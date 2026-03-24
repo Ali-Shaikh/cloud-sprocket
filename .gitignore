@@ -1,0 +1,15 @@
+.venv/
+.tmp/
+CHECKPOINT.local.md
+.idea/
+.DS_Store
+__pycache__/
+.pytest_cache/
+.coverage
+pytest-cache-files-*
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+build/
+dist/
