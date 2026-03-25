@@ -99,6 +99,31 @@ def _make_profiles() -> tuple[DiscoveredProfile, ...]:
     return (aws_profile,)
 
 
+def _make_mixed_aws_profiles() -> tuple[DiscoveredProfile, ...]:
+    non_sso_profile = DiscoveredProfile(
+        provider_id="aws",
+        profile_id="default",
+        display_name="default",
+        source=Path("C:/Users/Ali/.aws/config"),
+        details="us-east-1",
+        source_paths=(Path("C:/Users/Ali/.aws/config"),),
+        attributes=(DetailField(label="region", value="us-east-1"),),
+    )
+    sso_profile = DiscoveredProfile(
+        provider_id="aws",
+        profile_id="sandbox-sso",
+        display_name="sandbox-sso",
+        source=Path("C:/Users/Ali/.aws/config"),
+        details="eu-west-1",
+        source_paths=(Path("C:/Users/Ali/.aws/config"), Path("C:/Users/Ali/.aws/credentials")),
+        attributes=(
+            DetailField(label="region", value="eu-west-1"),
+            DetailField(label="sso_start_url", value="https://example.awsapps.com/start"),
+        ),
+    )
+    return (non_sso_profile, sso_profile)
+
+
 def test_controller_activate_and_copy_export_snippet(tmp_path: Path) -> None:
     desktop = FakeDesktopIntegration()
     settings = _make_settings(tmp_path)
@@ -175,3 +200,20 @@ def test_controller_records_failed_process_result(tmp_path: Path) -> None:
     last_log = controller.log_entries()[-1]
     assert last_log.level.value == "error"
     assert "expired" in last_log.message.lower()
+
+
+def test_controller_keeps_global_logout_available_when_another_sso_profile_exists(tmp_path: Path) -> None:
+    controller = CloudSprocketController(
+        settings=_make_settings(tmp_path),
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(_make_mixed_aws_profiles()),
+        command_runner=DeferredRunner(),
+        desktop_integration=FakeDesktopIntegration(),
+    )
+
+    controller.select_profile("aws", "default")
+    actions = {action.action_id: action for action in controller.available_actions()}
+
+    assert not actions["sso-login"].enabled
+    assert actions["logout"].enabled
+    assert actions["logout"].label == "Global SSO Logout"

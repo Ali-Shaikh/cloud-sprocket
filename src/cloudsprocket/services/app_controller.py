@@ -169,10 +169,12 @@ class CloudSprocketController(QObject):
         adapter = self._current_adapter()
         if adapter is None:
             return ()
+        current_provider_id = self._session_state.current_provider_id
         return adapter.list_actions(
             self.selected_profile(),
+            self.profiles_for_provider(current_provider_id),
             self._session_state,
-            self.provider_health(self._session_state.current_provider_id),
+            self.provider_health(current_provider_id),
         )
 
     def status_message(self) -> str:

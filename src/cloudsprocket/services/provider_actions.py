@@ -34,6 +34,7 @@ class ProviderAdapter(Protocol):
     def list_actions(
         self,
         profile: DiscoveredProfile | None,
+        provider_profiles: tuple[DiscoveredProfile, ...],
         session_state: SessionState,
         health: ProviderHealth | None,
     ) -> tuple[ProviderAction, ...]:
@@ -74,6 +75,7 @@ class BaseProviderAdapter:
     def list_actions(
         self,
         profile: DiscoveredProfile | None,
+        provider_profiles: tuple[DiscoveredProfile, ...],
         session_state: SessionState,
         health: ProviderHealth | None,
     ) -> tuple[ProviderAction, ...]:
@@ -228,6 +230,7 @@ class AwsProviderAdapter(BaseProviderAdapter):
     def list_actions(
         self,
         profile: DiscoveredProfile | None,
+        provider_profiles: tuple[DiscoveredProfile, ...],
         session_state: SessionState,
         health: ProviderHealth | None,
     ) -> tuple[ProviderAction, ...]:
@@ -237,9 +240,11 @@ class AwsProviderAdapter(BaseProviderAdapter):
             profile and session_state.active_profile_id(self.provider_id) == profile.profile_id
         )
         is_sso = bool(profile and self._is_sso_profile(profile))
+        has_any_sso_profile = any(self._is_sso_profile(candidate) for candidate in provider_profiles)
         profile_reason = "Select an AWS profile to enable this action."
         cli_reason = "AWS CLI was not detected on this machine."
         sso_reason = "The selected profile does not contain AWS SSO settings."
+        global_sso_reason = "No AWS SSO-configured profiles were discovered."
 
         return (
             ProviderAction(
@@ -279,12 +284,17 @@ class AwsProviderAdapter(BaseProviderAdapter):
             ),
             ProviderAction(
                 action_id="logout",
-                label="Logout",
+                label="Global SSO Logout",
                 kind=ActionKind.LOGOUT,
                 auth_method=AuthMethod.SSO,
-                enabled=has_cli,
-                description="Run aws sso logout. This clears cached SSO sessions.",
-                disabled_reason=cli_reason if not has_cli else None,
+                enabled=has_cli and has_any_sso_profile,
+                description=(
+                    "Run aws sso logout. This clears cached IAM Identity Center access tokens "
+                    "and temporary AWS credentials across all AWS profiles."
+                ),
+                disabled_reason=(
+                    cli_reason if not has_cli else global_sso_reason if not has_any_sso_profile else None
+                ),
             ),
             ProviderAction(
                 action_id="activate",
@@ -367,7 +377,7 @@ class AwsProviderAdapter(BaseProviderAdapter):
                 execution_type=CommandExecutionType.PROCESS,
                 program="aws",
                 args=("sso", "logout"),
-                summary="Run AWS SSO logout",
+                summary="Run global AWS SSO logout",
             )
         raise ValueError(f"Unsupported AWS action {action.action_id}")
 
@@ -397,7 +407,10 @@ class AwsProviderAdapter(BaseProviderAdapter):
         if action.kind == ActionKind.LOGOUT and result.succeeded:
             return replace(
                 result,
-                summary="AWS SSO logout completed. Cached SSO sessions were cleared.",
+                summary=(
+                    "AWS global SSO logout completed. Cached IAM Identity Center access tokens "
+                    "and temporary AWS credentials were cleared across all AWS profiles."
+                ),
             )
         if not result.succeeded:
             failure_text = result.stderr.strip() or result.stdout.strip() or result.summary
@@ -455,9 +468,12 @@ class AwsProviderAdapter(BaseProviderAdapter):
             notes.append("Activate this profile to use it as CloudSprocket's AWS session context.")
         if is_sso:
             notes.append("AWS SSO login is available for this profile.")
-            notes.append("AWS logout clears cached SSO sessions for all AWS profiles.")
         else:
             notes.append("This profile does not advertise SSO fields, so SSO login is disabled.")
+        notes.append(
+            "Global SSO logout, when available, clears cached IAM Identity Center access tokens "
+            "and temporary AWS credentials across all AWS profiles."
+        )
 
         return ProfileDetails(
             provider_id=self.provider_id,

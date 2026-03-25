@@ -43,6 +43,7 @@ def test_aws_actions_vary_by_cli_and_sso_state(tmp_path: Path) -> None:
     session_state = SessionState(current_provider_id="aws", selected_profile_id="sandbox")
     sso_profile = _make_aws_profile("sandbox", with_sso=True)
     non_sso_profile = _make_aws_profile("sandbox", with_sso=False)
+    alternate_sso_profile = _make_aws_profile("prod-sso", with_sso=True)
 
     missing_cli_health = ProviderHealth(
         provider_id="aws",
@@ -58,17 +59,57 @@ def test_aws_actions_vary_by_cli_and_sso_state(tmp_path: Path) -> None:
         command_path=Path("C:/Program Files/Amazon/AWSCLIV2/aws.exe"),
     )
 
-    actions_without_cli = {action.action_id: action for action in adapter.list_actions(sso_profile, session_state, missing_cli_health)}
+    actions_without_cli = {
+        action.action_id: action
+        for action in adapter.list_actions(
+            sso_profile,
+            (sso_profile,),
+            session_state,
+            missing_cli_health,
+        )
+    }
     assert not actions_without_cli["whoami"].enabled
     assert not actions_without_cli["sso-login"].enabled
     assert actions_without_cli["copy-export"].enabled
 
-    actions_with_cli = {action.action_id: action for action in adapter.list_actions(sso_profile, session_state, with_cli_health)}
+    actions_with_cli = {
+        action.action_id: action
+        for action in adapter.list_actions(
+            sso_profile,
+            (sso_profile,),
+            session_state,
+            with_cli_health,
+        )
+    }
     assert actions_with_cli["whoami"].enabled
     assert actions_with_cli["sso-login"].enabled
+    assert actions_with_cli["logout"].enabled
+    assert actions_with_cli["logout"].label == "Global SSO Logout"
 
-    actions_without_sso = {action.action_id: action for action in adapter.list_actions(non_sso_profile, session_state, with_cli_health)}
+    actions_without_sso = {
+        action.action_id: action
+        for action in adapter.list_actions(
+            non_sso_profile,
+            (non_sso_profile,),
+            session_state,
+            with_cli_health,
+        )
+    }
     assert not actions_without_sso["sso-login"].enabled
+    assert not actions_without_sso["logout"].enabled
+
+    mixed_actions = {
+        action.action_id: action
+        for action in adapter.list_actions(
+            non_sso_profile,
+            (non_sso_profile, alternate_sso_profile),
+            session_state,
+            with_cli_health,
+        )
+    }
+    assert not mixed_actions["sso-login"].enabled
+    assert mixed_actions["logout"].enabled
+    assert "across all AWS profiles" in mixed_actions["logout"].description
 
 
 def test_aws_export_snippet_uses_selected_profile(tmp_path: Path) -> None:
@@ -80,6 +121,7 @@ def test_aws_export_snippet_uses_selected_profile(tmp_path: Path) -> None:
         action
         for action in adapter.list_actions(
             profile,
+            (profile,),
             session_state,
             ProviderHealth(
                 provider_id="aws",
