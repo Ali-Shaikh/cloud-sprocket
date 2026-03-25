@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QHeaderView
 from cloudsprocket.config import AppSettings
 from cloudsprocket.models import (
     AuthMethod,
+    CommandResult,
     DetailField,
     DiscoveredProfile,
     DiscoveryReport,
@@ -75,6 +76,18 @@ class FakeDesktopIntegration:
 class NoopRunner:
     def run(self, spec, on_finished) -> None:
         raise AssertionError("This test should not trigger process actions.")
+
+
+class DeferredRunner:
+    def __init__(self) -> None:
+        self.calls: list[tuple[object, object]] = []
+
+    def run(self, spec, on_finished) -> None:
+        self.calls.append((spec, on_finished))
+
+    def finish_next(self, result: CommandResult) -> None:
+        spec, callback = self.calls.pop(0)
+        callback(result)
 
 
 def _detail_value(window: MainWindow, label: str) -> str:
@@ -252,3 +265,55 @@ def test_main_window_switches_into_locked_workspace_tabs(qapp, tmp_path: Path) -
 
     assert not controller.is_session_locked()
     assert window.body_stack.currentIndex() == 0
+
+
+def test_main_window_renders_loaded_s3_workspace_data(qapp, tmp_path: Path) -> None:
+    settings = AppSettings.from_env(
+        home_dir=tmp_path / "home",
+        appdata_dir=tmp_path / "appdata",
+        local_appdata_dir=tmp_path / "local-appdata",
+        config_dir=tmp_path / "config-root",
+    )
+    runner = DeferredRunner()
+    controller = CloudSprocketController(
+        settings=settings,
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(),
+        command_runner=runner,
+        desktop_integration=FakeDesktopIntegration(),
+    )
+    window = MainWindow(settings=settings, controller=controller)
+
+    window.lock_session_button.click()
+    qapp.processEvents()
+    window.workspace_s3_refresh_buckets_button.click()
+    qapp.processEvents()
+
+    bucket_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=bucket_spec,
+            exit_code=0,
+            stdout='{"Buckets":[{"Name":"alpha","CreationDate":"2026-03-24T10:00:00Z"},{"Name":"zulu","CreationDate":"2026-03-25T12:30:00Z"}]}',
+            summary="buckets",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
+    object_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=object_spec,
+            exit_code=0,
+            stdout='{"Contents":[{"Key":"logs/app.log","Size":1024,"LastModified":"2026-03-25T08:15:00Z","StorageClass":"STANDARD"}]}',
+            summary="objects",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
+    assert window.workspace_s3_bucket_tree.topLevelItemCount() == 2
+    assert window.workspace_s3_object_tree.topLevelItemCount() == 1
+    assert window.workspace_s3_bucket_tree.topLevelItem(0).text(0) == "alpha"
+    assert window.workspace_s3_object_tree.topLevelItem(0).text(0) == "logs/app.log"

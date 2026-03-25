@@ -262,3 +262,70 @@ def test_controller_rejects_unavailable_auth_method_selection(tmp_path: Path) ->
 
     assert not controller.select_auth_method(AuthMethod.SSO)
     assert controller.selected_auth_method() == AuthMethod.CLI
+
+
+def test_controller_loads_s3_buckets_and_objects_for_locked_aws_session(tmp_path: Path) -> None:
+    runner = DeferredRunner()
+    controller = CloudSprocketController(
+        settings=_make_settings(tmp_path),
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(_make_profiles()),
+        command_runner=runner,
+        desktop_integration=FakeDesktopIntegration(),
+    )
+
+    assert controller.lock_session()
+    assert controller.refresh_aws_s3_buckets()
+
+    bucket_spec, _callback = runner.calls[0]
+    assert bucket_spec.execution_type == CommandExecutionType.PROCESS
+    assert bucket_spec.args[:2] == ("s3api", "list-buckets")
+
+    runner.finish_next(
+        CommandResult(
+            spec=bucket_spec,
+            exit_code=0,
+            stdout='{"Buckets":[{"Name":"alpha","CreationDate":"2026-03-24T10:00:00Z"},{"Name":"zulu","CreationDate":"2026-03-25T12:30:00Z"}]}',
+            summary="buckets",
+            succeeded=True,
+        )
+    )
+
+    object_spec, _callback = runner.calls[0]
+    assert object_spec.args[:2] == ("s3api", "list-objects-v2")
+    assert ("--bucket", "alpha") == object_spec.args[2:4]
+
+    runner.finish_next(
+        CommandResult(
+            spec=object_spec,
+            exit_code=0,
+            stdout='{"Contents":[{"Key":"logs/app.log","Size":1024,"LastModified":"2026-03-25T08:15:00Z","StorageClass":"STANDARD"}]}',
+            summary="objects",
+            succeeded=True,
+        )
+    )
+
+    state = controller.aws_s3_workspace()
+    assert [bucket.name for bucket in state.buckets] == ["alpha", "zulu"]
+    assert state.selected_bucket_name == "alpha"
+    assert [obj.key for obj in state.objects] == ["logs/app.log"]
+    assert state.objects[0].size == "1.0 KiB"
+
+
+def test_controller_blocks_s3_browsing_for_local_files_locked_session(tmp_path: Path) -> None:
+    controller = CloudSprocketController(
+        settings=_make_settings(tmp_path),
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(_make_profiles()),
+        command_runner=DeferredRunner(),
+        desktop_integration=FakeDesktopIntegration(),
+    )
+
+    assert controller.select_auth_method(AuthMethod.LOCAL_FILES)
+    assert controller.lock_session()
+
+    available, reason = controller.aws_s3_availability()
+
+    assert not available
+    assert "CLI or SSO" in reason
+    assert not controller.refresh_aws_s3_buckets()

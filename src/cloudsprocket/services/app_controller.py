@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from typing import Protocol
 
 from PySide6.QtCore import QObject, QUrl, Signal
@@ -14,6 +16,7 @@ from cloudsprocket.models import (
     AuthMethodStatus,
     CommandExecutionType,
     CommandResult,
+    CommandSpec,
     CommandState,
     DiscoveryReport,
     LogEntry,
@@ -21,6 +24,9 @@ from cloudsprocket.models import (
     ProfileDetails,
     ProviderAction,
     ProviderHealth,
+    S3BucketSummary,
+    S3ObjectSummary,
+    S3WorkspaceState,
     SessionState,
     WorkspaceTab,
 )
@@ -106,6 +112,10 @@ class CloudSprocketController(QObject):
         self._discovery_report = self._profile_discovery.discover()
         self._reconcile_selection()
         self._reconcile_auth_selection()
+        if self.is_session_locked() and self._session_state.locked_provider_id == "aws":
+            available, _reason = self.aws_s3_availability()
+            if not available:
+                self._reset_aws_s3_workspace()
         if emit_signal:
             self.state_changed.emit()
 
@@ -225,6 +235,7 @@ class CloudSprocketController(QObject):
         self._session_state.locked_provider_id = provider_id
         self._session_state.locked_profile_id = profile.profile_id
         self._session_state.locked_auth_method = auth_method
+        self._reset_aws_s3_workspace()
         self._append_log(
             LogLevel.SUCCESS,
             f"Locked {provider_id.upper()} session for {profile.profile_id} using {auth_method.value}.",
@@ -240,6 +251,7 @@ class CloudSprocketController(QObject):
         self._session_state.locked_provider_id = None
         self._session_state.locked_profile_id = None
         self._session_state.locked_auth_method = None
+        self._reset_aws_s3_workspace()
         self._append_log(
             LogLevel.INFO,
             f"Unlocked {locked_provider_id.upper()} session for {locked_profile_id}.",
@@ -266,6 +278,92 @@ class CloudSprocketController(QObject):
     def locked_provider_health(self) -> ProviderHealth | None:
         return self.provider_health(self._session_state.locked_provider_id)
 
+    def aws_s3_workspace(self) -> S3WorkspaceState:
+        return self._session_state.aws_s3_workspace
+
+    def aws_s3_availability(self) -> tuple[bool, str]:
+        if not self.is_session_locked():
+            return False, "Lock an AWS session to work with S3."
+        if self._session_state.locked_provider_id != "aws":
+            return False, "S3 is only available for locked AWS sessions."
+        if self._session_state.locked_auth_method == AuthMethod.LOCAL_FILES:
+            return False, "Unlock the session and choose CLI or SSO to browse S3."
+        provider_health = self.locked_provider_health()
+        if provider_health is None or provider_health.command_path is None:
+            return False, "AWS CLI is required to browse S3 from the locked workspace."
+        if self.locked_profile() is None:
+            return False, "The locked AWS profile is no longer available."
+        return True, ""
+
+    def can_refresh_aws_s3_buckets(self) -> bool:
+        available, _reason = self.aws_s3_availability()
+        return available and self._session_state.command_state != CommandState.RUNNING
+
+    def can_refresh_aws_s3_objects(self) -> bool:
+        return (
+            self.can_refresh_aws_s3_buckets()
+            and self._session_state.aws_s3_workspace.selected_bucket_name is not None
+        )
+
+    def refresh_aws_s3_buckets(self) -> bool:
+        available, reason = self.aws_s3_availability()
+        if not available:
+            self._session_state.aws_s3_workspace.status_message = reason
+            self._session_state.aws_s3_workspace.bucket_status_message = reason
+            self._append_log(LogLevel.WARNING, reason, action_id="aws-s3-buckets")
+            self.state_changed.emit()
+            return False
+        if self._session_state.command_state == CommandState.RUNNING:
+            message = "Wait for the current command to finish before refreshing S3 buckets."
+            self._session_state.aws_s3_workspace.status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-buckets")
+            self.state_changed.emit()
+            return False
+
+        profile = self.locked_profile()
+        if profile is None:
+            return False
+
+        self._session_state.aws_s3_workspace.status_message = (
+            f"Loading S3 buckets for {profile.profile_id}..."
+        )
+        self._session_state.aws_s3_workspace.bucket_status_message = "Loading buckets..."
+        spec = CommandSpec(
+            action_id="aws-s3-buckets",
+            execution_type=CommandExecutionType.PROCESS,
+            program="aws",
+            args=("s3api", "list-buckets", "--profile", profile.profile_id, "--output", "json"),
+            summary=f"List S3 buckets for AWS profile {profile.profile_id}",
+        )
+        return self._run_process_command(
+            action_id="aws-s3-buckets",
+            label="S3 Buckets",
+            spec=spec,
+            on_finished=lambda result: self._finish_aws_s3_bucket_refresh(profile.profile_id, result),
+        )
+
+    def refresh_aws_s3_objects(self) -> bool:
+        bucket_name = self._session_state.aws_s3_workspace.selected_bucket_name
+        if bucket_name is None:
+            message = "Select an S3 bucket before refreshing its contents."
+            self._session_state.aws_s3_workspace.bucket_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-objects")
+            self.state_changed.emit()
+            return False
+        return self._start_aws_s3_object_refresh(bucket_name)
+
+    def select_aws_s3_bucket(self, bucket_name: str) -> bool:
+        if bucket_name == self._session_state.aws_s3_workspace.selected_bucket_name:
+            return False
+        if not any(bucket.name == bucket_name for bucket in self._session_state.aws_s3_workspace.buckets):
+            return False
+        self._session_state.aws_s3_workspace.selected_bucket_name = bucket_name
+        self._session_state.aws_s3_workspace.objects = ()
+        self._session_state.aws_s3_workspace.bucket_status_message = (
+            f"Selected {bucket_name}. Loading bucket contents..."
+        )
+        return self._start_aws_s3_object_refresh(bucket_name)
+
     def workspace_tabs(self) -> tuple[WorkspaceTab, ...]:
         if not self.is_session_locked():
             return ()
@@ -273,6 +371,18 @@ class CloudSprocketController(QObject):
         auth_method = self._session_state.locked_auth_method
         auth_label = auth_method.value.upper() if auth_method else "UNKNOWN"
         if provider_id == "aws":
+            s3_available, s3_reason = self.aws_s3_availability()
+            s3_state = self._session_state.aws_s3_workspace
+            s3_summary = "Browse S3 buckets and inspect object listings for the locked AWS session."
+            if s3_state.buckets:
+                s3_summary = f"{len(s3_state.buckets)} S3 buckets loaded for the locked session."
+            if not s3_available:
+                s3_summary = "S3 browsing is unavailable for the current locked session."
+            s3_detail = (
+                s3_state.bucket_status_message
+                if s3_available
+                else s3_reason
+            )
             return (
                 WorkspaceTab(
                     tab_id="overview",
@@ -283,8 +393,8 @@ class CloudSprocketController(QObject):
                 WorkspaceTab(
                     tab_id="s3",
                     label="S3",
-                    summary="Bucket and object workspace placeholder.",
-                    detail="This tab will become the focused S3 workspace for the locked AWS session.",
+                    summary=s3_summary,
+                    detail=s3_detail,
                 ),
                 WorkspaceTab(
                     tab_id="ec2",
@@ -433,20 +543,12 @@ class CloudSprocketController(QObject):
             self.state_changed.emit()
             return True
         if spec.execution_type == CommandExecutionType.PROCESS:
-            self._session_state.command_state = CommandState.RUNNING
-            self._session_state.running_action_id = action.action_id
-            self._append_log(
-                LogLevel.INFO,
-                f"Running {action.label}",
-                details=spec.display_text(),
+            return self._run_process_command(
                 action_id=action.action_id,
+                label=action.label,
+                spec=spec,
+                on_finished=lambda result: self._finish_process_action(adapter, action, profile, result),
             )
-            self.state_changed.emit()
-            self._command_runner.run(
-                spec,
-                lambda result: self._finish_process_action(adapter, action, profile, result),
-            )
-            return True
 
         return False
 
@@ -495,6 +597,201 @@ class CloudSprocketController(QObject):
             action_id=action.action_id,
         )
         self.state_changed.emit()
+
+    def _run_process_command(
+        self,
+        *,
+        action_id: str,
+        label: str,
+        spec: CommandSpec,
+        on_finished,
+    ) -> bool:
+        self._session_state.command_state = CommandState.RUNNING
+        self._session_state.running_action_id = action_id
+        self._append_log(
+            LogLevel.INFO,
+            f"Running {label}",
+            details=spec.display_text(),
+            action_id=action_id,
+        )
+        self.state_changed.emit()
+        self._command_runner.run(spec, on_finished)
+        return True
+
+    def _start_aws_s3_object_refresh(self, bucket_name: str) -> bool:
+        available, reason = self.aws_s3_availability()
+        if not available:
+            self._session_state.aws_s3_workspace.bucket_status_message = reason
+            self._append_log(LogLevel.WARNING, reason, action_id="aws-s3-objects")
+            self.state_changed.emit()
+            return False
+        if self._session_state.command_state == CommandState.RUNNING:
+            message = "Wait for the current command to finish before refreshing bucket contents."
+            self._session_state.aws_s3_workspace.bucket_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-objects")
+            self.state_changed.emit()
+            return False
+
+        profile = self.locked_profile()
+        if profile is None:
+            return False
+
+        self._session_state.aws_s3_workspace.selected_bucket_name = bucket_name
+        self._session_state.aws_s3_workspace.objects = ()
+        self._session_state.aws_s3_workspace.bucket_status_message = (
+            f"Loading objects for {bucket_name}..."
+        )
+        spec = CommandSpec(
+            action_id="aws-s3-objects",
+            execution_type=CommandExecutionType.PROCESS,
+            program="aws",
+            args=(
+                "s3api",
+                "list-objects-v2",
+                "--bucket",
+                bucket_name,
+                "--max-items",
+                "200",
+                "--profile",
+                profile.profile_id,
+                "--output",
+                "json",
+            ),
+            summary=f"List S3 objects for bucket {bucket_name}",
+        )
+        return self._run_process_command(
+            action_id="aws-s3-objects",
+            label=f"S3 Objects for {bucket_name}",
+            spec=spec,
+            on_finished=lambda result: self._finish_aws_s3_object_refresh(bucket_name, result),
+        )
+
+    def _finish_aws_s3_bucket_refresh(self, profile_id: str, result: CommandResult) -> None:
+        self._session_state.command_state = CommandState.IDLE
+        self._session_state.running_action_id = None
+        state = self._session_state.aws_s3_workspace
+        if not result.succeeded:
+            failure_message = self._command_failure_summary(result, "S3 bucket refresh failed.")
+            state.status_message = failure_message
+            state.bucket_status_message = failure_message
+            state.buckets = ()
+            state.selected_bucket_name = None
+            state.objects = ()
+            self._append_log(LogLevel.ERROR, failure_message, details=result.stderr or result.stdout, action_id="aws-s3-buckets")
+            self.state_changed.emit()
+            return
+
+        try:
+            payload = json.loads(result.stdout or "{}")
+        except json.JSONDecodeError:
+            payload = {}
+
+        buckets = tuple(
+            sorted(
+                (
+                    S3BucketSummary(
+                        name=str(bucket.get("Name") or "").strip(),
+                        created_at=self._format_s3_timestamp(str(bucket.get("CreationDate") or "").strip()),
+                        summary="Available bucket",
+                    )
+                    for bucket in payload.get("Buckets", ())
+                    if str(bucket.get("Name") or "").strip()
+                ),
+                key=lambda bucket: bucket.name.lower(),
+            )
+        )
+        state.buckets = buckets
+        state.status_message = f"Loaded {len(buckets)} S3 buckets for {profile_id}."
+        if not buckets:
+            state.selected_bucket_name = None
+            state.objects = ()
+            state.bucket_status_message = "No buckets were returned for this locked AWS session."
+            self._append_log(LogLevel.SUCCESS, state.status_message, action_id="aws-s3-buckets")
+            self.state_changed.emit()
+            return
+
+        current_bucket_name = state.selected_bucket_name
+        if current_bucket_name not in {bucket.name for bucket in buckets}:
+            current_bucket_name = buckets[0].name
+        state.selected_bucket_name = current_bucket_name
+        state.objects = ()
+        state.bucket_status_message = f"Loading objects for {current_bucket_name}..."
+        self._append_log(LogLevel.SUCCESS, state.status_message, action_id="aws-s3-buckets")
+        self.state_changed.emit()
+        self._start_aws_s3_object_refresh(current_bucket_name)
+
+    def _finish_aws_s3_object_refresh(self, bucket_name: str, result: CommandResult) -> None:
+        self._session_state.command_state = CommandState.IDLE
+        self._session_state.running_action_id = None
+        state = self._session_state.aws_s3_workspace
+        if not result.succeeded:
+            failure_message = self._command_failure_summary(result, f"S3 object refresh failed for {bucket_name}.")
+            state.objects = ()
+            state.selected_bucket_name = bucket_name
+            state.bucket_status_message = failure_message
+            self._append_log(LogLevel.ERROR, failure_message, details=result.stderr or result.stdout, action_id="aws-s3-objects")
+            self.state_changed.emit()
+            return
+
+        try:
+            payload = json.loads(result.stdout or "{}")
+        except json.JSONDecodeError:
+            payload = {}
+
+        objects = tuple(
+            S3ObjectSummary(
+                key=str(item.get("Key") or "").strip(),
+                size=self._format_s3_size(int(item.get("Size") or 0)),
+                modified_at=self._format_s3_timestamp(str(item.get("LastModified") or "").strip()),
+                storage_class=str(item.get("StorageClass") or "").strip(),
+            )
+            for item in payload.get("Contents", ())
+            if str(item.get("Key") or "").strip()
+        )
+        state.selected_bucket_name = bucket_name
+        state.objects = objects
+        if objects:
+            state.bucket_status_message = f"Loaded {len(objects)} objects from {bucket_name}."
+        else:
+            state.bucket_status_message = f"No objects were returned for {bucket_name}."
+        self._append_log(LogLevel.SUCCESS, state.bucket_status_message, action_id="aws-s3-objects")
+        self.state_changed.emit()
+
+    def _reset_aws_s3_workspace(self) -> None:
+        state = self._session_state.aws_s3_workspace
+        available, reason = self.aws_s3_availability()
+        state.buckets = ()
+        state.selected_bucket_name = None
+        state.objects = ()
+        if available:
+            profile = self.locked_profile()
+            profile_id = profile.profile_id if profile is not None else "locked profile"
+            state.status_message = f"S3 workspace ready for {profile_id}. Refresh buckets to begin."
+            state.bucket_status_message = "Refresh buckets to load S3 buckets."
+            return
+        state.status_message = reason
+        state.bucket_status_message = reason
+
+    def _command_failure_summary(self, result: CommandResult, fallback: str) -> str:
+        return result.stderr.strip() or result.stdout.strip() or result.summary or fallback
+
+    def _format_s3_timestamp(self, value: str) -> str:
+        if not value:
+            return ""
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
+        except ValueError:
+            return value
+        return parsed.strftime("%Y-%m-%d %H:%M UTC")
+
+    def _format_s3_size(self, size_bytes: int) -> str:
+        if size_bytes < 1024:
+            return f"{size_bytes} B"
+        if size_bytes < 1024 * 1024:
+            return f"{size_bytes / 1024:.1f} KiB"
+        if size_bytes < 1024 * 1024 * 1024:
+            return f"{size_bytes / (1024 * 1024):.1f} MiB"
+        return f"{size_bytes / (1024 * 1024 * 1024):.1f} GiB"
 
     def _append_log(
         self,

@@ -92,12 +92,21 @@ class MainWindow(QMainWindow):
         self._workspace_profile_actions_layout = QGridLayout(self._workspace_profile_actions_container)
         self._workspace_global_actions_container = QWidget()
         self._workspace_global_actions_layout = QGridLayout(self._workspace_global_actions_container)
+        self._workspace_s3_status_label = QLabel()
+        self._workspace_s3_selected_bucket_label = QLabel()
+        self._workspace_s3_refresh_buckets_button = QPushButton("Refresh Buckets")
+        self._workspace_s3_refresh_bucket_button = QPushButton("Refresh Bucket Contents")
+        self._workspace_s3_bucket_tree = QTreeWidget()
+        self._workspace_s3_object_tree = QTreeWidget()
         self._detail_sections_splitter = QSplitter(Qt.Vertical)
         self._rendering_state = False
 
         self.setWindowTitle(settings.app_brand_name)
         self.resize(1360, 860)
         self.setStatusBar(self._status_bar)
+        self._workspace_s3_refresh_buckets_button.clicked.connect(self._on_s3_refresh_buckets_clicked)
+        self._workspace_s3_refresh_bucket_button.clicked.connect(self._on_s3_refresh_bucket_clicked)
+        self._workspace_s3_bucket_tree.itemSelectionChanged.connect(self._on_s3_bucket_selection_changed)
 
         self._build_ui()
         self._controller.state_changed.connect(self.render_state)
@@ -168,6 +177,22 @@ class MainWindow(QMainWindow):
         return self._workspace_tabs
 
     @property
+    def workspace_s3_bucket_tree(self) -> QTreeWidget:
+        return self._workspace_s3_bucket_tree
+
+    @property
+    def workspace_s3_object_tree(self) -> QTreeWidget:
+        return self._workspace_s3_object_tree
+
+    @property
+    def workspace_s3_refresh_buckets_button(self) -> QPushButton:
+        return self._workspace_s3_refresh_buckets_button
+
+    @property
+    def workspace_s3_refresh_bucket_button(self) -> QPushButton:
+        return self._workspace_s3_refresh_bucket_button
+
+    @property
     def lock_session_button(self) -> QPushButton:
         return self._session_lock_button
 
@@ -191,6 +216,7 @@ class MainWindow(QMainWindow):
             self._render_profile_details(self._controller.selected_profile_details())
             self._render_session_setup()
             self._render_workspace()
+            self._render_workspace_s3()
             self._render_actions(self._controller.available_actions())
             self._render_logs(self._controller.log_entries())
             self._body_stack.setCurrentIndex(1 if self._controller.is_session_locked() else 0)
@@ -422,6 +448,62 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._workspace_global_actions_label)
         layout.addWidget(self._workspace_global_actions_container)
         layout.addStretch(1)
+        return page
+
+    def _build_workspace_s3_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
+
+        self._workspace_s3_status_label.setWordWrap(True)
+        self._workspace_s3_status_label.setStyleSheet(
+            "padding: 10px 12px; background: #f4f7fa; border-radius: 8px; color: #4f6172;"
+        )
+        self._workspace_s3_selected_bucket_label.setStyleSheet(
+            "font-size: 13px; font-weight: 700; color: #2b4f73;"
+        )
+
+        self._workspace_s3_bucket_tree.setColumnCount(3)
+        self._workspace_s3_bucket_tree.setHeaderLabels(["Bucket", "Created", "Summary"])
+        self._configure_data_tree(self._workspace_s3_bucket_tree)
+        self._workspace_s3_bucket_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self._workspace_s3_bucket_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self._workspace_s3_bucket_tree.header().setSectionResizeMode(2, QHeaderView.Stretch)
+
+        self._workspace_s3_object_tree.setColumnCount(4)
+        self._workspace_s3_object_tree.setHeaderLabels(["Key", "Size", "Modified", "Storage Class"])
+        self._configure_data_tree(self._workspace_s3_object_tree)
+        self._workspace_s3_object_tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        self._workspace_s3_object_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self._workspace_s3_object_tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self._workspace_s3_object_tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+
+        bucket_group = QGroupBox("Buckets")
+        bucket_layout = QVBoxLayout(bucket_group)
+        bucket_layout.addWidget(self._workspace_s3_bucket_tree)
+
+        object_group = QGroupBox("Objects")
+        object_layout = QVBoxLayout(object_group)
+        object_layout.addWidget(self._workspace_s3_object_tree)
+
+        content_splitter = QSplitter(Qt.Horizontal)
+        content_splitter.setChildrenCollapsible(False)
+        content_splitter.addWidget(bucket_group)
+        content_splitter.addWidget(object_group)
+        content_splitter.setStretchFactor(0, 2)
+        content_splitter.setStretchFactor(1, 3)
+        content_splitter.setSizes([420, 640])
+
+        controls_layout = QHBoxLayout()
+        controls_layout.addWidget(self._workspace_s3_refresh_buckets_button)
+        controls_layout.addWidget(self._workspace_s3_refresh_bucket_button)
+        controls_layout.addStretch(1)
+
+        layout.addWidget(self._workspace_s3_status_label)
+        layout.addLayout(controls_layout)
+        layout.addWidget(self._workspace_s3_selected_bucket_label)
+        layout.addWidget(content_splitter, 1)
         return page
 
     def _build_provider_panel(self) -> QGroupBox:
@@ -809,6 +891,8 @@ class MainWindow(QMainWindow):
         for index, tab in enumerate(self._controller.workspace_tabs()):
             if tab.tab_id == "overview":
                 page = self._build_workspace_overview_tab()
+            elif tab.tab_id == "s3":
+                page = self._build_workspace_s3_tab()
             elif tab.tab_id == "actions":
                 page = self._build_workspace_actions_tab()
             else:
@@ -819,6 +903,44 @@ class MainWindow(QMainWindow):
                 next_index = index
         if self._workspace_tabs.count():
             self._workspace_tabs.setCurrentIndex(next_index)
+
+    def _render_workspace_s3(self) -> None:
+        state = self._controller.aws_s3_workspace()
+        available, reason = self._controller.aws_s3_availability()
+        self._workspace_s3_status_label.setText(state.status_message or reason)
+        if state.selected_bucket_name:
+            self._workspace_s3_selected_bucket_label.setText(
+                f"Selected bucket: {state.selected_bucket_name} | {state.bucket_status_message}"
+            )
+        else:
+            self._workspace_s3_selected_bucket_label.setText(state.bucket_status_message)
+        self._workspace_s3_refresh_buckets_button.setEnabled(self._controller.can_refresh_aws_s3_buckets())
+        self._workspace_s3_refresh_bucket_button.setEnabled(self._controller.can_refresh_aws_s3_objects())
+        self._workspace_s3_refresh_bucket_button.setVisible(available or state.selected_bucket_name is not None)
+
+        self._workspace_s3_bucket_tree.blockSignals(True)
+        self._workspace_s3_bucket_tree.clear()
+        selected_bucket_item: QTreeWidgetItem | None = None
+        for bucket in state.buckets:
+            item = QTreeWidgetItem([bucket.name, bucket.created_at, bucket.summary])
+            item.setData(0, Qt.UserRole, bucket.name)
+            self._workspace_s3_bucket_tree.addTopLevelItem(item)
+            if bucket.name == state.selected_bucket_name:
+                selected_bucket_item = item
+        if selected_bucket_item is not None:
+            self._workspace_s3_bucket_tree.setCurrentItem(selected_bucket_item)
+        self._workspace_s3_bucket_tree.blockSignals(False)
+        self._workspace_s3_bucket_tree.resizeColumnToContents(0)
+        self._workspace_s3_bucket_tree.resizeColumnToContents(1)
+
+        self._workspace_s3_object_tree.clear()
+        for obj in state.objects:
+            self._workspace_s3_object_tree.addTopLevelItem(
+                QTreeWidgetItem([obj.key, obj.size, obj.modified_at, obj.storage_class])
+            )
+        self._workspace_s3_object_tree.resizeColumnToContents(1)
+        self._workspace_s3_object_tree.resizeColumnToContents(2)
+        self._workspace_s3_object_tree.resizeColumnToContents(3)
 
     def _build_workspace_tab(self, tab: WorkspaceTab) -> QWidget:
         page = QWidget()
@@ -988,6 +1110,22 @@ class MainWindow(QMainWindow):
 
     def _on_unlock_session_clicked(self) -> None:
         self._controller.unlock_session()
+
+    def _on_s3_refresh_buckets_clicked(self) -> None:
+        self._controller.refresh_aws_s3_buckets()
+
+    def _on_s3_refresh_bucket_clicked(self) -> None:
+        self._controller.refresh_aws_s3_objects()
+
+    def _on_s3_bucket_selection_changed(self) -> None:
+        if self._rendering_state:
+            return
+        item = self._workspace_s3_bucket_tree.currentItem()
+        if item is None:
+            return
+        bucket_name = item.data(0, Qt.UserRole)
+        if bucket_name:
+            self._controller.select_aws_s3_bucket(bucket_name)
 
     def _show_about_dialog(self) -> None:
         QMessageBox.about(self, "About CloudSprocket", self.about_text())

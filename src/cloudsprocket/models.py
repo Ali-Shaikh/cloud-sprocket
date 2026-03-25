@@ -128,6 +128,30 @@ class WorkspaceTab:
 
 
 @dataclass(frozen=True, slots=True)
+class S3BucketSummary:
+    name: str
+    created_at: str = ""
+    summary: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class S3ObjectSummary:
+    key: str
+    size: str = ""
+    modified_at: str = ""
+    storage_class: str = ""
+
+
+@dataclass(slots=True)
+class S3WorkspaceState:
+    status_message: str = "Lock an AWS session to work with S3."
+    bucket_status_message: str = "Refresh buckets to begin."
+    buckets: tuple[S3BucketSummary, ...] = ()
+    selected_bucket_name: str | None = None
+    objects: tuple[S3ObjectSummary, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class CommandSpec:
     action_id: str
     execution_type: CommandExecutionType
@@ -191,6 +215,7 @@ class SessionState:
     active_profile_by_provider: dict[str, str] = field(default_factory=dict)
     command_state: CommandState = CommandState.IDLE
     running_action_id: str | None = None
+    aws_s3_workspace: S3WorkspaceState = field(default_factory=S3WorkspaceState)
     recent_logs: list[LogEntry] = field(default_factory=list)
 
     def active_profile_id(self, provider_id: str) -> str | None:
