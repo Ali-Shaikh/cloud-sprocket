@@ -50,6 +50,7 @@ class LogLevel(StrEnum):
 class DetailField:
     label: str
     value: str
+    sensitive: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,4 +182,3 @@ class SessionState:
 
     def active_profile_id(self, provider_id: str) -> str | None:
         return self.active_profile_by_provider.get(provider_id)
-

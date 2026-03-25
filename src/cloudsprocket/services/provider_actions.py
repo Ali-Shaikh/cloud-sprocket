@@ -171,10 +171,7 @@ class BaseProviderAdapter:
             title=profile.display_name,
             subtitle=profile.profile_id,
             summary=profile.details or f"{self.label} profile discovered from local configuration.",
-            detail_fields=tuple(
-                DetailField(label=_friendly_label(field.label), value=field.value)
-                for field in profile.attributes
-            ),
+            detail_fields=self._detail_fields_from_profile(profile),
             source_paths=profile.source_paths or (profile.source,),
             auth_methods=(
                 AuthMethodStatus(
@@ -209,6 +206,16 @@ class BaseProviderAdapter:
         if health and health.command_path:
             return f"CLI available at {health.command_path}"
         return f"{self.label} CLI is not currently available."
+
+    def _detail_fields_from_profile(self, profile: DiscoveredProfile) -> tuple[DetailField, ...]:
+        return tuple(
+            DetailField(
+                label=_friendly_label(field.label),
+                value=field.value,
+                sensitive=field.sensitive,
+            )
+            for field in profile.attributes
+        )
 
     def _config_path(self) -> Path:
         raise NotImplementedError
@@ -438,10 +445,7 @@ class AwsProviderAdapter(BaseProviderAdapter):
                 source_paths=(self._config_path(),),
             )
 
-        fields = tuple(
-            DetailField(label=_friendly_label(field.label), value=field.value)
-            for field in profile.attributes
-        )
+        fields = self._detail_fields_from_profile(profile)
         is_sso = self._is_sso_profile(profile)
         notes = []
         active_profile_id = session_state.active_profile_id(self.provider_id)

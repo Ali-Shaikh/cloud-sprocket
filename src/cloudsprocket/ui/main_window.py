@@ -3,10 +3,10 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
-    QFormLayout,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -20,7 +20,14 @@ from PySide6.QtWidgets import (
 )
 
 from cloudsprocket.config import APP_DESCRIPTION, AppSettings
-from cloudsprocket.models import AuthMethodStatus, LogEntry, ProfileDetails, ProviderAction, ProviderHealth
+from cloudsprocket.models import (
+    AuthMethodStatus,
+    DetailField,
+    LogEntry,
+    ProfileDetails,
+    ProviderAction,
+    ProviderHealth,
+)
 from cloudsprocket.services.app_controller import CloudSprocketController
 
 
@@ -48,6 +55,8 @@ class MainWindow(QMainWindow):
         self._config_label = QLabel()
         self._status_bar = QStatusBar()
         self._action_buttons: dict[str, QPushButton] = {}
+        self._reveal_sensitive_button = QPushButton("Reveal Sensitive Values")
+        self._show_sensitive_values = False
 
         self.setWindowTitle(settings.app_brand_name)
         self.resize(1360, 860)
@@ -70,12 +79,20 @@ class MainWindow(QMainWindow):
         return self._log_panel
 
     @property
+    def detail_fields_tree(self) -> QTreeWidget:
+        return self._detail_fields_tree
+
+    @property
     def detail_title_label(self) -> QLabel:
         return self._detail_title
 
     @property
     def auth_methods_tree(self) -> QTreeWidget:
         return self._auth_methods_tree
+
+    @property
+    def reveal_sensitive_button(self) -> QPushButton:
+        return self._reveal_sensitive_button
 
     @property
     def action_buttons(self) -> dict[str, QPushButton]:
@@ -151,7 +168,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(16)
         layout.addWidget(self._build_provider_panel(), 1)
         layout.addWidget(self._build_profile_panel(), 1)
-        layout.addLayout(self._build_details_column(), 2)
+        layout.addLayout(self._build_details_column(), 3)
         return layout
 
     def _build_provider_panel(self) -> QGroupBox:
@@ -161,6 +178,9 @@ class MainWindow(QMainWindow):
         self._provider_tree.setHeaderLabels(["Provider", "State", "Summary"])
         self._provider_tree.setRootIsDecorated(False)
         self._provider_tree.setAlternatingRowColors(True)
+        self._provider_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self._provider_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self._provider_tree.header().setSectionResizeMode(2, QHeaderView.Stretch)
         self._provider_tree.itemSelectionChanged.connect(self._on_provider_selection_changed)
         layout.addWidget(self._provider_tree)
         return group
@@ -172,6 +192,10 @@ class MainWindow(QMainWindow):
         self._profile_tree.setHeaderLabels(["Provider", "Profile", "Source", "Details"])
         self._profile_tree.setRootIsDecorated(False)
         self._profile_tree.setAlternatingRowColors(True)
+        self._profile_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self._profile_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self._profile_tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self._profile_tree.header().setSectionResizeMode(3, QHeaderView.Stretch)
         self._profile_tree.itemSelectionChanged.connect(self._on_profile_selection_changed)
         layout.addWidget(self._profile_tree)
         return group
@@ -193,19 +217,26 @@ class MainWindow(QMainWindow):
         self._detail_summary.setWordWrap(True)
         self._detail_notes.setWordWrap(True)
         self._detail_notes.setStyleSheet("color: #4f6172;")
-
-        form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignTop)
+        self._reveal_sensitive_button.setCheckable(True)
+        self._reveal_sensitive_button.setEnabled(False)
+        self._reveal_sensitive_button.toggled.connect(self._on_sensitive_visibility_toggled)
         self._detail_fields_tree.setColumnCount(2)
         self._detail_fields_tree.setHeaderLabels(["Field", "Value"])
         self._detail_fields_tree.setRootIsDecorated(False)
         self._detail_fields_tree.setAlternatingRowColors(True)
-        form.addRow(self._detail_fields_tree)
+        self._detail_fields_tree.setWordWrap(True)
+        self._detail_fields_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self._detail_fields_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+        self._detail_fields_tree.setMinimumHeight(240)
 
-        layout.addWidget(self._detail_title)
+        heading_layout = QHBoxLayout()
+        heading_layout.addWidget(self._detail_title, 1)
+        heading_layout.addWidget(self._reveal_sensitive_button, 0, Qt.AlignTop)
+
+        layout.addLayout(heading_layout)
         layout.addWidget(self._detail_subtitle)
         layout.addWidget(self._detail_summary)
-        layout.addLayout(form)
+        layout.addWidget(self._detail_fields_tree, 1)
         layout.addWidget(self._detail_notes)
         return group
 
@@ -216,6 +247,9 @@ class MainWindow(QMainWindow):
         self._auth_methods_tree.setHeaderLabels(["Method", "Status", "Summary"])
         self._auth_methods_tree.setRootIsDecorated(False)
         self._auth_methods_tree.setAlternatingRowColors(True)
+        self._auth_methods_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self._auth_methods_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self._auth_methods_tree.header().setSectionResizeMode(2, QHeaderView.Stretch)
         layout.addWidget(self._auth_methods_tree)
         return group
 
@@ -226,6 +260,9 @@ class MainWindow(QMainWindow):
         self._capabilities_tree.setHeaderLabels(["Capability", "Status", "Summary"])
         self._capabilities_tree.setRootIsDecorated(False)
         self._capabilities_tree.setAlternatingRowColors(True)
+        self._capabilities_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self._capabilities_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self._capabilities_tree.header().setSectionResizeMode(2, QHeaderView.Stretch)
         layout.addWidget(self._capabilities_tree)
         return group
 
@@ -310,6 +347,10 @@ class MainWindow(QMainWindow):
         self._detail_title.setText(details.title)
         self._detail_subtitle.setText(details.subtitle)
         self._detail_summary.setText(details.summary)
+        has_sensitive_fields = any(field.sensitive for field in details.detail_fields)
+        if not has_sensitive_fields:
+            self._set_sensitive_visibility(False)
+        self._reveal_sensitive_button.setEnabled(has_sensitive_fields)
         notes = []
         if details.source_paths:
             notes.append(
@@ -320,7 +361,14 @@ class MainWindow(QMainWindow):
 
         self._detail_fields_tree.clear()
         for field in details.detail_fields:
-            self._detail_fields_tree.addTopLevelItem(QTreeWidgetItem([field.label, field.value]))
+            field_value = self._display_field_value(field)
+            item = QTreeWidgetItem([field.label, field_value])
+            item.setToolTip(0, field.label)
+            if field.sensitive and not self._show_sensitive_values:
+                item.setToolTip(1, "Sensitive value hidden. Use Reveal Sensitive Values to display it.")
+            else:
+                item.setToolTip(1, field.value)
+            self._detail_fields_tree.addTopLevelItem(item)
         self._detail_fields_tree.resizeColumnToContents(0)
 
         self._auth_methods_tree.clear()
@@ -383,6 +431,7 @@ class MainWindow(QMainWindow):
             return
         provider_id = item.data(0, Qt.UserRole)
         if provider_id:
+            self._set_sensitive_visibility(False)
             self._controller.set_current_provider(provider_id)
 
     def _on_profile_selection_changed(self) -> None:
@@ -392,7 +441,30 @@ class MainWindow(QMainWindow):
         provider_id = item.data(0, Qt.UserRole)
         profile_id = item.data(1, Qt.UserRole)
         if provider_id and profile_id:
+            self._set_sensitive_visibility(False)
             self._controller.select_profile(provider_id, profile_id)
 
     def _show_about_dialog(self) -> None:
         QMessageBox.about(self, "About CloudSprocket", self.about_text())
+
+    def _display_field_value(self, field: DetailField) -> str:
+        if field.sensitive and not self._show_sensitive_values:
+            return "Hidden until revealed"
+        return field.value
+
+    def _on_sensitive_visibility_toggled(self, checked: bool) -> None:
+        self._show_sensitive_values = checked
+        self._sync_sensitive_button_label()
+        self._render_profile_details(self._controller.selected_profile_details())
+
+    def _set_sensitive_visibility(self, visible: bool) -> None:
+        self._show_sensitive_values = visible
+        self._reveal_sensitive_button.blockSignals(True)
+        self._reveal_sensitive_button.setChecked(visible)
+        self._reveal_sensitive_button.blockSignals(False)
+        self._sync_sensitive_button_label()
+
+    def _sync_sensitive_button_label(self) -> None:
+        self._reveal_sensitive_button.setText(
+            "Hide Sensitive Values" if self._show_sensitive_values else "Reveal Sensitive Values"
+        )

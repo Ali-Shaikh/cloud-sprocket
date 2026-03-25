@@ -32,6 +32,11 @@ class StaticDiscoveryService:
                     attributes=(
                         DetailField(label="region", value="us-east-1"),
                         DetailField(label="sso_start_url", value="https://example.awsapps.com/start"),
+                        DetailField(
+                            label="aws_secret_access_key",
+                            value="super-secret-value",
+                            sensitive=True,
+                        ),
                     ),
                 ),
                 DiscoveredProfile(
@@ -60,6 +65,18 @@ class FakeDesktopIntegration:
 class NoopRunner:
     def run(self, spec, on_finished) -> None:
         raise AssertionError("This test should not trigger process actions.")
+
+
+def _detail_value(window: MainWindow, label: str) -> str:
+    return _detail_item(window, label).text(1)
+
+
+def _detail_item(window: MainWindow, label: str):
+    for index in range(window.detail_fields_tree.topLevelItemCount()):
+        item = window.detail_fields_tree.topLevelItem(index)
+        if item.text(0) == label:
+            return item
+    raise AssertionError(f"Missing detail field {label}")
 
 
 def test_main_window_renders_branding_and_actions(qapp, tmp_path: Path) -> None:
@@ -114,3 +131,37 @@ def test_main_window_selection_updates_details_and_log_panel(qapp, tmp_path: Pat
 
     assert "Copied export snippet" in window.log_panel.toPlainText()
     assert "prod" in desktop.copied_texts[-1]
+
+
+def test_main_window_masks_sensitive_fields_until_explicit_reveal(qapp, tmp_path: Path) -> None:
+    settings = AppSettings.from_env(
+        home_dir=tmp_path / "home",
+        appdata_dir=tmp_path / "appdata",
+        local_appdata_dir=tmp_path / "local-appdata",
+        config_dir=tmp_path / "config-root",
+    )
+    controller = CloudSprocketController(
+        settings=settings,
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(),
+        command_runner=NoopRunner(),
+        desktop_integration=FakeDesktopIntegration(),
+    )
+    window = MainWindow(settings=settings, controller=controller)
+    secret_label = "Aws Secret Access Key"
+
+    assert window.reveal_sensitive_button.isEnabled()
+    assert _detail_value(window, secret_label) == "Hidden until revealed"
+    assert "super-secret-value" not in _detail_item(window, secret_label).toolTip(1)
+
+    window.reveal_sensitive_button.click()
+    qapp.processEvents()
+
+    assert _detail_value(window, secret_label) == "super-secret-value"
+
+    second_item = window.profile_tree.topLevelItem(1)
+    window.profile_tree.setCurrentItem(second_item)
+    qapp.processEvents()
+
+    assert not window.reveal_sensitive_button.isChecked()
+    assert not window.reveal_sensitive_button.isEnabled()

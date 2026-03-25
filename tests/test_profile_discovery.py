@@ -40,7 +40,10 @@ def test_profile_discovery_collects_aws_azure_and_gcp(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     settings.aws_credentials_path.write_text(
-        "[default]\naws_access_key_id = one\n\n[dev]\naws_access_key_id = two\n",
+        (
+            "[default]\naws_access_key_id = one\naws_secret_access_key = hidden-one\n\n"
+            "[dev]\naws_access_key_id = two\naws_secret_access_key = hidden-two\n"
+        ),
         encoding="utf-8",
     )
 
@@ -76,3 +79,13 @@ def test_profile_discovery_collects_aws_azure_and_gcp(tmp_path: Path) -> None:
     assert ("gcp", "team") in discovered_keys
     assert not report.warnings
 
+    aws_profiles = {
+        profile.profile_id: profile for profile in report.profiles if profile.provider_id == "aws"
+    }
+    default_attributes = {
+        attribute.label: attribute for attribute in aws_profiles["default"].attributes
+    }
+
+    assert default_attributes["region"].sensitive is False
+    assert default_attributes["aws_access_key_id"].sensitive is True
+    assert default_attributes["aws_secret_access_key"].sensitive is True

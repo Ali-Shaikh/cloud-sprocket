@@ -7,6 +7,22 @@ from pathlib import Path
 from cloudsprocket.config import AppSettings
 from cloudsprocket.models import DetailField, DiscoveredProfile, DiscoveryReport, DiscoveryWarning
 
+SENSITIVE_FIELD_NAMES = {
+    "aws_access_key_id",
+    "aws_secret_access_key",
+    "aws_session_token",
+    "access_key",
+    "secret_key",
+    "secret_access_key",
+    "client_secret",
+    "refresh_token",
+    "access_token",
+    "id_token",
+    "password",
+}
+
+SENSITIVE_FIELD_MARKERS = ("secret", "token", "password")
+
 
 class ProfileDiscoveryService:
     def __init__(self, settings: AppSettings) -> None:
@@ -102,7 +118,7 @@ class ProfileDiscoveryService:
                     )
                 ),
                 attributes=tuple(
-                    DetailField(label=key, value=value)
+                    DetailField(label=key, value=value, sensitive=self._is_sensitive_field(key))
                     for key, value in sorted(section_values.items())
                 ),
             )
@@ -151,12 +167,28 @@ class ProfileDiscoveryService:
                 user_name = str(user_payload.get("name") or "").strip()
             details = ", ".join(part for part in (tenant_id, user_name) if part)
             attributes = [
-                DetailField(label="subscription_id", value=subscription_id),
+                DetailField(
+                    label="subscription_id",
+                    value=subscription_id,
+                    sensitive=self._is_sensitive_field("subscription_id"),
+                ),
             ]
             if tenant_id:
-                attributes.append(DetailField(label="tenant_id", value=tenant_id))
+                attributes.append(
+                    DetailField(
+                        label="tenant_id",
+                        value=tenant_id,
+                        sensitive=self._is_sensitive_field("tenant_id"),
+                    )
+                )
             if user_name:
-                attributes.append(DetailField(label="user_name", value=user_name))
+                attributes.append(
+                    DetailField(
+                        label="user_name",
+                        value=user_name,
+                        sensitive=self._is_sensitive_field("user_name"),
+                    )
+                )
             profiles.append(
                 DiscoveredProfile(
                     provider_id="azure",
@@ -199,11 +231,29 @@ class ProfileDiscoveryService:
             project = parser.get("core", "project", fallback="").strip()
             display_name = project or profile_name
             details = ", ".join(part for part in (account, project) if part)
-            attributes = [DetailField(label="configuration", value=profile_name)]
+            attributes = [
+                DetailField(
+                    label="configuration",
+                    value=profile_name,
+                    sensitive=self._is_sensitive_field("configuration"),
+                )
+            ]
             if account:
-                attributes.append(DetailField(label="account", value=account))
+                attributes.append(
+                    DetailField(
+                        label="account",
+                        value=account,
+                        sensitive=self._is_sensitive_field("account"),
+                    )
+                )
             if project:
-                attributes.append(DetailField(label="project", value=project))
+                attributes.append(
+                    DetailField(
+                        label="project",
+                        value=project,
+                        sensitive=self._is_sensitive_field("project"),
+                    )
+                )
             profiles.append(
                 DiscoveredProfile(
                     provider_id="gcp",
@@ -226,3 +276,10 @@ class ProfileDiscoveryService:
             section_values.get("role_arn", "").strip(),
         )
         return ", ".join(field for field in detail_fields if field)
+
+    @staticmethod
+    def _is_sensitive_field(label: str) -> bool:
+        normalized_label = label.lower()
+        if normalized_label in SENSITIVE_FIELD_NAMES:
+            return True
+        return any(marker in normalized_label for marker in SENSITIVE_FIELD_MARKERS)
