@@ -36,6 +36,7 @@ from cloudsprocket.services.auth import AuthStatusService
 from cloudsprocket.services.command_runner import BackgroundCommandRunner
 from cloudsprocket.services.profile_discovery import ProfileDiscoveryService
 from cloudsprocket.services.provider_actions import ProviderAdapter, create_provider_adapters
+from cloudsprocket.services.url_tester import BackgroundUrlValidator, UrlValidationResult, analyse_url
 
 
 class DesktopIntegration(Protocol):
@@ -66,6 +67,7 @@ class CloudSprocketController(QObject):
         profile_discovery: ProfileDiscoveryService,
         provider_adapters: dict[str, ProviderAdapter] | None = None,
         command_runner: BackgroundCommandRunner | None = None,
+        url_validator: BackgroundUrlValidator | None = None,
         desktop_integration: DesktopIntegration | None = None,
     ) -> None:
         super().__init__()
@@ -74,6 +76,7 @@ class CloudSprocketController(QObject):
         self._profile_discovery = profile_discovery
         self._provider_adapters = provider_adapters or create_provider_adapters(settings)
         self._command_runner = command_runner or BackgroundCommandRunner()
+        self._url_validator = url_validator or BackgroundUrlValidator()
         self._desktop_integration = desktop_integration or QtDesktopIntegration()
         self._session_state = SessionState()
         self._provider_snapshot: tuple[ProviderHealth, ...] = ()
@@ -320,6 +323,12 @@ class CloudSprocketController(QObject):
     def can_copy_aws_s3_signed_url(self) -> bool:
         return bool(self._session_state.aws_s3_workspace.signed_url)
 
+    def can_analyse_aws_s3_test_url(self) -> bool:
+        return bool(self._session_state.aws_s3_workspace.url_tester_input.strip())
+
+    def can_validate_aws_s3_test_url(self) -> bool:
+        return self.can_analyse_aws_s3_test_url() and self._session_state.command_state != CommandState.RUNNING
+
     def set_aws_s3_prefix_filter(self, prefix: str) -> bool:
         normalised_prefix = prefix.strip()
         state = self._session_state.aws_s3_workspace
@@ -359,6 +368,20 @@ class CloudSprocketController(QObject):
             duration_unit,
         )
 
+    def set_aws_s3_test_url_input(self, url: str) -> bool:
+        normalised_url = url.strip()
+        state = self._session_state.aws_s3_workspace
+        if normalised_url == state.url_tester_input:
+            return False
+        state.url_tester_input = normalised_url
+        state.url_tester_detail_fields = ()
+        if normalised_url:
+            state.url_tester_status_message = "Analyse or validate the pasted URL."
+        else:
+            state.url_tester_status_message = "Paste any URL to inspect it or validate it."
+        self.state_changed.emit()
+        return True
+
     def copy_aws_s3_uri(self) -> bool:
         bucket_name = self._session_state.aws_s3_workspace.selected_bucket_name
         if bucket_name is None:
@@ -394,6 +417,24 @@ class CloudSprocketController(QObject):
             "Copied the signed URL to the clipboard.",
             details=signed_url,
             action_id="aws-s3-signed-url-copy",
+        )
+        self.state_changed.emit()
+        return True
+
+    def use_generated_aws_s3_signed_url_for_testing(self) -> bool:
+        signed_url = self._session_state.aws_s3_workspace.signed_url.strip()
+        if not signed_url:
+            message = "Generate a signed URL before loading it into the tester."
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-url-tester-use-generated")
+            self.state_changed.emit()
+            return False
+        state = self._session_state.aws_s3_workspace
+        state.url_tester_input = signed_url
+        self._apply_url_test_analysis(signed_url)
+        self._append_log(
+            LogLevel.SUCCESS,
+            "Loaded the generated signed URL into the tester.",
+            action_id="aws-s3-url-tester-use-generated",
         )
         self.state_changed.emit()
         return True
@@ -474,7 +515,61 @@ class CloudSprocketController(QObject):
             self.state_changed.emit()
             return False
         duration_seconds = self._aws_s3_signed_url_duration_seconds()
-        return self._start_aws_s3_signed_url_generation(bucket_name, object_key, duration_seconds)
+        cached_region = self._session_state.aws_s3_workspace.bucket_regions.get(bucket_name, "").strip()
+        if cached_region:
+            return self._start_aws_s3_signed_url_generation(
+                bucket_name,
+                object_key,
+                duration_seconds,
+                cached_region,
+            )
+        return self._start_aws_s3_bucket_region_lookup(bucket_name, object_key, duration_seconds)
+
+    def analyse_aws_s3_test_url(self) -> bool:
+        url = self._session_state.aws_s3_workspace.url_tester_input.strip()
+        if not url:
+            message = "Paste a URL before analysing it."
+            self._session_state.aws_s3_workspace.url_tester_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-url-analyse")
+            self.state_changed.emit()
+            return False
+        self._apply_url_test_analysis(url)
+        self._append_log(
+            LogLevel.INFO,
+            self._session_state.aws_s3_workspace.url_tester_status_message,
+            action_id="aws-s3-url-analyse",
+        )
+        self.state_changed.emit()
+        return True
+
+    def validate_aws_s3_test_url(self) -> bool:
+        url = self._session_state.aws_s3_workspace.url_tester_input.strip()
+        if not url:
+            message = "Paste a URL before validating it."
+            self._session_state.aws_s3_workspace.url_tester_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-url-validate")
+            self.state_changed.emit()
+            return False
+        if self._session_state.command_state == CommandState.RUNNING:
+            message = "Wait for the current command to finish before validating a URL."
+            self._session_state.aws_s3_workspace.url_tester_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-url-validate")
+            self.state_changed.emit()
+            return False
+
+        self._apply_url_test_analysis(url)
+        self._session_state.command_state = CommandState.RUNNING
+        self._session_state.running_action_id = "aws-s3-url-validate"
+        self._session_state.aws_s3_workspace.url_tester_status_message = "Validating the URL..."
+        self._append_log(
+            LogLevel.INFO,
+            "Running URL validation",
+            details=url,
+            action_id="aws-s3-url-validate",
+        )
+        self.state_changed.emit()
+        self._url_validator.run(url, self._finish_aws_s3_test_url_validation)
+        return True
 
     def select_aws_s3_bucket(self, bucket_name: str) -> bool:
         if bucket_name == self._session_state.aws_s3_workspace.selected_bucket_name:
@@ -878,6 +973,7 @@ class CloudSprocketController(QObject):
         bucket_name: str,
         object_key: str,
         duration_seconds: int,
+        bucket_region: str,
     ) -> bool:
         available, reason = self.aws_s3_availability()
         if not available:
@@ -909,10 +1005,9 @@ class CloudSprocketController(QObject):
             str(duration_seconds),
             "--profile",
             profile.profile_id,
+            "--region",
+            bucket_region,
         ]
-        region = self._selected_aws_region(profile)
-        if region:
-            args.extend(["--region", region])
         args.append("--no-cli-pager")
         spec = CommandSpec(
             action_id="aws-s3-signed-url",
@@ -932,6 +1027,65 @@ class CloudSprocketController(QObject):
             ),
         )
 
+    def _start_aws_s3_bucket_region_lookup(
+        self,
+        bucket_name: str,
+        object_key: str,
+        duration_seconds: int,
+    ) -> bool:
+        available, reason = self.aws_s3_availability()
+        if not available:
+            self._session_state.aws_s3_workspace.signed_url_status_message = reason
+            self._append_log(LogLevel.WARNING, reason, action_id="aws-s3-bucket-region")
+            self.state_changed.emit()
+            return False
+        if self._session_state.command_state == CommandState.RUNNING:
+            message = "Wait for the current command to finish before resolving the bucket region."
+            self._session_state.aws_s3_workspace.signed_url_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-bucket-region")
+            self.state_changed.emit()
+            return False
+
+        profile = self.locked_profile()
+        if profile is None:
+            return False
+
+        state = self._session_state.aws_s3_workspace
+        state.selected_bucket_name = bucket_name
+        state.selected_object_key = object_key
+        state.signed_url = ""
+        state.signed_url_status_message = f"Resolving the bucket region for {bucket_name}..."
+        spec = CommandSpec(
+            action_id="aws-s3-bucket-region",
+            execution_type=CommandExecutionType.PROCESS,
+            program="aws",
+            args=(
+                "s3api",
+                "head-bucket",
+                "--bucket",
+                bucket_name,
+                "--profile",
+                profile.profile_id,
+                "--query",
+                "BucketRegion",
+                "--output",
+                "text",
+                "--no-cli-pager",
+            ),
+            summary=f"Resolve the bucket region for {bucket_name}",
+        )
+        return self._run_process_command(
+            action_id="aws-s3-bucket-region",
+            label=f"S3 Bucket Region for {bucket_name}",
+            spec=spec,
+            on_finished=lambda result: self._finish_aws_s3_bucket_region_lookup(
+                bucket_name,
+                object_key,
+                duration_seconds,
+                result,
+            ),
+        )
+
     def _finish_aws_s3_bucket_refresh(self, profile_id: str, result: CommandResult) -> None:
         self._session_state.command_state = CommandState.IDLE
         self._session_state.running_action_id = None
@@ -941,6 +1095,7 @@ class CloudSprocketController(QObject):
             state.status_message = failure_message
             state.bucket_status_message = failure_message
             state.buckets = ()
+            state.bucket_regions = {}
             state.selected_bucket_name = None
             state.objects = ()
             state.selected_object_key = None
@@ -971,6 +1126,11 @@ class CloudSprocketController(QObject):
             )
         )
         state.buckets = buckets
+        state.bucket_regions = {
+            bucket_name: region
+            for bucket_name, region in state.bucket_regions.items()
+            if bucket_name in {bucket.name for bucket in buckets}
+        }
         state.status_message = f"Loaded {len(buckets)} S3 buckets for {profile_id}."
         if not buckets:
             state.selected_bucket_name = None
@@ -1153,15 +1313,69 @@ class CloudSprocketController(QObject):
         )
         self.state_changed.emit()
 
+    def _finish_aws_s3_bucket_region_lookup(
+        self,
+        bucket_name: str,
+        object_key: str,
+        duration_seconds: int,
+        result: CommandResult,
+    ) -> None:
+        self._session_state.command_state = CommandState.IDLE
+        self._session_state.running_action_id = None
+        if not result.succeeded:
+            failure_message = self._command_failure_summary(
+                result,
+                f"Bucket region lookup failed for {bucket_name}.",
+            )
+            self._session_state.aws_s3_workspace.signed_url_status_message = failure_message
+            self._append_log(
+                LogLevel.ERROR,
+                failure_message,
+                details=result.stderr or result.stdout,
+                action_id="aws-s3-bucket-region",
+            )
+            self.state_changed.emit()
+            return
+
+        bucket_region = (result.stdout or "").strip() or "us-east-1"
+        self._session_state.aws_s3_workspace.bucket_regions[bucket_name] = bucket_region
+        self._append_log(
+            LogLevel.SUCCESS,
+            f"Resolved bucket region for {bucket_name}: {bucket_region}.",
+            action_id="aws-s3-bucket-region",
+        )
+        self.state_changed.emit()
+        self._start_aws_s3_signed_url_generation(
+            bucket_name,
+            object_key,
+            duration_seconds,
+            bucket_region,
+        )
+
+    def _finish_aws_s3_test_url_validation(self, result: UrlValidationResult) -> None:
+        self._session_state.command_state = CommandState.IDLE
+        self._session_state.running_action_id = None
+        self._apply_url_test_analysis(result.url, extra_fields=result.detail_fields)
+        self._session_state.aws_s3_workspace.url_tester_status_message = result.summary
+        self._append_log(
+            LogLevel.SUCCESS if result.succeeded else LogLevel.ERROR,
+            result.summary,
+            action_id="aws-s3-url-validate",
+        )
+        self.state_changed.emit()
+
     def _reset_aws_s3_workspace(self) -> None:
         state = self._session_state.aws_s3_workspace
         available, reason = self.aws_s3_availability()
         state.buckets = ()
+        state.bucket_regions = {}
         state.selected_bucket_name = None
         state.objects = ()
         state.selected_object_key = None
         state.object_metadata = ()
         state.signed_url = ""
+        state.url_tester_input = ""
+        state.url_tester_detail_fields = ()
         if available:
             profile = self.locked_profile()
             profile_id = profile.profile_id if profile is not None else "locked profile"
@@ -1169,11 +1383,13 @@ class CloudSprocketController(QObject):
             state.bucket_status_message = "Refresh buckets to load S3 buckets."
             state.object_status_message = "Select an object to inspect its metadata."
             state.signed_url_status_message = "Select an object to generate a signed URL."
+            state.url_tester_status_message = "Paste any URL to inspect it or validate it."
             return
         state.status_message = reason
         state.bucket_status_message = reason
         state.object_status_message = reason
         state.signed_url_status_message = reason
+        state.url_tester_status_message = reason
 
     def _command_failure_summary(self, result: CommandResult, fallback: str) -> str:
         return result.stderr.strip() or result.stdout.strip() or result.summary or fallback
@@ -1230,11 +1446,17 @@ class CloudSprocketController(QObject):
             )
         return tuple(metadata_fields)
 
-    def _selected_aws_region(self, profile) -> str | None:
-        if profile is None:
-            return None
-        region = profile.attribute_map().get("region", "").strip()
-        return region or None
+    def _apply_url_test_analysis(
+        self,
+        url: str,
+        *,
+        extra_fields: tuple[DetailField, ...] = (),
+    ) -> None:
+        inspection = analyse_url(url)
+        state = self._session_state.aws_s3_workspace
+        state.url_tester_input = url
+        state.url_tester_status_message = inspection.summary
+        state.url_tester_detail_fields = (*inspection.detail_fields, *extra_fields)
 
     def _reset_s3_signed_url_state(self, state: S3WorkspaceState, *, reason: str | None = None) -> None:
         state.signed_url = ""

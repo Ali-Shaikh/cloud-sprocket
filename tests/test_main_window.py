@@ -14,6 +14,7 @@ from cloudsprocket.models import (
     ProviderState,
 )
 from cloudsprocket.services.app_controller import CloudSprocketController
+from cloudsprocket.services.url_tester import UrlValidationResult
 from cloudsprocket.ui.main_window import MainWindow
 
 
@@ -87,6 +88,18 @@ class DeferredRunner:
 
     def finish_next(self, result: CommandResult) -> None:
         spec, callback = self.calls.pop(0)
+        callback(result)
+
+
+class DeferredUrlValidator:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, object]] = []
+
+    def run(self, url: str, on_finished) -> None:
+        self.calls.append((url, on_finished))
+
+    def finish_next(self, result: UrlValidationResult) -> None:
+        _url, callback = self.calls.pop(0)
         callback(result)
 
 
@@ -460,6 +473,19 @@ def test_main_window_generates_and_copies_s3_signed_url_with_day_duration(qapp, 
     window.workspace_s3_generate_signed_url_button.click()
     qapp.processEvents()
 
+    region_spec, _callback = runner.calls[0]
+    assert region_spec.args[:2] == ("s3api", "head-bucket")
+    runner.finish_next(
+        CommandResult(
+            spec=region_spec,
+            exit_code=0,
+            stdout="eu-west-2",
+            summary="bucket-region",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
     presign_spec, _callback = runner.calls[0]
     assert presign_spec.args[:2] == ("s3", "presign")
     assert "--expires-in" in presign_spec.args
@@ -484,3 +510,62 @@ def test_main_window_generates_and_copies_s3_signed_url_with_day_duration(qapp, 
     qapp.processEvents()
 
     assert desktop.copied_texts[-1] == signed_url
+
+
+def test_main_window_can_analyse_and_validate_a_pasted_url(qapp, tmp_path: Path) -> None:
+    settings = AppSettings.from_env(
+        home_dir=tmp_path / "home",
+        appdata_dir=tmp_path / "appdata",
+        local_appdata_dir=tmp_path / "local-appdata",
+        config_dir=tmp_path / "config-root",
+    )
+    url_validator = DeferredUrlValidator()
+    controller = CloudSprocketController(
+        settings=settings,
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(),
+        command_runner=DeferredRunner(),
+        url_validator=url_validator,
+        desktop_integration=FakeDesktopIntegration(),
+    )
+    window = MainWindow(settings=settings, controller=controller)
+
+    window.lock_session_button.click()
+    qapp.processEvents()
+
+    pasted_url = (
+        "https://example-bucket.s3.eu-west-2.amazonaws.com/logs/app.log"
+        "?X-Amz-Algorithm=AWS4-HMAC-SHA256"
+        "&X-Amz-Date=20260325T100000Z"
+        "&X-Amz-Expires=7200"
+        "&X-Amz-Security-Token=token"
+    )
+    window.workspace_s3_url_tester_input.setPlainText(pasted_url)
+    window.workspace_s3_analyse_url_button.click()
+    qapp.processEvents()
+
+    labels = {
+        window.workspace_s3_url_tester_details_tree.topLevelItem(index).text(0)
+        for index in range(window.workspace_s3_url_tester_details_tree.topLevelItemCount())
+    }
+    assert {"Signature Type", "Nominal Expiry", "Time Remaining"} <= labels
+
+    window.workspace_s3_validate_url_button.click()
+    qapp.processEvents()
+    assert url_validator.calls[0][0] == pasted_url
+
+    url_validator.finish_next(
+        UrlValidationResult(
+            url=pasted_url,
+            succeeded=True,
+            summary="Live validation succeeded with HTTP 206.",
+            detail_fields=(DetailField(label="HTTP Status", value="206 Partial Content"),),
+        )
+    )
+    qapp.processEvents()
+
+    labels = {
+        window.workspace_s3_url_tester_details_tree.topLevelItem(index).text(0)
+        for index in range(window.workspace_s3_url_tester_details_tree.topLevelItemCount())
+    }
+    assert "HTTP Status" in labels

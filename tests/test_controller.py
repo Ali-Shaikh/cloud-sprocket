@@ -14,6 +14,7 @@ from cloudsprocket.models import (
 )
 from cloudsprocket.services.app_controller import CloudSprocketController
 from cloudsprocket.services.provider_actions import create_provider_adapters
+from cloudsprocket.services.url_tester import UrlValidationResult
 
 
 class StaticAuthService:
@@ -74,6 +75,18 @@ class ImmediateRunner:
 
     def run(self, spec, on_finished) -> None:
         on_finished(self._result_factory(spec))
+
+
+class DeferredUrlValidator:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, object]] = []
+
+    def run(self, url: str, on_finished) -> None:
+        self.calls.append((url, on_finished))
+
+    def finish_next(self, result: UrlValidationResult) -> None:
+        _url, callback = self.calls.pop(0)
+        callback(result)
 
 
 def _make_settings(tmp_path: Path) -> AppSettings:
@@ -447,6 +460,19 @@ def test_controller_generates_s3_signed_url_with_day_duration_selection(tmp_path
     assert controller.set_aws_s3_signed_url_duration_value(2)
     assert controller.generate_aws_s3_signed_url()
 
+    region_spec, _callback = runner.calls[0]
+    assert region_spec.args[:2] == ("s3api", "head-bucket")
+    assert "--query" in region_spec.args
+    runner.finish_next(
+        CommandResult(
+            spec=region_spec,
+            exit_code=0,
+            stdout="eu-west-2",
+            summary="bucket-region",
+            succeeded=True,
+        )
+    )
+
     presign_spec, _callback = runner.calls[0]
     assert presign_spec.args[:2] == ("s3", "presign")
     assert presign_spec.args[2] == "s3://alpha/logs/app.log"
@@ -454,6 +480,8 @@ def test_controller_generates_s3_signed_url_with_day_duration_selection(tmp_path
     expires_index = presign_spec.args.index("--expires-in")
     assert presign_spec.args[expires_index + 1] == "172800"
     assert "--region" in presign_spec.args
+    region_index = presign_spec.args.index("--region")
+    assert presign_spec.args[region_index + 1] == "eu-west-2"
     assert "--no-cli-pager" in presign_spec.args
 
     signed_url = "https://example-bucket.s3.amazonaws.com/logs/app.log?X-Amz-Signature=abc123"
@@ -473,3 +501,47 @@ def test_controller_generates_s3_signed_url_with_day_duration_selection(tmp_path
 
     assert controller.copy_aws_s3_signed_url()
     assert desktop.copied_texts[-1] == signed_url
+
+
+def test_controller_can_analyse_and_validate_a_pasted_url(tmp_path: Path) -> None:
+    url_validator = DeferredUrlValidator()
+    controller = CloudSprocketController(
+        settings=_make_settings(tmp_path),
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(_make_profiles()),
+        command_runner=DeferredRunner(),
+        url_validator=url_validator,
+        desktop_integration=FakeDesktopIntegration(),
+    )
+
+    pasted_url = (
+        "https://example-bucket.s3.eu-west-2.amazonaws.com/logs/app.log"
+        "?X-Amz-Algorithm=AWS4-HMAC-SHA256"
+        "&X-Amz-Date=20260325T100000Z"
+        "&X-Amz-Expires=7200"
+        "&X-Amz-Security-Token=token"
+    )
+    assert controller.set_aws_s3_test_url_input(pasted_url)
+    assert controller.analyse_aws_s3_test_url()
+
+    analysed_state = controller.aws_s3_workspace()
+    analysed_labels = {field.label for field in analysed_state.url_tester_detail_fields}
+    assert {"Signature Type", "Nominal Expiry", "Time Remaining"} <= analysed_labels
+    assert "Nominal expiry is" in analysed_state.url_tester_status_message
+
+    assert controller.validate_aws_s3_test_url()
+    assert url_validator.calls[0][0] == pasted_url
+
+    url_validator.finish_next(
+        UrlValidationResult(
+            url=pasted_url,
+            succeeded=True,
+            summary="Live validation succeeded with HTTP 206.",
+            detail_fields=(DetailField(label="HTTP Status", value="206 Partial Content"),),
+        )
+    )
+
+    validated_state = controller.aws_s3_workspace()
+    validated_labels = {field.label for field in validated_state.url_tester_detail_fields}
+    assert "HTTP Status" in validated_labels
+    assert validated_state.url_tester_status_message == "Live validation succeeded with HTTP 206."

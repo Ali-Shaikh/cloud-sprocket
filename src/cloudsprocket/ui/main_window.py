@@ -113,6 +113,12 @@ class MainWindow(QMainWindow):
         self._workspace_s3_generate_signed_url_button = QPushButton("Generate Signed URL")
         self._workspace_s3_copy_signed_url_button = QPushButton("Copy Signed URL")
         self._workspace_s3_signed_url_output = QPlainTextEdit()
+        self._workspace_s3_use_generated_url_button = QPushButton("Use Generated URL")
+        self._workspace_s3_analyse_url_button = QPushButton("Analyse URL")
+        self._workspace_s3_validate_url_button = QPushButton("Validate URL")
+        self._workspace_s3_url_tester_status_label = QLabel()
+        self._workspace_s3_url_tester_input = QPlainTextEdit()
+        self._workspace_s3_url_tester_details_tree = QTreeWidget()
         self._detail_sections_splitter = QSplitter(Qt.Vertical)
         self._rendering_state = False
 
@@ -128,6 +134,10 @@ class MainWindow(QMainWindow):
         self._workspace_s3_signed_url_duration_unit_combo.currentTextChanged.connect(self._on_s3_signed_url_unit_changed)
         self._workspace_s3_generate_signed_url_button.clicked.connect(self._on_s3_generate_signed_url_clicked)
         self._workspace_s3_copy_signed_url_button.clicked.connect(self._on_s3_copy_signed_url_clicked)
+        self._workspace_s3_use_generated_url_button.clicked.connect(self._on_s3_use_generated_url_clicked)
+        self._workspace_s3_analyse_url_button.clicked.connect(self._on_s3_analyse_url_clicked)
+        self._workspace_s3_validate_url_button.clicked.connect(self._on_s3_validate_url_clicked)
+        self._workspace_s3_url_tester_input.textChanged.connect(self._on_s3_url_tester_text_changed)
         self._workspace_s3_bucket_tree.itemSelectionChanged.connect(self._on_s3_bucket_selection_changed)
         self._workspace_s3_object_tree.itemSelectionChanged.connect(self._on_s3_object_selection_changed)
 
@@ -250,6 +260,26 @@ class MainWindow(QMainWindow):
     @property
     def workspace_s3_signed_url_duration_unit_combo(self) -> QComboBox:
         return self._workspace_s3_signed_url_duration_unit_combo
+
+    @property
+    def workspace_s3_use_generated_url_button(self) -> QPushButton:
+        return self._workspace_s3_use_generated_url_button
+
+    @property
+    def workspace_s3_analyse_url_button(self) -> QPushButton:
+        return self._workspace_s3_analyse_url_button
+
+    @property
+    def workspace_s3_validate_url_button(self) -> QPushButton:
+        return self._workspace_s3_validate_url_button
+
+    @property
+    def workspace_s3_url_tester_input(self) -> QPlainTextEdit:
+        return self._workspace_s3_url_tester_input
+
+    @property
+    def workspace_s3_url_tester_details_tree(self) -> QTreeWidget:
+        return self._workspace_s3_url_tester_details_tree
 
     @property
     def lock_session_button(self) -> QPushButton:
@@ -539,6 +569,21 @@ class MainWindow(QMainWindow):
         self._workspace_s3_signed_url_output.setPlaceholderText("Generated signed URL will appear here.")
         self._workspace_s3_signed_url_output.setLineWrapMode(QPlainTextEdit.NoWrap)
         self._workspace_s3_signed_url_output.setMinimumHeight(96)
+        self._workspace_s3_url_tester_status_label.setWordWrap(True)
+        self._workspace_s3_url_tester_status_label.setStyleSheet(
+            "padding: 10px 12px; background: #f7f8fb; border-radius: 8px; color: #4f6172;"
+        )
+        self._workspace_s3_url_tester_input.setPlaceholderText("Paste any URL here, including a signed URL received from someone else.")
+        self._workspace_s3_url_tester_input.setMinimumHeight(76)
+        self._workspace_s3_url_tester_details_tree.setColumnCount(2)
+        self._workspace_s3_url_tester_details_tree.setHeaderLabels(["Field", "Value"])
+        self._configure_data_tree(self._workspace_s3_url_tester_details_tree)
+        self._workspace_s3_url_tester_details_tree.setUniformRowHeights(False)
+        self._workspace_s3_url_tester_details_tree.setWordWrap(True)
+        self._workspace_s3_url_tester_details_tree.header().setStretchLastSection(False)
+        self._workspace_s3_url_tester_details_tree.header().setSectionResizeMode(0, QHeaderView.Interactive)
+        self._workspace_s3_url_tester_details_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+        self._workspace_s3_url_tester_details_tree.setColumnWidth(0, 220)
 
         self._workspace_s3_bucket_tree.setColumnCount(3)
         self._workspace_s3_bucket_tree.setHeaderLabels(["Bucket", "Created", "Summary"])
@@ -590,6 +635,19 @@ class MainWindow(QMainWindow):
         signed_url_layout.addWidget(self._workspace_s3_signed_url_status_label)
         signed_url_layout.addLayout(signed_url_controls)
         signed_url_layout.addWidget(self._workspace_s3_signed_url_output)
+
+        url_tester_group = QGroupBox("URL Tester")
+        url_tester_layout = QVBoxLayout(url_tester_group)
+        url_tester_controls = QHBoxLayout()
+        url_tester_controls.addWidget(self._workspace_s3_use_generated_url_button)
+        url_tester_controls.addWidget(self._workspace_s3_analyse_url_button)
+        url_tester_controls.addWidget(self._workspace_s3_validate_url_button)
+        url_tester_controls.addStretch(1)
+        url_tester_layout.addWidget(self._workspace_s3_url_tester_status_label)
+        url_tester_layout.addWidget(self._workspace_s3_url_tester_input)
+        url_tester_layout.addLayout(url_tester_controls)
+        url_tester_layout.addWidget(self._workspace_s3_url_tester_details_tree)
+        signed_url_layout.addWidget(url_tester_group)
         object_details_layout.addWidget(signed_url_group)
 
         object_splitter = QSplitter(Qt.Vertical)
@@ -1095,6 +1153,17 @@ class MainWindow(QMainWindow):
         self._workspace_s3_object_details_tree.resizeColumnToContents(0)
         self._workspace_s3_signed_url_status_label.setText(state.signed_url_status_message)
         self._workspace_s3_signed_url_output.setPlainText(state.signed_url)
+        if self._workspace_s3_url_tester_input.toPlainText() != state.url_tester_input:
+            self._workspace_s3_url_tester_input.setPlainText(state.url_tester_input)
+        self._workspace_s3_url_tester_status_label.setText(state.url_tester_status_message)
+        self._workspace_s3_url_tester_details_tree.clear()
+        for field in state.url_tester_detail_fields:
+            item = QTreeWidgetItem([field.label, field.value])
+            item.setToolTip(0, field.label)
+            item.setToolTip(1, field.value)
+            self._workspace_s3_url_tester_details_tree.addTopLevelItem(item)
+        self._workspace_s3_url_tester_details_tree.resizeColumnToContents(0)
+        self._refresh_s3_url_tester_button_state()
 
     def _build_workspace_tab(self, tab: WorkspaceTab) -> QWidget:
         page = QWidget()
@@ -1294,6 +1363,22 @@ class MainWindow(QMainWindow):
     def _on_s3_copy_signed_url_clicked(self) -> None:
         self._controller.copy_aws_s3_signed_url()
 
+    def _on_s3_use_generated_url_clicked(self) -> None:
+        self._controller.use_generated_aws_s3_signed_url_for_testing()
+
+    def _on_s3_analyse_url_clicked(self) -> None:
+        self._controller.set_aws_s3_test_url_input(self._workspace_s3_url_tester_input.toPlainText())
+        self._controller.analyse_aws_s3_test_url()
+
+    def _on_s3_validate_url_clicked(self) -> None:
+        self._controller.set_aws_s3_test_url_input(self._workspace_s3_url_tester_input.toPlainText())
+        self._controller.validate_aws_s3_test_url()
+
+    def _on_s3_url_tester_text_changed(self) -> None:
+        if self._rendering_state:
+            return
+        self._refresh_s3_url_tester_button_state()
+
     def _on_s3_bucket_selection_changed(self) -> None:
         if self._rendering_state:
             return
@@ -1321,6 +1406,13 @@ class MainWindow(QMainWindow):
         if field.sensitive and not self._show_sensitive_values:
             return "Hidden until revealed"
         return field.value
+
+    def _refresh_s3_url_tester_button_state(self) -> None:
+        has_input = bool(self._workspace_s3_url_tester_input.toPlainText().strip())
+        busy = self._controller.session_state.command_state.value == "running"
+        self._workspace_s3_use_generated_url_button.setEnabled(bool(self._controller.aws_s3_workspace().signed_url))
+        self._workspace_s3_analyse_url_button.setEnabled(has_input)
+        self._workspace_s3_validate_url_button.setEnabled(has_input and not busy)
 
     def _on_sensitive_visibility_toggled(self, checked: bool) -> None:
         self._show_sensitive_values = checked

@@ -155,14 +155,18 @@ class S3WorkspaceState:
     object_status_message: str = "Select an object to inspect its metadata."
     prefix_filter: str = ""
     signed_url_status_message: str = "Select an object to generate a signed URL."
+    url_tester_input: str = ""
+    url_tester_status_message: str = "Paste any URL to inspect it or validate it."
     signed_url_duration_value: int = 1
     signed_url_duration_unit: SignedUrlDurationUnit = SignedUrlDurationUnit.HOURS
     buckets: tuple[S3BucketSummary, ...] = ()
+    bucket_regions: dict[str, str] = field(default_factory=dict)
     selected_bucket_name: str | None = None
     objects: tuple[S3ObjectSummary, ...] = ()
     selected_object_key: str | None = None
     object_metadata: tuple[DetailField, ...] = ()
     signed_url: str = ""
+    url_tester_detail_fields: tuple[DetailField, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
