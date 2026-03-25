@@ -275,12 +275,13 @@ def test_main_window_renders_loaded_s3_workspace_data(qapp, tmp_path: Path) -> N
         config_dir=tmp_path / "config-root",
     )
     runner = DeferredRunner()
+    desktop = FakeDesktopIntegration()
     controller = CloudSprocketController(
         settings=settings,
         auth_service=StaticAuthService(),
         profile_discovery=StaticDiscoveryService(),
         command_runner=runner,
-        desktop_integration=FakeDesktopIntegration(),
+        desktop_integration=desktop,
     )
     window = MainWindow(settings=settings, controller=controller)
 
@@ -306,8 +307,20 @@ def test_main_window_renders_loaded_s3_workspace_data(qapp, tmp_path: Path) -> N
         CommandResult(
             spec=object_spec,
             exit_code=0,
-            stdout='{"Contents":[{"Key":"logs/app.log","Size":1024,"LastModified":"2026-03-25T08:15:00Z","StorageClass":"STANDARD"}]}',
+            stdout='{"Contents":[{"Key":"logs/app.log","Size":1024,"LastModified":"2026-03-25T08:15:00Z","StorageClass":"STANDARD","ETag":"\\"abc123\\""}]}',
             summary="objects",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
+    metadata_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=metadata_spec,
+            exit_code=0,
+            stdout='{"ContentLength":1024,"LastModified":"2026-03-25T08:15:00Z","ContentType":"text/plain","StorageClass":"STANDARD","ETag":"\\"abc123\\"","Metadata":{"env":"dev"}}',
+            summary="head-object",
             succeeded=True,
         )
     )
@@ -317,3 +330,65 @@ def test_main_window_renders_loaded_s3_workspace_data(qapp, tmp_path: Path) -> N
     assert window.workspace_s3_object_tree.topLevelItemCount() == 1
     assert window.workspace_s3_bucket_tree.topLevelItem(0).text(0) == "alpha"
     assert window.workspace_s3_object_tree.topLevelItem(0).text(0) == "logs/app.log"
+    assert window.workspace_s3_object_details_tree.topLevelItemCount() >= 5
+
+    window.workspace_s3_copy_uri_button.click()
+    qapp.processEvents()
+
+    assert desktop.copied_texts[-1] == "s3://alpha/logs/app.log"
+
+
+def test_main_window_applies_s3_prefix_filter(qapp, tmp_path: Path) -> None:
+    settings = AppSettings.from_env(
+        home_dir=tmp_path / "home",
+        appdata_dir=tmp_path / "appdata",
+        local_appdata_dir=tmp_path / "local-appdata",
+        config_dir=tmp_path / "config-root",
+    )
+    runner = DeferredRunner()
+    controller = CloudSprocketController(
+        settings=settings,
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(),
+        command_runner=runner,
+        desktop_integration=FakeDesktopIntegration(),
+    )
+    window = MainWindow(settings=settings, controller=controller)
+
+    window.lock_session_button.click()
+    qapp.processEvents()
+    window.workspace_s3_refresh_buckets_button.click()
+    qapp.processEvents()
+
+    bucket_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=bucket_spec,
+            exit_code=0,
+            stdout='{"Buckets":[{"Name":"alpha","CreationDate":"2026-03-24T10:00:00Z"}]}',
+            summary="buckets",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
+    initial_object_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=initial_object_spec,
+            exit_code=0,
+            stdout='{"Contents":[]}',
+            summary="objects",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
+    window.workspace_s3_prefix_input.setText("logs/2026/")
+    window.workspace_s3_apply_prefix_button.click()
+    qapp.processEvents()
+
+    filtered_object_spec, _callback = runner.calls[0]
+    assert "--prefix" in filtered_object_spec.args
+    prefix_index = filtered_object_spec.args.index("--prefix")
+    assert filtered_object_spec.args[prefix_index + 1] == "logs/2026/"

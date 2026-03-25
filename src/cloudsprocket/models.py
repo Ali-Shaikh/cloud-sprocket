@@ -140,15 +140,20 @@ class S3ObjectSummary:
     size: str = ""
     modified_at: str = ""
     storage_class: str = ""
+    etag: str = ""
 
 
 @dataclass(slots=True)
 class S3WorkspaceState:
     status_message: str = "Lock an AWS session to work with S3."
     bucket_status_message: str = "Refresh buckets to begin."
+    object_status_message: str = "Select an object to inspect its metadata."
+    prefix_filter: str = ""
     buckets: tuple[S3BucketSummary, ...] = ()
     selected_bucket_name: str | None = None
     objects: tuple[S3ObjectSummary, ...] = ()
+    selected_object_key: str | None = None
+    object_metadata: tuple[DetailField, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

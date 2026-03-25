@@ -18,6 +18,7 @@ from cloudsprocket.models import (
     CommandResult,
     CommandSpec,
     CommandState,
+    DetailField,
     DiscoveryReport,
     LogEntry,
     LogLevel,
@@ -305,6 +306,50 @@ class CloudSprocketController(QObject):
             and self._session_state.aws_s3_workspace.selected_bucket_name is not None
         )
 
+    def can_refresh_aws_s3_object_metadata(self) -> bool:
+        return (
+            self.can_refresh_aws_s3_buckets()
+            and self._session_state.aws_s3_workspace.selected_bucket_name is not None
+            and self._session_state.aws_s3_workspace.selected_object_key is not None
+        )
+
+    def set_aws_s3_prefix_filter(self, prefix: str) -> bool:
+        normalised_prefix = prefix.strip()
+        state = self._session_state.aws_s3_workspace
+        if normalised_prefix == state.prefix_filter:
+            return False
+        state.prefix_filter = normalised_prefix
+        state.selected_object_key = None
+        state.object_metadata = ()
+        if normalised_prefix:
+            state.object_status_message = f"Prefix filter active: {normalised_prefix}"
+        else:
+            state.object_status_message = "Select an object to inspect its metadata."
+        self.state_changed.emit()
+        return True
+
+    def copy_aws_s3_uri(self) -> bool:
+        bucket_name = self._session_state.aws_s3_workspace.selected_bucket_name
+        if bucket_name is None:
+            message = "Select an S3 bucket before copying an S3 URI."
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-copy-uri")
+            self.state_changed.emit()
+            return False
+        object_key = self._session_state.aws_s3_workspace.selected_object_key
+        if object_key:
+            uri = f"s3://{bucket_name}/{object_key}"
+        else:
+            uri = f"s3://{bucket_name}/"
+        self._desktop_integration.copy_text(uri)
+        self._append_log(
+            LogLevel.SUCCESS,
+            "Copied S3 URI to the clipboard.",
+            details=uri,
+            action_id="aws-s3-copy-uri",
+        )
+        self.state_changed.emit()
+        return True
+
     def refresh_aws_s3_buckets(self) -> bool:
         available, reason = self.aws_s3_availability()
         if not available:
@@ -352,17 +397,46 @@ class CloudSprocketController(QObject):
             return False
         return self._start_aws_s3_object_refresh(bucket_name)
 
+    def refresh_aws_s3_object_metadata(self) -> bool:
+        bucket_name = self._session_state.aws_s3_workspace.selected_bucket_name
+        object_key = self._session_state.aws_s3_workspace.selected_object_key
+        if bucket_name is None or object_key is None:
+            message = "Select an S3 object before refreshing its metadata."
+            self._session_state.aws_s3_workspace.object_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-object-details")
+            self.state_changed.emit()
+            return False
+        return self._start_aws_s3_object_metadata_refresh(bucket_name, object_key)
+
     def select_aws_s3_bucket(self, bucket_name: str) -> bool:
         if bucket_name == self._session_state.aws_s3_workspace.selected_bucket_name:
             return False
         if not any(bucket.name == bucket_name for bucket in self._session_state.aws_s3_workspace.buckets):
             return False
-        self._session_state.aws_s3_workspace.selected_bucket_name = bucket_name
-        self._session_state.aws_s3_workspace.objects = ()
-        self._session_state.aws_s3_workspace.bucket_status_message = (
+        state = self._session_state.aws_s3_workspace
+        state.selected_bucket_name = bucket_name
+        state.objects = ()
+        state.selected_object_key = None
+        state.object_metadata = ()
+        state.object_status_message = "Select an object to inspect its metadata."
+        state.bucket_status_message = (
             f"Selected {bucket_name}. Loading bucket contents..."
         )
         return self._start_aws_s3_object_refresh(bucket_name)
+
+    def select_aws_s3_object(self, object_key: str) -> bool:
+        state = self._session_state.aws_s3_workspace
+        bucket_name = state.selected_bucket_name
+        if bucket_name is None:
+            return False
+        if object_key == state.selected_object_key:
+            return False
+        if not any(obj.key == object_key for obj in state.objects):
+            return False
+        state.selected_object_key = object_key
+        state.object_metadata = ()
+        state.object_status_message = f"Loading metadata for {object_key}..."
+        return self._start_aws_s3_object_metadata_refresh(bucket_name, object_key)
 
     def workspace_tabs(self) -> tuple[WorkspaceTab, ...]:
         if not self.is_session_locked():
@@ -636,27 +710,38 @@ class CloudSprocketController(QObject):
         if profile is None:
             return False
 
-        self._session_state.aws_s3_workspace.selected_bucket_name = bucket_name
-        self._session_state.aws_s3_workspace.objects = ()
-        self._session_state.aws_s3_workspace.bucket_status_message = (
-            f"Loading objects for {bucket_name}..."
+        state = self._session_state.aws_s3_workspace
+        prefix_filter = state.prefix_filter
+        state.selected_bucket_name = bucket_name
+        state.objects = ()
+        state.selected_object_key = None
+        state.object_metadata = ()
+        state.object_status_message = (
+            f"Prefix filter active: {prefix_filter}"
+            if prefix_filter
+            else "Select an object to inspect its metadata."
         )
+        state.bucket_status_message = (
+            f"Loading objects for {bucket_name} with prefix {prefix_filter}..."
+            if prefix_filter
+            else f"Loading objects for {bucket_name}..."
+        )
+        args = [
+            "s3api",
+            "list-objects-v2",
+            "--bucket",
+            bucket_name,
+            "--max-items",
+            "200",
+        ]
+        if prefix_filter:
+            args.extend(["--prefix", prefix_filter])
+        args.extend(["--profile", profile.profile_id, "--output", "json"])
         spec = CommandSpec(
             action_id="aws-s3-objects",
             execution_type=CommandExecutionType.PROCESS,
             program="aws",
-            args=(
-                "s3api",
-                "list-objects-v2",
-                "--bucket",
-                bucket_name,
-                "--max-items",
-                "200",
-                "--profile",
-                profile.profile_id,
-                "--output",
-                "json",
-            ),
+            args=tuple(args),
             summary=f"List S3 objects for bucket {bucket_name}",
         )
         return self._run_process_command(
@@ -664,6 +749,55 @@ class CloudSprocketController(QObject):
             label=f"S3 Objects for {bucket_name}",
             spec=spec,
             on_finished=lambda result: self._finish_aws_s3_object_refresh(bucket_name, result),
+        )
+
+    def _start_aws_s3_object_metadata_refresh(self, bucket_name: str, object_key: str) -> bool:
+        available, reason = self.aws_s3_availability()
+        if not available:
+            self._session_state.aws_s3_workspace.object_status_message = reason
+            self._append_log(LogLevel.WARNING, reason, action_id="aws-s3-object-details")
+            self.state_changed.emit()
+            return False
+        if self._session_state.command_state == CommandState.RUNNING:
+            message = "Wait for the current command to finish before refreshing object metadata."
+            self._session_state.aws_s3_workspace.object_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-object-details")
+            self.state_changed.emit()
+            return False
+
+        profile = self.locked_profile()
+        if profile is None:
+            return False
+
+        self._session_state.aws_s3_workspace.selected_bucket_name = bucket_name
+        self._session_state.aws_s3_workspace.selected_object_key = object_key
+        self._session_state.aws_s3_workspace.object_metadata = ()
+        self._session_state.aws_s3_workspace.object_status_message = (
+            f"Loading metadata for {object_key}..."
+        )
+        spec = CommandSpec(
+            action_id="aws-s3-object-details",
+            execution_type=CommandExecutionType.PROCESS,
+            program="aws",
+            args=(
+                "s3api",
+                "head-object",
+                "--bucket",
+                bucket_name,
+                "--key",
+                object_key,
+                "--profile",
+                profile.profile_id,
+                "--output",
+                "json",
+            ),
+            summary=f"Load metadata for {object_key}",
+        )
+        return self._run_process_command(
+            action_id="aws-s3-object-details",
+            label=f"S3 Object Metadata for {object_key}",
+            spec=spec,
+            on_finished=lambda result: self._finish_aws_s3_object_metadata_refresh(bucket_name, object_key, result),
         )
 
     def _finish_aws_s3_bucket_refresh(self, profile_id: str, result: CommandResult) -> None:
@@ -677,6 +811,9 @@ class CloudSprocketController(QObject):
             state.buckets = ()
             state.selected_bucket_name = None
             state.objects = ()
+            state.selected_object_key = None
+            state.object_metadata = ()
+            state.object_status_message = failure_message
             self._append_log(LogLevel.ERROR, failure_message, details=result.stderr or result.stdout, action_id="aws-s3-buckets")
             self.state_changed.emit()
             return
@@ -705,7 +842,10 @@ class CloudSprocketController(QObject):
         if not buckets:
             state.selected_bucket_name = None
             state.objects = ()
+            state.selected_object_key = None
+            state.object_metadata = ()
             state.bucket_status_message = "No buckets were returned for this locked AWS session."
+            state.object_status_message = "No object metadata is available."
             self._append_log(LogLevel.SUCCESS, state.status_message, action_id="aws-s3-buckets")
             self.state_changed.emit()
             return
@@ -715,6 +855,12 @@ class CloudSprocketController(QObject):
             current_bucket_name = buckets[0].name
         state.selected_bucket_name = current_bucket_name
         state.objects = ()
+        state.selected_object_key = None
+        state.object_metadata = ()
+        if state.prefix_filter:
+            state.object_status_message = f"Prefix filter active: {state.prefix_filter}"
+        else:
+            state.object_status_message = "Select an object to inspect its metadata."
         state.bucket_status_message = f"Loading objects for {current_bucket_name}..."
         self._append_log(LogLevel.SUCCESS, state.status_message, action_id="aws-s3-buckets")
         self.state_changed.emit()
@@ -728,7 +874,10 @@ class CloudSprocketController(QObject):
             failure_message = self._command_failure_summary(result, f"S3 object refresh failed for {bucket_name}.")
             state.objects = ()
             state.selected_bucket_name = bucket_name
+            state.selected_object_key = None
+            state.object_metadata = ()
             state.bucket_status_message = failure_message
+            state.object_status_message = failure_message
             self._append_log(LogLevel.ERROR, failure_message, details=result.stderr or result.stdout, action_id="aws-s3-objects")
             self.state_changed.emit()
             return
@@ -744,17 +893,73 @@ class CloudSprocketController(QObject):
                 size=self._format_s3_size(int(item.get("Size") or 0)),
                 modified_at=self._format_s3_timestamp(str(item.get("LastModified") or "").strip()),
                 storage_class=str(item.get("StorageClass") or "").strip(),
+                etag=str(item.get("ETag") or "").strip().strip('"'),
             )
             for item in payload.get("Contents", ())
             if str(item.get("Key") or "").strip()
         )
         state.selected_bucket_name = bucket_name
         state.objects = objects
+        state.object_metadata = ()
         if objects:
-            state.bucket_status_message = f"Loaded {len(objects)} objects from {bucket_name}."
+            prefix_suffix = f" matching {state.prefix_filter}" if state.prefix_filter else ""
+            state.bucket_status_message = f"Loaded {len(objects)} objects from {bucket_name}{prefix_suffix}."
+            selected_object_key = state.selected_object_key
+            if selected_object_key not in {obj.key for obj in objects}:
+                selected_object_key = objects[0].key
+            state.selected_object_key = selected_object_key
+            state.object_status_message = f"Loading metadata for {selected_object_key}..."
         else:
-            state.bucket_status_message = f"No objects were returned for {bucket_name}."
+            if state.prefix_filter:
+                state.bucket_status_message = f"No objects matched prefix {state.prefix_filter} in {bucket_name}."
+            else:
+                state.bucket_status_message = f"No objects were returned for {bucket_name}."
+            state.selected_object_key = None
+            state.object_status_message = "No object metadata is available."
         self._append_log(LogLevel.SUCCESS, state.bucket_status_message, action_id="aws-s3-objects")
+        self.state_changed.emit()
+        if state.selected_object_key is not None:
+            self._start_aws_s3_object_metadata_refresh(bucket_name, state.selected_object_key)
+
+    def _finish_aws_s3_object_metadata_refresh(
+        self,
+        bucket_name: str,
+        object_key: str,
+        result: CommandResult,
+    ) -> None:
+        self._session_state.command_state = CommandState.IDLE
+        self._session_state.running_action_id = None
+        state = self._session_state.aws_s3_workspace
+        state.selected_bucket_name = bucket_name
+        state.selected_object_key = object_key
+        if not result.succeeded:
+            failure_message = self._command_failure_summary(
+                result,
+                f"S3 metadata refresh failed for {object_key}.",
+            )
+            state.object_metadata = ()
+            state.object_status_message = failure_message
+            self._append_log(
+                LogLevel.ERROR,
+                failure_message,
+                details=result.stderr or result.stdout,
+                action_id="aws-s3-object-details",
+            )
+            self.state_changed.emit()
+            return
+
+        try:
+            payload = json.loads(result.stdout or "{}")
+        except json.JSONDecodeError:
+            payload = {}
+
+        state.object_metadata = self._build_s3_object_metadata(bucket_name, object_key, payload)
+        state.object_status_message = f"Loaded metadata for {object_key}."
+        self._append_log(
+            LogLevel.SUCCESS,
+            state.object_status_message,
+            action_id="aws-s3-object-details",
+        )
         self.state_changed.emit()
 
     def _reset_aws_s3_workspace(self) -> None:
@@ -763,17 +968,73 @@ class CloudSprocketController(QObject):
         state.buckets = ()
         state.selected_bucket_name = None
         state.objects = ()
+        state.selected_object_key = None
+        state.object_metadata = ()
         if available:
             profile = self.locked_profile()
             profile_id = profile.profile_id if profile is not None else "locked profile"
             state.status_message = f"S3 workspace ready for {profile_id}. Refresh buckets to begin."
             state.bucket_status_message = "Refresh buckets to load S3 buckets."
+            state.object_status_message = "Select an object to inspect its metadata."
             return
         state.status_message = reason
         state.bucket_status_message = reason
+        state.object_status_message = reason
 
     def _command_failure_summary(self, result: CommandResult, fallback: str) -> str:
         return result.stderr.strip() or result.stdout.strip() or result.summary or fallback
+
+    def _build_s3_object_metadata(
+        self,
+        bucket_name: str,
+        object_key: str,
+        payload: dict,
+    ) -> tuple[DetailField, ...]:
+        metadata_fields = [
+            DetailField(label="Bucket", value=bucket_name),
+            DetailField(label="Key", value=object_key),
+        ]
+
+        if "ContentLength" in payload:
+            metadata_fields.append(
+                DetailField(label="Size", value=self._format_s3_size(int(payload.get("ContentLength") or 0)))
+            )
+        if payload.get("LastModified"):
+            metadata_fields.append(
+                DetailField(
+                    label="Last Modified",
+                    value=self._format_s3_timestamp(str(payload.get("LastModified") or "").strip()),
+                )
+            )
+        if payload.get("ContentType"):
+            metadata_fields.append(
+                DetailField(label="Content Type", value=str(payload.get("ContentType") or "").strip())
+            )
+        if payload.get("StorageClass"):
+            metadata_fields.append(
+                DetailField(label="Storage Class", value=str(payload.get("StorageClass") or "").strip())
+            )
+        if payload.get("ETag"):
+            metadata_fields.append(
+                DetailField(label="ETag", value=str(payload.get("ETag") or "").strip().strip('"'))
+            )
+        if payload.get("CacheControl"):
+            metadata_fields.append(
+                DetailField(label="Cache Control", value=str(payload.get("CacheControl") or "").strip())
+            )
+        if payload.get("ContentLanguage"):
+            metadata_fields.append(
+                DetailField(label="Content Language", value=str(payload.get("ContentLanguage") or "").strip())
+            )
+        metadata_map = payload.get("Metadata") or {}
+        if metadata_map:
+            metadata_fields.append(
+                DetailField(
+                    label="User Metadata",
+                    value=", ".join(f"{key}={value}" for key, value in sorted(metadata_map.items())),
+                )
+            )
+        return tuple(metadata_fields)
 
     def _format_s3_timestamp(self, value: str) -> str:
         if not value:

@@ -266,12 +266,13 @@ def test_controller_rejects_unavailable_auth_method_selection(tmp_path: Path) ->
 
 def test_controller_loads_s3_buckets_and_objects_for_locked_aws_session(tmp_path: Path) -> None:
     runner = DeferredRunner()
+    desktop = FakeDesktopIntegration()
     controller = CloudSprocketController(
         settings=_make_settings(tmp_path),
         auth_service=StaticAuthService(),
         profile_discovery=StaticDiscoveryService(_make_profiles()),
         command_runner=runner,
-        desktop_integration=FakeDesktopIntegration(),
+        desktop_integration=desktop,
     )
 
     assert controller.lock_session()
@@ -305,11 +306,30 @@ def test_controller_loads_s3_buckets_and_objects_for_locked_aws_session(tmp_path
         )
     )
 
+    metadata_spec, _callback = runner.calls[0]
+    assert metadata_spec.args[:2] == ("s3api", "head-object")
+    assert metadata_spec.args[2:6] == ("--bucket", "alpha", "--key", "logs/app.log")
+
+    runner.finish_next(
+        CommandResult(
+            spec=metadata_spec,
+            exit_code=0,
+            stdout='{"ContentLength":1024,"LastModified":"2026-03-25T08:15:00Z","ContentType":"text/plain","StorageClass":"STANDARD","ETag":"\\"abc123\\"","Metadata":{"env":"dev"}}',
+            summary="head-object",
+            succeeded=True,
+        )
+    )
+
     state = controller.aws_s3_workspace()
     assert [bucket.name for bucket in state.buckets] == ["alpha", "zulu"]
     assert state.selected_bucket_name == "alpha"
     assert [obj.key for obj in state.objects] == ["logs/app.log"]
     assert state.objects[0].size == "1.0 KiB"
+    assert state.selected_object_key == "logs/app.log"
+    assert {field.label for field in state.object_metadata} >= {"Bucket", "Key", "Size", "Content Type", "ETag"}
+
+    assert controller.copy_aws_s3_uri()
+    assert desktop.copied_texts[-1] == "s3://alpha/logs/app.log"
 
 
 def test_controller_blocks_s3_browsing_for_local_files_locked_session(tmp_path: Path) -> None:
@@ -329,3 +349,47 @@ def test_controller_blocks_s3_browsing_for_local_files_locked_session(tmp_path: 
     assert not available
     assert "CLI or SSO" in reason
     assert not controller.refresh_aws_s3_buckets()
+
+
+def test_controller_applies_s3_prefix_filter_to_object_listing(tmp_path: Path) -> None:
+    runner = DeferredRunner()
+    controller = CloudSprocketController(
+        settings=_make_settings(tmp_path),
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(_make_profiles()),
+        command_runner=runner,
+        desktop_integration=FakeDesktopIntegration(),
+    )
+
+    assert controller.lock_session()
+    assert controller.refresh_aws_s3_buckets()
+
+    bucket_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=bucket_spec,
+            exit_code=0,
+            stdout='{"Buckets":[{"Name":"alpha","CreationDate":"2026-03-24T10:00:00Z"}]}',
+            summary="buckets",
+            succeeded=True,
+        )
+    )
+
+    first_object_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=first_object_spec,
+            exit_code=0,
+            stdout='{"Contents":[]}',
+            summary="objects",
+            succeeded=True,
+        )
+    )
+
+    assert controller.set_aws_s3_prefix_filter("logs/2026/")
+    assert controller.refresh_aws_s3_objects()
+
+    filtered_object_spec, _callback = runner.calls[0]
+    assert "--prefix" in filtered_object_spec.args
+    prefix_index = filtered_object_spec.args.index("--prefix")
+    assert filtered_object_spec.args[prefix_index + 1] == "logs/2026/"
