@@ -1,7 +1,7 @@
 # CloudSprocket
 
-CloudSprocket is a PySide6 desktop scaffold for building a local cloud profile
-and authentication control surface.
+CloudSprocket by Ali Shaikh is a PySide6 desktop shell for local cloud profile
+discovery, auth visibility, and AWS-first provider actions.
 
 The scaffold is set up to run on Windows and macOS, with platform-aware config
 and cloud profile discovery defaults.
@@ -9,9 +9,9 @@ and cloud profile discovery defaults.
 ## Project Layout
 
 - `src/cloudsprocket/`: application package
-- `src/cloudsprocket/ui/`: PySide6 window shell
-- `src/cloudsprocket/services/`: auth status and profile discovery services
-- `tests/`: pytest coverage for settings, discovery, and the GUI shell
+- `src/cloudsprocket/ui/`: branded actionable desktop shell
+- `src/cloudsprocket/services/`: discovery, controller, provider actions, and command execution
+- `tests/`: pytest coverage for settings, discovery, provider actions, controller behavior, and the UI
 
 ## Quick Start
 
@@ -40,14 +40,18 @@ The build uses PyInstaller 6.19.0 and writes platform-native artifacts into
 - Windows: `dist/CloudSprocket/CloudSprocket.exe`
 - macOS: `dist/CloudSprocket.app`
 
+GitHub Actions also runs the test suite and desktop build on both Windows and
+macOS for pushes to `dev` and `main`, as well as pull requests.
+
 ## Scope Of The Scaffold
 
-The initial shell includes:
+The current shell includes:
 
 - an MIT-licensed repo setup
 - a modular `src/` package layout
-- a desktop main window with refreshable provider and profile views
-- auth/tooling probes for AWS, Azure, and GCP
+- a branded desktop main window with provider summary, profile selection, details, auth methods, actions, and activity logs
+- auth/tooling probes for AWS, Azure, and GCP with AWS as the first fully actionable provider
+- AWS actions for refresh, identity check, SSO login, logout, session activation, config opening, and export snippet copying
 - profile discovery skeletons for AWS config files, Azure CLI profile cache, and
   gcloud named configurations
 - a reproducible PyInstaller-based desktop build command

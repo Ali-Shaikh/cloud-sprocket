@@ -4,12 +4,24 @@ import subprocess
 import sys
 from pathlib import Path
 
-APP_BUILD_NAME = "CloudSprocket"
+from cloudsprocket.config import APP_NAME
+
+APP_BUILD_NAME = APP_NAME
 MACOS_BUNDLE_ID = "com.cloudsprocket.app"
 
 
 def project_root() -> Path:
     return Path(__file__).resolve().parents[2]
+
+
+def windows_version_file(*, root: Path | None = None) -> Path:
+    resolved_root = root or project_root()
+    return resolved_root / "src" / "cloudsprocket" / "resources" / "windows_version_info.txt"
+
+
+def distribution_path(*, root: Path | None = None) -> Path:
+    resolved_root = root or project_root()
+    return resolved_root / "dist" / APP_BUILD_NAME
 
 
 def build_command(
@@ -39,14 +51,18 @@ def build_command(
     ]
     if resolved_platform == "darwin":
         command.extend(["--osx-bundle-identifier", MACOS_BUNDLE_ID])
+    if resolved_platform.startswith("win"):
+        command.extend(["--version-file", str(windows_version_file(root=resolved_root))])
     return command
 
 
 def expected_artifact_path(*, root: Path | None = None, platform_name: str | None = None) -> Path:
-    resolved_root = root or project_root()
     resolved_platform = platform_name or sys.platform
-    artifact_name = f"{APP_BUILD_NAME}.app" if resolved_platform == "darwin" else APP_BUILD_NAME
-    return resolved_root / "dist" / artifact_name
+    dist_path = distribution_path(root=root)
+    if resolved_platform == "darwin":
+        return dist_path.with_suffix(".app")
+    executable_name = f"{APP_BUILD_NAME}.exe" if resolved_platform.startswith("win") else APP_BUILD_NAME
+    return dist_path / executable_name
 
 
 def run_build(*, root: Path | None = None, python_executable: str | None = None) -> Path:
@@ -66,3 +82,7 @@ def main() -> int:
     artifact_path = run_build()
     print(f"Built {artifact_path}")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

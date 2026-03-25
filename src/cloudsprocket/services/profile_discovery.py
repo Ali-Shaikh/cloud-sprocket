@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from cloudsprocket.config import AppSettings
-from cloudsprocket.models import DiscoveredProfile, DiscoveryReport, DiscoveryWarning
+from cloudsprocket.models import DetailField, DiscoveredProfile, DiscoveryReport, DiscoveryWarning
 
 
 class ProfileDiscoveryService:
@@ -54,6 +54,7 @@ class ProfileDiscoveryService:
     ) -> tuple[list[DiscoveredProfile], list[DiscoveryWarning]]:
         warnings: list[DiscoveryWarning] = []
         details_by_name: dict[str, dict[str, str]] = {}
+        sources_by_name: dict[str, set[Path]] = {}
 
         for path, trim_prefix in (
             (self._settings.aws_config_path, True),
@@ -81,6 +82,7 @@ class ProfileDiscoveryService:
 
                 section = {key: value for key, value in parser.items(section_name)}
                 details_by_name.setdefault(profile_name, {}).update(section)
+                sources_by_name.setdefault(profile_name, set()).add(path)
 
         profiles = [
             DiscoveredProfile(
@@ -93,6 +95,16 @@ class ProfileDiscoveryService:
                     else self._settings.aws_credentials_path
                 ),
                 details=self._format_aws_details(section_values),
+                source_paths=tuple(
+                    sorted(
+                        sources_by_name.get(profile_name, {self._settings.aws_config_path}),
+                        key=lambda candidate: str(candidate),
+                    )
+                ),
+                attributes=tuple(
+                    DetailField(label=key, value=value)
+                    for key, value in sorted(section_values.items())
+                ),
             )
             for profile_name, section_values in details_by_name.items()
         ]
@@ -138,6 +150,13 @@ class ProfileDiscoveryService:
             if isinstance(user_payload, dict):
                 user_name = str(user_payload.get("name") or "").strip()
             details = ", ".join(part for part in (tenant_id, user_name) if part)
+            attributes = [
+                DetailField(label="subscription_id", value=subscription_id),
+            ]
+            if tenant_id:
+                attributes.append(DetailField(label="tenant_id", value=tenant_id))
+            if user_name:
+                attributes.append(DetailField(label="user_name", value=user_name))
             profiles.append(
                 DiscoveredProfile(
                     provider_id="azure",
@@ -145,6 +164,8 @@ class ProfileDiscoveryService:
                     display_name=display_name,
                     source=path,
                     details=details,
+                    source_paths=(path,),
+                    attributes=tuple(attributes),
                 )
             )
         return profiles, []
@@ -178,6 +199,11 @@ class ProfileDiscoveryService:
             project = parser.get("core", "project", fallback="").strip()
             display_name = project or profile_name
             details = ", ".join(part for part in (account, project) if part)
+            attributes = [DetailField(label="configuration", value=profile_name)]
+            if account:
+                attributes.append(DetailField(label="account", value=account))
+            if project:
+                attributes.append(DetailField(label="project", value=project))
             profiles.append(
                 DiscoveredProfile(
                     provider_id="gcp",
@@ -185,6 +211,8 @@ class ProfileDiscoveryService:
                     display_name=display_name,
                     source=config_path,
                     details=details,
+                    source_paths=(config_path,),
+                    attributes=tuple(attributes),
                 )
             )
 
@@ -198,4 +226,3 @@ class ProfileDiscoveryService:
             section_values.get("role_arn", "").strip(),
         )
         return ", ".join(field for field in detail_fields if field)
-

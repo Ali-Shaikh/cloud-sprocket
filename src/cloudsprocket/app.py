@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from PySide6.QtWidgets import QApplication
 
 from cloudsprocket.config import AppSettings
+from cloudsprocket.services.app_controller import CloudSprocketController
 from cloudsprocket.services.auth import AuthStatusService
 from cloudsprocket.services.profile_discovery import ProfileDiscoveryService
 from cloudsprocket.ui.main_window import MainWindow
@@ -17,6 +18,8 @@ def create_application(argv: Sequence[str] | None = None) -> QApplication:
 
     settings = AppSettings.from_env()
     app.setApplicationName(settings.app_name)
+    if hasattr(app, "setApplicationDisplayName"):
+        app.setApplicationDisplayName(settings.app_brand_name)
     app.setOrganizationName(settings.organization_name)
     return app
 
@@ -24,10 +27,14 @@ def create_application(argv: Sequence[str] | None = None) -> QApplication:
 def create_main_window(settings: AppSettings | None = None) -> MainWindow:
     resolved_settings = settings or AppSettings.from_env()
     resolved_settings.ensure_runtime_dirs()
-    return MainWindow(
+    controller = CloudSprocketController(
         settings=resolved_settings,
         auth_service=AuthStatusService(resolved_settings),
         profile_discovery=ProfileDiscoveryService(resolved_settings),
+    )
+    return MainWindow(
+        settings=resolved_settings,
+        controller=controller,
     )
 
 
@@ -36,4 +43,3 @@ def main(argv: Sequence[str] | None = None) -> int:
     window = create_main_window()
     window.show()
     return app.exec()
-

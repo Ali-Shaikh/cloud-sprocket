@@ -69,5 +69,5 @@ class AuthStatusService:
             state=state,
             summary=summary,
             locations=existing_paths,
+            command_path=Path(command_path) if command_path else None,
         )
-

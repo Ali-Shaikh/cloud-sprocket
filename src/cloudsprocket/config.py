@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 APP_NAME = "CloudSprocket"
-ORGANIZATION_NAME = "CloudSprocket"
+APP_BRAND_NAME = "CloudSprocket by Ali Shaikh"
+AUTHOR_NAME = "Ali Shaikh"
+ORGANIZATION_NAME = "Ali Shaikh"
+APP_DESCRIPTION = "Desktop shell for cloud auth visibility and local profile discovery."
 
 
 def _resolve_path(raw_value: str | None, fallback: Path) -> Path:
@@ -28,6 +31,8 @@ def _normalize_platform(platform_name: str | None) -> str:
 @dataclass(frozen=True, slots=True)
 class AppSettings:
     app_name: str
+    app_brand_name: str
+    author_name: str
     organization_name: str
     platform_name: str
     home_dir: Path
@@ -115,6 +120,8 @@ class AppSettings:
         )
         return cls(
             app_name=APP_NAME,
+            app_brand_name=APP_BRAND_NAME,
+            author_name=AUTHOR_NAME,
             organization_name=ORGANIZATION_NAME,
             platform_name=normalized_platform,
             home_dir=home,

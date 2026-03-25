@@ -5,12 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "cloudsprocket"
 version = "0.1.0"
-description = "CloudSprocket desktop shell for cloud auth and profile discovery."
+description = "CloudSprocket by Ali Shaikh desktop shell for cloud auth and profile discovery."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.13,<3.15"
 authors = [
-  { name = "CloudSprocket" },
+  { name = "Ali Shaikh" },
 ]
 dependencies = [
   "PySide6==6.11.0",
