@@ -147,6 +147,7 @@ def test_main_window_renders_branding_and_actions(qapp, tmp_path: Path) -> None:
     assert window.action_buttons["logout"].text() == "Global SSO Logout"
     assert window.action_buttons["logout"].parentWidget() is window.global_actions_container
     assert window.action_buttons["whoami"].parentWidget() is window.profile_actions_container
+    assert "#205c8a" in window.styleSheet()
 
 
 def test_main_window_selection_updates_details_and_log_panel(qapp, tmp_path: Path) -> None:
@@ -349,6 +350,75 @@ def test_main_window_renders_loaded_s3_workspace_data(qapp, tmp_path: Path) -> N
     qapp.processEvents()
 
     assert desktop.copied_texts[-1] == "s3://alpha/logs/app.log"
+
+
+def test_main_window_rebuilds_s3_workspace_without_losing_data_or_headers(qapp, tmp_path: Path) -> None:
+    settings = AppSettings.from_env(
+        home_dir=tmp_path / "home",
+        appdata_dir=tmp_path / "appdata",
+        local_appdata_dir=tmp_path / "local-appdata",
+        config_dir=tmp_path / "config-root",
+    )
+    runner = DeferredRunner()
+    controller = CloudSprocketController(
+        settings=settings,
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(),
+        command_runner=runner,
+        desktop_integration=FakeDesktopIntegration(),
+    )
+    window = MainWindow(settings=settings, controller=controller)
+
+    window.lock_session_button.click()
+    qapp.processEvents()
+
+    for _ in range(2):
+        window.workspace_s3_refresh_buckets_button.click()
+        qapp.processEvents()
+
+        bucket_spec, _callback = runner.calls[0]
+        runner.finish_next(
+            CommandResult(
+                spec=bucket_spec,
+                exit_code=0,
+                stdout='{"Buckets":[{"Name":"alpha","CreationDate":"2026-03-24T10:00:00Z"}]}',
+                summary="buckets",
+                succeeded=True,
+            )
+        )
+        qapp.processEvents()
+
+        object_spec, _callback = runner.calls[0]
+        runner.finish_next(
+            CommandResult(
+                spec=object_spec,
+                exit_code=0,
+                stdout='{"Contents":[{"Key":"logs/app.log","Size":1024,"LastModified":"2026-03-25T08:15:00Z","StorageClass":"STANDARD"}]}',
+                summary="objects",
+                succeeded=True,
+            )
+        )
+        qapp.processEvents()
+
+        metadata_spec, _callback = runner.calls[0]
+        runner.finish_next(
+            CommandResult(
+                spec=metadata_spec,
+                exit_code=0,
+                stdout='{"ContentLength":1024,"LastModified":"2026-03-25T08:15:00Z","ContentType":"text/plain"}',
+                summary="head-object",
+                succeeded=True,
+            )
+        )
+        qapp.processEvents()
+
+    assert window.workspace_s3_bucket_tree.columnCount() == 3
+    assert window.workspace_s3_bucket_tree.headerItem().text(0) == "Bucket"
+    assert window.workspace_s3_bucket_tree.topLevelItemCount() == 1
+    assert window.workspace_s3_object_tree.columnCount() == 4
+    assert window.workspace_s3_object_tree.headerItem().text(0) == "Key"
+    assert window.workspace_s3_object_tree.topLevelItemCount() == 1
+    assert window.workspace_s3_selected_bucket_label.text().startswith("Bucket: alpha")
 
 
 def test_main_window_applies_s3_prefix_filter(qapp, tmp_path: Path) -> None:
