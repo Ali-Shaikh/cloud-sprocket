@@ -119,8 +119,6 @@ class MainWindow(QMainWindow):
         self._workspace_s3_url_tester_status_label = QLabel()
         self._workspace_s3_url_tester_input = QPlainTextEdit()
         self._workspace_s3_url_tester_details_tree = QTreeWidget()
-        self._workspace_s3_browser_splitter = QSplitter(Qt.Horizontal)
-        self._workspace_s3_tools_tabs = QTabWidget()
         self._detail_sections_splitter = QSplitter(Qt.Vertical)
         self._rendering_state = False
 
@@ -284,14 +282,6 @@ class MainWindow(QMainWindow):
         return self._workspace_s3_url_tester_details_tree
 
     @property
-    def workspace_s3_browser_splitter(self) -> QSplitter:
-        return self._workspace_s3_browser_splitter
-
-    @property
-    def workspace_s3_tools_tabs(self) -> QTabWidget:
-        return self._workspace_s3_tools_tabs
-
-    @property
     def lock_session_button(self) -> QPushButton:
         return self._session_lock_button
 
@@ -342,158 +332,23 @@ class MainWindow(QMainWindow):
         root_layout.addWidget(self._build_body(), 1)
 
         self.setCentralWidget(central)
-        self._apply_theme()
-
-    def _apply_theme(self) -> None:
-        self.setStyleSheet(
-            """
-            QMainWindow, QWidget {
-                background-color: #eef3f8;
-                color: #14263a;
-            }
-            QMenuBar, QStatusBar {
-                background-color: #eef3f8;
-                color: #14263a;
-            }
-            QMenuBar::item:selected {
-                background-color: #dce8f4;
-            }
-            QGroupBox {
-                background-color: #fbfdff;
-                border: 1px solid #c6d5e4;
-                border-radius: 14px;
-                margin-top: 16px;
-                padding: 12px;
-                padding-top: 18px;
-                font-weight: 700;
-                color: #1a4263;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 6px;
-                color: #1a4263;
-                background-color: #fbfdff;
-            }
-            QPushButton {
-                background-color: #1d5f8e;
-                color: #ffffff;
-                border: 1px solid #174968;
-                border-radius: 10px;
-                padding: 8px 14px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #2572a8;
-            }
-            QPushButton:pressed {
-                background-color: #154768;
-            }
-            QPushButton:disabled {
-                background-color: #d5dee7;
-                color: #687b8e;
-                border-color: #c5d0db;
-            }
-            QLineEdit, QPlainTextEdit, QTreeWidget, QComboBox, QSpinBox {
-                background-color: #ffffff;
-                color: #14263a;
-                border: 1px solid #bfd0df;
-                border-radius: 10px;
-                selection-background-color: #205c8a;
-                selection-color: #ffffff;
-            }
-            QLineEdit, QPlainTextEdit, QComboBox, QSpinBox {
-                padding: 7px 10px;
-            }
-            QTreeWidget {
-                alternate-background-color: #f4f8fc;
-                gridline-color: #d6e1eb;
-            }
-            QTreeWidget::item {
-                padding: 4px 6px;
-            }
-            QTreeWidget::item:selected {
-                background-color: #205c8a;
-                color: #ffffff;
-            }
-            QHeaderView::section {
-                background-color: #e7f0f7;
-                color: #17334d;
-                padding: 8px 8px;
-                border: none;
-                border-bottom: 1px solid #c6d5e4;
-                font-weight: 700;
-            }
-            QTabWidget::pane {
-                border: 1px solid #c6d5e4;
-                border-radius: 12px;
-                background: #fbfdff;
-                top: -1px;
-            }
-            QTabBar::tab {
-                background: #dfe8f1;
-                color: #23445f;
-                border: 1px solid #c6d5e4;
-                border-bottom: none;
-                border-top-left-radius: 10px;
-                border-top-right-radius: 10px;
-                padding: 9px 14px;
-                margin-right: 4px;
-                font-weight: 600;
-            }
-            QTabBar::tab:selected {
-                background: #fbfdff;
-                color: #0f2740;
-            }
-            QTabBar::tab:!selected:hover {
-                background: #eaf1f8;
-            }
-            QSplitter::handle {
-                background-color: #d4dfeb;
-                margin: 2px;
-            }
-            QScrollBar:vertical, QScrollBar:horizontal {
-                background: #e6edf4;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
-                background: #9cb7cf;
-                border-radius: 6px;
-                min-height: 28px;
-                min-width: 28px;
-            }
-            """
-        )
-
-    def _info_card_style(self, *, emphasised: bool = False) -> str:
-        background = "#e4eff9" if emphasised else "#f3f7fb"
-        border = "#b5cade" if emphasised else "#c8d6e3"
-        foreground = "#17324d" if emphasised else "#29445d"
-        return (
-            "padding: 11px 13px; "
-            f"background: {background}; "
-            f"border: 1px solid {border}; "
-            "border-radius: 12px; "
-            f"color: {foreground};"
-        )
-
-    def _section_label_style(self) -> str:
-        return "font-size: 13px; font-weight: 700; color: #184b72; padding-top: 4px;"
 
     def _build_header(self) -> QHBoxLayout:
         title = QLabel(self._settings.app_brand_name)
         title.setObjectName("title")
-        title.setStyleSheet("font-size: 30px; font-weight: 700; color: #10283f;")
+        title.setStyleSheet("font-size: 30px; font-weight: 700;")
 
         subtitle = QLabel(APP_DESCRIPTION)
         subtitle.setWordWrap(True)
-        subtitle.setStyleSheet("color: #395066; font-size: 14px;")
+        subtitle.setStyleSheet("color: #5f6b7a; font-size: 14px;")
 
         byline = QLabel(f"Created by {self._settings.author_name}")
-        byline.setStyleSheet("color: #184b72; font-size: 13px; font-weight: 600;")
+        byline.setStyleSheet("color: #2b4f73; font-size: 13px; font-weight: 600;")
 
         self._config_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._config_label.setStyleSheet(self._info_card_style(emphasised=True))
+        self._config_label.setStyleSheet(
+            "padding: 8px 12px; background: #eef3f8; border-radius: 8px;"
+        )
 
         refresh_button = QPushButton("Refresh Snapshot")
         refresh_button.clicked.connect(lambda: self._controller.trigger_action("refresh"))
@@ -513,11 +368,13 @@ class MainWindow(QMainWindow):
     def _build_session_setup_panel(self) -> QGroupBox:
         group = QGroupBox("Session Setup")
         layout = QVBoxLayout(group)
-        self._session_provider_label.setStyleSheet("font-size: 14px; font-weight: 700; color: #17324d;")
-        self._session_profile_label.setStyleSheet("font-size: 14px; font-weight: 700; color: #17324d;")
-        self._session_auth_label.setStyleSheet("font-size: 14px; font-weight: 700; color: #17324d;")
+        self._session_provider_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #2a3a4a;")
+        self._session_profile_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #2a3a4a;")
+        self._session_auth_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #2a3a4a;")
         self._session_lock_hint_label.setWordWrap(True)
-        self._session_lock_hint_label.setStyleSheet(self._info_card_style())
+        self._session_lock_hint_label.setStyleSheet(
+            "padding: 10px 12px; background: #f4f7fa; border-radius: 8px; color: #4f6172;"
+        )
         self._session_lock_button.clicked.connect(self._on_lock_session_clicked)
 
         metadata_layout = QGridLayout()
@@ -540,10 +397,12 @@ class MainWindow(QMainWindow):
         group = QGroupBox("Locked Session")
         layout = QHBoxLayout(group)
 
-        self._workspace_title.setStyleSheet("font-size: 22px; font-weight: 700; color: #10283f;")
-        self._workspace_subtitle.setStyleSheet("font-size: 14px; font-weight: 700; color: #184b72;")
+        self._workspace_title.setStyleSheet("font-size: 22px; font-weight: 700;")
+        self._workspace_subtitle.setStyleSheet("font-size: 14px; font-weight: 600; color: #2b4f73;")
         self._workspace_meta.setWordWrap(True)
-        self._workspace_meta.setStyleSheet(self._info_card_style(emphasised=True))
+        self._workspace_meta.setStyleSheet(
+            "padding: 10px 12px; background: #f4f7fa; border-radius: 8px; color: #4f6172;"
+        )
         self._workspace_unlock_button.clicked.connect(self._on_unlock_session_clicked)
 
         text_layout = QVBoxLayout()
@@ -613,18 +472,24 @@ class MainWindow(QMainWindow):
         layout.setSpacing(16)
 
         self._workspace_overview_heading.setStyleSheet(
-            "font-size: 16px; font-weight: 700; color: #17324d;"
+            "font-size: 16px; font-weight: 700; color: #2a3a4a;"
         )
         self._workspace_overview_summary.setWordWrap(True)
-        self._workspace_overview_summary.setStyleSheet("font-size: 14px; color: #17324d;")
+        self._workspace_overview_summary.setStyleSheet("font-size: 14px; color: #2a3a4a;")
         self._workspace_overview_detail.setWordWrap(True)
-        self._workspace_overview_detail.setStyleSheet(self._info_card_style())
+        self._workspace_overview_detail.setStyleSheet(
+            "padding: 12px 14px; background: #f7f8fb; border-radius: 8px; color: #4f6172;"
+        )
         self._workspace_overview_sources.setWordWrap(True)
         self._workspace_overview_sources.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._workspace_overview_sources.setStyleSheet(self._info_card_style(emphasised=True))
+        self._workspace_overview_sources.setStyleSheet(
+            "padding: 10px 12px; background: #f4f7fa; border-radius: 8px; color: #2a3a4a;"
+        )
         self._workspace_overview_notes.setWordWrap(True)
         self._workspace_overview_notes.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._workspace_overview_notes.setStyleSheet(self._info_card_style())
+        self._workspace_overview_notes.setStyleSheet(
+            "padding: 10px 12px; background: #f7f8fb; border-radius: 8px; color: #4f6172;"
+        )
 
         sources_group = QGroupBox("Source Paths")
         sources_layout = QVBoxLayout(sources_group)
@@ -649,9 +514,15 @@ class MainWindow(QMainWindow):
         layout.setSpacing(12)
 
         self._workspace_actions_hint_label.setWordWrap(True)
-        self._workspace_actions_hint_label.setStyleSheet(self._info_card_style())
-        self._workspace_profile_actions_label.setStyleSheet(self._section_label_style())
-        self._workspace_global_actions_label.setStyleSheet(self._section_label_style())
+        self._workspace_actions_hint_label.setStyleSheet(
+            "padding: 10px 12px; background: #f4f7fa; border-radius: 8px; color: #4f6172;"
+        )
+        self._workspace_profile_actions_label.setStyleSheet(
+            "font-size: 13px; font-weight: 700; color: #2b4f73; padding-top: 4px;"
+        )
+        self._workspace_global_actions_label.setStyleSheet(
+            "font-size: 13px; font-weight: 700; color: #2b4f73; padding-top: 4px;"
+        )
 
         self._workspace_profile_actions_layout.setContentsMargins(0, 0, 0, 0)
         self._workspace_profile_actions_layout.setHorizontalSpacing(8)
@@ -675,17 +546,21 @@ class MainWindow(QMainWindow):
         layout.setSpacing(16)
 
         self._workspace_s3_status_label.setWordWrap(True)
-        self._workspace_s3_status_label.setStyleSheet(self._info_card_style(emphasised=True))
-        self._workspace_s3_selected_bucket_label.setWordWrap(True)
+        self._workspace_s3_status_label.setStyleSheet(
+            "padding: 10px 12px; background: #f4f7fa; border-radius: 8px; color: #4f6172;"
+        )
         self._workspace_s3_selected_bucket_label.setStyleSheet(
-            "padding: 8px 12px; background: #edf4fb; border: 1px solid #c5d5e4; "
-            "border-radius: 10px; font-size: 13px; font-weight: 700; color: #17324d;"
+            "font-size: 13px; font-weight: 700; color: #2b4f73;"
         )
         self._workspace_s3_prefix_input.setPlaceholderText("Optional prefix filter, for example logs/2026/")
         self._workspace_s3_object_status_label.setWordWrap(True)
-        self._workspace_s3_object_status_label.setStyleSheet(self._info_card_style())
+        self._workspace_s3_object_status_label.setStyleSheet(
+            "padding: 10px 12px; background: #f7f8fb; border-radius: 8px; color: #4f6172;"
+        )
         self._workspace_s3_signed_url_status_label.setWordWrap(True)
-        self._workspace_s3_signed_url_status_label.setStyleSheet(self._info_card_style())
+        self._workspace_s3_signed_url_status_label.setStyleSheet(
+            "padding: 10px 12px; background: #f4f7fa; border-radius: 8px; color: #4f6172;"
+        )
         self._workspace_s3_signed_url_duration_spin.setRange(1, 168)
         self._workspace_s3_signed_url_duration_spin.setSingleStep(1)
         if self._workspace_s3_signed_url_duration_unit_combo.count() == 0:
@@ -693,11 +568,13 @@ class MainWindow(QMainWindow):
         self._workspace_s3_signed_url_output.setReadOnly(True)
         self._workspace_s3_signed_url_output.setPlaceholderText("Generated signed URL will appear here.")
         self._workspace_s3_signed_url_output.setLineWrapMode(QPlainTextEdit.NoWrap)
-        self._workspace_s3_signed_url_output.setMinimumHeight(140)
+        self._workspace_s3_signed_url_output.setMinimumHeight(96)
         self._workspace_s3_url_tester_status_label.setWordWrap(True)
-        self._workspace_s3_url_tester_status_label.setStyleSheet(self._info_card_style())
+        self._workspace_s3_url_tester_status_label.setStyleSheet(
+            "padding: 10px 12px; background: #f7f8fb; border-radius: 8px; color: #4f6172;"
+        )
         self._workspace_s3_url_tester_input.setPlaceholderText("Paste any URL here, including a signed URL received from someone else.")
-        self._workspace_s3_url_tester_input.setMinimumHeight(96)
+        self._workspace_s3_url_tester_input.setMinimumHeight(76)
         self._workspace_s3_url_tester_details_tree.setColumnCount(2)
         self._workspace_s3_url_tester_details_tree.setHeaderLabels(["Field", "Value"])
         self._configure_data_tree(self._workspace_s3_url_tester_details_tree)
@@ -711,19 +588,17 @@ class MainWindow(QMainWindow):
         self._workspace_s3_bucket_tree.setColumnCount(3)
         self._workspace_s3_bucket_tree.setHeaderLabels(["Bucket", "Created", "Summary"])
         self._configure_data_tree(self._workspace_s3_bucket_tree)
-        self._workspace_s3_bucket_tree.header().setSectionResizeMode(0, QHeaderView.Interactive)
+        self._workspace_s3_bucket_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self._workspace_s3_bucket_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self._workspace_s3_bucket_tree.header().setSectionResizeMode(2, QHeaderView.Stretch)
-        self._workspace_s3_bucket_tree.setColumnWidth(0, 220)
 
         self._workspace_s3_object_tree.setColumnCount(4)
         self._workspace_s3_object_tree.setHeaderLabels(["Key", "Size", "Modified", "Storage Class"])
         self._configure_data_tree(self._workspace_s3_object_tree)
-        self._workspace_s3_object_tree.header().setSectionResizeMode(0, QHeaderView.Interactive)
+        self._workspace_s3_object_tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self._workspace_s3_object_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self._workspace_s3_object_tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self._workspace_s3_object_tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self._workspace_s3_object_tree.setColumnWidth(0, 460)
 
         self._workspace_s3_object_details_tree.setColumnCount(2)
         self._workspace_s3_object_details_tree.setHeaderLabels(["Field", "Value"])
@@ -737,39 +612,19 @@ class MainWindow(QMainWindow):
 
         bucket_group = QGroupBox("Buckets")
         bucket_layout = QVBoxLayout(bucket_group)
-        bucket_layout.setSpacing(12)
-        bucket_hint = QLabel("Choose a bucket to browse its objects and generate S3 actions.")
-        bucket_hint.setWordWrap(True)
-        bucket_hint.setStyleSheet(self._info_card_style())
-        bucket_layout.addWidget(bucket_hint)
-        bucket_layout.addWidget(self._workspace_s3_bucket_tree, 1)
-        bucket_group.setMinimumWidth(280)
+        bucket_layout.addWidget(self._workspace_s3_bucket_tree)
 
-        object_group = QGroupBox("Objects")
-        object_layout = QVBoxLayout(object_group)
-        object_layout.setSpacing(12)
-        object_layout.addWidget(self._workspace_s3_selected_bucket_label)
-        object_layout.addWidget(self._workspace_s3_object_status_label)
-        object_layout.addWidget(self._workspace_s3_object_tree, 1)
-        object_group.setMinimumWidth(420)
+        object_list_group = QGroupBox("Objects")
+        object_list_layout = QVBoxLayout(object_list_group)
+        object_list_layout.addWidget(self._workspace_s3_object_tree)
 
-        object_details_page = QWidget()
-        object_details_layout = QVBoxLayout(object_details_page)
-        object_details_layout.setContentsMargins(0, 0, 0, 0)
-        object_details_layout.setSpacing(12)
-        object_details_hint = QLabel("Inspect the selected object metadata, headers, and storage details.")
-        object_details_hint.setWordWrap(True)
-        object_details_hint.setStyleSheet(self._info_card_style())
-        object_details_layout.addWidget(object_details_hint)
-        object_details_layout.addWidget(self._workspace_s3_object_details_tree, 1)
+        object_details_group = QGroupBox("Object Details")
+        object_details_layout = QVBoxLayout(object_details_group)
+        object_details_layout.addWidget(self._workspace_s3_object_status_label)
+        object_details_layout.addWidget(self._workspace_s3_object_details_tree)
 
-        signed_url_page = QWidget()
-        signed_url_layout = QVBoxLayout(signed_url_page)
-        signed_url_layout.setContentsMargins(0, 0, 0, 0)
-        signed_url_layout.setSpacing(12)
-        signed_url_hint = QLabel("Generate or copy a presigned URL for the selected object without leaving the app.")
-        signed_url_hint.setWordWrap(True)
-        signed_url_hint.setStyleSheet(self._info_card_style())
+        signed_url_group = QGroupBox("Signed URL")
+        signed_url_layout = QVBoxLayout(signed_url_group)
         signed_url_controls = QHBoxLayout()
         signed_url_controls.addWidget(QLabel("Duration"))
         signed_url_controls.addWidget(self._workspace_s3_signed_url_duration_spin)
@@ -777,39 +632,39 @@ class MainWindow(QMainWindow):
         signed_url_controls.addWidget(self._workspace_s3_generate_signed_url_button)
         signed_url_controls.addWidget(self._workspace_s3_copy_signed_url_button)
         signed_url_controls.addStretch(1)
-        signed_url_layout.addWidget(signed_url_hint)
         signed_url_layout.addWidget(self._workspace_s3_signed_url_status_label)
         signed_url_layout.addLayout(signed_url_controls)
-        signed_url_layout.addWidget(self._workspace_s3_signed_url_output, 1)
+        signed_url_layout.addWidget(self._workspace_s3_signed_url_output)
 
-        url_tester_page = QWidget()
-        url_tester_layout = QVBoxLayout(url_tester_page)
-        url_tester_layout.setContentsMargins(0, 0, 0, 0)
-        url_tester_layout.setSpacing(12)
-        url_tester_hint = QLabel("Paste any URL to inspect expiry hints or validate that it still responds.")
-        url_tester_hint.setWordWrap(True)
-        url_tester_hint.setStyleSheet(self._info_card_style())
+        url_tester_group = QGroupBox("URL Tester")
+        url_tester_layout = QVBoxLayout(url_tester_group)
         url_tester_controls = QHBoxLayout()
         url_tester_controls.addWidget(self._workspace_s3_use_generated_url_button)
         url_tester_controls.addWidget(self._workspace_s3_analyse_url_button)
         url_tester_controls.addWidget(self._workspace_s3_validate_url_button)
         url_tester_controls.addStretch(1)
-        url_tester_layout.addWidget(url_tester_hint)
         url_tester_layout.addWidget(self._workspace_s3_url_tester_status_label)
         url_tester_layout.addWidget(self._workspace_s3_url_tester_input)
         url_tester_layout.addLayout(url_tester_controls)
-        url_tester_layout.addWidget(self._workspace_s3_url_tester_details_tree, 1)
+        url_tester_layout.addWidget(self._workspace_s3_url_tester_details_tree)
+        signed_url_layout.addWidget(url_tester_group)
+        object_details_layout.addWidget(signed_url_group)
 
-        self._workspace_s3_tools_tabs.setDocumentMode(True)
-        self._workspace_s3_tools_tabs.clear()
-        self._workspace_s3_tools_tabs.addTab(object_details_page, "Object Details")
-        self._workspace_s3_tools_tabs.addTab(signed_url_page, "Signed URL")
-        self._workspace_s3_tools_tabs.addTab(url_tester_page, "URL Tester")
+        object_splitter = QSplitter(Qt.Vertical)
+        object_splitter.setChildrenCollapsible(False)
+        object_splitter.addWidget(object_list_group)
+        object_splitter.addWidget(object_details_group)
+        object_splitter.setStretchFactor(0, 3)
+        object_splitter.setStretchFactor(1, 2)
+        object_splitter.setSizes([360, 220])
 
-        tools_group = QGroupBox("S3 Tools")
-        tools_layout = QVBoxLayout(tools_group)
-        tools_layout.addWidget(self._workspace_s3_tools_tabs, 1)
-        tools_group.setMinimumWidth(380)
+        content_splitter = QSplitter(Qt.Horizontal)
+        content_splitter.setChildrenCollapsible(False)
+        content_splitter.addWidget(bucket_group)
+        content_splitter.addWidget(object_splitter)
+        content_splitter.setStretchFactor(0, 2)
+        content_splitter.setStretchFactor(1, 3)
+        content_splitter.setSizes([420, 640])
 
         controls_layout = QHBoxLayout()
         controls_layout.addWidget(QLabel("Prefix"))
@@ -821,18 +676,10 @@ class MainWindow(QMainWindow):
         controls_layout.addWidget(self._workspace_s3_copy_uri_button)
         controls_layout.addStretch(1)
 
-        self._workspace_s3_browser_splitter.setChildrenCollapsible(False)
-        self._workspace_s3_browser_splitter.addWidget(bucket_group)
-        self._workspace_s3_browser_splitter.addWidget(object_group)
-        self._workspace_s3_browser_splitter.addWidget(tools_group)
-        self._workspace_s3_browser_splitter.setStretchFactor(0, 2)
-        self._workspace_s3_browser_splitter.setStretchFactor(1, 4)
-        self._workspace_s3_browser_splitter.setStretchFactor(2, 3)
-        self._workspace_s3_browser_splitter.setSizes([280, 620, 420])
-
         layout.addWidget(self._workspace_s3_status_label)
         layout.addLayout(controls_layout)
-        layout.addWidget(self._workspace_s3_browser_splitter, 1)
+        layout.addWidget(self._workspace_s3_selected_bucket_label)
+        layout.addWidget(content_splitter, 1)
         return page
 
     def _build_provider_panel(self) -> QGroupBox:
@@ -902,15 +749,19 @@ class MainWindow(QMainWindow):
     def _build_details_panel(self) -> QGroupBox:
         group = QGroupBox("Selected Profile")
         layout = QVBoxLayout(group)
-        self._detail_title.setStyleSheet("font-size: 22px; font-weight: 700; color: #10283f;")
-        self._detail_subtitle.setStyleSheet("color: #184b72; font-size: 13px; font-weight: 600;")
+        self._detail_title.setStyleSheet("font-size: 22px; font-weight: 700;")
+        self._detail_subtitle.setStyleSheet("color: #2b4f73; font-size: 13px;")
         self._detail_summary.setWordWrap(True)
         self._detail_sources.setWordWrap(True)
         self._detail_sources.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._detail_sources.setStyleSheet(self._info_card_style(emphasised=True))
+        self._detail_sources.setStyleSheet(
+            "padding: 10px 12px; background: #f4f7fa; border-radius: 8px; color: #2a3a4a;"
+        )
         self._detail_notes.setWordWrap(True)
         self._detail_notes.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._detail_notes.setStyleSheet(self._info_card_style())
+        self._detail_notes.setStyleSheet(
+            "padding: 10px 12px; background: #f7f8fb; border-radius: 8px; color: #4f6172;"
+        )
         self._reveal_sensitive_button.setCheckable(True)
         self._reveal_sensitive_button.setEnabled(False)
         self._reveal_sensitive_button.toggled.connect(self._on_sensitive_visibility_toggled)
@@ -986,9 +837,15 @@ class MainWindow(QMainWindow):
         group = QGroupBox("Actions")
         layout = QVBoxLayout(group)
         self._actions_hint_label.setWordWrap(True)
-        self._actions_hint_label.setStyleSheet(self._info_card_style())
-        self._profile_actions_label.setStyleSheet(self._section_label_style())
-        self._global_actions_label.setStyleSheet(self._section_label_style())
+        self._actions_hint_label.setStyleSheet(
+            "padding: 10px 12px; background: #f4f7fa; border-radius: 8px; color: #4f6172;"
+        )
+        self._profile_actions_label.setStyleSheet(
+            "font-size: 13px; font-weight: 700; color: #2b4f73; padding-top: 4px;"
+        )
+        self._global_actions_label.setStyleSheet(
+            "font-size: 13px; font-weight: 700; color: #2b4f73; padding-top: 4px;"
+        )
 
         self._profile_actions_container = QWidget(group)
         self._profile_actions_layout = QGridLayout(self._profile_actions_container)
@@ -1228,14 +1085,11 @@ class MainWindow(QMainWindow):
         available, reason = self._controller.aws_s3_availability()
         self._workspace_s3_status_label.setText(state.status_message or reason)
         if state.selected_bucket_name:
-            object_count = len(state.objects)
-            object_label = "object" if object_count == 1 else "objects"
-            prefix_label = f" | Prefix: {state.prefix_filter}" if state.prefix_filter else ""
             self._workspace_s3_selected_bucket_label.setText(
-                f"Bucket: {state.selected_bucket_name} | {object_count} {object_label} visible{prefix_label}"
+                f"Selected bucket: {state.selected_bucket_name} | {state.bucket_status_message}"
             )
         else:
-            self._workspace_s3_selected_bucket_label.setText("Select a bucket to browse its objects.")
+            self._workspace_s3_selected_bucket_label.setText(state.bucket_status_message)
         if self._workspace_s3_prefix_input.text() != state.prefix_filter:
             self._workspace_s3_prefix_input.setText(state.prefix_filter)
         self._workspace_s3_refresh_buckets_button.setEnabled(self._controller.can_refresh_aws_s3_buckets())
@@ -1315,10 +1169,12 @@ class MainWindow(QMainWindow):
         page = QWidget()
         layout = QVBoxLayout(page)
         summary_label = QLabel(tab.summary)
-        summary_label.setStyleSheet("font-size: 16px; font-weight: 700; color: #17324d;")
+        summary_label.setStyleSheet("font-size: 16px; font-weight: 700; color: #2a3a4a;")
         detail_label = QLabel(tab.detail or "This workspace area is not configured yet.")
         detail_label.setWordWrap(True)
-        detail_label.setStyleSheet(self._info_card_style())
+        detail_label.setStyleSheet(
+            "padding: 12px 14px; background: #f7f8fb; border-radius: 8px; color: #4f6172;"
+        )
         layout.addWidget(summary_label)
         layout.addWidget(detail_label)
         layout.addStretch(1)
@@ -1583,6 +1439,5 @@ class MainWindow(QMainWindow):
         tree.setAllColumnsShowFocus(True)
         tree.setSelectionBehavior(QAbstractItemView.SelectRows)
         tree.setSelectionMode(QAbstractItemView.SingleSelection)
-        tree.setTextElideMode(Qt.ElideMiddle)
         tree.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
