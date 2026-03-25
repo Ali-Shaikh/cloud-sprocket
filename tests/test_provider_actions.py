@@ -139,3 +139,30 @@ def test_aws_export_snippet_uses_selected_profile(tmp_path: Path) -> None:
     assert "AWS_PROFILE" in (spec.clipboard_text or "")
     assert "dev" in (spec.clipboard_text or "")
     assert "CloudSprocket by Ali Shaikh" in (spec.clipboard_text or "")
+
+
+def test_aws_process_commands_disable_the_cli_pager(tmp_path: Path) -> None:
+    settings = _make_settings(tmp_path)
+    adapter = AwsProviderAdapter(settings)
+    session_state = SessionState(current_provider_id="aws", selected_profile_id="sandbox")
+    profile = _make_aws_profile("sandbox")
+
+    health = ProviderHealth(
+        provider_id="aws",
+        label="AWS",
+        state=ProviderState.CONFIGURED,
+        summary="Configured.",
+        command_path=Path("C:/Program Files/Amazon/AWSCLIV2/aws.exe"),
+    )
+    actions = {
+        action.action_id: action
+        for action in adapter.list_actions(profile, (profile,), session_state, health)
+    }
+
+    whoami_spec = adapter.build_command(actions["whoami"], profile, session_state)
+    login_spec = adapter.build_command(actions["sso-login"], profile, session_state)
+    logout_spec = adapter.build_command(actions["logout"], profile, session_state)
+
+    assert "--no-cli-pager" in whoami_spec.args
+    assert "--no-cli-pager" in login_spec.args
+    assert "--no-cli-pager" in logout_spec.args

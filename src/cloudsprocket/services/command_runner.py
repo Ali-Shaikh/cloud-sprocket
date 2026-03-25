@@ -22,14 +22,20 @@ class SubprocessCommandExecutor:
 
         env = os.environ.copy()
         env.update(dict(spec.env))
-        completed = subprocess.run(
-            [spec.program, *spec.args],
-            capture_output=True,
-            text=True,
-            cwd=str(spec.cwd) if spec.cwd else None,
-            env=env,
-            check=False,
-        )
+        run_kwargs = {
+            "capture_output": True,
+            "text": True,
+            "cwd": str(spec.cwd) if spec.cwd else None,
+            "env": env,
+            "check": False,
+        }
+        if os.name == "nt":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = subprocess.SW_HIDE
+            run_kwargs["startupinfo"] = startupinfo
+            run_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        completed = subprocess.run([spec.program, *spec.args], **run_kwargs)
         return CommandResult(
             spec=spec,
             exit_code=completed.returncode,

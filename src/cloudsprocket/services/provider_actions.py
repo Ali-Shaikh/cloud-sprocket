@@ -360,7 +360,15 @@ class AwsProviderAdapter(BaseProviderAdapter):
                 action_id=action.action_id,
                 execution_type=CommandExecutionType.PROCESS,
                 program="aws",
-                args=("sts", "get-caller-identity", "--profile", profile.profile_id, "--output", "json"),
+                args=(
+                    "sts",
+                    "get-caller-identity",
+                    "--profile",
+                    profile.profile_id,
+                    "--output",
+                    "json",
+                    "--no-cli-pager",
+                ),
                 summary=f"Check caller identity for AWS profile {profile.profile_id}",
             )
         if action.kind == ActionKind.SSO_LOGIN and profile:
@@ -368,7 +376,7 @@ class AwsProviderAdapter(BaseProviderAdapter):
                 action_id=action.action_id,
                 execution_type=CommandExecutionType.PROCESS,
                 program="aws",
-                args=("sso", "login", "--profile", profile.profile_id),
+                args=("sso", "login", "--profile", profile.profile_id, "--no-cli-pager"),
                 summary=f"Run AWS SSO login for profile {profile.profile_id}",
             )
         if action.kind == ActionKind.LOGOUT:
@@ -376,7 +384,7 @@ class AwsProviderAdapter(BaseProviderAdapter):
                 action_id=action.action_id,
                 execution_type=CommandExecutionType.PROCESS,
                 program="aws",
-                args=("sso", "logout"),
+                args=("sso", "logout", "--no-cli-pager"),
                 summary="Run global AWS SSO logout",
             )
         raise ValueError(f"Unsupported AWS action {action.action_id}")
