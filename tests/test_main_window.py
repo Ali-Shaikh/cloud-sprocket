@@ -1,5 +1,8 @@
 from pathlib import Path
 
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QHeaderView
+
 from cloudsprocket.config import AppSettings
 from cloudsprocket.models import (
     AuthMethod,
@@ -183,6 +186,28 @@ def test_main_window_masks_sensitive_fields_until_explicit_reveal(qapp, tmp_path
 
     assert not window.reveal_sensitive_button.isChecked()
     assert not window.reveal_sensitive_button.isEnabled()
+
+
+def test_main_window_allows_resizing_detail_sections_and_field_columns(qapp, tmp_path: Path) -> None:
+    settings = AppSettings.from_env(
+        home_dir=tmp_path / "home",
+        appdata_dir=tmp_path / "appdata",
+        local_appdata_dir=tmp_path / "local-appdata",
+        config_dir=tmp_path / "config-root",
+    )
+    controller = CloudSprocketController(
+        settings=settings,
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(),
+        command_runner=NoopRunner(),
+        desktop_integration=FakeDesktopIntegration(),
+    )
+    window = MainWindow(settings=settings, controller=controller)
+
+    assert window.detail_sections_splitter.orientation() == Qt.Vertical
+    assert window.detail_sections_splitter.count() == 3
+    assert window.detail_fields_tree.header().sectionResizeMode(0) == QHeaderView.Interactive
+    assert window.detail_fields_tree.header().sectionResizeMode(1) == QHeaderView.Interactive
 
 
 def test_main_window_switches_into_locked_workspace_tabs(qapp, tmp_path: Path) -> None:

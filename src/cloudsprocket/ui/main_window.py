@@ -92,6 +92,7 @@ class MainWindow(QMainWindow):
         self._workspace_profile_actions_layout = QGridLayout(self._workspace_profile_actions_container)
         self._workspace_global_actions_container = QWidget()
         self._workspace_global_actions_layout = QGridLayout(self._workspace_global_actions_container)
+        self._detail_sections_splitter = QSplitter(Qt.Vertical)
         self._rendering_state = False
 
         self.setWindowTitle(settings.app_brand_name)
@@ -117,6 +118,10 @@ class MainWindow(QMainWindow):
     @property
     def detail_fields_tree(self) -> QTreeWidget:
         return self._detail_fields_tree
+
+    @property
+    def detail_sections_splitter(self) -> QSplitter:
+        return self._detail_sections_splitter
 
     @property
     def detail_title_label(self) -> QLabel:
@@ -507,9 +512,12 @@ class MainWindow(QMainWindow):
         self._configure_data_tree(self._detail_fields_tree)
         self._detail_fields_tree.setUniformRowHeights(False)
         self._detail_fields_tree.setWordWrap(True)
-        self._detail_fields_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self._detail_fields_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+        self._detail_fields_tree.header().setStretchLastSection(False)
+        self._detail_fields_tree.header().setSectionResizeMode(0, QHeaderView.Interactive)
+        self._detail_fields_tree.header().setSectionResizeMode(1, QHeaderView.Interactive)
         self._detail_fields_tree.setMinimumHeight(320)
+        self._detail_fields_tree.setColumnWidth(0, 240)
+        self._detail_fields_tree.setColumnWidth(1, 580)
 
         heading_layout = QHBoxLayout()
         heading_layout.addWidget(self._detail_title, 1)
@@ -530,9 +538,16 @@ class MainWindow(QMainWindow):
         layout.addLayout(heading_layout)
         layout.addWidget(self._detail_subtitle)
         layout.addWidget(self._detail_summary)
-        layout.addWidget(sources_group)
-        layout.addWidget(fields_group, 1)
-        layout.addWidget(notes_group)
+        self._detail_sections_splitter.setObjectName("detail-sections-splitter")
+        self._detail_sections_splitter.setChildrenCollapsible(False)
+        self._detail_sections_splitter.addWidget(sources_group)
+        self._detail_sections_splitter.addWidget(fields_group)
+        self._detail_sections_splitter.addWidget(notes_group)
+        self._detail_sections_splitter.setStretchFactor(0, 1)
+        self._detail_sections_splitter.setStretchFactor(1, 4)
+        self._detail_sections_splitter.setStretchFactor(2, 2)
+        self._detail_sections_splitter.setSizes([120, 360, 180])
+        layout.addWidget(self._detail_sections_splitter, 1)
         return group
 
     def _build_auth_methods_panel(self) -> QGroupBox:
