@@ -57,6 +57,9 @@ class MainWindow(QMainWindow):
         self._action_buttons: dict[str, QPushButton] = {}
         self._reveal_sensitive_button = QPushButton("Reveal Sensitive Values")
         self._show_sensitive_values = False
+        self._actions_hint_label = QLabel()
+        self._profile_actions_label = QLabel()
+        self._global_actions_label = QLabel()
 
         self.setWindowTitle(settings.app_brand_name)
         self.resize(1360, 860)
@@ -97,6 +100,26 @@ class MainWindow(QMainWindow):
     @property
     def action_buttons(self) -> dict[str, QPushButton]:
         return self._action_buttons
+
+    @property
+    def actions_hint_label(self) -> QLabel:
+        return self._actions_hint_label
+
+    @property
+    def profile_actions_label(self) -> QLabel:
+        return self._profile_actions_label
+
+    @property
+    def global_actions_label(self) -> QLabel:
+        return self._global_actions_label
+
+    @property
+    def profile_actions_container(self) -> QWidget:
+        return self._profile_actions_container
+
+    @property
+    def global_actions_container(self) -> QWidget:
+        return self._global_actions_container
 
     def about_text(self) -> str:
         return self._controller.about_text()
@@ -269,12 +292,28 @@ class MainWindow(QMainWindow):
     def _build_actions_panel(self) -> QGroupBox:
         group = QGroupBox("Actions")
         layout = QVBoxLayout(group)
-        self._actions_container = QWidget(group)
-        self._actions_layout = QGridLayout(self._actions_container)
-        self._actions_layout.setContentsMargins(0, 0, 0, 0)
-        self._actions_layout.setHorizontalSpacing(8)
-        self._actions_layout.setVerticalSpacing(8)
-        layout.addWidget(self._actions_container)
+        self._actions_hint_label.setWordWrap(True)
+        self._actions_hint_label.setStyleSheet("color: #4f6172;")
+        self._profile_actions_label.setStyleSheet("font-size: 13px; font-weight: 700; color: #2b4f73;")
+        self._global_actions_label.setStyleSheet("font-size: 13px; font-weight: 700; color: #2b4f73;")
+
+        self._profile_actions_container = QWidget(group)
+        self._profile_actions_layout = QGridLayout(self._profile_actions_container)
+        self._profile_actions_layout.setContentsMargins(0, 0, 0, 0)
+        self._profile_actions_layout.setHorizontalSpacing(8)
+        self._profile_actions_layout.setVerticalSpacing(8)
+
+        self._global_actions_container = QWidget(group)
+        self._global_actions_layout = QGridLayout(self._global_actions_container)
+        self._global_actions_layout.setContentsMargins(0, 0, 0, 0)
+        self._global_actions_layout.setHorizontalSpacing(8)
+        self._global_actions_layout.setVerticalSpacing(8)
+
+        layout.addWidget(self._actions_hint_label)
+        layout.addWidget(self._profile_actions_label)
+        layout.addWidget(self._profile_actions_container)
+        layout.addWidget(self._global_actions_label)
+        layout.addWidget(self._global_actions_container)
         return group
 
     def _build_log_panel(self) -> QGroupBox:
@@ -387,26 +426,59 @@ class MainWindow(QMainWindow):
         self._capabilities_tree.resizeColumnToContents(1)
 
     def _render_actions(self, actions: tuple[ProviderAction, ...]) -> None:
-        while self._actions_layout.count():
-            child = self._actions_layout.takeAt(0)
+        self._action_buttons = {}
+        busy = self._controller.session_state.command_state.value == "running"
+        selected_profile = self._controller.selected_profile()
+        selected_profile_actions = tuple(action for action in actions if action.requires_profile)
+        global_actions = tuple(action for action in actions if not action.requires_profile)
+
+        self._clear_action_layout(self._profile_actions_layout)
+        self._clear_action_layout(self._global_actions_layout)
+        self._actions_hint_label.setText(
+            "Selected profile actions only affect the chosen profile. "
+            "Provider-wide actions affect shared CLI session state or configuration."
+        )
+        if selected_profile is not None:
+            self._profile_actions_label.setText(
+                f"Selected Profile Actions: {selected_profile.display_name}"
+            )
+        else:
+            self._profile_actions_label.setText("Selected Profile Actions")
+        self._global_actions_label.setText("Provider-wide Actions")
+        self._profile_actions_label.setVisible(bool(selected_profile_actions))
+        self._profile_actions_container.setVisible(bool(selected_profile_actions))
+        self._global_actions_label.setVisible(bool(global_actions))
+        self._global_actions_container.setVisible(bool(global_actions))
+
+        for layout, grouped_actions in (
+            (self._profile_actions_layout, selected_profile_actions),
+            (self._global_actions_layout, global_actions),
+        ):
+            for index, action in enumerate(grouped_actions):
+                button = self._render_action_button(action, busy=busy)
+                row, column = divmod(index, 2)
+                layout.addWidget(button, row, column)
+                self._action_buttons[action.action_id] = button
+
+    def _clear_action_layout(self, layout: QGridLayout) -> None:
+        while layout.count():
+            child = layout.takeAt(0)
             widget = child.widget()
             if widget is not None:
                 widget.deleteLater()
 
-        self._action_buttons = {}
-        busy = self._controller.session_state.command_state.value == "running"
-        for index, action in enumerate(actions):
-            button = QPushButton(action.label)
-            button.setObjectName(f"action-{action.action_id}")
-            button.clicked.connect(lambda _checked=False, action_id=action.action_id: self._controller.trigger_action(action_id))
-            button.setEnabled(action.enabled and not busy)
-            tooltip = action.description
-            if not action.enabled and action.disabled_reason:
-                tooltip = f"{action.description}\n{action.disabled_reason}".strip()
-            button.setToolTip(tooltip)
-            row, column = divmod(index, 2)
-            self._actions_layout.addWidget(button, row, column)
-            self._action_buttons[action.action_id] = button
+    def _render_action_button(self, action: ProviderAction, *, busy: bool) -> QPushButton:
+        button = QPushButton(action.label)
+        button.setObjectName(f"action-{action.action_id}")
+        button.clicked.connect(
+            lambda _checked=False, action_id=action.action_id: self._controller.trigger_action(action_id)
+        )
+        button.setEnabled(action.enabled and not busy)
+        tooltip = action.description
+        if not action.enabled and action.disabled_reason:
+            tooltip = f"{action.description}\n{action.disabled_reason}".strip()
+        button.setToolTip(tooltip)
+        return button
 
     def _render_logs(self, entries: tuple[LogEntry, ...] | list[LogEntry]) -> None:
         lines = []

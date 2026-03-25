@@ -100,6 +100,12 @@ def test_main_window_renders_branding_and_actions(qapp, tmp_path: Path) -> None:
     assert "Ali Shaikh" in window.about_text()
     assert {"refresh", "whoami", "sso-login", "logout", "activate", "open-config", "copy-export"} <= set(window.action_buttons)
     assert window.auth_methods_tree.topLevelItemCount() == 3
+    assert "Provider-wide actions" in window.actions_hint_label.text()
+    assert window.profile_actions_label.text() == "Selected Profile Actions: sandbox"
+    assert window.global_actions_label.text() == "Provider-wide Actions"
+    assert window.action_buttons["logout"].text() == "Global SSO Logout"
+    assert window.action_buttons["logout"].parentWidget() is window.global_actions_container
+    assert window.action_buttons["whoami"].parentWidget() is window.profile_actions_container
 
 
 def test_main_window_selection_updates_details_and_log_panel(qapp, tmp_path: Path) -> None:
