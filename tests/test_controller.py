@@ -2,6 +2,7 @@ from pathlib import Path
 
 from cloudsprocket.config import AppSettings
 from cloudsprocket.models import (
+    AuthMethod,
     CommandExecutionType,
     CommandResult,
     DetailField,
@@ -217,3 +218,47 @@ def test_controller_keeps_global_logout_available_when_another_sso_profile_exist
     assert not actions["sso-login"].enabled
     assert actions["logout"].enabled
     assert actions["logout"].label == "Global SSO Logout"
+
+
+def test_controller_tracks_selected_auth_method_and_locked_workspace_tabs(tmp_path: Path) -> None:
+    controller = CloudSprocketController(
+        settings=_make_settings(tmp_path),
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(_make_profiles()),
+        command_runner=DeferredRunner(),
+        desktop_integration=FakeDesktopIntegration(),
+    )
+
+    assert controller.selected_auth_method() == AuthMethod.CLI
+    assert controller.select_auth_method(AuthMethod.SSO)
+    assert controller.lock_session()
+    assert controller.is_session_locked()
+    assert controller.session_state.locked_auth_method == AuthMethod.SSO
+    assert [tab.label for tab in controller.workspace_tabs()] == [
+        "Overview",
+        "S3",
+        "EC2",
+        "IAM",
+        "CloudWatch",
+        "Actions",
+    ]
+
+    controller.unlock_session()
+
+    assert not controller.is_session_locked()
+    assert controller.workspace_tabs() == ()
+
+
+def test_controller_rejects_unavailable_auth_method_selection(tmp_path: Path) -> None:
+    controller = CloudSprocketController(
+        settings=_make_settings(tmp_path),
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(_make_mixed_aws_profiles()),
+        command_runner=DeferredRunner(),
+        desktop_integration=FakeDesktopIntegration(),
+    )
+
+    controller.select_profile("aws", "default")
+
+    assert not controller.select_auth_method(AuthMethod.SSO)
+    assert controller.selected_auth_method() == AuthMethod.CLI

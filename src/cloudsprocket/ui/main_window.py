@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSplitter,
+    QStackedWidget,
     QStatusBar,
     QTabWidget,
     QTreeWidget,
@@ -25,12 +26,14 @@ from PySide6.QtWidgets import (
 
 from cloudsprocket.config import APP_DESCRIPTION, AppSettings
 from cloudsprocket.models import (
+    AuthMethod,
     AuthMethodStatus,
     DetailField,
     LogEntry,
     ProfileDetails,
     ProviderAction,
     ProviderHealth,
+    WorkspaceTab,
 )
 from cloudsprocket.services.app_controller import CloudSprocketController
 
@@ -65,6 +68,31 @@ class MainWindow(QMainWindow):
         self._actions_hint_label = QLabel()
         self._profile_actions_label = QLabel()
         self._global_actions_label = QLabel()
+        self._body_stack = QStackedWidget()
+        self._session_tabs = QTabWidget()
+        self._workspace_tabs = QTabWidget()
+        self._session_provider_label = QLabel()
+        self._session_profile_label = QLabel()
+        self._session_auth_label = QLabel()
+        self._session_lock_hint_label = QLabel()
+        self._session_lock_button = QPushButton("Lock Session")
+        self._workspace_title = QLabel()
+        self._workspace_subtitle = QLabel()
+        self._workspace_meta = QLabel()
+        self._workspace_unlock_button = QPushButton("Unlock")
+        self._workspace_overview_heading = QLabel()
+        self._workspace_overview_summary = QLabel()
+        self._workspace_overview_detail = QLabel()
+        self._workspace_overview_sources = QLabel()
+        self._workspace_overview_notes = QLabel()
+        self._workspace_actions_hint_label = QLabel()
+        self._workspace_profile_actions_label = QLabel()
+        self._workspace_global_actions_label = QLabel()
+        self._workspace_profile_actions_container = QWidget()
+        self._workspace_profile_actions_layout = QGridLayout(self._workspace_profile_actions_container)
+        self._workspace_global_actions_container = QWidget()
+        self._workspace_global_actions_layout = QGridLayout(self._workspace_global_actions_container)
+        self._rendering_state = False
 
         self.setWindowTitle(settings.app_brand_name)
         self.resize(1360, 860)
@@ -126,17 +154,44 @@ class MainWindow(QMainWindow):
     def global_actions_container(self) -> QWidget:
         return self._global_actions_container
 
+    @property
+    def session_tabs(self) -> QTabWidget:
+        return self._session_tabs
+
+    @property
+    def workspace_tabs(self) -> QTabWidget:
+        return self._workspace_tabs
+
+    @property
+    def lock_session_button(self) -> QPushButton:
+        return self._session_lock_button
+
+    @property
+    def unlock_session_button(self) -> QPushButton:
+        return self._workspace_unlock_button
+
+    @property
+    def body_stack(self) -> QStackedWidget:
+        return self._body_stack
+
     def about_text(self) -> str:
         return self._controller.about_text()
 
     def render_state(self) -> None:
-        self._config_label.setText(f"Config root: {self._settings.config_dir}")
-        self._render_provider_snapshot(self._controller.provider_snapshot)
-        self._render_profile_list()
-        self._render_profile_details(self._controller.selected_profile_details())
-        self._render_actions(self._controller.available_actions())
-        self._render_logs(self._controller.log_entries())
-        self._status_bar.showMessage(self._controller.status_message())
+        self._rendering_state = True
+        try:
+            self._config_label.setText(f"Config root: {self._settings.config_dir}")
+            self._render_provider_snapshot(self._controller.provider_snapshot)
+            self._render_profile_list()
+            self._render_profile_details(self._controller.selected_profile_details())
+            self._render_session_setup()
+            self._render_workspace()
+            self._render_actions(self._controller.available_actions())
+            self._render_logs(self._controller.log_entries())
+            self._body_stack.setCurrentIndex(1 if self._controller.is_session_locked() else 0)
+            self._status_bar.showMessage(self._controller.status_message())
+        finally:
+            self._rendering_state = False
 
     def _build_ui(self) -> None:
         refresh_action = QAction("Refresh", self)
@@ -190,7 +245,68 @@ class MainWindow(QMainWindow):
         layout.addWidget(refresh_button, 0, Qt.AlignTop)
         return layout
 
+    def _build_session_setup_panel(self) -> QGroupBox:
+        group = QGroupBox("Session Setup")
+        layout = QVBoxLayout(group)
+        self._session_provider_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #2a3a4a;")
+        self._session_profile_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #2a3a4a;")
+        self._session_auth_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #2a3a4a;")
+        self._session_lock_hint_label.setWordWrap(True)
+        self._session_lock_hint_label.setStyleSheet(
+            "padding: 10px 12px; background: #f4f7fa; border-radius: 8px; color: #4f6172;"
+        )
+        self._session_lock_button.clicked.connect(self._on_lock_session_clicked)
+
+        metadata_layout = QGridLayout()
+        metadata_layout.addWidget(QLabel("Provider"), 0, 0)
+        metadata_layout.addWidget(self._session_provider_label, 0, 1)
+        metadata_layout.addWidget(QLabel("Profile"), 1, 0)
+        metadata_layout.addWidget(self._session_profile_label, 1, 1)
+        metadata_layout.addWidget(QLabel("Auth"), 2, 0)
+        metadata_layout.addWidget(self._session_auth_label, 2, 1)
+
+        footer_layout = QHBoxLayout()
+        footer_layout.addWidget(self._session_lock_hint_label, 1)
+        footer_layout.addWidget(self._session_lock_button, 0, Qt.AlignRight)
+
+        layout.addLayout(metadata_layout)
+        layout.addLayout(footer_layout)
+        return group
+
+    def _build_workspace_header(self) -> QGroupBox:
+        group = QGroupBox("Locked Session")
+        layout = QHBoxLayout(group)
+
+        self._workspace_title.setStyleSheet("font-size: 22px; font-weight: 700;")
+        self._workspace_subtitle.setStyleSheet("font-size: 14px; font-weight: 600; color: #2b4f73;")
+        self._workspace_meta.setWordWrap(True)
+        self._workspace_meta.setStyleSheet(
+            "padding: 10px 12px; background: #f4f7fa; border-radius: 8px; color: #4f6172;"
+        )
+        self._workspace_unlock_button.clicked.connect(self._on_unlock_session_clicked)
+
+        text_layout = QVBoxLayout()
+        text_layout.addWidget(self._workspace_title)
+        text_layout.addWidget(self._workspace_subtitle)
+        text_layout.addWidget(self._workspace_meta)
+
+        layout.addLayout(text_layout, 1)
+        layout.addWidget(self._workspace_unlock_button, 0, Qt.AlignTop)
+        return group
+
     def _build_body(self) -> QSplitter:
+        self._body_stack.addWidget(self._build_session_page())
+        self._body_stack.addWidget(self._build_workspace_page())
+
+        root_splitter = QSplitter(Qt.Vertical)
+        root_splitter.setChildrenCollapsible(False)
+        root_splitter.addWidget(self._body_stack)
+        root_splitter.addWidget(self._build_log_panel())
+        root_splitter.setStretchFactor(0, 5)
+        root_splitter.setStretchFactor(1, 2)
+        return root_splitter
+
+    def _build_session_page(self) -> QWidget:
         navigation_splitter = QSplitter(Qt.Vertical)
         navigation_splitter.setChildrenCollapsible(False)
         navigation_splitter.addWidget(self._build_provider_panel())
@@ -198,27 +314,110 @@ class MainWindow(QMainWindow):
         navigation_splitter.setStretchFactor(0, 2)
         navigation_splitter.setStretchFactor(1, 3)
 
-        detail_tabs = QTabWidget()
-        detail_tabs.setDocumentMode(True)
-        detail_tabs.addTab(self._build_overview_tab(), "Overview")
-        detail_tabs.addTab(self._build_access_tab(), "Access")
-        detail_tabs.addTab(self._build_actions_tab(), "Actions")
+        self._session_tabs.setDocumentMode(True)
+        self._session_tabs.addTab(self._build_overview_tab(), "Profile")
+        self._session_tabs.addTab(self._build_access_tab(), "Access")
+        self._session_tabs.addTab(self._build_actions_tab(), "Actions")
 
-        content_splitter = QSplitter(Qt.Vertical)
-        content_splitter.setChildrenCollapsible(False)
-        content_splitter.addWidget(detail_tabs)
-        content_splitter.addWidget(self._build_log_panel())
-        content_splitter.setStretchFactor(0, 5)
-        content_splitter.setStretchFactor(1, 2)
+        session_content = QWidget()
+        session_content_layout = QVBoxLayout(session_content)
+        session_content_layout.setContentsMargins(0, 0, 0, 0)
+        session_content_layout.setSpacing(16)
+        session_content_layout.addWidget(self._build_session_setup_panel())
+        session_content_layout.addWidget(self._session_tabs, 1)
 
-        body_splitter = QSplitter(Qt.Horizontal)
-        body_splitter.setChildrenCollapsible(False)
-        body_splitter.addWidget(navigation_splitter)
-        body_splitter.addWidget(content_splitter)
-        body_splitter.setStretchFactor(0, 2)
-        body_splitter.setStretchFactor(1, 5)
-        body_splitter.setSizes([360, 980])
-        return body_splitter
+        session_splitter = QSplitter(Qt.Horizontal)
+        session_splitter.setChildrenCollapsible(False)
+        session_splitter.addWidget(navigation_splitter)
+        session_splitter.addWidget(session_content)
+        session_splitter.setStretchFactor(0, 2)
+        session_splitter.setStretchFactor(1, 5)
+        session_splitter.setSizes([360, 980])
+        return session_splitter
+
+    def _build_workspace_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
+        layout.addWidget(self._build_workspace_header())
+        self._workspace_tabs.setDocumentMode(True)
+        layout.addWidget(self._workspace_tabs, 1)
+        return page
+
+    def _build_workspace_overview_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
+
+        self._workspace_overview_heading.setStyleSheet(
+            "font-size: 16px; font-weight: 700; color: #2a3a4a;"
+        )
+        self._workspace_overview_summary.setWordWrap(True)
+        self._workspace_overview_summary.setStyleSheet("font-size: 14px; color: #2a3a4a;")
+        self._workspace_overview_detail.setWordWrap(True)
+        self._workspace_overview_detail.setStyleSheet(
+            "padding: 12px 14px; background: #f7f8fb; border-radius: 8px; color: #4f6172;"
+        )
+        self._workspace_overview_sources.setWordWrap(True)
+        self._workspace_overview_sources.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._workspace_overview_sources.setStyleSheet(
+            "padding: 10px 12px; background: #f4f7fa; border-radius: 8px; color: #2a3a4a;"
+        )
+        self._workspace_overview_notes.setWordWrap(True)
+        self._workspace_overview_notes.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._workspace_overview_notes.setStyleSheet(
+            "padding: 10px 12px; background: #f7f8fb; border-radius: 8px; color: #4f6172;"
+        )
+
+        sources_group = QGroupBox("Source Paths")
+        sources_layout = QVBoxLayout(sources_group)
+        sources_layout.addWidget(self._workspace_overview_sources)
+
+        notes_group = QGroupBox("Workspace Notes")
+        notes_layout = QVBoxLayout(notes_group)
+        notes_layout.addWidget(self._workspace_overview_notes)
+
+        layout.addWidget(self._workspace_overview_heading)
+        layout.addWidget(self._workspace_overview_summary)
+        layout.addWidget(self._workspace_overview_detail)
+        layout.addWidget(sources_group)
+        layout.addWidget(notes_group)
+        layout.addStretch(1)
+        return page
+
+    def _build_workspace_actions_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+
+        self._workspace_actions_hint_label.setWordWrap(True)
+        self._workspace_actions_hint_label.setStyleSheet(
+            "padding: 10px 12px; background: #f4f7fa; border-radius: 8px; color: #4f6172;"
+        )
+        self._workspace_profile_actions_label.setStyleSheet(
+            "font-size: 13px; font-weight: 700; color: #2b4f73; padding-top: 4px;"
+        )
+        self._workspace_global_actions_label.setStyleSheet(
+            "font-size: 13px; font-weight: 700; color: #2b4f73; padding-top: 4px;"
+        )
+
+        self._workspace_profile_actions_layout.setContentsMargins(0, 0, 0, 0)
+        self._workspace_profile_actions_layout.setHorizontalSpacing(8)
+        self._workspace_profile_actions_layout.setVerticalSpacing(8)
+        self._workspace_global_actions_layout.setContentsMargins(0, 0, 0, 0)
+        self._workspace_global_actions_layout.setHorizontalSpacing(8)
+        self._workspace_global_actions_layout.setVerticalSpacing(8)
+
+        layout.addWidget(self._workspace_actions_hint_label)
+        layout.addWidget(self._workspace_profile_actions_label)
+        layout.addWidget(self._workspace_profile_actions_container)
+        layout.addWidget(self._workspace_global_actions_label)
+        layout.addWidget(self._workspace_global_actions_container)
+        layout.addStretch(1)
+        return page
 
     def _build_provider_panel(self) -> QGroupBox:
         group = QGroupBox("Provider Summary")
@@ -345,6 +544,7 @@ class MainWindow(QMainWindow):
         self._auth_methods_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self._auth_methods_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self._auth_methods_tree.header().setSectionResizeMode(2, QHeaderView.Stretch)
+        self._auth_methods_tree.itemSelectionChanged.connect(self._on_auth_method_selection_changed)
         layout.addWidget(self._auth_methods_tree)
         return group
 
@@ -492,8 +692,18 @@ class MainWindow(QMainWindow):
         self._detail_fields_tree.resizeColumnToContents(0)
 
         self._auth_methods_tree.clear()
+        selected_auth_method = self._controller.selected_auth_method()
+        self._auth_methods_tree.blockSignals(True)
+        selected_auth_item: QTreeWidgetItem | None = None
         for method in details.auth_methods:
-            self._auth_methods_tree.addTopLevelItem(self._auth_method_item(method))
+            item = self._auth_method_item(method)
+            item.setData(0, Qt.UserRole, method.method.value)
+            self._auth_methods_tree.addTopLevelItem(item)
+            if method.available and method.method == selected_auth_method:
+                selected_auth_item = item
+        if selected_auth_item is not None:
+            self._auth_methods_tree.setCurrentItem(selected_auth_item)
+        self._auth_methods_tree.blockSignals(False)
         self._auth_methods_tree.resizeColumnToContents(0)
         self._auth_methods_tree.resizeColumnToContents(1)
 
@@ -506,40 +716,178 @@ class MainWindow(QMainWindow):
         self._capabilities_tree.resizeColumnToContents(0)
         self._capabilities_tree.resizeColumnToContents(1)
 
+    def _render_session_setup(self) -> None:
+        current_provider = self._controller.current_provider_id()
+        selected_profile = self._controller.selected_profile()
+        selected_auth_method = self._controller.selected_auth_method()
+
+        self._session_provider_label.setText(current_provider.upper() if current_provider else "Not selected")
+        self._session_profile_label.setText(
+            selected_profile.display_name if selected_profile is not None else "Not selected"
+        )
+        self._session_auth_label.setText(
+            selected_auth_method.value.upper() if selected_auth_method is not None else "Not selected"
+        )
+
+        lock_reason = self._controller.lock_session_reason()
+        if lock_reason:
+            self._session_lock_hint_label.setText(lock_reason)
+        else:
+            self._session_lock_hint_label.setText(
+                "Lock the session to switch into the focused workspace. Use Unlock later to change provider, profile, or auth method."
+            )
+        self._session_lock_button.setEnabled(self._controller.can_lock_session())
+
+    def _render_workspace(self) -> None:
+        self._workspace_title.setText(self._controller.locked_session_title())
+        self._workspace_subtitle.setText(self._controller.locked_session_summary())
+        locked_profile = self._controller.locked_profile()
+        locked_auth_method = self._controller.session_state.locked_auth_method
+        provider_health = self._controller.locked_provider_health()
+        selected_details = self._controller.selected_profile_details()
+        details = []
+        if locked_profile is not None:
+            details.append(f"Profile: {locked_profile.display_name}")
+        if locked_auth_method is not None:
+            details.append(f"Auth: {locked_auth_method.value.upper()}")
+        if provider_health and provider_health.command_path:
+            details.append(f"CLI: {provider_health.command_path}")
+        self._workspace_meta.setText(
+            "\n".join(details) if details else "Unlock the session to change provider or configuration."
+        )
+
+        if self._controller.is_session_locked():
+            self._workspace_overview_heading.setText("Focused Session Overview")
+            self._workspace_overview_summary.setText(selected_details.summary)
+            self._workspace_overview_detail.setText(
+                "The workspace is locked to the current provider, profile, and auth method. "
+                "Use the service tabs for task-specific work or unlock the session to change configuration."
+            )
+            self._workspace_overview_sources.setText(
+                "\n".join(str(path) for path in selected_details.source_paths)
+                if selected_details.source_paths
+                else "No source paths were reported for this profile."
+            )
+            self._workspace_overview_notes.setText(
+                "\n".join(selected_details.notes)
+                if selected_details.notes
+                else "No additional notes for this locked session."
+            )
+        else:
+            self._workspace_overview_heading.setText("Focused Session Overview")
+            self._workspace_overview_summary.setText(
+                "Lock a session to switch from setup into the focused workspace."
+            )
+            self._workspace_overview_detail.setText(
+                "Choose a provider, profile, and available auth method in the Session page, then lock the session."
+            )
+            self._workspace_overview_sources.setText("No locked session is active.")
+            self._workspace_overview_notes.setText("No additional notes for this locked session.")
+
+        current_tab_id = None
+        current_widget = self._workspace_tabs.currentWidget()
+        if current_widget is not None:
+            current_tab_id = current_widget.property("workspace_tab_id")
+
+        self._workspace_tabs.clear()
+        next_index = 0
+        for index, tab in enumerate(self._controller.workspace_tabs()):
+            if tab.tab_id == "overview":
+                page = self._build_workspace_overview_tab()
+            elif tab.tab_id == "actions":
+                page = self._build_workspace_actions_tab()
+            else:
+                page = self._build_workspace_tab(tab)
+            page.setProperty("workspace_tab_id", tab.tab_id)
+            self._workspace_tabs.addTab(page, tab.label)
+            if tab.tab_id == current_tab_id:
+                next_index = index
+        if self._workspace_tabs.count():
+            self._workspace_tabs.setCurrentIndex(next_index)
+
+    def _build_workspace_tab(self, tab: WorkspaceTab) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        summary_label = QLabel(tab.summary)
+        summary_label.setStyleSheet("font-size: 16px; font-weight: 700; color: #2a3a4a;")
+        detail_label = QLabel(tab.detail or "This workspace area is not configured yet.")
+        detail_label.setWordWrap(True)
+        detail_label.setStyleSheet(
+            "padding: 12px 14px; background: #f7f8fb; border-radius: 8px; color: #4f6172;"
+        )
+        layout.addWidget(summary_label)
+        layout.addWidget(detail_label)
+        layout.addStretch(1)
+        return page
+
     def _render_actions(self, actions: tuple[ProviderAction, ...]) -> None:
-        self._action_buttons = {}
         busy = self._controller.session_state.command_state.value == "running"
         selected_profile = self._controller.selected_profile()
         selected_profile_actions = tuple(action for action in actions if action.requires_profile)
         global_actions = tuple(action for action in actions if not action.requires_profile)
+        active_prefix = "workspace" if self._controller.is_session_locked() else "session"
+        self._action_buttons = self._render_action_sections(
+            prefix=active_prefix,
+            selected_profile=selected_profile.display_name if selected_profile is not None else None,
+            selected_profile_actions=selected_profile_actions,
+            global_actions=global_actions,
+            busy=busy,
+        )
 
-        self._clear_action_layout(self._profile_actions_layout)
-        self._clear_action_layout(self._global_actions_layout)
-        self._actions_hint_label.setText(
+    def _render_action_sections(
+        self,
+        *,
+        prefix: str,
+        selected_profile: str | None,
+        selected_profile_actions: tuple[ProviderAction, ...],
+        global_actions: tuple[ProviderAction, ...],
+        busy: bool,
+    ) -> dict[str, QPushButton]:
+        if prefix == "workspace":
+            hint_label = self._workspace_actions_hint_label
+            profile_label = self._workspace_profile_actions_label
+            profile_container = self._workspace_profile_actions_container
+            profile_layout = self._workspace_profile_actions_layout
+            global_label = self._workspace_global_actions_label
+            global_container = self._workspace_global_actions_container
+            global_layout = self._workspace_global_actions_layout
+        else:
+            hint_label = self._actions_hint_label
+            profile_label = self._profile_actions_label
+            profile_container = self._profile_actions_container
+            profile_layout = self._profile_actions_layout
+            global_label = self._global_actions_label
+            global_container = self._global_actions_container
+            global_layout = self._global_actions_layout
+
+        action_buttons: dict[str, QPushButton] = {}
+        self._clear_action_layout(profile_layout)
+        self._clear_action_layout(global_layout)
+
+        hint_label.setText(
             "Selected profile actions only affect the chosen profile. "
             "Provider-wide actions affect shared CLI session state or configuration."
         )
         if selected_profile is not None:
-            self._profile_actions_label.setText(
-                f"Selected Profile Actions: {selected_profile.display_name}"
-            )
+            profile_label.setText(f"Selected Profile Actions: {selected_profile}")
         else:
-            self._profile_actions_label.setText("Selected Profile Actions")
-        self._global_actions_label.setText("Provider-wide Actions")
-        self._profile_actions_label.setVisible(bool(selected_profile_actions))
-        self._profile_actions_container.setVisible(bool(selected_profile_actions))
-        self._global_actions_label.setVisible(bool(global_actions))
-        self._global_actions_container.setVisible(bool(global_actions))
+            profile_label.setText("Selected Profile Actions")
+        global_label.setText("Provider-wide Actions")
+        profile_label.setVisible(bool(selected_profile_actions))
+        profile_container.setVisible(bool(selected_profile_actions))
+        global_label.setVisible(bool(global_actions))
+        global_container.setVisible(bool(global_actions))
 
         for layout, grouped_actions in (
-            (self._profile_actions_layout, selected_profile_actions),
-            (self._global_actions_layout, global_actions),
+            (profile_layout, selected_profile_actions),
+            (global_layout, global_actions),
         ):
             for index, action in enumerate(grouped_actions):
                 button = self._render_action_button(action, busy=busy)
                 row, column = divmod(index, 2)
                 layout.addWidget(button, row, column)
-                self._action_buttons[action.action_id] = button
+                action_buttons[action.action_id] = button
+        return action_buttons
 
     def _clear_action_layout(self, layout: QGridLayout) -> None:
         while layout.count():
@@ -579,6 +927,8 @@ class MainWindow(QMainWindow):
         return QTreeWidgetItem([method.label, status, method.summary])
 
     def _on_provider_selection_changed(self) -> None:
+        if self._rendering_state:
+            return
         item = self._provider_tree.currentItem()
         if item is None:
             return
@@ -588,6 +938,8 @@ class MainWindow(QMainWindow):
             self._controller.set_current_provider(provider_id)
 
     def _on_profile_selection_changed(self) -> None:
+        if self._rendering_state:
+            return
         item = self._profile_tree.currentItem()
         if item is None:
             return
@@ -596,6 +948,31 @@ class MainWindow(QMainWindow):
         if provider_id and profile_id:
             self._set_sensitive_visibility(False)
             self._controller.select_profile(provider_id, profile_id)
+
+    def _on_auth_method_selection_changed(self) -> None:
+        if self._rendering_state:
+            return
+        item = self._auth_methods_tree.currentItem()
+        if item is None:
+            return
+        method_value = item.data(0, Qt.UserRole)
+        if not method_value:
+            return
+        try:
+            method = AuthMethod(method_value)
+        except ValueError:
+            self.render_state()
+            return
+        if method == self._controller.selected_auth_method():
+            return
+        if not self._controller.select_auth_method(method):
+            self.render_state()
+
+    def _on_lock_session_clicked(self) -> None:
+        self._controller.lock_session()
+
+    def _on_unlock_session_clicked(self) -> None:
+        self._controller.unlock_session()
 
     def _show_about_dialog(self) -> None:
         QMessageBox.about(self, "About CloudSprocket", self.about_text())

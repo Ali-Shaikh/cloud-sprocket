@@ -1,9 +1,14 @@
 from pathlib import Path
 
-from PySide6.QtWidgets import QTabWidget
-
 from cloudsprocket.config import AppSettings
-from cloudsprocket.models import DetailField, DiscoveredProfile, DiscoveryReport, ProviderHealth, ProviderState
+from cloudsprocket.models import (
+    AuthMethod,
+    DetailField,
+    DiscoveredProfile,
+    DiscoveryReport,
+    ProviderHealth,
+    ProviderState,
+)
 from cloudsprocket.services.app_controller import CloudSprocketController
 from cloudsprocket.ui.main_window import MainWindow
 
@@ -97,14 +102,16 @@ def test_main_window_renders_branding_and_actions(qapp, tmp_path: Path) -> None:
     )
 
     window = MainWindow(settings=settings, controller=controller)
-    tabs = window.findChild(QTabWidget)
 
     assert window.windowTitle() == "CloudSprocket by Ali Shaikh"
     assert "Ali Shaikh" in window.about_text()
     assert {"refresh", "whoami", "sso-login", "logout", "activate", "open-config", "copy-export"} <= set(window.action_buttons)
     assert window.auth_methods_tree.topLevelItemCount() == 3
-    assert tabs is not None
-    assert [tabs.tabText(index) for index in range(tabs.count())] == ["Overview", "Access", "Actions"]
+    assert [window.session_tabs.tabText(index) for index in range(window.session_tabs.count())] == [
+        "Profile",
+        "Access",
+        "Actions",
+    ]
     assert "Provider-wide actions" in window.actions_hint_label.text()
     assert window.profile_actions_label.text() == "Selected Profile Actions: sandbox"
     assert window.global_actions_label.text() == "Provider-wide Actions"
@@ -176,3 +183,47 @@ def test_main_window_masks_sensitive_fields_until_explicit_reveal(qapp, tmp_path
 
     assert not window.reveal_sensitive_button.isChecked()
     assert not window.reveal_sensitive_button.isEnabled()
+
+
+def test_main_window_switches_into_locked_workspace_tabs(qapp, tmp_path: Path) -> None:
+    settings = AppSettings.from_env(
+        home_dir=tmp_path / "home",
+        appdata_dir=tmp_path / "appdata",
+        local_appdata_dir=tmp_path / "local-appdata",
+        config_dir=tmp_path / "config-root",
+    )
+    controller = CloudSprocketController(
+        settings=settings,
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(),
+        command_runner=NoopRunner(),
+        desktop_integration=FakeDesktopIntegration(),
+    )
+    window = MainWindow(settings=settings, controller=controller)
+
+    sso_item = window.auth_methods_tree.topLevelItem(1)
+    window.auth_methods_tree.setCurrentItem(sso_item)
+    qapp.processEvents()
+
+    assert controller.selected_auth_method() == AuthMethod.SSO
+
+    window.lock_session_button.click()
+    qapp.processEvents()
+
+    assert controller.is_session_locked()
+    assert window.body_stack.currentIndex() == 1
+    assert [window.workspace_tabs.tabText(index) for index in range(window.workspace_tabs.count())] == [
+        "Overview",
+        "S3",
+        "EC2",
+        "IAM",
+        "CloudWatch",
+        "Actions",
+    ]
+    assert {"refresh", "whoami", "sso-login", "logout", "activate", "open-config", "copy-export"} <= set(window.action_buttons)
+
+    window.unlock_session_button.click()
+    qapp.processEvents()
+
+    assert not controller.is_session_locked()
+    assert window.body_stack.currentIndex() == 0

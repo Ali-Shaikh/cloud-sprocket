@@ -119,6 +119,15 @@ class ProviderAction:
 
 
 @dataclass(frozen=True, slots=True)
+class WorkspaceTab:
+    tab_id: str
+    label: str
+    summary: str
+    detail: str = ""
+    enabled: bool = True
+
+
+@dataclass(frozen=True, slots=True)
 class CommandSpec:
     action_id: str
     execution_type: CommandExecutionType
@@ -175,6 +184,10 @@ class ProfileDetails:
 class SessionState:
     current_provider_id: str | None = None
     selected_profile_id: str | None = None
+    selected_auth_method_by_provider: dict[str, AuthMethod] = field(default_factory=dict)
+    locked_provider_id: str | None = None
+    locked_profile_id: str | None = None
+    locked_auth_method: AuthMethod | None = None
     active_profile_by_provider: dict[str, str] = field(default_factory=dict)
     command_state: CommandState = CommandState.IDLE
     running_action_id: str | None = None
@@ -182,3 +195,6 @@ class SessionState:
 
     def active_profile_id(self, provider_id: str) -> str | None:
         return self.active_profile_by_provider.get(provider_id)
+
+    def selected_auth_method(self, provider_id: str) -> AuthMethod | None:
+        return self.selected_auth_method_by_provider.get(provider_id)

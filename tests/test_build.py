@@ -49,3 +49,27 @@ def test_expected_artifact_path_varies_by_platform(tmp_path: Path) -> None:
     assert expected_artifact_path(root=root, platform_name="win32") == root / "dist" / APP_BUILD_NAME / f"{APP_BUILD_NAME}.exe"
     assert expected_artifact_path(root=root, platform_name="darwin") == root / "dist" / f"{APP_BUILD_NAME}.app"
     assert expected_artifact_path(root=root, platform_name="linux") == root / "dist" / APP_BUILD_NAME / APP_BUILD_NAME
+
+
+def test_build_command_accepts_custom_output_paths(tmp_path: Path) -> None:
+    root = tmp_path
+    dist_path = root / ".tmp" / "dist-verify"
+    work_path = root / ".tmp" / "pyinstaller-work"
+    spec_path = root / ".tmp" / "pyinstaller-spec"
+
+    command = build_command(
+        root=root,
+        python_executable="python-test",
+        platform_name="darwin",
+        dist_path=dist_path,
+        work_path=work_path,
+        spec_path=spec_path,
+    )
+
+    assert "--distpath" in command
+    assert str(dist_path) in command
+    assert "--workpath" in command
+    assert str(work_path) in command
+    assert "--specpath" in command
+    assert str(spec_path) in command
+    assert expected_artifact_path(root=root, dist_path=dist_path, platform_name="darwin") == dist_path / f"{APP_BUILD_NAME}.app"

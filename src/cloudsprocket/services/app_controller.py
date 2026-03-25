@@ -10,6 +10,8 @@ from PySide6.QtWidgets import QApplication
 from cloudsprocket.config import APP_BRAND_NAME, APP_DESCRIPTION, AUTHOR_NAME, AppSettings
 from cloudsprocket.models import (
     ActionKind,
+    AuthMethod,
+    AuthMethodStatus,
     CommandExecutionType,
     CommandResult,
     CommandState,
@@ -20,6 +22,7 @@ from cloudsprocket.models import (
     ProviderAction,
     ProviderHealth,
     SessionState,
+    WorkspaceTab,
 )
 from cloudsprocket.services.auth import AuthStatusService
 from cloudsprocket.services.command_runner import BackgroundCommandRunner
@@ -102,6 +105,7 @@ class CloudSprocketController(QObject):
         self._provider_snapshot = self._auth_service.snapshot()
         self._discovery_report = self._profile_discovery.discover()
         self._reconcile_selection()
+        self._reconcile_auth_selection()
         if emit_signal:
             self.state_changed.emit()
 
@@ -133,6 +137,7 @@ class CloudSprocketController(QObject):
                 self._session_state.selected_profile_id = profiles[0].profile_id
         else:
             self._session_state.selected_profile_id = None
+        self._reconcile_auth_selection()
         self.state_changed.emit()
 
     def selected_profile(self):
@@ -148,7 +153,191 @@ class CloudSprocketController(QObject):
     def select_profile(self, provider_id: str, profile_id: str) -> None:
         self._session_state.current_provider_id = provider_id
         self._session_state.selected_profile_id = profile_id
+        self._reconcile_auth_selection()
         self.state_changed.emit()
+
+    def available_auth_methods(self) -> tuple[AuthMethodStatus, ...]:
+        return self.selected_profile_details().auth_methods
+
+    def selected_auth_method(self) -> AuthMethod | None:
+        provider_id = self._session_state.current_provider_id
+        if provider_id is None:
+            return None
+        return self._session_state.selected_auth_method(provider_id)
+
+    def select_auth_method(self, method: AuthMethod) -> bool:
+        available_methods = {
+            candidate.method: candidate
+            for candidate in self.available_auth_methods()
+            if candidate.available
+        }
+        if method not in available_methods:
+            return False
+        provider_id = self._session_state.current_provider_id
+        if provider_id is None:
+            return False
+        self._session_state.selected_auth_method_by_provider[provider_id] = method
+        self.state_changed.emit()
+        return True
+
+    def can_lock_session(self) -> bool:
+        if self._session_state.command_state == CommandState.RUNNING:
+            return False
+        if self._session_state.current_provider_id is None or self.selected_profile() is None:
+            return False
+        selected_auth_method = self.selected_auth_method()
+        if selected_auth_method is None:
+            return False
+        return any(
+            method.method == selected_auth_method and method.available
+            for method in self.available_auth_methods()
+        )
+
+    def lock_session_reason(self) -> str:
+        if self._session_state.command_state == CommandState.RUNNING:
+            return "Wait for the current command to finish before locking the session."
+        if self._session_state.current_provider_id is None:
+            return "Select a provider before locking the session."
+        if self.selected_profile() is None:
+            return "Select a profile before locking the session."
+        selected_auth_method = self.selected_auth_method()
+        if selected_auth_method is None:
+            return "Select an available auth method before locking the session."
+        for method in self.available_auth_methods():
+            if method.method == selected_auth_method:
+                if method.available:
+                    return ""
+                return f"{method.label} is not available for the selected profile."
+        return "Select an available auth method before locking the session."
+
+    def lock_session(self) -> bool:
+        if not self.can_lock_session():
+            reason = self.lock_session_reason()
+            if reason:
+                self._append_log(LogLevel.WARNING, reason)
+                self.state_changed.emit()
+            return False
+        profile = self.selected_profile()
+        provider_id = self._session_state.current_provider_id
+        auth_method = self.selected_auth_method()
+        if profile is None or provider_id is None or auth_method is None:
+            return False
+        self._session_state.locked_provider_id = provider_id
+        self._session_state.locked_profile_id = profile.profile_id
+        self._session_state.locked_auth_method = auth_method
+        self._append_log(
+            LogLevel.SUCCESS,
+            f"Locked {provider_id.upper()} session for {profile.profile_id} using {auth_method.value}.",
+        )
+        self.state_changed.emit()
+        return True
+
+    def unlock_session(self) -> None:
+        if not self.is_session_locked():
+            return
+        locked_provider_id = self._session_state.locked_provider_id or ""
+        locked_profile_id = self._session_state.locked_profile_id or ""
+        self._session_state.locked_provider_id = None
+        self._session_state.locked_profile_id = None
+        self._session_state.locked_auth_method = None
+        self._append_log(
+            LogLevel.INFO,
+            f"Unlocked {locked_provider_id.upper()} session for {locked_profile_id}.",
+        )
+        self.state_changed.emit()
+
+    def is_session_locked(self) -> bool:
+        return (
+            self._session_state.locked_provider_id is not None
+            and self._session_state.locked_profile_id is not None
+            and self._session_state.locked_auth_method is not None
+        )
+
+    def locked_profile(self):
+        provider_id = self._session_state.locked_provider_id
+        profile_id = self._session_state.locked_profile_id
+        if provider_id is None or profile_id is None:
+            return None
+        for profile in self.profiles_for_provider(provider_id):
+            if profile.profile_id == profile_id:
+                return profile
+        return None
+
+    def locked_provider_health(self) -> ProviderHealth | None:
+        return self.provider_health(self._session_state.locked_provider_id)
+
+    def workspace_tabs(self) -> tuple[WorkspaceTab, ...]:
+        if not self.is_session_locked():
+            return ()
+        provider_id = self._session_state.locked_provider_id or ""
+        auth_method = self._session_state.locked_auth_method
+        auth_label = auth_method.value.upper() if auth_method else "UNKNOWN"
+        if provider_id == "aws":
+            return (
+                WorkspaceTab(
+                    tab_id="overview",
+                    label="Overview",
+                    summary="Locked AWS session overview.",
+                    detail=f"Review the locked AWS workspace before moving into a service tab. Current auth mode: {auth_label}.",
+                ),
+                WorkspaceTab(
+                    tab_id="s3",
+                    label="S3",
+                    summary="Bucket and object workspace placeholder.",
+                    detail="This tab will become the focused S3 workspace for the locked AWS session.",
+                ),
+                WorkspaceTab(
+                    tab_id="ec2",
+                    label="EC2",
+                    summary="Instance and fleet workspace placeholder.",
+                    detail="This tab will become the focused EC2 workspace for the locked AWS session.",
+                ),
+                WorkspaceTab(
+                    tab_id="iam",
+                    label="IAM",
+                    summary="Identity and permission workspace placeholder.",
+                    detail="This tab will become the focused IAM workspace for the locked AWS session.",
+                ),
+                WorkspaceTab(
+                    tab_id="cloudwatch",
+                    label="CloudWatch",
+                    summary="Logs and metrics workspace placeholder.",
+                    detail="This tab will become the focused CloudWatch workspace for the locked AWS session.",
+                ),
+                WorkspaceTab(
+                    tab_id="actions",
+                    label="Actions",
+                    summary="Quick actions for the locked AWS session.",
+                    detail="This tab keeps the AWS session actions available without returning to session setup.",
+                ),
+            )
+        return (
+            WorkspaceTab(
+                tab_id="overview",
+                label="Overview",
+                summary=f"Locked {provider_id.upper()} session overview.",
+                detail="Provider-specific workspace tabs will be added after the AWS session flow is complete.",
+            ),
+            WorkspaceTab(
+                tab_id="actions",
+                label="Actions",
+                summary="Session actions placeholder.",
+                detail="Provider-wide actions for the locked session will appear here.",
+            ),
+        )
+
+    def locked_session_title(self) -> str:
+        profile = self.locked_profile()
+        if profile is None:
+            return "Locked Session"
+        return f"{profile.provider_id.upper()} Workspace"
+
+    def locked_session_summary(self) -> str:
+        profile = self.locked_profile()
+        auth_method = self._session_state.locked_auth_method
+        if profile is None or auth_method is None:
+            return "No locked session."
+        return f"{profile.display_name} locked with {auth_method.value.upper()}."
 
     def selected_profile_details(self) -> ProfileDetails:
         adapter = self._current_adapter()
@@ -344,3 +533,18 @@ class CloudSprocketController(QObject):
         valid_profile_ids = {profile.profile_id for profile in profiles}
         if self._session_state.selected_profile_id not in valid_profile_ids:
             self._session_state.selected_profile_id = profiles[0].profile_id
+
+    def _reconcile_auth_selection(self) -> None:
+        provider_id = self._session_state.current_provider_id
+        if provider_id is None:
+            return
+        available_methods = tuple(
+            method for method in self.available_auth_methods() if method.available
+        )
+        if not available_methods:
+            self._session_state.selected_auth_method_by_provider.pop(provider_id, None)
+            return
+        selected_method = self._session_state.selected_auth_method(provider_id)
+        available_method_ids = {method.method for method in available_methods}
+        if selected_method not in available_method_ids:
+            self._session_state.selected_auth_method_by_provider[provider_id] = available_methods[0].method
