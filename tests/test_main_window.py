@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from PySide6.QtWidgets import QTabWidget
+
 from cloudsprocket.config import AppSettings
 from cloudsprocket.models import DetailField, DiscoveredProfile, DiscoveryReport, ProviderHealth, ProviderState
 from cloudsprocket.services.app_controller import CloudSprocketController
@@ -95,11 +97,14 @@ def test_main_window_renders_branding_and_actions(qapp, tmp_path: Path) -> None:
     )
 
     window = MainWindow(settings=settings, controller=controller)
+    tabs = window.findChild(QTabWidget)
 
     assert window.windowTitle() == "CloudSprocket by Ali Shaikh"
     assert "Ali Shaikh" in window.about_text()
     assert {"refresh", "whoami", "sso-login", "logout", "activate", "open-config", "copy-export"} <= set(window.action_buttons)
     assert window.auth_methods_tree.topLevelItemCount() == 3
+    assert tabs is not None
+    assert [tabs.tabText(index) for index in range(tabs.count())] == ["Overview", "Access", "Actions"]
     assert "Provider-wide actions" in window.actions_hint_label.text()
     assert window.profile_actions_label.text() == "Selected Profile Actions: sandbox"
     assert window.global_actions_label.text() == "Provider-wide Actions"

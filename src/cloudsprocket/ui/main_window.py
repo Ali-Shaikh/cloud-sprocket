@@ -3,6 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -12,7 +13,10 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
+    QSplitter,
     QStatusBar,
+    QTabWidget,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -51,6 +55,7 @@ class MainWindow(QMainWindow):
         self._detail_title = QLabel()
         self._detail_subtitle = QLabel()
         self._detail_summary = QLabel()
+        self._detail_sources = QLabel()
         self._detail_notes = QLabel()
         self._config_label = QLabel()
         self._status_bar = QStatusBar()
@@ -149,8 +154,7 @@ class MainWindow(QMainWindow):
         root_layout.setSpacing(16)
 
         root_layout.addLayout(self._build_header())
-        root_layout.addLayout(self._build_body(), 1)
-        root_layout.addWidget(self._build_log_panel(), 1)
+        root_layout.addWidget(self._build_body(), 1)
 
         self.setCentralWidget(central)
 
@@ -186,21 +190,42 @@ class MainWindow(QMainWindow):
         layout.addWidget(refresh_button, 0, Qt.AlignTop)
         return layout
 
-    def _build_body(self) -> QHBoxLayout:
-        layout = QHBoxLayout()
-        layout.setSpacing(16)
-        layout.addWidget(self._build_provider_panel(), 1)
-        layout.addWidget(self._build_profile_panel(), 1)
-        layout.addLayout(self._build_details_column(), 3)
-        return layout
+    def _build_body(self) -> QSplitter:
+        navigation_splitter = QSplitter(Qt.Vertical)
+        navigation_splitter.setChildrenCollapsible(False)
+        navigation_splitter.addWidget(self._build_provider_panel())
+        navigation_splitter.addWidget(self._build_profile_panel())
+        navigation_splitter.setStretchFactor(0, 2)
+        navigation_splitter.setStretchFactor(1, 3)
+
+        detail_tabs = QTabWidget()
+        detail_tabs.setDocumentMode(True)
+        detail_tabs.addTab(self._build_overview_tab(), "Overview")
+        detail_tabs.addTab(self._build_access_tab(), "Access")
+        detail_tabs.addTab(self._build_actions_tab(), "Actions")
+
+        content_splitter = QSplitter(Qt.Vertical)
+        content_splitter.setChildrenCollapsible(False)
+        content_splitter.addWidget(detail_tabs)
+        content_splitter.addWidget(self._build_log_panel())
+        content_splitter.setStretchFactor(0, 5)
+        content_splitter.setStretchFactor(1, 2)
+
+        body_splitter = QSplitter(Qt.Horizontal)
+        body_splitter.setChildrenCollapsible(False)
+        body_splitter.addWidget(navigation_splitter)
+        body_splitter.addWidget(content_splitter)
+        body_splitter.setStretchFactor(0, 2)
+        body_splitter.setStretchFactor(1, 5)
+        body_splitter.setSizes([360, 980])
+        return body_splitter
 
     def _build_provider_panel(self) -> QGroupBox:
         group = QGroupBox("Provider Summary")
         layout = QVBoxLayout(group)
         self._provider_tree.setColumnCount(3)
         self._provider_tree.setHeaderLabels(["Provider", "State", "Summary"])
-        self._provider_tree.setRootIsDecorated(False)
-        self._provider_tree.setAlternatingRowColors(True)
+        self._configure_data_tree(self._provider_tree)
         self._provider_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self._provider_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self._provider_tree.header().setSectionResizeMode(2, QHeaderView.Stretch)
@@ -213,8 +238,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(group)
         self._profile_tree.setColumnCount(4)
         self._profile_tree.setHeaderLabels(["Provider", "Profile", "Source", "Details"])
-        self._profile_tree.setRootIsDecorated(False)
-        self._profile_tree.setAlternatingRowColors(True)
+        self._configure_data_tree(self._profile_tree)
         self._profile_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self._profile_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self._profile_tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
@@ -223,14 +247,42 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._profile_tree)
         return group
 
-    def _build_details_column(self) -> QVBoxLayout:
-        layout = QVBoxLayout()
+    def _build_overview_tab(self) -> QWidget:
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
-        layout.addWidget(self._build_details_panel(), 2)
-        layout.addWidget(self._build_auth_methods_panel(), 1)
-        layout.addWidget(self._build_capabilities_panel(), 1)
-        layout.addWidget(self._build_actions_panel(), 1)
-        return layout
+        layout.addWidget(self._build_details_panel())
+        layout.addStretch(1)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setWidget(content)
+        return scroll
+
+    def _build_access_tab(self) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
+
+        access_splitter = QSplitter(Qt.Vertical)
+        access_splitter.setChildrenCollapsible(False)
+        access_splitter.addWidget(self._build_auth_methods_panel())
+        access_splitter.addWidget(self._build_capabilities_panel())
+        access_splitter.setStretchFactor(0, 1)
+        access_splitter.setStretchFactor(1, 1)
+
+        layout.addWidget(access_splitter)
+        return panel
+
+    def _build_actions_tab(self) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._build_actions_panel())
+        return panel
 
     def _build_details_panel(self) -> QGroupBox:
         group = QGroupBox("Selected Profile")
@@ -238,29 +290,50 @@ class MainWindow(QMainWindow):
         self._detail_title.setStyleSheet("font-size: 22px; font-weight: 700;")
         self._detail_subtitle.setStyleSheet("color: #2b4f73; font-size: 13px;")
         self._detail_summary.setWordWrap(True)
+        self._detail_sources.setWordWrap(True)
+        self._detail_sources.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._detail_sources.setStyleSheet(
+            "padding: 10px 12px; background: #f4f7fa; border-radius: 8px; color: #2a3a4a;"
+        )
         self._detail_notes.setWordWrap(True)
-        self._detail_notes.setStyleSheet("color: #4f6172;")
+        self._detail_notes.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._detail_notes.setStyleSheet(
+            "padding: 10px 12px; background: #f7f8fb; border-radius: 8px; color: #4f6172;"
+        )
         self._reveal_sensitive_button.setCheckable(True)
         self._reveal_sensitive_button.setEnabled(False)
         self._reveal_sensitive_button.toggled.connect(self._on_sensitive_visibility_toggled)
         self._detail_fields_tree.setColumnCount(2)
-        self._detail_fields_tree.setHeaderLabels(["Field", "Value"])
-        self._detail_fields_tree.setRootIsDecorated(False)
-        self._detail_fields_tree.setAlternatingRowColors(True)
+        self._detail_fields_tree.setHeaderLabels(["Setting", "Value"])
+        self._configure_data_tree(self._detail_fields_tree)
+        self._detail_fields_tree.setUniformRowHeights(False)
         self._detail_fields_tree.setWordWrap(True)
         self._detail_fields_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self._detail_fields_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
-        self._detail_fields_tree.setMinimumHeight(240)
+        self._detail_fields_tree.setMinimumHeight(320)
 
         heading_layout = QHBoxLayout()
         heading_layout.addWidget(self._detail_title, 1)
         heading_layout.addWidget(self._reveal_sensitive_button, 0, Qt.AlignTop)
 
+        sources_group = QGroupBox("Source Paths")
+        sources_layout = QVBoxLayout(sources_group)
+        sources_layout.addWidget(self._detail_sources)
+
+        fields_group = QGroupBox("Discovered Fields")
+        fields_layout = QVBoxLayout(fields_group)
+        fields_layout.addWidget(self._detail_fields_tree)
+
+        notes_group = QGroupBox("Notes")
+        notes_layout = QVBoxLayout(notes_group)
+        notes_layout.addWidget(self._detail_notes)
+
         layout.addLayout(heading_layout)
         layout.addWidget(self._detail_subtitle)
         layout.addWidget(self._detail_summary)
-        layout.addWidget(self._detail_fields_tree, 1)
-        layout.addWidget(self._detail_notes)
+        layout.addWidget(sources_group)
+        layout.addWidget(fields_group, 1)
+        layout.addWidget(notes_group)
         return group
 
     def _build_auth_methods_panel(self) -> QGroupBox:
@@ -268,8 +341,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(group)
         self._auth_methods_tree.setColumnCount(3)
         self._auth_methods_tree.setHeaderLabels(["Method", "Status", "Summary"])
-        self._auth_methods_tree.setRootIsDecorated(False)
-        self._auth_methods_tree.setAlternatingRowColors(True)
+        self._configure_data_tree(self._auth_methods_tree)
         self._auth_methods_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self._auth_methods_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self._auth_methods_tree.header().setSectionResizeMode(2, QHeaderView.Stretch)
@@ -281,8 +353,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(group)
         self._capabilities_tree.setColumnCount(3)
         self._capabilities_tree.setHeaderLabels(["Capability", "Status", "Summary"])
-        self._capabilities_tree.setRootIsDecorated(False)
-        self._capabilities_tree.setAlternatingRowColors(True)
+        self._configure_data_tree(self._capabilities_tree)
         self._capabilities_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self._capabilities_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self._capabilities_tree.header().setSectionResizeMode(2, QHeaderView.Stretch)
@@ -293,9 +364,15 @@ class MainWindow(QMainWindow):
         group = QGroupBox("Actions")
         layout = QVBoxLayout(group)
         self._actions_hint_label.setWordWrap(True)
-        self._actions_hint_label.setStyleSheet("color: #4f6172;")
-        self._profile_actions_label.setStyleSheet("font-size: 13px; font-weight: 700; color: #2b4f73;")
-        self._global_actions_label.setStyleSheet("font-size: 13px; font-weight: 700; color: #2b4f73;")
+        self._actions_hint_label.setStyleSheet(
+            "padding: 10px 12px; background: #f4f7fa; border-radius: 8px; color: #4f6172;"
+        )
+        self._profile_actions_label.setStyleSheet(
+            "font-size: 13px; font-weight: 700; color: #2b4f73; padding-top: 4px;"
+        )
+        self._global_actions_label.setStyleSheet(
+            "font-size: 13px; font-weight: 700; color: #2b4f73; padding-top: 4px;"
+        )
 
         self._profile_actions_container = QWidget(group)
         self._profile_actions_layout = QGridLayout(self._profile_actions_container)
@@ -320,6 +397,10 @@ class MainWindow(QMainWindow):
         group = QGroupBox("Activity Log")
         layout = QVBoxLayout(group)
         self._log_panel.setReadOnly(True)
+        self._log_panel.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._log_panel.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._log_panel.setCenterOnScroll(False)
+        self._log_panel.setLineWrapMode(QPlainTextEdit.WidgetWidth)
         self._log_panel.setPlaceholderText("Command output and action history will appear here.")
         layout.addWidget(self._log_panel)
         return group
@@ -390,13 +471,13 @@ class MainWindow(QMainWindow):
         if not has_sensitive_fields:
             self._set_sensitive_visibility(False)
         self._reveal_sensitive_button.setEnabled(has_sensitive_fields)
-        notes = []
         if details.source_paths:
-            notes.append(
-                "Sources: " + ", ".join(str(path) for path in details.source_paths)
-            )
-        notes.extend(details.notes)
-        self._detail_notes.setText("\n".join(notes))
+            self._detail_sources.setText("\n".join(str(path) for path in details.source_paths))
+        else:
+            self._detail_sources.setText("No source paths were reported for this profile.")
+        self._detail_notes.setText(
+            "\n".join(details.notes) if details.notes else "No additional notes for this profile."
+        )
 
         self._detail_fields_tree.clear()
         for field in details.detail_fields:
@@ -540,3 +621,14 @@ class MainWindow(QMainWindow):
         self._reveal_sensitive_button.setText(
             "Hide Sensitive Values" if self._show_sensitive_values else "Reveal Sensitive Values"
         )
+
+    def _configure_data_tree(self, tree: QTreeWidget) -> None:
+        tree.setRootIsDecorated(False)
+        tree.setAlternatingRowColors(True)
+        tree.setUniformRowHeights(True)
+        tree.setIndentation(0)
+        tree.setAllColumnsShowFocus(True)
+        tree.setSelectionBehavior(QAbstractItemView.SelectRows)
+        tree.setSelectionMode(QAbstractItemView.SingleSelection)
+        tree.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+        tree.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
