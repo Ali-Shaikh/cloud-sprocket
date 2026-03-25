@@ -393,3 +393,81 @@ def test_controller_applies_s3_prefix_filter_to_object_listing(tmp_path: Path) -
     assert "--prefix" in filtered_object_spec.args
     prefix_index = filtered_object_spec.args.index("--prefix")
     assert filtered_object_spec.args[prefix_index + 1] == "logs/2026/"
+
+
+def test_controller_generates_s3_signed_url_with_custom_duration(tmp_path: Path) -> None:
+    runner = DeferredRunner()
+    desktop = FakeDesktopIntegration()
+    controller = CloudSprocketController(
+        settings=_make_settings(tmp_path),
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(_make_profiles()),
+        command_runner=runner,
+        desktop_integration=desktop,
+    )
+
+    assert controller.lock_session()
+    assert controller.refresh_aws_s3_buckets()
+
+    bucket_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=bucket_spec,
+            exit_code=0,
+            stdout='{"Buckets":[{"Name":"alpha","CreationDate":"2026-03-24T10:00:00Z"}]}',
+            summary="buckets",
+            succeeded=True,
+        )
+    )
+
+    object_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=object_spec,
+            exit_code=0,
+            stdout='{"Contents":[{"Key":"logs/app.log","Size":1024,"LastModified":"2026-03-25T08:15:00Z","StorageClass":"STANDARD"}]}',
+            summary="objects",
+            succeeded=True,
+        )
+    )
+
+    metadata_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=metadata_spec,
+            exit_code=0,
+            stdout='{"ContentLength":1024,"LastModified":"2026-03-25T08:15:00Z","ContentType":"text/plain"}',
+            summary="head-object",
+            succeeded=True,
+        )
+    )
+
+    assert controller.set_aws_s3_signed_url_duration(7200)
+    assert controller.generate_aws_s3_signed_url()
+
+    presign_spec, _callback = runner.calls[0]
+    assert presign_spec.args[:2] == ("s3", "presign")
+    assert presign_spec.args[2] == "s3://alpha/logs/app.log"
+    assert "--expires-in" in presign_spec.args
+    expires_index = presign_spec.args.index("--expires-in")
+    assert presign_spec.args[expires_index + 1] == "7200"
+    assert "--region" in presign_spec.args
+    assert "--no-cli-pager" in presign_spec.args
+
+    signed_url = "https://example-bucket.s3.amazonaws.com/logs/app.log?X-Amz-Signature=abc123"
+    runner.finish_next(
+        CommandResult(
+            spec=presign_spec,
+            exit_code=0,
+            stdout=signed_url,
+            summary="presign",
+            succeeded=True,
+        )
+    )
+
+    state = controller.aws_s3_workspace()
+    assert state.signed_url == signed_url
+    assert "7200-second duration" in state.signed_url_status_message
+
+    assert controller.copy_aws_s3_signed_url()
+    assert desktop.copied_texts[-1] == signed_url

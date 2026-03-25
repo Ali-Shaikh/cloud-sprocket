@@ -392,3 +392,93 @@ def test_main_window_applies_s3_prefix_filter(qapp, tmp_path: Path) -> None:
     assert "--prefix" in filtered_object_spec.args
     prefix_index = filtered_object_spec.args.index("--prefix")
     assert filtered_object_spec.args[prefix_index + 1] == "logs/2026/"
+
+
+def test_main_window_generates_and_copies_s3_signed_url(qapp, tmp_path: Path) -> None:
+    settings = AppSettings.from_env(
+        home_dir=tmp_path / "home",
+        appdata_dir=tmp_path / "appdata",
+        local_appdata_dir=tmp_path / "local-appdata",
+        config_dir=tmp_path / "config-root",
+    )
+    runner = DeferredRunner()
+    desktop = FakeDesktopIntegration()
+    controller = CloudSprocketController(
+        settings=settings,
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(),
+        command_runner=runner,
+        desktop_integration=desktop,
+    )
+    window = MainWindow(settings=settings, controller=controller)
+
+    window.lock_session_button.click()
+    qapp.processEvents()
+    window.workspace_s3_refresh_buckets_button.click()
+    qapp.processEvents()
+
+    bucket_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=bucket_spec,
+            exit_code=0,
+            stdout='{"Buckets":[{"Name":"alpha","CreationDate":"2026-03-24T10:00:00Z"}]}',
+            summary="buckets",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
+    object_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=object_spec,
+            exit_code=0,
+            stdout='{"Contents":[{"Key":"logs/app.log","Size":1024,"LastModified":"2026-03-25T08:15:00Z","StorageClass":"STANDARD"}]}',
+            summary="objects",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
+    metadata_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=metadata_spec,
+            exit_code=0,
+            stdout='{"ContentLength":1024,"LastModified":"2026-03-25T08:15:00Z","ContentType":"text/plain"}',
+            summary="head-object",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
+    window.workspace_s3_signed_url_duration_spin.setValue(7200)
+    qapp.processEvents()
+    window.workspace_s3_generate_signed_url_button.click()
+    qapp.processEvents()
+
+    presign_spec, _callback = runner.calls[0]
+    assert presign_spec.args[:2] == ("s3", "presign")
+    assert "--expires-in" in presign_spec.args
+    expires_index = presign_spec.args.index("--expires-in")
+    assert presign_spec.args[expires_index + 1] == "7200"
+
+    signed_url = "https://example-bucket.s3.amazonaws.com/logs/app.log?X-Amz-Signature=abc123"
+    runner.finish_next(
+        CommandResult(
+            spec=presign_spec,
+            exit_code=0,
+            stdout=signed_url,
+            summary="presign",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
+    assert signed_url in window.workspace_s3_signed_url_output.toPlainText()
+
+    window.workspace_s3_copy_signed_url_button.click()
+    qapp.processEvents()
+
+    assert desktop.copied_texts[-1] == signed_url

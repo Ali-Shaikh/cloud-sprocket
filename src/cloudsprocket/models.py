@@ -149,11 +149,14 @@ class S3WorkspaceState:
     bucket_status_message: str = "Refresh buckets to begin."
     object_status_message: str = "Select an object to inspect its metadata."
     prefix_filter: str = ""
+    signed_url_status_message: str = "Select an object to generate a signed URL."
+    signed_url_duration_seconds: int = 3600
     buckets: tuple[S3BucketSummary, ...] = ()
     selected_bucket_name: str | None = None
     objects: tuple[S3ObjectSummary, ...] = ()
     selected_object_key: str | None = None
     object_metadata: tuple[DetailField, ...] = ()
+    signed_url: str = ""
 
 
 @dataclass(frozen=True, slots=True)

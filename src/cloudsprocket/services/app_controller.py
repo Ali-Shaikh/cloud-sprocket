@@ -313,6 +313,12 @@ class CloudSprocketController(QObject):
             and self._session_state.aws_s3_workspace.selected_object_key is not None
         )
 
+    def can_generate_aws_s3_signed_url(self) -> bool:
+        return self.can_refresh_aws_s3_object_metadata()
+
+    def can_copy_aws_s3_signed_url(self) -> bool:
+        return bool(self._session_state.aws_s3_workspace.signed_url)
+
     def set_aws_s3_prefix_filter(self, prefix: str) -> bool:
         normalised_prefix = prefix.strip()
         state = self._session_state.aws_s3_workspace
@@ -321,10 +327,21 @@ class CloudSprocketController(QObject):
         state.prefix_filter = normalised_prefix
         state.selected_object_key = None
         state.object_metadata = ()
+        self._reset_s3_signed_url_state(state)
         if normalised_prefix:
             state.object_status_message = f"Prefix filter active: {normalised_prefix}"
         else:
             state.object_status_message = "Select an object to inspect its metadata."
+        self.state_changed.emit()
+        return True
+
+    def set_aws_s3_signed_url_duration(self, duration_seconds: int) -> bool:
+        normalised_duration = max(1, min(int(duration_seconds), 604800))
+        state = self._session_state.aws_s3_workspace
+        if normalised_duration == state.signed_url_duration_seconds:
+            return False
+        state.signed_url_duration_seconds = normalised_duration
+        self._reset_s3_signed_url_state(state)
         self.state_changed.emit()
         return True
 
@@ -346,6 +363,23 @@ class CloudSprocketController(QObject):
             "Copied S3 URI to the clipboard.",
             details=uri,
             action_id="aws-s3-copy-uri",
+        )
+        self.state_changed.emit()
+        return True
+
+    def copy_aws_s3_signed_url(self) -> bool:
+        signed_url = self._session_state.aws_s3_workspace.signed_url.strip()
+        if not signed_url:
+            message = "Generate a signed URL before copying it."
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-signed-url-copy")
+            self.state_changed.emit()
+            return False
+        self._desktop_integration.copy_text(signed_url)
+        self._append_log(
+            LogLevel.SUCCESS,
+            "Copied the signed URL to the clipboard.",
+            details=signed_url,
+            action_id="aws-s3-signed-url-copy",
         )
         self.state_changed.emit()
         return True
@@ -377,7 +411,15 @@ class CloudSprocketController(QObject):
             action_id="aws-s3-buckets",
             execution_type=CommandExecutionType.PROCESS,
             program="aws",
-            args=("s3api", "list-buckets", "--profile", profile.profile_id, "--output", "json"),
+            args=(
+                "s3api",
+                "list-buckets",
+                "--profile",
+                profile.profile_id,
+                "--output",
+                "json",
+                "--no-cli-pager",
+            ),
             summary=f"List S3 buckets for AWS profile {profile.profile_id}",
         )
         return self._run_process_command(
@@ -408,6 +450,18 @@ class CloudSprocketController(QObject):
             return False
         return self._start_aws_s3_object_metadata_refresh(bucket_name, object_key)
 
+    def generate_aws_s3_signed_url(self) -> bool:
+        bucket_name = self._session_state.aws_s3_workspace.selected_bucket_name
+        object_key = self._session_state.aws_s3_workspace.selected_object_key
+        if bucket_name is None or object_key is None:
+            message = "Select an S3 object before generating a signed URL."
+            self._session_state.aws_s3_workspace.signed_url_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-signed-url")
+            self.state_changed.emit()
+            return False
+        duration_seconds = self._session_state.aws_s3_workspace.signed_url_duration_seconds
+        return self._start_aws_s3_signed_url_generation(bucket_name, object_key, duration_seconds)
+
     def select_aws_s3_bucket(self, bucket_name: str) -> bool:
         if bucket_name == self._session_state.aws_s3_workspace.selected_bucket_name:
             return False
@@ -419,6 +473,7 @@ class CloudSprocketController(QObject):
         state.selected_object_key = None
         state.object_metadata = ()
         state.object_status_message = "Select an object to inspect its metadata."
+        self._reset_s3_signed_url_state(state)
         state.bucket_status_message = (
             f"Selected {bucket_name}. Loading bucket contents..."
         )
@@ -436,6 +491,7 @@ class CloudSprocketController(QObject):
         state.selected_object_key = object_key
         state.object_metadata = ()
         state.object_status_message = f"Loading metadata for {object_key}..."
+        self._reset_s3_signed_url_state(state)
         return self._start_aws_s3_object_metadata_refresh(bucket_name, object_key)
 
     def workspace_tabs(self) -> tuple[WorkspaceTab, ...]:
@@ -721,6 +777,7 @@ class CloudSprocketController(QObject):
             if prefix_filter
             else "Select an object to inspect its metadata."
         )
+        self._reset_s3_signed_url_state(state)
         state.bucket_status_message = (
             f"Loading objects for {bucket_name} with prefix {prefix_filter}..."
             if prefix_filter
@@ -736,7 +793,7 @@ class CloudSprocketController(QObject):
         ]
         if prefix_filter:
             args.extend(["--prefix", prefix_filter])
-        args.extend(["--profile", profile.profile_id, "--output", "json"])
+        args.extend(["--profile", profile.profile_id, "--output", "json", "--no-cli-pager"])
         spec = CommandSpec(
             action_id="aws-s3-objects",
             execution_type=CommandExecutionType.PROCESS,
@@ -775,6 +832,7 @@ class CloudSprocketController(QObject):
         self._session_state.aws_s3_workspace.object_status_message = (
             f"Loading metadata for {object_key}..."
         )
+        self._reset_s3_signed_url_state(self._session_state.aws_s3_workspace)
         spec = CommandSpec(
             action_id="aws-s3-object-details",
             execution_type=CommandExecutionType.PROCESS,
@@ -790,6 +848,7 @@ class CloudSprocketController(QObject):
                 profile.profile_id,
                 "--output",
                 "json",
+                "--no-cli-pager",
             ),
             summary=f"Load metadata for {object_key}",
         )
@@ -798,6 +857,66 @@ class CloudSprocketController(QObject):
             label=f"S3 Object Metadata for {object_key}",
             spec=spec,
             on_finished=lambda result: self._finish_aws_s3_object_metadata_refresh(bucket_name, object_key, result),
+        )
+
+    def _start_aws_s3_signed_url_generation(
+        self,
+        bucket_name: str,
+        object_key: str,
+        duration_seconds: int,
+    ) -> bool:
+        available, reason = self.aws_s3_availability()
+        if not available:
+            self._session_state.aws_s3_workspace.signed_url_status_message = reason
+            self._append_log(LogLevel.WARNING, reason, action_id="aws-s3-signed-url")
+            self.state_changed.emit()
+            return False
+        if self._session_state.command_state == CommandState.RUNNING:
+            message = "Wait for the current command to finish before generating a signed URL."
+            self._session_state.aws_s3_workspace.signed_url_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-signed-url")
+            self.state_changed.emit()
+            return False
+
+        profile = self.locked_profile()
+        if profile is None:
+            return False
+
+        state = self._session_state.aws_s3_workspace
+        state.selected_bucket_name = bucket_name
+        state.selected_object_key = object_key
+        state.signed_url = ""
+        state.signed_url_status_message = f"Generating a signed URL for {object_key}..."
+        args = [
+            "s3",
+            "presign",
+            f"s3://{bucket_name}/{object_key}",
+            "--expires-in",
+            str(duration_seconds),
+            "--profile",
+            profile.profile_id,
+        ]
+        region = self._selected_aws_region(profile)
+        if region:
+            args.extend(["--region", region])
+        args.append("--no-cli-pager")
+        spec = CommandSpec(
+            action_id="aws-s3-signed-url",
+            execution_type=CommandExecutionType.PROCESS,
+            program="aws",
+            args=tuple(args),
+            summary=f"Generate a signed URL for {object_key}",
+        )
+        return self._run_process_command(
+            action_id="aws-s3-signed-url",
+            label=f"S3 Signed URL for {object_key}",
+            spec=spec,
+            on_finished=lambda result: self._finish_aws_s3_signed_url_generation(
+                bucket_name,
+                object_key,
+                duration_seconds,
+                result,
+            ),
         )
 
     def _finish_aws_s3_bucket_refresh(self, profile_id: str, result: CommandResult) -> None:
@@ -814,6 +933,7 @@ class CloudSprocketController(QObject):
             state.selected_object_key = None
             state.object_metadata = ()
             state.object_status_message = failure_message
+            self._reset_s3_signed_url_state(state, reason=failure_message)
             self._append_log(LogLevel.ERROR, failure_message, details=result.stderr or result.stdout, action_id="aws-s3-buckets")
             self.state_changed.emit()
             return
@@ -846,6 +966,7 @@ class CloudSprocketController(QObject):
             state.object_metadata = ()
             state.bucket_status_message = "No buckets were returned for this locked AWS session."
             state.object_status_message = "No object metadata is available."
+            self._reset_s3_signed_url_state(state, reason="No signed URL is available.")
             self._append_log(LogLevel.SUCCESS, state.status_message, action_id="aws-s3-buckets")
             self.state_changed.emit()
             return
@@ -861,6 +982,7 @@ class CloudSprocketController(QObject):
             state.object_status_message = f"Prefix filter active: {state.prefix_filter}"
         else:
             state.object_status_message = "Select an object to inspect its metadata."
+        self._reset_s3_signed_url_state(state)
         state.bucket_status_message = f"Loading objects for {current_bucket_name}..."
         self._append_log(LogLevel.SUCCESS, state.status_message, action_id="aws-s3-buckets")
         self.state_changed.emit()
@@ -878,6 +1000,7 @@ class CloudSprocketController(QObject):
             state.object_metadata = ()
             state.bucket_status_message = failure_message
             state.object_status_message = failure_message
+            self._reset_s3_signed_url_state(state, reason=failure_message)
             self._append_log(LogLevel.ERROR, failure_message, details=result.stderr or result.stdout, action_id="aws-s3-objects")
             self.state_changed.emit()
             return
@@ -909,6 +1032,7 @@ class CloudSprocketController(QObject):
                 selected_object_key = objects[0].key
             state.selected_object_key = selected_object_key
             state.object_status_message = f"Loading metadata for {selected_object_key}..."
+            self._reset_s3_signed_url_state(state)
         else:
             if state.prefix_filter:
                 state.bucket_status_message = f"No objects matched prefix {state.prefix_filter} in {bucket_name}."
@@ -916,6 +1040,7 @@ class CloudSprocketController(QObject):
                 state.bucket_status_message = f"No objects were returned for {bucket_name}."
             state.selected_object_key = None
             state.object_status_message = "No object metadata is available."
+            self._reset_s3_signed_url_state(state, reason="No signed URL is available.")
         self._append_log(LogLevel.SUCCESS, state.bucket_status_message, action_id="aws-s3-objects")
         self.state_changed.emit()
         if state.selected_object_key is not None:
@@ -939,6 +1064,7 @@ class CloudSprocketController(QObject):
             )
             state.object_metadata = ()
             state.object_status_message = failure_message
+            self._reset_s3_signed_url_state(state)
             self._append_log(
                 LogLevel.ERROR,
                 failure_message,
@@ -955,10 +1081,63 @@ class CloudSprocketController(QObject):
 
         state.object_metadata = self._build_s3_object_metadata(bucket_name, object_key, payload)
         state.object_status_message = f"Loaded metadata for {object_key}."
+        self._reset_s3_signed_url_state(state)
         self._append_log(
             LogLevel.SUCCESS,
             state.object_status_message,
             action_id="aws-s3-object-details",
+        )
+        self.state_changed.emit()
+
+    def _finish_aws_s3_signed_url_generation(
+        self,
+        bucket_name: str,
+        object_key: str,
+        duration_seconds: int,
+        result: CommandResult,
+    ) -> None:
+        self._session_state.command_state = CommandState.IDLE
+        self._session_state.running_action_id = None
+        state = self._session_state.aws_s3_workspace
+        state.selected_bucket_name = bucket_name
+        state.selected_object_key = object_key
+        if not result.succeeded:
+            failure_message = self._command_failure_summary(
+                result,
+                f"Signed URL generation failed for {object_key}.",
+            )
+            state.signed_url = ""
+            state.signed_url_status_message = failure_message
+            self._append_log(
+                LogLevel.ERROR,
+                failure_message,
+                details=result.stderr or result.stdout,
+                action_id="aws-s3-signed-url",
+            )
+            self.state_changed.emit()
+            return
+
+        signed_url = next((line.strip() for line in result.stdout.splitlines() if line.strip()), "")
+        if not signed_url:
+            state.signed_url = ""
+            state.signed_url_status_message = "AWS CLI returned no signed URL."
+            self._append_log(
+                LogLevel.ERROR,
+                state.signed_url_status_message,
+                action_id="aws-s3-signed-url",
+            )
+            self.state_changed.emit()
+            return
+
+        state.signed_url = signed_url
+        state.signed_url_status_message = (
+            f"Generated a signed URL for {object_key} with a {duration_seconds}-second duration."
+        )
+        self._append_log(
+            LogLevel.SUCCESS,
+            state.signed_url_status_message,
+            details=signed_url,
+            action_id="aws-s3-signed-url",
         )
         self.state_changed.emit()
 
@@ -970,16 +1149,19 @@ class CloudSprocketController(QObject):
         state.objects = ()
         state.selected_object_key = None
         state.object_metadata = ()
+        state.signed_url = ""
         if available:
             profile = self.locked_profile()
             profile_id = profile.profile_id if profile is not None else "locked profile"
             state.status_message = f"S3 workspace ready for {profile_id}. Refresh buckets to begin."
             state.bucket_status_message = "Refresh buckets to load S3 buckets."
             state.object_status_message = "Select an object to inspect its metadata."
+            state.signed_url_status_message = "Select an object to generate a signed URL."
             return
         state.status_message = reason
         state.bucket_status_message = reason
         state.object_status_message = reason
+        state.signed_url_status_message = reason
 
     def _command_failure_summary(self, result: CommandResult, fallback: str) -> str:
         return result.stderr.strip() or result.stdout.strip() or result.summary or fallback
@@ -1035,6 +1217,28 @@ class CloudSprocketController(QObject):
                 )
             )
         return tuple(metadata_fields)
+
+    def _selected_aws_region(self, profile) -> str | None:
+        if profile is None:
+            return None
+        region = profile.attribute_map().get("region", "").strip()
+        return region or None
+
+    def _reset_s3_signed_url_state(self, state: S3WorkspaceState, *, reason: str | None = None) -> None:
+        state.signed_url = ""
+        if reason:
+            state.signed_url_status_message = reason
+            return
+        if state.selected_object_key is None:
+            state.signed_url_status_message = "Select an object to generate a signed URL."
+            return
+        state.signed_url_status_message = self._s3_signed_url_ready_message(
+            state.selected_object_key,
+            state.signed_url_duration_seconds,
+        )
+
+    def _s3_signed_url_ready_message(self, object_key: str, duration_seconds: int) -> str:
+        return f"Ready to generate a signed URL for {object_key} with a {duration_seconds}-second duration."
 
     def _format_s3_timestamp(self, value: str) -> str:
         if not value:
