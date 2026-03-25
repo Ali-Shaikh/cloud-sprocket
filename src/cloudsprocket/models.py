@@ -46,6 +46,11 @@ class LogLevel(StrEnum):
     ERROR = "error"
 
 
+class SignedUrlDurationUnit(StrEnum):
+    HOURS = "hours"
+    DAYS = "days"
+
+
 @dataclass(frozen=True, slots=True)
 class DetailField:
     label: str
@@ -150,7 +155,8 @@ class S3WorkspaceState:
     object_status_message: str = "Select an object to inspect its metadata."
     prefix_filter: str = ""
     signed_url_status_message: str = "Select an object to generate a signed URL."
-    signed_url_duration_seconds: int = 3600
+    signed_url_duration_value: int = 1
+    signed_url_duration_unit: SignedUrlDurationUnit = SignedUrlDurationUnit.HOURS
     buckets: tuple[S3BucketSummary, ...] = ()
     selected_bucket_name: str | None = None
     objects: tuple[S3ObjectSummary, ...] = ()

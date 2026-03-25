@@ -27,6 +27,7 @@ from cloudsprocket.models import (
     ProviderHealth,
     S3BucketSummary,
     S3ObjectSummary,
+    SignedUrlDurationUnit,
     S3WorkspaceState,
     SessionState,
     WorkspaceTab,
@@ -336,14 +337,27 @@ class CloudSprocketController(QObject):
         return True
 
     def set_aws_s3_signed_url_duration(self, duration_seconds: int) -> bool:
-        normalised_duration = max(1, min(int(duration_seconds), 604800))
+        if duration_seconds % 86400 == 0:
+            duration_value = max(1, min(int(duration_seconds / 86400), 7))
+            duration_unit = SignedUrlDurationUnit.DAYS
+        else:
+            duration_value = max(1, min(int(duration_seconds / 3600), 168))
+            duration_unit = SignedUrlDurationUnit.HOURS
+        return self._set_aws_s3_signed_url_duration_selection(duration_value, duration_unit)
+
+    def set_aws_s3_signed_url_duration_value(self, duration_value: int) -> bool:
         state = self._session_state.aws_s3_workspace
-        if normalised_duration == state.signed_url_duration_seconds:
-            return False
-        state.signed_url_duration_seconds = normalised_duration
-        self._reset_s3_signed_url_state(state)
-        self.state_changed.emit()
-        return True
+        return self._set_aws_s3_signed_url_duration_selection(
+            duration_value,
+            state.signed_url_duration_unit,
+        )
+
+    def set_aws_s3_signed_url_duration_unit(self, duration_unit: SignedUrlDurationUnit | str) -> bool:
+        state = self._session_state.aws_s3_workspace
+        return self._set_aws_s3_signed_url_duration_selection(
+            state.signed_url_duration_value,
+            duration_unit,
+        )
 
     def copy_aws_s3_uri(self) -> bool:
         bucket_name = self._session_state.aws_s3_workspace.selected_bucket_name
@@ -459,7 +473,7 @@ class CloudSprocketController(QObject):
             self._append_log(LogLevel.WARNING, message, action_id="aws-s3-signed-url")
             self.state_changed.emit()
             return False
-        duration_seconds = self._session_state.aws_s3_workspace.signed_url_duration_seconds
+        duration_seconds = self._aws_s3_signed_url_duration_seconds()
         return self._start_aws_s3_signed_url_generation(bucket_name, object_key, duration_seconds)
 
     def select_aws_s3_bucket(self, bucket_name: str) -> bool:
@@ -914,7 +928,6 @@ class CloudSprocketController(QObject):
             on_finished=lambda result: self._finish_aws_s3_signed_url_generation(
                 bucket_name,
                 object_key,
-                duration_seconds,
                 result,
             ),
         )
@@ -1093,7 +1106,6 @@ class CloudSprocketController(QObject):
         self,
         bucket_name: str,
         object_key: str,
-        duration_seconds: int,
         result: CommandResult,
     ) -> None:
         self._session_state.command_state = CommandState.IDLE
@@ -1131,7 +1143,7 @@ class CloudSprocketController(QObject):
 
         state.signed_url = signed_url
         state.signed_url_status_message = (
-            f"Generated a signed URL for {object_key} with a {duration_seconds}-second duration."
+            f"Generated a signed URL for {object_key} with a {self._format_s3_signed_url_duration()} duration."
         )
         self._append_log(
             LogLevel.SUCCESS,
@@ -1234,11 +1246,50 @@ class CloudSprocketController(QObject):
             return
         state.signed_url_status_message = self._s3_signed_url_ready_message(
             state.selected_object_key,
-            state.signed_url_duration_seconds,
+            self._format_s3_signed_url_duration(state),
         )
 
-    def _s3_signed_url_ready_message(self, object_key: str, duration_seconds: int) -> str:
-        return f"Ready to generate a signed URL for {object_key} with a {duration_seconds}-second duration."
+    def _set_aws_s3_signed_url_duration_selection(
+        self,
+        duration_value: int,
+        duration_unit: SignedUrlDurationUnit | str,
+    ) -> bool:
+        try:
+            normalised_unit = SignedUrlDurationUnit(duration_unit)
+        except ValueError:
+            normalised_unit = SignedUrlDurationUnit.HOURS
+        max_value = self._s3_signed_url_duration_max(normalised_unit)
+        normalised_value = max(1, min(int(duration_value), max_value))
+        state = self._session_state.aws_s3_workspace
+        if (
+            normalised_value == state.signed_url_duration_value
+            and normalised_unit == state.signed_url_duration_unit
+        ):
+            return False
+        state.signed_url_duration_value = normalised_value
+        state.signed_url_duration_unit = normalised_unit
+        self._reset_s3_signed_url_state(state)
+        self.state_changed.emit()
+        return True
+
+    def _aws_s3_signed_url_duration_seconds(self) -> int:
+        state = self._session_state.aws_s3_workspace
+        multiplier = 86400 if state.signed_url_duration_unit == SignedUrlDurationUnit.DAYS else 3600
+        return state.signed_url_duration_value * multiplier
+
+    def _format_s3_signed_url_duration(self, state: S3WorkspaceState | None = None) -> str:
+        state = state or self._session_state.aws_s3_workspace
+        unit = state.signed_url_duration_unit
+        value = state.signed_url_duration_value
+        singular = "day" if unit == SignedUrlDurationUnit.DAYS else "hour"
+        plural = "days" if unit == SignedUrlDurationUnit.DAYS else "hours"
+        return f"{value} {singular if value == 1 else plural}"
+
+    def _s3_signed_url_duration_max(self, duration_unit: SignedUrlDurationUnit) -> int:
+        return 7 if duration_unit == SignedUrlDurationUnit.DAYS else 168
+
+    def _s3_signed_url_ready_message(self, object_key: str, duration_label: str) -> str:
+        return f"Ready to generate a signed URL for {object_key} with a {duration_label} duration."
 
     def _format_s3_timestamp(self, value: str) -> str:
         if not value:

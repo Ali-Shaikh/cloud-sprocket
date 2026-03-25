@@ -394,7 +394,7 @@ def test_main_window_applies_s3_prefix_filter(qapp, tmp_path: Path) -> None:
     assert filtered_object_spec.args[prefix_index + 1] == "logs/2026/"
 
 
-def test_main_window_generates_and_copies_s3_signed_url(qapp, tmp_path: Path) -> None:
+def test_main_window_generates_and_copies_s3_signed_url_with_day_duration(qapp, tmp_path: Path) -> None:
     settings = AppSettings.from_env(
         home_dir=tmp_path / "home",
         appdata_dir=tmp_path / "appdata",
@@ -453,7 +453,9 @@ def test_main_window_generates_and_copies_s3_signed_url(qapp, tmp_path: Path) ->
     )
     qapp.processEvents()
 
-    window.workspace_s3_signed_url_duration_spin.setValue(7200)
+    window.workspace_s3_signed_url_duration_unit_combo.setCurrentText("Days")
+    qapp.processEvents()
+    window.workspace_s3_signed_url_duration_spin.setValue(2)
     qapp.processEvents()
     window.workspace_s3_generate_signed_url_button.click()
     qapp.processEvents()
@@ -462,7 +464,7 @@ def test_main_window_generates_and_copies_s3_signed_url(qapp, tmp_path: Path) ->
     assert presign_spec.args[:2] == ("s3", "presign")
     assert "--expires-in" in presign_spec.args
     expires_index = presign_spec.args.index("--expires-in")
-    assert presign_spec.args[expires_index + 1] == "7200"
+    assert presign_spec.args[expires_index + 1] == "172800"
 
     signed_url = "https://example-bucket.s3.amazonaws.com/logs/app.log?X-Amz-Signature=abc123"
     runner.finish_next(

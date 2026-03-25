@@ -10,6 +10,7 @@ from cloudsprocket.models import (
     DiscoveryReport,
     ProviderHealth,
     ProviderState,
+    SignedUrlDurationUnit,
 )
 from cloudsprocket.services.app_controller import CloudSprocketController
 from cloudsprocket.services.provider_actions import create_provider_adapters
@@ -395,7 +396,7 @@ def test_controller_applies_s3_prefix_filter_to_object_listing(tmp_path: Path) -
     assert filtered_object_spec.args[prefix_index + 1] == "logs/2026/"
 
 
-def test_controller_generates_s3_signed_url_with_custom_duration(tmp_path: Path) -> None:
+def test_controller_generates_s3_signed_url_with_day_duration_selection(tmp_path: Path) -> None:
     runner = DeferredRunner()
     desktop = FakeDesktopIntegration()
     controller = CloudSprocketController(
@@ -442,7 +443,8 @@ def test_controller_generates_s3_signed_url_with_custom_duration(tmp_path: Path)
         )
     )
 
-    assert controller.set_aws_s3_signed_url_duration(7200)
+    assert controller.set_aws_s3_signed_url_duration_unit(SignedUrlDurationUnit.DAYS)
+    assert controller.set_aws_s3_signed_url_duration_value(2)
     assert controller.generate_aws_s3_signed_url()
 
     presign_spec, _callback = runner.calls[0]
@@ -450,7 +452,7 @@ def test_controller_generates_s3_signed_url_with_custom_duration(tmp_path: Path)
     assert presign_spec.args[2] == "s3://alpha/logs/app.log"
     assert "--expires-in" in presign_spec.args
     expires_index = presign_spec.args.index("--expires-in")
-    assert presign_spec.args[expires_index + 1] == "7200"
+    assert presign_spec.args[expires_index + 1] == "172800"
     assert "--region" in presign_spec.args
     assert "--no-cli-pager" in presign_spec.args
 
@@ -467,7 +469,7 @@ def test_controller_generates_s3_signed_url_with_custom_duration(tmp_path: Path)
 
     state = controller.aws_s3_workspace()
     assert state.signed_url == signed_url
-    assert "7200-second duration" in state.signed_url_status_message
+    assert "2 days duration" in state.signed_url_status_message
 
     assert controller.copy_aws_s3_signed_url()
     assert desktop.copied_texts[-1] == signed_url

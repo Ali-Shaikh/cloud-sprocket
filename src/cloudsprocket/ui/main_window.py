@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -108,6 +109,7 @@ class MainWindow(QMainWindow):
         self._workspace_s3_object_details_tree = QTreeWidget()
         self._workspace_s3_signed_url_status_label = QLabel()
         self._workspace_s3_signed_url_duration_spin = QSpinBox()
+        self._workspace_s3_signed_url_duration_unit_combo = QComboBox()
         self._workspace_s3_generate_signed_url_button = QPushButton("Generate Signed URL")
         self._workspace_s3_copy_signed_url_button = QPushButton("Copy Signed URL")
         self._workspace_s3_signed_url_output = QPlainTextEdit()
@@ -123,6 +125,7 @@ class MainWindow(QMainWindow):
         self._workspace_s3_refresh_bucket_button.clicked.connect(self._on_s3_refresh_bucket_clicked)
         self._workspace_s3_copy_uri_button.clicked.connect(self._on_s3_copy_uri_clicked)
         self._workspace_s3_signed_url_duration_spin.valueChanged.connect(self._on_s3_signed_url_duration_changed)
+        self._workspace_s3_signed_url_duration_unit_combo.currentTextChanged.connect(self._on_s3_signed_url_unit_changed)
         self._workspace_s3_generate_signed_url_button.clicked.connect(self._on_s3_generate_signed_url_clicked)
         self._workspace_s3_copy_signed_url_button.clicked.connect(self._on_s3_copy_signed_url_clicked)
         self._workspace_s3_bucket_tree.itemSelectionChanged.connect(self._on_s3_bucket_selection_changed)
@@ -243,6 +246,10 @@ class MainWindow(QMainWindow):
     @property
     def workspace_s3_signed_url_output(self) -> QPlainTextEdit:
         return self._workspace_s3_signed_url_output
+
+    @property
+    def workspace_s3_signed_url_duration_unit_combo(self) -> QComboBox:
+        return self._workspace_s3_signed_url_duration_unit_combo
 
     @property
     def lock_session_button(self) -> QPushButton:
@@ -524,9 +531,10 @@ class MainWindow(QMainWindow):
         self._workspace_s3_signed_url_status_label.setStyleSheet(
             "padding: 10px 12px; background: #f4f7fa; border-radius: 8px; color: #4f6172;"
         )
-        self._workspace_s3_signed_url_duration_spin.setRange(1, 604800)
-        self._workspace_s3_signed_url_duration_spin.setSingleStep(300)
-        self._workspace_s3_signed_url_duration_spin.setSuffix(" sec")
+        self._workspace_s3_signed_url_duration_spin.setRange(1, 168)
+        self._workspace_s3_signed_url_duration_spin.setSingleStep(1)
+        if self._workspace_s3_signed_url_duration_unit_combo.count() == 0:
+            self._workspace_s3_signed_url_duration_unit_combo.addItems(["Hours", "Days"])
         self._workspace_s3_signed_url_output.setReadOnly(True)
         self._workspace_s3_signed_url_output.setPlaceholderText("Generated signed URL will appear here.")
         self._workspace_s3_signed_url_output.setLineWrapMode(QPlainTextEdit.NoWrap)
@@ -575,6 +583,7 @@ class MainWindow(QMainWindow):
         signed_url_controls = QHBoxLayout()
         signed_url_controls.addWidget(QLabel("Duration"))
         signed_url_controls.addWidget(self._workspace_s3_signed_url_duration_spin)
+        signed_url_controls.addWidget(self._workspace_s3_signed_url_duration_unit_combo)
         signed_url_controls.addWidget(self._workspace_s3_generate_signed_url_button)
         signed_url_controls.addWidget(self._workspace_s3_copy_signed_url_button)
         signed_url_controls.addStretch(1)
@@ -1031,10 +1040,17 @@ class MainWindow(QMainWindow):
         self._workspace_s3_apply_prefix_button.setEnabled(available)
         self._workspace_s3_clear_prefix_button.setEnabled(available and bool(state.prefix_filter))
         self._workspace_s3_copy_uri_button.setEnabled(state.selected_bucket_name is not None)
+        duration_max = 7 if state.signed_url_duration_unit.value == "days" else 168
         self._workspace_s3_signed_url_duration_spin.blockSignals(True)
-        if self._workspace_s3_signed_url_duration_spin.value() != state.signed_url_duration_seconds:
-            self._workspace_s3_signed_url_duration_spin.setValue(state.signed_url_duration_seconds)
+        self._workspace_s3_signed_url_duration_spin.setRange(1, duration_max)
+        if self._workspace_s3_signed_url_duration_spin.value() != state.signed_url_duration_value:
+            self._workspace_s3_signed_url_duration_spin.setValue(state.signed_url_duration_value)
         self._workspace_s3_signed_url_duration_spin.blockSignals(False)
+        self._workspace_s3_signed_url_duration_unit_combo.blockSignals(True)
+        combo_index = self._workspace_s3_signed_url_duration_unit_combo.findText(state.signed_url_duration_unit.value.title())
+        if combo_index >= 0 and combo_index != self._workspace_s3_signed_url_duration_unit_combo.currentIndex():
+            self._workspace_s3_signed_url_duration_unit_combo.setCurrentIndex(combo_index)
+        self._workspace_s3_signed_url_duration_unit_combo.blockSignals(False)
         self._workspace_s3_generate_signed_url_button.setEnabled(self._controller.can_generate_aws_s3_signed_url())
         self._workspace_s3_copy_signed_url_button.setEnabled(self._controller.can_copy_aws_s3_signed_url())
 
@@ -1267,7 +1283,10 @@ class MainWindow(QMainWindow):
         self._controller.copy_aws_s3_uri()
 
     def _on_s3_signed_url_duration_changed(self, value: int) -> None:
-        self._controller.set_aws_s3_signed_url_duration(value)
+        self._controller.set_aws_s3_signed_url_duration_value(value)
+
+    def _on_s3_signed_url_unit_changed(self, value: str) -> None:
+        self._controller.set_aws_s3_signed_url_duration_unit(value.lower())
 
     def _on_s3_generate_signed_url_clicked(self) -> None:
         self._controller.generate_aws_s3_signed_url()
