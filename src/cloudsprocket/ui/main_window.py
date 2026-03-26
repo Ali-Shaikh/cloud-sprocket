@@ -77,6 +77,15 @@ class MainWindow(QMainWindow):
         self._body_stack = QStackedWidget()
         self._session_tabs = QTabWidget()
         self._workspace_tabs = QTabWidget()
+        self._brand_eyebrow_label = QLabel("CONTROL DESKTOP")
+        self._brand_badge_label = QLabel("CS")
+        self._hero_heading_label = QLabel()
+        self._hero_summary_label = QLabel()
+        self._hero_steps_label = QLabel()
+        self._hero_provider_metric_label = QLabel()
+        self._hero_profile_metric_label = QLabel()
+        self._hero_auth_metric_label = QLabel()
+        self._hero_target_metric_label = QLabel()
         self._session_provider_label = QLabel()
         self._session_profile_label = QLabel()
         self._session_auth_label = QLabel()
@@ -203,6 +212,26 @@ class MainWindow(QMainWindow):
     @property
     def actions_hint_label(self) -> QLabel:
         return self._actions_hint_label
+
+    @property
+    def hero_heading_label(self) -> QLabel:
+        return self._hero_heading_label
+
+    @property
+    def hero_provider_metric_label(self) -> QLabel:
+        return self._hero_provider_metric_label
+
+    @property
+    def hero_profile_metric_label(self) -> QLabel:
+        return self._hero_profile_metric_label
+
+    @property
+    def hero_auth_metric_label(self) -> QLabel:
+        return self._hero_auth_metric_label
+
+    @property
+    def hero_target_metric_label(self) -> QLabel:
+        return self._hero_target_metric_label
 
     @property
     def profile_actions_label(self) -> QLabel:
@@ -563,50 +592,190 @@ class MainWindow(QMainWindow):
     def _section_label_style(self) -> str:
         return "font-size: 13px; font-weight: 700; color: #184b72; padding-top: 4px;"
 
+    def _hero_panel_style(self) -> str:
+        return (
+            "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+            "stop:0 #123956, stop:1 #1e5f8c); "
+            "border: 1px solid #0e314a; "
+            "border-radius: 20px;"
+        )
+
+    def _hero_metric_style(self, *, emphasised: bool = False) -> str:
+        background = "#eff5fa" if emphasised else "#f8fbfd"
+        border = "#6f89a5" if emphasised else "#a5b6c7"
+        return (
+            "padding: 12px 14px; "
+            f"background: {background}; "
+            f"border: 1px solid {border}; "
+            "border-radius: 14px;"
+        )
+
+    def _hero_pill_style(self, *, accent: bool = False) -> str:
+        background = "#f5c04e" if accent else "rgba(255, 255, 255, 0.12)"
+        foreground = "#10283f" if accent else "#f5fbff"
+        border = "#f5c04e" if accent else "rgba(255, 255, 255, 0.2)"
+        return (
+            "padding: 6px 12px; "
+            f"background: {background}; "
+            f"color: {foreground}; "
+            f"border: 1px solid {border}; "
+            "border-radius: 999px; "
+            "font-size: 12px; font-weight: 700;"
+        )
+
+    def _set_hero_metric_text(self, label: QLabel, *, value: str, caption: str) -> None:
+        label.setText(
+            f"<div style='font-size:24px; font-weight:700; color:#10283f;'>{value}</div>"
+            f"<div style='font-size:12px; font-weight:600; color:#36506a; margin-top:2px;'>{caption}</div>"
+        )
+
     def _set_button_tone(self, button: QPushButton, tone: str) -> None:
         button.setProperty("tone", tone)
         button.style().unpolish(button)
         button.style().polish(button)
 
     def _build_header(self) -> QHBoxLayout:
+        self._brand_eyebrow_label.setStyleSheet(
+            "font-size: 12px; font-weight: 800; letter-spacing: 0.18em; color: #184b72;"
+        )
         title = QLabel(self._settings.app_brand_name)
         title.setObjectName("title")
-        title.setStyleSheet("font-size: 30px; font-weight: 700; color: #10283f;")
+        title.setStyleSheet("font-size: 34px; font-weight: 800; color: #10283f;")
 
         subtitle = QLabel(APP_DESCRIPTION)
         subtitle.setWordWrap(True)
-        subtitle.setStyleSheet("color: #395066; font-size: 14px;")
+        subtitle.setStyleSheet("color: #395066; font-size: 15px;")
 
         byline = QLabel(f"Created by {self._settings.author_name}")
         byline.setStyleSheet("color: #184b72; font-size: 13px; font-weight: 600;")
 
         self._config_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._config_label.setStyleSheet(self._info_card_style(emphasised=True))
+        self._config_label.setStyleSheet(
+            "padding: 10px 12px; background: #ffffff; border: 1px solid #9dafc1; "
+            "border-radius: 12px; color: #17324d; font-size: 12px;"
+        )
 
         refresh_button = QPushButton("Refresh Snapshot")
         self._set_button_tone(refresh_button, "primary")
         refresh_button.clicked.connect(lambda: self._controller.trigger_action("refresh"))
         refresh_button.setFixedWidth(160)
 
+        flow_pill_cli = QLabel("CLI")
+        flow_pill_cli.setStyleSheet(self._hero_pill_style(accent=True))
+        flow_pill_sso = QLabel("SSO")
+        flow_pill_sso.setStyleSheet(self._hero_pill_style())
+        flow_pill_files = QLabel("Local Files")
+        flow_pill_files.setStyleSheet(self._hero_pill_style())
+        flow_layout = QHBoxLayout()
+        flow_layout.setSpacing(8)
+        flow_layout.addWidget(flow_pill_cli)
+        flow_layout.addWidget(flow_pill_sso)
+        flow_layout.addWidget(flow_pill_files)
+        flow_layout.addStretch(1)
+
+        header_side_note = QLabel("Desktop control surface for cloud sessions and account context.")
+        header_side_note.setWordWrap(True)
+        header_side_note.setStyleSheet(self._info_card_style())
+
+        header_side = QVBoxLayout()
+        header_side.setSpacing(12)
+        header_side.addWidget(header_side_note)
+        header_side.addWidget(self._config_label)
+        header_side.addWidget(refresh_button, 0, Qt.AlignRight)
+
         header_text = QVBoxLayout()
+        header_text.addWidget(self._brand_eyebrow_label)
         header_text.addWidget(title)
         header_text.addWidget(subtitle)
         header_text.addWidget(byline)
-        header_text.addWidget(self._config_label)
+        header_text.addLayout(flow_layout)
 
         layout = QHBoxLayout()
         layout.addLayout(header_text, 1)
-        layout.addWidget(refresh_button, 0, Qt.AlignTop)
+        layout.addLayout(header_side, 0)
         return layout
 
+    def _build_brand_panel(self) -> QWidget:
+        panel = QWidget()
+        panel.setStyleSheet(self._hero_panel_style())
+
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(18)
+
+        self._brand_badge_label.setAlignment(Qt.AlignCenter)
+        self._brand_badge_label.setFixedSize(88, 88)
+        self._brand_badge_label.setStyleSheet(
+            "background: rgba(255, 255, 255, 0.12); color: #f7fbfe; border: 1px solid rgba(255, 255, 255, 0.18); "
+            "border-radius: 24px; font-size: 28px; font-weight: 800; letter-spacing: 0.08em;"
+        )
+
+        self._hero_heading_label.setStyleSheet("font-size: 28px; font-weight: 800; color: #f7fbfe;")
+        self._hero_heading_label.setWordWrap(True)
+        self._hero_summary_label.setStyleSheet("font-size: 14px; color: #d9ebf7;")
+        self._hero_summary_label.setWordWrap(True)
+        self._hero_steps_label.setStyleSheet(
+            "padding: 10px 12px; background: rgba(255, 255, 255, 0.10); color: #f3f9fe; "
+            "border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 14px; font-size: 13px; font-weight: 600;"
+        )
+        self._hero_steps_label.setWordWrap(True)
+
+        chip_cli = QLabel("CLI-first")
+        chip_cli.setStyleSheet(self._hero_pill_style(accent=True))
+        chip_sso = QLabel("SSO-aware")
+        chip_sso.setStyleSheet(self._hero_pill_style())
+        chip_files = QLabel("Local profile visibility")
+        chip_files.setStyleSheet(self._hero_pill_style())
+        chip_layout = QHBoxLayout()
+        chip_layout.setSpacing(8)
+        chip_layout.addWidget(chip_cli)
+        chip_layout.addWidget(chip_sso)
+        chip_layout.addWidget(chip_files)
+        chip_layout.addStretch(1)
+
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(8)
+        text_layout.addWidget(self._hero_heading_label)
+        text_layout.addWidget(self._hero_summary_label)
+        text_layout.addLayout(chip_layout)
+
+        top_layout = QHBoxLayout()
+        top_layout.setSpacing(16)
+        top_layout.addWidget(self._brand_badge_label, 0, Qt.AlignTop)
+        top_layout.addLayout(text_layout, 1)
+
+        metric_labels = (
+            self._hero_provider_metric_label,
+            self._hero_profile_metric_label,
+            self._hero_auth_metric_label,
+            self._hero_target_metric_label,
+        )
+        for index, label in enumerate(metric_labels):
+            label.setTextFormat(Qt.RichText)
+            label.setTextInteractionFlags(Qt.NoTextInteraction)
+            label.setStyleSheet(self._hero_metric_style(emphasised=index == 2))
+
+        metrics_layout = QGridLayout()
+        metrics_layout.setHorizontalSpacing(12)
+        metrics_layout.setVerticalSpacing(12)
+        metrics_layout.addWidget(self._hero_provider_metric_label, 0, 0)
+        metrics_layout.addWidget(self._hero_profile_metric_label, 0, 1)
+        metrics_layout.addWidget(self._hero_auth_metric_label, 1, 0)
+        metrics_layout.addWidget(self._hero_target_metric_label, 1, 1)
+
+        layout.addLayout(top_layout)
+        layout.addWidget(self._hero_steps_label)
+        layout.addLayout(metrics_layout)
+        return panel
+
     def _build_session_setup_panel(self) -> QGroupBox:
-        group = QGroupBox("Session Setup")
+        group = QGroupBox("Session Lock")
         layout = QVBoxLayout(group)
         self._session_provider_label.setStyleSheet("font-size: 14px; font-weight: 700; color: #17324d;")
         self._session_profile_label.setStyleSheet("font-size: 14px; font-weight: 700; color: #17324d;")
         self._session_auth_label.setStyleSheet("font-size: 14px; font-weight: 700; color: #17324d;")
         self._session_lock_hint_label.setWordWrap(True)
-        self._session_lock_hint_label.setStyleSheet(self._info_card_style())
+        self._session_lock_hint_label.setStyleSheet(self._info_card_style(emphasised=True))
         self._set_button_tone(self._session_lock_button, "primary")
         self._session_lock_button.clicked.connect(self._on_lock_session_clicked)
 
@@ -674,7 +843,8 @@ class MainWindow(QMainWindow):
         session_content = QWidget()
         session_content_layout = QVBoxLayout(session_content)
         session_content_layout.setContentsMargins(0, 0, 0, 0)
-        session_content_layout.setSpacing(16)
+        session_content_layout.setSpacing(18)
+        session_content_layout.addWidget(self._build_brand_panel())
         session_content_layout.addWidget(self._build_session_setup_panel())
         session_content_layout.addWidget(self._session_tabs, 1)
 
@@ -684,7 +854,7 @@ class MainWindow(QMainWindow):
         session_splitter.addWidget(session_content)
         session_splitter.setStretchFactor(0, 2)
         session_splitter.setStretchFactor(1, 5)
-        session_splitter.setSizes([360, 980])
+        session_splitter.setSizes([330, 1010])
         return session_splitter
 
     def _build_workspace_page(self) -> QWidget:
@@ -970,8 +1140,11 @@ class MainWindow(QMainWindow):
         return page
 
     def _build_provider_panel(self) -> QGroupBox:
-        group = QGroupBox("Provider Summary")
+        group = QGroupBox("Provider Rail")
         layout = QVBoxLayout(group)
+        hint = QLabel("Start by choosing the provider you want to lock into a focused workspace.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet(self._info_card_style())
         self._provider_tree.setColumnCount(3)
         self._provider_tree.setHeaderLabels(["Provider", "State", "Summary"])
         self._configure_data_tree(self._provider_tree)
@@ -979,12 +1152,16 @@ class MainWindow(QMainWindow):
         self._provider_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self._provider_tree.header().setSectionResizeMode(2, QHeaderView.Stretch)
         self._provider_tree.itemSelectionChanged.connect(self._on_provider_selection_changed)
+        layout.addWidget(hint)
         layout.addWidget(self._provider_tree)
         return group
 
     def _build_profile_panel(self) -> QGroupBox:
-        group = QGroupBox("Discovered Profiles")
+        group = QGroupBox("Profile Rail")
         layout = QVBoxLayout(group)
+        hint = QLabel("Profiles update with the selected provider. Pick one to inspect its auth and runtime context.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet(self._info_card_style())
         self._profile_tree.setColumnCount(4)
         self._profile_tree.setHeaderLabels(["Provider", "Profile", "Source", "Details"])
         self._configure_data_tree(self._profile_tree)
@@ -993,6 +1170,7 @@ class MainWindow(QMainWindow):
         self._profile_tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self._profile_tree.header().setSectionResizeMode(3, QHeaderView.Stretch)
         self._profile_tree.itemSelectionChanged.connect(self._on_profile_selection_changed)
+        layout.addWidget(hint)
         layout.addWidget(self._profile_tree)
         return group
 
@@ -1270,6 +1448,8 @@ class MainWindow(QMainWindow):
         current_provider = self._controller.current_provider_id()
         selected_profile = self._controller.selected_profile()
         selected_auth_method = self._controller.selected_auth_method()
+        provider_count = len(self._controller.provider_snapshot)
+        profile_count = len(self._controller.discovery_report.profiles)
 
         self._session_provider_label.setText(current_provider.upper() if current_provider else "Not selected")
         self._session_profile_label.setText(
@@ -1287,6 +1467,41 @@ class MainWindow(QMainWindow):
                 "Lock the session to switch into the focused workspace. Use Unlock later to change provider, profile, or auth method."
             )
         self._session_lock_button.setEnabled(self._controller.can_lock_session())
+
+        target_value = "Awaiting target"
+        if current_provider and selected_profile is not None:
+            target_value = f"{current_provider.upper()} / {selected_profile.display_name}"
+        elif current_provider:
+            target_value = current_provider.upper()
+
+        auth_value = selected_auth_method.value.upper() if selected_auth_method is not None else "Choose"
+        self._hero_heading_label.setText("Lock the right cloud workspace before you act.")
+        self._hero_summary_label.setText(
+            "Use CloudSprocket to align provider, profile, and auth state first, then move into the focused workspace for service work."
+        )
+        self._hero_steps_label.setText(
+            "1 Choose a provider.  2 Inspect the profile context.  3 Pick an auth path.  4 Lock the session and continue inside the workspace."
+        )
+        self._set_hero_metric_text(
+            self._hero_provider_metric_label,
+            value=str(provider_count),
+            caption="Providers visible",
+        )
+        self._set_hero_metric_text(
+            self._hero_profile_metric_label,
+            value=str(profile_count),
+            caption="Profiles discovered",
+        )
+        self._set_hero_metric_text(
+            self._hero_auth_metric_label,
+            value=auth_value,
+            caption="Selected auth",
+        )
+        self._set_hero_metric_text(
+            self._hero_target_metric_label,
+            value=target_value,
+            caption="Current target",
+        )
 
     def _render_workspace(self) -> None:
         self._workspace_title.setText(self._controller.locked_session_title())

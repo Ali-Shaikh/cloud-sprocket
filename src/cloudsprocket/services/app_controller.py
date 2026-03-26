@@ -109,7 +109,7 @@ class CloudSprocketController(QObject):
                 APP_DESCRIPTION,
                 "",
                 f"Created by {AUTHOR_NAME}",
-                "CLI + SSO + Local files auth model",
+                "Built around the CLI + SSO + Local files auth model.",
                 "AWS is the reference provider in this milestone.",
                 "Azure and GCP remain visible through the same provider shell.",
             ]

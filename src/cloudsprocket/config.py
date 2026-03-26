@@ -10,7 +10,7 @@ APP_NAME = "CloudSprocket"
 APP_BRAND_NAME = "CloudSprocket by Ali Shaikh"
 AUTHOR_NAME = "Ali Shaikh"
 ORGANIZATION_NAME = "Ali Shaikh"
-APP_DESCRIPTION = "Desktop shell for cloud auth visibility and local profile discovery."
+APP_DESCRIPTION = "Operator desktop for cloud auth, profile context, and focused service workspaces."
 
 
 def _resolve_path(raw_value: str | None, fallback: Path) -> Path:

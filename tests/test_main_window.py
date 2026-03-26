@@ -147,6 +147,11 @@ def test_main_window_renders_branding_and_actions(qapp, tmp_path: Path) -> None:
     assert window.action_buttons["logout"].text() == "Global SSO Logout"
     assert window.action_buttons["logout"].parentWidget() is window.global_actions_container
     assert window.action_buttons["whoami"].parentWidget() is window.profile_actions_container
+    assert window.hero_heading_label.text() == "Lock the right cloud workspace before you act."
+    assert "Providers visible" in window.hero_provider_metric_label.text()
+    assert "Profiles discovered" in window.hero_profile_metric_label.text()
+    assert "CLI" in window.hero_auth_metric_label.text()
+    assert "AWS / sandbox" in window.hero_target_metric_label.text()
     assert "#0d5ca6" in window.styleSheet()
 
 
