@@ -96,6 +96,7 @@ class MainWindow(QMainWindow):
         self._workspace_global_actions_container = QWidget()
         self._workspace_global_actions_layout = QGridLayout(self._workspace_global_actions_container)
         self._workspace_s3_status_label = QLabel()
+        self._workspace_s3_bucket_status_label = QLabel()
         self._workspace_s3_selected_bucket_label = QLabel()
         self._workspace_s3_prefix_input = QLineEdit()
         self._workspace_s3_apply_prefix_button = QPushButton("Apply Prefix")
@@ -119,6 +120,9 @@ class MainWindow(QMainWindow):
         self._workspace_s3_url_tester_status_label = QLabel()
         self._workspace_s3_url_tester_input = QPlainTextEdit()
         self._workspace_s3_url_tester_details_tree = QTreeWidget()
+        self._workspace_s3_root_splitter: QSplitter | None = None
+        self._workspace_s3_content_splitter: QSplitter | None = None
+        self._workspace_s3_inspector_tabs: QTabWidget | None = None
         self._detail_sections_splitter = QSplitter(Qt.Vertical)
         self._rendering_state = False
 
@@ -242,6 +246,10 @@ class MainWindow(QMainWindow):
         return self._workspace_s3_copy_uri_button
 
     @property
+    def workspace_s3_bucket_status_label(self) -> QLabel:
+        return self._workspace_s3_bucket_status_label
+
+    @property
     def workspace_s3_selected_bucket_label(self) -> QLabel:
         return self._workspace_s3_selected_bucket_label
 
@@ -284,6 +292,18 @@ class MainWindow(QMainWindow):
     @property
     def workspace_s3_url_tester_details_tree(self) -> QTreeWidget:
         return self._workspace_s3_url_tester_details_tree
+
+    @property
+    def workspace_s3_root_splitter(self) -> QSplitter | None:
+        return self._workspace_s3_root_splitter
+
+    @property
+    def workspace_s3_content_splitter(self) -> QSplitter | None:
+        return self._workspace_s3_content_splitter
+
+    @property
+    def workspace_s3_inspector_tabs(self) -> QTabWidget | None:
+        return self._workspace_s3_inspector_tabs
 
     @property
     def lock_session_button(self) -> QPushButton:
@@ -708,13 +728,15 @@ class MainWindow(QMainWindow):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
+        layout.setSpacing(14)
 
         self._workspace_s3_status_label.setWordWrap(True)
         self._workspace_s3_status_label.setStyleSheet(self._info_card_style(emphasised=True))
+        self._workspace_s3_bucket_status_label.setWordWrap(True)
+        self._workspace_s3_bucket_status_label.setStyleSheet(self._info_card_style())
         self._workspace_s3_selected_bucket_label.setWordWrap(True)
         self._workspace_s3_selected_bucket_label.setStyleSheet(
-            "padding: 8px 12px; background: #edf4fb; border: 1px solid #c5d5e4; "
+            "padding: 10px 12px; background: #f7fafc; border: 1px solid #8ea3b7; "
             "border-radius: 10px; font-size: 13px; font-weight: 700; color: #17324d;"
         )
         self._set_button_tone(self._workspace_s3_refresh_buckets_button, "primary")
@@ -747,22 +769,21 @@ class MainWindow(QMainWindow):
         self._workspace_s3_url_tester_details_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
         self._workspace_s3_url_tester_details_tree.setColumnWidth(0, 220)
 
-        self._workspace_s3_bucket_tree.setColumnCount(3)
-        self._workspace_s3_bucket_tree.setHeaderLabels(["Bucket", "Created", "Summary"])
+        self._workspace_s3_bucket_tree.setColumnCount(2)
+        self._workspace_s3_bucket_tree.setHeaderLabels(["Bucket", "Created"])
         self._configure_data_tree(self._workspace_s3_bucket_tree)
-        self._workspace_s3_bucket_tree.header().setSectionResizeMode(0, QHeaderView.Interactive)
+        self._workspace_s3_bucket_tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self._workspace_s3_bucket_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self._workspace_s3_bucket_tree.header().setSectionResizeMode(2, QHeaderView.Stretch)
-        self._workspace_s3_bucket_tree.setColumnWidth(0, 220)
+        self._workspace_s3_bucket_tree.setColumnWidth(0, 240)
 
         self._workspace_s3_object_tree.setColumnCount(4)
         self._workspace_s3_object_tree.setHeaderLabels(["Key", "Size", "Modified", "Storage Class"])
         self._configure_data_tree(self._workspace_s3_object_tree)
-        self._workspace_s3_object_tree.header().setSectionResizeMode(0, QHeaderView.Interactive)
+        self._workspace_s3_object_tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self._workspace_s3_object_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self._workspace_s3_object_tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self._workspace_s3_object_tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self._workspace_s3_object_tree.setColumnWidth(0, 420)
+        self._workspace_s3_object_tree.setColumnWidth(0, 520)
 
         self._workspace_s3_object_details_tree.setColumnCount(2)
         self._workspace_s3_object_details_tree.setHeaderLabels(["Field", "Value"])
@@ -777,32 +798,43 @@ class MainWindow(QMainWindow):
         bucket_group = QGroupBox("Buckets")
         bucket_layout = QVBoxLayout(bucket_group)
         bucket_layout.setSpacing(12)
-        bucket_hint = QLabel("Choose a bucket to browse its objects and run S3 actions.")
-        bucket_hint.setWordWrap(True)
-        bucket_hint.setStyleSheet(self._info_card_style())
-        bucket_layout.addWidget(bucket_hint)
+        bucket_toolbar = QHBoxLayout()
+        bucket_toolbar.addWidget(self._workspace_s3_refresh_buckets_button)
+        bucket_toolbar.addStretch(1)
+        bucket_layout.addLayout(bucket_toolbar)
+        bucket_layout.addWidget(self._workspace_s3_bucket_status_label)
         bucket_layout.addWidget(self._workspace_s3_bucket_tree, 1)
+
+        browser_panel = QWidget()
+        browser_panel_layout = QVBoxLayout(browser_panel)
+        browser_panel_layout.setContentsMargins(0, 0, 0, 0)
+        browser_panel_layout.setSpacing(10)
+        browser_panel_layout.addWidget(self._workspace_s3_selected_bucket_label)
+
+        controls_layout = QHBoxLayout()
+        controls_layout.addWidget(QLabel("Prefix"))
+        controls_layout.addWidget(self._workspace_s3_prefix_input, 1)
+        controls_layout.addWidget(self._workspace_s3_apply_prefix_button)
+        controls_layout.addWidget(self._workspace_s3_clear_prefix_button)
+        controls_layout.addWidget(self._workspace_s3_refresh_bucket_button)
+        controls_layout.addWidget(self._workspace_s3_copy_uri_button)
+        browser_panel_layout.addLayout(controls_layout)
+        browser_panel_layout.addWidget(self._workspace_s3_object_status_label)
 
         object_group = QGroupBox("Objects")
         object_layout = QVBoxLayout(object_group)
         object_layout.setSpacing(12)
-        object_layout.addWidget(self._workspace_s3_selected_bucket_label)
-        object_layout.addWidget(self._workspace_s3_object_status_label)
         object_layout.addWidget(self._workspace_s3_object_tree, 1)
 
-        object_details_group = QGroupBox("Object Details")
-        object_details_layout = QVBoxLayout(object_details_group)
-        object_details_hint = QLabel("Inspect metadata, headers, and storage details for the selected object.")
-        object_details_hint.setWordWrap(True)
-        object_details_hint.setStyleSheet(self._info_card_style())
-        object_details_layout.addWidget(object_details_hint)
+        object_details_page = QWidget()
+        object_details_layout = QVBoxLayout(object_details_page)
+        object_details_layout.setContentsMargins(0, 0, 0, 0)
         object_details_layout.addWidget(self._workspace_s3_object_details_tree, 1)
 
-        signed_url_group = QGroupBox("Signed URL")
-        signed_url_layout = QVBoxLayout(signed_url_group)
-        signed_url_hint = QLabel("Generate or copy a presigned URL for the selected object.")
-        signed_url_hint.setWordWrap(True)
-        signed_url_hint.setStyleSheet(self._info_card_style())
+        signed_url_page = QWidget()
+        signed_url_layout = QVBoxLayout(signed_url_page)
+        signed_url_layout.setContentsMargins(0, 0, 0, 0)
+        signed_url_layout.setSpacing(12)
         signed_url_controls = QHBoxLayout()
         signed_url_controls.addWidget(QLabel("Duration"))
         signed_url_controls.addWidget(self._workspace_s3_signed_url_duration_spin)
@@ -810,56 +842,63 @@ class MainWindow(QMainWindow):
         signed_url_controls.addWidget(self._workspace_s3_generate_signed_url_button)
         signed_url_controls.addWidget(self._workspace_s3_copy_signed_url_button)
         signed_url_controls.addStretch(1)
-        signed_url_layout.addWidget(signed_url_hint)
         signed_url_layout.addWidget(self._workspace_s3_signed_url_status_label)
         signed_url_layout.addLayout(signed_url_controls)
-        signed_url_layout.addWidget(self._workspace_s3_signed_url_output)
+        signed_url_layout.addWidget(self._workspace_s3_signed_url_output, 1)
 
-        url_tester_group = QGroupBox("URL Tester")
-        url_tester_layout = QVBoxLayout(url_tester_group)
-        url_tester_hint = QLabel("Paste any URL to inspect expiry hints or validate that it still responds.")
-        url_tester_hint.setWordWrap(True)
-        url_tester_hint.setStyleSheet(self._info_card_style())
+        url_tester_page = QWidget()
+        url_tester_layout = QVBoxLayout(url_tester_page)
+        url_tester_layout.setContentsMargins(0, 0, 0, 0)
+        url_tester_layout.setSpacing(12)
         url_tester_controls = QHBoxLayout()
         url_tester_controls.addWidget(self._workspace_s3_use_generated_url_button)
         url_tester_controls.addWidget(self._workspace_s3_analyse_url_button)
         url_tester_controls.addWidget(self._workspace_s3_validate_url_button)
         url_tester_controls.addStretch(1)
-        url_tester_layout.addWidget(url_tester_hint)
         url_tester_layout.addWidget(self._workspace_s3_url_tester_status_label)
         url_tester_layout.addWidget(self._workspace_s3_url_tester_input)
         url_tester_layout.addLayout(url_tester_controls)
-        url_tester_layout.addWidget(self._workspace_s3_url_tester_details_tree)
+        url_tester_layout.addWidget(self._workspace_s3_url_tester_details_tree, 1)
 
         tools_tabs = QTabWidget()
         tools_tabs.setDocumentMode(True)
-        tools_tabs.addTab(object_details_group, "Object Details")
-        tools_tabs.addTab(signed_url_group, "Signed URL")
-        tools_tabs.addTab(url_tester_group, "URL Tester")
+        tools_tabs.addTab(object_details_page, "Object Details")
+        tools_tabs.addTab(signed_url_page, "Signed URL")
+        tools_tabs.addTab(url_tester_page, "URL Tester")
+
+        inspector_group = QGroupBox("Inspector")
+        inspector_layout = QVBoxLayout(inspector_group)
+        inspector_layout.addWidget(tools_tabs, 1)
 
         content_splitter = QSplitter(Qt.Horizontal)
         content_splitter.setChildrenCollapsible(False)
-        content_splitter.addWidget(bucket_group)
         content_splitter.addWidget(object_group)
-        content_splitter.addWidget(tools_tabs)
-        content_splitter.setStretchFactor(0, 2)
-        content_splitter.setStretchFactor(1, 4)
-        content_splitter.setStretchFactor(2, 3)
-        content_splitter.setSizes([280, 620, 420])
+        content_splitter.addWidget(inspector_group)
+        content_splitter.setStretchFactor(0, 5)
+        content_splitter.setStretchFactor(1, 3)
+        content_splitter.setSizes([760, 420])
 
-        controls_layout = QHBoxLayout()
-        controls_layout.addWidget(QLabel("Prefix"))
-        controls_layout.addWidget(self._workspace_s3_prefix_input, 1)
-        controls_layout.addWidget(self._workspace_s3_apply_prefix_button)
-        controls_layout.addWidget(self._workspace_s3_clear_prefix_button)
-        controls_layout.addWidget(self._workspace_s3_refresh_buckets_button)
-        controls_layout.addWidget(self._workspace_s3_refresh_bucket_button)
-        controls_layout.addWidget(self._workspace_s3_copy_uri_button)
-        controls_layout.addStretch(1)
+        main_panel = QWidget()
+        main_panel_layout = QVBoxLayout(main_panel)
+        main_panel_layout.setContentsMargins(0, 0, 0, 0)
+        main_panel_layout.setSpacing(12)
+        main_panel_layout.addWidget(browser_panel)
+        main_panel_layout.addWidget(content_splitter, 1)
+
+        root_splitter = QSplitter(Qt.Horizontal)
+        root_splitter.setChildrenCollapsible(False)
+        root_splitter.addWidget(bucket_group)
+        root_splitter.addWidget(main_panel)
+        root_splitter.setStretchFactor(0, 0)
+        root_splitter.setStretchFactor(1, 1)
+        root_splitter.setSizes([280, 980])
+
+        self._workspace_s3_root_splitter = root_splitter
+        self._workspace_s3_content_splitter = content_splitter
+        self._workspace_s3_inspector_tabs = tools_tabs
 
         layout.addWidget(self._workspace_s3_status_label)
-        layout.addLayout(controls_layout)
-        layout.addWidget(content_splitter, 1)
+        layout.addWidget(root_splitter, 1)
         return page
 
     def _build_provider_panel(self) -> QGroupBox:
@@ -1232,6 +1271,9 @@ class MainWindow(QMainWindow):
         if current_widget is not None:
             current_tab_id = current_widget.property("workspace_tab_id")
 
+        self._workspace_s3_root_splitter = None
+        self._workspace_s3_content_splitter = None
+        self._workspace_s3_inspector_tabs = None
         self._workspace_tabs.clear()
         next_index = 0
         for index, tab in enumerate(self._controller.workspace_tabs()):
@@ -1254,22 +1296,34 @@ class MainWindow(QMainWindow):
         state = self._controller.aws_s3_workspace()
         available, reason = self._controller.aws_s3_availability()
         self._workspace_s3_status_label.setText(state.status_message or reason)
+        self._workspace_s3_bucket_status_label.setText(state.bucket_status_message)
         if state.selected_bucket_name:
             object_count = len(state.objects)
             object_label = "object" if object_count == 1 else "objects"
-            prefix_label = f" | Prefix: {state.prefix_filter}" if state.prefix_filter else ""
+            summary_parts = [
+                f"Selected bucket: {state.selected_bucket_name}",
+                f"{object_count} {object_label} visible",
+            ]
+            if state.selected_object_key:
+                summary_parts.append(f"Selected object: {state.selected_object_key}")
+            if state.prefix_filter:
+                summary_parts.append(f"Prefix: {state.prefix_filter}")
             self._workspace_s3_selected_bucket_label.setText(
-                f"Bucket: {state.selected_bucket_name} | {object_count} {object_label} visible{prefix_label}"
+                " | ".join(summary_parts)
             )
         else:
-            self._workspace_s3_selected_bucket_label.setText("Select a bucket to browse its objects.")
+            self._workspace_s3_selected_bucket_label.setText(
+                "Select a bucket to browse its objects, inspect metadata, and generate a signed URL."
+            )
         if self._workspace_s3_prefix_input.text() != state.prefix_filter:
             self._workspace_s3_prefix_input.setText(state.prefix_filter)
+        bucket_selected = state.selected_bucket_name is not None
         self._workspace_s3_refresh_buckets_button.setEnabled(self._controller.can_refresh_aws_s3_buckets())
         self._workspace_s3_refresh_bucket_button.setEnabled(self._controller.can_refresh_aws_s3_objects())
         self._workspace_s3_refresh_bucket_button.setVisible(available or state.selected_bucket_name is not None)
-        self._workspace_s3_apply_prefix_button.setEnabled(available)
-        self._workspace_s3_clear_prefix_button.setEnabled(available and bool(state.prefix_filter))
+        self._workspace_s3_prefix_input.setEnabled(available)
+        self._workspace_s3_apply_prefix_button.setEnabled(available and bucket_selected)
+        self._workspace_s3_clear_prefix_button.setEnabled(available and bucket_selected and bool(state.prefix_filter))
         self._workspace_s3_copy_uri_button.setEnabled(state.selected_bucket_name is not None)
         duration_max = 7 if state.signed_url_duration_unit.value == "days" else 168
         self._workspace_s3_signed_url_duration_spin.blockSignals(True)
@@ -1289,8 +1343,10 @@ class MainWindow(QMainWindow):
         self._workspace_s3_bucket_tree.clear()
         selected_bucket_item: QTreeWidgetItem | None = None
         for bucket in state.buckets:
-            item = QTreeWidgetItem([bucket.name, bucket.created_at, bucket.summary])
+            item = QTreeWidgetItem([bucket.name, bucket.created_at])
             item.setData(0, Qt.UserRole, bucket.name)
+            item.setToolTip(0, bucket.summary)
+            item.setToolTip(1, bucket.created_at)
             self._workspace_s3_bucket_tree.addTopLevelItem(item)
             if bucket.name == state.selected_bucket_name:
                 selected_bucket_item = item
@@ -1613,3 +1669,4 @@ class MainWindow(QMainWindow):
         tree.setTextElideMode(Qt.ElideMiddle)
         tree.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
+        tree.header().setHighlightSections(False)

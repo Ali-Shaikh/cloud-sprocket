@@ -304,6 +304,40 @@ def test_main_window_switches_into_locked_workspace_tabs(qapp, tmp_path: Path) -
     assert window.body_stack.currentIndex() == 0
 
 
+def test_main_window_uses_a_two_splitter_s3_workspace_with_inspector_tabs(qapp, tmp_path: Path) -> None:
+    settings = AppSettings.from_env(
+        home_dir=tmp_path / "home",
+        appdata_dir=tmp_path / "appdata",
+        local_appdata_dir=tmp_path / "local-appdata",
+        config_dir=tmp_path / "config-root",
+    )
+    controller = CloudSprocketController(
+        settings=settings,
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(),
+        command_runner=NoopRunner(),
+        desktop_integration=FakeDesktopIntegration(),
+    )
+    window = MainWindow(settings=settings, controller=controller)
+
+    window.lock_session_button.click()
+    qapp.processEvents()
+
+    assert window.workspace_s3_root_splitter is not None
+    assert window.workspace_s3_root_splitter.orientation() == Qt.Horizontal
+    assert window.workspace_s3_root_splitter.count() == 2
+    assert window.workspace_s3_content_splitter is not None
+    assert window.workspace_s3_content_splitter.orientation() == Qt.Horizontal
+    assert window.workspace_s3_content_splitter.count() == 2
+    assert window.workspace_s3_inspector_tabs is not None
+    assert [window.workspace_s3_inspector_tabs.tabText(index) for index in range(window.workspace_s3_inspector_tabs.count())] == [
+        "Object Details",
+        "Signed URL",
+        "URL Tester",
+    ]
+    assert window.workspace_s3_bucket_tree.columnCount() == 2
+
+
 def test_main_window_renders_loaded_s3_workspace_data(qapp, tmp_path: Path) -> None:
     settings = AppSettings.from_env(
         home_dir=tmp_path / "home",
@@ -435,13 +469,14 @@ def test_main_window_rebuilds_s3_workspace_without_losing_data_or_headers(qapp, 
         )
         qapp.processEvents()
 
-    assert window.workspace_s3_bucket_tree.columnCount() == 3
+    assert window.workspace_s3_bucket_tree.columnCount() == 2
     assert window.workspace_s3_bucket_tree.headerItem().text(0) == "Bucket"
+    assert window.workspace_s3_bucket_tree.headerItem().text(1) == "Created"
     assert window.workspace_s3_bucket_tree.topLevelItemCount() == 1
     assert window.workspace_s3_object_tree.columnCount() == 4
     assert window.workspace_s3_object_tree.headerItem().text(0) == "Key"
     assert window.workspace_s3_object_tree.topLevelItemCount() == 1
-    assert window.workspace_s3_selected_bucket_label.text().startswith("Bucket: alpha")
+    assert window.workspace_s3_selected_bucket_label.text().startswith("Selected bucket: alpha")
 
 
 def test_main_window_applies_s3_prefix_filter(qapp, tmp_path: Path) -> None:
