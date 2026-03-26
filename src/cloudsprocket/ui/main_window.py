@@ -342,92 +342,120 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(
             """
             QMainWindow, QWidget {
-                background-color: #eef3f8;
-                color: #14263a;
+                background-color: #f3f5f8;
+                color: #112236;
             }
             QMenuBar, QStatusBar {
-                background-color: #eef3f8;
-                color: #14263a;
+                background-color: #e7edf3;
+                color: #112236;
             }
             QMenuBar::item:selected {
-                background-color: #dce8f4;
+                background-color: #d7e4ef;
             }
             QGroupBox {
-                background-color: #fbfdff;
-                border: 1px solid #c6d5e4;
+                background-color: #fbfcfe;
+                border: 1px solid #8699ac;
                 border-radius: 14px;
-                margin-top: 16px;
-                padding: 12px;
-                padding-top: 18px;
+                margin-top: 18px;
+                padding: 14px;
+                padding-top: 20px;
                 font-weight: 700;
-                color: #1a4263;
+                color: #16344d;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 left: 12px;
                 padding: 0 6px;
-                color: #1a4263;
-                background-color: #fbfdff;
+                color: #16344d;
+                background-color: #fbfcfe;
             }
             QPushButton {
-                background-color: #1d5f8e;
-                color: #ffffff;
-                border: 1px solid #174968;
+                background-color: #ffffff;
+                color: #17324d;
+                border: 1px solid #6e8399;
                 border-radius: 10px;
                 padding: 8px 14px;
                 font-weight: 600;
             }
             QPushButton:hover {
-                background-color: #2572a8;
+                background-color: #eef4f9;
+                border-color: #516b84;
             }
             QPushButton:pressed {
-                background-color: #154768;
+                background-color: #dce6ef;
+            }
+            QPushButton:focus {
+                border: 2px solid #0d5ca6;
+                padding: 7px 13px;
             }
             QPushButton:disabled {
-                background-color: #d5dee7;
-                color: #687b8e;
-                border-color: #c5d0db;
+                background-color: #edf1f5;
+                color: #6b7a89;
+                border-color: #c1ccd7;
+            }
+            QPushButton[tone="primary"] {
+                background-color: #0d5ca6;
+                color: #ffffff;
+                border-color: #08467f;
+            }
+            QPushButton[tone="primary"]:hover {
+                background-color: #1469bb;
+                border-color: #08467f;
+            }
+            QPushButton[tone="primary"]:pressed {
+                background-color: #0b4f8d;
             }
             QLineEdit, QPlainTextEdit, QTreeWidget, QComboBox, QSpinBox {
                 background-color: #ffffff;
-                color: #14263a;
-                border: 1px solid #bfd0df;
+                color: #112236;
+                border: 1px solid #8699ac;
                 border-radius: 10px;
-                selection-background-color: #205c8a;
+                selection-background-color: #0d5ca6;
                 selection-color: #ffffff;
             }
             QLineEdit, QPlainTextEdit, QComboBox, QSpinBox {
                 padding: 7px 10px;
             }
+            QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QSpinBox:focus {
+                border: 2px solid #0d5ca6;
+                padding: 6px 9px;
+            }
+            QTreeWidget:focus {
+                border: 2px solid #0d5ca6;
+            }
             QTreeWidget {
-                alternate-background-color: #f4f8fc;
-                gridline-color: #d6e1eb;
+                alternate-background-color: #f5f8fb;
+                gridline-color: #c7d3de;
             }
             QTreeWidget::item {
                 padding: 4px 6px;
             }
+            QTreeWidget::item:hover {
+                background-color: #e7eef5;
+            }
             QTreeWidget::item:selected {
-                background-color: #205c8a;
+                background-color: #0d5ca6;
                 color: #ffffff;
             }
             QHeaderView::section {
-                background-color: #e7f0f7;
-                color: #17334d;
+                background-color: #e9eff4;
+                color: #16344d;
                 padding: 8px 8px;
                 border: none;
-                border-bottom: 1px solid #c6d5e4;
+                border-right: 1px solid #9eb0c1;
+                border-bottom: 1px solid #7f92a5;
                 font-weight: 700;
             }
             QTabWidget::pane {
-                border: 1px solid #c6d5e4;
+                border: 1px solid #8699ac;
                 border-radius: 12px;
-                background: #fbfdff;
+                background: #fbfcfe;
                 top: -1px;
             }
             QTabBar::tab {
-                background: #dfe8f1;
+                background: #dfe6ed;
                 color: #23445f;
-                border: 1px solid #c6d5e4;
+                border: 1px solid #95a8bb;
                 border-bottom: none;
                 border-top-left-radius: 10px;
                 border-top-right-radius: 10px;
@@ -436,33 +464,39 @@ class MainWindow(QMainWindow):
                 font-weight: 600;
             }
             QTabBar::tab:selected {
-                background: #fbfdff;
-                color: #0f2740;
+                background: #fbfcfe;
+                color: #10283f;
             }
             QTabBar::tab:!selected:hover {
-                background: #eaf1f8;
+                background: #ebf0f5;
             }
             QSplitter::handle {
-                background-color: #d4dfeb;
+                background-color: #9eb0c1;
                 margin: 2px;
             }
+            QSplitter::handle:hover {
+                background-color: #6e8399;
+            }
             QScrollBar:vertical, QScrollBar:horizontal {
-                background: #e6edf4;
+                background: #dde5ec;
                 border-radius: 6px;
             }
             QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
-                background: #9cb7cf;
+                background: #647c94;
                 border-radius: 6px;
                 min-height: 28px;
                 min-width: 28px;
+            }
+            QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {
+                background: #4e6780;
             }
             """
         )
 
     def _info_card_style(self, *, emphasised: bool = False) -> str:
-        background = "#e4eff9" if emphasised else "#f3f7fb"
-        border = "#b5cade" if emphasised else "#c8d6e3"
-        foreground = "#17324d" if emphasised else "#29445d"
+        background = "#e8f1fa" if emphasised else "#f6f8fb"
+        border = "#6f89a5" if emphasised else "#9dafc1"
+        foreground = "#10283f" if emphasised else "#243b53"
         return (
             "padding: 11px 13px; "
             f"background: {background}; "
@@ -473,6 +507,11 @@ class MainWindow(QMainWindow):
 
     def _section_label_style(self) -> str:
         return "font-size: 13px; font-weight: 700; color: #184b72; padding-top: 4px;"
+
+    def _set_button_tone(self, button: QPushButton, tone: str) -> None:
+        button.setProperty("tone", tone)
+        button.style().unpolish(button)
+        button.style().polish(button)
 
     def _build_header(self) -> QHBoxLayout:
         title = QLabel(self._settings.app_brand_name)
@@ -490,6 +529,7 @@ class MainWindow(QMainWindow):
         self._config_label.setStyleSheet(self._info_card_style(emphasised=True))
 
         refresh_button = QPushButton("Refresh Snapshot")
+        self._set_button_tone(refresh_button, "primary")
         refresh_button.clicked.connect(lambda: self._controller.trigger_action("refresh"))
         refresh_button.setFixedWidth(160)
 
@@ -512,6 +552,7 @@ class MainWindow(QMainWindow):
         self._session_auth_label.setStyleSheet("font-size: 14px; font-weight: 700; color: #17324d;")
         self._session_lock_hint_label.setWordWrap(True)
         self._session_lock_hint_label.setStyleSheet(self._info_card_style())
+        self._set_button_tone(self._session_lock_button, "primary")
         self._session_lock_button.clicked.connect(self._on_lock_session_clicked)
 
         metadata_layout = QGridLayout()
@@ -538,6 +579,7 @@ class MainWindow(QMainWindow):
         self._workspace_subtitle.setStyleSheet("font-size: 14px; font-weight: 700; color: #184b72;")
         self._workspace_meta.setWordWrap(True)
         self._workspace_meta.setStyleSheet(self._info_card_style(emphasised=True))
+        self._set_button_tone(self._workspace_unlock_button, "primary")
         self._workspace_unlock_button.clicked.connect(self._on_unlock_session_clicked)
 
         text_layout = QVBoxLayout()
@@ -675,6 +717,9 @@ class MainWindow(QMainWindow):
             "padding: 8px 12px; background: #edf4fb; border: 1px solid #c5d5e4; "
             "border-radius: 10px; font-size: 13px; font-weight: 700; color: #17324d;"
         )
+        self._set_button_tone(self._workspace_s3_refresh_buckets_button, "primary")
+        self._set_button_tone(self._workspace_s3_generate_signed_url_button, "primary")
+        self._set_button_tone(self._workspace_s3_validate_url_button, "primary")
         self._workspace_s3_prefix_input.setPlaceholderText("Optional prefix filter, for example logs/2026/")
         self._workspace_s3_object_status_label.setWordWrap(True)
         self._workspace_s3_object_status_label.setStyleSheet(self._info_card_style())

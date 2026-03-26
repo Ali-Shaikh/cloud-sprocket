@@ -147,7 +147,7 @@ def test_main_window_renders_branding_and_actions(qapp, tmp_path: Path) -> None:
     assert window.action_buttons["logout"].text() == "Global SSO Logout"
     assert window.action_buttons["logout"].parentWidget() is window.global_actions_container
     assert window.action_buttons["whoami"].parentWidget() is window.profile_actions_container
-    assert "#205c8a" in window.styleSheet()
+    assert "#0d5ca6" in window.styleSheet()
 
 
 def test_main_window_selection_updates_details_and_log_panel(qapp, tmp_path: Path) -> None:
@@ -235,6 +235,29 @@ def test_main_window_allows_resizing_detail_sections_and_field_columns(qapp, tmp
     assert window.detail_sections_splitter.count() == 3
     assert window.detail_fields_tree.header().sectionResizeMode(0) == QHeaderView.Interactive
     assert window.detail_fields_tree.header().sectionResizeMode(1) == QHeaderView.Interactive
+
+
+def test_main_window_theme_defines_focus_states_and_primary_button_tone(qapp, tmp_path: Path) -> None:
+    settings = AppSettings.from_env(
+        home_dir=tmp_path / "home",
+        appdata_dir=tmp_path / "appdata",
+        local_appdata_dir=tmp_path / "local-appdata",
+        config_dir=tmp_path / "config-root",
+    )
+    controller = CloudSprocketController(
+        settings=settings,
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(),
+        command_runner=NoopRunner(),
+        desktop_integration=FakeDesktopIntegration(),
+    )
+    window = MainWindow(settings=settings, controller=controller)
+
+    stylesheet = window.styleSheet()
+
+    assert "QLineEdit:focus" in stylesheet
+    assert 'QPushButton[tone="primary"]' in stylesheet
+    assert window.lock_session_button.property("tone") == "primary"
 
 
 def test_main_window_switches_into_locked_workspace_tabs(qapp, tmp_path: Path) -> None:
