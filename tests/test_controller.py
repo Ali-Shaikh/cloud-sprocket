@@ -139,6 +139,15 @@ def _make_mixed_aws_profiles() -> tuple[DiscoveredProfile, ...]:
     return (non_sso_profile, sso_profile)
 
 
+def _create_sparse_file(path: Path, size_bytes: int) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        if size_bytes > 0:
+            handle.seek(size_bytes - 1)
+            handle.write(b"\0")
+    return path
+
+
 def test_controller_activate_and_copy_export_snippet(tmp_path: Path) -> None:
     desktop = FakeDesktopIntegration()
     settings = _make_settings(tmp_path)
@@ -407,6 +416,130 @@ def test_controller_applies_s3_prefix_filter_to_object_listing(tmp_path: Path) -
     assert "--prefix" in filtered_object_spec.args
     prefix_index = filtered_object_spec.args.index("--prefix")
     assert filtered_object_spec.args[prefix_index + 1] == "logs/2026/"
+
+
+def test_controller_plans_multipart_upload_for_large_files(tmp_path: Path) -> None:
+    large_file = _create_sparse_file(tmp_path / "uploads" / "archive.bin", 9 * 1024 * 1024)
+    controller = CloudSprocketController(
+        settings=_make_settings(tmp_path),
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(_make_profiles()),
+        command_runner=DeferredRunner(),
+        desktop_integration=FakeDesktopIntegration(),
+    )
+
+    assert controller.lock_session()
+    controller.session_state.aws_s3_workspace.selected_bucket_name = "alpha"
+
+    assert controller.set_aws_s3_upload_source_path(str(large_file))
+
+    upload_fields = {field.label: field.value for field in controller.aws_s3_upload_detail_fields()}
+    assert upload_fields["Transfer Mode"] == "multipart upload via AWS CLI"
+    assert upload_fields["Object Key"] == "archive.bin"
+    assert "multipart upload via AWS CLI" in controller.aws_s3_workspace().upload_status_message
+
+
+def test_controller_uploads_file_and_refreshes_visible_bucket_contents(tmp_path: Path) -> None:
+    upload_file = _create_sparse_file(tmp_path / "uploads" / "report.csv", 4096)
+    runner = DeferredRunner()
+    controller = CloudSprocketController(
+        settings=_make_settings(tmp_path),
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(_make_profiles()),
+        command_runner=runner,
+        desktop_integration=FakeDesktopIntegration(),
+    )
+
+    assert controller.lock_session()
+    assert controller.refresh_aws_s3_buckets()
+
+    bucket_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=bucket_spec,
+            exit_code=0,
+            stdout='{"Buckets":[{"Name":"alpha","CreationDate":"2026-03-24T10:00:00Z"}]}',
+            summary="buckets",
+            succeeded=True,
+        )
+    )
+
+    initial_object_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=initial_object_spec,
+            exit_code=0,
+            stdout='{"Contents":[]}',
+            summary="objects",
+            succeeded=True,
+        )
+    )
+
+    assert controller.set_aws_s3_upload_source_path(str(upload_file))
+    assert controller.set_aws_s3_upload_object_key("uploads/report.csv")
+    assert controller.upload_aws_s3_file()
+
+    region_spec, _callback = runner.calls[0]
+    assert region_spec.args[:2] == ("s3api", "head-bucket")
+    runner.finish_next(
+        CommandResult(
+            spec=region_spec,
+            exit_code=0,
+            stdout="eu-west-2",
+            summary="bucket-region",
+            succeeded=True,
+        )
+    )
+
+    upload_spec, _callback = runner.calls[0]
+    assert upload_spec.args[:2] == ("s3", "cp")
+    assert upload_spec.args[2] == str(upload_file)
+    assert upload_spec.args[3] == "s3://alpha/uploads/report.csv"
+    assert "--region" in upload_spec.args
+    assert "--only-show-errors" in upload_spec.args
+    assert "--no-progress" in upload_spec.args
+    runner.finish_next(
+        CommandResult(
+            spec=upload_spec,
+            exit_code=0,
+            stdout="",
+            summary="upload",
+            succeeded=True,
+        )
+    )
+
+    refreshed_object_spec, _callback = runner.calls[0]
+    assert refreshed_object_spec.args[:2] == ("s3api", "list-objects-v2")
+    runner.finish_next(
+        CommandResult(
+            spec=refreshed_object_spec,
+            exit_code=0,
+            stdout='{"Contents":[{"Key":"uploads/report.csv","Size":4096,"LastModified":"2026-03-25T08:15:00Z","StorageClass":"STANDARD"}]}',
+            summary="objects",
+            succeeded=True,
+        )
+    )
+
+    metadata_spec, _callback = runner.calls[0]
+    assert metadata_spec.args[:2] == ("s3api", "head-object")
+    assert metadata_spec.args[2:6] == ("--bucket", "alpha", "--key", "uploads/report.csv")
+    runner.finish_next(
+        CommandResult(
+            spec=metadata_spec,
+            exit_code=0,
+            stdout='{"ContentLength":4096,"LastModified":"2026-03-25T08:15:00Z","ContentType":"text/csv"}',
+            summary="head-object",
+            succeeded=True,
+        )
+    )
+
+    state = controller.aws_s3_workspace()
+    assert state.selected_object_key == "uploads/report.csv"
+    assert "Uploaded report.csv to s3://alpha/uploads/report.csv" in state.upload_status_message
+    assert any(
+        entry.action_id == "aws-s3-upload" and "uploads/report.csv" in entry.message
+        for entry in controller.log_entries()
+    )
 
 
 def test_controller_generates_s3_signed_url_with_day_duration_selection(tmp_path: Path) -> None:

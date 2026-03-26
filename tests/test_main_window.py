@@ -331,6 +331,7 @@ def test_main_window_uses_a_two_splitter_s3_workspace_with_inspector_tabs(qapp, 
     assert window.workspace_s3_content_splitter.count() == 2
     assert window.workspace_s3_inspector_tabs is not None
     assert [window.workspace_s3_inspector_tabs.tabText(index) for index in range(window.workspace_s3_inspector_tabs.count())] == [
+        "Upload",
         "Object Details",
         "Signed URL",
         "URL Tester",
@@ -407,6 +408,118 @@ def test_main_window_renders_loaded_s3_workspace_data(qapp, tmp_path: Path) -> N
     qapp.processEvents()
 
     assert desktop.copied_texts[-1] == "s3://alpha/logs/app.log"
+
+
+def test_main_window_uploads_a_file_and_refreshes_the_s3_browser(qapp, tmp_path: Path) -> None:
+    upload_file = tmp_path / "uploads" / "photo.png"
+    upload_file.parent.mkdir(parents=True, exist_ok=True)
+    upload_file.write_bytes(b"image-data")
+    runner = DeferredRunner()
+    settings = AppSettings.from_env(
+        home_dir=tmp_path / "home",
+        appdata_dir=tmp_path / "appdata",
+        local_appdata_dir=tmp_path / "local-appdata",
+        config_dir=tmp_path / "config-root",
+    )
+    controller = CloudSprocketController(
+        settings=settings,
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(),
+        command_runner=runner,
+        desktop_integration=FakeDesktopIntegration(),
+    )
+    window = MainWindow(settings=settings, controller=controller)
+
+    window.lock_session_button.click()
+    qapp.processEvents()
+    window.workspace_s3_refresh_buckets_button.click()
+    qapp.processEvents()
+
+    bucket_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=bucket_spec,
+            exit_code=0,
+            stdout='{"Buckets":[{"Name":"alpha","CreationDate":"2026-03-24T10:00:00Z"}]}',
+            summary="buckets",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
+    initial_object_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=initial_object_spec,
+            exit_code=0,
+            stdout='{"Contents":[]}',
+            summary="objects",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
+    window.workspace_s3_upload_source_input.setText(str(upload_file))
+    qapp.processEvents()
+    assert window.workspace_s3_upload_key_input.text() == "photo.png"
+
+    window.workspace_s3_upload_button.click()
+    qapp.processEvents()
+
+    region_spec, _callback = runner.calls[0]
+    assert region_spec.args[:2] == ("s3api", "head-bucket")
+    runner.finish_next(
+        CommandResult(
+            spec=region_spec,
+            exit_code=0,
+            stdout="eu-west-2",
+            summary="bucket-region",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
+    upload_spec, _callback = runner.calls[0]
+    assert upload_spec.args[:2] == ("s3", "cp")
+    assert upload_spec.args[3] == "s3://alpha/photo.png"
+    runner.finish_next(
+        CommandResult(
+            spec=upload_spec,
+            exit_code=0,
+            stdout="",
+            summary="upload",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
+    refreshed_object_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=refreshed_object_spec,
+            exit_code=0,
+            stdout='{"Contents":[{"Key":"photo.png","Size":10,"LastModified":"2026-03-25T08:15:00Z","StorageClass":"STANDARD"}]}',
+            summary="objects",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
+    metadata_spec, _callback = runner.calls[0]
+    runner.finish_next(
+        CommandResult(
+            spec=metadata_spec,
+            exit_code=0,
+            stdout='{"ContentLength":10,"LastModified":"2026-03-25T08:15:00Z","ContentType":"image/png"}',
+            summary="head-object",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
+    assert window.workspace_s3_object_tree.topLevelItemCount() == 1
+    assert window.workspace_s3_object_tree.topLevelItem(0).text(0) == "photo.png"
+    assert "Uploaded photo.png to s3://alpha/photo.png" in window.workspace_s3_upload_status_label.text()
 
 
 def test_main_window_rebuilds_s3_workspace_without_losing_data_or_headers(qapp, tmp_path: Path) -> None:

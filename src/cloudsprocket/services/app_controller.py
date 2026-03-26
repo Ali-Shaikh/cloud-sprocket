@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Protocol
 
 from PySide6.QtCore import QObject, QUrl, Signal
@@ -37,6 +38,8 @@ from cloudsprocket.services.command_runner import BackgroundCommandRunner
 from cloudsprocket.services.profile_discovery import ProfileDiscoveryService
 from cloudsprocket.services.provider_actions import ProviderAdapter, create_provider_adapters
 from cloudsprocket.services.url_tester import BackgroundUrlValidator, UrlValidationResult, analyse_url
+
+AWS_S3_MULTIPART_THRESHOLD_BYTES = 8 * 1024 * 1024
 
 
 class DesktopIntegration(Protocol):
@@ -329,6 +332,100 @@ class CloudSprocketController(QObject):
     def can_validate_aws_s3_test_url(self) -> bool:
         return self.can_analyse_aws_s3_test_url() and self._session_state.command_state != CommandState.RUNNING
 
+    def can_upload_aws_s3_file(self) -> bool:
+        available, _reason = self.aws_s3_availability()
+        if not available or self._session_state.command_state == CommandState.RUNNING:
+            return False
+        state = self._session_state.aws_s3_workspace
+        source_path = self._aws_s3_upload_source_file()
+        return (
+            state.selected_bucket_name is not None
+            and source_path is not None
+            and source_path.is_file()
+            and bool(state.upload_object_key.strip())
+        )
+
+    def aws_s3_upload_detail_fields(self) -> tuple[DetailField, ...]:
+        state = self._session_state.aws_s3_workspace
+        fields = [
+            DetailField(
+                label="Bucket",
+                value=state.selected_bucket_name or "Select a bucket to enable uploads.",
+            )
+        ]
+
+        source_path = self._aws_s3_upload_source_file()
+        if state.upload_source_path:
+            fields.append(DetailField(label="Source File", value=state.upload_source_path))
+        else:
+            fields.append(DetailField(label="Source File", value="Choose a local file to upload."))
+
+        if source_path is not None and source_path.exists() and source_path.is_file():
+            file_size = source_path.stat().st_size
+            fields.append(DetailField(label="File Size", value=self._format_s3_size(file_size)))
+            fields.append(
+                DetailField(
+                    label="Transfer Mode",
+                    value=self._aws_s3_upload_mode_label(file_size),
+                )
+            )
+            fields.append(
+                DetailField(
+                    label="Multipart Threshold",
+                    value="8 MiB (AWS CLI default multipart threshold)",
+                )
+            )
+        elif state.upload_source_path:
+            fields.append(DetailField(label="File Status", value="The selected file is not available."))
+
+        if state.upload_object_key:
+            fields.append(DetailField(label="Object Key", value=state.upload_object_key))
+        else:
+            fields.append(DetailField(label="Object Key", value="Set the destination object key."))
+
+        if state.selected_bucket_name and state.upload_object_key:
+            fields.append(
+                DetailField(
+                    label="Destination URI",
+                    value=f"s3://{state.selected_bucket_name}/{state.upload_object_key}",
+                )
+            )
+        if state.prefix_filter:
+            fields.append(DetailField(label="Current Prefix Filter", value=state.prefix_filter))
+        return tuple(fields)
+
+    def set_aws_s3_upload_source_path(self, source_path: str) -> bool:
+        normalised = str(Path(source_path.strip()).expanduser()) if source_path.strip() else ""
+        state = self._session_state.aws_s3_workspace
+        if normalised == state.upload_source_path:
+            return False
+        state.upload_source_path = normalised
+        if normalised and not state.upload_object_key:
+            state.upload_object_key = self._default_aws_s3_upload_object_key(normalised)
+        self._refresh_aws_s3_upload_status()
+        self.state_changed.emit()
+        return True
+
+    def clear_aws_s3_upload_selection(self) -> bool:
+        state = self._session_state.aws_s3_workspace
+        if not state.upload_source_path and not state.upload_object_key:
+            return False
+        state.upload_source_path = ""
+        state.upload_object_key = ""
+        self._refresh_aws_s3_upload_status()
+        self.state_changed.emit()
+        return True
+
+    def set_aws_s3_upload_object_key(self, object_key: str) -> bool:
+        normalised = object_key.strip().replace("\\", "/").lstrip("/")
+        state = self._session_state.aws_s3_workspace
+        if normalised == state.upload_object_key:
+            return False
+        state.upload_object_key = normalised
+        self._refresh_aws_s3_upload_status()
+        self.state_changed.emit()
+        return True
+
     def set_aws_s3_prefix_filter(self, prefix: str) -> bool:
         normalised_prefix = prefix.strip()
         state = self._session_state.aws_s3_workspace
@@ -342,6 +439,7 @@ class CloudSprocketController(QObject):
             state.object_status_message = f"Prefix filter active: {normalised_prefix}"
         else:
             state.object_status_message = "Select an object to inspect its metadata."
+        self._refresh_aws_s3_upload_status()
         self.state_changed.emit()
         return True
 
@@ -505,6 +603,51 @@ class CloudSprocketController(QObject):
             return False
         return self._start_aws_s3_object_metadata_refresh(bucket_name, object_key)
 
+    def upload_aws_s3_file(self) -> bool:
+        available, reason = self.aws_s3_availability()
+        state = self._session_state.aws_s3_workspace
+        if not available:
+            state.upload_status_message = reason
+            self._append_log(LogLevel.WARNING, reason, action_id="aws-s3-upload")
+            self.state_changed.emit()
+            return False
+        if self._session_state.command_state == CommandState.RUNNING:
+            message = "Wait for the current command to finish before starting an upload."
+            state.upload_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-upload")
+            self.state_changed.emit()
+            return False
+
+        bucket_name = state.selected_bucket_name
+        if bucket_name is None:
+            message = "Select an S3 bucket before uploading a file."
+            state.upload_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-upload")
+            self.state_changed.emit()
+            return False
+
+        source_path = self._aws_s3_upload_source_file()
+        if source_path is None or not source_path.exists() or not source_path.is_file():
+            message = "Choose a local file that exists before uploading."
+            state.upload_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-upload")
+            self.state_changed.emit()
+            return False
+
+        object_key = state.upload_object_key.strip()
+        if not object_key:
+            message = "Set the destination object key before uploading."
+            state.upload_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-upload")
+            self.state_changed.emit()
+            return False
+
+        file_size = source_path.stat().st_size
+        cached_region = state.bucket_regions.get(bucket_name, "").strip()
+        if cached_region:
+            return self._start_aws_s3_upload(bucket_name, source_path, object_key, file_size, cached_region)
+        return self._start_aws_s3_upload_bucket_region_lookup(bucket_name, source_path, object_key, file_size)
+
     def generate_aws_s3_signed_url(self) -> bool:
         bucket_name = self._session_state.aws_s3_workspace.selected_bucket_name
         object_key = self._session_state.aws_s3_workspace.selected_object_key
@@ -586,6 +729,7 @@ class CloudSprocketController(QObject):
         state.bucket_status_message = (
             f"Selected {bucket_name}. Loading bucket contents..."
         )
+        self._refresh_aws_s3_upload_status()
         return self._start_aws_s3_object_refresh(bucket_name)
 
     def select_aws_s3_object(self, object_key: str) -> bool:
@@ -857,7 +1001,7 @@ class CloudSprocketController(QObject):
         self._command_runner.run(spec, on_finished)
         return True
 
-    def _start_aws_s3_object_refresh(self, bucket_name: str) -> bool:
+    def _start_aws_s3_object_refresh(self, bucket_name: str, *, preferred_object_key: str | None = None) -> bool:
         available, reason = self.aws_s3_availability()
         if not available:
             self._session_state.aws_s3_workspace.bucket_status_message = reason
@@ -879,7 +1023,7 @@ class CloudSprocketController(QObject):
         prefix_filter = state.prefix_filter
         state.selected_bucket_name = bucket_name
         state.objects = ()
-        state.selected_object_key = None
+        state.selected_object_key = preferred_object_key
         state.object_metadata = ()
         state.object_status_message = (
             f"Prefix filter active: {prefix_filter}"
@@ -966,6 +1110,126 @@ class CloudSprocketController(QObject):
             label=f"S3 Object Metadata for {object_key}",
             spec=spec,
             on_finished=lambda result: self._finish_aws_s3_object_metadata_refresh(bucket_name, object_key, result),
+        )
+
+    def _start_aws_s3_upload(
+        self,
+        bucket_name: str,
+        source_path: Path,
+        object_key: str,
+        file_size: int,
+        bucket_region: str,
+    ) -> bool:
+        available, reason = self.aws_s3_availability()
+        if not available:
+            self._session_state.aws_s3_workspace.upload_status_message = reason
+            self._append_log(LogLevel.WARNING, reason, action_id="aws-s3-upload")
+            self.state_changed.emit()
+            return False
+        if self._session_state.command_state == CommandState.RUNNING:
+            message = "Wait for the current command to finish before starting an upload."
+            self._session_state.aws_s3_workspace.upload_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-upload")
+            self.state_changed.emit()
+            return False
+
+        profile = self.locked_profile()
+        if profile is None:
+            return False
+
+        state = self._session_state.aws_s3_workspace
+        state.selected_bucket_name = bucket_name
+        state.upload_source_path = str(source_path)
+        state.upload_object_key = object_key
+        state.upload_status_message = (
+            f"Uploading {source_path.name} to s3://{bucket_name}/{object_key} "
+            f"using {self._aws_s3_upload_mode_label(file_size)}..."
+        )
+        spec = CommandSpec(
+            action_id="aws-s3-upload",
+            execution_type=CommandExecutionType.PROCESS,
+            program="aws",
+            args=(
+                "s3",
+                "cp",
+                str(source_path),
+                f"s3://{bucket_name}/{object_key}",
+                "--profile",
+                profile.profile_id,
+                "--region",
+                bucket_region,
+                "--only-show-errors",
+                "--no-progress",
+                "--no-cli-pager",
+            ),
+            summary=f"Upload {source_path.name} to {bucket_name}/{object_key}",
+        )
+        return self._run_process_command(
+            action_id="aws-s3-upload",
+            label=f"S3 Upload for {source_path.name}",
+            spec=spec,
+            on_finished=lambda result: self._finish_aws_s3_upload(bucket_name, object_key, file_size, result),
+        )
+
+    def _start_aws_s3_upload_bucket_region_lookup(
+        self,
+        bucket_name: str,
+        source_path: Path,
+        object_key: str,
+        file_size: int,
+    ) -> bool:
+        available, reason = self.aws_s3_availability()
+        if not available:
+            self._session_state.aws_s3_workspace.upload_status_message = reason
+            self._append_log(LogLevel.WARNING, reason, action_id="aws-s3-upload-region")
+            self.state_changed.emit()
+            return False
+        if self._session_state.command_state == CommandState.RUNNING:
+            message = "Wait for the current command to finish before resolving the bucket region."
+            self._session_state.aws_s3_workspace.upload_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-s3-upload-region")
+            self.state_changed.emit()
+            return False
+
+        profile = self.locked_profile()
+        if profile is None:
+            return False
+
+        state = self._session_state.aws_s3_workspace
+        state.selected_bucket_name = bucket_name
+        state.upload_source_path = str(source_path)
+        state.upload_object_key = object_key
+        state.upload_status_message = f"Resolving the bucket region for upload into {bucket_name}..."
+        spec = CommandSpec(
+            action_id="aws-s3-upload-region",
+            execution_type=CommandExecutionType.PROCESS,
+            program="aws",
+            args=(
+                "s3api",
+                "head-bucket",
+                "--bucket",
+                bucket_name,
+                "--profile",
+                profile.profile_id,
+                "--query",
+                "BucketRegion",
+                "--output",
+                "text",
+                "--no-cli-pager",
+            ),
+            summary=f"Resolve the bucket region for upload into {bucket_name}",
+        )
+        return self._run_process_command(
+            action_id="aws-s3-upload-region",
+            label=f"S3 Upload Region for {bucket_name}",
+            spec=spec,
+            on_finished=lambda result: self._finish_aws_s3_upload_bucket_region_lookup(
+                bucket_name,
+                source_path,
+                object_key,
+                file_size,
+                result,
+            ),
         )
 
     def _start_aws_s3_signed_url_generation(
@@ -1102,6 +1366,7 @@ class CloudSprocketController(QObject):
             state.object_metadata = ()
             state.object_status_message = failure_message
             self._reset_s3_signed_url_state(state, reason=failure_message)
+            self._refresh_aws_s3_upload_status()
             self._append_log(LogLevel.ERROR, failure_message, details=result.stderr or result.stdout, action_id="aws-s3-buckets")
             self.state_changed.emit()
             return
@@ -1140,6 +1405,7 @@ class CloudSprocketController(QObject):
             state.bucket_status_message = "No buckets were returned for this locked AWS session."
             state.object_status_message = "No object metadata is available."
             self._reset_s3_signed_url_state(state, reason="No signed URL is available.")
+            self._refresh_aws_s3_upload_status()
             self._append_log(LogLevel.SUCCESS, state.status_message, action_id="aws-s3-buckets")
             self.state_changed.emit()
             return
@@ -1157,6 +1423,7 @@ class CloudSprocketController(QObject):
             state.object_status_message = "Select an object to inspect its metadata."
         self._reset_s3_signed_url_state(state)
         state.bucket_status_message = f"Loading objects for {current_bucket_name}..."
+        self._refresh_aws_s3_upload_status()
         self._append_log(LogLevel.SUCCESS, state.status_message, action_id="aws-s3-buckets")
         self.state_changed.emit()
         self._start_aws_s3_object_refresh(current_bucket_name)
@@ -1261,6 +1528,88 @@ class CloudSprocketController(QObject):
             action_id="aws-s3-object-details",
         )
         self.state_changed.emit()
+
+    def _finish_aws_s3_upload(
+        self,
+        bucket_name: str,
+        object_key: str,
+        file_size: int,
+        result: CommandResult,
+    ) -> None:
+        self._session_state.command_state = CommandState.IDLE
+        self._session_state.running_action_id = None
+        state = self._session_state.aws_s3_workspace
+        state.selected_bucket_name = bucket_name
+        state.upload_object_key = object_key
+        source_path = self._aws_s3_upload_source_file()
+        source_label = source_path.name if source_path is not None else object_key
+        destination_uri = f"s3://{bucket_name}/{object_key}"
+        mode_label = self._aws_s3_upload_mode_label(file_size)
+        if not result.succeeded:
+            failure_message = self._command_failure_summary(
+                result,
+                f"Upload failed for {source_label}.",
+            )
+            state.upload_status_message = failure_message
+            self._append_log(
+                LogLevel.ERROR,
+                failure_message,
+                details=result.stderr or result.stdout,
+                action_id="aws-s3-upload",
+            )
+            self.state_changed.emit()
+            return
+
+        state.upload_status_message = f"Uploaded {source_label} to {destination_uri} using {mode_label}."
+        self._append_log(
+            LogLevel.SUCCESS,
+            state.upload_status_message,
+            details=f"{state.upload_source_path}\n{destination_uri}",
+            action_id="aws-s3-upload",
+        )
+        self.state_changed.emit()
+        if self._aws_s3_prefix_allows_object(object_key):
+            self._start_aws_s3_object_refresh(bucket_name, preferred_object_key=object_key)
+            return
+        state.bucket_status_message = (
+            f"Upload completed, but {object_key} is outside the current prefix filter."
+        )
+        self.state_changed.emit()
+
+    def _finish_aws_s3_upload_bucket_region_lookup(
+        self,
+        bucket_name: str,
+        source_path: Path,
+        object_key: str,
+        file_size: int,
+        result: CommandResult,
+    ) -> None:
+        self._session_state.command_state = CommandState.IDLE
+        self._session_state.running_action_id = None
+        if not result.succeeded:
+            failure_message = self._command_failure_summary(
+                result,
+                f"Bucket region lookup failed for upload into {bucket_name}.",
+            )
+            self._session_state.aws_s3_workspace.upload_status_message = failure_message
+            self._append_log(
+                LogLevel.ERROR,
+                failure_message,
+                details=result.stderr or result.stdout,
+                action_id="aws-s3-upload-region",
+            )
+            self.state_changed.emit()
+            return
+
+        bucket_region = (result.stdout or "").strip() or "us-east-1"
+        self._session_state.aws_s3_workspace.bucket_regions[bucket_name] = bucket_region
+        self._append_log(
+            LogLevel.SUCCESS,
+            f"Resolved bucket region for upload into {bucket_name}: {bucket_region}.",
+            action_id="aws-s3-upload-region",
+        )
+        self.state_changed.emit()
+        self._start_aws_s3_upload(bucket_name, source_path, object_key, file_size, bucket_region)
 
     def _finish_aws_s3_signed_url_generation(
         self,
@@ -1373,6 +1722,8 @@ class CloudSprocketController(QObject):
         state.objects = ()
         state.selected_object_key = None
         state.object_metadata = ()
+        state.upload_source_path = ""
+        state.upload_object_key = ""
         state.signed_url = ""
         state.url_tester_input = ""
         state.url_tester_detail_fields = ()
@@ -1382,14 +1733,70 @@ class CloudSprocketController(QObject):
             state.status_message = f"S3 workspace ready for {profile_id}. Refresh buckets to begin."
             state.bucket_status_message = "Refresh buckets to load S3 buckets."
             state.object_status_message = "Select an object to inspect its metadata."
+            state.upload_status_message = "Select a bucket and choose a local file to upload."
             state.signed_url_status_message = "Select an object to generate a signed URL."
             state.url_tester_status_message = "Paste any URL to inspect it or validate it."
             return
         state.status_message = reason
         state.bucket_status_message = reason
         state.object_status_message = reason
+        state.upload_status_message = reason
         state.signed_url_status_message = reason
         state.url_tester_status_message = reason
+
+    def _aws_s3_upload_source_file(self) -> Path | None:
+        source_path = self._session_state.aws_s3_workspace.upload_source_path.strip()
+        if not source_path:
+            return None
+        return Path(source_path).expanduser()
+
+    def _default_aws_s3_upload_object_key(self, source_path: str) -> str:
+        filename = Path(source_path).name
+        prefix_filter = self._session_state.aws_s3_workspace.prefix_filter.strip().strip("/")
+        if prefix_filter:
+            return f"{prefix_filter}/{filename}"
+        return filename
+
+    def _refresh_aws_s3_upload_status(self) -> None:
+        state = self._session_state.aws_s3_workspace
+        available, reason = self.aws_s3_availability()
+        if not available:
+            state.upload_status_message = reason
+            return
+        if state.selected_bucket_name is None:
+            state.upload_status_message = "Select a bucket before uploading a file."
+            return
+        source_path = self._aws_s3_upload_source_file()
+        if source_path is None:
+            state.upload_status_message = f"Choose a local file to upload into {state.selected_bucket_name}."
+            return
+        if not source_path.exists() or not source_path.is_file():
+            state.upload_status_message = "The selected upload file is not available."
+            return
+        if not state.upload_object_key:
+            state.upload_status_message = "Set the destination object key before uploading."
+            return
+        destination_uri = f"s3://{state.selected_bucket_name}/{state.upload_object_key}"
+        file_size = source_path.stat().st_size
+        upload_mode = self._aws_s3_upload_mode_label(file_size)
+        if self._aws_s3_prefix_allows_object(state.upload_object_key):
+            state.upload_status_message = f"Ready to upload to {destination_uri} using {upload_mode}."
+            return
+        state.upload_status_message = (
+            f"Ready to upload to {destination_uri} using {upload_mode}. "
+            "The current prefix filter will hide the new object after upload."
+        )
+
+    def _aws_s3_upload_mode_label(self, file_size: int) -> str:
+        if file_size > AWS_S3_MULTIPART_THRESHOLD_BYTES:
+            return "multipart upload via AWS CLI"
+        return "single-file upload via AWS CLI"
+
+    def _aws_s3_prefix_allows_object(self, object_key: str) -> bool:
+        prefix_filter = self._session_state.aws_s3_workspace.prefix_filter
+        if not prefix_filter:
+            return True
+        return object_key.startswith(prefix_filter)
 
     def _command_failure_summary(self, result: CommandResult, fallback: str) -> str:
         return result.stderr.strip() or result.stdout.strip() or result.summary or fallback

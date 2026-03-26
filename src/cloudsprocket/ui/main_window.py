@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
+    QFileDialog,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -98,6 +101,13 @@ class MainWindow(QMainWindow):
         self._workspace_s3_status_label = QLabel()
         self._workspace_s3_bucket_status_label = QLabel()
         self._workspace_s3_selected_bucket_label = QLabel()
+        self._workspace_s3_upload_status_label = QLabel()
+        self._workspace_s3_upload_source_input = QLineEdit()
+        self._workspace_s3_upload_browse_button = QPushButton("Choose File")
+        self._workspace_s3_upload_clear_button = QPushButton("Clear")
+        self._workspace_s3_upload_key_input = QLineEdit()
+        self._workspace_s3_upload_button = QPushButton("Upload File")
+        self._workspace_s3_upload_detail_tree = QTreeWidget()
         self._workspace_s3_prefix_input = QLineEdit()
         self._workspace_s3_apply_prefix_button = QPushButton("Apply Prefix")
         self._workspace_s3_clear_prefix_button = QPushButton("Clear Prefix")
@@ -134,6 +144,11 @@ class MainWindow(QMainWindow):
         self._workspace_s3_refresh_buckets_button.clicked.connect(self._on_s3_refresh_buckets_clicked)
         self._workspace_s3_refresh_bucket_button.clicked.connect(self._on_s3_refresh_bucket_clicked)
         self._workspace_s3_copy_uri_button.clicked.connect(self._on_s3_copy_uri_clicked)
+        self._workspace_s3_upload_browse_button.clicked.connect(self._on_s3_upload_browse_clicked)
+        self._workspace_s3_upload_clear_button.clicked.connect(self._on_s3_upload_clear_clicked)
+        self._workspace_s3_upload_source_input.textChanged.connect(self._on_s3_upload_source_text_changed)
+        self._workspace_s3_upload_key_input.textChanged.connect(self._on_s3_upload_key_text_changed)
+        self._workspace_s3_upload_button.clicked.connect(self._on_s3_upload_clicked)
         self._workspace_s3_signed_url_duration_spin.valueChanged.connect(self._on_s3_signed_url_duration_changed)
         self._workspace_s3_signed_url_duration_unit_combo.currentTextChanged.connect(self._on_s3_signed_url_unit_changed)
         self._workspace_s3_generate_signed_url_button.clicked.connect(self._on_s3_generate_signed_url_clicked)
@@ -248,6 +263,26 @@ class MainWindow(QMainWindow):
     @property
     def workspace_s3_bucket_status_label(self) -> QLabel:
         return self._workspace_s3_bucket_status_label
+
+    @property
+    def workspace_s3_upload_status_label(self) -> QLabel:
+        return self._workspace_s3_upload_status_label
+
+    @property
+    def workspace_s3_upload_source_input(self) -> QLineEdit:
+        return self._workspace_s3_upload_source_input
+
+    @property
+    def workspace_s3_upload_key_input(self) -> QLineEdit:
+        return self._workspace_s3_upload_key_input
+
+    @property
+    def workspace_s3_upload_button(self) -> QPushButton:
+        return self._workspace_s3_upload_button
+
+    @property
+    def workspace_s3_upload_detail_tree(self) -> QTreeWidget:
+        return self._workspace_s3_upload_detail_tree
 
     @property
     def workspace_s3_selected_bucket_label(self) -> QLabel:
@@ -739,6 +774,11 @@ class MainWindow(QMainWindow):
             "padding: 10px 12px; background: #f7fafc; border: 1px solid #8ea3b7; "
             "border-radius: 10px; font-size: 13px; font-weight: 700; color: #17324d;"
         )
+        self._workspace_s3_upload_status_label.setWordWrap(True)
+        self._workspace_s3_upload_status_label.setStyleSheet(self._info_card_style())
+        self._workspace_s3_upload_source_input.setPlaceholderText("Choose or paste the local file path.")
+        self._workspace_s3_upload_key_input.setPlaceholderText("Object key inside the selected bucket.")
+        self._set_button_tone(self._workspace_s3_upload_button, "primary")
         self._set_button_tone(self._workspace_s3_refresh_buckets_button, "primary")
         self._set_button_tone(self._workspace_s3_generate_signed_url_button, "primary")
         self._set_button_tone(self._workspace_s3_validate_url_button, "primary")
@@ -768,6 +808,15 @@ class MainWindow(QMainWindow):
         self._workspace_s3_url_tester_details_tree.header().setSectionResizeMode(0, QHeaderView.Interactive)
         self._workspace_s3_url_tester_details_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
         self._workspace_s3_url_tester_details_tree.setColumnWidth(0, 220)
+        self._workspace_s3_upload_detail_tree.setColumnCount(2)
+        self._workspace_s3_upload_detail_tree.setHeaderLabels(["Field", "Value"])
+        self._configure_data_tree(self._workspace_s3_upload_detail_tree)
+        self._workspace_s3_upload_detail_tree.setUniformRowHeights(False)
+        self._workspace_s3_upload_detail_tree.setWordWrap(True)
+        self._workspace_s3_upload_detail_tree.header().setStretchLastSection(False)
+        self._workspace_s3_upload_detail_tree.header().setSectionResizeMode(0, QHeaderView.Interactive)
+        self._workspace_s3_upload_detail_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+        self._workspace_s3_upload_detail_tree.setColumnWidth(0, 220)
 
         self._workspace_s3_bucket_tree.setColumnCount(2)
         self._workspace_s3_bucket_tree.setHeaderLabels(["Bucket", "Created"])
@@ -831,6 +880,24 @@ class MainWindow(QMainWindow):
         object_details_layout.setContentsMargins(0, 0, 0, 0)
         object_details_layout.addWidget(self._workspace_s3_object_details_tree, 1)
 
+        upload_page = QWidget()
+        upload_layout = QVBoxLayout(upload_page)
+        upload_layout.setContentsMargins(0, 0, 0, 0)
+        upload_layout.setSpacing(12)
+        upload_source_layout = QHBoxLayout()
+        upload_source_layout.addWidget(QLabel("Source"))
+        upload_source_layout.addWidget(self._workspace_s3_upload_source_input, 1)
+        upload_source_layout.addWidget(self._workspace_s3_upload_browse_button)
+        upload_source_layout.addWidget(self._workspace_s3_upload_clear_button)
+        upload_key_layout = QHBoxLayout()
+        upload_key_layout.addWidget(QLabel("Object Key"))
+        upload_key_layout.addWidget(self._workspace_s3_upload_key_input, 1)
+        upload_key_layout.addWidget(self._workspace_s3_upload_button)
+        upload_layout.addWidget(self._workspace_s3_upload_status_label)
+        upload_layout.addLayout(upload_source_layout)
+        upload_layout.addLayout(upload_key_layout)
+        upload_layout.addWidget(self._workspace_s3_upload_detail_tree, 1)
+
         signed_url_page = QWidget()
         signed_url_layout = QVBoxLayout(signed_url_page)
         signed_url_layout.setContentsMargins(0, 0, 0, 0)
@@ -862,6 +929,7 @@ class MainWindow(QMainWindow):
 
         tools_tabs = QTabWidget()
         tools_tabs.setDocumentMode(True)
+        tools_tabs.addTab(upload_page, "Upload")
         tools_tabs.addTab(object_details_page, "Object Details")
         tools_tabs.addTab(signed_url_page, "Signed URL")
         tools_tabs.addTab(url_tester_page, "URL Tester")
@@ -1297,6 +1365,7 @@ class MainWindow(QMainWindow):
         available, reason = self._controller.aws_s3_availability()
         self._workspace_s3_status_label.setText(state.status_message or reason)
         self._workspace_s3_bucket_status_label.setText(state.bucket_status_message)
+        self._workspace_s3_upload_status_label.setText(state.upload_status_message)
         if state.selected_bucket_name:
             object_count = len(state.objects)
             object_label = "object" if object_count == 1 else "objects"
@@ -1317,6 +1386,10 @@ class MainWindow(QMainWindow):
             )
         if self._workspace_s3_prefix_input.text() != state.prefix_filter:
             self._workspace_s3_prefix_input.setText(state.prefix_filter)
+        if self._workspace_s3_upload_source_input.text() != state.upload_source_path:
+            self._workspace_s3_upload_source_input.setText(state.upload_source_path)
+        if self._workspace_s3_upload_key_input.text() != state.upload_object_key:
+            self._workspace_s3_upload_key_input.setText(state.upload_object_key)
         bucket_selected = state.selected_bucket_name is not None
         self._workspace_s3_refresh_buckets_button.setEnabled(self._controller.can_refresh_aws_s3_buckets())
         self._workspace_s3_refresh_bucket_button.setEnabled(self._controller.can_refresh_aws_s3_objects())
@@ -1325,6 +1398,11 @@ class MainWindow(QMainWindow):
         self._workspace_s3_apply_prefix_button.setEnabled(available and bucket_selected)
         self._workspace_s3_clear_prefix_button.setEnabled(available and bucket_selected and bool(state.prefix_filter))
         self._workspace_s3_copy_uri_button.setEnabled(state.selected_bucket_name is not None)
+        self._workspace_s3_upload_source_input.setEnabled(available)
+        self._workspace_s3_upload_key_input.setEnabled(available)
+        self._workspace_s3_upload_browse_button.setEnabled(available)
+        self._workspace_s3_upload_clear_button.setEnabled(available and bool(state.upload_source_path or state.upload_object_key))
+        self._workspace_s3_upload_button.setEnabled(self._controller.can_upload_aws_s3_file())
         duration_max = 7 if state.signed_url_duration_unit.value == "days" else 168
         self._workspace_s3_signed_url_duration_spin.blockSignals(True)
         self._workspace_s3_signed_url_duration_spin.setRange(1, duration_max)
@@ -1355,6 +1433,14 @@ class MainWindow(QMainWindow):
         self._workspace_s3_bucket_tree.blockSignals(False)
         self._workspace_s3_bucket_tree.resizeColumnToContents(0)
         self._workspace_s3_bucket_tree.resizeColumnToContents(1)
+
+        self._workspace_s3_upload_detail_tree.clear()
+        for field in self._controller.aws_s3_upload_detail_fields():
+            item = QTreeWidgetItem([field.label, field.value])
+            item.setToolTip(0, field.label)
+            item.setToolTip(1, field.value)
+            self._workspace_s3_upload_detail_tree.addTopLevelItem(item)
+        self._workspace_s3_upload_detail_tree.resizeColumnToContents(0)
 
         self._workspace_s3_object_tree.blockSignals(True)
         self._workspace_s3_object_tree.clear()
@@ -1577,6 +1663,37 @@ class MainWindow(QMainWindow):
 
     def _on_s3_copy_uri_clicked(self) -> None:
         self._controller.copy_aws_s3_uri()
+
+    def _on_s3_upload_browse_clicked(self) -> None:
+        current_path = self._workspace_s3_upload_source_input.text().strip()
+        start_path = current_path
+        if current_path:
+            current_file = Path(current_path)
+            if current_file.exists() and current_file.is_file():
+                start_path = str(current_file.parent)
+        selected_path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Choose a file to upload",
+            start_path,
+        )
+        if selected_path:
+            self._controller.set_aws_s3_upload_source_path(selected_path)
+
+    def _on_s3_upload_clear_clicked(self) -> None:
+        self._controller.clear_aws_s3_upload_selection()
+
+    def _on_s3_upload_source_text_changed(self, value: str) -> None:
+        if self._rendering_state:
+            return
+        self._controller.set_aws_s3_upload_source_path(value)
+
+    def _on_s3_upload_key_text_changed(self, value: str) -> None:
+        if self._rendering_state:
+            return
+        self._controller.set_aws_s3_upload_object_key(value)
+
+    def _on_s3_upload_clicked(self) -> None:
+        self._controller.upload_aws_s3_file()
 
     def _on_s3_signed_url_duration_changed(self, value: int) -> None:
         self._controller.set_aws_s3_signed_url_duration_value(value)
