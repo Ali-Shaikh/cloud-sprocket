@@ -6,11 +6,25 @@ on:
       - dev
       - main
   pull_request:
+    branches:
+      - dev
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-and-build:
     name: Test and Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      QT_QPA_PLATFORM: offscreen
     strategy:
       fail-fast: false
       matrix:
@@ -24,12 +38,13 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.14"
+          cache: pip
 
       - name: Install dependencies
         run: |
@@ -37,16 +52,22 @@ jobs:
           python -m pip install -e .[dev,build]
 
       - name: Run test suite
-        env:
-          QT_QPA_PLATFORM: offscreen
         run: python -m pytest --cache-clear
 
-      - name: Build desktop artifact
-        run: python -m cloudsprocket.build
+      - name: Build desktop artifact on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/build.ps1
+
+      - name: Build desktop artifact on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: ./scripts/build.sh
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_path }}
           if-no-files-found: error
+          retention-days: 14
