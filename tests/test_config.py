@@ -10,12 +10,14 @@ def test_settings_use_override_paths(tmp_path: Path) -> None:
     config_dir = tmp_path / "config-root"
 
     settings = AppSettings.from_env(
+        platform_name="windows",
         home_dir=home_dir,
         appdata_dir=appdata_dir,
         local_appdata_dir=local_appdata_dir,
         config_dir=config_dir,
     )
 
+    assert settings.platform_name == "windows"
     assert settings.aws_config_path == home_dir / ".aws" / "config"
     assert settings.azure_profile_path == home_dir / ".azure" / "azureProfile.json"
     assert settings.gcloud_config_dir == appdata_dir / "gcloud" / "configurations"
@@ -51,3 +53,4 @@ def test_settings_create_runtime_dirs(tmp_path: Path) -> None:
 
     assert settings.config_dir.is_dir()
     assert settings.app_profile_dir.is_dir()
+
