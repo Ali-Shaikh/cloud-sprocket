@@ -7,6 +7,7 @@ from cloudsprocket.services.profile_discovery import ProfileDiscoveryService
 
 def test_auth_status_prefers_local_config(tmp_path: Path) -> None:
     settings = AppSettings.from_env(
+        env={},
         home_dir=tmp_path / "home",
         appdata_dir=tmp_path / "appdata",
         local_appdata_dir=tmp_path / "local-appdata",
@@ -28,6 +29,7 @@ def test_auth_status_prefers_local_config(tmp_path: Path) -> None:
 
 def test_profile_discovery_collects_aws_azure_and_gcp(tmp_path: Path) -> None:
     settings = AppSettings.from_env(
+        env={},
         home_dir=tmp_path / "home",
         appdata_dir=tmp_path / "appdata",
         local_appdata_dir=tmp_path / "local-appdata",

@@ -10,6 +10,7 @@ def test_settings_use_override_paths(tmp_path: Path) -> None:
     config_dir = tmp_path / "config-root"
 
     settings = AppSettings.from_env(
+        env={},
         platform_name="windows",
         home_dir=home_dir,
         appdata_dir=appdata_dir,
@@ -43,6 +44,7 @@ def test_settings_use_macos_defaults(tmp_path: Path) -> None:
 
 def test_settings_create_runtime_dirs(tmp_path: Path) -> None:
     settings = AppSettings.from_env(
+        env={},
         home_dir=tmp_path / "home",
         appdata_dir=tmp_path / "appdata",
         local_appdata_dir=tmp_path / "local-appdata",
@@ -53,4 +55,3 @@ def test_settings_create_runtime_dirs(tmp_path: Path) -> None:
 
     assert settings.config_dir.is_dir()
     assert settings.app_profile_dir.is_dir()
-
