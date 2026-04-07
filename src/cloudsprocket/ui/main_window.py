@@ -417,9 +417,8 @@ class MainWindow(QMainWindow):
         about_action = QAction("About", self)
         about_action.triggered.connect(self._show_about_dialog)
 
-        if FIF is not None:
-            refresh_action.setIcon(FIF.SYNC.icon())
-            about_action.setIcon(FIF.INFO.icon())
+        self._set_action_icon(refresh_action, "SYNC")
+        self._set_action_icon(about_action, "INFO")
 
         menu_bar = self.menuBar()
         menu_bar.addAction(refresh_action)
@@ -653,6 +652,32 @@ class MainWindow(QMainWindow):
         button.style().unpolish(button)
         button.style().polish(button)
 
+    def _fluent_icon(self, icon_name: str):
+        if FIF is None:
+            return None
+        candidate = getattr(FIF, icon_name, None)
+        if candidate is None:
+            return None
+        try:
+            return candidate.icon()
+        except Exception:
+            return None
+
+    def _set_action_icon(self, action: QAction, icon_name: str) -> None:
+        icon = self._fluent_icon(icon_name)
+        if icon is not None:
+            action.setIcon(icon)
+
+    def _set_button_icon(self, button: QPushButton, icon_name: str) -> None:
+        icon = self._fluent_icon(icon_name)
+        if icon is not None:
+            button.setIcon(icon)
+
+    def _set_tab_icon(self, tabs: QTabWidget, index: int, icon_name: str) -> None:
+        icon = self._fluent_icon(icon_name)
+        if icon is not None:
+            tabs.setTabIcon(index, icon)
+
     def _build_header(self) -> QHBoxLayout:
         self._brand_eyebrow_label.setStyleSheet(
             "font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: #2a5d87;"
@@ -675,8 +700,7 @@ class MainWindow(QMainWindow):
         )
 
         refresh_button = QPushButton("Refresh Snapshot")
-        if FIF is not None:
-            refresh_button.setIcon(FIF.SYNC.icon())
+        self._set_button_icon(refresh_button, "SYNC")
         self._set_button_tone(refresh_button, "primary")
         refresh_button.clicked.connect(lambda: self._controller.trigger_action("refresh"))
         refresh_button.setFixedWidth(168)
@@ -834,15 +858,21 @@ class MainWindow(QMainWindow):
         activity_layout.addWidget(self._build_log_panel(), 1)
 
         self._primary_sections_tabs.setDocumentMode(True)
-        self._primary_sections_tabs.addTab(control_page, "Control")
-        self._primary_sections_tabs.addTab(activity_page, "Activity")
+        self._primary_sections_tabs.setTabPosition(QTabWidget.West)
+        control_index = self._primary_sections_tabs.addTab(control_page, "Control")
+        activity_index = self._primary_sections_tabs.addTab(activity_page, "Activity")
+        self._set_tab_icon(self._primary_sections_tabs, control_index, "HOME")
+        self._set_tab_icon(self._primary_sections_tabs, activity_index, "HISTORY")
         return self._primary_sections_tabs
 
     def _build_session_page(self) -> QWidget:
         rail_tabs = QTabWidget()
         rail_tabs.setDocumentMode(True)
-        rail_tabs.addTab(self._build_provider_panel(), "Providers")
-        rail_tabs.addTab(self._build_profile_panel(), "Profiles")
+        rail_tabs.setTabPosition(QTabWidget.West)
+        provider_index = rail_tabs.addTab(self._build_provider_panel(), "Providers")
+        profile_index = rail_tabs.addTab(self._build_profile_panel(), "Profiles")
+        self._set_tab_icon(rail_tabs, provider_index, "IOT")
+        self._set_tab_icon(rail_tabs, profile_index, "PEOPLE")
 
         self._session_tabs.setDocumentMode(True)
         self._session_tabs.addTab(self._build_overview_tab(), "Profile")
@@ -872,6 +902,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(16)
         layout.addWidget(self._build_workspace_header())
         self._workspace_tabs.setDocumentMode(True)
+        self._workspace_tabs.setTabPosition(QTabWidget.West)
         layout.addWidget(self._workspace_tabs, 1)
         return page
 
@@ -1583,7 +1614,10 @@ class MainWindow(QMainWindow):
             else:
                 page = self._build_workspace_tab(tab)
             page.setProperty("workspace_tab_id", tab.tab_id)
-            self._workspace_tabs.addTab(page, tab.label)
+            tab_index = self._workspace_tabs.addTab(page, tab.label)
+            icon_name = self._workspace_tab_icon_name(tab.tab_id)
+            if icon_name is not None:
+                self._set_tab_icon(self._workspace_tabs, tab_index, icon_name)
             if tab.tab_id == current_tab_id:
                 next_index = index
         if self._workspace_tabs.count():
@@ -1801,6 +1835,9 @@ class MainWindow(QMainWindow):
     def _render_action_button(self, action: ProviderAction, *, busy: bool) -> QPushButton:
         button = QPushButton(action.label)
         button.setObjectName(f"action-{action.action_id}")
+        icon_name = self._action_icon_name(action.action_id)
+        if icon_name is not None:
+            self._set_button_icon(button, icon_name)
         button.clicked.connect(
             lambda _checked=False, action_id=action.action_id: self._controller.trigger_action(action_id)
         )
@@ -1810,6 +1847,29 @@ class MainWindow(QMainWindow):
             tooltip = f"{action.description}\n{action.disabled_reason}".strip()
         button.setToolTip(tooltip)
         return button
+
+    def _action_icon_name(self, action_id: str) -> str | None:
+        icon_map = {
+            "refresh": "SYNC",
+            "whoami": "CONTACT",
+            "sso-login": "LINK",
+            "logout": "POWER_BUTTON",
+            "activate": "PLAY_SOLID",
+            "open-config": "FOLDER",
+            "copy-export": "COPY",
+        }
+        return icon_map.get(action_id)
+
+    def _workspace_tab_icon_name(self, tab_id: str) -> str | None:
+        icon_map = {
+            "overview": "HOME",
+            "s3": "CLOUD",
+            "ec2": "DEVELOPER_TOOLS",
+            "iam": "PEOPLE",
+            "cloudwatch": "HISTORY",
+            "actions": "ROBOT",
+        }
+        return icon_map.get(tab_id)
 
     def _render_logs(self, entries: tuple[LogEntry, ...] | list[LogEntry]) -> None:
         lines = []
@@ -2017,6 +2077,11 @@ class MainWindow(QMainWindow):
         tree.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.header().setHighlightSections(False)
+
+
+
+
+
 
 
 
