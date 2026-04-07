@@ -47,7 +47,7 @@ macOS for pushes to `dev` and `main`, as well as pull requests.
 
 The current shell includes:
 
-- an MIT-licensed repo setup
+- a GPLv3-licensed repo setup
 - a modular `src/` package layout
 - a branded desktop main window with provider summary, profile selection, details, auth methods, actions, and activity logs
 - auth/tooling probes for AWS, Azure, and GCP with AWS as the first fully actionable provider
@@ -57,3 +57,8 @@ The current shell includes:
 - a reproducible PyInstaller-based desktop build command
 - platform-aware defaults for Windows and macOS local config directories
 - tests covering the non-trivial pieces of the baseline
+
+## Licence
+
+CloudSprocket is licensed under the GNU General Public License v3.0.
+See [`LICENSE`](LICENSE) for the full text.
