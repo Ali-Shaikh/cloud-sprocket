@@ -242,6 +242,38 @@ def test_main_window_allows_resizing_detail_sections_and_field_columns(qapp, tmp
     assert window.detail_fields_tree.header().sectionResizeMode(1) == QHeaderView.Interactive
 
 
+def test_main_window_exposes_resizable_activity_log_splitter_controls(qapp, tmp_path: Path) -> None:
+    settings = AppSettings.from_env(
+        home_dir=tmp_path / "home",
+        appdata_dir=tmp_path / "appdata",
+        local_appdata_dir=tmp_path / "local-appdata",
+        config_dir=tmp_path / "config-root",
+    )
+    controller = CloudSprocketController(
+        settings=settings,
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(),
+        command_runner=NoopRunner(),
+        desktop_integration=FakeDesktopIntegration(),
+    )
+    window = MainWindow(settings=settings, controller=controller)
+    window.show()
+    qapp.processEvents()
+
+    assert window.body_root_splitter is not None
+    assert window.body_root_splitter.orientation() == Qt.Vertical
+    assert window.body_root_splitter.count() == 2
+    assert window.body_root_splitter.handleWidth() >= 12
+
+    window.body_root_splitter.setSizes([window.height() - 80, 60])
+    qapp.processEvents()
+    window.log_panel_reset_size_button.click()
+    qapp.processEvents()
+
+    sizes = window.body_root_splitter.sizes()
+    assert sizes[1] >= 180
+
+
 def test_main_window_theme_defines_focus_states_and_primary_button_tone(qapp, tmp_path: Path) -> None:
     settings = AppSettings.from_env(
         home_dir=tmp_path / "home",
@@ -815,3 +847,4 @@ def test_main_window_can_analyse_and_validate_a_pasted_url(qapp, tmp_path: Path)
         for index in range(window.workspace_s3_url_tester_details_tree.topLevelItemCount())
     }
     assert "HTTP Status" in labels
+

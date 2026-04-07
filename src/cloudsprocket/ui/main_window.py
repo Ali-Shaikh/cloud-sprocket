@@ -61,6 +61,8 @@ class MainWindow(QMainWindow):
         self._auth_methods_tree = QTreeWidget()
         self._capabilities_tree = QTreeWidget()
         self._log_panel = QPlainTextEdit()
+        self._log_panel_resize_hint_label = QLabel("Drag the divider above to resize this panel.")
+        self._log_panel_reset_size_button = QPushButton("Reset Panel Height")
         self._detail_title = QLabel()
         self._detail_subtitle = QLabel()
         self._detail_summary = QLabel()
@@ -142,6 +144,7 @@ class MainWindow(QMainWindow):
         self._workspace_s3_root_splitter: QSplitter | None = None
         self._workspace_s3_content_splitter: QSplitter | None = None
         self._workspace_s3_inspector_tabs: QTabWidget | None = None
+        self._body_root_splitter: QSplitter | None = None
         self._detail_sections_splitter = QSplitter(Qt.Vertical)
         self._rendering_state = False
 
@@ -370,6 +373,14 @@ class MainWindow(QMainWindow):
         return self._workspace_s3_inspector_tabs
 
     @property
+    def body_root_splitter(self) -> QSplitter | None:
+        return self._body_root_splitter
+
+    @property
+    def log_panel_reset_size_button(self) -> QPushButton:
+        return self._log_panel_reset_size_button
+
+    @property
     def lock_session_button(self) -> QPushButton:
         return self._session_lock_button
 
@@ -556,10 +567,20 @@ class MainWindow(QMainWindow):
             }
             QSplitter::handle {
                 background-color: #9eb0c1;
-                margin: 2px;
+                margin: 1px;
+                border-radius: 6px;
+            }
+            QSplitter::handle:vertical {
+                height: 14px;
+            }
+            QSplitter::handle:horizontal {
+                width: 12px;
             }
             QSplitter::handle:hover {
                 background-color: #6e8399;
+            }
+            QSplitter::handle:pressed {
+                background-color: #46617b;
             }
             QScrollBar:vertical, QScrollBar:horizontal {
                 background: #dde5ec;
@@ -818,13 +839,19 @@ class MainWindow(QMainWindow):
     def _build_body(self) -> QSplitter:
         self._body_stack.addWidget(self._build_session_page())
         self._body_stack.addWidget(self._build_workspace_page())
+        self._body_stack.setMinimumHeight(360)
 
         root_splitter = QSplitter(Qt.Vertical)
+        root_splitter.setObjectName("main-body-splitter")
         root_splitter.setChildrenCollapsible(False)
+        root_splitter.setHandleWidth(14)
+        root_splitter.setOpaqueResize(False)
         root_splitter.addWidget(self._body_stack)
         root_splitter.addWidget(self._build_log_panel())
         root_splitter.setStretchFactor(0, 5)
         root_splitter.setStretchFactor(1, 2)
+        root_splitter.setSizes([700, 250])
+        self._body_root_splitter = root_splitter
         return root_splitter
 
     def _build_session_page(self) -> QWidget:
@@ -1323,7 +1350,17 @@ class MainWindow(QMainWindow):
 
     def _build_log_panel(self) -> QGroupBox:
         group = QGroupBox("Activity Log")
+        group.setMinimumHeight(180)
         layout = QVBoxLayout(group)
+        layout.setSpacing(10)
+        hint_layout = QHBoxLayout()
+        self._log_panel_resize_hint_label.setWordWrap(True)
+        self._log_panel_resize_hint_label.setStyleSheet(self._info_card_style())
+        self._set_button_tone(self._log_panel_reset_size_button, "primary")
+        self._log_panel_reset_size_button.clicked.connect(self._reset_body_splitter_sizes)
+        hint_layout.addWidget(self._log_panel_resize_hint_label, 1)
+        hint_layout.addWidget(self._log_panel_reset_size_button, 0, Qt.AlignTop)
+        layout.addLayout(hint_layout)
         self._log_panel.setReadOnly(True)
         self._log_panel.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._log_panel.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -1810,6 +1847,16 @@ class MainWindow(QMainWindow):
         self._log_panel.setPlainText("\n".join(lines).strip())
         self._log_panel.verticalScrollBar().setValue(self._log_panel.verticalScrollBar().maximum())
 
+    def _reset_body_splitter_sizes(self) -> None:
+        if self._body_root_splitter is None:
+            return
+        splitter_height = self._body_root_splitter.height()
+        if splitter_height <= 0:
+            splitter_height = max(self.height() - 220, 540)
+        log_height = max(200, int(splitter_height * 0.26))
+        body_height = max(360, splitter_height - log_height)
+        self._body_root_splitter.setSizes([body_height, log_height])
+
     def _auth_method_item(self, method: AuthMethodStatus) -> QTreeWidgetItem:
         status = "available" if method.available else "unavailable"
         return QTreeWidgetItem([method.label, status, method.summary])
@@ -2002,3 +2049,4 @@ class MainWindow(QMainWindow):
         tree.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.header().setHighlightSections(False)
+
