@@ -81,6 +81,7 @@ class MainWindow(QMainWindow):
         self._global_actions_label = QLabel()
         self._body_stack = QStackedWidget()
         self._primary_sections_tabs = QTabWidget()
+        self._session_flow_tabs = QTabWidget()
         self._session_tabs = QTabWidget()
         self._workspace_tabs = QTabWidget()
         self._brand_eyebrow_label = QLabel("CONTROL DESKTOP")
@@ -97,6 +98,7 @@ class MainWindow(QMainWindow):
         self._session_auth_label = QLabel()
         self._session_lock_hint_label = QLabel()
         self._session_lock_button = QPushButton("Lock Session")
+        self._session_continue_button = QPushButton("Continue to Session Setup")
         self._workspace_title = QLabel()
         self._workspace_subtitle = QLabel()
         self._workspace_meta = QLabel()
@@ -380,6 +382,10 @@ class MainWindow(QMainWindow):
         return self._primary_sections_tabs
 
     @property
+    def session_flow_tabs(self) -> QTabWidget:
+        return self._session_flow_tabs
+
+    @property
     def lock_session_button(self) -> QPushButton:
         return self._session_lock_button
 
@@ -429,7 +435,6 @@ class MainWindow(QMainWindow):
         root_layout.setContentsMargins(12, 8, 12, 8)
         root_layout.setSpacing(8)
 
-        root_layout.addLayout(self._build_header())
         root_layout.addWidget(self._build_body(), 1)
 
         self.setCentralWidget(central)
@@ -865,37 +870,72 @@ class MainWindow(QMainWindow):
         self._set_tab_icon(self._primary_sections_tabs, activity_index, "HISTORY")
         return self._primary_sections_tabs
 
-    def _build_session_page(self) -> QWidget:
-        rail_tabs = QTabWidget()
-        rail_tabs.setDocumentMode(True)
-        rail_tabs.setTabPosition(QTabWidget.North)
-        provider_index = rail_tabs.addTab(self._build_provider_panel(), "Providers")
-        profile_index = rail_tabs.addTab(self._build_profile_panel(), "Profiles")
-        self._set_tab_icon(rail_tabs, provider_index, "IOT")
-        self._set_tab_icon(rail_tabs, profile_index, "PEOPLE")
+    def _build_session_home_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
 
+        home_hint = QLabel(
+            "Start here. Choose a provider, then continue to session setup for profile, auth, and lock actions."
+        )
+        home_hint.setWordWrap(True)
+        home_hint.setStyleSheet(self._info_card_style(emphasised=True))
+
+        self._set_button_tone(self._session_continue_button, "primary")
+        self._session_continue_button.clicked.connect(lambda: self._session_flow_tabs.setCurrentIndex(1))
+
+        footer_layout = QHBoxLayout()
+        footer_layout.addStretch(1)
+        footer_layout.addWidget(self._session_continue_button)
+
+        layout.addWidget(home_hint)
+        layout.addWidget(self._build_provider_panel(), 1)
+        layout.addLayout(footer_layout)
+        return page
+
+    def _build_session_setup_page(self) -> QWidget:
         self._session_tabs.setDocumentMode(True)
         self._session_tabs.clear()
         self._session_tabs.addTab(self._build_overview_tab(), "Profile")
         self._session_tabs.addTab(self._build_access_tab(), "Access")
         self._session_tabs.addTab(self._build_actions_tab(), "Actions")
 
+        back_button = QPushButton("Back to Home")
+        back_button.clicked.connect(lambda: self._session_flow_tabs.setCurrentIndex(0))
+
         session_content = QWidget()
         session_content_layout = QVBoxLayout(session_content)
         session_content_layout.setContentsMargins(0, 0, 0, 0)
         session_content_layout.setSpacing(12)
-        session_content_layout.addWidget(self._build_brand_panel())
         session_content_layout.addWidget(self._build_session_setup_panel())
         session_content_layout.addWidget(self._session_tabs, 1)
 
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(10)
+        right_layout.addWidget(back_button, 0, Qt.AlignLeft)
+        right_layout.addWidget(session_content, 1)
+
         session_splitter = QSplitter(Qt.Horizontal)
         session_splitter.setChildrenCollapsible(False)
-        session_splitter.addWidget(rail_tabs)
-        session_splitter.addWidget(session_content)
+        session_splitter.addWidget(self._build_profile_panel())
+        session_splitter.addWidget(right_panel)
         session_splitter.setStretchFactor(0, 2)
         session_splitter.setStretchFactor(1, 5)
-        session_splitter.setSizes([410, 980])
+        session_splitter.setSizes([360, 1030])
         return session_splitter
+
+    def _build_session_page(self) -> QWidget:
+        self._session_flow_tabs.setDocumentMode(True)
+        self._session_flow_tabs.setTabPosition(QTabWidget.North)
+        self._session_flow_tabs.clear()
+        home_index = self._session_flow_tabs.addTab(self._build_session_home_page(), "Home")
+        setup_index = self._session_flow_tabs.addTab(self._build_session_setup_page(), "Session Setup")
+        self._set_tab_icon(self._session_flow_tabs, home_index, "HOME")
+        self._set_tab_icon(self._session_flow_tabs, setup_index, "SETTING")
+        return self._session_flow_tabs
 
     def _build_workspace_page(self) -> QWidget:
         page = QWidget()
@@ -1495,8 +1535,6 @@ class MainWindow(QMainWindow):
         current_provider = self._controller.current_provider_id()
         selected_profile = self._controller.selected_profile()
         selected_auth_method = self._controller.selected_auth_method()
-        provider_count = len(self._controller.provider_snapshot)
-        profile_count = len(self._controller.discovery_report.profiles)
 
         self._session_provider_label.setText(current_provider.upper() if current_provider else "Not selected")
         self._session_profile_label.setText(
@@ -1515,40 +1553,11 @@ class MainWindow(QMainWindow):
             )
         self._session_lock_button.setEnabled(self._controller.can_lock_session())
 
-        target_value = "Awaiting target"
-        if current_provider and selected_profile is not None:
-            target_value = f"{current_provider.upper()} / {selected_profile.display_name}"
-        elif current_provider:
-            target_value = current_provider.upper()
-
-        auth_value = selected_auth_method.value.upper() if selected_auth_method is not None else "Choose"
-        self._hero_heading_label.setText("Lock the right cloud workspace before you act.")
-        self._hero_summary_label.setText(
-            "Use CloudSprocket to align provider, profile, and auth state first, then move into the focused workspace for service work."
-        )
-        self._hero_steps_label.setText(
-            "1 Choose a provider.  2 Inspect the profile context.  3 Pick an auth path.  4 Lock the session and continue inside the workspace."
-        )
-        self._set_hero_metric_text(
-            self._hero_provider_metric_label,
-            value=str(provider_count),
-            caption="Providers visible",
-        )
-        self._set_hero_metric_text(
-            self._hero_profile_metric_label,
-            value=str(profile_count),
-            caption="Profiles discovered",
-        )
-        self._set_hero_metric_text(
-            self._hero_auth_metric_label,
-            value=auth_value,
-            caption="Selected auth",
-        )
-        self._set_hero_metric_text(
-            self._hero_target_metric_label,
-            value=target_value,
-            caption="Current target",
-        )
+        has_provider = current_provider is not None
+        self._session_continue_button.setEnabled(has_provider)
+        self._session_flow_tabs.setTabEnabled(1, has_provider)
+        if not has_provider and self._session_flow_tabs.currentIndex() != 0:
+            self._session_flow_tabs.setCurrentIndex(0)
 
     def _render_workspace(self) -> None:
         self._workspace_title.setText(self._controller.locked_session_title())
@@ -2079,4 +2088,5 @@ class MainWindow(QMainWindow):
         tree.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.header().setHighlightSections(False)
+
 
