@@ -34,7 +34,7 @@ jobs:
             artifact_path: dist/CloudSprocket
           - os: macos-latest
             artifact_name: cloudsprocket-macos
-            artifact_path: dist/CloudSprocket.app
+            artifact_path: dist/CloudSprocket-macos.tar.gz
 
     steps:
       - name: Check out repository
@@ -63,6 +63,12 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: bash ./scripts/build.sh
+
+      - name: Package macOS app bundle for artifact upload
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          tar -C dist -czf dist/CloudSprocket-macos.tar.gz CloudSprocket.app
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
