@@ -426,8 +426,8 @@ class MainWindow(QMainWindow):
 
         central = QWidget(self)
         root_layout = QVBoxLayout(central)
-        root_layout.setContentsMargins(16, 14, 16, 14)
-        root_layout.setSpacing(12)
+        root_layout.setContentsMargins(12, 8, 12, 8)
+        root_layout.setSpacing(8)
 
         root_layout.addLayout(self._build_header())
         root_layout.addWidget(self._build_body(), 1)
@@ -439,122 +439,122 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(
             """
             QMainWindow, QWidget {
-                background-color: #f5f7fb;
-                color: #0f172a;
+                background-color: #f3f4f7;
+                color: #111827;
             }
             QMenuBar, QStatusBar {
-                background-color: #ffffff;
-                color: #1e293b;
-                border-bottom: 1px solid #d7deea;
+                background-color: #f8fafc;
+                color: #334155;
+                border-bottom: 1px solid #dde3ec;
             }
             QMenuBar::item {
-                padding: 6px 10px;
-                border-radius: 6px;
+                padding: 6px 12px;
+                border-radius: 7px;
             }
             QMenuBar::item:selected {
-                background-color: #e9f1ff;
+                background-color: #e8eef9;
             }
             QGroupBox {
-                background-color: #ffffff;
-                border: 1px solid #d2dbea;
-                border-radius: 12px;
-                margin-top: 15px;
-                padding: 10px;
-                padding-top: 17px;
+                background-color: #f8fafc;
+                border: 1px solid #d7dee8;
+                border-radius: 14px;
+                margin-top: 14px;
+                padding: 11px;
+                padding-top: 16px;
                 font-weight: 700;
-                color: #12314d;
+                color: #334155;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px;
-                color: #12314d;
-                background-color: #ffffff;
+                left: 12px;
+                padding: 0 6px;
+                color: #334155;
+                background-color: #f8fafc;
             }
             QPushButton {
-                background-color: #ffffff;
-                color: #1e293b;
-                border: 1px solid #aebfd5;
-                border-radius: 8px;
-                padding: 6px 11px;
+                background-color: #f8fafc;
+                color: #334155;
+                border: 1px solid #c8d1de;
+                border-radius: 9px;
+                padding: 7px 12px;
                 font-weight: 600;
             }
             QPushButton:hover {
-                background-color: #f3f7ff;
-                border-color: #8fa6c2;
+                background-color: #f2f6fb;
+                border-color: #9eb0c7;
             }
             QPushButton:pressed {
-                background-color: #e7eefb;
+                background-color: #e4ecf7;
             }
             QPushButton:focus {
                 border: 2px solid #0f6cbd;
-                padding: 5px 10px;
+                padding: 6px 11px;
             }
             QPushButton:disabled {
-                background-color: #eef2f7;
-                color: #7b8898;
-                border-color: #c8d2df;
+                background-color: #eff3f8;
+                color: #8a95a5;
+                border-color: #d2dae5;
             }
             QPushButton[tone="primary"] {
-                background-color: #0f6cbd;
+                background-color: #0d63b8;
                 color: #ffffff;
-                border-color: #0d5a9e;
+                border-color: #0c5499;
             }
             QPushButton[tone="primary"]:hover {
-                background-color: #1164af;
+                background-color: #0f5aa5;
             }
             QPushButton[tone="primary"]:pressed {
-                background-color: #0d538f;
+                background-color: #0d4f91;
             }
             QLineEdit, QPlainTextEdit, QTreeWidget, QComboBox, QSpinBox {
-                background-color: #ffffff;
-                color: #0f172a;
-                border: 1px solid #bcc8d8;
-                border-radius: 8px;
+                background-color: #f8fafc;
+                color: #111827;
+                border: 1px solid #c8d1de;
+                border-radius: 9px;
                 selection-background-color: #0f6cbd;
                 selection-color: #ffffff;
             }
             QLineEdit, QPlainTextEdit, QComboBox, QSpinBox {
-                padding: 6px 8px;
+                padding: 7px 9px;
             }
             QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QSpinBox:focus {
                 border: 2px solid #0f6cbd;
-                padding: 5px 7px;
+                padding: 6px 8px;
             }
             QTreeWidget {
-                alternate-background-color: #f9fbff;
-                gridline-color: #d7e0ee;
+                alternate-background-color: #f7f9fc;
+                gridline-color: #e4eaf3;
             }
             QTreeWidget::item {
-                padding: 4px 6px;
+                padding: 6px 8px;
             }
             QTreeWidget::item:selected {
-                background-color: #deecff;
-                color: #12314d;
+                background-color: #dbeafe;
+                color: #334155;
             }
             QHeaderView::section {
-                background-color: #eff4fb;
-                color: #243b53;
-                padding: 7px;
+                background-color: #eff3f8;
+                color: #334155;
+                padding: 8px;
                 border: none;
-                border-right: 1px solid #d4deea;
-                border-bottom: 1px solid #c4d0de;
+                border-right: 1px solid #d7dee8;
+                border-bottom: 1px solid #ccd5e3;
                 font-weight: 700;
             }
             QTabWidget::pane {
-                border: 1px solid #d2dbea;
+                border: 1px solid #d7dee8;
                 border-radius: 10px;
                 background: #ffffff;
                 top: -1px;
             }
             QTabBar::tab {
-                background: #eaf1fa;
-                color: #1f3a56;
-                border: 1px solid #d2dbea;
+                background: #eef2f7;
+                color: #334155;
+                border: 1px solid #d7dee8;
                 border-bottom: none;
-                border-top-left-radius: 8px;
-                border-top-right-radius: 8px;
-                padding: 7px 11px;
+                border-top-left-radius: 9px;
+                border-top-right-radius: 9px;
+                padding: 8px 12px;
                 margin-right: 4px;
                 font-weight: 600;
             }
@@ -563,10 +563,10 @@ class MainWindow(QMainWindow):
                 color: #0f2d47;
             }
             QTabBar::tab:!selected:hover {
-                background: #f0f5fc;
+                background: #f5f8fc;
             }
             QSplitter::handle {
-                background-color: #8ea4bf;
+                background-color: #b8c4d4;
                 border-radius: 5px;
                 margin: 1px;
             }
@@ -577,68 +577,68 @@ class MainWindow(QMainWindow):
                 width: 8px;
             }
             QSplitter::handle:hover {
-                background-color: #728ba7;
+                background-color: #8ea1b9;
             }
             QScrollBar:vertical, QScrollBar:horizontal {
-                background: #e4ebf5;
+                background: #edf1f6;
                 border-radius: 5px;
             }
             QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
-                background: #607a97;
+                background: #8ea1b9;
                 border-radius: 5px;
                 min-height: 22px;
                 min-width: 22px;
             }
             QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {
-                background: #4d6580;
+                background: #7288a4;
             }
             """
         )
 
     def _info_card_style(self, *, emphasised: bool = False) -> str:
-        background = "#e8f1fa" if emphasised else "#f6f8fb"
-        border = "#6f89a5" if emphasised else "#9dafc1"
-        foreground = "#10283f" if emphasised else "#243b53"
+        background = "#e9f3ff" if emphasised else "#f7f9fc"
+        border = "#9ab5d6" if emphasised else "#d7dee8"
+        foreground = "#102a43" if emphasised else "#334155"
         return (
-            "padding: 11px 13px; "
+            "padding: 10px 12px; "
             f"background: {background}; "
             f"border: 1px solid {border}; "
-            "border-radius: 12px; "
+            "border-radius: 11px; "
             f"color: {foreground};"
         )
 
     def _section_label_style(self) -> str:
-        return "font-size: 13px; font-weight: 700; color: #184b72; padding-top: 4px;"
+        return "font-size: 12px; font-weight: 700; color: #334155; padding-top: 4px;"
 
     def _hero_panel_style(self) -> str:
         return (
             "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
-            "stop:0 #123956, stop:1 #1e5f8c); "
-            "border: 1px solid #0e314a; "
-            "border-radius: 20px;"
+            "stop:0 #0f4c81, stop:1 #1766a8); "
+            "border: 1px solid #0e4f86; "
+            "border-radius: 16px;"
         )
 
     def _hero_metric_style(self, *, emphasised: bool = False) -> str:
-        background = "#eff5fa" if emphasised else "#f8fbfd"
-        border = "#6f89a5" if emphasised else "#a5b6c7"
+        background = "rgba(255, 255, 255, 0.22)" if emphasised else "rgba(255, 255, 255, 0.14)"
+        border = "rgba(255, 255, 255, 0.35)" if emphasised else "rgba(255, 255, 255, 0.24)"
         return (
-            "padding: 12px 14px; "
+            "padding: 10px 12px; "
             f"background: {background}; "
             f"border: 1px solid {border}; "
-            "border-radius: 14px;"
+            "border-radius: 12px;"
         )
 
     def _hero_pill_style(self, *, accent: bool = False) -> str:
-        background = "#f5c04e" if accent else "rgba(255, 255, 255, 0.12)"
-        foreground = "#10283f" if accent else "#f5fbff"
-        border = "#f5c04e" if accent else "rgba(255, 255, 255, 0.2)"
+        background = "#f7ca62" if accent else "rgba(255, 255, 255, 0.18)"
+        foreground = "#10283f" if accent else "#f8fcff"
+        border = "#f7ca62" if accent else "rgba(255, 255, 255, 0.32)"
         return (
-            "padding: 6px 12px; "
+            "padding: 5px 10px; "
             f"background: {background}; "
             f"color: {foreground}; "
             f"border: 1px solid {border}; "
             "border-radius: 999px; "
-            "font-size: 12px; font-weight: 700;"
+            "font-size: 11px; font-weight: 700;"
         )
 
     def _set_hero_metric_text(self, label: QLabel, *, value: str, caption: str) -> None:
@@ -684,10 +684,10 @@ class MainWindow(QMainWindow):
         )
         title = QLabel(self._settings.app_brand_name)
         title.setObjectName("title")
-        title.setStyleSheet("font-size: 24px; font-weight: 800; color: #0f2b45;")
+        title.setStyleSheet("font-size: 20px; font-weight: 800; color: #0f2b45;")
 
         subtitle = QLabel(APP_DESCRIPTION)
-        subtitle.setWordWrap(True)
+        subtitle.setWordWrap(False)
         subtitle.setStyleSheet("color: #41576f; font-size: 13px;")
 
         byline = QLabel(f"Created by {self._settings.author_name}")
@@ -695,7 +695,7 @@ class MainWindow(QMainWindow):
 
         self._config_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self._config_label.setStyleSheet(
-            "padding: 8px 10px; background: #ffffff; border: 1px solid #d2dbea; "
+            "padding: 8px 10px; background: #ffffff; border: 1px solid #d7dee8; "
             "border-radius: 9px; color: #2a4159; font-size: 11px;"
         )
 
@@ -706,7 +706,7 @@ class MainWindow(QMainWindow):
         refresh_button.setFixedWidth(168)
 
         left_column = QVBoxLayout()
-        left_column.setSpacing(3)
+        left_column.setSpacing(1)
         left_column.addWidget(self._brand_eyebrow_label)
         left_column.addWidget(title)
         left_column.addWidget(subtitle)
@@ -728,19 +728,19 @@ class MainWindow(QMainWindow):
         panel.setStyleSheet(self._hero_panel_style())
 
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(18)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
 
         self._brand_badge_label.setAlignment(Qt.AlignCenter)
-        self._brand_badge_label.setFixedSize(88, 88)
+        self._brand_badge_label.setFixedSize(56, 56)
         self._brand_badge_label.setStyleSheet(
             "background: rgba(255, 255, 255, 0.12); color: #f7fbfe; border: 1px solid rgba(255, 255, 255, 0.18); "
-            "border-radius: 24px; font-size: 28px; font-weight: 800; letter-spacing: 0.08em;"
+            "border-radius: 16px; font-size: 22px; font-weight: 800; letter-spacing: 0.08em;"
         )
 
-        self._hero_heading_label.setStyleSheet("font-size: 28px; font-weight: 800; color: #f7fbfe;")
+        self._hero_heading_label.setStyleSheet("font-size: 18px; font-weight: 800; color: #f7fbfe;")
         self._hero_heading_label.setWordWrap(True)
-        self._hero_summary_label.setStyleSheet("font-size: 14px; color: #d9ebf7;")
+        self._hero_summary_label.setStyleSheet("font-size: 12px; color: #d9ebf7;")
         self._hero_summary_label.setWordWrap(True)
         self._hero_steps_label.setStyleSheet(
             "padding: 10px 12px; background: rgba(255, 255, 255, 0.10); color: #f3f9fe; "
@@ -755,20 +755,20 @@ class MainWindow(QMainWindow):
         chip_files = QLabel("Local profile visibility")
         chip_files.setStyleSheet(self._hero_pill_style())
         chip_layout = QHBoxLayout()
-        chip_layout.setSpacing(8)
+        chip_layout.setSpacing(6)
         chip_layout.addWidget(chip_cli)
         chip_layout.addWidget(chip_sso)
         chip_layout.addWidget(chip_files)
         chip_layout.addStretch(1)
 
         text_layout = QVBoxLayout()
-        text_layout.setSpacing(8)
+        text_layout.setSpacing(6)
         text_layout.addWidget(self._hero_heading_label)
         text_layout.addWidget(self._hero_summary_label)
         text_layout.addLayout(chip_layout)
 
         top_layout = QHBoxLayout()
-        top_layout.setSpacing(16)
+        top_layout.setSpacing(12)
         top_layout.addWidget(self._brand_badge_label, 0, Qt.AlignTop)
         top_layout.addLayout(text_layout, 1)
 
@@ -784,12 +784,12 @@ class MainWindow(QMainWindow):
             label.setStyleSheet(self._hero_metric_style(emphasised=index == 2))
 
         metrics_layout = QGridLayout()
-        metrics_layout.setHorizontalSpacing(12)
-        metrics_layout.setVerticalSpacing(12)
+        metrics_layout.setHorizontalSpacing(8)
+        metrics_layout.setVerticalSpacing(8)
         metrics_layout.addWidget(self._hero_provider_metric_label, 0, 0)
         metrics_layout.addWidget(self._hero_profile_metric_label, 0, 1)
-        metrics_layout.addWidget(self._hero_auth_metric_label, 1, 0)
-        metrics_layout.addWidget(self._hero_target_metric_label, 1, 1)
+        metrics_layout.addWidget(self._hero_auth_metric_label, 0, 2)
+        metrics_layout.addWidget(self._hero_target_metric_label, 0, 3)
 
         layout.addLayout(top_layout)
         layout.addWidget(self._hero_steps_label)
@@ -858,7 +858,7 @@ class MainWindow(QMainWindow):
         activity_layout.addWidget(self._build_log_panel(), 1)
 
         self._primary_sections_tabs.setDocumentMode(True)
-        self._primary_sections_tabs.setTabPosition(QTabWidget.West)
+        self._primary_sections_tabs.setTabPosition(QTabWidget.North)
         control_index = self._primary_sections_tabs.addTab(control_page, "Control")
         activity_index = self._primary_sections_tabs.addTab(activity_page, "Activity")
         self._set_tab_icon(self._primary_sections_tabs, control_index, "HOME")
@@ -868,13 +868,14 @@ class MainWindow(QMainWindow):
     def _build_session_page(self) -> QWidget:
         rail_tabs = QTabWidget()
         rail_tabs.setDocumentMode(True)
-        rail_tabs.setTabPosition(QTabWidget.West)
+        rail_tabs.setTabPosition(QTabWidget.North)
         provider_index = rail_tabs.addTab(self._build_provider_panel(), "Providers")
         profile_index = rail_tabs.addTab(self._build_profile_panel(), "Profiles")
         self._set_tab_icon(rail_tabs, provider_index, "IOT")
         self._set_tab_icon(rail_tabs, profile_index, "PEOPLE")
 
         self._session_tabs.setDocumentMode(True)
+        self._session_tabs.clear()
         self._session_tabs.addTab(self._build_overview_tab(), "Profile")
         self._session_tabs.addTab(self._build_access_tab(), "Access")
         self._session_tabs.addTab(self._build_actions_tab(), "Actions")
@@ -883,6 +884,7 @@ class MainWindow(QMainWindow):
         session_content_layout = QVBoxLayout(session_content)
         session_content_layout.setContentsMargins(0, 0, 0, 0)
         session_content_layout.setSpacing(12)
+        session_content_layout.addWidget(self._build_brand_panel())
         session_content_layout.addWidget(self._build_session_setup_panel())
         session_content_layout.addWidget(self._session_tabs, 1)
 
@@ -892,7 +894,7 @@ class MainWindow(QMainWindow):
         session_splitter.addWidget(session_content)
         session_splitter.setStretchFactor(0, 2)
         session_splitter.setStretchFactor(1, 5)
-        session_splitter.setSizes([390, 980])
+        session_splitter.setSizes([410, 980])
         return session_splitter
 
     def _build_workspace_page(self) -> QWidget:
@@ -902,7 +904,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(16)
         layout.addWidget(self._build_workspace_header())
         self._workspace_tabs.setDocumentMode(True)
-        self._workspace_tabs.setTabPosition(QTabWidget.West)
+        self._workspace_tabs.setTabPosition(QTabWidget.North)
         layout.addWidget(self._workspace_tabs, 1)
         return page
 
@@ -1138,7 +1140,7 @@ class MainWindow(QMainWindow):
 
         tools_tabs = QTabWidget()
         tools_tabs.setDocumentMode(True)
-        tools_tabs.setTabPosition(QTabWidget.West)
+        tools_tabs.setTabPosition(QTabWidget.North)
         tools_tabs.addTab(upload_page, "Upload")
         tools_tabs.addTab(object_details_page, "Object Details")
         tools_tabs.addTab(signed_url_page, "Signed URL")
@@ -1154,7 +1156,7 @@ class MainWindow(QMainWindow):
         content_splitter.addWidget(inspector_group)
         content_splitter.setStretchFactor(0, 5)
         content_splitter.setStretchFactor(1, 3)
-        content_splitter.setSizes([900, 360])
+        content_splitter.setSizes([840, 500])
 
         main_panel = QWidget()
         main_panel_layout = QVBoxLayout(main_panel)
@@ -1169,7 +1171,7 @@ class MainWindow(QMainWindow):
         root_splitter.addWidget(main_panel)
         root_splitter.setStretchFactor(0, 0)
         root_splitter.setStretchFactor(1, 1)
-        root_splitter.setSizes([340, 1040])
+        root_splitter.setSizes([300, 1080])
 
         self._workspace_s3_root_splitter = root_splitter
         self._workspace_s3_content_splitter = content_splitter
@@ -2077,13 +2079,4 @@ class MainWindow(QMainWindow):
         tree.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.header().setHighlightSections(False)
-
-
-
-
-
-
-
-
-
 
