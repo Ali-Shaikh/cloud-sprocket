@@ -61,8 +61,6 @@ class MainWindow(QMainWindow):
         self._auth_methods_tree = QTreeWidget()
         self._capabilities_tree = QTreeWidget()
         self._log_panel = QPlainTextEdit()
-        self._log_panel_resize_hint_label = QLabel("Drag the divider above to resize this panel.")
-        self._log_panel_reset_size_button = QPushButton("Reset Panel Height")
         self._detail_title = QLabel()
         self._detail_subtitle = QLabel()
         self._detail_summary = QLabel()
@@ -77,6 +75,7 @@ class MainWindow(QMainWindow):
         self._profile_actions_label = QLabel()
         self._global_actions_label = QLabel()
         self._body_stack = QStackedWidget()
+        self._primary_sections_tabs = QTabWidget()
         self._session_tabs = QTabWidget()
         self._workspace_tabs = QTabWidget()
         self._brand_eyebrow_label = QLabel("CONTROL DESKTOP")
@@ -144,7 +143,6 @@ class MainWindow(QMainWindow):
         self._workspace_s3_root_splitter: QSplitter | None = None
         self._workspace_s3_content_splitter: QSplitter | None = None
         self._workspace_s3_inspector_tabs: QTabWidget | None = None
-        self._body_root_splitter: QSplitter | None = None
         self._detail_sections_splitter = QSplitter(Qt.Vertical)
         self._rendering_state = False
 
@@ -373,12 +371,8 @@ class MainWindow(QMainWindow):
         return self._workspace_s3_inspector_tabs
 
     @property
-    def body_root_splitter(self) -> QSplitter | None:
-        return self._body_root_splitter
-
-    @property
-    def log_panel_reset_size_button(self) -> QPushButton:
-        return self._log_panel_reset_size_button
+    def primary_sections_tabs(self) -> QTabWidget:
+        return self._primary_sections_tabs
 
     @property
     def lock_session_button(self) -> QPushButton:
@@ -437,163 +431,153 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(
             """
             QMainWindow, QWidget {
-                background-color: #f3f5f8;
-                color: #112236;
+                background-color: #f4f6fa;
+                color: #1f2937;
             }
             QMenuBar, QStatusBar {
-                background-color: #e7edf3;
-                color: #112236;
+                background-color: #e9eef5;
+                color: #1f2937;
             }
             QMenuBar::item:selected {
-                background-color: #d7e4ef;
+                background-color: #d8e2ef;
             }
             QGroupBox {
-                background-color: #fbfcfe;
-                border: 1px solid #8699ac;
-                border-radius: 14px;
-                margin-top: 18px;
-                padding: 14px;
-                padding-top: 20px;
+                background-color: #ffffff;
+                border: 1px solid #c6d2df;
+                border-radius: 12px;
+                margin-top: 16px;
+                padding: 12px;
+                padding-top: 18px;
                 font-weight: 700;
-                color: #16344d;
+                color: #1d3550;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
-                left: 12px;
+                left: 10px;
                 padding: 0 6px;
-                color: #16344d;
-                background-color: #fbfcfe;
+                color: #1d3550;
+                background-color: #ffffff;
             }
             QPushButton {
                 background-color: #ffffff;
-                color: #17324d;
-                border: 1px solid #6e8399;
-                border-radius: 10px;
-                padding: 8px 14px;
+                color: #1f2937;
+                border: 1px solid #9eb1c6;
+                border-radius: 9px;
+                padding: 7px 12px;
                 font-weight: 600;
             }
             QPushButton:hover {
-                background-color: #eef4f9;
-                border-color: #516b84;
+                background-color: #f1f5f9;
+                border-color: #8098b1;
             }
             QPushButton:pressed {
-                background-color: #dce6ef;
+                background-color: #e3eaf2;
             }
             QPushButton:focus {
-                border: 2px solid #0d5ca6;
-                padding: 7px 13px;
+                border: 2px solid #0b57d0;
+                padding: 6px 11px;
             }
             QPushButton:disabled {
-                background-color: #edf1f5;
-                color: #6b7a89;
-                border-color: #c1ccd7;
+                background-color: #eef2f6;
+                color: #7a8796;
+                border-color: #c6d0db;
             }
             QPushButton[tone="primary"] {
-                background-color: #0d5ca6;
+                background-color: #0b57d0;
                 color: #ffffff;
-                border-color: #08467f;
+                border-color: #0947ab;
             }
             QPushButton[tone="primary"]:hover {
-                background-color: #1469bb;
-                border-color: #08467f;
+                background-color: #1a63d6;
             }
             QPushButton[tone="primary"]:pressed {
-                background-color: #0b4f8d;
+                background-color: #0948ad;
             }
             QLineEdit, QPlainTextEdit, QTreeWidget, QComboBox, QSpinBox {
                 background-color: #ffffff;
-                color: #112236;
-                border: 1px solid #8699ac;
-                border-radius: 10px;
-                selection-background-color: #0d5ca6;
+                color: #1f2937;
+                border: 1px solid #b8c5d3;
+                border-radius: 9px;
+                selection-background-color: #0b57d0;
                 selection-color: #ffffff;
             }
             QLineEdit, QPlainTextEdit, QComboBox, QSpinBox {
-                padding: 7px 10px;
-            }
-            QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QSpinBox:focus {
-                border: 2px solid #0d5ca6;
                 padding: 6px 9px;
             }
-            QTreeWidget:focus {
-                border: 2px solid #0d5ca6;
+            QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QSpinBox:focus {
+                border: 2px solid #0b57d0;
+                padding: 5px 8px;
             }
             QTreeWidget {
-                alternate-background-color: #f5f8fb;
-                gridline-color: #c7d3de;
+                alternate-background-color: #f7f9fc;
+                gridline-color: #d6e0ea;
             }
             QTreeWidget::item {
                 padding: 4px 6px;
             }
-            QTreeWidget::item:hover {
-                background-color: #e7eef5;
-            }
             QTreeWidget::item:selected {
-                background-color: #0d5ca6;
-                color: #ffffff;
+                background-color: #dbe8fb;
+                color: #12355b;
             }
             QHeaderView::section {
-                background-color: #e9eff4;
-                color: #16344d;
-                padding: 8px 8px;
+                background-color: #eef3f9;
+                color: #243b53;
+                padding: 7px;
                 border: none;
-                border-right: 1px solid #9eb0c1;
-                border-bottom: 1px solid #7f92a5;
+                border-right: 1px solid #cfdae6;
+                border-bottom: 1px solid #b7c6d7;
                 font-weight: 700;
             }
             QTabWidget::pane {
-                border: 1px solid #8699ac;
+                border: 1px solid #c6d2df;
                 border-radius: 12px;
-                background: #fbfcfe;
+                background: #ffffff;
                 top: -1px;
             }
             QTabBar::tab {
-                background: #dfe6ed;
-                color: #23445f;
-                border: 1px solid #95a8bb;
+                background: #e7edf5;
+                color: #27415c;
+                border: 1px solid #c6d2df;
                 border-bottom: none;
-                border-top-left-radius: 10px;
-                border-top-right-radius: 10px;
-                padding: 9px 14px;
+                border-top-left-radius: 9px;
+                border-top-right-radius: 9px;
+                padding: 8px 12px;
                 margin-right: 4px;
                 font-weight: 600;
             }
             QTabBar::tab:selected {
-                background: #fbfcfe;
-                color: #10283f;
+                background: #ffffff;
+                color: #14273d;
             }
             QTabBar::tab:!selected:hover {
-                background: #ebf0f5;
+                background: #edf2f8;
             }
             QSplitter::handle {
-                background-color: #9eb0c1;
-                margin: 1px;
+                background-color: #91a6bc;
                 border-radius: 6px;
+                margin: 1px;
             }
             QSplitter::handle:vertical {
-                height: 14px;
+                height: 10px;
             }
             QSplitter::handle:horizontal {
-                width: 12px;
+                width: 10px;
             }
             QSplitter::handle:hover {
-                background-color: #6e8399;
-            }
-            QSplitter::handle:pressed {
-                background-color: #46617b;
+                background-color: #6f88a2;
             }
             QScrollBar:vertical, QScrollBar:horizontal {
-                background: #dde5ec;
+                background: #e0e8f0;
                 border-radius: 6px;
             }
             QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
-                background: #647c94;
+                background: #5f7893;
                 border-radius: 6px;
-                min-height: 28px;
-                min-width: 28px;
+                min-height: 24px;
+                min-width: 24px;
             }
             QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {
-                background: #4e6780;
+                background: #4d6680;
             }
             """
         )
@@ -657,63 +641,46 @@ class MainWindow(QMainWindow):
 
     def _build_header(self) -> QHBoxLayout:
         self._brand_eyebrow_label.setStyleSheet(
-            "font-size: 12px; font-weight: 800; letter-spacing: 0.18em; color: #184b72;"
+            "font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: #1f4d7a;"
         )
         title = QLabel(self._settings.app_brand_name)
         title.setObjectName("title")
-        title.setStyleSheet("font-size: 34px; font-weight: 800; color: #10283f;")
+        title.setStyleSheet("font-size: 32px; font-weight: 800; color: #12263a;")
 
         subtitle = QLabel(APP_DESCRIPTION)
         subtitle.setWordWrap(True)
-        subtitle.setStyleSheet("color: #395066; font-size: 15px;")
+        subtitle.setStyleSheet("color: #3b4d5f; font-size: 14px;")
 
         byline = QLabel(f"Created by {self._settings.author_name}")
-        byline.setStyleSheet("color: #184b72; font-size: 13px; font-weight: 600;")
+        byline.setStyleSheet("color: #1f4d7a; font-size: 12px; font-weight: 600;")
 
         self._config_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self._config_label.setStyleSheet(
-            "padding: 10px 12px; background: #ffffff; border: 1px solid #9dafc1; "
-            "border-radius: 12px; color: #17324d; font-size: 12px;"
+            "padding: 10px 12px; background: #ffffff; border: 1px solid #c6d2df; "
+            "border-radius: 10px; color: #23384d; font-size: 12px;"
         )
 
         refresh_button = QPushButton("Refresh Snapshot")
         self._set_button_tone(refresh_button, "primary")
         refresh_button.clicked.connect(lambda: self._controller.trigger_action("refresh"))
-        refresh_button.setFixedWidth(160)
+        refresh_button.setFixedWidth(170)
 
-        flow_pill_cli = QLabel("CLI")
-        flow_pill_cli.setStyleSheet(self._hero_pill_style(accent=True))
-        flow_pill_sso = QLabel("SSO")
-        flow_pill_sso.setStyleSheet(self._hero_pill_style())
-        flow_pill_files = QLabel("Local Files")
-        flow_pill_files.setStyleSheet(self._hero_pill_style())
-        flow_layout = QHBoxLayout()
-        flow_layout.setSpacing(8)
-        flow_layout.addWidget(flow_pill_cli)
-        flow_layout.addWidget(flow_pill_sso)
-        flow_layout.addWidget(flow_pill_files)
-        flow_layout.addStretch(1)
+        left_column = QVBoxLayout()
+        left_column.setSpacing(6)
+        left_column.addWidget(self._brand_eyebrow_label)
+        left_column.addWidget(title)
+        left_column.addWidget(subtitle)
+        left_column.addWidget(byline)
 
-        header_side_note = QLabel("Desktop control surface for cloud sessions and account context.")
-        header_side_note.setWordWrap(True)
-        header_side_note.setStyleSheet(self._info_card_style())
-
-        header_side = QVBoxLayout()
-        header_side.setSpacing(12)
-        header_side.addWidget(header_side_note)
-        header_side.addWidget(self._config_label)
-        header_side.addWidget(refresh_button, 0, Qt.AlignRight)
-
-        header_text = QVBoxLayout()
-        header_text.addWidget(self._brand_eyebrow_label)
-        header_text.addWidget(title)
-        header_text.addWidget(subtitle)
-        header_text.addWidget(byline)
-        header_text.addLayout(flow_layout)
+        right_column = QVBoxLayout()
+        right_column.setSpacing(10)
+        right_column.addWidget(self._config_label)
+        right_column.addWidget(refresh_button, 0, Qt.AlignRight)
 
         layout = QHBoxLayout()
-        layout.addLayout(header_text, 1)
-        layout.addLayout(header_side, 0)
+        layout.setSpacing(16)
+        layout.addLayout(left_column, 1)
+        layout.addLayout(right_column, 0)
         return layout
 
     def _build_brand_panel(self) -> QWidget:
@@ -836,23 +803,24 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._workspace_unlock_button, 0, Qt.AlignTop)
         return group
 
-    def _build_body(self) -> QSplitter:
+    def _build_body(self) -> QTabWidget:
         self._body_stack.addWidget(self._build_session_page())
         self._body_stack.addWidget(self._build_workspace_page())
-        self._body_stack.setMinimumHeight(360)
 
-        root_splitter = QSplitter(Qt.Vertical)
-        root_splitter.setObjectName("main-body-splitter")
-        root_splitter.setChildrenCollapsible(False)
-        root_splitter.setHandleWidth(14)
-        root_splitter.setOpaqueResize(False)
-        root_splitter.addWidget(self._body_stack)
-        root_splitter.addWidget(self._build_log_panel())
-        root_splitter.setStretchFactor(0, 5)
-        root_splitter.setStretchFactor(1, 2)
-        root_splitter.setSizes([700, 250])
-        self._body_root_splitter = root_splitter
-        return root_splitter
+        control_page = QWidget()
+        control_layout = QVBoxLayout(control_page)
+        control_layout.setContentsMargins(0, 0, 0, 0)
+        control_layout.addWidget(self._body_stack)
+
+        activity_page = QWidget()
+        activity_layout = QVBoxLayout(activity_page)
+        activity_layout.setContentsMargins(0, 0, 0, 0)
+        activity_layout.addWidget(self._build_log_panel(), 1)
+
+        self._primary_sections_tabs.setDocumentMode(True)
+        self._primary_sections_tabs.addTab(control_page, "Control")
+        self._primary_sections_tabs.addTab(activity_page, "Activity")
+        return self._primary_sections_tabs
 
     def _build_session_page(self) -> QWidget:
         navigation_splitter = QSplitter(Qt.Vertical)
@@ -870,8 +838,7 @@ class MainWindow(QMainWindow):
         session_content = QWidget()
         session_content_layout = QVBoxLayout(session_content)
         session_content_layout.setContentsMargins(0, 0, 0, 0)
-        session_content_layout.setSpacing(18)
-        session_content_layout.addWidget(self._build_brand_panel())
+        session_content_layout.setSpacing(14)
         session_content_layout.addWidget(self._build_session_setup_panel())
         session_content_layout.addWidget(self._session_tabs, 1)
 
@@ -881,7 +848,7 @@ class MainWindow(QMainWindow):
         session_splitter.addWidget(session_content)
         session_splitter.setStretchFactor(0, 2)
         session_splitter.setStretchFactor(1, 5)
-        session_splitter.setSizes([330, 1010])
+        session_splitter.setSizes([360, 980])
         return session_splitter
 
     def _build_workspace_page(self) -> QWidget:
@@ -1167,9 +1134,9 @@ class MainWindow(QMainWindow):
         return page
 
     def _build_provider_panel(self) -> QGroupBox:
-        group = QGroupBox("Provider Rail")
+        group = QGroupBox("Providers")
         layout = QVBoxLayout(group)
-        hint = QLabel("Start by choosing the provider you want to lock into a focused workspace.")
+        hint = QLabel("Choose a provider to load its profiles and available auth options.")
         hint.setWordWrap(True)
         hint.setStyleSheet(self._info_card_style())
         self._provider_tree.setColumnCount(3)
@@ -1184,9 +1151,9 @@ class MainWindow(QMainWindow):
         return group
 
     def _build_profile_panel(self) -> QGroupBox:
-        group = QGroupBox("Profile Rail")
+        group = QGroupBox("Profiles")
         layout = QVBoxLayout(group)
-        hint = QLabel("Profiles update with the selected provider. Pick one to inspect its auth and runtime context.")
+        hint = QLabel("Pick a profile to inspect details, auth, and available actions.")
         hint.setWordWrap(True)
         hint.setStyleSheet(self._info_card_style())
         self._profile_tree.setColumnCount(4)
@@ -1349,25 +1316,20 @@ class MainWindow(QMainWindow):
         return group
 
     def _build_log_panel(self) -> QGroupBox:
-        group = QGroupBox("Activity Log")
-        group.setMinimumHeight(180)
+        group = QGroupBox("Activity")
         layout = QVBoxLayout(group)
-        layout.setSpacing(10)
-        hint_layout = QHBoxLayout()
-        self._log_panel_resize_hint_label.setWordWrap(True)
-        self._log_panel_resize_hint_label.setStyleSheet(self._info_card_style())
-        self._set_button_tone(self._log_panel_reset_size_button, "primary")
-        self._log_panel_reset_size_button.clicked.connect(self._reset_body_splitter_sizes)
-        hint_layout.addWidget(self._log_panel_resize_hint_label, 1)
-        hint_layout.addWidget(self._log_panel_reset_size_button, 0, Qt.AlignTop)
-        layout.addLayout(hint_layout)
+        layout.setSpacing(8)
+        caption = QLabel("Command output and action history are grouped here so the control view stays focused.")
+        caption.setWordWrap(True)
+        caption.setStyleSheet(self._info_card_style())
+        layout.addWidget(caption)
         self._log_panel.setReadOnly(True)
         self._log_panel.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._log_panel.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._log_panel.setCenterOnScroll(False)
         self._log_panel.setLineWrapMode(QPlainTextEdit.WidgetWidth)
         self._log_panel.setPlaceholderText("Command output and action history will appear here.")
-        layout.addWidget(self._log_panel)
+        layout.addWidget(self._log_panel, 1)
         return group
 
     def _render_provider_snapshot(self, snapshot: tuple[ProviderHealth, ...]) -> None:
@@ -1847,15 +1809,6 @@ class MainWindow(QMainWindow):
         self._log_panel.setPlainText("\n".join(lines).strip())
         self._log_panel.verticalScrollBar().setValue(self._log_panel.verticalScrollBar().maximum())
 
-    def _reset_body_splitter_sizes(self) -> None:
-        if self._body_root_splitter is None:
-            return
-        splitter_height = self._body_root_splitter.height()
-        if splitter_height <= 0:
-            splitter_height = max(self.height() - 220, 540)
-        log_height = max(200, int(splitter_height * 0.26))
-        body_height = max(360, splitter_height - log_height)
-        self._body_root_splitter.setSizes([body_height, log_height])
 
     def _auth_method_item(self, method: AuthMethodStatus) -> QTreeWidgetItem:
         status = "available" if method.available else "unavailable"
@@ -2049,4 +2002,3 @@ class MainWindow(QMainWindow):
         tree.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.header().setHighlightSections(False)
-

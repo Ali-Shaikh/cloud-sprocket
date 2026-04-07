@@ -4,6 +4,11 @@ from collections.abc import Sequence
 
 from PySide6.QtWidgets import QApplication
 
+try:
+    from qt_material import apply_stylesheet
+except ImportError:
+    apply_stylesheet = None  # type: ignore[assignment]
+
 from cloudsprocket.config import AppSettings
 from cloudsprocket.services.app_controller import CloudSprocketController
 from cloudsprocket.services.auth import AuthStatusService
@@ -21,6 +26,11 @@ def create_application(argv: Sequence[str] | None = None) -> QApplication:
     if hasattr(app, "setApplicationDisplayName"):
         app.setApplicationDisplayName(settings.app_brand_name)
     app.setOrganizationName(settings.organization_name)
+    if apply_stylesheet is not None:
+        try:
+            apply_stylesheet(app, theme="light_cyan_500.xml")
+        except Exception:
+            pass
     return app
 
 

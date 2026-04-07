@@ -152,7 +152,7 @@ def test_main_window_renders_branding_and_actions(qapp, tmp_path: Path) -> None:
     assert "Profiles discovered" in window.hero_profile_metric_label.text()
     assert "CLI" in window.hero_auth_metric_label.text()
     assert "AWS / sandbox" in window.hero_target_metric_label.text()
-    assert "#0d5ca6" in window.styleSheet()
+    assert "QTabBar::tab" in window.styleSheet()
 
 
 def test_main_window_selection_updates_details_and_log_panel(qapp, tmp_path: Path) -> None:
@@ -242,7 +242,7 @@ def test_main_window_allows_resizing_detail_sections_and_field_columns(qapp, tmp
     assert window.detail_fields_tree.header().sectionResizeMode(1) == QHeaderView.Interactive
 
 
-def test_main_window_exposes_resizable_activity_log_splitter_controls(qapp, tmp_path: Path) -> None:
+def test_main_window_separates_control_and_activity_views(qapp, tmp_path: Path) -> None:
     settings = AppSettings.from_env(
         home_dir=tmp_path / "home",
         appdata_dir=tmp_path / "appdata",
@@ -257,21 +257,12 @@ def test_main_window_exposes_resizable_activity_log_splitter_controls(qapp, tmp_
         desktop_integration=FakeDesktopIntegration(),
     )
     window = MainWindow(settings=settings, controller=controller)
-    window.show()
-    qapp.processEvents()
 
-    assert window.body_root_splitter is not None
-    assert window.body_root_splitter.orientation() == Qt.Vertical
-    assert window.body_root_splitter.count() == 2
-    assert window.body_root_splitter.handleWidth() >= 12
-
-    window.body_root_splitter.setSizes([window.height() - 80, 60])
-    qapp.processEvents()
-    window.log_panel_reset_size_button.click()
-    qapp.processEvents()
-
-    sizes = window.body_root_splitter.sizes()
-    assert sizes[1] >= 180
+    assert window.primary_sections_tabs.count() == 2
+    assert [window.primary_sections_tabs.tabText(index) for index in range(window.primary_sections_tabs.count())] == [
+        "Control",
+        "Activity",
+    ]
 
 
 def test_main_window_theme_defines_focus_states_and_primary_button_tone(qapp, tmp_path: Path) -> None:
@@ -847,4 +838,3 @@ def test_main_window_can_analyse_and_validate_a_pasted_url(qapp, tmp_path: Path)
         for index in range(window.workspace_s3_url_tester_details_tree.topLevelItemCount())
     }
     assert "HTTP Status" in labels
-
