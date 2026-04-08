@@ -150,6 +150,18 @@ class MainWindow(QMainWindow):
         self._workspace_s3_root_splitter: QSplitter | None = None
         self._workspace_s3_content_splitter: QSplitter | None = None
         self._workspace_s3_inspector_tabs: QTabWidget | None = None
+        self._workspace_ec2_status_label = QLabel()
+        self._workspace_ec2_instance_status_label = QLabel()
+        self._workspace_ec2_search_input = QLineEdit()
+        self._workspace_ec2_state_filter_combo = QComboBox()
+        self._workspace_ec2_refresh_button = QPushButton("Refresh Instances")
+        self._workspace_ec2_start_button = QPushButton("Start")
+        self._workspace_ec2_stop_button = QPushButton("Stop")
+        self._workspace_ec2_reboot_button = QPushButton("Reboot")
+        self._workspace_ec2_copy_id_button = QPushButton("Copy Instance ID")
+        self._workspace_ec2_copy_ssh_button = QPushButton("Copy SSH Snippet")
+        self._workspace_ec2_instance_tree = QTreeWidget()
+        self._workspace_ec2_details_tree = QTreeWidget()
         self._detail_sections_splitter = QSplitter(Qt.Vertical)
         self._rendering_state = False
 
@@ -176,6 +188,15 @@ class MainWindow(QMainWindow):
         self._workspace_s3_url_tester_input.textChanged.connect(self._on_s3_url_tester_text_changed)
         self._workspace_s3_bucket_tree.itemSelectionChanged.connect(self._on_s3_bucket_selection_changed)
         self._workspace_s3_object_tree.itemSelectionChanged.connect(self._on_s3_object_selection_changed)
+        self._workspace_ec2_refresh_button.clicked.connect(self._on_ec2_refresh_instances_clicked)
+        self._workspace_ec2_start_button.clicked.connect(self._on_ec2_start_clicked)
+        self._workspace_ec2_stop_button.clicked.connect(self._on_ec2_stop_clicked)
+        self._workspace_ec2_reboot_button.clicked.connect(self._on_ec2_reboot_clicked)
+        self._workspace_ec2_copy_id_button.clicked.connect(self._on_ec2_copy_id_clicked)
+        self._workspace_ec2_copy_ssh_button.clicked.connect(self._on_ec2_copy_ssh_clicked)
+        self._workspace_ec2_search_input.textChanged.connect(self._on_ec2_search_text_changed)
+        self._workspace_ec2_state_filter_combo.currentTextChanged.connect(self._on_ec2_state_filter_changed)
+        self._workspace_ec2_instance_tree.itemSelectionChanged.connect(self._on_ec2_instance_selection_changed)
 
         self._build_ui()
         self._controller.state_changed.connect(self.render_state)
@@ -378,6 +399,46 @@ class MainWindow(QMainWindow):
         return self._workspace_s3_inspector_tabs
 
     @property
+    def workspace_ec2_refresh_button(self) -> QPushButton:
+        return self._workspace_ec2_refresh_button
+
+    @property
+    def workspace_ec2_start_button(self) -> QPushButton:
+        return self._workspace_ec2_start_button
+
+    @property
+    def workspace_ec2_stop_button(self) -> QPushButton:
+        return self._workspace_ec2_stop_button
+
+    @property
+    def workspace_ec2_reboot_button(self) -> QPushButton:
+        return self._workspace_ec2_reboot_button
+
+
+    @property
+    def workspace_ec2_copy_id_button(self) -> QPushButton:
+        return self._workspace_ec2_copy_id_button
+
+    @property
+    def workspace_ec2_copy_ssh_button(self) -> QPushButton:
+        return self._workspace_ec2_copy_ssh_button
+    @property
+    def workspace_ec2_instance_tree(self) -> QTreeWidget:
+        return self._workspace_ec2_instance_tree
+
+    @property
+    def workspace_ec2_details_tree(self) -> QTreeWidget:
+        return self._workspace_ec2_details_tree
+
+    @property
+    def workspace_ec2_search_input(self) -> QLineEdit:
+        return self._workspace_ec2_search_input
+
+    @property
+    def workspace_ec2_state_filter_combo(self) -> QComboBox:
+        return self._workspace_ec2_state_filter_combo
+
+    @property
     def primary_sections_tabs(self) -> QTabWidget:
         return self._primary_sections_tabs
 
@@ -410,6 +471,7 @@ class MainWindow(QMainWindow):
             self._render_session_setup()
             self._render_workspace()
             self._render_workspace_s3()
+            self._render_workspace_ec2()
             self._render_actions(self._controller.available_actions())
             self._render_logs(self._controller.log_entries())
             self._body_stack.setCurrentIndex(1 if self._controller.is_session_locked() else 0)
@@ -1221,6 +1283,95 @@ class MainWindow(QMainWindow):
         layout.addWidget(root_splitter, 1)
         return page
 
+    def _build_workspace_ec2_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+
+        self._workspace_ec2_status_label.setWordWrap(True)
+        self._workspace_ec2_status_label.setStyleSheet(self._info_card_style(emphasised=True))
+        self._workspace_ec2_instance_status_label.setWordWrap(True)
+        self._workspace_ec2_instance_status_label.setStyleSheet(self._info_card_style())
+
+        self._workspace_ec2_search_input.setPlaceholderText("Search by instance ID, name, state, type, or IP address.")
+        if self._workspace_ec2_state_filter_combo.count() == 0:
+            self._workspace_ec2_state_filter_combo.addItems([
+                "All",
+                "Running",
+                "Stopped",
+                "Pending",
+                "Stopping",
+            ])
+
+        self._set_button_tone(self._workspace_ec2_refresh_button, "primary")
+
+        self._workspace_ec2_instance_tree.setColumnCount(6)
+        self._workspace_ec2_instance_tree.setHeaderLabels([
+            "Name",
+            "Instance ID",
+            "State",
+            "Type",
+            "Zone",
+            "Public IP",
+        ])
+        self._configure_data_tree(self._workspace_ec2_instance_tree)
+        self._workspace_ec2_instance_tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        self._workspace_ec2_instance_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self._workspace_ec2_instance_tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self._workspace_ec2_instance_tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self._workspace_ec2_instance_tree.header().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self._workspace_ec2_instance_tree.header().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+
+        self._workspace_ec2_details_tree.setColumnCount(2)
+        self._workspace_ec2_details_tree.setHeaderLabels(["Field", "Value"])
+        self._configure_data_tree(self._workspace_ec2_details_tree)
+        self._workspace_ec2_details_tree.setUniformRowHeights(False)
+        self._workspace_ec2_details_tree.setWordWrap(True)
+        self._workspace_ec2_details_tree.header().setStretchLastSection(False)
+        self._workspace_ec2_details_tree.header().setSectionResizeMode(0, QHeaderView.Interactive)
+        self._workspace_ec2_details_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+        self._workspace_ec2_details_tree.setColumnWidth(0, 220)
+
+        controls_layout = QHBoxLayout()
+        controls_layout.addWidget(QLabel("Search"))
+        controls_layout.addWidget(self._workspace_ec2_search_input, 1)
+        controls_layout.addWidget(QLabel("State"))
+        controls_layout.addWidget(self._workspace_ec2_state_filter_combo)
+        controls_layout.addWidget(self._workspace_ec2_refresh_button)
+
+        action_layout = QHBoxLayout()
+        action_layout.addWidget(self._workspace_ec2_start_button)
+        action_layout.addWidget(self._workspace_ec2_stop_button)
+        action_layout.addWidget(self._workspace_ec2_reboot_button)
+        action_layout.addWidget(self._workspace_ec2_copy_id_button)
+        action_layout.addWidget(self._workspace_ec2_copy_ssh_button)
+        action_layout.addStretch(1)
+
+        instance_group = QGroupBox("Instances")
+        instance_layout = QVBoxLayout(instance_group)
+        instance_layout.setSpacing(10)
+        instance_layout.addWidget(self._workspace_ec2_instance_status_label)
+        instance_layout.addWidget(self._workspace_ec2_instance_tree, 1)
+
+        details_group = QGroupBox("Instance Details")
+        details_layout = QVBoxLayout(details_group)
+        details_layout.addWidget(self._workspace_ec2_details_tree, 1)
+
+        content_splitter = QSplitter(Qt.Horizontal)
+        content_splitter.setChildrenCollapsible(False)
+        content_splitter.addWidget(instance_group)
+        content_splitter.addWidget(details_group)
+        content_splitter.setStretchFactor(0, 5)
+        content_splitter.setStretchFactor(1, 4)
+        content_splitter.setSizes([740, 560])
+
+        layout.addWidget(self._workspace_ec2_status_label)
+        layout.addLayout(controls_layout)
+        layout.addLayout(action_layout)
+        layout.addWidget(content_splitter, 1)
+        return page
+
     def _build_provider_panel(self) -> QGroupBox:
         group = QGroupBox("Providers")
         layout = QVBoxLayout(group)
@@ -1754,6 +1905,67 @@ class MainWindow(QMainWindow):
         self._workspace_s3_url_tester_details_tree.resizeColumnToContents(0)
         self._refresh_s3_url_tester_button_state()
 
+    def _render_workspace_ec2(self) -> None:
+        state = self._controller.aws_ec2_workspace()
+        available, reason = self._controller.aws_ec2_availability()
+        self._workspace_ec2_status_label.setText(state.status_message or reason)
+        self._workspace_ec2_instance_status_label.setText(state.instance_status_message or reason)
+
+        if self._workspace_ec2_search_input.text() != state.search_query:
+            self._workspace_ec2_search_input.blockSignals(True)
+            self._workspace_ec2_search_input.setText(state.search_query)
+            self._workspace_ec2_search_input.blockSignals(False)
+
+        desired_state_filter = state.state_filter.title() if state.state_filter != "all" else "All"
+        combo_index = self._workspace_ec2_state_filter_combo.findText(desired_state_filter)
+        self._workspace_ec2_state_filter_combo.blockSignals(True)
+        if combo_index >= 0 and combo_index != self._workspace_ec2_state_filter_combo.currentIndex():
+            self._workspace_ec2_state_filter_combo.setCurrentIndex(combo_index)
+        self._workspace_ec2_state_filter_combo.blockSignals(False)
+
+        busy = self._controller.session_state.command_state.value == "running"
+        self._workspace_ec2_search_input.setEnabled(available and not busy)
+        self._workspace_ec2_state_filter_combo.setEnabled(available and not busy)
+        self._workspace_ec2_refresh_button.setEnabled(self._controller.can_refresh_aws_ec2_instances())
+        self._workspace_ec2_start_button.setEnabled(self._controller.can_start_aws_ec2_instance())
+        self._workspace_ec2_stop_button.setEnabled(self._controller.can_stop_aws_ec2_instance())
+        self._workspace_ec2_reboot_button.setEnabled(self._controller.can_reboot_aws_ec2_instance())
+        self._workspace_ec2_copy_id_button.setEnabled(self._controller.can_copy_aws_ec2_instance_id())
+        self._workspace_ec2_copy_ssh_button.setEnabled(self._controller.can_copy_aws_ec2_ssh_snippet())
+
+        self._workspace_ec2_instance_tree.blockSignals(True)
+        self._workspace_ec2_instance_tree.clear()
+        selected_item: QTreeWidgetItem | None = None
+        for instance in state.instances:
+            item = QTreeWidgetItem([
+                instance.name or "(unnamed)",
+                instance.instance_id,
+                (instance.state or "unknown").title(),
+                instance.instance_type,
+                instance.availability_zone,
+                instance.public_ip,
+            ])
+            item.setData(1, Qt.UserRole, instance.instance_id)
+            self._workspace_ec2_instance_tree.addTopLevelItem(item)
+            if instance.instance_id == state.selected_instance_id:
+                selected_item = item
+        if selected_item is not None:
+            self._workspace_ec2_instance_tree.setCurrentItem(selected_item)
+        self._workspace_ec2_instance_tree.blockSignals(False)
+        self._workspace_ec2_instance_tree.resizeColumnToContents(1)
+        self._workspace_ec2_instance_tree.resizeColumnToContents(2)
+        self._workspace_ec2_instance_tree.resizeColumnToContents(3)
+        self._workspace_ec2_instance_tree.resizeColumnToContents(4)
+        self._workspace_ec2_instance_tree.resizeColumnToContents(5)
+
+        self._workspace_ec2_details_tree.clear()
+        for field in state.selected_instance_details:
+            item = QTreeWidgetItem([field.label, field.value])
+            item.setToolTip(0, field.label)
+            item.setToolTip(1, field.value)
+            self._workspace_ec2_details_tree.addTopLevelItem(item)
+        self._workspace_ec2_details_tree.resizeColumnToContents(0)
+
     def _build_workspace_tab(self, tab: WorkspaceTab) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -2044,6 +2256,46 @@ class MainWindow(QMainWindow):
         if object_key:
             self._controller.select_aws_s3_object(object_key)
 
+    def _on_ec2_refresh_instances_clicked(self) -> None:
+        self._controller.refresh_aws_ec2_instances()
+
+    def _on_ec2_start_clicked(self) -> None:
+        self._controller.start_selected_aws_ec2_instance()
+
+    def _on_ec2_stop_clicked(self) -> None:
+        self._controller.stop_selected_aws_ec2_instance()
+
+    def _on_ec2_reboot_clicked(self) -> None:
+        self._controller.reboot_selected_aws_ec2_instance()
+
+    def _on_ec2_copy_id_clicked(self) -> None:
+        self._controller.copy_selected_aws_ec2_instance_id()
+
+    def _on_ec2_copy_ssh_clicked(self) -> None:
+        self._controller.copy_selected_aws_ec2_ssh_snippet()
+
+    def _on_ec2_search_text_changed(self, value: str) -> None:
+        if self._rendering_state:
+            return
+        self._controller.set_aws_ec2_search_query(value)
+
+    def _on_ec2_state_filter_changed(self, value: str) -> None:
+        if self._rendering_state:
+            return
+        changed = self._controller.set_aws_ec2_state_filter(value.lower())
+        if changed:
+            self._controller.refresh_aws_ec2_instances()
+
+    def _on_ec2_instance_selection_changed(self) -> None:
+        if self._rendering_state:
+            return
+        item = self._workspace_ec2_instance_tree.currentItem()
+        if item is None:
+            return
+        instance_id = item.data(1, Qt.UserRole) or item.text(1)
+        if instance_id:
+            self._controller.select_aws_ec2_instance(str(instance_id))
+
     def _show_about_dialog(self) -> None:
         QMessageBox.about(self, "About CloudSprocket", self.about_text())
 
@@ -2088,5 +2340,18 @@ class MainWindow(QMainWindow):
         tree.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.header().setHighlightSections(False)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

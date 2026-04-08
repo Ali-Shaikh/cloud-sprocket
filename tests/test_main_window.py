@@ -318,8 +318,6 @@ def test_main_window_switches_into_locked_workspace_tabs(qapp, tmp_path: Path) -
         "Overview",
         "S3",
         "EC2",
-        "IAM",
-        "CloudWatch",
         "Actions",
     ]
     assert {"refresh", "whoami", "sso-login", "logout", "activate", "open-config", "copy-export"} <= set(window.action_buttons)
@@ -330,6 +328,67 @@ def test_main_window_switches_into_locked_workspace_tabs(qapp, tmp_path: Path) -
     assert not controller.is_session_locked()
     assert window.body_stack.currentIndex() == 0
 
+
+
+def test_main_window_renders_ec2_workspace_and_instance_actions(qapp, tmp_path: Path) -> None:
+    settings = AppSettings.from_env(
+        home_dir=tmp_path / "home",
+        appdata_dir=tmp_path / "appdata",
+        local_appdata_dir=tmp_path / "local-appdata",
+        config_dir=tmp_path / "config-root",
+    )
+    runner = DeferredRunner()
+    desktop = FakeDesktopIntegration()
+    controller = CloudSprocketController(
+        settings=settings,
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(),
+        command_runner=runner,
+        desktop_integration=desktop,
+    )
+    window = MainWindow(settings=settings, controller=controller)
+
+    window.lock_session_button.click()
+    qapp.processEvents()
+
+    ec2_index = next(
+        index for index in range(window.workspace_tabs.count()) if window.workspace_tabs.tabText(index) == "EC2"
+    )
+    window.workspace_tabs.setCurrentIndex(ec2_index)
+    qapp.processEvents()
+
+    window.workspace_ec2_refresh_button.click()
+    qapp.processEvents()
+
+    list_spec, _callback = runner.calls[0]
+    assert list_spec.args[:2] == ("ec2", "describe-instances")
+
+    runner.finish_next(
+        CommandResult(
+            spec=list_spec,
+            exit_code=0,
+            stdout=(
+                '{"Reservations":[{"Instances":['
+                '{"InstanceId":"i-001","InstanceType":"t3.small","State":{"Name":"running"},'
+                '"Placement":{"AvailabilityZone":"eu-west-1a"},"PublicIpAddress":"52.0.0.1",'
+                '"PrivateIpAddress":"10.0.0.10","PlatformDetails":"Linux/UNIX",'
+                '"LaunchTime":"2026-03-25T08:15:00Z","Tags":[{"Key":"Name","Value":"web"}]}'
+                ']}]}'
+            ),
+            summary="instances",
+            succeeded=True,
+        )
+    )
+    qapp.processEvents()
+
+    assert window.workspace_ec2_instance_tree.topLevelItemCount() == 1
+    assert window.workspace_ec2_instance_tree.topLevelItem(0).text(1) == "i-001"
+    assert window.workspace_ec2_stop_button.isEnabled()
+    assert not window.workspace_ec2_start_button.isEnabled()
+
+    window.workspace_ec2_copy_ssh_button.click()
+    qapp.processEvents()
+    assert desktop.copied_texts[-1] == "ssh ec2-user@52.0.0.1"
 
 def test_main_window_uses_a_two_splitter_s3_workspace_with_inspector_tabs(qapp, tmp_path: Path) -> None:
     settings = AppSettings.from_env(
@@ -837,4 +896,8 @@ def test_main_window_can_analyse_and_validate_a_pasted_url(qapp, tmp_path: Path)
         for index in range(window.workspace_s3_url_tester_details_tree.topLevelItemCount())
     }
     assert "HTTP Status" in labels
+
+
+
+
 
