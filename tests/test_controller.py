@@ -261,8 +261,6 @@ def test_controller_tracks_selected_auth_method_and_locked_workspace_tabs(tmp_pa
         "Overview",
         "S3",
         "EC2",
-        "IAM",
-        "CloudWatch",
         "Actions",
     ]
 
@@ -373,6 +371,119 @@ def test_controller_blocks_s3_browsing_for_local_files_locked_session(tmp_path: 
     assert "CLI or SSO" in reason
     assert not controller.refresh_aws_s3_buckets()
 
+
+
+def test_controller_loads_ec2_instances_and_runs_stop_action(tmp_path: Path) -> None:
+    runner = DeferredRunner()
+    desktop = FakeDesktopIntegration()
+    controller = CloudSprocketController(
+        settings=_make_settings(tmp_path),
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(_make_profiles()),
+        command_runner=runner,
+        desktop_integration=desktop,
+    )
+
+    assert controller.lock_session()
+    assert controller.refresh_aws_ec2_instances()
+
+    list_spec, _callback = runner.calls[0]
+    assert list_spec.args[:2] == ("ec2", "describe-instances")
+
+    runner.finish_next(
+        CommandResult(
+            spec=list_spec,
+            exit_code=0,
+            stdout=(
+                '{"Reservations":[{"Instances":['
+                '{"InstanceId":"i-001","InstanceType":"t3.small","State":{"Name":"running"},'
+                '"Placement":{"AvailabilityZone":"eu-west-1a"},"PublicIpAddress":"52.0.0.1",'
+                '"PrivateIpAddress":"10.0.0.10","PlatformDetails":"Linux/UNIX",'
+                '"LaunchTime":"2026-03-25T08:15:00Z","Tags":[{"Key":"Name","Value":"web"}]},'
+                '{"InstanceId":"i-002","InstanceType":"t3.micro","State":{"Name":"stopped"},'
+                '"Placement":{"AvailabilityZone":"eu-west-1b"},"PrivateIpAddress":"10.0.0.20",'
+                '"PlatformDetails":"Linux/UNIX","LaunchTime":"2026-03-20T07:00:00Z",'
+                '"Tags":[{"Key":"Name","Value":"database"}]}'
+                ']}]}'
+            ),
+            summary="instances",
+            succeeded=True,
+        )
+    )
+
+    state = controller.aws_ec2_workspace()
+    assert [instance.instance_id for instance in state.instances] == ["i-002", "i-001"]
+    assert controller.select_aws_ec2_instance("i-001")
+    assert controller.can_stop_aws_ec2_instance()
+    assert not controller.can_start_aws_ec2_instance()
+
+    assert controller.copy_selected_aws_ec2_instance_id()
+    assert desktop.copied_texts[-1] == "i-001"
+
+    assert controller.copy_selected_aws_ec2_ssh_snippet()
+    assert desktop.copied_texts[-1] == "ssh ec2-user@52.0.0.1"
+
+    assert controller.stop_selected_aws_ec2_instance()
+    stop_spec, _callback = runner.calls[0]
+    assert stop_spec.args[:2] == ("ec2", "stop-instances")
+    assert stop_spec.args[2:4] == ("--instance-ids", "i-001")
+
+    runner.finish_next(
+        CommandResult(
+            spec=stop_spec,
+            exit_code=0,
+            stdout="{}",
+            summary="stop",
+            succeeded=True,
+        )
+    )
+
+    refreshed_spec, _callback = runner.calls[0]
+    assert refreshed_spec.args[:2] == ("ec2", "describe-instances")
+
+    runner.finish_next(
+        CommandResult(
+            spec=refreshed_spec,
+            exit_code=0,
+            stdout=(
+                '{"Reservations":[{"Instances":['
+                '{"InstanceId":"i-001","InstanceType":"t3.small","State":{"Name":"stopped"},'
+                '"Placement":{"AvailabilityZone":"eu-west-1a"},"PublicIpAddress":"52.0.0.1",'
+                '"PrivateIpAddress":"10.0.0.10","PlatformDetails":"Linux/UNIX",'
+                '"LaunchTime":"2026-03-25T08:15:00Z","Tags":[{"Key":"Name","Value":"web"}]}'
+                ']}]}'
+            ),
+            summary="instances",
+            succeeded=True,
+        )
+    )
+
+    refreshed_state = controller.aws_ec2_workspace()
+    assert refreshed_state.selected_instance_id == "i-001"
+    assert refreshed_state.instances[0].state == "stopped"
+    assert controller.can_start_aws_ec2_instance()
+    assert not controller.can_stop_aws_ec2_instance()
+    assert any(entry.action_id == "aws-ec2-stop" for entry in controller.log_entries())
+
+
+def test_controller_applies_ec2_state_filter_to_cli_request(tmp_path: Path) -> None:
+    runner = DeferredRunner()
+    controller = CloudSprocketController(
+        settings=_make_settings(tmp_path),
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(_make_profiles()),
+        command_runner=runner,
+        desktop_integration=FakeDesktopIntegration(),
+    )
+
+    assert controller.lock_session()
+    assert controller.set_aws_ec2_state_filter("running")
+    assert controller.refresh_aws_ec2_instances()
+
+    list_spec, _callback = runner.calls[0]
+    assert "--filters" in list_spec.args
+    filter_index = list_spec.args.index("--filters")
+    assert list_spec.args[filter_index + 1] == "Name=instance-state-name,Values=running"
 
 def test_controller_applies_s3_prefix_filter_to_object_listing(tmp_path: Path) -> None:
     runner = DeferredRunner()
@@ -678,3 +789,7 @@ def test_controller_can_analyse_and_validate_a_pasted_url(tmp_path: Path) -> Non
     validated_labels = {field.label for field in validated_state.url_tester_detail_fields}
     assert "HTTP Status" in validated_labels
     assert validated_state.url_tester_status_message == "Live validation succeeded with HTTP 206."
+
+
+
+

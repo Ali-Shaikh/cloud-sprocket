@@ -148,6 +148,19 @@ class S3ObjectSummary:
     etag: str = ""
 
 
+@dataclass(frozen=True, slots=True)
+class Ec2InstanceSummary:
+    instance_id: str
+    name: str = ""
+    state: str = ""
+    instance_type: str = ""
+    availability_zone: str = ""
+    public_ip: str = ""
+    private_ip: str = ""
+    platform: str = ""
+    launch_time: str = ""
+
+
 @dataclass(slots=True)
 class S3WorkspaceState:
     status_message: str = "Lock an AWS session to work with S3."
@@ -170,6 +183,17 @@ class S3WorkspaceState:
     object_metadata: tuple[DetailField, ...] = ()
     signed_url: str = ""
     url_tester_detail_fields: tuple[DetailField, ...] = ()
+
+
+@dataclass(slots=True)
+class Ec2WorkspaceState:
+    status_message: str = "Lock an AWS session to work with EC2."
+    instance_status_message: str = "Refresh instances to begin."
+    search_query: str = ""
+    state_filter: str = "all"
+    selected_instance_id: str | None = None
+    selected_instance_details: tuple[DetailField, ...] = ()
+    instances: tuple[Ec2InstanceSummary, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -237,6 +261,7 @@ class SessionState:
     command_state: CommandState = CommandState.IDLE
     running_action_id: str | None = None
     aws_s3_workspace: S3WorkspaceState = field(default_factory=S3WorkspaceState)
+    aws_ec2_workspace: Ec2WorkspaceState = field(default_factory=Ec2WorkspaceState)
     recent_logs: list[LogEntry] = field(default_factory=list)
 
     def active_profile_id(self, provider_id: str) -> str | None:
@@ -244,3 +269,4 @@ class SessionState:
 
     def selected_auth_method(self, provider_id: str) -> AuthMethod | None:
         return self.selected_auth_method_by_provider.get(provider_id)
+

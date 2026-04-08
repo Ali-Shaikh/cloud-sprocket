@@ -23,6 +23,8 @@ from cloudsprocket.models import (
     DiscoveryReport,
     LogEntry,
     LogLevel,
+    Ec2InstanceSummary,
+    Ec2WorkspaceState,
     ProfileDetails,
     ProviderAction,
     ProviderHealth,
@@ -121,9 +123,12 @@ class CloudSprocketController(QObject):
         self._reconcile_selection()
         self._reconcile_auth_selection()
         if self.is_session_locked() and self._session_state.locked_provider_id == "aws":
-            available, _reason = self.aws_s3_availability()
-            if not available:
+            s3_available, _s3_reason = self.aws_s3_availability()
+            ec2_available, _ec2_reason = self.aws_ec2_availability()
+            if not s3_available:
                 self._reset_aws_s3_workspace()
+            if not ec2_available:
+                self._reset_aws_ec2_workspace()
         if emit_signal:
             self.state_changed.emit()
 
@@ -244,6 +249,7 @@ class CloudSprocketController(QObject):
         self._session_state.locked_profile_id = profile.profile_id
         self._session_state.locked_auth_method = auth_method
         self._reset_aws_s3_workspace()
+        self._reset_aws_ec2_workspace()
         self._append_log(
             LogLevel.SUCCESS,
             f"Locked {provider_id.upper()} session for {profile.profile_id} using {auth_method.value}.",
@@ -260,6 +266,7 @@ class CloudSprocketController(QObject):
         self._session_state.locked_profile_id = None
         self._session_state.locked_auth_method = None
         self._reset_aws_s3_workspace()
+        self._reset_aws_ec2_workspace()
         self._append_log(
             LogLevel.INFO,
             f"Unlocked {locked_provider_id.upper()} session for {locked_profile_id}.",
@@ -288,6 +295,89 @@ class CloudSprocketController(QObject):
 
     def aws_s3_workspace(self) -> S3WorkspaceState:
         return self._session_state.aws_s3_workspace
+
+    def aws_ec2_workspace(self) -> Ec2WorkspaceState:
+        return self._session_state.aws_ec2_workspace
+
+    def aws_ec2_availability(self) -> tuple[bool, str]:
+        if not self.is_session_locked():
+            return False, "Lock an AWS session to work with EC2."
+        if self._session_state.locked_provider_id != "aws":
+            return False, "EC2 is only available for locked AWS sessions."
+        if self._session_state.locked_auth_method == AuthMethod.LOCAL_FILES:
+            return False, "Unlock the session and choose CLI or SSO to work with EC2."
+        provider_health = self.locked_provider_health()
+        if provider_health is None or provider_health.command_path is None:
+            return False, "AWS CLI is required to work with EC2 from the locked workspace."
+        if self.locked_profile() is None:
+            return False, "The locked AWS profile is no longer available."
+        return True, ""
+
+    def can_refresh_aws_ec2_instances(self) -> bool:
+        available, _reason = self.aws_ec2_availability()
+        return available and self._session_state.command_state != CommandState.RUNNING
+
+    def can_start_aws_ec2_instance(self) -> bool:
+        available, _reason = self.aws_ec2_availability()
+        selected = self._selected_aws_ec2_instance()
+        return (
+            available
+            and self._session_state.command_state != CommandState.RUNNING
+            and selected is not None
+            and selected.state.lower() == "stopped"
+        )
+
+    def can_stop_aws_ec2_instance(self) -> bool:
+        available, _reason = self.aws_ec2_availability()
+        selected = self._selected_aws_ec2_instance()
+        return (
+            available
+            and self._session_state.command_state != CommandState.RUNNING
+            and selected is not None
+            and selected.state.lower() == "running"
+        )
+
+    def can_reboot_aws_ec2_instance(self) -> bool:
+        available, _reason = self.aws_ec2_availability()
+        selected = self._selected_aws_ec2_instance()
+        return (
+            available
+            and self._session_state.command_state != CommandState.RUNNING
+            and selected is not None
+            and selected.state.lower() == "running"
+        )
+
+    def can_copy_aws_ec2_instance_id(self) -> bool:
+        return self._selected_aws_ec2_instance() is not None
+
+    def can_copy_aws_ec2_ssh_snippet(self) -> bool:
+        selected = self._selected_aws_ec2_instance()
+        return selected is not None and bool(selected.public_ip)
+
+    def set_aws_ec2_search_query(self, query: str) -> bool:
+        normalised = query.strip()
+        state = self._session_state.aws_ec2_workspace
+        if normalised == state.search_query:
+            return False
+        state.search_query = normalised
+        self._refresh_aws_ec2_selection_details()
+        self.state_changed.emit()
+        return True
+
+    def set_aws_ec2_state_filter(self, state_filter: str) -> bool:
+        normalised = self._normalise_aws_ec2_state_filter(state_filter)
+        state = self._session_state.aws_ec2_workspace
+        if normalised == state.state_filter:
+            return False
+        state.state_filter = normalised
+        state.selected_instance_id = None
+        state.selected_instance_details = ()
+        if state.instances:
+            state.instance_status_message = f"State filter changed to {normalised}. Refresh instances to apply the new filter."
+        else:
+            state.instance_status_message = "Refresh instances to begin."
+        self.state_changed.emit()
+        return True
 
     def aws_s3_availability(self) -> tuple[bool, str]:
         if not self.is_session_locked():
@@ -747,6 +837,405 @@ class CloudSprocketController(QObject):
         self._reset_s3_signed_url_state(state)
         return self._start_aws_s3_object_metadata_refresh(bucket_name, object_key)
 
+    def refresh_aws_ec2_instances(self) -> bool:
+        available, reason = self.aws_ec2_availability()
+        state = self._session_state.aws_ec2_workspace
+        if not available:
+            state.status_message = reason
+            state.instance_status_message = reason
+            self._append_log(LogLevel.WARNING, reason, action_id="aws-ec2-instances")
+            self.state_changed.emit()
+            return False
+        if self._session_state.command_state == CommandState.RUNNING:
+            message = "Wait for the current command to finish before refreshing EC2 instances."
+            state.instance_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-ec2-instances")
+            self.state_changed.emit()
+            return False
+
+        profile = self.locked_profile()
+        if profile is None:
+            return False
+
+        preferred_selected_id = state.selected_instance_id
+        state.status_message = f"Loading EC2 instances for {profile.profile_id}..."
+        state.instance_status_message = "Loading EC2 instances..."
+        state.selected_instance_details = ()
+
+        args = ["ec2", "describe-instances"]
+        if state.state_filter != "all":
+            args.extend(["--filters", f"Name=instance-state-name,Values={state.state_filter}"])
+        args.extend(["--profile", profile.profile_id, "--output", "json", "--no-cli-pager"])
+
+        spec = CommandSpec(
+            action_id="aws-ec2-instances",
+            execution_type=CommandExecutionType.PROCESS,
+            program="aws",
+            args=tuple(args),
+            summary=f"List EC2 instances for AWS profile {profile.profile_id}",
+        )
+        return self._run_process_command(
+            action_id="aws-ec2-instances",
+            label="EC2 Instances",
+            spec=spec,
+            on_finished=lambda result: self._finish_aws_ec2_instance_refresh(
+                profile.profile_id,
+                preferred_selected_id,
+                result,
+            ),
+        )
+
+    def select_aws_ec2_instance(self, instance_id: str) -> bool:
+        state = self._session_state.aws_ec2_workspace
+        if instance_id == state.selected_instance_id:
+            return False
+        if not any(instance.instance_id == instance_id for instance in state.instances):
+            return False
+        state.selected_instance_id = instance_id
+        self._refresh_aws_ec2_selection_details()
+        selected = self._selected_aws_ec2_instance()
+        if selected is not None:
+            state.instance_status_message = (
+                f"Selected {selected.instance_id} ({selected.state or 'unknown'})."
+            )
+        self.state_changed.emit()
+        return True
+
+    def start_selected_aws_ec2_instance(self) -> bool:
+        return self._start_aws_ec2_instance_action(
+            action_id="start",
+            command="start-instances",
+            label="Start",
+        )
+
+    def stop_selected_aws_ec2_instance(self) -> bool:
+        return self._start_aws_ec2_instance_action(
+            action_id="stop",
+            command="stop-instances",
+            label="Stop",
+        )
+
+    def reboot_selected_aws_ec2_instance(self) -> bool:
+        return self._start_aws_ec2_instance_action(
+            action_id="reboot",
+            command="reboot-instances",
+            label="Reboot",
+        )
+
+    def copy_selected_aws_ec2_instance_id(self) -> bool:
+        instance = self._selected_aws_ec2_instance()
+        if instance is None:
+            message = "Select an EC2 instance before copying its instance ID."
+            self._append_log(LogLevel.WARNING, message, action_id="aws-ec2-copy-id")
+            self.state_changed.emit()
+            return False
+        self._desktop_integration.copy_text(instance.instance_id)
+        self._append_log(
+            LogLevel.SUCCESS,
+            f"Copied instance ID {instance.instance_id}.",
+            details=instance.instance_id,
+            action_id="aws-ec2-copy-id",
+        )
+        self.state_changed.emit()
+        return True
+
+    def copy_selected_aws_ec2_ssh_snippet(self) -> bool:
+        instance = self._selected_aws_ec2_instance()
+        if instance is None:
+            message = "Select an EC2 instance before copying an SSH snippet."
+            self._append_log(LogLevel.WARNING, message, action_id="aws-ec2-copy-ssh")
+            self.state_changed.emit()
+            return False
+        if not instance.public_ip:
+            message = "The selected instance has no public IP address for direct SSH."
+            self._append_log(LogLevel.WARNING, message, action_id="aws-ec2-copy-ssh")
+            self.state_changed.emit()
+            return False
+        username = "Administrator" if "windows" in instance.platform.lower() else "ec2-user"
+        snippet = f"ssh {username}@{instance.public_ip}"
+        self._desktop_integration.copy_text(snippet)
+        self._append_log(
+            LogLevel.SUCCESS,
+            f"Copied SSH snippet for {instance.instance_id}.",
+            details=snippet,
+            action_id="aws-ec2-copy-ssh",
+        )
+        self.state_changed.emit()
+        return True
+
+    def _start_aws_ec2_instance_action(self, *, action_id: str, command: str, label: str) -> bool:
+        available, reason = self.aws_ec2_availability()
+        state = self._session_state.aws_ec2_workspace
+        if not available:
+            state.instance_status_message = reason
+            self._append_log(LogLevel.WARNING, reason, action_id=f"aws-ec2-{action_id}")
+            self.state_changed.emit()
+            return False
+        if self._session_state.command_state == CommandState.RUNNING:
+            message = "Wait for the current command to finish before starting another EC2 action."
+            state.instance_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id=f"aws-ec2-{action_id}")
+            self.state_changed.emit()
+            return False
+
+        profile = self.locked_profile()
+        instance = self._selected_aws_ec2_instance()
+        if profile is None or instance is None:
+            message = "Select an EC2 instance before running this action."
+            state.instance_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id=f"aws-ec2-{action_id}")
+            self.state_changed.emit()
+            return False
+
+        instance_state = instance.state.lower()
+        if action_id == "start" and instance_state != "stopped":
+            message = "Start is only available for stopped instances."
+            state.instance_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id="aws-ec2-start")
+            self.state_changed.emit()
+            return False
+        if action_id in {"stop", "reboot"} and instance_state != "running":
+            message = f"{label} is only available for running instances."
+            state.instance_status_message = message
+            self._append_log(LogLevel.WARNING, message, action_id=f"aws-ec2-{action_id}")
+            self.state_changed.emit()
+            return False
+
+        state.instance_status_message = f"{label} request in progress for {instance.instance_id}..."
+        spec = CommandSpec(
+            action_id=f"aws-ec2-{action_id}",
+            execution_type=CommandExecutionType.PROCESS,
+            program="aws",
+            args=(
+                "ec2",
+                command,
+                "--instance-ids",
+                instance.instance_id,
+                "--profile",
+                profile.profile_id,
+                "--output",
+                "json",
+                "--no-cli-pager",
+            ),
+            summary=f"{label} EC2 instance {instance.instance_id}",
+        )
+        return self._run_process_command(
+            action_id=f"aws-ec2-{action_id}",
+            label=f"EC2 {label}",
+            spec=spec,
+            on_finished=lambda result: self._finish_aws_ec2_instance_action(
+                action_id,
+                instance.instance_id,
+                result,
+            ),
+        )
+
+    def _finish_aws_ec2_instance_refresh(
+        self,
+        profile_id: str,
+        preferred_selected_id: str | None,
+        result: CommandResult,
+    ) -> None:
+        self._session_state.command_state = CommandState.IDLE
+        self._session_state.running_action_id = None
+        state = self._session_state.aws_ec2_workspace
+
+        if not result.succeeded:
+            failure_message = self._command_failure_summary(result, "EC2 instance refresh failed.")
+            state.status_message = failure_message
+            state.instance_status_message = failure_message
+            state.instances = ()
+            state.selected_instance_id = None
+            state.selected_instance_details = ()
+            self._append_log(
+                LogLevel.ERROR,
+                failure_message,
+                details=result.stderr or result.stdout,
+                action_id="aws-ec2-instances",
+            )
+            self.state_changed.emit()
+            return
+
+        try:
+            payload = json.loads(result.stdout or "{}")
+        except json.JSONDecodeError:
+            failure_message = "EC2 instance refresh returned invalid JSON."
+            state.status_message = failure_message
+            state.instance_status_message = failure_message
+            state.instances = ()
+            state.selected_instance_id = None
+            state.selected_instance_details = ()
+            self._append_log(
+                LogLevel.ERROR,
+                failure_message,
+                details=result.stdout,
+                action_id="aws-ec2-instances",
+            )
+            self.state_changed.emit()
+            return
+
+        parsed_instances: list[Ec2InstanceSummary] = []
+        for reservation in payload.get("Reservations") or ():
+            for entry in reservation.get("Instances") or ():
+                instance_id = str(entry.get("InstanceId") or "").strip()
+                if not instance_id:
+                    continue
+                tags = entry.get("Tags") or ()
+                name = ""
+                for tag in tags:
+                    if str(tag.get("Key") or "") == "Name":
+                        name = str(tag.get("Value") or "").strip()
+                        break
+                placement = entry.get("Placement") or {}
+                state_info = entry.get("State") or {}
+                parsed_instances.append(
+                    Ec2InstanceSummary(
+                        instance_id=instance_id,
+                        name=name,
+                        state=str(state_info.get("Name") or "unknown").strip(),
+                        instance_type=str(entry.get("InstanceType") or "").strip(),
+                        availability_zone=str(placement.get("AvailabilityZone") or "").strip(),
+                        public_ip=str(entry.get("PublicIpAddress") or "").strip(),
+                        private_ip=str(entry.get("PrivateIpAddress") or "").strip(),
+                        platform=str(entry.get("PlatformDetails") or entry.get("Platform") or "").strip(),
+                        launch_time=self._format_s3_timestamp(str(entry.get("LaunchTime") or "").strip()),
+                    )
+                )
+
+        parsed_instances.sort(key=lambda instance: ((instance.name or instance.instance_id).lower(), instance.instance_id))
+        filtered_instances = self._apply_aws_ec2_client_filters(tuple(parsed_instances))
+        state.instances = filtered_instances
+
+        selected_id = preferred_selected_id
+        if selected_id and not any(instance.instance_id == selected_id for instance in filtered_instances):
+            selected_id = None
+        if selected_id is None and filtered_instances:
+            selected_id = filtered_instances[0].instance_id
+        state.selected_instance_id = selected_id
+        self._refresh_aws_ec2_selection_details()
+
+        count = len(filtered_instances)
+        instance_label = "instance" if count == 1 else "instances"
+        if count:
+            state.status_message = f"Loaded {count} EC2 {instance_label} for {profile_id}."
+            state.instance_status_message = state.status_message
+        else:
+            state.status_message = f"No EC2 instances matched the current filters for {profile_id}."
+            state.instance_status_message = state.status_message
+
+        self._append_log(LogLevel.SUCCESS, state.status_message, action_id="aws-ec2-instances")
+        self.state_changed.emit()
+
+    def _finish_aws_ec2_instance_action(
+        self,
+        action_id: str,
+        instance_id: str,
+        result: CommandResult,
+    ) -> None:
+        self._session_state.command_state = CommandState.IDLE
+        self._session_state.running_action_id = None
+        state = self._session_state.aws_ec2_workspace
+        if not result.succeeded:
+            failure_message = self._command_failure_summary(
+                result,
+                f"EC2 {action_id} failed for {instance_id}.",
+            )
+            state.instance_status_message = failure_message
+            self._append_log(
+                LogLevel.ERROR,
+                failure_message,
+                details=result.stderr or result.stdout,
+                action_id=f"aws-ec2-{action_id}",
+            )
+            self.state_changed.emit()
+            return
+
+        past_tense = {"start": "started", "stop": "stopped", "reboot": "rebooted"}.get(action_id, action_id)
+        success_message = f"Instance {instance_id} {past_tense}. Refreshing EC2 instances."
+        state.instance_status_message = success_message
+        self._append_log(LogLevel.SUCCESS, success_message, action_id=f"aws-ec2-{action_id}")
+        self.state_changed.emit()
+        self.refresh_aws_ec2_instances()
+
+    def _selected_aws_ec2_instance(self) -> Ec2InstanceSummary | None:
+        state = self._session_state.aws_ec2_workspace
+        selected_id = state.selected_instance_id
+        if selected_id is None:
+            return None
+        for instance in state.instances:
+            if instance.instance_id == selected_id:
+                return instance
+        return None
+
+    def _refresh_aws_ec2_selection_details(self) -> None:
+        state = self._session_state.aws_ec2_workspace
+        selected = self._selected_aws_ec2_instance()
+        if selected is None:
+            state.selected_instance_details = ()
+            return
+        state.selected_instance_details = self._build_aws_ec2_instance_details(selected)
+
+    def _build_aws_ec2_instance_details(self, instance: Ec2InstanceSummary) -> tuple[DetailField, ...]:
+        details = [
+            DetailField(label="Instance ID", value=instance.instance_id),
+            DetailField(label="Name", value=instance.name or "(none)"),
+            DetailField(label="State", value=instance.state or "unknown"),
+            DetailField(label="Type", value=instance.instance_type or "unknown"),
+            DetailField(label="Availability Zone", value=instance.availability_zone or "unknown"),
+            DetailField(label="Public IP", value=instance.public_ip or "(none)"),
+            DetailField(label="Private IP", value=instance.private_ip or "(none)"),
+        ]
+        if instance.platform:
+            details.append(DetailField(label="Platform", value=instance.platform))
+        if instance.launch_time:
+            details.append(DetailField(label="Launch Time", value=instance.launch_time))
+        return tuple(details)
+
+    def _apply_aws_ec2_client_filters(
+        self,
+        instances: tuple[Ec2InstanceSummary, ...],
+    ) -> tuple[Ec2InstanceSummary, ...]:
+        state = self._session_state.aws_ec2_workspace
+        filtered = instances
+        state_filter = self._normalise_aws_ec2_state_filter(state.state_filter)
+        if state_filter != "all":
+            filtered = tuple(
+                instance for instance in filtered if instance.state.lower() == state_filter
+            )
+        search_query = state.search_query.strip().lower()
+        if search_query:
+            filtered = tuple(
+                instance
+                for instance in filtered
+                if search_query in " ".join(
+                    (
+                        instance.instance_id,
+                        instance.name,
+                        instance.state,
+                        instance.instance_type,
+                        instance.availability_zone,
+                        instance.public_ip,
+                        instance.private_ip,
+                    )
+                ).lower()
+            )
+        return filtered
+
+    def _normalise_aws_ec2_state_filter(self, state_filter: str) -> str:
+        normalised = state_filter.strip().lower()
+        allowed_filters = {
+            "all",
+            "pending",
+            "running",
+            "stopping",
+            "stopped",
+            "shutting-down",
+            "terminated",
+        }
+        if normalised in allowed_filters:
+            return normalised
+        return "all"
+
     def workspace_tabs(self) -> tuple[WorkspaceTab, ...]:
         if not self.is_session_locked():
             return ()
@@ -761,11 +1250,17 @@ class CloudSprocketController(QObject):
                 s3_summary = f"{len(s3_state.buckets)} S3 buckets loaded for the locked session."
             if not s3_available:
                 s3_summary = "S3 browsing is unavailable for the current locked session."
-            s3_detail = (
-                s3_state.bucket_status_message
-                if s3_available
-                else s3_reason
-            )
+            s3_detail = s3_state.bucket_status_message if s3_available else s3_reason
+
+            ec2_available, ec2_reason = self.aws_ec2_availability()
+            ec2_state = self._session_state.aws_ec2_workspace
+            ec2_summary = "Browse EC2 instances and run state actions for the locked AWS session."
+            if ec2_state.instances:
+                ec2_summary = f"{len(ec2_state.instances)} EC2 instances loaded for the locked session."
+            if not ec2_available:
+                ec2_summary = "EC2 workspace is unavailable for the current locked session."
+            ec2_detail = ec2_state.instance_status_message if ec2_available else ec2_reason
+
             return (
                 WorkspaceTab(
                     tab_id="overview",
@@ -782,20 +1277,8 @@ class CloudSprocketController(QObject):
                 WorkspaceTab(
                     tab_id="ec2",
                     label="EC2",
-                    summary="Instance and fleet workspace placeholder.",
-                    detail="This tab will become the focused EC2 workspace for the locked AWS session.",
-                ),
-                WorkspaceTab(
-                    tab_id="iam",
-                    label="IAM",
-                    summary="Identity and permission workspace placeholder.",
-                    detail="This tab will become the focused IAM workspace for the locked AWS session.",
-                ),
-                WorkspaceTab(
-                    tab_id="cloudwatch",
-                    label="CloudWatch",
-                    summary="Logs and metrics workspace placeholder.",
-                    detail="This tab will become the focused CloudWatch workspace for the locked AWS session.",
+                    summary=ec2_summary,
+                    detail=ec2_detail,
                 ),
                 WorkspaceTab(
                     tab_id="actions",
@@ -1744,6 +2227,21 @@ class CloudSprocketController(QObject):
         state.signed_url_status_message = reason
         state.url_tester_status_message = reason
 
+    def _reset_aws_ec2_workspace(self) -> None:
+        state = self._session_state.aws_ec2_workspace
+        available, reason = self.aws_ec2_availability()
+        state.instances = ()
+        state.selected_instance_id = None
+        state.selected_instance_details = ()
+        if available:
+            profile = self.locked_profile()
+            profile_id = profile.profile_id if profile is not None else "locked profile"
+            state.status_message = f"EC2 workspace ready for {profile_id}. Refresh instances to begin."
+            state.instance_status_message = "Refresh EC2 instances to load the current fleet snapshot."
+            return
+        state.status_message = reason
+        state.instance_status_message = reason
+
     def _aws_s3_upload_source_file(self) -> Path | None:
         source_path = self._session_state.aws_s3_workspace.upload_source_path.strip()
         if not source_path:
@@ -1990,3 +2488,14 @@ class CloudSprocketController(QObject):
         available_method_ids = {method.method for method in available_methods}
         if selected_method not in available_method_ids:
             self._session_state.selected_auth_method_by_provider[provider_id] = available_methods[0].method
+
+
+
+
+
+
+
+
+
+
+
