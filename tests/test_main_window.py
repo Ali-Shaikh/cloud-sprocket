@@ -901,3 +901,4 @@ def test_main_window_can_analyse_and_validate_a_pasted_url(qapp, tmp_path: Path)
 
 
 
+
