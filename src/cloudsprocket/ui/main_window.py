@@ -1771,6 +1771,8 @@ class MainWindow(QMainWindow):
                 page = self._build_workspace_overview_tab()
             elif tab.tab_id == "s3":
                 page = self._build_workspace_s3_tab()
+            elif tab.tab_id == "ec2":
+                page = self._build_workspace_ec2_tab()
             elif tab.tab_id == "actions":
                 page = self._build_workspace_actions_tab()
             else:
@@ -2340,6 +2342,7 @@ class MainWindow(QMainWindow):
         tree.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.header().setHighlightSections(False)
+
 
 
 
