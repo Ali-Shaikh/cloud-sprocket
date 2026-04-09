@@ -389,6 +389,9 @@ def test_controller_loads_ec2_instances_and_runs_stop_action(tmp_path: Path) -> 
 
     list_spec, _callback = runner.calls[0]
     assert list_spec.args[:2] == ("ec2", "describe-instances")
+    assert "--region" in list_spec.args
+    region_index = list_spec.args.index("--region")
+    assert list_spec.args[region_index + 1] == "us-east-1"
 
     runner.finish_next(
         CommandResult(
@@ -427,6 +430,9 @@ def test_controller_loads_ec2_instances_and_runs_stop_action(tmp_path: Path) -> 
     stop_spec, _callback = runner.calls[0]
     assert stop_spec.args[:2] == ("ec2", "stop-instances")
     assert stop_spec.args[2:4] == ("--instance-ids", "i-001")
+    assert "--region" in stop_spec.args
+    stop_region_index = stop_spec.args.index("--region")
+    assert stop_spec.args[stop_region_index + 1] == "us-east-1"
 
     runner.finish_next(
         CommandResult(
@@ -440,6 +446,9 @@ def test_controller_loads_ec2_instances_and_runs_stop_action(tmp_path: Path) -> 
 
     refreshed_spec, _callback = runner.calls[0]
     assert refreshed_spec.args[:2] == ("ec2", "describe-instances")
+    assert "--region" in refreshed_spec.args
+    refreshed_region_index = refreshed_spec.args.index("--region")
+    assert refreshed_spec.args[refreshed_region_index + 1] == "us-east-1"
 
     runner.finish_next(
         CommandResult(
@@ -484,6 +493,27 @@ def test_controller_applies_ec2_state_filter_to_cli_request(tmp_path: Path) -> N
     assert "--filters" in list_spec.args
     filter_index = list_spec.args.index("--filters")
     assert list_spec.args[filter_index + 1] == "Name=instance-state-name,Values=running"
+
+def test_controller_applies_selected_ec2_region_to_cli_request(tmp_path: Path) -> None:
+    runner = DeferredRunner()
+    controller = CloudSprocketController(
+        settings=_make_settings(tmp_path),
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(_make_profiles()),
+        command_runner=runner,
+        desktop_integration=FakeDesktopIntegration(),
+    )
+
+    assert controller.lock_session()
+    assert controller.aws_ec2_selected_region() == "us-east-1"
+    assert controller.set_aws_ec2_region("eu-west-2")
+    assert controller.refresh_aws_ec2_instances()
+
+    list_spec, _callback = runner.calls[0]
+    assert "--region" in list_spec.args
+    region_index = list_spec.args.index("--region")
+    assert list_spec.args[region_index + 1] == "eu-west-2"
+
 
 def test_controller_applies_s3_prefix_filter_to_object_listing(tmp_path: Path) -> None:
     runner = DeferredRunner()

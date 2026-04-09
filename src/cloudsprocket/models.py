@@ -191,6 +191,8 @@ class Ec2WorkspaceState:
     instance_status_message: str = "Refresh instances to begin."
     search_query: str = ""
     state_filter: str = "all"
+    selected_region: str = ""
+    region_options: tuple[str, ...] = ()
     selected_instance_id: str | None = None
     selected_instance_details: tuple[DetailField, ...] = ()
     instances: tuple[Ec2InstanceSummary, ...] = ()
@@ -269,4 +271,3 @@ class SessionState:
 
     def selected_auth_method(self, provider_id: str) -> AuthMethod | None:
         return self.selected_auth_method_by_provider.get(provider_id)
-

@@ -154,6 +154,8 @@ class MainWindow(QMainWindow):
         self._workspace_ec2_instance_status_label = QLabel()
         self._workspace_ec2_search_input = QLineEdit()
         self._workspace_ec2_state_filter_combo = QComboBox()
+        self._workspace_ec2_region_combo = QComboBox()
+        self._workspace_ec2_apply_region_button = QPushButton("Apply Region")
         self._workspace_ec2_refresh_button = QPushButton("Refresh Instances")
         self._workspace_ec2_start_button = QPushButton("Start")
         self._workspace_ec2_stop_button = QPushButton("Stop")
@@ -196,6 +198,7 @@ class MainWindow(QMainWindow):
         self._workspace_ec2_copy_ssh_button.clicked.connect(self._on_ec2_copy_ssh_clicked)
         self._workspace_ec2_search_input.textChanged.connect(self._on_ec2_search_text_changed)
         self._workspace_ec2_state_filter_combo.currentTextChanged.connect(self._on_ec2_state_filter_changed)
+        self._workspace_ec2_apply_region_button.clicked.connect(self._on_ec2_apply_region_clicked)
         self._workspace_ec2_instance_tree.itemSelectionChanged.connect(self._on_ec2_instance_selection_changed)
 
         self._build_ui()
@@ -437,6 +440,14 @@ class MainWindow(QMainWindow):
     @property
     def workspace_ec2_state_filter_combo(self) -> QComboBox:
         return self._workspace_ec2_state_filter_combo
+
+    @property
+    def workspace_ec2_region_combo(self) -> QComboBox:
+        return self._workspace_ec2_region_combo
+
+    @property
+    def workspace_ec2_apply_region_button(self) -> QPushButton:
+        return self._workspace_ec2_apply_region_button
 
     @property
     def primary_sections_tabs(self) -> QTabWidget:
@@ -1303,6 +1314,13 @@ class MainWindow(QMainWindow):
                 "Pending",
                 "Stopping",
             ])
+        self._workspace_ec2_region_combo.setEditable(True)
+        self._workspace_ec2_region_combo.setInsertPolicy(QComboBox.NoInsert)
+        self._workspace_ec2_region_combo.setMinimumContentsLength(12)
+        self._workspace_ec2_region_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        region_editor = self._workspace_ec2_region_combo.lineEdit()
+        if region_editor is not None:
+            region_editor.setPlaceholderText("Type or select an AWS region, for example eu-west-2")
 
         self._set_button_tone(self._workspace_ec2_refresh_button, "primary")
 
@@ -1338,6 +1356,9 @@ class MainWindow(QMainWindow):
         controls_layout.addWidget(self._workspace_ec2_search_input, 1)
         controls_layout.addWidget(QLabel("State"))
         controls_layout.addWidget(self._workspace_ec2_state_filter_combo)
+        controls_layout.addWidget(QLabel("Region"))
+        controls_layout.addWidget(self._workspace_ec2_region_combo)
+        controls_layout.addWidget(self._workspace_ec2_apply_region_button)
         controls_layout.addWidget(self._workspace_ec2_refresh_button)
 
         action_layout = QHBoxLayout()
@@ -1925,9 +1946,25 @@ class MainWindow(QMainWindow):
             self._workspace_ec2_state_filter_combo.setCurrentIndex(combo_index)
         self._workspace_ec2_state_filter_combo.blockSignals(False)
 
+        desired_regions = self._controller.aws_ec2_region_options()
+        current_regions = tuple(
+            self._workspace_ec2_region_combo.itemText(index)
+            for index in range(self._workspace_ec2_region_combo.count())
+        )
+        desired_region = self._controller.aws_ec2_selected_region()
+        self._workspace_ec2_region_combo.blockSignals(True)
+        if current_regions != desired_regions:
+            self._workspace_ec2_region_combo.clear()
+            self._workspace_ec2_region_combo.addItems(desired_regions)
+        if self._workspace_ec2_region_combo.currentText() != desired_region:
+            self._workspace_ec2_region_combo.setEditText(desired_region)
+        self._workspace_ec2_region_combo.blockSignals(False)
+
         busy = self._controller.session_state.command_state.value == "running"
         self._workspace_ec2_search_input.setEnabled(available and not busy)
         self._workspace_ec2_state_filter_combo.setEnabled(available and not busy)
+        self._workspace_ec2_region_combo.setEnabled(available and not busy)
+        self._workspace_ec2_apply_region_button.setEnabled(available and not busy)
         self._workspace_ec2_refresh_button.setEnabled(self._controller.can_refresh_aws_ec2_instances())
         self._workspace_ec2_start_button.setEnabled(self._controller.can_start_aws_ec2_instance())
         self._workspace_ec2_stop_button.setEnabled(self._controller.can_stop_aws_ec2_instance())
@@ -2286,6 +2323,13 @@ class MainWindow(QMainWindow):
             return
         changed = self._controller.set_aws_ec2_state_filter(value.lower())
         if changed:
+            self._controller.refresh_aws_ec2_instances()
+
+    def _on_ec2_apply_region_clicked(self) -> None:
+        if self._rendering_state:
+            return
+        changed = self._controller.set_aws_ec2_region(self._workspace_ec2_region_combo.currentText())
+        if changed and self._controller.can_refresh_aws_ec2_instances():
             self._controller.refresh_aws_ec2_instances()
 
     def _on_ec2_instance_selection_changed(self) -> None:

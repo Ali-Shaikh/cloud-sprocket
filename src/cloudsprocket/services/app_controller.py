@@ -42,6 +42,28 @@ from cloudsprocket.services.provider_actions import ProviderAdapter, create_prov
 from cloudsprocket.services.url_tester import BackgroundUrlValidator, UrlValidationResult, analyse_url
 
 AWS_S3_MULTIPART_THRESHOLD_BYTES = 8 * 1024 * 1024
+AWS_EC2_REGION_SUGGESTIONS = (
+    "us-east-1",
+    "us-east-2",
+    "us-west-1",
+    "us-west-2",
+    "ca-central-1",
+    "sa-east-1",
+    "eu-west-1",
+    "eu-west-2",
+    "eu-west-3",
+    "eu-central-1",
+    "eu-north-1",
+    "eu-south-1",
+    "ap-south-1",
+    "ap-southeast-1",
+    "ap-southeast-2",
+    "ap-northeast-1",
+    "ap-northeast-2",
+    "me-central-1",
+    "me-south-1",
+    "af-south-1",
+)
 
 
 class DesktopIntegration(Protocol):
@@ -376,6 +398,33 @@ class CloudSprocketController(QObject):
             state.instance_status_message = f"State filter changed to {normalised}. Refresh instances to apply the new filter."
         else:
             state.instance_status_message = "Refresh instances to begin."
+        self.state_changed.emit()
+        return True
+
+    def aws_ec2_selected_region(self) -> str:
+        return self._session_state.aws_ec2_workspace.selected_region
+
+    def aws_ec2_region_options(self) -> tuple[str, ...]:
+        state = self._session_state.aws_ec2_workspace
+        if state.region_options:
+            return state.region_options
+        return self._build_aws_ec2_region_options(state.selected_region)
+
+    def set_aws_ec2_region(self, region: str) -> bool:
+        state = self._session_state.aws_ec2_workspace
+        normalised = self._normalise_aws_region(region)
+        if normalised == state.selected_region:
+            return False
+        state.selected_region = normalised
+        state.region_options = self._build_aws_ec2_region_options(normalised)
+        state.selected_instance_id = None
+        state.selected_instance_details = ()
+        if normalised:
+            message = f"Region changed to {normalised}. Refresh instances to load this region."
+        else:
+            message = "Region cleared. Refresh instances to use the AWS CLI default region."
+        state.status_message = message
+        state.instance_status_message = message
         self.state_changed.emit()
         return True
 
@@ -858,21 +907,31 @@ class CloudSprocketController(QObject):
             return False
 
         preferred_selected_id = state.selected_instance_id
-        state.status_message = f"Loading EC2 instances for {profile.profile_id}..."
+        selected_region = state.selected_region.strip()
+        if selected_region:
+            state.status_message = f"Loading EC2 instances for {profile.profile_id} in {selected_region}..."
+        else:
+            state.status_message = f"Loading EC2 instances for {profile.profile_id}..."
         state.instance_status_message = "Loading EC2 instances..."
         state.selected_instance_details = ()
 
         args = ["ec2", "describe-instances"]
         if state.state_filter != "all":
             args.extend(["--filters", f"Name=instance-state-name,Values={state.state_filter}"])
+        if selected_region:
+            args.extend(["--region", selected_region])
         args.extend(["--profile", profile.profile_id, "--output", "json", "--no-cli-pager"])
+
+        summary = f"List EC2 instances for AWS profile {profile.profile_id}"
+        if selected_region:
+            summary = f"{summary} in {selected_region}"
 
         spec = CommandSpec(
             action_id="aws-ec2-instances",
             execution_type=CommandExecutionType.PROCESS,
             program="aws",
             args=tuple(args),
-            summary=f"List EC2 instances for AWS profile {profile.profile_id}",
+            summary=summary,
         )
         return self._run_process_command(
             action_id="aws-ec2-instances",
@@ -1002,22 +1061,32 @@ class CloudSprocketController(QObject):
             return False
 
         state.instance_status_message = f"{label} request in progress for {instance.instance_id}..."
+        selected_region = state.selected_region.strip()
+        args = [
+            "ec2",
+            command,
+            "--instance-ids",
+            instance.instance_id,
+        ]
+        if selected_region:
+            args.extend(["--region", selected_region])
+        args.extend([
+            "--profile",
+            profile.profile_id,
+            "--output",
+            "json",
+            "--no-cli-pager",
+        ])
+        summary = f"{label} EC2 instance {instance.instance_id}"
+        if selected_region:
+            summary = f"{summary} in {selected_region}"
+
         spec = CommandSpec(
             action_id=f"aws-ec2-{action_id}",
             execution_type=CommandExecutionType.PROCESS,
             program="aws",
-            args=(
-                "ec2",
-                command,
-                "--instance-ids",
-                instance.instance_id,
-                "--profile",
-                profile.profile_id,
-                "--output",
-                "json",
-                "--no-cli-pager",
-            ),
-            summary=f"{label} EC2 instance {instance.instance_id}",
+            args=tuple(args),
+            summary=summary,
         )
         return self._run_process_command(
             action_id=f"aws-ec2-{action_id}",
@@ -1103,8 +1172,20 @@ class CloudSprocketController(QObject):
                 )
 
         parsed_instances.sort(key=lambda instance: ((instance.name or instance.instance_id).lower(), instance.instance_id))
+        discovered_regions = {
+            region
+            for region in (
+                self._aws_region_from_availability_zone(instance.availability_zone)
+                for instance in parsed_instances
+            )
+            if region
+        }
         filtered_instances = self._apply_aws_ec2_client_filters(tuple(parsed_instances))
         state.instances = filtered_instances
+        state.region_options = self._build_aws_ec2_region_options(
+            state.selected_region,
+            tuple(sorted(discovered_regions)),
+        )
 
         selected_id = preferred_selected_id
         if selected_id and not any(instance.instance_id == selected_id for instance in filtered_instances):
@@ -1116,11 +1197,12 @@ class CloudSprocketController(QObject):
 
         count = len(filtered_instances)
         instance_label = "instance" if count == 1 else "instances"
+        region_suffix = f" in {state.selected_region}" if state.selected_region else ""
         if count:
-            state.status_message = f"Loaded {count} EC2 {instance_label} for {profile_id}."
+            state.status_message = f"Loaded {count} EC2 {instance_label} for {profile_id}{region_suffix}."
             state.instance_status_message = state.status_message
         else:
-            state.status_message = f"No EC2 instances matched the current filters for {profile_id}."
+            state.status_message = f"No EC2 instances matched the current filters for {profile_id}{region_suffix}."
             state.instance_status_message = state.status_message
 
         self._append_log(LogLevel.SUCCESS, state.status_message, action_id="aws-ec2-instances")
@@ -1235,6 +1317,49 @@ class CloudSprocketController(QObject):
         if normalised in allowed_filters:
             return normalised
         return "all"
+
+    def _normalise_aws_region(self, region: str) -> str:
+        return region.strip().lower()
+
+    def _aws_region_from_availability_zone(self, availability_zone: str) -> str:
+        zone = availability_zone.strip().lower()
+        if len(zone) < 2:
+            return ""
+        if zone[-1].isalpha() and zone[-2].isdigit():
+            return zone[:-1]
+        return ""
+
+    def _locked_aws_profile_region(self) -> str:
+        profile = self.locked_profile()
+        if profile is None or profile.provider_id != "aws":
+            return ""
+        for field in profile.attributes:
+            if field.label.strip().lower() == "region":
+                return self._normalise_aws_region(field.value)
+        return ""
+
+    def _build_aws_ec2_region_options(
+        self,
+        selected_region: str,
+        discovered_regions: Sequence[str] = (),
+    ) -> tuple[str, ...]:
+        ordered_regions: list[str] = []
+        seen_regions: set[str] = set()
+
+        def _add_region(value: str) -> None:
+            normalised_region = self._normalise_aws_region(value)
+            if not normalised_region or normalised_region in seen_regions:
+                return
+            seen_regions.add(normalised_region)
+            ordered_regions.append(normalised_region)
+
+        _add_region(selected_region)
+        _add_region(self._locked_aws_profile_region())
+        for region in discovered_regions:
+            _add_region(region)
+        for region in AWS_EC2_REGION_SUGGESTIONS:
+            _add_region(region)
+        return tuple(ordered_regions)
 
     def workspace_tabs(self) -> tuple[WorkspaceTab, ...]:
         if not self.is_session_locked():
@@ -2230,14 +2355,23 @@ class CloudSprocketController(QObject):
     def _reset_aws_ec2_workspace(self) -> None:
         state = self._session_state.aws_ec2_workspace
         available, reason = self.aws_ec2_availability()
+        profile_region = self._locked_aws_profile_region() if available else ""
+        state.selected_region = profile_region
+        state.region_options = self._build_aws_ec2_region_options(profile_region)
         state.instances = ()
         state.selected_instance_id = None
         state.selected_instance_details = ()
         if available:
             profile = self.locked_profile()
             profile_id = profile.profile_id if profile is not None else "locked profile"
-            state.status_message = f"EC2 workspace ready for {profile_id}. Refresh instances to begin."
-            state.instance_status_message = "Refresh EC2 instances to load the current fleet snapshot."
+            if profile_region:
+                state.status_message = f"EC2 workspace ready for {profile_id} in {profile_region}. Refresh instances to begin."
+                state.instance_status_message = (
+                    f"Refresh EC2 instances to load the current fleet snapshot in {profile_region}."
+                )
+            else:
+                state.status_message = f"EC2 workspace ready for {profile_id}. Refresh instances to begin."
+                state.instance_status_message = "Refresh EC2 instances to load the current fleet snapshot."
             return
         state.status_message = reason
         state.instance_status_message = reason

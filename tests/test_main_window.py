@@ -362,6 +362,9 @@ def test_main_window_renders_ec2_workspace_and_instance_actions(qapp, tmp_path: 
 
     list_spec, _callback = runner.calls[0]
     assert list_spec.args[:2] == ("ec2", "describe-instances")
+    assert "--region" in list_spec.args
+    region_index = list_spec.args.index("--region")
+    assert list_spec.args[region_index + 1] == "us-east-1"
 
     runner.finish_next(
         CommandResult(
@@ -389,6 +392,43 @@ def test_main_window_renders_ec2_workspace_and_instance_actions(qapp, tmp_path: 
     window.workspace_ec2_copy_ssh_button.click()
     qapp.processEvents()
     assert desktop.copied_texts[-1] == "ssh ec2-user@52.0.0.1"
+
+def test_main_window_applies_ec2_region_and_triggers_refresh(qapp, tmp_path: Path) -> None:
+    settings = AppSettings.from_env(
+        home_dir=tmp_path / "home",
+        appdata_dir=tmp_path / "appdata",
+        local_appdata_dir=tmp_path / "local-appdata",
+        config_dir=tmp_path / "config-root",
+    )
+    runner = DeferredRunner()
+    controller = CloudSprocketController(
+        settings=settings,
+        auth_service=StaticAuthService(),
+        profile_discovery=StaticDiscoveryService(),
+        command_runner=runner,
+        desktop_integration=FakeDesktopIntegration(),
+    )
+    window = MainWindow(settings=settings, controller=controller)
+
+    window.lock_session_button.click()
+    qapp.processEvents()
+
+    ec2_index = next(
+        index for index in range(window.workspace_tabs.count()) if window.workspace_tabs.tabText(index) == "EC2"
+    )
+    window.workspace_tabs.setCurrentIndex(ec2_index)
+    qapp.processEvents()
+
+    window.workspace_ec2_region_combo.setEditText("eu-west-2")
+    window.workspace_ec2_apply_region_button.click()
+    qapp.processEvents()
+
+    list_spec, _callback = runner.calls[0]
+    assert list_spec.args[:2] == ("ec2", "describe-instances")
+    assert "--region" in list_spec.args
+    region_index = list_spec.args.index("--region")
+    assert list_spec.args[region_index + 1] == "eu-west-2"
+
 
 def test_main_window_uses_a_two_splitter_s3_workspace_with_inspector_tabs(qapp, tmp_path: Path) -> None:
     settings = AppSettings.from_env(
