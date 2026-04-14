@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 1420",
-    "build": "vite build",
+    "build": "node ./scripts/vite-build.mjs",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "test": "vitest run",
     "tauri": "tauri",
