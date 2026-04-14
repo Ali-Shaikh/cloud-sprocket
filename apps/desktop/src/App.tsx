@@ -18,6 +18,7 @@ import { startTransition, useEffect, useEffectEvent, useState } from "react";
 import { backendRequest, subscribeToBackendEvent } from "./lib/backend";
 import type {
   ActivityLogEntry,
+  AppSettingsSnapshot,
   JobStatus,
   ProfileSummary,
   ProviderSummary,
@@ -30,6 +31,13 @@ const emptySession: SessionSnapshot = {
   isLocked: false,
   availableAuthMethods: [],
   workspaceTabs: [],
+};
+
+const emptySettings: AppSettingsSnapshot = {
+  platformName: "",
+  configDir: "",
+  databasePath: "",
+  logPath: "",
 };
 
 function statusType(provider: ProviderSummary): "success" | "warning" | "error" {
@@ -86,9 +94,11 @@ export default function App() {
   const [providers, setProviders] = useState<ProviderSummary[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [session, setSession] = useState<SessionSnapshot>(emptySession);
+  const [appSettings, setAppSettings] = useState<AppSettingsSnapshot>(emptySettings);
   const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
   const [notifications, setNotifications] = useState<FlashbarProps.MessageDefinition[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showSensitiveValues, setShowSensitiveValues] = useState(false);
 
   const selectedProvider = providers.find(
     (provider) => provider.providerId === session.currentProviderId,
@@ -105,6 +115,7 @@ export default function App() {
       const profilesResult = await backendRequest<ProfileSummary[]>("profiles.list", {
         providerId: sessionResult.currentProviderId,
       });
+      const settingsResult = await backendRequest<AppSettingsSnapshot>("app.settings.get");
       const logsResult = await backendRequest<ActivityLogEntry[]>("logs.list", {
         limit: 50,
       });
@@ -112,6 +123,7 @@ export default function App() {
         setProviders(providersResult);
         setProfiles(profilesResult);
         setSession(sessionResult);
+        setAppSettings(settingsResult);
         setLogs(logsResult);
       });
     } finally {
@@ -187,6 +199,10 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    setShowSensitiveValues(false);
+  }, [selectedProfile?.profileId, session.isLocked]);
+
   const providerColumns: TableProps.ColumnDefinition<ProviderSummary>[] = [
     {
       id: "provider",
@@ -245,6 +261,114 @@ export default function App() {
       actionId: "refresh",
     });
   }
+
+  const selectedProfileDetails = (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          actions={
+            <Button
+              disabled={
+                !selectedProfile?.attributes.some((attribute) => attribute.sensitive)
+              }
+              onClick={() => {
+                setShowSensitiveValues((current) => !current);
+              }}
+            >
+              {showSensitiveValues ? "Hide Sensitive Values" : "Reveal Sensitive Values"}
+            </Button>
+          }
+          description={
+            selectedProfile
+              ? `${selectedProfile.displayName} from ${selectedProfile.providerId.toUpperCase()}`
+              : "Choose a profile to inspect its attributes and source files."
+          }
+        >
+          Profile Detail
+        </Header>
+      }
+    >
+      {selectedProfile ? (
+        <SpaceBetween size="m">
+          <div className="detail-grid">
+            {selectedProfile.attributes.map((attribute) => (
+              <div
+                key={`${attribute.label}-${attribute.value}`}
+                className="detail-card"
+              >
+                <Box variant="awsui-key-label">{attribute.label}</Box>
+                <Box variant="p">
+                  {attribute.sensitive && !showSensitiveValues
+                    ? "Hidden until revealed"
+                    : attribute.value}
+                </Box>
+              </div>
+            ))}
+          </div>
+          <div className="detail-grid">
+            {selectedProfile.authMethods.map((method) => (
+              <div
+                key={method.method}
+                className="detail-card"
+              >
+                <Box variant="awsui-key-label">{method.label}</Box>
+                <StatusIndicator type={method.available ? "success" : "warning"}>
+                  {method.available ? "Available" : "Unavailable"}
+                </StatusIndicator>
+                <Box color="text-body-secondary">{method.summary}</Box>
+              </div>
+            ))}
+          </div>
+          <div className="path-list">
+            <Box variant="awsui-key-label">Source Paths</Box>
+            {selectedProfile.sourcePaths.map((sourcePath) => (
+              <Box
+                key={sourcePath}
+                variant="code"
+              >
+                {sourcePath}
+              </Box>
+            ))}
+          </div>
+        </SpaceBetween>
+      ) : (
+        <Box color="text-status-inactive">No profile selected yet.</Box>
+      )}
+    </Container>
+  );
+
+  const runtimeSettingsPanel = (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description="Paths and platform data coming from the Go daemon."
+        >
+          Runtime Settings
+        </Header>
+      }
+    >
+      <div className="detail-grid">
+        <div className="detail-card">
+          <Box variant="awsui-key-label">Platform</Box>
+          <Box variant="p">{appSettings.platformName || "Unknown"}</Box>
+        </div>
+        <div className="detail-card">
+          <Box variant="awsui-key-label">Config Root</Box>
+          <Box variant="code">{appSettings.configDir || "Unavailable"}</Box>
+        </div>
+        <div className="detail-card">
+          <Box variant="awsui-key-label">Database</Box>
+          <Box variant="code">{appSettings.databasePath || "Unavailable"}</Box>
+        </div>
+        <div className="detail-card">
+          <Box variant="awsui-key-label">Log Path</Box>
+          <Box variant="code">{appSettings.logPath || "Unavailable"}</Box>
+        </div>
+      </div>
+    </Container>
+  );
 
   const sessionSetupView = (
     <SpaceBetween size="l">
@@ -398,7 +522,30 @@ export default function App() {
           </Box>
         </SpaceBetween>
       </Container>
+
+      <div className="setup-grid">
+        {selectedProfileDetails}
+        {runtimeSettingsPanel}
+      </div>
     </SpaceBetween>
+  );
+
+  const overviewTab = (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description="Session profile detail, auth path, and local runtime settings."
+        >
+          Overview
+        </Header>
+      }
+    >
+      <SpaceBetween size="l">
+        {selectedProfileDetails}
+        {runtimeSettingsPanel}
+      </SpaceBetween>
+    </Container>
   );
 
   const workspaceView = (
@@ -441,7 +588,17 @@ export default function App() {
         </Box>
       </Container>
 
-      <Tabs tabs={session.workspaceTabs.map(makeWorkspaceTab)} />
+      <Tabs
+        tabs={session.workspaceTabs.map((tab) =>
+          tab.tabId === "overview"
+            ? {
+                id: tab.tabId,
+                label: tab.label,
+                content: overviewTab,
+              }
+            : makeWorkspaceTab(tab),
+        )}
+      />
     </SpaceBetween>
   );
 

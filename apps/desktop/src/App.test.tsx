@@ -1,8 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import type {
   ActivityLogEntry,
+  AppSettingsSnapshot,
   ProfileSummary,
   ProviderSummary,
   SessionSnapshot,
@@ -27,7 +28,10 @@ const profileFixtures: ProfileSummary[] = [
     displayName: "sandbox",
     summary: "AWS sandbox profile.",
     sourcePaths: ["~/.aws/config"],
-    attributes: [{ label: "Region", value: "us-east-1" }],
+    attributes: [
+      { label: "Region", value: "us-east-1" },
+      { label: "AWS Secret Access Key", value: "super-secret-value", sensitive: true },
+    ],
     authMethods: [
       { method: "cli", label: "CLI", summary: "AWS CLI detected.", available: true },
       { method: "sso", label: "SSO", summary: "SSO metadata detected.", available: true },
@@ -38,6 +42,12 @@ const profileFixtures: ProfileSummary[] = [
 
 let sessionFixture: SessionSnapshot;
 let logFixtures: ActivityLogEntry[];
+const settingsFixture: AppSettingsSnapshot = {
+  platformName: "windows",
+  configDir: "C:/Users/Ali/AppData/Local/CloudSprocket",
+  databasePath: "C:/Users/Ali/AppData/Local/CloudSprocket/cloudsprocket.db",
+  logPath: "C:/Users/Ali/AppData/Local/CloudSprocket/logs/cloudsprocket.log",
+};
 
 vi.mock("./lib/backend", () => ({
   backendRequest: vi.fn(async (method: string) => {
@@ -48,6 +58,8 @@ vi.mock("./lib/backend", () => ({
         return profileFixtures;
       case "session.get":
         return sessionFixture;
+      case "app.settings.get":
+        return settingsFixture;
       case "logs.list":
         return logFixtures;
       case "actions.invoke":
@@ -90,7 +102,17 @@ describe("App", () => {
     expect(await screen.findByText("Session Setup")).toBeInTheDocument();
     expect(screen.getByText("Providers")).toBeInTheDocument();
     expect(screen.getByText("Authentication Path")).toBeInTheDocument();
+    expect(screen.getByText("Profile Detail")).toBeInTheDocument();
+    expect(screen.getByText("Runtime Settings")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Lock Session" })).toBeInTheDocument();
+  });
+
+  it("masks sensitive profile values until they are revealed", async () => {
+    render(<App />);
+
+    expect(await screen.findByText("Hidden until revealed")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reveal Sensitive Values" }));
+    expect(await screen.findByText("super-secret-value")).toBeInTheDocument();
   });
 
   it("renders the locked workspace tabs when the session is locked", async () => {
@@ -121,6 +143,7 @@ describe("App", () => {
     expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
     expect(screen.getByText("Overview")).toBeInTheDocument();
     expect(screen.getByText("S3")).toBeInTheDocument();
+    expect(screen.getByText("cloudsprocket.db")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Unlock" })).toBeInTheDocument();
   });
 });
