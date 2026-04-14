@@ -24,6 +24,7 @@ import type {
   ProviderSummary,
   SessionSnapshot,
   StateChangedPayload,
+  WorkspaceSnapshot,
   WorkspaceTab,
 } from "./types/backend";
 
@@ -38,6 +39,13 @@ const emptySettings: AppSettingsSnapshot = {
   configDir: "",
   databasePath: "",
   logPath: "",
+};
+
+const emptyWorkspace: WorkspaceSnapshot = {
+  runtimeSettings: emptySettings,
+  s3Buckets: [],
+  s3Objects: [],
+  ec2Instances: [],
 };
 
 function statusType(provider: ProviderSummary): "success" | "warning" | "error" {
@@ -61,6 +69,10 @@ function badgeColour(level: ActivityLogEntry["level"]): "blue" | "green" | "grey
     return "red";
   }
   return "blue";
+}
+
+function countLabel(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 function makeWorkspaceTab(tab: WorkspaceTab): TabsProps.Tab {
@@ -95,6 +107,7 @@ export default function App() {
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [session, setSession] = useState<SessionSnapshot>(emptySession);
   const [appSettings, setAppSettings] = useState<AppSettingsSnapshot>(emptySettings);
+  const [workspace, setWorkspace] = useState<WorkspaceSnapshot>(emptyWorkspace);
   const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
   const [notifications, setNotifications] = useState<FlashbarProps.MessageDefinition[]>([]);
   const [loading, setLoading] = useState(true);
@@ -129,6 +142,20 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  });
+
+  const loadWorkspace = useEffectEvent(async (nextSession: SessionSnapshot) => {
+    if (!nextSession.isLocked) {
+      startTransition(() => {
+        setWorkspace(emptyWorkspace);
+      });
+      return;
+    }
+
+    const workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
+    startTransition(() => {
+      setWorkspace(workspaceResult);
+    });
   });
 
   const onStateChanged = useEffectEvent((payload: StateChangedPayload) => {
@@ -200,6 +227,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    void loadWorkspace(session);
+  }, [
+    session.isLocked,
+    session.lockedAuthMethod,
+    session.lockedProfileId,
+    session.lockedProviderId,
+  ]);
+
+  useEffect(() => {
     setShowSensitiveValues(false);
   }, [selectedProfile?.profileId, session.isLocked]);
 
@@ -262,112 +298,134 @@ export default function App() {
     });
   }
 
-  const selectedProfileDetails = (
-    <Container
-      header={
-        <Header
-          variant="h2"
-          actions={
-            <Button
-              disabled={
-                !selectedProfile?.attributes.some((attribute) => attribute.sensitive)
-              }
-              onClick={() => {
-                setShowSensitiveValues((current) => !current);
-              }}
-            >
-              {showSensitiveValues ? "Hide Sensitive Values" : "Reveal Sensitive Values"}
-            </Button>
-          }
-          description={
-            selectedProfile
-              ? `${selectedProfile.displayName} from ${selectedProfile.providerId.toUpperCase()}`
-              : "Choose a profile to inspect its attributes and source files."
-          }
-        >
-          Profile Detail
-        </Header>
-      }
-    >
-      {selectedProfile ? (
-        <SpaceBetween size="m">
-          <div className="detail-grid">
-            {selectedProfile.attributes.map((attribute) => (
-              <div
-                key={`${attribute.label}-${attribute.value}`}
-                className="detail-card"
+  function renderProfileDetailPanel(
+    profile: ProfileSummary | undefined,
+    title: string,
+    emptyMessage: string,
+    description: string,
+  ) {
+    return (
+      <Container
+        header={
+          <Header
+            variant="h2"
+            actions={
+              <Button
+                disabled={!profile?.attributes.some((attribute) => attribute.sensitive)}
+                onClick={() => {
+                  setShowSensitiveValues((current) => !current);
+                }}
               >
-                <Box variant="awsui-key-label">{attribute.label}</Box>
-                <Box variant="p">
-                  {attribute.sensitive && !showSensitiveValues
-                    ? "Hidden until revealed"
-                    : attribute.value}
+                {showSensitiveValues ? "Hide Sensitive Values" : "Reveal Sensitive Values"}
+              </Button>
+            }
+            description={
+              profile
+                ? `${profile.displayName} from ${profile.providerId.toUpperCase()}`
+                : description
+            }
+          >
+            {title}
+          </Header>
+        }
+      >
+        {profile ? (
+          <SpaceBetween size="m">
+            <div className="detail-grid">
+              {profile.attributes.map((attribute) => (
+                <div
+                  key={`${attribute.label}-${attribute.value}`}
+                  className="detail-card"
+                >
+                  <Box variant="awsui-key-label">{attribute.label}</Box>
+                  <Box variant="p">
+                    {attribute.sensitive && !showSensitiveValues
+                      ? "Hidden until revealed"
+                      : attribute.value}
+                  </Box>
+                </div>
+              ))}
+            </div>
+            <div className="detail-grid">
+              {profile.authMethods.map((method) => (
+                <div
+                  key={method.method}
+                  className="detail-card"
+                >
+                  <Box variant="awsui-key-label">{method.label}</Box>
+                  <StatusIndicator type={method.available ? "success" : "warning"}>
+                    {method.available ? "Available" : "Unavailable"}
+                  </StatusIndicator>
+                  <Box color="text-body-secondary">{method.summary}</Box>
+                </div>
+              ))}
+            </div>
+            <div className="path-list">
+              <Box variant="awsui-key-label">Source Paths</Box>
+              {profile.sourcePaths.map((sourcePath) => (
+                <Box
+                  key={sourcePath}
+                  variant="code"
+                >
+                  {sourcePath}
                 </Box>
-              </div>
-            ))}
+              ))}
+            </div>
+          </SpaceBetween>
+        ) : (
+          <Box color="text-status-inactive">{emptyMessage}</Box>
+        )}
+      </Container>
+    );
+  }
+
+  function renderRuntimeSettingsPanel(
+    settings: AppSettingsSnapshot,
+    description: string,
+  ) {
+    return (
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description={description}
+          >
+            Runtime Settings
+          </Header>
+        }
+      >
+        <div className="detail-grid">
+          <div className="detail-card">
+            <Box variant="awsui-key-label">Platform</Box>
+            <Box variant="p">{settings.platformName || "Unknown"}</Box>
           </div>
-          <div className="detail-grid">
-            {selectedProfile.authMethods.map((method) => (
-              <div
-                key={method.method}
-                className="detail-card"
-              >
-                <Box variant="awsui-key-label">{method.label}</Box>
-                <StatusIndicator type={method.available ? "success" : "warning"}>
-                  {method.available ? "Available" : "Unavailable"}
-                </StatusIndicator>
-                <Box color="text-body-secondary">{method.summary}</Box>
-              </div>
-            ))}
+          <div className="detail-card">
+            <Box variant="awsui-key-label">Config Root</Box>
+            <Box variant="code">{settings.configDir || "Unavailable"}</Box>
           </div>
-          <div className="path-list">
-            <Box variant="awsui-key-label">Source Paths</Box>
-            {selectedProfile.sourcePaths.map((sourcePath) => (
-              <Box
-                key={sourcePath}
-                variant="code"
-              >
-                {sourcePath}
-              </Box>
-            ))}
+          <div className="detail-card">
+            <Box variant="awsui-key-label">Database</Box>
+            <Box variant="code">{settings.databasePath || "Unavailable"}</Box>
           </div>
-        </SpaceBetween>
-      ) : (
-        <Box color="text-status-inactive">No profile selected yet.</Box>
-      )}
-    </Container>
+          <div className="detail-card">
+            <Box variant="awsui-key-label">Log Path</Box>
+            <Box variant="code">{settings.logPath || "Unavailable"}</Box>
+          </div>
+        </div>
+      </Container>
+    );
+  }
+
+  const selectedProfileDetails = renderProfileDetailPanel(
+    selectedProfile,
+    "Profile Detail",
+    "No profile selected yet.",
+    "Choose a profile to inspect its attributes and source files.",
   );
 
-  const runtimeSettingsPanel = (
-    <Container
-      header={
-        <Header
-          variant="h2"
-          description="Paths and platform data coming from the Go daemon."
-        >
-          Runtime Settings
-        </Header>
-      }
-    >
-      <div className="detail-grid">
-        <div className="detail-card">
-          <Box variant="awsui-key-label">Platform</Box>
-          <Box variant="p">{appSettings.platformName || "Unknown"}</Box>
-        </div>
-        <div className="detail-card">
-          <Box variant="awsui-key-label">Config Root</Box>
-          <Box variant="code">{appSettings.configDir || "Unavailable"}</Box>
-        </div>
-        <div className="detail-card">
-          <Box variant="awsui-key-label">Database</Box>
-          <Box variant="code">{appSettings.databasePath || "Unavailable"}</Box>
-        </div>
-        <div className="detail-card">
-          <Box variant="awsui-key-label">Log Path</Box>
-          <Box variant="code">{appSettings.logPath || "Unavailable"}</Box>
-        </div>
-      </div>
-    </Container>
+  const runtimeSettingsPanel = renderRuntimeSettingsPanel(
+    appSettings,
+    "Paths and platform data coming from the Go daemon.",
   );
 
   const sessionSetupView = (
@@ -530,22 +588,117 @@ export default function App() {
     </SpaceBetween>
   );
 
-  const overviewTab = (
+  function renderLogEntries(entries: ActivityLogEntry[]) {
+    if (entries.length === 0) {
+      return <Box color="text-status-inactive">No activity recorded yet.</Box>;
+    }
+
+    return entries.map((entry) => (
+      <div
+        key={entry.id}
+        className={`log-entry log-entry-${entry.level}`}
+      >
+        <div className="log-entry-meta">
+          <span>{new Date(entry.timestamp).toLocaleString()}</span>
+          <Badge color={badgeColour(entry.level)}>{entry.level}</Badge>
+        </div>
+        <div>{entry.message}</div>
+      </div>
+    ));
+  }
+
+  const workspaceSummaryPanel = (
     <Container
       header={
         <Header
           variant="h2"
-          description="Session profile detail, auth path, and local runtime settings."
+          description="Workspace scope and AWS inventory counts coming from the backend workspace snapshot."
         >
-          Overview
+          Workspace Summary
         </Header>
       }
     >
-      <SpaceBetween size="l">
-        {selectedProfileDetails}
-        {runtimeSettingsPanel}
-      </SpaceBetween>
+      <div className="detail-grid">
+        <div className="detail-card">
+          <Box variant="awsui-key-label">Provider</Box>
+          <Box variant="p">{workspace.provider?.label || "Unavailable"}</Box>
+          {workspace.provider ? (
+            <StatusIndicator type={statusType(workspace.provider)}>
+              {workspace.provider.state}
+            </StatusIndicator>
+          ) : null}
+        </div>
+        <div className="detail-card">
+          <Box variant="awsui-key-label">Profile</Box>
+          <Box variant="p">{workspace.profile?.displayName || "Unavailable"}</Box>
+          <Box color="text-body-secondary">
+            {workspace.profile?.profileId || "No locked profile selected."}
+          </Box>
+        </div>
+        <div className="detail-card">
+          <Box variant="awsui-key-label">Auth Path</Box>
+          <Box variant="p">{workspace.authMethod?.toUpperCase() || "Unavailable"}</Box>
+          <Box color="text-body-secondary">
+            Active auth method for the locked workspace.
+          </Box>
+        </div>
+        <div className="detail-card">
+          <Box variant="awsui-key-label">S3 Buckets</Box>
+          <Box variant="p">{countLabel(workspace.s3Buckets.length, "bucket", "buckets")}</Box>
+          <Box color="text-body-secondary">
+            Resource inventory will expand as the AWS adapters are ported.
+          </Box>
+        </div>
+        <div className="detail-card">
+          <Box variant="awsui-key-label">S3 Objects</Box>
+          <Box variant="p">{countLabel(workspace.s3Objects.length, "object", "objects")}</Box>
+          <Box color="text-body-secondary">
+            Current object sample visible through the workspace contract.
+          </Box>
+        </div>
+        <div className="detail-card">
+          <Box variant="awsui-key-label">EC2 Instances</Box>
+          <Box variant="p">{countLabel(workspace.ec2Instances.length, "instance", "instances")}</Box>
+          <Box color="text-body-secondary">
+            Lifecycle actions will attach to this inventory next.
+          </Box>
+        </div>
+      </div>
     </Container>
+  );
+
+  const workspaceProfileDetails = renderProfileDetailPanel(
+    workspace.profile,
+    "Workspace Profile",
+    "No locked workspace profile is available yet.",
+    "The locked workspace snapshot will populate this profile detail.",
+  );
+
+  const workspaceRuntimeSettingsPanel = renderRuntimeSettingsPanel(
+    workspace.runtimeSettings,
+    "Runtime settings embedded in the backend workspace snapshot.",
+  );
+
+  const overviewTab = (
+    <SpaceBetween size="l">
+      {workspaceSummaryPanel}
+      <div className="setup-grid">
+        {workspaceProfileDetails}
+        {workspaceRuntimeSettingsPanel}
+      </div>
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description="Recent backend activity for the locked workspace."
+          >
+            Workspace Activity
+          </Header>
+        }
+      >
+        <div className="log-stream">{renderLogEntries(logs.slice(0, 5))}</div>
+      </Container>
+    </SpaceBetween>
   );
 
   const workspaceView = (
@@ -604,24 +757,7 @@ export default function App() {
 
   const splitPanel = (
     <SplitPanel header="Recent Activity">
-      <div className="log-stream">
-        {logs.length === 0 ? (
-          <Box color="text-status-inactive">No activity recorded yet.</Box>
-        ) : (
-          logs.map((entry) => (
-            <div
-              key={entry.id}
-              className={`log-entry log-entry-${entry.level}`}
-            >
-              <div className="log-entry-meta">
-                <span>{new Date(entry.timestamp).toLocaleString()}</span>
-                <Badge color={badgeColour(entry.level)}>{entry.level}</Badge>
-              </div>
-              <div>{entry.message}</div>
-            </div>
-          ))
-        )}
-      </div>
+      <div className="log-stream">{renderLogEntries(logs)}</div>
     </SplitPanel>
   );
 

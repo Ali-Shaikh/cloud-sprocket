@@ -9,6 +9,7 @@ import type {
   ProviderSummary,
   SessionSnapshot,
   StateChangedPayload,
+  WorkspaceSnapshot,
   WorkspaceTab,
 } from "../types/backend";
 
@@ -57,6 +58,51 @@ const mockWorkspaceTabs: WorkspaceTab[] = [
     label: "Actions",
     summary: "Cross-provider command actions.",
     detail: "Command and session actions remain visible while the backend reaches parity.",
+  },
+];
+
+const mockWorkspaceBuckets = [
+  {
+    name: "cloudsprocket-artifacts",
+    summary: "Primary artefact bucket for sandbox automation.",
+  },
+  {
+    name: "cloudsprocket-reports",
+    summary: "Reporting and export bucket for the sandbox profile.",
+  },
+];
+
+const mockWorkspaceObjects = [
+  {
+    key: "reports/weekly-summary.json",
+    size: "18 KB",
+    modifiedAt: "2026-04-14T09:12:00Z",
+    storageClass: "STANDARD",
+  },
+  {
+    key: "uploads/demo-package.zip",
+    size: "42 MB",
+    modifiedAt: "2026-04-14T08:40:00Z",
+    storageClass: "STANDARD",
+  },
+];
+
+const mockWorkspaceInstances = [
+  {
+    instanceId: "i-0123456789abcdef0",
+    name: "sandbox-app-1",
+    state: "running",
+    instanceType: "t3.medium",
+    availabilityZone: "us-east-1a",
+    privateIp: "10.0.14.22",
+  },
+  {
+    instanceId: "i-0fedcba9876543210",
+    name: "sandbox-worker-1",
+    state: "stopped",
+    instanceType: "t3.small",
+    availabilityZone: "us-east-1b",
+    privateIp: "10.0.18.11",
   },
 ];
 
@@ -195,6 +241,12 @@ function currentProfile(): ProfileSummary | undefined {
   );
 }
 
+function currentProvider(): ProviderSummary | undefined {
+  return mockState.providers.find(
+    (provider) => provider.providerId === mockState.session.currentProviderId,
+  );
+}
+
 function rebuildSessionDerivedState(): void {
   const profile = currentProfile();
   mockState.session.availableAuthMethods = profile?.authMethods ?? [];
@@ -261,6 +313,22 @@ function filteredProfiles(providerId?: string): ProfileSummary[] {
   return mockState.profiles.filter((profile) => profile.providerId === providerId);
 }
 
+function buildMockWorkspace(): WorkspaceSnapshot {
+  const provider = currentProvider();
+  const profile = currentProfile();
+  const isAWSWorkspace = provider?.providerId === "aws";
+
+  return {
+    provider,
+    profile,
+    authMethod: mockState.session.selectedAuthMethod,
+    runtimeSettings: mockState.settings,
+    s3Buckets: isAWSWorkspace ? mockWorkspaceBuckets : [],
+    s3Objects: isAWSWorkspace ? mockWorkspaceObjects : [],
+    ec2Instances: isAWSWorkspace ? mockWorkspaceInstances : [],
+  };
+}
+
 function handleMockRequest<T>(
   method: string,
   params: Record<string, unknown>,
@@ -273,6 +341,9 @@ function handleMockRequest<T>(
     case "session.get":
       rebuildSessionDerivedState();
       return Promise.resolve(mockState.session as T);
+    case "workspace.get":
+      rebuildSessionDerivedState();
+      return Promise.resolve(buildMockWorkspace() as T);
     case "session.selectProvider":
       setCurrentProvider(String(params.providerId ?? ""));
       emitStateChanged();

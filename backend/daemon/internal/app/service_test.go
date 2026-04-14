@@ -54,6 +54,25 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	if _, err := service.Handle(ctx, "session.lock", nil, nil); err != nil {
 		t.Fatalf("expected session.lock to succeed, got %v", err)
 	}
+
+	workspaceResult, err := service.Handle(ctx, "workspace.get", nil, nil)
+	if err != nil {
+		t.Fatalf("expected workspace.get to succeed, got %v", err)
+	}
+	workspace := workspaceResult.(models.WorkspaceSnapshot)
+	if workspace.Provider == nil || workspace.Provider.ProviderID != "aws" {
+		t.Fatalf("expected workspace provider to be aws, got %+v", workspace.Provider)
+	}
+	if workspace.Profile == nil || workspace.Profile.ProfileID != "sandbox" {
+		t.Fatalf("expected workspace profile to be sandbox, got %+v", workspace.Profile)
+	}
+	if workspace.AuthMethod != models.AuthMethodCLI {
+		t.Fatalf("expected workspace auth method to be cli, got %s", workspace.AuthMethod)
+	}
+	if workspace.RuntimeSettings.DatabasePath == "" {
+		t.Fatalf("expected workspace runtime settings to include a database path")
+	}
+
 	logs, err := service.Handle(ctx, "logs.list", []byte(`{"limit":10}`), nil)
 	if err != nil {
 		t.Fatalf("expected logs.list to succeed, got %v", err)

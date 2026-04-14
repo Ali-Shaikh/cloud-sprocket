@@ -79,6 +79,10 @@ export interface AwsEc2Instance {
 }
 
 export interface WorkspaceSnapshot {
+  provider?: ProviderSummary;
+  profile?: ProfileSummary;
+  authMethod?: AuthMethod;
+  runtimeSettings: AppSettingsSnapshot;
   s3Buckets: AwsS3Bucket[];
   s3Objects: AwsS3Object[];
   ec2Instances: AwsEc2Instance[];

@@ -7,6 +7,7 @@ import type {
   ProfileSummary,
   ProviderSummary,
   SessionSnapshot,
+  WorkspaceSnapshot,
 } from "./types/backend";
 
 const providerFixtures: ProviderSummary[] = [
@@ -42,6 +43,7 @@ const profileFixtures: ProfileSummary[] = [
 
 let sessionFixture: SessionSnapshot;
 let logFixtures: ActivityLogEntry[];
+let workspaceFixture: WorkspaceSnapshot;
 const settingsFixture: AppSettingsSnapshot = {
   platformName: "windows",
   configDir: "C:/Users/Ali/AppData/Local/CloudSprocket",
@@ -60,6 +62,8 @@ vi.mock("./lib/backend", () => ({
         return sessionFixture;
       case "app.settings.get":
         return settingsFixture;
+      case "workspace.get":
+        return workspaceFixture;
       case "logs.list":
         return logFixtures;
       case "actions.invoke":
@@ -94,6 +98,24 @@ describe("App", () => {
         timestamp: "2026-04-14T09:00:00Z",
       },
     ];
+    workspaceFixture = {
+      provider: providerFixtures[0],
+      profile: {
+        ...profileFixtures[0],
+        displayName: "workspace sandbox",
+      },
+      authMethod: "cli",
+      runtimeSettings: {
+        ...settingsFixture,
+        databasePath: "D:/Workspace/runtime/cloudsprocket-workspace.db",
+      },
+      s3Buckets: [
+        { name: "cloudsprocket-artifacts" },
+        { name: "cloudsprocket-reports" },
+      ],
+      s3Objects: [{ key: "reports/weekly-summary.json" }],
+      ec2Instances: [{ instanceId: "i-0123456789abcdef0" }],
+    };
   });
 
   it("renders the session setup view while unlocked", async () => {
@@ -141,9 +163,12 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
+    expect(await screen.findByText("Workspace Summary")).toBeInTheDocument();
     expect(screen.getByText("Overview")).toBeInTheDocument();
     expect(screen.getByText("S3")).toBeInTheDocument();
-    expect(screen.getByText("cloudsprocket.db")).toBeInTheDocument();
+    expect(screen.getByText("workspace sandbox")).toBeInTheDocument();
+    expect(screen.getByText("2 buckets")).toBeInTheDocument();
+    expect(screen.getByText("cloudsprocket-workspace.db")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Unlock" })).toBeInTheDocument();
   });
 });

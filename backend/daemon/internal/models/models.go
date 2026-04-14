@@ -30,13 +30,13 @@ type AuthMethodStatus struct {
 }
 
 type ProviderSummary struct {
-	ProviderID string        `json:"providerId"`
-	Label      string        `json:"label"`
-	State      ProviderState `json:"state"`
-	Summary    string        `json:"summary"`
-	ProfileCount int         `json:"profileCount"`
-	CommandPath string       `json:"commandPath,omitempty"`
-	Locations  []string      `json:"locations"`
+	ProviderID   string        `json:"providerId"`
+	Label        string        `json:"label"`
+	State        ProviderState `json:"state"`
+	Summary      string        `json:"summary"`
+	ProfileCount int           `json:"profileCount"`
+	CommandPath  string        `json:"commandPath,omitempty"`
+	Locations    []string      `json:"locations"`
 }
 
 type ProfileSummary struct {
@@ -57,15 +57,48 @@ type WorkspaceTab struct {
 }
 
 type SessionSnapshot struct {
-	CurrentProviderID string             `json:"currentProviderId,omitempty"`
-	SelectedProfileID string             `json:"selectedProfileId,omitempty"`
-	SelectedAuthMethod AuthMethod        `json:"selectedAuthMethod,omitempty"`
-	LockedProviderID string             `json:"lockedProviderId,omitempty"`
-	LockedProfileID  string             `json:"lockedProfileId,omitempty"`
-	LockedAuthMethod AuthMethod         `json:"lockedAuthMethod,omitempty"`
-	IsLocked         bool               `json:"isLocked"`
+	CurrentProviderID     string             `json:"currentProviderId,omitempty"`
+	SelectedProfileID     string             `json:"selectedProfileId,omitempty"`
+	SelectedAuthMethod    AuthMethod         `json:"selectedAuthMethod,omitempty"`
+	LockedProviderID      string             `json:"lockedProviderId,omitempty"`
+	LockedProfileID       string             `json:"lockedProfileId,omitempty"`
+	LockedAuthMethod      AuthMethod         `json:"lockedAuthMethod,omitempty"`
+	IsLocked              bool               `json:"isLocked"`
 	AvailableAuthMethods []AuthMethodStatus `json:"availableAuthMethods"`
-	WorkspaceTabs    []WorkspaceTab     `json:"workspaceTabs"`
+	WorkspaceTabs        []WorkspaceTab     `json:"workspaceTabs"`
+}
+
+type AwsS3Bucket struct {
+	Name      string `json:"name"`
+	CreatedAt string `json:"createdAt,omitempty"`
+	Summary   string `json:"summary,omitempty"`
+}
+
+type AwsS3Object struct {
+	Key          string `json:"key"`
+	Size         string `json:"size,omitempty"`
+	ModifiedAt   string `json:"modifiedAt,omitempty"`
+	StorageClass string `json:"storageClass,omitempty"`
+}
+
+type AwsEc2Instance struct {
+	InstanceID       string `json:"instanceId"`
+	Name             string `json:"name,omitempty"`
+	State            string `json:"state,omitempty"`
+	InstanceType     string `json:"instanceType,omitempty"`
+	AvailabilityZone string `json:"availabilityZone,omitempty"`
+	PublicIP         string `json:"publicIp,omitempty"`
+	PrivateIP        string `json:"privateIp,omitempty"`
+}
+
+type WorkspaceSnapshot struct {
+	Provider        *ProviderSummary     `json:"provider,omitempty"`
+	Profile         *ProfileSummary      `json:"profile,omitempty"`
+	AuthMethod      AuthMethod           `json:"authMethod,omitempty"`
+	RuntimeSettings AppSettingsSnapshot  `json:"runtimeSettings"`
+	S3Buckets       []AwsS3Bucket        `json:"s3Buckets"`
+	S3Objects       []AwsS3Object        `json:"s3Objects"`
+	EC2Instances    []AwsEc2Instance     `json:"ec2Instances"`
 }
 
 type ActivityLogEntry struct {

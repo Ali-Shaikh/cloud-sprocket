@@ -63,6 +63,14 @@ func (s *Service) Handle(
 		defer s.mu.Unlock()
 		_, session, err := s.currentState(ctx)
 		return session, err
+	case "workspace.get":
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		snapshot, session, err := s.currentState(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), nil
 	case "session.selectProvider":
 		var request struct {
 			ProviderID string `json:"providerId"`
@@ -171,12 +179,7 @@ func (s *Service) Handle(
 		_ = json.Unmarshal(params, &request)
 		return s.store.ListLogs(ctx, request.Limit)
 	case "app.settings.get":
-		return models.AppSettingsSnapshot{
-			PlatformName: s.settings.PlatformName,
-			ConfigDir:    s.settings.ConfigDir,
-			DatabasePath: s.settings.DatabasePath,
-			LogPath:      s.settings.LogPath,
-		}, nil
+		return s.settingsSnapshot(), nil
 	case "actions.invoke":
 		var request struct {
 			ActionID string `json:"actionId"`
@@ -298,6 +301,39 @@ func (s *Service) notifyStateAndLog(
 
 func (s *Service) timestamp() string {
 	return s.now().UTC().Format(time.RFC3339)
+}
+
+func (s *Service) settingsSnapshot() models.AppSettingsSnapshot {
+	return models.AppSettingsSnapshot{
+		PlatformName: s.settings.PlatformName,
+		ConfigDir:    s.settings.ConfigDir,
+		DatabasePath: s.settings.DatabasePath,
+		LogPath:      s.settings.LogPath,
+	}
+}
+
+func (s *Service) buildWorkspaceSnapshot(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+) models.WorkspaceSnapshot {
+	workspace := models.WorkspaceSnapshot{
+		AuthMethod:      session.SelectedAuthMethod,
+		RuntimeSettings: s.settingsSnapshot(),
+		S3Buckets:       []models.AwsS3Bucket{},
+		S3Objects:       []models.AwsS3Object{},
+		EC2Instances:    []models.AwsEc2Instance{},
+	}
+
+	if provider, ok := findProvider(snapshot.Providers, session.CurrentProviderID); ok {
+		workspace.Provider = &provider
+	}
+
+	profiles := filterProfiles(snapshot.Profiles, session.CurrentProviderID)
+	if profile, ok := findProfile(profiles, session.SelectedProfileID); ok {
+		workspace.Profile = &profile
+	}
+
+	return workspace
 }
 
 func statePayload(snapshot discovery.Snapshot, session models.SessionSnapshot) models.StateChangedPayload {
@@ -429,6 +465,15 @@ func findProfile(profiles []models.ProfileSummary, profileID string) (models.Pro
 		}
 	}
 	return models.ProfileSummary{}, false
+}
+
+func findProvider(providers []models.ProviderSummary, providerID string) (models.ProviderSummary, bool) {
+	for _, provider := range providers {
+		if provider.ProviderID == providerID {
+			return provider, true
+		}
+	}
+	return models.ProviderSummary{}, false
 }
 
 func authMethodAvailable(methods []models.AuthMethodStatus, target models.AuthMethod) bool {
