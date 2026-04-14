@@ -7,7 +7,7 @@ use std::{
 };
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_shell::{
     process::{CommandChild, CommandEvent},
     ShellExt,
@@ -201,16 +201,15 @@ impl SidecarManager {
             let _ = self.emit_shell_log(
                 &app,
                 "warning",
-                "The backend sidecar exited. Attempting one automatic restart.".into(),
+                "The backend sidecar exited. It will restart on the next request.".into(),
             );
-            let _ = self.ensure_started(app).await;
             return;
         }
 
         let _ = self.emit_shell_log(
             &app,
             "error",
-            "The backend sidecar stopped after its automatic restart.".into(),
+            "The backend sidecar stopped again after a previous exit.".into(),
         );
     }
 
