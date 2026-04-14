@@ -122,10 +122,14 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText("Session Setup")).toBeInTheDocument();
-    expect(screen.getByText("Providers")).toBeInTheDocument();
-    expect(screen.getByText("Authentication Path")).toBeInTheDocument();
-    expect(screen.getByText("Profile Detail")).toBeInTheDocument();
-    expect(screen.getByText("Runtime Settings")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Providers" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Authentication Path" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Profile Detail" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Runtime Settings" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Lock Session" })).toBeInTheDocument();
   });
 
@@ -166,9 +170,11 @@ describe("App", () => {
     expect(await screen.findByText("Workspace Summary")).toBeInTheDocument();
     expect(screen.getByText("Overview")).toBeInTheDocument();
     expect(screen.getByText("S3")).toBeInTheDocument();
-    expect(screen.getByText("workspace sandbox")).toBeInTheDocument();
-    expect(screen.getByText("2 buckets")).toBeInTheDocument();
-    expect(screen.getByText("cloudsprocket-workspace.db")).toBeInTheDocument();
+    expect(await screen.findByText("workspace sandbox")).toBeInTheDocument();
+    expect(await screen.findByText("2 buckets")).toBeInTheDocument();
+    expect(
+      await screen.findByText(/cloudsprocket-workspace\.db/i),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Unlock" })).toBeInTheDocument();
   });
 });
