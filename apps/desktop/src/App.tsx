@@ -112,6 +112,11 @@ export default function App() {
   const [notifications, setNotifications] = useState<FlashbarProps.MessageDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSensitiveValues, setShowSensitiveValues] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  const [splitPanelOpen, setSplitPanelOpen] = useState(() => window.innerWidth >= 1180);
+
+  const isTablet = viewportWidth < 1180;
+  const isMobile = viewportWidth < 820;
 
   const selectedProvider = providers.find(
     (provider) => provider.providerId === session.currentProviderId,
@@ -227,6 +232,17 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    function onResize() {
+      setViewportWidth(window.innerWidth);
+    }
+
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
+
+  useEffect(() => {
     void loadWorkspace(session);
   }, [
     session.isLocked,
@@ -238,6 +254,12 @@ export default function App() {
   useEffect(() => {
     setShowSensitiveValues(false);
   }, [selectedProfile?.profileId, session.isLocked]);
+
+  useEffect(() => {
+    if (isTablet) {
+      setSplitPanelOpen(false);
+    }
+  }, [isTablet]);
 
   const providerColumns: TableProps.ColumnDefinition<ProviderSummary>[] = [
     {
@@ -429,7 +451,10 @@ export default function App() {
   );
 
   const sessionSetupView = (
-    <SpaceBetween size="l">
+    <SpaceBetween
+      size="l"
+      className="page-stack"
+    >
       <Container>
         <div className="hero-banner">
           <div>
@@ -547,6 +572,13 @@ export default function App() {
         }
         footer={
           <div className="session-actions">
+            <Button
+              onClick={() => {
+                setSplitPanelOpen((current) => !current);
+              }}
+            >
+              {splitPanelOpen ? "Hide Activity" : "Show Activity"}
+            </Button>
             <Button
               variant="primary"
               disabled={!selectedProfile || !session.selectedAuthMethod}
@@ -680,7 +712,10 @@ export default function App() {
   );
 
   const overviewTab = (
-    <SpaceBetween size="l">
+    <SpaceBetween
+      size="l"
+      className="page-stack"
+    >
       {workspaceSummaryPanel}
       <div className="setup-grid">
         {workspaceProfileDetails}
@@ -702,7 +737,10 @@ export default function App() {
   );
 
   const workspaceView = (
-    <SpaceBetween size="l">
+    <SpaceBetween
+      size="l"
+      className="page-stack"
+    >
       <Container
         header={
           <Header
@@ -713,6 +751,13 @@ export default function App() {
                 direction="horizontal"
                 size="xs"
               >
+                <Button
+                  onClick={() => {
+                    setSplitPanelOpen((current) => !current);
+                  }}
+                >
+                  {splitPanelOpen ? "Hide Activity" : "Show Activity"}
+                </Button>
                 <Button
                   iconName="refresh"
                   onClick={() => {
@@ -769,8 +814,11 @@ export default function App() {
         contentType="default"
         notifications={<Flashbar items={notifications} />}
         splitPanel={splitPanel}
-        splitPanelOpen
-        splitPanelSize={320}
+        splitPanelOpen={splitPanelOpen}
+        splitPanelSize={isMobile ? 280 : isTablet ? 300 : 360}
+        onSplitPanelToggle={({ detail }) => {
+          setSplitPanelOpen(detail.open);
+        }}
         content={session.isLocked ? workspaceView : sessionSetupView}
       />
     </div>
