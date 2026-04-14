@@ -1,65 +1,51 @@
 # CloudSprocket
 
-CloudSprocket by Ali Shaikh is a PySide6 desktop shell for local cloud profile
-discovery, auth visibility, and AWS-first provider actions.
+CloudSprocket is being rewritten as a local-first desktop app built with `React`,
+`TypeScript`, `Cloudscape`, `Tauri v2`, and a `Go` sidecar backend.
 
-The scaffold is set up to run on Windows and macOS, with platform-aware config
-and cloud profile discovery defaults.
+## Current Status
 
-## Project Layout
+The repository is now in the first rewrite slice:
 
-- `src/cloudsprocket/`: application package
-- `src/cloudsprocket/ui/`: branded actionable desktop shell
-- `src/cloudsprocket/services/`: discovery, controller, provider actions, and command execution
-- `tests/`: pytest coverage for settings, discovery, provider actions, controller behavior, and the UI
+- the previous PySide6 application has been archived to `legacy/pyside-v1/`
+- the new desktop shell lives in `apps/desktop/`
+- the new backend daemon lives in `backend/daemon/`
+- the repo is moving to a Tauri build and test pipeline across Windows, macOS,
+  and Linux
 
-## Quick Start
+Parity with the archived Python app is still in progress. The current codebase
+focuses on the new app shell, RPC bridge, persistence layer, and the first port
+of provider discovery and session state.
 
-Use Python 3.13 or 3.14 for local development.
+## Repository Layout
+
+- `apps/desktop/`: Tauri v2 desktop shell, React UI, and desktop bridge
+- `backend/daemon/`: Go sidecar daemon, JSON-RPC handlers, discovery logic, and SQLite store
+- `legacy/pyside-v1/`: archived PySide6 implementation kept for behaviour reference
+- `.github/workflows/`: CI for the new multi-platform desktop pipeline
+
+## Toolchain Baseline
+
+- `Node 24` Active LTS
+- `pnpm 10.17+`
+- `Go 1.26.1`
+- latest stable `Rust`
+
+Tauri's Linux system packages are also required. See the official prerequisites:
+[Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
+
+## Getting Started
 
 ```powershell
-python -m venv .venv
-.venv\Scripts\python -m pip install --upgrade pip
-.venv\Scripts\python -m pip install -e .[dev]
-.venv\Scripts\python -m pytest
-.venv\Scripts\python -m cloudsprocket
+pnpm install
+pnpm run test
+pnpm run build:desktop
 ```
 
-## Desktop Build
+The desktop package builds the Go sidecar into `apps/desktop/src-tauri/binaries/`
+before invoking the Tauri bundle step.
 
-Install the optional build dependency group and run the packaged build command:
+## Legacy Reference
 
-```powershell
-.venv\Scripts\python -m pip install -e .[dev,build]
-.venv\Scripts\cloudsprocket-build
-```
-
-The build uses PyInstaller 6.19.0 and writes platform-native artifacts into
-`dist/`:
-
-- Windows: `dist/CloudSprocket/CloudSprocket.exe`
-- macOS: `dist/CloudSprocket.app`
-
-GitHub Actions also runs the test suite and desktop build on both Windows and
-macOS for pushes to `dev` and `main`, as well as pull requests.
-
-## Scope Of The Scaffold
-
-The current shell includes:
-
-- a GPLv3-licensed repo setup
-- a modular `src/` package layout
-- a branded desktop main window with provider summary, profile selection, details, auth methods, actions, and activity logs
-- auth/tooling probes for AWS, Azure, and GCP with AWS as the first fully actionable provider
-- AWS actions for refresh, identity check, SSO login, logout, session activation, config opening, and export snippet copying
-- profile discovery skeletons for AWS config files, Azure CLI profile cache, and
-  gcloud named configurations
-- a reproducible PyInstaller-based desktop build command
-- platform-aware defaults for Windows and macOS local config directories
-- tests covering the non-trivial pieces of the baseline
-
-## Licence
-
-CloudSprocket is licensed under the GNU General Public License v3.0.
-See [`LICENSE`](LICENSE) for the full text.
-Project-specific copyright and notice details are in [`COPYRIGHT`](COPYRIGHT).
+The archived Python code remains available under `legacy/pyside-v1/` while the
+rewrite reaches parity. It is no longer the active implementation path.

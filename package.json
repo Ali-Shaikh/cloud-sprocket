@@ -1,0 +1,16 @@
+{
+  "name": "cloud-sprocket-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.17.0",
+  "scripts": {
+    "dev": "pnpm --dir apps/desktop dev",
+    "dev:desktop": "pnpm --dir apps/desktop dev:desktop",
+    "build": "pnpm --dir apps/desktop build",
+    "build:desktop": "pnpm --dir apps/desktop build:desktop",
+    "test": "pnpm run test:desktop && pnpm run test:backend",
+    "test:desktop": "pnpm --dir apps/desktop test",
+    "test:backend": "go -C backend/daemon test ./...",
+    "prepare:sidecar": "pnpm --dir apps/desktop build:sidecar"
+  }
+}

@@ -505,9 +505,16 @@ class MainWindow(QMainWindow):
 
         central = QWidget(self)
         root_layout = QVBoxLayout(central)
-        root_layout.setContentsMargins(12, 8, 12, 8)
-        root_layout.setSpacing(8)
+        root_layout.setContentsMargins(16, 12, 16, 12)
+        root_layout.setSpacing(12)
 
+        shell_header = QWidget()
+        shell_header.setObjectName("shell-header")
+        shell_header_layout = self._build_header()
+        shell_header_layout.setContentsMargins(14, 12, 14, 12)
+        shell_header.setLayout(shell_header_layout)
+
+        root_layout.addWidget(shell_header)
         root_layout.addWidget(self._build_body(), 1)
 
         self.setCentralWidget(central)
@@ -517,134 +524,219 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(
             """
             QMainWindow, QWidget {
-                background-color: #f3f4f7;
-                color: #111827;
+                background-color: #edf2f8;
+                color: #11263b;
+                font-family: "Segoe UI Variable Text", "Segoe UI", "Noto Sans", sans-serif;
+                font-size: 13px;
             }
-            QMenuBar, QStatusBar {
-                background-color: #f8fafc;
-                color: #334155;
-                border-bottom: 1px solid #dde3ec;
+            #shell-header {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #fdfefe, stop:1 #f6f9fc);
+                border: 1px solid #d0dce9;
+                border-radius: 14px;
+            }
+            QLabel#shell-kicker {
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 0.11em;
+                color: #2c587f;
+            }
+            QLabel#shell-title {
+                font-size: 22px;
+                font-weight: 800;
+                color: #153452;
+            }
+            QLabel#shell-subtitle {
+                color: #415d79;
+                font-size: 13px;
+            }
+            QLabel#shell-byline {
+                color: #1f4f76;
+                font-size: 11px;
+                font-weight: 700;
+            }
+            QLabel#config-label {
+                padding: 8px 10px;
+                background: #ffffff;
+                border: 1px solid #d4e0ec;
+                border-radius: 10px;
+                color: #2d455e;
+                font-size: 11px;
+            }
+            QMenuBar {
+                background-color: #f7fafe;
+                color: #2f4861;
+                border: 1px solid #d6e1ee;
+                border-radius: 10px;
+                padding: 2px 6px;
+            }
+            QStatusBar {
+                background-color: #f7fafe;
+                color: #3e5770;
+                border-top: 1px solid #d6e1ee;
             }
             QMenuBar::item {
-                padding: 6px 12px;
+                padding: 6px 11px;
                 border-radius: 7px;
             }
             QMenuBar::item:selected {
-                background-color: #e8eef9;
+                background-color: #e4edf8;
             }
             QGroupBox {
-                background-color: #f8fafc;
-                border: 1px solid #d7dee8;
-                border-radius: 14px;
+                background-color: #fbfdff;
+                border: 1px solid #cfdbe8;
+                border-radius: 13px;
                 margin-top: 14px;
-                padding: 11px;
-                padding-top: 16px;
+                padding: 12px;
+                padding-top: 18px;
                 font-weight: 700;
-                color: #334155;
+                color: #26405a;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
-                left: 12px;
+                left: 11px;
                 padding: 0 6px;
-                color: #334155;
-                background-color: #f8fafc;
+                color: #26405a;
+                background-color: #fbfdff;
             }
             QPushButton {
-                background-color: #f8fafc;
-                color: #334155;
-                border: 1px solid #c8d1de;
-                border-radius: 9px;
-                padding: 7px 12px;
-                font-weight: 600;
+                background-color: #f6fafe;
+                color: #26405a;
+                border: 1px solid #c5d3e2;
+                border-radius: 10px;
+                padding: 8px 13px;
+                font-weight: 700;
             }
             QPushButton:hover {
-                background-color: #f2f6fb;
-                border-color: #9eb0c7;
+                background-color: #edf4fb;
+                border-color: #8ea7c3;
             }
             QPushButton:pressed {
-                background-color: #e4ecf7;
+                background-color: #dfe9f6;
             }
             QPushButton:focus {
-                border: 2px solid #0f6cbd;
-                padding: 6px 11px;
+                border: 2px solid #1e6eb5;
+                padding: 7px 12px;
             }
             QPushButton:disabled {
-                background-color: #eff3f8;
-                color: #8a95a5;
-                border-color: #d2dae5;
+                background-color: #edf3f9;
+                color: #8c99a9;
+                border-color: #d2dce8;
             }
             QPushButton[tone="primary"] {
-                background-color: #0d63b8;
+                background-color: #0f5f9f;
                 color: #ffffff;
-                border-color: #0c5499;
+                border-color: #0b4f86;
             }
             QPushButton[tone="primary"]:hover {
-                background-color: #0f5aa5;
+                background-color: #0d568f;
             }
             QPushButton[tone="primary"]:pressed {
-                background-color: #0d4f91;
+                background-color: #0a4778;
+            }
+            QPushButton[tone="quiet"] {
+                background-color: #ecf3fb;
+                color: #28415c;
+                border-color: #bfd0e3;
+            }
+            QPushButton[tone="quiet"]:hover {
+                background-color: #e4edf8;
+            }
+            QPushButton[tone="caution"] {
+                background-color: #fff1e4;
+                color: #7a3d15;
+                border-color: #ecbe91;
+            }
+            QPushButton[tone="caution"]:hover {
+                background-color: #fee5cb;
             }
             QLineEdit, QPlainTextEdit, QTreeWidget, QComboBox, QSpinBox {
-                background-color: #f8fafc;
-                color: #111827;
-                border: 1px solid #c8d1de;
-                border-radius: 9px;
-                selection-background-color: #0f6cbd;
+                background-color: #ffffff;
+                color: #12283d;
+                border: 1px solid #c8d5e4;
+                border-radius: 10px;
+                selection-background-color: #1d6fb8;
                 selection-color: #ffffff;
             }
             QLineEdit, QPlainTextEdit, QComboBox, QSpinBox {
-                padding: 7px 9px;
+                padding: 8px 11px;
             }
             QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QSpinBox:focus {
-                border: 2px solid #0f6cbd;
-                padding: 6px 8px;
+                border: 2px solid #1d6fb8;
+                padding: 7px 10px;
             }
             QTreeWidget {
-                alternate-background-color: #f7f9fc;
-                gridline-color: #e4eaf3;
+                alternate-background-color: #f6fafe;
+                gridline-color: #e2ebf5;
             }
             QTreeWidget::item {
                 padding: 6px 8px;
             }
             QTreeWidget::item:selected {
-                background-color: #dbeafe;
-                color: #334155;
+                background-color: #d8eafb;
+                color: #18344d;
             }
             QHeaderView::section {
-                background-color: #eff3f8;
-                color: #334155;
+                background-color: #edf3fa;
+                color: #28435e;
                 padding: 8px;
                 border: none;
-                border-right: 1px solid #d7dee8;
-                border-bottom: 1px solid #ccd5e3;
+                border-right: 1px solid #d7e1ee;
+                border-bottom: 1px solid #ced9e7;
                 font-weight: 700;
             }
             QTabWidget::pane {
-                border: 1px solid #d7dee8;
-                border-radius: 10px;
-                background: #ffffff;
+                border: 1px solid #d1dce9;
+                border-radius: 12px;
+                background: #fbfdff;
                 top: -1px;
             }
             QTabBar::tab {
-                background: #eef2f7;
-                color: #334155;
-                border: 1px solid #d7dee8;
+                background: #eaf1f9;
+                color: #34506b;
+                border: 1px solid #d1dce9;
                 border-bottom: none;
-                border-top-left-radius: 9px;
-                border-top-right-radius: 9px;
-                padding: 8px 12px;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+                padding: 9px 13px;
                 margin-right: 4px;
-                font-weight: 600;
+                font-weight: 700;
             }
             QTabBar::tab:selected {
-                background: #ffffff;
-                color: #0f2d47;
+                background: #fbfdff;
+                color: #163a5c;
+                border-color: #c7d5e4;
             }
             QTabBar::tab:!selected:hover {
-                background: #f5f8fc;
+                background: #e4edf8;
+            }
+            QTabWidget#session-flow-tabs::pane {
+                border: 1px solid #c5d5e5;
+                border-radius: 12px;
+                background: #f7fbff;
+                top: -1px;
+            }
+            QTabWidget#session-flow-tabs QTabBar::tab {
+                background: #e4edf8;
+                color: #2f4b67;
+                border: 1px solid #ccdaea;
+                border-bottom: none;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+                padding: 10px 16px;
+                font-weight: 700;
+            }
+            QTabWidget#session-flow-tabs QTabBar::tab:selected {
+                background: #0f5f9f;
+                color: #ffffff;
+                border-color: #0b4f86;
+            }
+            QTabWidget#session-tabs QTabBar::tab:selected {
+                background: #e6f0fd;
+                color: #133b5e;
+                border-color: #b7cce4;
             }
             QSplitter::handle {
-                background-color: #b8c4d4;
+                background-color: #c3d3e4;
                 border-radius: 5px;
                 margin: 1px;
             }
@@ -655,61 +747,61 @@ class MainWindow(QMainWindow):
                 width: 8px;
             }
             QSplitter::handle:hover {
-                background-color: #8ea1b9;
+                background-color: #8aa4c2;
             }
             QScrollBar:vertical, QScrollBar:horizontal {
-                background: #edf1f6;
+                background: #ecf2f9;
                 border-radius: 5px;
             }
             QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
-                background: #8ea1b9;
+                background: #8da5c1;
                 border-radius: 5px;
                 min-height: 22px;
                 min-width: 22px;
             }
             QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {
-                background: #7288a4;
+                background: #6e86a3;
             }
             """
         )
 
     def _info_card_style(self, *, emphasised: bool = False) -> str:
-        background = "#e9f3ff" if emphasised else "#f7f9fc"
-        border = "#9ab5d6" if emphasised else "#d7dee8"
-        foreground = "#102a43" if emphasised else "#334155"
+        background = "#e8f1fb" if emphasised else "#f4f8fd"
+        border = "#9bb7d5" if emphasised else "#d2deea"
+        foreground = "#193a5b" if emphasised else "#34516b"
         return (
-            "padding: 10px 12px; "
+            "padding: 11px 13px; "
             f"background: {background}; "
             f"border: 1px solid {border}; "
-            "border-radius: 11px; "
+            "border-radius: 12px; "
             f"color: {foreground};"
         )
 
     def _section_label_style(self) -> str:
-        return "font-size: 12px; font-weight: 700; color: #334155; padding-top: 4px;"
+        return "font-size: 12px; font-weight: 700; color: #2b4863; padding-top: 4px;"
 
     def _hero_panel_style(self) -> str:
         return (
             "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
-            "stop:0 #0f4c81, stop:1 #1766a8); "
-            "border: 1px solid #0e4f86; "
+            "stop:0 #f8fbff, stop:1 #ecf3fb); "
+            "border: 1px solid #cfdceb; "
             "border-radius: 16px;"
         )
 
     def _hero_metric_style(self, *, emphasised: bool = False) -> str:
-        background = "rgba(255, 255, 255, 0.22)" if emphasised else "rgba(255, 255, 255, 0.14)"
-        border = "rgba(255, 255, 255, 0.35)" if emphasised else "rgba(255, 255, 255, 0.24)"
+        background = "#e5f0fb" if emphasised else "#f4f8fe"
+        border = "#8fb0d1" if emphasised else "#cfdeec"
         return (
-            "padding: 10px 12px; "
+            "padding: 10px 11px; "
             f"background: {background}; "
             f"border: 1px solid {border}; "
             "border-radius: 12px;"
         )
 
     def _hero_pill_style(self, *, accent: bool = False) -> str:
-        background = "#f7ca62" if accent else "rgba(255, 255, 255, 0.18)"
-        foreground = "#10283f" if accent else "#f8fcff"
-        border = "#f7ca62" if accent else "rgba(255, 255, 255, 0.32)"
+        background = "#dbe8f6" if accent else "#f3f8fd"
+        foreground = "#173753" if accent else "#2f4a65"
+        border = "#89aaca" if accent else "#cfddea"
         return (
             "padding: 5px 10px; "
             f"background: {background}; "
@@ -721,8 +813,8 @@ class MainWindow(QMainWindow):
 
     def _set_hero_metric_text(self, label: QLabel, *, value: str, caption: str) -> None:
         label.setText(
-            f"<div style='font-size:24px; font-weight:700; color:#10283f;'>{value}</div>"
-            f"<div style='font-size:12px; font-weight:600; color:#36506a; margin-top:2px;'>{caption}</div>"
+            f"<div style='font-size:24px; font-weight:800; color:#173a5b;'>{value}</div>"
+            f"<div style='font-size:12px; font-weight:600; color:#476582; margin-top:2px;'>{caption}</div>"
         )
 
     def _set_button_tone(self, button: QPushButton, tone: str) -> None:
@@ -757,34 +849,30 @@ class MainWindow(QMainWindow):
             tabs.setTabIcon(index, icon)
 
     def _build_header(self) -> QHBoxLayout:
-        self._brand_eyebrow_label.setStyleSheet(
-            "font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: #2a5d87;"
-        )
+        self._brand_eyebrow_label.setObjectName("shell-kicker")
+
         title = QLabel(self._settings.app_brand_name)
-        title.setObjectName("title")
-        title.setStyleSheet("font-size: 20px; font-weight: 800; color: #0f2b45;")
+        title.setObjectName("shell-title")
 
         subtitle = QLabel(APP_DESCRIPTION)
-        subtitle.setWordWrap(False)
-        subtitle.setStyleSheet("color: #41576f; font-size: 13px;")
+        subtitle.setWordWrap(True)
+        subtitle.setObjectName("shell-subtitle")
 
         byline = QLabel(f"Created by {self._settings.author_name}")
-        byline.setStyleSheet("color: #1d4f76; font-size: 11px; font-weight: 700;")
+        byline.setObjectName("shell-byline")
 
         self._config_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._config_label.setStyleSheet(
-            "padding: 8px 10px; background: #ffffff; border: 1px solid #d7dee8; "
-            "border-radius: 9px; color: #2a4159; font-size: 11px;"
-        )
+        self._config_label.setObjectName("config-label")
 
         refresh_button = QPushButton("Refresh Snapshot")
+        refresh_button.setObjectName("refresh-snapshot-button")
         self._set_button_icon(refresh_button, "SYNC")
         self._set_button_tone(refresh_button, "primary")
         refresh_button.clicked.connect(lambda: self._controller.trigger_action("refresh"))
-        refresh_button.setFixedWidth(168)
+        refresh_button.setMinimumWidth(164)
 
         left_column = QVBoxLayout()
-        left_column.setSpacing(1)
+        left_column.setSpacing(2)
         left_column.addWidget(self._brand_eyebrow_label)
         left_column.addWidget(title)
         left_column.addWidget(subtitle)
@@ -794,9 +882,10 @@ class MainWindow(QMainWindow):
         right_column.setSpacing(8)
         right_column.addWidget(self._config_label)
         right_column.addWidget(refresh_button, 0, Qt.AlignRight)
+        right_column.addStretch(1)
 
         layout = QHBoxLayout()
-        layout.setSpacing(12)
+        layout.setSpacing(16)
         layout.addLayout(left_column, 1)
         layout.addLayout(right_column, 0)
         return layout
@@ -806,37 +895,38 @@ class MainWindow(QMainWindow):
         panel.setStyleSheet(self._hero_panel_style())
 
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(10)
 
         self._brand_badge_label.setAlignment(Qt.AlignCenter)
-        self._brand_badge_label.setFixedSize(56, 56)
+        self._brand_badge_label.setFixedSize(46, 46)
         self._brand_badge_label.setStyleSheet(
-            "background: rgba(255, 255, 255, 0.12); color: #f7fbfe; border: 1px solid rgba(255, 255, 255, 0.18); "
-            "border-radius: 16px; font-size: 22px; font-weight: 800; letter-spacing: 0.08em;"
+            "background: #d9e8f7; color: #173c5e; border: 1px solid #9fb7d2; "
+            "border-radius: 14px; font-size: 18px; font-weight: 800; letter-spacing: 0.06em;"
         )
 
-        self._hero_heading_label.setStyleSheet("font-size: 18px; font-weight: 800; color: #f7fbfe;")
+        self._hero_heading_label.setStyleSheet("font-size: 18px; font-weight: 800; color: #173c5e;")
         self._hero_heading_label.setWordWrap(True)
-        self._hero_summary_label.setStyleSheet("font-size: 12px; color: #d9ebf7;")
+        self._hero_summary_label.setStyleSheet("font-size: 12px; color: #3f5f7c;")
         self._hero_summary_label.setWordWrap(True)
         self._hero_steps_label.setStyleSheet(
-            "padding: 10px 12px; background: rgba(255, 255, 255, 0.10); color: #f3f9fe; "
-            "border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 14px; font-size: 13px; font-weight: 600;"
+            "padding: 10px 12px; background: #f5f9fe; color: #2f4e69; "
+            "border: 1px solid #d1ddec; border-radius: 12px; font-size: 12px; font-weight: 700;"
         )
         self._hero_steps_label.setWordWrap(True)
 
-        chip_cli = QLabel("CLI-first")
-        chip_cli.setStyleSheet(self._hero_pill_style(accent=True))
-        chip_sso = QLabel("SSO-aware")
-        chip_sso.setStyleSheet(self._hero_pill_style())
-        chip_files = QLabel("Local profile visibility")
-        chip_files.setStyleSheet(self._hero_pill_style())
+        chip_provider = QLabel("Step 1 Provider")
+        chip_provider.setStyleSheet(self._hero_pill_style(accent=True))
+        chip_profile = QLabel("Step 2 Profile")
+        chip_profile.setStyleSheet(self._hero_pill_style())
+        chip_auth = QLabel("Step 3 Authentication")
+        chip_auth.setStyleSheet(self._hero_pill_style())
+
         chip_layout = QHBoxLayout()
         chip_layout.setSpacing(6)
-        chip_layout.addWidget(chip_cli)
-        chip_layout.addWidget(chip_sso)
-        chip_layout.addWidget(chip_files)
+        chip_layout.addWidget(chip_provider)
+        chip_layout.addWidget(chip_profile)
+        chip_layout.addWidget(chip_auth)
         chip_layout.addStretch(1)
 
         text_layout = QVBoxLayout()
@@ -859,44 +949,64 @@ class MainWindow(QMainWindow):
         for index, label in enumerate(metric_labels):
             label.setTextFormat(Qt.RichText)
             label.setTextInteractionFlags(Qt.NoTextInteraction)
-            label.setStyleSheet(self._hero_metric_style(emphasised=index == 2))
+            label.setStyleSheet(self._hero_metric_style(emphasised=index == 3))
+
+        metrics_title = QLabel("Readiness Snapshot")
+        metrics_title.setStyleSheet("font-size: 11px; font-weight: 800; color: #34516b; letter-spacing: 0.08em;")
 
         metrics_layout = QGridLayout()
         metrics_layout.setHorizontalSpacing(8)
         metrics_layout.setVerticalSpacing(8)
         metrics_layout.addWidget(self._hero_provider_metric_label, 0, 0)
         metrics_layout.addWidget(self._hero_profile_metric_label, 0, 1)
-        metrics_layout.addWidget(self._hero_auth_metric_label, 0, 2)
-        metrics_layout.addWidget(self._hero_target_metric_label, 0, 3)
+        metrics_layout.addWidget(self._hero_auth_metric_label, 1, 0)
+        metrics_layout.addWidget(self._hero_target_metric_label, 1, 1)
 
         layout.addLayout(top_layout)
         layout.addWidget(self._hero_steps_label)
+        layout.addWidget(metrics_title)
         layout.addLayout(metrics_layout)
         return panel
 
     def _build_session_setup_panel(self) -> QGroupBox:
-        group = QGroupBox("Session Lock")
+        group = QGroupBox("Step 4: Lock Session")
         layout = QVBoxLayout(group)
-        self._session_provider_label.setStyleSheet("font-size: 14px; font-weight: 700; color: #17324d;")
-        self._session_profile_label.setStyleSheet("font-size: 14px; font-weight: 700; color: #17324d;")
-        self._session_auth_label.setStyleSheet("font-size: 14px; font-weight: 700; color: #17324d;")
+        layout.setSpacing(10)
+
+        intro = QLabel("Confirm provider, profile, and authentication, then lock this session.")
+        intro.setWordWrap(True)
+        intro.setStyleSheet(self._info_card_style())
+
+        self._session_provider_label.setStyleSheet("font-size: 14px; font-weight: 700; color: #163754;")
+        self._session_profile_label.setStyleSheet("font-size: 14px; font-weight: 700; color: #163754;")
+        self._session_auth_label.setStyleSheet("font-size: 14px; font-weight: 700; color: #163754;")
         self._session_lock_hint_label.setWordWrap(True)
         self._session_lock_hint_label.setStyleSheet(self._info_card_style(emphasised=True))
         self._set_button_tone(self._session_lock_button, "primary")
         self._session_lock_button.clicked.connect(self._on_lock_session_clicked)
 
+        provider_caption = QLabel("Step 1: Provider")
+        provider_caption.setStyleSheet("font-size: 12px; font-weight: 700; color: #3e5f7d;")
+        profile_caption = QLabel("Step 2: Profile")
+        profile_caption.setStyleSheet("font-size: 12px; font-weight: 700; color: #3e5f7d;")
+        auth_caption = QLabel("Step 3: Authentication")
+        auth_caption.setStyleSheet("font-size: 12px; font-weight: 700; color: #3e5f7d;")
+
         metadata_layout = QGridLayout()
-        metadata_layout.addWidget(QLabel("Provider"), 0, 0)
+        metadata_layout.setHorizontalSpacing(16)
+        metadata_layout.setVerticalSpacing(8)
+        metadata_layout.addWidget(provider_caption, 0, 0)
         metadata_layout.addWidget(self._session_provider_label, 0, 1)
-        metadata_layout.addWidget(QLabel("Profile"), 1, 0)
+        metadata_layout.addWidget(profile_caption, 1, 0)
         metadata_layout.addWidget(self._session_profile_label, 1, 1)
-        metadata_layout.addWidget(QLabel("Auth"), 2, 0)
+        metadata_layout.addWidget(auth_caption, 2, 0)
         metadata_layout.addWidget(self._session_auth_label, 2, 1)
 
         footer_layout = QHBoxLayout()
         footer_layout.addWidget(self._session_lock_hint_label, 1)
         footer_layout.addWidget(self._session_lock_button, 0, Qt.AlignRight)
 
+        layout.addWidget(intro)
         layout.addLayout(metadata_layout)
         layout.addLayout(footer_layout)
         return group
@@ -904,15 +1014,17 @@ class MainWindow(QMainWindow):
     def _build_workspace_header(self) -> QGroupBox:
         group = QGroupBox("Locked Session")
         layout = QHBoxLayout(group)
+        layout.setSpacing(12)
 
-        self._workspace_title.setStyleSheet("font-size: 22px; font-weight: 700; color: #10283f;")
-        self._workspace_subtitle.setStyleSheet("font-size: 14px; font-weight: 700; color: #184b72;")
+        self._workspace_title.setStyleSheet("font-size: 22px; font-weight: 700; color: #102c47;")
+        self._workspace_subtitle.setStyleSheet("font-size: 14px; font-weight: 700; color: #1e5078;")
         self._workspace_meta.setWordWrap(True)
         self._workspace_meta.setStyleSheet(self._info_card_style(emphasised=True))
-        self._set_button_tone(self._workspace_unlock_button, "primary")
+        self._set_button_tone(self._workspace_unlock_button, "quiet")
         self._workspace_unlock_button.clicked.connect(self._on_unlock_session_clicked)
 
         text_layout = QVBoxLayout()
+        text_layout.setSpacing(8)
         text_layout.addWidget(self._workspace_title)
         text_layout.addWidget(self._workspace_subtitle)
         text_layout.addWidget(self._workspace_meta)
@@ -928,11 +1040,13 @@ class MainWindow(QMainWindow):
         control_page = QWidget()
         control_layout = QVBoxLayout(control_page)
         control_layout.setContentsMargins(0, 0, 0, 0)
+        control_layout.setSpacing(0)
         control_layout.addWidget(self._body_stack)
 
         activity_page = QWidget()
         activity_layout = QVBoxLayout(activity_page)
         activity_layout.setContentsMargins(0, 0, 0, 0)
+        activity_layout.setSpacing(0)
         activity_layout.addWidget(self._build_log_panel(), 1)
 
         self._primary_sections_tabs.setDocumentMode(True)
@@ -949,8 +1063,11 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
+        stage_title = QLabel("Step 1: Select a provider")
+        stage_title.setStyleSheet("font-size: 18px; font-weight: 800; color: #173c5e;")
+
         home_hint = QLabel(
-            "Start here. Choose a provider, then continue to session setup for profile, auth, and lock actions."
+            "Provider choice defines available profiles, authentication methods, and operational actions."
         )
         home_hint.setWordWrap(True)
         home_hint.setStyleSheet(self._info_card_style(emphasised=True))
@@ -958,49 +1075,71 @@ class MainWindow(QMainWindow):
         self._set_button_tone(self._session_continue_button, "primary")
         self._session_continue_button.clicked.connect(lambda: self._session_flow_tabs.setCurrentIndex(1))
 
-        footer_layout = QHBoxLayout()
-        footer_layout.addStretch(1)
-        footer_layout.addWidget(self._session_continue_button)
+        title_row = QHBoxLayout()
+        title_row.addWidget(stage_title, 1)
+        title_row.addWidget(self._session_continue_button, 0, Qt.AlignRight)
 
+        home_splitter = QSplitter(Qt.Horizontal)
+        home_splitter.setChildrenCollapsible(False)
+        home_splitter.addWidget(self._build_provider_panel())
+        home_splitter.addWidget(self._build_brand_panel())
+        home_splitter.setStretchFactor(0, 5)
+        home_splitter.setStretchFactor(1, 4)
+        home_splitter.setSizes([780, 560])
+
+        layout.addLayout(title_row)
         layout.addWidget(home_hint)
-        layout.addWidget(self._build_provider_panel(), 1)
-        layout.addLayout(footer_layout)
+        layout.addWidget(home_splitter, 1)
         return page
 
     def _build_session_setup_page(self) -> QWidget:
         self._session_tabs.setDocumentMode(True)
+        self._session_tabs.setObjectName("session-tabs")
         self._session_tabs.clear()
-        self._session_tabs.addTab(self._build_overview_tab(), "Profile")
-        self._session_tabs.addTab(self._build_access_tab(), "Access")
-        self._session_tabs.addTab(self._build_actions_tab(), "Actions")
+        profile_index = self._session_tabs.addTab(self._build_overview_tab(), "Profile")
+        access_index = self._session_tabs.addTab(self._build_access_tab(), "Access")
+        actions_index = self._session_tabs.addTab(self._build_actions_tab(), "Actions")
+        self._set_tab_icon(self._session_tabs, profile_index, "CONTACT")
+        self._set_tab_icon(self._session_tabs, access_index, "LINK")
+        self._set_tab_icon(self._session_tabs, actions_index, "ROBOT")
 
         back_button = QPushButton("Back to Home")
+        self._set_button_tone(back_button, "quiet")
         back_button.clicked.connect(lambda: self._session_flow_tabs.setCurrentIndex(0))
+
+        setup_title = QLabel("Step 2 and Step 3: Validate profile and authentication")
+        setup_title.setStyleSheet("font-size: 18px; font-weight: 800; color: #173c5e;")
+
+        setup_hint = QLabel(
+            "Use the Profile, Access, and Actions tabs to confirm readiness before locking this session."
+        )
+        setup_hint.setWordWrap(True)
+        setup_hint.setStyleSheet(self._info_card_style())
+
+        header_row = QHBoxLayout()
+        header_row.addWidget(setup_title, 1)
+        header_row.addWidget(back_button, 0, Qt.AlignRight)
 
         session_content = QWidget()
         session_content_layout = QVBoxLayout(session_content)
         session_content_layout.setContentsMargins(0, 0, 0, 0)
         session_content_layout.setSpacing(12)
+        session_content_layout.addLayout(header_row)
+        session_content_layout.addWidget(setup_hint)
         session_content_layout.addWidget(self._build_session_setup_panel())
         session_content_layout.addWidget(self._session_tabs, 1)
-
-        right_panel = QWidget()
-        right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(10)
-        right_layout.addWidget(back_button, 0, Qt.AlignLeft)
-        right_layout.addWidget(session_content, 1)
 
         session_splitter = QSplitter(Qt.Horizontal)
         session_splitter.setChildrenCollapsible(False)
         session_splitter.addWidget(self._build_profile_panel())
-        session_splitter.addWidget(right_panel)
-        session_splitter.setStretchFactor(0, 2)
+        session_splitter.addWidget(session_content)
+        session_splitter.setStretchFactor(0, 3)
         session_splitter.setStretchFactor(1, 5)
-        session_splitter.setSizes([360, 1030])
+        session_splitter.setSizes([430, 970])
         return session_splitter
 
     def _build_session_page(self) -> QWidget:
+        self._session_flow_tabs.setObjectName("session-flow-tabs")
         self._session_flow_tabs.setDocumentMode(True)
         self._session_flow_tabs.setTabPosition(QTabWidget.North)
         self._session_flow_tabs.clear()
@@ -1008,13 +1147,17 @@ class MainWindow(QMainWindow):
         setup_index = self._session_flow_tabs.addTab(self._build_session_setup_page(), "Session Setup")
         self._set_tab_icon(self._session_flow_tabs, home_index, "HOME")
         self._set_tab_icon(self._session_flow_tabs, setup_index, "SETTING")
+        self._session_flow_tabs.setTabToolTip(home_index, "Step 1: Select provider")
+        self._session_flow_tabs.setTabToolTip(setup_index, "Step 2 to Step 4: Validate and lock")
+        self._session_flow_tabs.tabBar().setExpanding(True)
+        self._session_flow_tabs.tabBar().setVisible(True)
         return self._session_flow_tabs
 
     def _build_workspace_page(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
+        layout.setSpacing(12)
         layout.addWidget(self._build_workspace_header())
         self._workspace_tabs.setDocumentMode(True)
         self._workspace_tabs.setTabPosition(QTabWidget.North)
@@ -1025,21 +1168,29 @@ class MainWindow(QMainWindow):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
+        layout.setSpacing(12)
 
         self._workspace_overview_heading.setStyleSheet(
-            "font-size: 16px; font-weight: 700; color: #17324d;"
+            "font-size: 18px; font-weight: 800; color: #173b5d;"
         )
         self._workspace_overview_summary.setWordWrap(True)
-        self._workspace_overview_summary.setStyleSheet("font-size: 14px; color: #17324d;")
+        self._workspace_overview_summary.setStyleSheet(self._info_card_style(emphasised=True))
         self._workspace_overview_detail.setWordWrap(True)
         self._workspace_overview_detail.setStyleSheet(self._info_card_style())
         self._workspace_overview_sources.setWordWrap(True)
         self._workspace_overview_sources.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._workspace_overview_sources.setStyleSheet(self._info_card_style(emphasised=True))
+        self._workspace_overview_sources.setStyleSheet(self._info_card_style())
         self._workspace_overview_notes.setWordWrap(True)
         self._workspace_overview_notes.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self._workspace_overview_notes.setStyleSheet(self._info_card_style())
+
+        summary_group = QGroupBox("Session Summary")
+        summary_layout = QVBoxLayout(summary_group)
+        summary_layout.addWidget(self._workspace_overview_summary)
+
+        context_group = QGroupBox("Operating Context")
+        context_layout = QVBoxLayout(context_group)
+        context_layout.addWidget(self._workspace_overview_detail)
 
         sources_group = QGroupBox("Source Paths")
         sources_layout = QVBoxLayout(sources_group)
@@ -1049,12 +1200,18 @@ class MainWindow(QMainWindow):
         notes_layout = QVBoxLayout(notes_group)
         notes_layout.addWidget(self._workspace_overview_notes)
 
+        detail_splitter = QSplitter(Qt.Horizontal)
+        detail_splitter.setChildrenCollapsible(False)
+        detail_splitter.addWidget(sources_group)
+        detail_splitter.addWidget(notes_group)
+        detail_splitter.setStretchFactor(0, 1)
+        detail_splitter.setStretchFactor(1, 1)
+        detail_splitter.setSizes([640, 640])
+
         layout.addWidget(self._workspace_overview_heading)
-        layout.addWidget(self._workspace_overview_summary)
-        layout.addWidget(self._workspace_overview_detail)
-        layout.addWidget(sources_group)
-        layout.addWidget(notes_group)
-        layout.addStretch(1)
+        layout.addWidget(summary_group)
+        layout.addWidget(context_group)
+        layout.addWidget(detail_splitter, 1)
         return page
 
     def _build_workspace_actions_tab(self) -> QWidget:
@@ -1064,30 +1221,44 @@ class MainWindow(QMainWindow):
         layout.setSpacing(12)
 
         self._workspace_actions_hint_label.setWordWrap(True)
-        self._workspace_actions_hint_label.setStyleSheet(self._info_card_style())
+        self._workspace_actions_hint_label.setStyleSheet(self._info_card_style(emphasised=True))
         self._workspace_profile_actions_label.setStyleSheet(self._section_label_style())
         self._workspace_global_actions_label.setStyleSheet(self._section_label_style())
 
         self._workspace_profile_actions_layout.setContentsMargins(0, 0, 0, 0)
-        self._workspace_profile_actions_layout.setHorizontalSpacing(8)
-        self._workspace_profile_actions_layout.setVerticalSpacing(8)
+        self._workspace_profile_actions_layout.setHorizontalSpacing(10)
+        self._workspace_profile_actions_layout.setVerticalSpacing(10)
         self._workspace_global_actions_layout.setContentsMargins(0, 0, 0, 0)
-        self._workspace_global_actions_layout.setHorizontalSpacing(8)
-        self._workspace_global_actions_layout.setVerticalSpacing(8)
+        self._workspace_global_actions_layout.setHorizontalSpacing(10)
+        self._workspace_global_actions_layout.setVerticalSpacing(10)
+
+        profile_group = QGroupBox("Selected Profile")
+        profile_layout = QVBoxLayout(profile_group)
+        profile_layout.addWidget(self._workspace_profile_actions_label)
+        profile_layout.addWidget(self._workspace_profile_actions_container)
+
+        global_group = QGroupBox("Provider-wide")
+        global_layout = QVBoxLayout(global_group)
+        global_layout.addWidget(self._workspace_global_actions_label)
+        global_layout.addWidget(self._workspace_global_actions_container)
+
+        action_splitter = QSplitter(Qt.Horizontal)
+        action_splitter.setChildrenCollapsible(False)
+        action_splitter.addWidget(profile_group)
+        action_splitter.addWidget(global_group)
+        action_splitter.setStretchFactor(0, 1)
+        action_splitter.setStretchFactor(1, 1)
+        action_splitter.setSizes([640, 640])
 
         layout.addWidget(self._workspace_actions_hint_label)
-        layout.addWidget(self._workspace_profile_actions_label)
-        layout.addWidget(self._workspace_profile_actions_container)
-        layout.addWidget(self._workspace_global_actions_label)
-        layout.addWidget(self._workspace_global_actions_container)
-        layout.addStretch(1)
+        layout.addWidget(action_splitter, 1)
         return page
 
     def _build_workspace_s3_tab(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(14)
+        layout.setSpacing(12)
 
         self._workspace_s3_status_label.setWordWrap(True)
         self._workspace_s3_status_label.setStyleSheet(self._info_card_style(emphasised=True))
@@ -1095,8 +1266,8 @@ class MainWindow(QMainWindow):
         self._workspace_s3_bucket_status_label.setStyleSheet(self._info_card_style())
         self._workspace_s3_selected_bucket_label.setWordWrap(True)
         self._workspace_s3_selected_bucket_label.setStyleSheet(
-            "padding: 10px 12px; background: #f7fafc; border: 1px solid #8ea3b7; "
-            "border-radius: 10px; font-size: 13px; font-weight: 700; color: #17324d;"
+            "padding: 10px 12px; background: #f7fafe; border: 1px solid #9db3ca; "
+            "border-radius: 10px; font-size: 13px; font-weight: 700; color: #163754;"
         )
         self._workspace_s3_upload_status_label.setWordWrap(True)
         self._workspace_s3_upload_status_label.setStyleSheet(self._info_card_style())
@@ -1104,7 +1275,16 @@ class MainWindow(QMainWindow):
         self._workspace_s3_upload_key_input.setPlaceholderText("Object key inside the selected bucket.")
         self._set_button_tone(self._workspace_s3_upload_button, "primary")
         self._set_button_tone(self._workspace_s3_refresh_buckets_button, "primary")
+        self._set_button_tone(self._workspace_s3_refresh_bucket_button, "quiet")
+        self._set_button_tone(self._workspace_s3_upload_browse_button, "quiet")
+        self._set_button_tone(self._workspace_s3_upload_clear_button, "quiet")
+        self._set_button_tone(self._workspace_s3_apply_prefix_button, "quiet")
+        self._set_button_tone(self._workspace_s3_clear_prefix_button, "quiet")
+        self._set_button_tone(self._workspace_s3_copy_uri_button, "quiet")
         self._set_button_tone(self._workspace_s3_generate_signed_url_button, "primary")
+        self._set_button_tone(self._workspace_s3_copy_signed_url_button, "quiet")
+        self._set_button_tone(self._workspace_s3_use_generated_url_button, "quiet")
+        self._set_button_tone(self._workspace_s3_analyse_url_button, "quiet")
         self._set_button_tone(self._workspace_s3_validate_url_button, "primary")
         self._workspace_s3_prefix_input.setPlaceholderText("Optional prefix filter, for example logs/2026/")
         self._workspace_s3_object_status_label.setWordWrap(True)
@@ -1123,6 +1303,7 @@ class MainWindow(QMainWindow):
         self._workspace_s3_url_tester_status_label.setStyleSheet(self._info_card_style())
         self._workspace_s3_url_tester_input.setPlaceholderText("Paste any URL here, including a signed URL received from someone else.")
         self._workspace_s3_url_tester_input.setMinimumHeight(90)
+
         self._workspace_s3_url_tester_details_tree.setColumnCount(2)
         self._workspace_s3_url_tester_details_tree.setHeaderLabels(["Field", "Value"])
         self._configure_data_tree(self._workspace_s3_url_tester_details_tree)
@@ -1132,6 +1313,7 @@ class MainWindow(QMainWindow):
         self._workspace_s3_url_tester_details_tree.header().setSectionResizeMode(0, QHeaderView.Interactive)
         self._workspace_s3_url_tester_details_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
         self._workspace_s3_url_tester_details_tree.setColumnWidth(0, 220)
+
         self._workspace_s3_upload_detail_tree.setColumnCount(2)
         self._workspace_s3_upload_detail_tree.setHeaderLabels(["Field", "Value"])
         self._configure_data_tree(self._workspace_s3_upload_detail_tree)
@@ -1168,9 +1350,9 @@ class MainWindow(QMainWindow):
         self._workspace_s3_object_details_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
         self._workspace_s3_object_details_tree.setColumnWidth(0, 220)
 
-        bucket_group = QGroupBox("Buckets")
+        bucket_group = QGroupBox("Bucket Catalogue")
         bucket_layout = QVBoxLayout(bucket_group)
-        bucket_layout.setSpacing(12)
+        bucket_layout.setSpacing(10)
         bucket_toolbar = QHBoxLayout()
         bucket_toolbar.addWidget(self._workspace_s3_refresh_buckets_button)
         bucket_toolbar.addStretch(1)
@@ -1184,19 +1366,24 @@ class MainWindow(QMainWindow):
         browser_panel_layout.setSpacing(10)
         browser_panel_layout.addWidget(self._workspace_s3_selected_bucket_label)
 
-        controls_layout = QHBoxLayout()
-        controls_layout.addWidget(QLabel("Prefix"))
-        controls_layout.addWidget(self._workspace_s3_prefix_input, 1)
-        controls_layout.addWidget(self._workspace_s3_apply_prefix_button)
-        controls_layout.addWidget(self._workspace_s3_clear_prefix_button)
-        controls_layout.addWidget(self._workspace_s3_refresh_bucket_button)
-        controls_layout.addWidget(self._workspace_s3_copy_uri_button)
-        browser_panel_layout.addLayout(controls_layout)
+        prefix_layout = QHBoxLayout()
+        prefix_layout.addWidget(QLabel("Prefix"))
+        prefix_layout.addWidget(self._workspace_s3_prefix_input, 1)
+        prefix_layout.addWidget(self._workspace_s3_apply_prefix_button)
+        prefix_layout.addWidget(self._workspace_s3_clear_prefix_button)
+
+        object_toolbar = QHBoxLayout()
+        object_toolbar.addWidget(self._workspace_s3_refresh_bucket_button)
+        object_toolbar.addWidget(self._workspace_s3_copy_uri_button)
+        object_toolbar.addStretch(1)
+
+        browser_panel_layout.addLayout(prefix_layout)
+        browser_panel_layout.addLayout(object_toolbar)
         browser_panel_layout.addWidget(self._workspace_s3_object_status_label)
 
-        object_group = QGroupBox("Objects")
+        object_group = QGroupBox("Object Browser")
         object_layout = QVBoxLayout(object_group)
-        object_layout.setSpacing(12)
+        object_layout.setSpacing(10)
         object_layout.addWidget(self._workspace_s3_object_tree, 1)
 
         object_details_page = QWidget()
@@ -1259,7 +1446,7 @@ class MainWindow(QMainWindow):
         tools_tabs.addTab(signed_url_page, "Signed URL")
         tools_tabs.addTab(url_tester_page, "URL Tester")
 
-        inspector_group = QGroupBox("Inspector")
+        inspector_group = QGroupBox("Object Workbench")
         inspector_layout = QVBoxLayout(inspector_group)
         inspector_layout.addWidget(tools_tabs, 1)
 
@@ -1274,7 +1461,7 @@ class MainWindow(QMainWindow):
         main_panel = QWidget()
         main_panel_layout = QVBoxLayout(main_panel)
         main_panel_layout.setContentsMargins(0, 0, 0, 0)
-        main_panel_layout.setSpacing(12)
+        main_panel_layout.setSpacing(10)
         main_panel_layout.addWidget(browser_panel)
         main_panel_layout.addWidget(content_splitter, 1)
 
@@ -1322,7 +1509,13 @@ class MainWindow(QMainWindow):
         if region_editor is not None:
             region_editor.setPlaceholderText("Type or select an AWS region, for example eu-west-2")
 
+        self._set_button_tone(self._workspace_ec2_apply_region_button, "quiet")
         self._set_button_tone(self._workspace_ec2_refresh_button, "primary")
+        self._set_button_tone(self._workspace_ec2_start_button, "quiet")
+        self._set_button_tone(self._workspace_ec2_stop_button, "caution")
+        self._set_button_tone(self._workspace_ec2_reboot_button, "quiet")
+        self._set_button_tone(self._workspace_ec2_copy_id_button, "quiet")
+        self._set_button_tone(self._workspace_ec2_copy_ssh_button, "quiet")
 
         self._workspace_ec2_instance_tree.setColumnCount(6)
         self._workspace_ec2_instance_tree.setHeaderLabels([
@@ -1351,15 +1544,15 @@ class MainWindow(QMainWindow):
         self._workspace_ec2_details_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
         self._workspace_ec2_details_tree.setColumnWidth(0, 220)
 
-        controls_layout = QHBoxLayout()
-        controls_layout.addWidget(QLabel("Search"))
-        controls_layout.addWidget(self._workspace_ec2_search_input, 1)
-        controls_layout.addWidget(QLabel("State"))
-        controls_layout.addWidget(self._workspace_ec2_state_filter_combo)
-        controls_layout.addWidget(QLabel("Region"))
-        controls_layout.addWidget(self._workspace_ec2_region_combo)
-        controls_layout.addWidget(self._workspace_ec2_apply_region_button)
-        controls_layout.addWidget(self._workspace_ec2_refresh_button)
+        filter_layout = QHBoxLayout()
+        filter_layout.addWidget(QLabel("Search"))
+        filter_layout.addWidget(self._workspace_ec2_search_input, 1)
+        filter_layout.addWidget(QLabel("State"))
+        filter_layout.addWidget(self._workspace_ec2_state_filter_combo)
+        filter_layout.addWidget(QLabel("Region"))
+        filter_layout.addWidget(self._workspace_ec2_region_combo)
+        filter_layout.addWidget(self._workspace_ec2_apply_region_button)
+        filter_layout.addWidget(self._workspace_ec2_refresh_button)
 
         action_layout = QHBoxLayout()
         action_layout.addWidget(self._workspace_ec2_start_button)
@@ -1369,13 +1562,21 @@ class MainWindow(QMainWindow):
         action_layout.addWidget(self._workspace_ec2_copy_ssh_button)
         action_layout.addStretch(1)
 
+        filters_group = QGroupBox("Fleet Query")
+        filters_group_layout = QVBoxLayout(filters_group)
+        filters_group_layout.addLayout(filter_layout)
+
+        actions_group = QGroupBox("Instance Commands")
+        actions_group_layout = QVBoxLayout(actions_group)
+        actions_group_layout.addLayout(action_layout)
+
         instance_group = QGroupBox("Instances")
         instance_layout = QVBoxLayout(instance_group)
         instance_layout.setSpacing(10)
         instance_layout.addWidget(self._workspace_ec2_instance_status_label)
         instance_layout.addWidget(self._workspace_ec2_instance_tree, 1)
 
-        details_group = QGroupBox("Instance Details")
+        details_group = QGroupBox("Selected Instance")
         details_layout = QVBoxLayout(details_group)
         details_layout.addWidget(self._workspace_ec2_details_tree, 1)
 
@@ -1388,15 +1589,15 @@ class MainWindow(QMainWindow):
         content_splitter.setSizes([740, 560])
 
         layout.addWidget(self._workspace_ec2_status_label)
-        layout.addLayout(controls_layout)
-        layout.addLayout(action_layout)
+        layout.addWidget(filters_group)
+        layout.addWidget(actions_group)
         layout.addWidget(content_splitter, 1)
         return page
 
     def _build_provider_panel(self) -> QGroupBox:
-        group = QGroupBox("Providers")
+        group = QGroupBox("Step 1: Choose Provider")
         layout = QVBoxLayout(group)
-        hint = QLabel("Choose a provider to load its profiles and available auth options.")
+        hint = QLabel("Select a provider to load matching profiles, authentication methods, and actions.")
         hint.setWordWrap(True)
         hint.setStyleSheet(self._info_card_style())
         self._provider_tree.setColumnCount(3)
@@ -1411,9 +1612,9 @@ class MainWindow(QMainWindow):
         return group
 
     def _build_profile_panel(self) -> QGroupBox:
-        group = QGroupBox("Profiles")
+        group = QGroupBox("Step 2: Choose Profile")
         layout = QVBoxLayout(group)
-        hint = QLabel("Pick a profile to inspect details, auth, and available actions.")
+        hint = QLabel("Choose a profile to inspect configuration details, authentication readiness, and scoped actions.")
         hint.setWordWrap(True)
         hint.setStyleSheet(self._info_card_style())
         self._profile_tree.setColumnCount(4)
@@ -1551,28 +1752,45 @@ class MainWindow(QMainWindow):
     def _build_actions_panel(self) -> QGroupBox:
         group = QGroupBox("Actions")
         layout = QVBoxLayout(group)
+        layout.setSpacing(10)
+
         self._actions_hint_label.setWordWrap(True)
-        self._actions_hint_label.setStyleSheet(self._info_card_style())
+        self._actions_hint_label.setStyleSheet(self._info_card_style(emphasised=True))
         self._profile_actions_label.setStyleSheet(self._section_label_style())
         self._global_actions_label.setStyleSheet(self._section_label_style())
 
         self._profile_actions_container = QWidget(group)
         self._profile_actions_layout = QGridLayout(self._profile_actions_container)
         self._profile_actions_layout.setContentsMargins(0, 0, 0, 0)
-        self._profile_actions_layout.setHorizontalSpacing(8)
-        self._profile_actions_layout.setVerticalSpacing(8)
+        self._profile_actions_layout.setHorizontalSpacing(10)
+        self._profile_actions_layout.setVerticalSpacing(10)
 
         self._global_actions_container = QWidget(group)
         self._global_actions_layout = QGridLayout(self._global_actions_container)
         self._global_actions_layout.setContentsMargins(0, 0, 0, 0)
-        self._global_actions_layout.setHorizontalSpacing(8)
-        self._global_actions_layout.setVerticalSpacing(8)
+        self._global_actions_layout.setHorizontalSpacing(10)
+        self._global_actions_layout.setVerticalSpacing(10)
+
+        profile_group = QGroupBox("Selected Profile")
+        profile_layout = QVBoxLayout(profile_group)
+        profile_layout.addWidget(self._profile_actions_label)
+        profile_layout.addWidget(self._profile_actions_container)
+
+        global_group = QGroupBox("Provider-wide")
+        global_layout = QVBoxLayout(global_group)
+        global_layout.addWidget(self._global_actions_label)
+        global_layout.addWidget(self._global_actions_container)
+
+        action_splitter = QSplitter(Qt.Horizontal)
+        action_splitter.setChildrenCollapsible(False)
+        action_splitter.addWidget(profile_group)
+        action_splitter.addWidget(global_group)
+        action_splitter.setStretchFactor(0, 1)
+        action_splitter.setStretchFactor(1, 1)
+        action_splitter.setSizes([620, 620])
 
         layout.addWidget(self._actions_hint_label)
-        layout.addWidget(self._profile_actions_label)
-        layout.addWidget(self._profile_actions_container)
-        layout.addWidget(self._global_actions_label)
-        layout.addWidget(self._global_actions_container)
+        layout.addWidget(action_splitter, 1)
         return group
 
     def _build_log_panel(self) -> QGroupBox:
@@ -1717,19 +1935,83 @@ class MainWindow(QMainWindow):
         )
 
         lock_reason = self._controller.lock_session_reason()
+        can_lock = self._controller.can_lock_session()
         if lock_reason:
-            self._session_lock_hint_label.setText(lock_reason)
+            self._session_lock_hint_label.setText(f"Cannot lock yet: {lock_reason}")
         else:
             self._session_lock_hint_label.setText(
-                "Lock the session to switch into the focused workspace. Use Unlock later to change provider, profile, or auth method."
+                "All checks are complete. Lock this session to enter workspace mode."
             )
-        self._session_lock_button.setEnabled(self._controller.can_lock_session())
+        self._session_lock_button.setEnabled(can_lock)
 
         has_provider = current_provider is not None
         self._session_continue_button.setEnabled(has_provider)
+        self._session_continue_button.setText(
+            "Continue to Session Setup" if has_provider else "Choose Provider to Continue"
+        )
         self._session_flow_tabs.setTabEnabled(1, has_provider)
         if not has_provider and self._session_flow_tabs.currentIndex() != 0:
             self._session_flow_tabs.setCurrentIndex(0)
+
+        provider_count = len(self._controller.provider_snapshot)
+        total_profiles = len(self._controller.discovery_report.profiles)
+        provider_profiles = len(self._controller.profiles_for_provider(current_provider)) if current_provider else 0
+        available_auth_count = (
+            sum(1 for method in self._controller.available_auth_methods() if method.available)
+            if current_provider
+            else 0
+        )
+
+        provider_ready = has_provider
+        profile_ready = selected_profile is not None
+        auth_ready = selected_auth_method is not None
+
+        provider_step = current_provider.upper() if current_provider else "Choose provider"
+        profile_step = selected_profile.display_name if selected_profile is not None else "Choose profile"
+        auth_step = selected_auth_method.value.upper() if selected_auth_method is not None else "Choose authentication"
+
+        self._hero_heading_label.setText("Session readiness checklist")
+        if can_lock:
+            self._hero_summary_label.setText(
+                "All prerequisites are ready. Lock the session to move into workspace mode."
+            )
+        elif has_provider:
+            self._hero_summary_label.setText(
+                "Provider selected. Complete profile and authentication checks to unlock session lock."
+            )
+        else:
+            self._hero_summary_label.setText(
+                "Select a provider to begin profile and authentication readiness checks."
+            )
+
+        self._hero_steps_label.setText(
+            "Step 1  Provider [" + ("Ready" if provider_ready else "Required") + "]: " + provider_step + "\n"
+            "Step 2  Profile [" + ("Ready" if profile_ready else "Required") + "]: " + profile_step + "\n"
+            "Step 3  Authentication [" + ("Ready" if auth_ready else "Required") + "]: " + auth_step + "\n"
+            "Step 4  Lock session [" + ("Ready" if can_lock else "Pending") + "]"
+        )
+
+        self._set_hero_metric_text(
+            self._hero_provider_metric_label,
+            value=str(provider_count),
+            caption="Detected providers",
+        )
+        profile_caption = "Profiles for provider" if has_provider else "Profiles discovered"
+        self._set_hero_metric_text(
+            self._hero_profile_metric_label,
+            value=str(provider_profiles if has_provider else total_profiles),
+            caption=profile_caption,
+        )
+        self._set_hero_metric_text(
+            self._hero_auth_metric_label,
+            value=str(available_auth_count),
+            caption="Available auth methods",
+        )
+        self._set_hero_metric_text(
+            self._hero_target_metric_label,
+            value="Ready" if can_lock else "Pending",
+            caption="Session lock",
+        )
 
     def _render_workspace(self) -> None:
         self._workspace_title.setText(self._controller.locked_session_title())
@@ -1738,7 +2020,7 @@ class MainWindow(QMainWindow):
         locked_auth_method = self._controller.session_state.locked_auth_method
         provider_health = self._controller.locked_provider_health()
         selected_details = self._controller.selected_profile_details()
-        details = []
+        details: list[str] = []
         if locked_profile is not None:
             details.append(f"Profile: {locked_profile.display_name}")
         if locked_auth_method is not None:
@@ -1746,15 +2028,15 @@ class MainWindow(QMainWindow):
         if provider_health and provider_health.command_path:
             details.append(f"CLI: {provider_health.command_path}")
         self._workspace_meta.setText(
-            "\n".join(details) if details else "Unlock the session to change provider or configuration."
+            " | ".join(details) if details else "Unlock the session to change provider or configuration."
         )
 
         if self._controller.is_session_locked():
-            self._workspace_overview_heading.setText("Focused Session Overview")
+            self._workspace_overview_heading.setText("Locked Session Overview")
             self._workspace_overview_summary.setText(selected_details.summary)
             self._workspace_overview_detail.setText(
-                "The workspace is locked to the current provider, profile, and auth method. "
-                "Use the service tabs for task-specific work or unlock the session to change configuration."
+                "This workspace is pinned to the current provider, profile, and authentication method. "
+                "Use service tabs for task-focused work, or unlock if you need to change context."
             )
             self._workspace_overview_sources.setText(
                 "\n".join(str(path) for path in selected_details.source_paths)
@@ -1767,46 +2049,57 @@ class MainWindow(QMainWindow):
                 else "No additional notes for this locked session."
             )
         else:
-            self._workspace_overview_heading.setText("Focused Session Overview")
+            self._workspace_overview_heading.setText("Locked Session Overview")
             self._workspace_overview_summary.setText(
-                "Lock a session to switch from setup into the focused workspace."
+                "Lock a session to move from setup into the operational workspace."
             )
             self._workspace_overview_detail.setText(
-                "Choose a provider, profile, and available auth method in the Session page, then lock the session."
+                "Choose provider, profile, and authentication in the Session page, then lock the session."
             )
             self._workspace_overview_sources.setText("No locked session is active.")
             self._workspace_overview_notes.setText("No additional notes for this locked session.")
 
-        current_tab_id = None
-        current_widget = self._workspace_tabs.currentWidget()
-        if current_widget is not None:
-            current_tab_id = current_widget.property("workspace_tab_id")
+        workspace_tabs = self._controller.workspace_tabs()
+        desired_tab_ids = tuple(tab.tab_id for tab in workspace_tabs)
+        existing_tab_ids = tuple(
+            self._workspace_tabs.widget(index).property("workspace_tab_id")
+            for index in range(self._workspace_tabs.count())
+        )
 
-        self._workspace_s3_root_splitter = None
-        self._workspace_s3_content_splitter = None
-        self._workspace_s3_inspector_tabs = None
-        self._workspace_tabs.clear()
-        next_index = 0
-        for index, tab in enumerate(self._controller.workspace_tabs()):
-            if tab.tab_id == "overview":
-                page = self._build_workspace_overview_tab()
-            elif tab.tab_id == "s3":
-                page = self._build_workspace_s3_tab()
-            elif tab.tab_id == "ec2":
-                page = self._build_workspace_ec2_tab()
-            elif tab.tab_id == "actions":
-                page = self._build_workspace_actions_tab()
-            else:
-                page = self._build_workspace_tab(tab)
-            page.setProperty("workspace_tab_id", tab.tab_id)
-            tab_index = self._workspace_tabs.addTab(page, tab.label)
-            icon_name = self._workspace_tab_icon_name(tab.tab_id)
-            if icon_name is not None:
-                self._set_tab_icon(self._workspace_tabs, tab_index, icon_name)
-            if tab.tab_id == current_tab_id:
-                next_index = index
-        if self._workspace_tabs.count():
-            self._workspace_tabs.setCurrentIndex(next_index)
+        if existing_tab_ids != desired_tab_ids:
+            current_tab_id = None
+            current_widget = self._workspace_tabs.currentWidget()
+            if current_widget is not None:
+                current_tab_id = current_widget.property("workspace_tab_id")
+
+            self._workspace_s3_root_splitter = None
+            self._workspace_s3_content_splitter = None
+            self._workspace_s3_inspector_tabs = None
+            self._workspace_tabs.clear()
+            next_index = 0
+            for index, tab in enumerate(workspace_tabs):
+                if tab.tab_id == "overview":
+                    page = self._build_workspace_overview_tab()
+                elif tab.tab_id == "s3":
+                    page = self._build_workspace_s3_tab()
+                elif tab.tab_id == "ec2":
+                    page = self._build_workspace_ec2_tab()
+                elif tab.tab_id == "actions":
+                    page = self._build_workspace_actions_tab()
+                else:
+                    page = self._build_workspace_tab(tab)
+                page.setProperty("workspace_tab_id", tab.tab_id)
+                tab_index = self._workspace_tabs.addTab(page, tab.label)
+                icon_name = self._workspace_tab_icon_name(tab.tab_id)
+                if icon_name is not None:
+                    self._set_tab_icon(self._workspace_tabs, tab_index, icon_name)
+                if tab.tab_id == current_tab_id:
+                    next_index = index
+            if self._workspace_tabs.count():
+                self._workspace_tabs.setCurrentIndex(next_index)
+        else:
+            for index, tab in enumerate(workspace_tabs):
+                self._workspace_tabs.setTabText(index, tab.label)
 
     def _render_workspace_s3(self) -> None:
         state = self._controller.aws_s3_workspace()
@@ -2097,6 +2390,15 @@ class MainWindow(QMainWindow):
     def _render_action_button(self, action: ProviderAction, *, busy: bool) -> QPushButton:
         button = QPushButton(action.label)
         button.setObjectName(f"action-{action.action_id}")
+        button.setMinimumHeight(38)
+
+        if action.action_id in {"refresh", "activate", "sso-login"}:
+            self._set_button_tone(button, "primary")
+        elif action.action_id in {"logout"}:
+            self._set_button_tone(button, "caution")
+        else:
+            self._set_button_tone(button, "quiet")
+
         icon_name = self._action_icon_name(action.action_id)
         if icon_name is not None:
             self._set_button_icon(button, icon_name)
@@ -2386,6 +2688,22 @@ class MainWindow(QMainWindow):
         tree.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         tree.header().setHighlightSections(False)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

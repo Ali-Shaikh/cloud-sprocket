@@ -1,0 +1,74 @@
+package app
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"cloudsprocket/backend/daemon/internal/config"
+	"cloudsprocket/backend/daemon/internal/discovery"
+	"cloudsprocket/backend/daemon/internal/models"
+	"cloudsprocket/backend/daemon/internal/store"
+)
+
+func TestServiceLocksSessionAndListsLogs(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+
+	mustWriteFile(t, filepath.Join(home, ".aws", "config"), "[profile sandbox]\nregion = us-east-1\nsso_start_url = https://example.awsapps.com/start\n")
+	mustWriteFile(t, filepath.Join(home, ".aws", "credentials"), "[sandbox]\naws_access_key_id = AKIAEXAMPLE\n")
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("expected runtime dirs to be created, got %v", err)
+	}
+
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("expected sqlite store to open, got %v", err)
+	}
+	defer dataStore.Close()
+
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(command string) (string, error) {
+			if command == "aws" {
+				return "/usr/bin/aws", nil
+			}
+			return "", nil
+		}),
+	)
+
+	ctx := context.Background()
+	result, err := service.Handle(ctx, "session.get", nil, nil)
+	if err != nil {
+		t.Fatalf("expected session.get to succeed, got %v", err)
+	}
+	session := result.(models.SessionSnapshot)
+	if session.SelectedProfileID != "sandbox" {
+		t.Fatalf("expected default session to select sandbox, got %+v", session)
+	}
+
+	if _, err := service.Handle(ctx, "session.lock", nil, nil); err != nil {
+		t.Fatalf("expected session.lock to succeed, got %v", err)
+	}
+	logs, err := service.Handle(ctx, "logs.list", []byte(`{"limit":10}`), nil)
+	if err != nil {
+		t.Fatalf("expected logs.list to succeed, got %v", err)
+	}
+	if len(logs.([]models.ActivityLogEntry)) == 0 {
+		t.Fatalf("expected lock action to append a log entry")
+	}
+}
+
+func mustWriteFile(t *testing.T, path string, contents string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("failed to create directory for %s: %v", path, err)
+	}
+	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+		t.Fatalf("failed to write %s: %v", path, err)
+	}
+}

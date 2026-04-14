@@ -13,3 +13,12 @@ pytest-cache-files-*
 *.egg-info/
 build/
 dist/
+node_modules/
+coverage/
+*.tsbuildinfo
+*.db
+*.db-shm
+*.db-wal
+apps/desktop/dist/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/binaries/cloudsprocketd-*

@@ -22,59 +22,68 @@ jobs:
   test-and-build:
     name: Test and Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-    env:
-      QT_QPA_PLATFORM: offscreen
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
             artifact_name: cloudsprocket-windows
-            artifact_path: dist/CloudSprocket
           - os: macos-latest
             artifact_name: cloudsprocket-macos
-            artifact_path: dist/CloudSprocket-macos.tar.gz
+          - os: ubuntu-latest
+            artifact_name: cloudsprocket-linux
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.14"
-          cache: pip
+          node-version: "24"
+          cache: "pnpm"
 
-      - name: Install dependencies
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.1"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux Tauri prerequisites
+        if: runner.os == 'Linux'
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e .[dev,build]
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
 
-      - name: Run test suite
-        run: python -m pytest --cache-clear
+      - name: Install workspace dependencies
+        run: pnpm install --no-frozen-lockfile
 
-      - name: Build desktop artifact on Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./scripts/build.ps1
+      - name: Run desktop tests
+        run: pnpm run test:desktop
 
-      - name: Build desktop artifact on macOS
-        if: runner.os == 'macOS'
-        shell: bash
-        run: bash ./scripts/build.sh
+      - name: Run backend tests
+        run: pnpm run test:backend
 
-      - name: Package macOS app bundle for artifact upload
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          tar -C dist -czf dist/CloudSprocket-macos.tar.gz CloudSprocket.app
+      - name: Build desktop bundle
+        run: pnpm run build:desktop
 
-      - name: Upload build artifact
+      - name: Upload desktop bundle
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_path }}
+          path: apps/desktop/src-tauri/target/release/bundle
           if-no-files-found: error
           retention-days: 14
-
