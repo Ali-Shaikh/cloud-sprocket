@@ -1,5 +1,6 @@
 .venv/
 .tmp/
+.tools/
 CHECKPOINT.local.md
 .idea/
 .DS_Store
@@ -20,5 +21,6 @@ coverage/
 *.db-shm
 *.db-wal
 apps/desktop/dist/
+apps/desktop/src-tauri/gen/
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/binaries/cloudsprocketd-*
