@@ -14,10 +14,15 @@ import (
 
 type stubS3Inventory struct {
 	buckets []models.AwsS3Bucket
+	objects map[string][]models.AwsS3Object
 }
 
 func (s stubS3Inventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.AwsS3Bucket, error) {
 	return append([]models.AwsS3Bucket(nil), s.buckets...), nil
+}
+
+func (s stubS3Inventory) ListObjects(_ context.Context, _ models.ProfileSummary, bucketName string) ([]models.AwsS3Object, error) {
+	return append([]models.AwsS3Object(nil), s.objects[bucketName]...), nil
 }
 
 func TestServiceLocksSessionAndListsLogs(t *testing.T) {
@@ -50,6 +55,11 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 		stubS3Inventory{
 			buckets: []models.AwsS3Bucket{
 				{Name: "cloudsprocket-artifacts"},
+			},
+			objects: map[string][]models.AwsS3Object{
+				"cloudsprocket-artifacts": {
+					{Key: "reports/daily.json", Size: "12 MB"},
+				},
 			},
 		},
 	)
@@ -85,8 +95,23 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	if len(workspace.S3Buckets) != 1 || workspace.S3Buckets[0].Name != "cloudsprocket-artifacts" {
 		t.Fatalf("expected workspace buckets to come from the s3 inventory, got %+v", workspace.S3Buckets)
 	}
+	if workspace.SelectedS3BucketName != "cloudsprocket-artifacts" {
+		t.Fatalf("expected workspace to select the first bucket, got %q", workspace.SelectedS3BucketName)
+	}
+	if len(workspace.S3Objects) != 1 || workspace.S3Objects[0].Key != "reports/daily.json" {
+		t.Fatalf("expected workspace objects to come from the s3 inventory, got %+v", workspace.S3Objects)
+	}
 	if workspace.RuntimeSettings.DatabasePath == "" {
 		t.Fatalf("expected workspace runtime settings to include a database path")
+	}
+
+	selectionResult, err := service.Handle(ctx, "aws.s3.selectBucket", []byte(`{"bucketName":"cloudsprocket-artifacts"}`), nil)
+	if err != nil {
+		t.Fatalf("expected aws.s3.selectBucket to succeed, got %v", err)
+	}
+	selectedWorkspace := selectionResult.(models.WorkspaceSnapshot)
+	if selectedWorkspace.SelectedS3BucketName != "cloudsprocket-artifacts" {
+		t.Fatalf("expected selected workspace bucket to be persisted, got %q", selectedWorkspace.SelectedS3BucketName)
 	}
 
 	logs, err := service.Handle(ctx, "logs.list", []byte(`{"limit":10}`), nil)

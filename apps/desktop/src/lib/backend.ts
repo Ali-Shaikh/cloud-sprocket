@@ -317,12 +317,17 @@ function buildMockWorkspace(): WorkspaceSnapshot {
   const provider = currentProvider();
   const profile = currentProfile();
   const isAWSWorkspace = provider?.providerId === "aws";
+  const selectedS3BucketName = isAWSWorkspace ? mockWorkspaceBuckets[0]?.name : undefined;
 
   return {
     provider,
     profile,
     authMethod: mockState.session.selectedAuthMethod,
     runtimeSettings: mockState.settings,
+    selectedS3BucketName,
+    s3StatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceObjects.length} objects from ${selectedS3BucketName}.`
+      : "S3 inventory is only available for locked AWS workspaces.",
     s3Buckets: isAWSWorkspace ? mockWorkspaceBuckets : [],
     s3Objects: isAWSWorkspace ? mockWorkspaceObjects : [],
     ec2Instances: isAWSWorkspace ? mockWorkspaceInstances : [],
@@ -343,6 +348,9 @@ function handleMockRequest<T>(
       return Promise.resolve(mockState.session as T);
     case "workspace.get":
       rebuildSessionDerivedState();
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.s3.selectBucket":
+      appendLog("info", `Selected S3 bucket ${params.bucketName}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     case "session.selectProvider":
       setCurrentProvider(String(params.providerId ?? ""));

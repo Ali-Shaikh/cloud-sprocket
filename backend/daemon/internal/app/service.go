@@ -16,6 +16,7 @@ import (
 
 type S3Inventory interface {
 	ListBuckets(ctx context.Context, profile models.ProfileSummary) ([]models.AwsS3Bucket, error)
+	ListObjects(ctx context.Context, profile models.ProfileSummary, bucketName string) ([]models.AwsS3Object, error)
 }
 
 type Notifier interface {
@@ -82,6 +83,34 @@ func (s *Service) Handle(
 			return nil, err
 		}
 		return s.buildWorkspaceSnapshot(snapshot, session), nil
+	case "aws.s3.selectBucket":
+		var request struct {
+			BucketName string `json:"bucketName"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		snapshot, session, err := s.currentState(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			return nil, errors.New("lock an AWS session before selecting an S3 bucket")
+		}
+		session.SelectedS3BucketName = request.BucketName
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), s.notifyStateAndLog(
+			ctx,
+			snapshot,
+			session,
+			notifier,
+			"info",
+			fmt.Sprintf("Selected S3 bucket %s.", request.BucketName),
+		)
 	case "session.selectProvider":
 		var request struct {
 			ProviderID string `json:"providerId"`
@@ -99,6 +128,7 @@ func (s *Service) Handle(
 		session.CurrentProviderID = request.ProviderID
 		session.SelectedProfileID = ""
 		session.SelectedAuthMethod = ""
+		session.SelectedS3BucketName = ""
 		session = reconcileSession(session, snapshot)
 		if err := s.store.SaveSession(ctx, session); err != nil {
 			return nil, err
@@ -122,6 +152,7 @@ func (s *Service) Handle(
 		session.CurrentProviderID = request.ProviderID
 		session.SelectedProfileID = request.ProfileID
 		session.SelectedAuthMethod = ""
+		session.SelectedS3BucketName = ""
 		session = reconcileSession(session, snapshot)
 		if err := s.store.SaveSession(ctx, session); err != nil {
 			return nil, err
@@ -349,9 +380,39 @@ func (s *Service) buildWorkspaceSnapshot(
 		workspace.Profile != nil &&
 		s.s3 != nil {
 		workspace.S3Buckets = s.s3Buckets(context.Background(), *workspace.Profile)
+		workspace.SelectedS3BucketName = s.selectedS3BucketName(session, workspace.S3Buckets)
+		workspace.S3Objects = s.s3Objects(context.Background(), *workspace.Profile, workspace.SelectedS3BucketName)
+		if workspace.SelectedS3BucketName == "" {
+			workspace.S3StatusMessage = "No buckets are currently available for this locked AWS session."
+		} else if len(workspace.S3Objects) == 0 {
+			workspace.S3StatusMessage = fmt.Sprintf("No objects were returned for %s.", workspace.SelectedS3BucketName)
+		} else {
+			workspace.S3StatusMessage = fmt.Sprintf(
+				"Loaded %d objects from %s.",
+				len(workspace.S3Objects),
+				workspace.SelectedS3BucketName,
+			)
+		}
 	}
 
 	return workspace
+}
+
+func (s *Service) selectedS3BucketName(
+	session models.SessionSnapshot,
+	buckets []models.AwsS3Bucket,
+) string {
+	if session.SelectedS3BucketName != "" {
+		for _, bucket := range buckets {
+			if bucket.Name == session.SelectedS3BucketName {
+				return session.SelectedS3BucketName
+			}
+		}
+	}
+	if len(buckets) == 0 {
+		return ""
+	}
+	return buckets[0].Name
 }
 
 func (s *Service) s3Buckets(
@@ -386,6 +447,32 @@ func (s *Service) s3Buckets(
 	}
 
 	return []models.AwsS3Bucket{}
+}
+
+func (s *Service) s3Objects(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+) []models.AwsS3Object {
+	if bucketName == "" {
+		return []models.AwsS3Object{}
+	}
+
+	const scope = "aws.s3.objects"
+	queryHash := profile.ProfileID + "|" + bucketName
+	objects, err := s.s3.ListObjects(ctx, profile, bucketName)
+	if err == nil {
+		_ = s.store.SaveResourceCache(ctx, scope, queryHash, objects, s.timestamp())
+		return objects
+	}
+
+	var cached []models.AwsS3Object
+	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
+	if cacheErr == nil && ok {
+		return cached
+	}
+
+	return []models.AwsS3Object{}
 }
 
 func statePayload(snapshot discovery.Snapshot, session models.SessionSnapshot) models.StateChangedPayload {
@@ -444,6 +531,7 @@ func clearLockState(session models.SessionSnapshot) models.SessionSnapshot {
 	session.LockedProviderID = ""
 	session.LockedProfileID = ""
 	session.LockedAuthMethod = ""
+	session.SelectedS3BucketName = ""
 	session.AvailableAuthMethods = append([]models.AuthMethodStatus(nil), session.AvailableAuthMethods...)
 	if session.SelectedProfileID == "" {
 		session.SelectedAuthMethod = ""

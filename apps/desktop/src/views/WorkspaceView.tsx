@@ -5,10 +5,14 @@ import {
   Header,
   SpaceBetween,
   StatusIndicator,
+  Table,
   Tabs,
 } from "@cloudscape-design/components";
+import type { TableProps } from "@cloudscape-design/components";
 import type {
   ActivityLogEntry,
+  AwsS3Bucket,
+  AwsS3Object,
   SessionSnapshot,
   WorkspaceSnapshot,
 } from "../types/backend";
@@ -30,6 +34,7 @@ type Props = {
   onRefreshDiscovery: () => void;
   onUnlockSession: () => void;
   onToggleSensitiveValues: () => void;
+  onSelectS3Bucket: (bucketName: string) => void;
 };
 
 export default function WorkspaceView({
@@ -42,6 +47,7 @@ export default function WorkspaceView({
   onRefreshDiscovery,
   onUnlockSession,
   onToggleSensitiveValues,
+  onSelectS3Bucket,
 }: Props) {
   const workspaceSummaryPanel = (
     <Container
@@ -132,6 +138,126 @@ export default function WorkspaceView({
     </SpaceBetween>
   );
 
+  const selectedBucket = workspace.s3Buckets.find(
+    (bucket) => bucket.name === workspace.selectedS3BucketName,
+  );
+
+  const s3BucketColumns: TableProps.ColumnDefinition<AwsS3Bucket>[] = [
+    {
+      id: "name",
+      header: "Bucket",
+      cell: (bucket) => bucket.name,
+    },
+    {
+      id: "createdAt",
+      header: "Created",
+      cell: (bucket) => bucket.createdAt || "Unknown",
+    },
+  ];
+
+  const s3ObjectColumns: TableProps.ColumnDefinition<AwsS3Object>[] = [
+    {
+      id: "key",
+      header: "Object Key",
+      cell: (object) => object.key,
+    },
+    {
+      id: "size",
+      header: "Size",
+      cell: (object) => object.size || "Unknown",
+    },
+    {
+      id: "modifiedAt",
+      header: "Modified",
+      cell: (object) => object.modifiedAt || "Unknown",
+    },
+    {
+      id: "storageClass",
+      header: "Storage Class",
+      cell: (object) => object.storageClass || "STANDARD",
+    },
+  ];
+
+  const s3Tab = (
+    <SpaceBetween
+      size="l"
+      className="page-stack"
+    >
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description="Real bucket inventory and object listings now come from the Go daemon."
+          >
+            S3 Inventory
+          </Header>
+        }
+      >
+        <div className="status-strip">
+          <div className="status-pill">
+            <Box variant="awsui-key-label">Selected Bucket</Box>
+            <Box variant="p">{workspace.selectedS3BucketName || "No bucket selected"}</Box>
+          </div>
+          <div className="status-pill">
+            <Box variant="awsui-key-label">Objects</Box>
+            <Box variant="p">{countLabel(workspace.s3Objects.length, "object", "objects")}</Box>
+          </div>
+        </div>
+        <Box color="text-body-secondary">
+          {workspace.s3StatusMessage || "S3 inventory is waiting for a locked AWS workspace."}
+        </Box>
+      </Container>
+
+      <div className="setup-grid">
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description="Select a bucket to refresh the workspace object listing."
+            >
+              Buckets
+            </Header>
+          }
+        >
+          <Table
+            items={workspace.s3Buckets}
+            columnDefinitions={s3BucketColumns}
+            selectionType="single"
+            selectedItems={selectedBucket ? [selectedBucket] : []}
+            trackBy="name"
+            variant="embedded"
+            onSelectionChange={({ detail }) => {
+              const bucket = detail.selectedItems[0];
+              if (bucket) {
+                onSelectS3Bucket(bucket.name);
+              }
+            }}
+            empty={<Box color="text-status-inactive">No S3 buckets loaded for this workspace.</Box>}
+          />
+        </Container>
+
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description={workspace.selectedS3BucketName || "Select a bucket to inspect its objects."}
+            >
+              Objects
+            </Header>
+          }
+        >
+          <Table
+            items={workspace.s3Objects}
+            columnDefinitions={s3ObjectColumns}
+            trackBy="key"
+            variant="embedded"
+            empty={<Box color="text-status-inactive">No S3 objects loaded for the selected bucket.</Box>}
+          />
+        </Container>
+      </div>
+    </SpaceBetween>
+  );
+
   return (
     <SpaceBetween
       size="l"
@@ -188,6 +314,12 @@ export default function WorkspaceView({
                 label: tab.label,
                 content: overviewTab,
               }
+            : tab.tabId === "s3"
+              ? {
+                  id: tab.tabId,
+                  label: tab.label,
+                  content: s3Tab,
+                }
             : makeWorkspaceTab(tab),
         )}
       />

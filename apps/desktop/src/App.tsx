@@ -277,6 +277,15 @@ export default function App() {
       onToggleSensitiveValues={() => {
         setShowSensitiveValues((current) => !current);
       }}
+      onSelectS3Bucket={(bucketName) => {
+        void backendRequest<WorkspaceSnapshot>("aws.s3.selectBucket", { bucketName }).then(
+          (workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(workspaceResult);
+            });
+          },
+        );
+      }}
     />
   ) : (
     <SessionSetupView

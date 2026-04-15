@@ -3,7 +3,7 @@ package models
 type ProviderState string
 
 const (
-	ProviderStateConfigured ProviderState = "configured"
+	ProviderStateConfigured  ProviderState = "configured"
 	ProviderStateToolingOnly ProviderState = "tooling-only"
 	ProviderStateMissing     ProviderState = "missing"
 )
@@ -57,13 +57,14 @@ type WorkspaceTab struct {
 }
 
 type SessionSnapshot struct {
-	CurrentProviderID     string             `json:"currentProviderId,omitempty"`
-	SelectedProfileID     string             `json:"selectedProfileId,omitempty"`
-	SelectedAuthMethod    AuthMethod         `json:"selectedAuthMethod,omitempty"`
-	LockedProviderID      string             `json:"lockedProviderId,omitempty"`
-	LockedProfileID       string             `json:"lockedProfileId,omitempty"`
-	LockedAuthMethod      AuthMethod         `json:"lockedAuthMethod,omitempty"`
-	IsLocked              bool               `json:"isLocked"`
+	CurrentProviderID    string             `json:"currentProviderId,omitempty"`
+	SelectedProfileID    string             `json:"selectedProfileId,omitempty"`
+	SelectedAuthMethod   AuthMethod         `json:"selectedAuthMethod,omitempty"`
+	SelectedS3BucketName string             `json:"selectedS3BucketName,omitempty"`
+	LockedProviderID     string             `json:"lockedProviderId,omitempty"`
+	LockedProfileID      string             `json:"lockedProfileId,omitempty"`
+	LockedAuthMethod     AuthMethod         `json:"lockedAuthMethod,omitempty"`
+	IsLocked             bool               `json:"isLocked"`
 	AvailableAuthMethods []AuthMethodStatus `json:"availableAuthMethods"`
 	WorkspaceTabs        []WorkspaceTab     `json:"workspaceTabs"`
 }
@@ -92,13 +93,15 @@ type AwsEc2Instance struct {
 }
 
 type WorkspaceSnapshot struct {
-	Provider        *ProviderSummary     `json:"provider,omitempty"`
-	Profile         *ProfileSummary      `json:"profile,omitempty"`
-	AuthMethod      AuthMethod           `json:"authMethod,omitempty"`
-	RuntimeSettings AppSettingsSnapshot  `json:"runtimeSettings"`
-	S3Buckets       []AwsS3Bucket        `json:"s3Buckets"`
-	S3Objects       []AwsS3Object        `json:"s3Objects"`
-	EC2Instances    []AwsEc2Instance     `json:"ec2Instances"`
+	Provider             *ProviderSummary    `json:"provider,omitempty"`
+	Profile              *ProfileSummary     `json:"profile,omitempty"`
+	AuthMethod           AuthMethod          `json:"authMethod,omitempty"`
+	RuntimeSettings      AppSettingsSnapshot `json:"runtimeSettings"`
+	SelectedS3BucketName string              `json:"selectedS3BucketName,omitempty"`
+	S3StatusMessage      string              `json:"s3StatusMessage,omitempty"`
+	S3Buckets            []AwsS3Bucket       `json:"s3Buckets"`
+	S3Objects            []AwsS3Object       `json:"s3Objects"`
+	EC2Instances         []AwsEc2Instance    `json:"ec2Instances"`
 }
 
 type ActivityLogEntry struct {
