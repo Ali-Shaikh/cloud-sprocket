@@ -12,6 +12,14 @@ import (
 	"cloudsprocket/backend/daemon/internal/store"
 )
 
+type stubS3Inventory struct {
+	buckets []models.AwsS3Bucket
+}
+
+func (s stubS3Inventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.AwsS3Bucket, error) {
+	return append([]models.AwsS3Bucket(nil), s.buckets...), nil
+}
+
 func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	tempDir := t.TempDir()
 	home := filepath.Join(tempDir, "home")
@@ -39,6 +47,11 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 			}
 			return "", nil
 		}),
+		stubS3Inventory{
+			buckets: []models.AwsS3Bucket{
+				{Name: "cloudsprocket-artifacts"},
+			},
+		},
 	)
 
 	ctx := context.Background()
@@ -68,6 +81,9 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	}
 	if workspace.AuthMethod != models.AuthMethodCLI {
 		t.Fatalf("expected workspace auth method to be cli, got %s", workspace.AuthMethod)
+	}
+	if len(workspace.S3Buckets) != 1 || workspace.S3Buckets[0].Name != "cloudsprocket-artifacts" {
+		t.Fatalf("expected workspace buckets to come from the s3 inventory, got %+v", workspace.S3Buckets)
 	}
 	if workspace.RuntimeSettings.DatabasePath == "" {
 		t.Fatalf("expected workspace runtime settings to include a database path")

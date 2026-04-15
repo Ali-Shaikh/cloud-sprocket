@@ -146,6 +146,63 @@ func (s *Store) AppendLog(
 	}, nil
 }
 
+func (s *Store) SaveResourceCache(
+	ctx context.Context,
+	scope string,
+	queryHash string,
+	value any,
+	fetchedAt string,
+) error {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.ExecContext(
+		ctx,
+		`INSERT INTO resource_cache (scope, query_hash, payload_json, fetched_at)
+		 VALUES (?, ?, ?, ?)
+		 ON CONFLICT(scope, query_hash) DO UPDATE SET
+		   payload_json = excluded.payload_json,
+		   fetched_at = excluded.fetched_at`,
+		scope,
+		queryHash,
+		string(payload),
+		fetchedAt,
+	)
+	return err
+}
+
+func (s *Store) LoadResourceCache(
+	ctx context.Context,
+	scope string,
+	queryHash string,
+	target any,
+) (string, bool, error) {
+	row := s.db.QueryRowContext(
+		ctx,
+		`SELECT payload_json, fetched_at
+		 FROM resource_cache
+		 WHERE scope = ? AND query_hash = ?`,
+		scope,
+		queryHash,
+	)
+
+	var payload string
+	var fetchedAt string
+	if err := row.Scan(&payload, &fetchedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+
+	if err := json.Unmarshal([]byte(payload), target); err != nil {
+		return "", false, err
+	}
+	return fetchedAt, true, nil
+}
+
 func (s *Store) ListLogs(ctx context.Context, limit int) ([]models.ActivityLogEntry, error) {
 	if limit <= 0 {
 		limit = 50

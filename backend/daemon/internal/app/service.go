@@ -14,6 +14,10 @@ import (
 	"cloudsprocket/backend/daemon/internal/store"
 )
 
+type S3Inventory interface {
+	ListBuckets(ctx context.Context, profile models.ProfileSummary) ([]models.AwsS3Bucket, error)
+}
+
 type Notifier interface {
 	Notify(method string, payload any) error
 }
@@ -22,15 +26,22 @@ type Service struct {
 	settings  config.Settings
 	store     *store.Store
 	discovery *discovery.Service
+	s3        S3Inventory
 	now       func() time.Time
 	mu        sync.Mutex
 }
 
-func New(settings config.Settings, store *store.Store, discoveryService *discovery.Service) *Service {
+func New(
+	settings config.Settings,
+	store *store.Store,
+	discoveryService *discovery.Service,
+	s3Inventory S3Inventory,
+) *Service {
 	return &Service{
 		settings:  settings,
 		store:     store,
 		discovery: discoveryService,
+		s3:        s3Inventory,
 		now:       func() time.Time { return time.Now().UTC() },
 	}
 }
@@ -333,7 +344,48 @@ func (s *Service) buildWorkspaceSnapshot(
 		workspace.Profile = &profile
 	}
 
+	if workspace.Provider != nil &&
+		workspace.Provider.ProviderID == "aws" &&
+		workspace.Profile != nil &&
+		s.s3 != nil {
+		workspace.S3Buckets = s.s3Buckets(context.Background(), *workspace.Profile)
+	}
+
 	return workspace
+}
+
+func (s *Service) s3Buckets(
+	ctx context.Context,
+	profile models.ProfileSummary,
+) []models.AwsS3Bucket {
+	const scope = "aws.s3.buckets"
+
+	queryHash := profile.ProfileID
+	buckets, err := s.s3.ListBuckets(ctx, profile)
+	if err == nil {
+		fetchedAt := s.timestamp()
+		if saveErr := s.store.SaveResourceCache(ctx, scope, queryHash, buckets, fetchedAt); saveErr == nil {
+			for index := range buckets {
+				if buckets[index].Summary == "" {
+					buckets[index].Summary = "Fetched " + fetchedAt
+				}
+			}
+		}
+		return buckets
+	}
+
+	var cached []models.AwsS3Bucket
+	fetchedAt, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
+	if cacheErr == nil && ok {
+		for index := range cached {
+			if cached[index].Summary == "" {
+				cached[index].Summary = "Cached " + fetchedAt
+			}
+		}
+		return cached
+	}
+
+	return []models.AwsS3Bucket{}
 }
 
 func statePayload(snapshot discovery.Snapshot, session models.SessionSnapshot) models.StateChangedPayload {

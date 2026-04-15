@@ -3,10 +3,11 @@ package main
 import (
 	"context"
 	"log"
-	"os/exec"
 	"os"
+	"os/exec"
 
 	"cloudsprocket/backend/daemon/internal/app"
+	"cloudsprocket/backend/daemon/internal/awsadapter"
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/rpc"
@@ -26,7 +27,8 @@ func main() {
 	defer dataStore.Close()
 
 	discoveryService := discovery.New(settings, exec.LookPath)
-	service := app.New(settings, dataStore, discoveryService)
+	s3Inventory := awsadapter.NewS3Inventory(settings)
+	service := app.New(settings, dataStore, discoveryService, s3Inventory)
 	server := rpc.New(service)
 
 	if err := server.Serve(context.Background(), os.Stdin, os.Stdout); err != nil {
