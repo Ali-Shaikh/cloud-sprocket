@@ -2,9 +2,12 @@ package awsadapter
 
 import (
 	"context"
+	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awscfg "github.com/aws/aws-sdk-go-v2/config"
+	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/dustin/go-humanize"
 
@@ -13,29 +16,24 @@ import (
 )
 
 type S3Inventory struct {
-	settings config.Settings
+	settings      config.Settings
+	mu            sync.Mutex
+	bucketRegions map[string]string
 }
 
 func NewS3Inventory(settings config.Settings) *S3Inventory {
-	return &S3Inventory{settings: settings}
+	return &S3Inventory{
+		settings:      settings,
+		bucketRegions: map[string]string{},
+	}
 }
 
 func (s *S3Inventory) ListBuckets(
 	ctx context.Context,
 	profile models.ProfileSummary,
 ) ([]models.AwsS3Bucket, error) {
-	region := awsRegion(profile)
-	if region == "" {
-		region = "us-east-1"
-	}
-
-	cfg, err := awscfg.LoadDefaultConfig(
-		ctx,
-		awscfg.WithSharedConfigProfile(profile.ProfileID),
-		awscfg.WithSharedConfigFiles([]string{s.settings.AWSConfigPath}),
-		awscfg.WithSharedCredentialsFiles([]string{s.settings.AWSCredentialsPath}),
-		awscfg.WithRegion(region),
-	)
+	region := awsRegionHint(profile)
+	cfg, err := s.loadConfig(ctx, profile, region)
 	if err != nil {
 		return nil, err
 	}
@@ -68,18 +66,12 @@ func (s *S3Inventory) ListObjects(
 	profile models.ProfileSummary,
 	bucketName string,
 ) ([]models.AwsS3Object, error) {
-	region := awsRegion(profile)
-	if region == "" {
-		region = "us-east-1"
+	region, err := s.bucketRegion(ctx, profile, bucketName)
+	if err != nil {
+		return nil, err
 	}
 
-	cfg, err := awscfg.LoadDefaultConfig(
-		ctx,
-		awscfg.WithSharedConfigProfile(profile.ProfileID),
-		awscfg.WithSharedConfigFiles([]string{s.settings.AWSConfigPath}),
-		awscfg.WithSharedCredentialsFiles([]string{s.settings.AWSCredentialsPath}),
-		awscfg.WithRegion(region),
-	)
+	cfg, err := s.loadConfig(ctx, profile, region)
 	if err != nil {
 		return nil, err
 	}
@@ -110,13 +102,56 @@ func (s *S3Inventory) ListObjects(
 	return objects, nil
 }
 
-func awsRegion(profile models.ProfileSummary) string {
+func (s *S3Inventory) bucketRegion(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+) (string, error) {
+	s.mu.Lock()
+	cachedRegion := s.bucketRegions[bucketName]
+	s.mu.Unlock()
+	if cachedRegion != "" {
+		return cachedRegion, nil
+	}
+
+	cfg, err := s.loadConfig(ctx, profile, awsRegionHint(profile))
+	if err != nil {
+		return "", err
+	}
+
+	region, err := s3manager.GetBucketRegion(ctx, s3.NewFromConfig(cfg), bucketName)
+	if err != nil {
+		return "", err
+	}
+
+	s.mu.Lock()
+	s.bucketRegions[bucketName] = region
+	s.mu.Unlock()
+
+	return region, nil
+}
+
+func (s *S3Inventory) loadConfig(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+) (aws.Config, error) {
+	return awscfg.LoadDefaultConfig(
+		ctx,
+		awscfg.WithSharedConfigProfile(profile.ProfileID),
+		awscfg.WithSharedConfigFiles([]string{s.settings.AWSConfigPath}),
+		awscfg.WithSharedCredentialsFiles([]string{s.settings.AWSCredentialsPath}),
+		awscfg.WithRegion(region),
+	)
+}
+
+func awsRegionHint(profile models.ProfileSummary) string {
 	for _, field := range profile.Attributes {
 		if field.Label == "Region" && field.Value != "" {
 			return field.Value
 		}
 	}
-	return ""
+	return "us-east-1"
 }
 
 func awsString(value *string) string {
