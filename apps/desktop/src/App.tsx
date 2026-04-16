@@ -46,6 +46,7 @@ const emptyWorkspace: WorkspaceSnapshot = {
   runtimeSettings: emptySettings,
   s3Buckets: [],
   s3Objects: [],
+  s3ObjectMetadata: [],
   ec2Instances: [],
 };
 
@@ -279,6 +280,24 @@ export default function App() {
       }}
       onSelectS3Bucket={(bucketName) => {
         void backendRequest<WorkspaceSnapshot>("aws.s3.selectBucket", { bucketName }).then(
+          (workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(workspaceResult);
+            });
+          },
+        );
+      }}
+      onSelectS3Object={(objectKey) => {
+        void backendRequest<WorkspaceSnapshot>("aws.s3.selectObject", { objectKey }).then(
+          (workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(workspaceResult);
+            });
+          },
+        );
+      }}
+      onSetS3PrefixFilter={(prefix) => {
+        void backendRequest<WorkspaceSnapshot>("aws.s3.setPrefixFilter", { prefix }).then(
           (workspaceResult) => {
             startTransition(() => {
               setWorkspace(workspaceResult);

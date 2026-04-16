@@ -65,6 +65,7 @@ func (s *S3Inventory) ListObjects(
 	ctx context.Context,
 	profile models.ProfileSummary,
 	bucketName string,
+	prefix string,
 ) ([]models.AwsS3Object, error) {
 	region, err := s.bucketRegion(ctx, profile, bucketName)
 	if err != nil {
@@ -77,9 +78,13 @@ func (s *S3Inventory) ListObjects(
 	}
 
 	client := s3.NewFromConfig(cfg)
-	result, err := client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+	input := &s3.ListObjectsV2Input{
 		Bucket: &bucketName,
-	})
+	}
+	if prefix != "" {
+		input.Prefix = &prefix
+	}
+	result, err := client.ListObjectsV2(ctx, input)
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +105,69 @@ func (s *S3Inventory) ListObjects(
 	}
 
 	return objects, nil
+}
+
+func (s *S3Inventory) HeadObject(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+	objectKey string,
+) ([]models.DetailField, error) {
+	region, err := s.bucketRegion(ctx, profile, bucketName)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err := s.loadConfig(ctx, profile, region)
+	if err != nil {
+		return nil, err
+	}
+
+	client := s3.NewFromConfig(cfg)
+	result, err := client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: &bucketName,
+		Key:    &objectKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	fields := []models.DetailField{
+		{Label: "Bucket", Value: bucketName},
+		{Label: "Key", Value: objectKey},
+		{Label: "Region", Value: region},
+	}
+	if result.ContentLength != nil && *result.ContentLength > 0 {
+		fields = append(fields, models.DetailField{
+			Label: "Size",
+			Value: humanize.Bytes(uint64(*result.ContentLength)),
+		})
+	}
+	if result.LastModified != nil {
+		fields = append(fields, models.DetailField{
+			Label: "Last Modified",
+			Value: result.LastModified.UTC().Format(time.RFC3339),
+		})
+	}
+	if result.ContentType != nil && *result.ContentType != "" {
+		fields = append(fields, models.DetailField{
+			Label: "Content Type",
+			Value: *result.ContentType,
+		})
+	}
+	if result.ETag != nil && *result.ETag != "" {
+		fields = append(fields, models.DetailField{
+			Label: "ETag",
+			Value: *result.ETag,
+		})
+	}
+	if result.StorageClass != "" {
+		fields = append(fields, models.DetailField{
+			Label: "Storage Class",
+			Value: string(result.StorageClass),
+		})
+	}
+	return fields, nil
 }
 
 func (s *S3Inventory) bucketRegion(

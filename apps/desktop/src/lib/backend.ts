@@ -87,6 +87,21 @@ const mockWorkspaceObjects = [
   },
 ];
 
+const mockWorkspaceObjectMetadata: Record<string, { label: string; value: string }[]> = {
+  "reports/weekly-summary.json": [
+    { label: "Bucket", value: "cloudsprocket-artifacts" },
+    { label: "Key", value: "reports/weekly-summary.json" },
+    { label: "Content Type", value: "application/json" },
+    { label: "ETag", value: "demo-etag-001" },
+  ],
+  "uploads/demo-package.zip": [
+    { label: "Bucket", value: "cloudsprocket-artifacts" },
+    { label: "Key", value: "uploads/demo-package.zip" },
+    { label: "Content Type", value: "application/zip" },
+    { label: "ETag", value: "demo-etag-002" },
+  ],
+};
+
 const mockWorkspaceInstances = [
   {
     instanceId: "i-0123456789abcdef0",
@@ -205,6 +220,9 @@ const mockState: MockState = {
     currentProviderId: "aws",
     selectedProfileId: "sandbox",
     selectedAuthMethod: "cli",
+    selectedS3BucketName: "cloudsprocket-artifacts",
+    selectedS3ObjectKey: "reports/weekly-summary.json",
+    s3PrefixFilter: "",
     isLocked: false,
     availableAuthMethods: mockProfiles[0].authMethods,
     workspaceTabs: [],
@@ -317,7 +335,18 @@ function buildMockWorkspace(): WorkspaceSnapshot {
   const provider = currentProvider();
   const profile = currentProfile();
   const isAWSWorkspace = provider?.providerId === "aws";
-  const selectedS3BucketName = isAWSWorkspace ? mockWorkspaceBuckets[0]?.name : undefined;
+  const selectedS3BucketName = isAWSWorkspace
+    ? mockState.session.selectedS3BucketName ?? mockWorkspaceBuckets[0]?.name
+    : undefined;
+  const filteredObjects = isAWSWorkspace
+    ? mockWorkspaceObjects.filter((object) =>
+        mockState.session.s3PrefixFilter
+          ? object.key.startsWith(mockState.session.s3PrefixFilter)
+          : true,
+      )
+    : [];
+  const selectedS3ObjectKey =
+    mockState.session.selectedS3ObjectKey ?? filteredObjects[0]?.key;
 
   return {
     provider,
@@ -325,11 +354,16 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     authMethod: mockState.session.selectedAuthMethod,
     runtimeSettings: mockState.settings,
     selectedS3BucketName,
+    selectedS3ObjectKey,
+    s3PrefixFilter: mockState.session.s3PrefixFilter,
     s3StatusMessage: isAWSWorkspace
-      ? `Loaded ${mockWorkspaceObjects.length} objects from ${selectedS3BucketName}.`
+      ? `Loaded ${filteredObjects.length} objects from ${selectedS3BucketName}.`
       : "S3 inventory is only available for locked AWS workspaces.",
     s3Buckets: isAWSWorkspace ? mockWorkspaceBuckets : [],
-    s3Objects: isAWSWorkspace ? mockWorkspaceObjects : [],
+    s3Objects: filteredObjects,
+    s3ObjectMetadata: selectedS3ObjectKey
+      ? mockWorkspaceObjectMetadata[selectedS3ObjectKey] ?? []
+      : [],
     ec2Instances: isAWSWorkspace ? mockWorkspaceInstances : [],
   };
 }
@@ -350,7 +384,18 @@ function handleMockRequest<T>(
       rebuildSessionDerivedState();
       return Promise.resolve(buildMockWorkspace() as T);
     case "aws.s3.selectBucket":
+      mockState.session.selectedS3BucketName = String(params.bucketName ?? "");
+      mockState.session.selectedS3ObjectKey = undefined;
       appendLog("info", `Selected S3 bucket ${params.bucketName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.s3.selectObject":
+      mockState.session.selectedS3ObjectKey = String(params.objectKey ?? "");
+      appendLog("info", `Selected S3 object ${params.objectKey}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.s3.setPrefixFilter":
+      mockState.session.s3PrefixFilter = String(params.prefix ?? "");
+      mockState.session.selectedS3ObjectKey = undefined;
+      appendLog("info", `Updated S3 prefix filter to ${params.prefix ?? ""}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     case "session.selectProvider":
       setCurrentProvider(String(params.providerId ?? ""));

@@ -48,6 +48,8 @@ export interface SessionSnapshot {
   selectedProfileId?: string;
   selectedAuthMethod?: AuthMethod;
   selectedS3BucketName?: string;
+  selectedS3ObjectKey?: string;
+  s3PrefixFilter?: string;
   lockedProviderId?: string;
   lockedProfileId?: string;
   lockedAuthMethod?: AuthMethod;
@@ -85,9 +87,12 @@ export interface WorkspaceSnapshot {
   authMethod?: AuthMethod;
   runtimeSettings: AppSettingsSnapshot;
   selectedS3BucketName?: string;
+  selectedS3ObjectKey?: string;
+  s3PrefixFilter?: string;
   s3StatusMessage?: string;
   s3Buckets: AwsS3Bucket[];
   s3Objects: AwsS3Object[];
+  s3ObjectMetadata: DetailField[];
   ec2Instances: AwsEc2Instance[];
 }
 

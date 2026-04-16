@@ -109,11 +109,19 @@ describe("App", () => {
         ...settingsFixture,
         databasePath: "D:/Workspace/runtime/cloudsprocket-workspace.db",
       },
+      selectedS3BucketName: "cloudsprocket-artifacts",
+      selectedS3ObjectKey: "reports/weekly-summary.json",
+      s3PrefixFilter: "",
+      s3StatusMessage: "Loaded 1 objects from cloudsprocket-artifacts.",
       s3Buckets: [
         { name: "cloudsprocket-artifacts" },
         { name: "cloudsprocket-reports" },
       ],
       s3Objects: [{ key: "reports/weekly-summary.json" }],
+      s3ObjectMetadata: [
+        { label: "Bucket", value: "cloudsprocket-artifacts" },
+        { label: "Key", value: "reports/weekly-summary.json" },
+      ],
       ec2Instances: [{ instanceId: "i-0123456789abcdef0" }],
     };
   });

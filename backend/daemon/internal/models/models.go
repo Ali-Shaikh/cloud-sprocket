@@ -61,6 +61,8 @@ type SessionSnapshot struct {
 	SelectedProfileID    string             `json:"selectedProfileId,omitempty"`
 	SelectedAuthMethod   AuthMethod         `json:"selectedAuthMethod,omitempty"`
 	SelectedS3BucketName string             `json:"selectedS3BucketName,omitempty"`
+	SelectedS3ObjectKey  string             `json:"selectedS3ObjectKey,omitempty"`
+	S3PrefixFilter       string             `json:"s3PrefixFilter,omitempty"`
 	LockedProviderID     string             `json:"lockedProviderId,omitempty"`
 	LockedProfileID      string             `json:"lockedProfileId,omitempty"`
 	LockedAuthMethod     AuthMethod         `json:"lockedAuthMethod,omitempty"`
@@ -98,9 +100,12 @@ type WorkspaceSnapshot struct {
 	AuthMethod           AuthMethod          `json:"authMethod,omitempty"`
 	RuntimeSettings      AppSettingsSnapshot `json:"runtimeSettings"`
 	SelectedS3BucketName string              `json:"selectedS3BucketName,omitempty"`
+	SelectedS3ObjectKey  string              `json:"selectedS3ObjectKey,omitempty"`
+	S3PrefixFilter       string              `json:"s3PrefixFilter,omitempty"`
 	S3StatusMessage      string              `json:"s3StatusMessage,omitempty"`
 	S3Buckets            []AwsS3Bucket       `json:"s3Buckets"`
 	S3Objects            []AwsS3Object       `json:"s3Objects"`
+	S3ObjectMetadata     []DetailField       `json:"s3ObjectMetadata"`
 	EC2Instances         []AwsEc2Instance    `json:"ec2Instances"`
 }
 

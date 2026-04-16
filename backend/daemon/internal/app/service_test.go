@@ -13,16 +13,31 @@ import (
 )
 
 type stubS3Inventory struct {
-	buckets []models.AwsS3Bucket
-	objects map[string][]models.AwsS3Object
+	buckets  []models.AwsS3Bucket
+	objects  map[string][]models.AwsS3Object
+	metadata map[string][]models.DetailField
 }
 
 func (s stubS3Inventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.AwsS3Bucket, error) {
 	return append([]models.AwsS3Bucket(nil), s.buckets...), nil
 }
 
-func (s stubS3Inventory) ListObjects(_ context.Context, _ models.ProfileSummary, bucketName string) ([]models.AwsS3Object, error) {
-	return append([]models.AwsS3Object(nil), s.objects[bucketName]...), nil
+func (s stubS3Inventory) ListObjects(_ context.Context, _ models.ProfileSummary, bucketName string, prefix string) ([]models.AwsS3Object, error) {
+	objects := append([]models.AwsS3Object(nil), s.objects[bucketName]...)
+	if prefix == "" {
+		return objects, nil
+	}
+	filtered := []models.AwsS3Object{}
+	for _, object := range objects {
+		if len(object.Key) >= len(prefix) && object.Key[:len(prefix)] == prefix {
+			filtered = append(filtered, object)
+		}
+	}
+	return filtered, nil
+}
+
+func (s stubS3Inventory) HeadObject(_ context.Context, _ models.ProfileSummary, bucketName string, objectKey string) ([]models.DetailField, error) {
+	return append([]models.DetailField(nil), s.metadata[bucketName+"|"+objectKey]...), nil
 }
 
 func TestServiceLocksSessionAndListsLogs(t *testing.T) {
@@ -59,6 +74,13 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 			objects: map[string][]models.AwsS3Object{
 				"cloudsprocket-artifacts": {
 					{Key: "reports/daily.json", Size: "12 MB"},
+					{Key: "uploads/demo-package.zip", Size: "42 MB"},
+				},
+			},
+			metadata: map[string][]models.DetailField{
+				"cloudsprocket-artifacts|reports/daily.json": {
+					{Label: "Bucket", Value: "cloudsprocket-artifacts"},
+					{Label: "Key", Value: "reports/daily.json"},
 				},
 			},
 		},
@@ -98,8 +120,14 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	if workspace.SelectedS3BucketName != "cloudsprocket-artifacts" {
 		t.Fatalf("expected workspace to select the first bucket, got %q", workspace.SelectedS3BucketName)
 	}
-	if len(workspace.S3Objects) != 1 || workspace.S3Objects[0].Key != "reports/daily.json" {
+	if len(workspace.S3Objects) != 2 || workspace.S3Objects[0].Key != "reports/daily.json" {
 		t.Fatalf("expected workspace objects to come from the s3 inventory, got %+v", workspace.S3Objects)
+	}
+	if workspace.SelectedS3ObjectKey != "reports/daily.json" {
+		t.Fatalf("expected workspace to select the first object, got %q", workspace.SelectedS3ObjectKey)
+	}
+	if len(workspace.S3ObjectMetadata) == 0 {
+		t.Fatalf("expected workspace metadata to be populated for the selected object")
 	}
 	if workspace.RuntimeSettings.DatabasePath == "" {
 		t.Fatalf("expected workspace runtime settings to include a database path")
@@ -112,6 +140,27 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	selectedWorkspace := selectionResult.(models.WorkspaceSnapshot)
 	if selectedWorkspace.SelectedS3BucketName != "cloudsprocket-artifacts" {
 		t.Fatalf("expected selected workspace bucket to be persisted, got %q", selectedWorkspace.SelectedS3BucketName)
+	}
+
+	objectResult, err := service.Handle(ctx, "aws.s3.selectObject", []byte(`{"objectKey":"uploads/demo-package.zip"}`), nil)
+	if err != nil {
+		t.Fatalf("expected aws.s3.selectObject to succeed, got %v", err)
+	}
+	selectedObjectWorkspace := objectResult.(models.WorkspaceSnapshot)
+	if selectedObjectWorkspace.SelectedS3ObjectKey != "uploads/demo-package.zip" {
+		t.Fatalf("expected selected workspace object to be persisted, got %q", selectedObjectWorkspace.SelectedS3ObjectKey)
+	}
+
+	filteredResult, err := service.Handle(ctx, "aws.s3.setPrefixFilter", []byte(`{"prefix":"reports/"}`), nil)
+	if err != nil {
+		t.Fatalf("expected aws.s3.setPrefixFilter to succeed, got %v", err)
+	}
+	filteredWorkspace := filteredResult.(models.WorkspaceSnapshot)
+	if filteredWorkspace.S3PrefixFilter != "reports/" {
+		t.Fatalf("expected prefix filter to be stored, got %q", filteredWorkspace.S3PrefixFilter)
+	}
+	if len(filteredWorkspace.S3Objects) != 1 || filteredWorkspace.S3Objects[0].Key != "reports/daily.json" {
+		t.Fatalf("expected prefix filtering to reduce visible objects, got %+v", filteredWorkspace.S3Objects)
 	}
 
 	logs, err := service.Handle(ctx, "logs.list", []byte(`{"limit":10}`), nil)

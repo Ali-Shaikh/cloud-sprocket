@@ -16,7 +16,8 @@ import (
 
 type S3Inventory interface {
 	ListBuckets(ctx context.Context, profile models.ProfileSummary) ([]models.AwsS3Bucket, error)
-	ListObjects(ctx context.Context, profile models.ProfileSummary, bucketName string) ([]models.AwsS3Object, error)
+	ListObjects(ctx context.Context, profile models.ProfileSummary, bucketName string, prefix string) ([]models.AwsS3Object, error)
+	HeadObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string) ([]models.DetailField, error)
 }
 
 type Notifier interface {
@@ -100,6 +101,7 @@ func (s *Service) Handle(
 			return nil, errors.New("lock an AWS session before selecting an S3 bucket")
 		}
 		session.SelectedS3BucketName = request.BucketName
+		session.SelectedS3ObjectKey = ""
 		if err := s.store.SaveSession(ctx, session); err != nil {
 			return nil, err
 		}
@@ -110,6 +112,56 @@ func (s *Service) Handle(
 			notifier,
 			"info",
 			fmt.Sprintf("Selected S3 bucket %s.", request.BucketName),
+		)
+	case "aws.s3.selectObject":
+		var request struct {
+			ObjectKey string `json:"objectKey"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		snapshot, session, err := s.currentState(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" || session.SelectedS3BucketName == "" {
+			return nil, errors.New("select an S3 bucket before selecting an object")
+		}
+		session.SelectedS3ObjectKey = request.ObjectKey
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), nil
+	case "aws.s3.setPrefixFilter":
+		var request struct {
+			Prefix string `json:"prefix"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		snapshot, session, err := s.currentState(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			return nil, errors.New("lock an AWS session before setting an S3 prefix filter")
+		}
+		session.S3PrefixFilter = request.Prefix
+		session.SelectedS3ObjectKey = ""
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), s.notifyStateAndLog(
+			ctx,
+			snapshot,
+			session,
+			notifier,
+			"info",
+			fmt.Sprintf("Updated S3 prefix filter to %q.", request.Prefix),
 		)
 	case "session.selectProvider":
 		var request struct {
@@ -129,6 +181,8 @@ func (s *Service) Handle(
 		session.SelectedProfileID = ""
 		session.SelectedAuthMethod = ""
 		session.SelectedS3BucketName = ""
+		session.SelectedS3ObjectKey = ""
+		session.S3PrefixFilter = ""
 		session = reconcileSession(session, snapshot)
 		if err := s.store.SaveSession(ctx, session); err != nil {
 			return nil, err
@@ -153,6 +207,8 @@ func (s *Service) Handle(
 		session.SelectedProfileID = request.ProfileID
 		session.SelectedAuthMethod = ""
 		session.SelectedS3BucketName = ""
+		session.SelectedS3ObjectKey = ""
+		session.S3PrefixFilter = ""
 		session = reconcileSession(session, snapshot)
 		if err := s.store.SaveSession(ctx, session); err != nil {
 			return nil, err
@@ -359,11 +415,13 @@ func (s *Service) buildWorkspaceSnapshot(
 	session models.SessionSnapshot,
 ) models.WorkspaceSnapshot {
 	workspace := models.WorkspaceSnapshot{
-		AuthMethod:      session.SelectedAuthMethod,
-		RuntimeSettings: s.settingsSnapshot(),
-		S3Buckets:       []models.AwsS3Bucket{},
-		S3Objects:       []models.AwsS3Object{},
-		EC2Instances:    []models.AwsEc2Instance{},
+		AuthMethod:       session.SelectedAuthMethod,
+		RuntimeSettings:  s.settingsSnapshot(),
+		S3PrefixFilter:   session.S3PrefixFilter,
+		S3Buckets:        []models.AwsS3Bucket{},
+		S3Objects:        []models.AwsS3Object{},
+		S3ObjectMetadata: []models.DetailField{},
+		EC2Instances:     []models.AwsEc2Instance{},
 	}
 
 	if provider, ok := findProvider(snapshot.Providers, session.CurrentProviderID); ok {
@@ -381,11 +439,31 @@ func (s *Service) buildWorkspaceSnapshot(
 		s.s3 != nil {
 		workspace.S3Buckets = s.s3Buckets(context.Background(), *workspace.Profile)
 		workspace.SelectedS3BucketName = s.selectedS3BucketName(session, workspace.S3Buckets)
-		workspace.S3Objects = s.s3Objects(context.Background(), *workspace.Profile, workspace.SelectedS3BucketName)
+		workspace.S3Objects = s.s3Objects(
+			context.Background(),
+			*workspace.Profile,
+			workspace.SelectedS3BucketName,
+			session.S3PrefixFilter,
+		)
+		workspace.SelectedS3ObjectKey = s.selectedS3ObjectKey(session, workspace.S3Objects)
+		workspace.S3ObjectMetadata = s.s3ObjectMetadata(
+			context.Background(),
+			*workspace.Profile,
+			workspace.SelectedS3BucketName,
+			workspace.SelectedS3ObjectKey,
+		)
 		if workspace.SelectedS3BucketName == "" {
 			workspace.S3StatusMessage = "No buckets are currently available for this locked AWS session."
 		} else if len(workspace.S3Objects) == 0 {
-			workspace.S3StatusMessage = fmt.Sprintf("No objects were returned for %s.", workspace.SelectedS3BucketName)
+			if session.S3PrefixFilter != "" {
+				workspace.S3StatusMessage = fmt.Sprintf(
+					"No objects matched prefix %q in %s.",
+					session.S3PrefixFilter,
+					workspace.SelectedS3BucketName,
+				)
+			} else {
+				workspace.S3StatusMessage = fmt.Sprintf("No objects were returned for %s.", workspace.SelectedS3BucketName)
+			}
 		} else {
 			workspace.S3StatusMessage = fmt.Sprintf(
 				"Loaded %d objects from %s.",
@@ -413,6 +491,23 @@ func (s *Service) selectedS3BucketName(
 		return ""
 	}
 	return buckets[0].Name
+}
+
+func (s *Service) selectedS3ObjectKey(
+	session models.SessionSnapshot,
+	objects []models.AwsS3Object,
+) string {
+	if session.SelectedS3ObjectKey != "" {
+		for _, object := range objects {
+			if object.Key == session.SelectedS3ObjectKey {
+				return session.SelectedS3ObjectKey
+			}
+		}
+	}
+	if len(objects) == 0 {
+		return ""
+	}
+	return objects[0].Key
 }
 
 func (s *Service) s3Buckets(
@@ -453,14 +548,15 @@ func (s *Service) s3Objects(
 	ctx context.Context,
 	profile models.ProfileSummary,
 	bucketName string,
+	prefix string,
 ) []models.AwsS3Object {
 	if bucketName == "" {
 		return []models.AwsS3Object{}
 	}
 
 	const scope = "aws.s3.objects"
-	queryHash := profile.ProfileID + "|" + bucketName
-	objects, err := s.s3.ListObjects(ctx, profile, bucketName)
+	queryHash := profile.ProfileID + "|" + bucketName + "|" + prefix
+	objects, err := s.s3.ListObjects(ctx, profile, bucketName, prefix)
 	if err == nil {
 		_ = s.store.SaveResourceCache(ctx, scope, queryHash, objects, s.timestamp())
 		return objects
@@ -473,6 +569,33 @@ func (s *Service) s3Objects(
 	}
 
 	return []models.AwsS3Object{}
+}
+
+func (s *Service) s3ObjectMetadata(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+	objectKey string,
+) []models.DetailField {
+	if bucketName == "" || objectKey == "" {
+		return []models.DetailField{}
+	}
+
+	const scope = "aws.s3.object-metadata"
+	queryHash := profile.ProfileID + "|" + bucketName + "|" + objectKey
+	fields, err := s.s3.HeadObject(ctx, profile, bucketName, objectKey)
+	if err == nil {
+		_ = s.store.SaveResourceCache(ctx, scope, queryHash, fields, s.timestamp())
+		return fields
+	}
+
+	var cached []models.DetailField
+	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
+	if cacheErr == nil && ok {
+		return cached
+	}
+
+	return []models.DetailField{}
 }
 
 func statePayload(snapshot discovery.Snapshot, session models.SessionSnapshot) models.StateChangedPayload {
@@ -532,6 +655,8 @@ func clearLockState(session models.SessionSnapshot) models.SessionSnapshot {
 	session.LockedProfileID = ""
 	session.LockedAuthMethod = ""
 	session.SelectedS3BucketName = ""
+	session.SelectedS3ObjectKey = ""
+	session.S3PrefixFilter = ""
 	session.AvailableAuthMethods = append([]models.AuthMethodStatus(nil), session.AvailableAuthMethods...)
 	if session.SelectedProfileID == "" {
 		session.SelectedAuthMethod = ""

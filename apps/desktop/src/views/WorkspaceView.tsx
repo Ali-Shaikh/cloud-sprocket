@@ -3,6 +3,7 @@ import {
   Button,
   Container,
   Header,
+  Input,
   SpaceBetween,
   StatusIndicator,
   Table,
@@ -35,6 +36,8 @@ type Props = {
   onUnlockSession: () => void;
   onToggleSensitiveValues: () => void;
   onSelectS3Bucket: (bucketName: string) => void;
+  onSelectS3Object: (objectKey: string) => void;
+  onSetS3PrefixFilter: (prefix: string) => void;
 };
 
 export default function WorkspaceView({
@@ -48,6 +51,8 @@ export default function WorkspaceView({
   onUnlockSession,
   onToggleSensitiveValues,
   onSelectS3Bucket,
+  onSelectS3Object,
+  onSetS3PrefixFilter,
 }: Props) {
   const workspaceSummaryPanel = (
     <Container
@@ -141,6 +146,9 @@ export default function WorkspaceView({
   const selectedBucket = workspace.s3Buckets.find(
     (bucket) => bucket.name === workspace.selectedS3BucketName,
   );
+  const selectedObject = workspace.s3Objects.find(
+    (object) => object.key === workspace.selectedS3ObjectKey,
+  );
 
   const s3BucketColumns: TableProps.ColumnDefinition<AwsS3Bucket>[] = [
     {
@@ -199,6 +207,10 @@ export default function WorkspaceView({
             <Box variant="p">{workspace.selectedS3BucketName || "No bucket selected"}</Box>
           </div>
           <div className="status-pill">
+            <Box variant="awsui-key-label">Prefix Filter</Box>
+            <Box variant="p">{workspace.s3PrefixFilter || "No prefix filter"}</Box>
+          </div>
+          <div className="status-pill">
             <Box variant="awsui-key-label">Objects</Box>
             <Box variant="p">{countLabel(workspace.s3Objects.length, "object", "objects")}</Box>
           </div>
@@ -246,13 +258,57 @@ export default function WorkspaceView({
             </Header>
           }
         >
-          <Table
-            items={workspace.s3Objects}
-            columnDefinitions={s3ObjectColumns}
-            trackBy="key"
-            variant="embedded"
-            empty={<Box color="text-status-inactive">No S3 objects loaded for the selected bucket.</Box>}
-          />
+          <SpaceBetween size="m">
+            <Input
+              value={workspace.s3PrefixFilter || ""}
+              placeholder="Filter by prefix, for example reports/"
+              onChange={({ detail }) => {
+                onSetS3PrefixFilter(detail.value);
+              }}
+            />
+            <Table
+              items={workspace.s3Objects}
+              columnDefinitions={s3ObjectColumns}
+              selectionType="single"
+              selectedItems={selectedObject ? [selectedObject] : []}
+              trackBy="key"
+              variant="embedded"
+              onSelectionChange={({ detail }) => {
+                const object = detail.selectedItems[0];
+                if (object) {
+                  onSelectS3Object(object.key);
+                }
+              }}
+              empty={<Box color="text-status-inactive">No S3 objects loaded for the selected bucket.</Box>}
+            />
+          </SpaceBetween>
+        </Container>
+
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description={workspace.selectedS3ObjectKey || "Select an object to inspect metadata."}
+            >
+              Object Metadata
+            </Header>
+          }
+        >
+          {workspace.s3ObjectMetadata.length === 0 ? (
+            <Box color="text-status-inactive">No metadata loaded for the selected object.</Box>
+          ) : (
+            <div className="detail-grid">
+              {workspace.s3ObjectMetadata.map((field) => (
+                <div
+                  key={`${field.label}-${field.value}`}
+                  className="detail-card"
+                >
+                  <Box variant="awsui-key-label">{field.label}</Box>
+                  <Box variant="p">{field.value}</Box>
+                </div>
+              ))}
+            </div>
+          )}
         </Container>
       </div>
     </SpaceBetween>
