@@ -162,6 +162,12 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	if len(filteredWorkspace.S3Objects) != 1 || filteredWorkspace.S3Objects[0].Key != "reports/daily.json" {
 		t.Fatalf("expected prefix filtering to reduce visible objects, got %+v", filteredWorkspace.S3Objects)
 	}
+	if filteredWorkspace.SelectedS3ObjectKey != "reports/daily.json" {
+		t.Fatalf("expected prefix filtering to select the first matching object, got %q", filteredWorkspace.SelectedS3ObjectKey)
+	}
+	if len(filteredWorkspace.S3ObjectMetadata) == 0 || filteredWorkspace.S3ObjectMetadata[1].Value != "reports/daily.json" {
+		t.Fatalf("expected prefix-filtered object metadata to be loaded, got %+v", filteredWorkspace.S3ObjectMetadata)
+	}
 
 	logs, err := service.Handle(ctx, "logs.list", []byte(`{"limit":10}`), nil)
 	if err != nil {

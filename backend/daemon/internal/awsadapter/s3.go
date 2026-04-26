@@ -2,6 +2,7 @@ package awsadapter
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -20,6 +21,8 @@ type S3Inventory struct {
 	mu            sync.Mutex
 	bucketRegions map[string]string
 }
+
+const maxObjectListingPages = 5
 
 func NewS3Inventory(settings config.Settings) *S3Inventory {
 	return &S3Inventory{
@@ -84,24 +87,28 @@ func (s *S3Inventory) ListObjects(
 	if prefix != "" {
 		input.Prefix = &prefix
 	}
-	result, err := client.ListObjectsV2(ctx, input)
-	if err != nil {
-		return nil, err
-	}
 
-	objects := make([]models.AwsS3Object, 0, len(result.Contents))
-	for _, object := range result.Contents {
-		entry := models.AwsS3Object{
-			Key:          awsString(object.Key),
-			StorageClass: string(object.StorageClass),
+	paginator := s3.NewListObjectsV2Paginator(client, input)
+	objects := []models.AwsS3Object{}
+	for pagesRead := 0; paginator.HasMorePages() && pagesRead < maxObjectListingPages; pagesRead++ {
+		result, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, err
 		}
-		if object.LastModified != nil {
-			entry.ModifiedAt = object.LastModified.UTC().Format(time.RFC3339)
+
+		for _, object := range result.Contents {
+			entry := models.AwsS3Object{
+				Key:          awsString(object.Key),
+				StorageClass: string(object.StorageClass),
+			}
+			if object.LastModified != nil {
+				entry.ModifiedAt = object.LastModified.UTC().Format(time.RFC3339)
+			}
+			if object.Size != nil {
+				entry.Size = humanize.Bytes(uint64(*object.Size))
+			}
+			objects = append(objects, entry)
 		}
-		if object.Size != nil && *object.Size > 0 {
-			entry.Size = humanize.Bytes(uint64(*object.Size))
-		}
-		objects = append(objects, entry)
 	}
 
 	return objects, nil
@@ -137,7 +144,7 @@ func (s *S3Inventory) HeadObject(
 		{Label: "Key", Value: objectKey},
 		{Label: "Region", Value: region},
 	}
-	if result.ContentLength != nil && *result.ContentLength > 0 {
+	if result.ContentLength != nil {
 		fields = append(fields, models.DetailField{
 			Label: "Size",
 			Value: humanize.Bytes(uint64(*result.ContentLength)),
@@ -165,6 +172,21 @@ func (s *S3Inventory) HeadObject(
 		fields = append(fields, models.DetailField{
 			Label: "Storage Class",
 			Value: string(result.StorageClass),
+		})
+	}
+	metadataKeys := make([]string, 0, len(result.Metadata))
+	for key := range result.Metadata {
+		metadataKeys = append(metadataKeys, key)
+	}
+	sort.Strings(metadataKeys)
+	for _, key := range metadataKeys {
+		value := result.Metadata[key]
+		if value == "" {
+			continue
+		}
+		fields = append(fields, models.DetailField{
+			Label: "Metadata: " + key,
+			Value: value,
 		})
 	}
 	return fields, nil

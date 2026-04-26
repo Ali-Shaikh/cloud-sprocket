@@ -52,7 +52,7 @@ const settingsFixture: AppSettingsSnapshot = {
 };
 
 vi.mock("./lib/backend", () => ({
-  backendRequest: vi.fn(async (method: string) => {
+  backendRequest: vi.fn(async (method: string, params?: Record<string, unknown>) => {
     switch (method) {
       case "providers.list":
         return providerFixtures;
@@ -73,6 +73,34 @@ vi.mock("./lib/backend", () => ({
           status: "queued",
           message: "Refreshing discovery.",
         };
+      case "aws.s3.setPrefixFilter": {
+        const prefix = String(params?.prefix ?? "");
+        workspaceFixture = {
+          ...workspaceFixture,
+          s3PrefixFilter: prefix,
+          s3StatusMessage: `Loaded 1 objects from ${workspaceFixture.selectedS3BucketName}.`,
+          s3Objects: [{ key: `${prefix}filtered-object.json`, size: "128 B" }],
+          selectedS3ObjectKey: `${prefix}filtered-object.json`,
+          s3ObjectMetadata: [
+            { label: "Bucket", value: workspaceFixture.selectedS3BucketName ?? "" },
+            { label: "Key", value: `${prefix}filtered-object.json` },
+            { label: "Metadata: owner", value: "analytics" },
+          ],
+        };
+        return workspaceFixture;
+      }
+      case "aws.s3.selectObject": {
+        const objectKey = String(params?.objectKey ?? "");
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedS3ObjectKey: objectKey,
+          s3ObjectMetadata: [
+            { label: "Bucket", value: workspaceFixture.selectedS3BucketName ?? "" },
+            { label: "Key", value: objectKey },
+          ],
+        };
+        return workspaceFixture;
+      }
       default:
         return sessionFixture;
     }
@@ -130,9 +158,9 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText("Session Setup")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Providers" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Choose Provider" })).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Authentication Path" }),
+      screen.getByRole("heading", { name: "Choose Authentication Path" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Profile Detail" })).toBeInTheDocument();
     expect(
@@ -184,5 +212,41 @@ describe("App", () => {
       await screen.findByText(/cloudsprocket-workspace\.db/i),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Unlock" })).toBeInTheDocument();
+  });
+
+  it("applies S3 prefix filtering and renders selected object metadata", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+        {
+          tabId: "s3",
+          label: "S3",
+          summary: "S3 summary",
+          detail: "S3 panel",
+        },
+      ],
+    };
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByText("S3"));
+    const prefixInput = await screen.findByPlaceholderText(
+      "Filter by prefix, for example reports/",
+    );
+    fireEvent.change(prefixInput, { target: { value: "logs/" } });
+
+    expect((await screen.findAllByText("logs/filtered-object.json")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("Metadata: owner")).toBeInTheDocument();
+    expect(await screen.findByText("analytics")).toBeInTheDocument();
   });
 });

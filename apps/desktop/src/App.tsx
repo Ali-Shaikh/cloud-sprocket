@@ -29,6 +29,16 @@ import { defaultQuery, renderLogEntries, type TablePreferences } from "./views/s
 const SessionSetupView = lazy(() => import("./views/SessionSetupView"));
 const WorkspaceView = lazy(() => import("./views/WorkspaceView"));
 
+function getDefaultSplitPanelSize(viewportWidth: number): number {
+  if (viewportWidth < 820) {
+    return 280;
+  }
+  if (viewportWidth < 1180) {
+    return 300;
+  }
+  return 360;
+}
+
 const emptySession: SessionSnapshot = {
   isLocked: false,
   availableAuthMethods: [],
@@ -62,6 +72,9 @@ export default function App() {
   const [showSensitiveValues, setShowSensitiveValues] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [splitPanelOpen, setSplitPanelOpen] = useState(() => window.innerWidth >= 1180);
+  const [splitPanelSize, setSplitPanelSize] = useState(() =>
+    getDefaultSplitPanelSize(window.innerWidth),
+  );
   const [providerQuery, setProviderQuery] = useState<PropertyFilterProps.Query>(
     defaultQuery,
   );
@@ -89,7 +102,7 @@ export default function App() {
   });
 
   const isTablet = viewportWidth < 1180;
-  const isMobile = viewportWidth < 820;
+  const defaultSplitPanelSize = getDefaultSplitPanelSize(viewportWidth);
 
   const selectedProvider = providers.find(
     (provider) => provider.providerId === session.currentProviderId,
@@ -239,6 +252,10 @@ export default function App() {
     }
   }, [isTablet]);
 
+  useEffect(() => {
+    setSplitPanelSize(defaultSplitPanelSize);
+  }, [defaultSplitPanelSize]);
+
   async function mutateSession(
     method: string,
     params: Record<string, unknown> = {},
@@ -360,7 +377,10 @@ export default function App() {
         notifications={<Flashbar items={notifications} />}
         splitPanel={splitPanel}
         splitPanelOpen={splitPanelOpen}
-        splitPanelSize={isMobile ? 280 : isTablet ? 300 : 360}
+        splitPanelSize={splitPanelSize}
+        onSplitPanelResize={({ detail }) => {
+          setSplitPanelSize(detail.size);
+        }}
         onSplitPanelToggle={({ detail }) => {
           setSplitPanelOpen(detail.open);
         }}
