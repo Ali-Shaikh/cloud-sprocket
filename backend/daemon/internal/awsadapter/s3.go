@@ -2,6 +2,8 @@ package awsadapter
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -190,6 +192,110 @@ func (s *S3Inventory) HeadObject(
 		})
 	}
 	return fields, nil
+}
+
+func (s *S3Inventory) UploadFile(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+	objectKey string,
+	sourcePath string,
+) (models.AwsS3UploadResult, error) {
+	if bucketName == "" || objectKey == "" || sourcePath == "" {
+		return models.AwsS3UploadResult{}, fmt.Errorf("bucket, object key, and source path are required")
+	}
+
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return models.AwsS3UploadResult{}, err
+	}
+	defer source.Close()
+
+	info, err := source.Stat()
+	if err != nil {
+		return models.AwsS3UploadResult{}, err
+	}
+	if info.IsDir() {
+		return models.AwsS3UploadResult{}, fmt.Errorf("source path must be a file")
+	}
+
+	region, err := s.bucketRegion(ctx, profile, bucketName)
+	if err != nil {
+		return models.AwsS3UploadResult{}, err
+	}
+
+	cfg, err := s.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsS3UploadResult{}, err
+	}
+
+	client := s3.NewFromConfig(cfg)
+	uploader := s3manager.NewUploader(client)
+	_, err = uploader.Upload(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(objectKey),
+		Body:   source,
+	})
+	if err != nil {
+		return models.AwsS3UploadResult{}, err
+	}
+
+	_, _ = client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(objectKey),
+	})
+
+	return models.AwsS3UploadResult{
+		BucketName:     bucketName,
+		ObjectKey:      objectKey,
+		DestinationURI: fmt.Sprintf("s3://%s/%s", bucketName, objectKey),
+	}, nil
+}
+
+func (s *S3Inventory) PresignGetObject(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+	objectKey string,
+	durationSeconds int,
+) (models.AwsS3PresignResult, error) {
+	if bucketName == "" || objectKey == "" {
+		return models.AwsS3PresignResult{}, fmt.Errorf("select an S3 bucket and object before generating a signed URL")
+	}
+	if durationSeconds <= 0 {
+		durationSeconds = 3600
+	}
+
+	region, err := s.bucketRegion(ctx, profile, bucketName)
+	if err != nil {
+		return models.AwsS3PresignResult{}, err
+	}
+
+	cfg, err := s.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsS3PresignResult{}, err
+	}
+
+	client := s3.NewFromConfig(cfg)
+	presigner := s3.NewPresignClient(client)
+	request, err := presigner.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(objectKey),
+	}, func(options *s3.PresignOptions) {
+		options.Expires = time.Duration(durationSeconds) * time.Second
+	})
+	if err != nil {
+		return models.AwsS3PresignResult{}, err
+	}
+
+	return models.AwsS3PresignResult{
+		BucketName:       bucketName,
+		ObjectKey:        objectKey,
+		URL:              request.URL,
+		DurationSeconds:  durationSeconds,
+		ExpiresAt:        time.Now().UTC().Add(time.Duration(durationSeconds) * time.Second).Format(time.RFC3339),
+		EffectiveWarning: "If the profile uses temporary credentials, the URL can stop working before this nominal expiry.",
+	}, nil
 }
 
 func (s *S3Inventory) bucketRegion(

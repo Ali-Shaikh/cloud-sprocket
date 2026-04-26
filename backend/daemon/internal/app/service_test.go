@@ -4,7 +4,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/discovery"
@@ -13,9 +15,11 @@ import (
 )
 
 type stubS3Inventory struct {
-	buckets  []models.AwsS3Bucket
-	objects  map[string][]models.AwsS3Object
-	metadata map[string][]models.DetailField
+	buckets       []models.AwsS3Bucket
+	objects       map[string][]models.AwsS3Object
+	metadata      map[string][]models.DetailField
+	uploaded      []models.AwsS3UploadResult
+	presignedURLs map[string]string
 }
 
 func (s stubS3Inventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.AwsS3Bucket, error) {
@@ -40,6 +44,44 @@ func (s stubS3Inventory) HeadObject(_ context.Context, _ models.ProfileSummary, 
 	return append([]models.DetailField(nil), s.metadata[bucketName+"|"+objectKey]...), nil
 }
 
+func (s *stubS3Inventory) UploadFile(_ context.Context, _ models.ProfileSummary, bucketName string, objectKey string, _ string) (models.AwsS3UploadResult, error) {
+	result := models.AwsS3UploadResult{
+		BucketName:     bucketName,
+		ObjectKey:      objectKey,
+		DestinationURI: "s3://" + bucketName + "/" + objectKey,
+	}
+	s.uploaded = append(s.uploaded, result)
+	return result, nil
+}
+
+func (s stubS3Inventory) PresignGetObject(_ context.Context, _ models.ProfileSummary, bucketName string, objectKey string, durationSeconds int) (models.AwsS3PresignResult, error) {
+	url := s.presignedURLs[bucketName+"|"+objectKey]
+	if url == "" {
+		url = "https://example.invalid/" + objectKey
+	}
+	return models.AwsS3PresignResult{
+		BucketName:      bucketName,
+		ObjectKey:       objectKey,
+		URL:             url,
+		DurationSeconds: durationSeconds,
+		ExpiresAt:       "2026-04-26T12:00:00Z",
+	}, nil
+}
+
+type recordingNotifier struct {
+	events chan models.JobStatus
+}
+
+func (r recordingNotifier) Notify(method string, payload any) error {
+	if method != "job.updated" {
+		return nil
+	}
+	if job, ok := payload.(models.JobStatus); ok {
+		r.events <- job
+	}
+	return nil
+}
+
 func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	tempDir := t.TempDir()
 	home := filepath.Join(tempDir, "home")
@@ -58,6 +100,26 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	}
 	defer dataStore.Close()
 
+	s3Inventory := &stubS3Inventory{
+		buckets: []models.AwsS3Bucket{
+			{Name: "cloudsprocket-artifacts"},
+		},
+		objects: map[string][]models.AwsS3Object{
+			"cloudsprocket-artifacts": {
+				{Key: "reports/daily.json", Size: "12 MB"},
+				{Key: "uploads/demo-package.zip", Size: "42 MB"},
+			},
+		},
+		metadata: map[string][]models.DetailField{
+			"cloudsprocket-artifacts|reports/daily.json": {
+				{Label: "Bucket", Value: "cloudsprocket-artifacts"},
+				{Label: "Key", Value: "reports/daily.json"},
+			},
+		},
+		presignedURLs: map[string]string{
+			"cloudsprocket-artifacts|reports/daily.json": "https://example-bucket.s3.amazonaws.com/reports/daily.json?X-Amz-Signature=abc",
+		},
+	}
 	service := New(
 		settings,
 		dataStore,
@@ -67,24 +129,9 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 			}
 			return "", nil
 		}),
-		stubS3Inventory{
-			buckets: []models.AwsS3Bucket{
-				{Name: "cloudsprocket-artifacts"},
-			},
-			objects: map[string][]models.AwsS3Object{
-				"cloudsprocket-artifacts": {
-					{Key: "reports/daily.json", Size: "12 MB"},
-					{Key: "uploads/demo-package.zip", Size: "42 MB"},
-				},
-			},
-			metadata: map[string][]models.DetailField{
-				"cloudsprocket-artifacts|reports/daily.json": {
-					{Label: "Bucket", Value: "cloudsprocket-artifacts"},
-					{Label: "Key", Value: "reports/daily.json"},
-				},
-			},
-		},
+		s3Inventory,
 	)
+	service.now = func() time.Time { return time.Date(2026, 4, 26, 10, 0, 0, 0, time.UTC) }
 
 	ctx := context.Background()
 	result, err := service.Handle(ctx, "session.get", nil, nil)
@@ -168,6 +215,43 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	if len(filteredWorkspace.S3ObjectMetadata) == 0 || filteredWorkspace.S3ObjectMetadata[1].Value != "reports/daily.json" {
 		t.Fatalf("expected prefix-filtered object metadata to be loaded, got %+v", filteredWorkspace.S3ObjectMetadata)
 	}
+	if len(filteredWorkspace.S3ExportSnippets) == 0 || !strings.Contains(filteredWorkspace.S3ExportSnippets[0].Value, "s3://cloudsprocket-artifacts/reports/daily.json") {
+		t.Fatalf("expected export snippets for the selected object, got %+v", filteredWorkspace.S3ExportSnippets)
+	}
+
+	uploadNotifier := recordingNotifier{events: make(chan models.JobStatus, 4)}
+	uploadResult, err := service.Handle(ctx, "aws.s3.uploadObject", []byte(`{"sourcePath":"/tmp/demo.txt","objectKey":"reports/uploaded.txt"}`), uploadNotifier)
+	if err != nil {
+		t.Fatalf("expected aws.s3.uploadObject to queue a job, got %v", err)
+	}
+	if uploadResult.(models.JobStatus).Status != "queued" {
+		t.Fatalf("expected queued upload job, got %+v", uploadResult)
+	}
+	completedUpload := waitForJobStatus(t, uploadNotifier.events, "completed")
+	if completedUpload.Result == nil || len(s3Inventory.uploaded) != 1 {
+		t.Fatalf("expected upload job result and upload call, got job=%+v uploads=%+v", completedUpload, s3Inventory.uploaded)
+	}
+
+	presignNotifier := recordingNotifier{events: make(chan models.JobStatus, 4)}
+	presignResult, err := service.Handle(ctx, "aws.s3.presignObject", []byte(`{"durationSeconds":7200}`), presignNotifier)
+	if err != nil {
+		t.Fatalf("expected aws.s3.presignObject to queue a job, got %v", err)
+	}
+	if presignResult.(models.JobStatus).Status != "queued" {
+		t.Fatalf("expected queued presign job, got %+v", presignResult)
+	}
+	completedPresign := waitForJobStatus(t, presignNotifier.events, "completed")
+	if completedPresign.Result == nil || !strings.Contains(completedPresign.Message, "signed URL") {
+		t.Fatalf("expected completed presign job with result, got %+v", completedPresign)
+	}
+
+	inspection, err := service.Handle(ctx, "aws.s3.analyseUrl", []byte(`{"url":"https://example-bucket.s3.amazonaws.com/reports/daily.json?X-Amz-Date=20260426T100000Z&X-Amz-Expires=3600"}`), nil)
+	if err != nil {
+		t.Fatalf("expected aws.s3.analyseUrl to succeed, got %v", err)
+	}
+	if !strings.Contains(inspection.(models.URLInspection).Summary, "Nominal expiry") {
+		t.Fatalf("expected expiry analysis, got %+v", inspection)
+	}
 
 	logs, err := service.Handle(ctx, "logs.list", []byte(`{"limit":10}`), nil)
 	if err != nil {
@@ -175,6 +259,21 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	}
 	if len(logs.([]models.ActivityLogEntry)) == 0 {
 		t.Fatalf("expected lock action to append a log entry")
+	}
+}
+
+func waitForJobStatus(t *testing.T, events <-chan models.JobStatus, status string) models.JobStatus {
+	t.Helper()
+	timeout := time.After(2 * time.Second)
+	for {
+		select {
+		case job := <-events:
+			if job.Status == status {
+				return job
+			}
+		case <-timeout:
+			t.Fatalf("timed out waiting for job status %s", status)
+		}
 	}
 }
 

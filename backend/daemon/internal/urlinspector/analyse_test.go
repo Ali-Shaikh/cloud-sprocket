@@ -1,6 +1,8 @@
 package urlinspector
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -26,5 +28,21 @@ func TestAnalyseURLReportsNonPresignedURLs(t *testing.T) {
 
 	if !strings.Contains(result.Summary, "does not expose AWS presign expiry fields") {
 		t.Fatalf("expected non-presigned summary, got %q", result.Summary)
+	}
+}
+
+func TestValidateURLReportsFailedHTTPStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusForbidden)
+	}))
+	defer server.Close()
+
+	result := ValidateURL(server.Client(), server.URL)
+
+	if result.Succeeded {
+		t.Fatalf("expected validation to fail for HTTP 403")
+	}
+	if !strings.Contains(result.Summary, "failed with HTTP 403") {
+		t.Fatalf("expected failed status summary, got %q", result.Summary)
 	}
 }

@@ -86,6 +86,12 @@ vi.mock("./lib/backend", () => ({
             { label: "Key", value: `${prefix}filtered-object.json` },
             { label: "Metadata: owner", value: "analytics" },
           ],
+          s3ExportSnippets: [
+            {
+              label: "S3 URI",
+              value: `s3://${workspaceFixture.selectedS3BucketName}/${prefix}filtered-object.json`,
+            },
+          ],
         };
         return workspaceFixture;
       }
@@ -98,9 +104,41 @@ vi.mock("./lib/backend", () => ({
             { label: "Bucket", value: workspaceFixture.selectedS3BucketName ?? "" },
             { label: "Key", value: objectKey },
           ],
+          s3ExportSnippets: [
+            {
+              label: "S3 URI",
+              value: `s3://${workspaceFixture.selectedS3BucketName}/${objectKey}`,
+            },
+          ],
         };
         return workspaceFixture;
       }
+      case "aws.s3.analyseUrl":
+        return {
+          summary: "Nominal expiry is visible in the signed URL.",
+          detailFields: [{ label: "Signature Type", value: "AWS SigV4 presigned URL" }],
+        };
+      case "aws.s3.uploadObject":
+        return {
+          jobId: "job-upload",
+          label: "S3 Upload",
+          status: "queued",
+          message: "Uploading object.",
+        };
+      case "aws.s3.presignObject":
+        return {
+          jobId: "job-presign",
+          label: "S3 Signed URL",
+          status: "queued",
+          message: "Generating a signed URL.",
+        };
+      case "aws.s3.validateUrl":
+        return {
+          jobId: "job-validate",
+          label: "S3 URL Validation",
+          status: "queued",
+          message: "Validating the pasted URL.",
+        };
       default:
         return sessionFixture;
     }
@@ -149,6 +187,12 @@ describe("App", () => {
       s3ObjectMetadata: [
         { label: "Bucket", value: "cloudsprocket-artifacts" },
         { label: "Key", value: "reports/weekly-summary.json" },
+      ],
+      s3ExportSnippets: [
+        {
+          label: "S3 URI",
+          value: "s3://cloudsprocket-artifacts/reports/weekly-summary.json",
+        },
       ],
       ec2Instances: [{ instanceId: "i-0123456789abcdef0" }],
     };
@@ -248,5 +292,7 @@ describe("App", () => {
     expect((await screen.findAllByText("logs/filtered-object.json")).length).toBeGreaterThan(0);
     expect(await screen.findByText("Metadata: owner")).toBeInTheDocument();
     expect(await screen.findByText("analytics")).toBeInTheDocument();
+    expect(await screen.findByText("Copy Snippets")).toBeInTheDocument();
+    expect(await screen.findByText(/s3:\/\/cloudsprocket-artifacts\/logs\/filtered-object\.json/i)).toBeInTheDocument();
   });
 });

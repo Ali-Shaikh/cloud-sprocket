@@ -102,6 +102,18 @@ const mockWorkspaceObjectMetadata: Record<string, { label: string; value: string
   ],
 };
 
+function mockExportSnippets(bucketName?: string, objectKey?: string) {
+  if (!bucketName || !objectKey) {
+    return [];
+  }
+  const s3Uri = `s3://${bucketName}/${objectKey}`;
+  return [
+    { label: "S3 URI", value: s3Uri },
+    { label: "AWS CLI copy command", value: `aws s3 cp "${s3Uri}" .` },
+    { label: "AWS CLI presign command", value: `aws s3 presign "${s3Uri}" --expires-in 3600` },
+  ];
+}
+
 const mockWorkspaceInstances = [
   {
     instanceId: "i-0123456789abcdef0",
@@ -364,6 +376,7 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     s3ObjectMetadata: selectedS3ObjectKey
       ? mockWorkspaceObjectMetadata[selectedS3ObjectKey] ?? []
       : [],
+    s3ExportSnippets: mockExportSnippets(selectedS3BucketName, selectedS3ObjectKey),
     ec2Instances: isAWSWorkspace ? mockWorkspaceInstances : [],
   };
 }
@@ -397,6 +410,106 @@ function handleMockRequest<T>(
       mockState.session.selectedS3ObjectKey = undefined;
       appendLog("info", `Updated S3 prefix filter to ${params.prefix ?? ""}.`);
       return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.s3.uploadObject": {
+      const objectKey = String(params.objectKey ?? "");
+      const bucketName = mockState.session.selectedS3BucketName ?? mockWorkspaceBuckets[0]?.name;
+      const job: JobStatus = {
+        jobId: `job-${Date.now()}`,
+        label: "S3 Upload",
+        status: "queued",
+        message: `Uploading ${params.sourcePath} to s3://${bucketName}/${objectKey}.`,
+      };
+      setTimeout(() => {
+        mockState.session.selectedS3ObjectKey = objectKey;
+        appendLog("success", `Uploaded ${objectKey} to s3://${bucketName}/${objectKey}.`);
+        emitMockEvent("job.updated", {
+          ...job,
+          status: "completed",
+          message: `Uploaded ${objectKey} to s3://${bucketName}/${objectKey}.`,
+          completedAt: new Date().toISOString(),
+          result: {
+            bucketName,
+            objectKey,
+            destinationUri: `s3://${bucketName}/${objectKey}`,
+          },
+        });
+      }, 30);
+      return Promise.resolve(job as T);
+    }
+    case "aws.s3.presignObject": {
+      const objectKey = mockState.session.selectedS3ObjectKey ?? mockWorkspaceObjects[0]?.key;
+      const bucketName = mockState.session.selectedS3BucketName ?? mockWorkspaceBuckets[0]?.name;
+      const durationSeconds = Number(params.durationSeconds ?? 3600);
+      const job: JobStatus = {
+        jobId: `job-${Date.now()}`,
+        label: "S3 Signed URL",
+        status: "queued",
+        message: `Generating a signed URL for ${objectKey}.`,
+      };
+      setTimeout(() => {
+        emitMockEvent("job.updated", {
+          ...job,
+          status: "completed",
+          message: `Generated a signed URL for ${objectKey}.`,
+          completedAt: new Date().toISOString(),
+          result: {
+            bucketName,
+            objectKey,
+            url: `https://${bucketName}.s3.amazonaws.com/${objectKey}?X-Amz-Signature=mock`,
+            durationSeconds,
+            expiresAt: new Date(Date.now() + durationSeconds * 1000).toISOString(),
+            effectiveWarning:
+              "If the profile uses temporary credentials, the URL can stop working before this nominal expiry.",
+          },
+        });
+      }, 30);
+      return Promise.resolve(job as T);
+    }
+    case "aws.s3.analyseUrl": {
+      const url = String(params.url ?? "");
+      let host = "Unavailable";
+      try {
+        host = new URL(url).host;
+      } catch {
+        host = "Invalid URL";
+      }
+      return Promise.resolve({
+        summary: url.includes("X-Amz-Expires")
+          ? "Nominal expiry is visible in the signed URL."
+          : "This URL does not expose AWS presign expiry fields. Live validation is still available.",
+        detailFields: [
+          { label: "Host", value: host },
+          { label: "Signature Type", value: url.includes("X-Amz-Expires") ? "AWS SigV4 presigned URL" : "No AWS presign expiry fields detected" },
+        ],
+      } as T);
+    }
+    case "aws.s3.validateUrl": {
+      const url = String(params.url ?? "");
+      const job: JobStatus = {
+        jobId: `job-${Date.now()}`,
+        label: "S3 URL Validation",
+        status: "queued",
+        message: "Validating the pasted URL.",
+      };
+      setTimeout(() => {
+        emitMockEvent("job.updated", {
+          ...job,
+          status: "completed",
+          message: "Live validation succeeded with HTTP 206.",
+          completedAt: new Date().toISOString(),
+          result: {
+            url,
+            succeeded: true,
+            summary: "Live validation succeeded with HTTP 206.",
+            detailFields: [
+              { label: "HTTP Status", value: "206 Partial Content" },
+              { label: "Content Type", value: "application/octet-stream" },
+            ],
+          },
+        });
+      }, 30);
+      return Promise.resolve(job as T);
+    }
     case "session.selectProvider":
       setCurrentProvider(String(params.providerId ?? ""));
       emitStateChanged();

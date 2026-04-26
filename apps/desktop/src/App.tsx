@@ -17,17 +17,37 @@ import { backendRequest, subscribeToBackendEvent } from "./lib/backend";
 import type {
   ActivityLogEntry,
   AppSettingsSnapshot,
+  AwsS3PresignResult,
+  AwsS3UploadResult,
   JobStatus,
   ProfileSummary,
   ProviderSummary,
   SessionSnapshot,
   StateChangedPayload,
+  UrlInspection,
+  UrlValidationResult,
   WorkspaceSnapshot,
 } from "./types/backend";
 import { defaultQuery, renderLogEntries, type TablePreferences } from "./views/shared";
 
 const SessionSetupView = lazy(() => import("./views/SessionSetupView"));
 const WorkspaceView = lazy(() => import("./views/WorkspaceView"));
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isS3UploadResult(value: unknown): value is AwsS3UploadResult {
+  return isRecord(value) && typeof value.destinationUri === "string";
+}
+
+function isS3PresignResult(value: unknown): value is AwsS3PresignResult {
+  return isRecord(value) && typeof value.url === "string" && typeof value.objectKey === "string";
+}
+
+function isUrlValidationResult(value: unknown): value is UrlValidationResult {
+  return isRecord(value) && typeof value.url === "string" && typeof value.summary === "string";
+}
 
 function getDefaultSplitPanelSize(viewportWidth: number): number {
   if (viewportWidth < 820) {
@@ -57,6 +77,7 @@ const emptyWorkspace: WorkspaceSnapshot = {
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
+  s3ExportSnippets: [],
   ec2Instances: [],
 };
 
@@ -68,6 +89,11 @@ export default function App() {
   const [workspace, setWorkspace] = useState<WorkspaceSnapshot>(emptyWorkspace);
   const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
   const [notifications, setNotifications] = useState<FlashbarProps.MessageDefinition[]>([]);
+  const [s3UploadStatus, setS3UploadStatus] = useState("Select a bucket and provide a local file path to upload.");
+  const [s3SignedUrlStatus, setS3SignedUrlStatus] = useState("Select an object to generate a signed URL.");
+  const [s3SignedUrlResult, setS3SignedUrlResult] = useState<AwsS3PresignResult>();
+  const [s3UrlInspection, setS3UrlInspection] = useState<UrlInspection>();
+  const [s3UrlValidation, setS3UrlValidation] = useState<UrlValidationResult>();
   const [loading, setLoading] = useState(true);
   const [showSensitiveValues, setShowSensitiveValues] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
@@ -171,6 +197,23 @@ export default function App() {
         : job.status === "completed"
           ? "success"
           : "info";
+    if (job.label === "S3 Upload") {
+      setS3UploadStatus(job.message);
+      if (job.status === "completed" && isS3UploadResult(job.result)) {
+        void loadWorkspace(session);
+      }
+    }
+    if (job.label === "S3 Signed URL") {
+      setS3SignedUrlStatus(job.message);
+      if (isS3PresignResult(job.result)) {
+        setS3SignedUrlResult(job.result);
+      }
+    }
+    if (job.label === "S3 URL Validation") {
+      if (isUrlValidationResult(job.result)) {
+        setS3UrlValidation(job.result);
+      }
+    }
     startTransition(() => {
       setNotifications((current) => {
         const next: FlashbarProps.MessageDefinition = {
@@ -296,6 +339,7 @@ export default function App() {
         setShowSensitiveValues((current) => !current);
       }}
       onSelectS3Bucket={(bucketName) => {
+        setS3SignedUrlResult(undefined);
         void backendRequest<WorkspaceSnapshot>("aws.s3.selectBucket", { bucketName }).then(
           (workspaceResult) => {
             startTransition(() => {
@@ -305,6 +349,7 @@ export default function App() {
         );
       }}
       onSelectS3Object={(objectKey) => {
+        setS3SignedUrlResult(undefined);
         void backendRequest<WorkspaceSnapshot>("aws.s3.selectObject", { objectKey }).then(
           (workspaceResult) => {
             startTransition(() => {
@@ -321,6 +366,36 @@ export default function App() {
             });
           },
         );
+      }}
+      s3UploadStatus={s3UploadStatus}
+      s3SignedUrlStatus={s3SignedUrlStatus}
+      s3SignedUrlResult={s3SignedUrlResult}
+      s3UrlInspection={s3UrlInspection}
+      s3UrlValidation={s3UrlValidation}
+      onUploadS3Object={(sourcePath, objectKey) => {
+        setS3UploadStatus(`Queueing upload for ${objectKey}.`);
+        void backendRequest<JobStatus>("aws.s3.uploadObject", { sourcePath, objectKey }).then(
+          (job) => {
+            setS3UploadStatus(job.message);
+          },
+        );
+      }}
+      onPresignS3Object={(durationSeconds) => {
+        setS3SignedUrlResult(undefined);
+        setS3SignedUrlStatus("Queueing signed URL generation.");
+        void backendRequest<JobStatus>("aws.s3.presignObject", { durationSeconds }).then(
+          (job) => {
+            setS3SignedUrlStatus(job.message);
+          },
+        );
+      }}
+      onAnalyseS3Url={(url) => {
+        void backendRequest<UrlInspection>("aws.s3.analyseUrl", { url }).then((inspection) => {
+          setS3UrlInspection(inspection);
+        });
+      }}
+      onValidateS3Url={(url) => {
+        void backendRequest<JobStatus>("aws.s3.validateUrl", { url });
       }}
     />
   ) : (

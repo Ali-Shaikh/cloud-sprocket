@@ -11,17 +11,8 @@ import (
 	"cloudsprocket/backend/daemon/internal/models"
 )
 
-type Inspection struct {
-	Summary      string               `json:"summary"`
-	DetailFields []models.DetailField `json:"detailFields"`
-}
-
-type ValidationResult struct {
-	URL          string               `json:"url"`
-	Succeeded    bool                 `json:"succeeded"`
-	Summary      string               `json:"summary"`
-	DetailFields []models.DetailField `json:"detailFields"`
-}
+type Inspection = models.URLInspection
+type ValidationResult = models.URLValidationResult
 
 func AnalyseURL(raw string, now time.Time) Inspection {
 	trimmed := strings.TrimSpace(raw)
@@ -153,10 +144,16 @@ func ValidateURL(client *http.Client, raw string) ValidationResult {
 		fields = append(fields, models.DetailField{Label: "Content Length", Value: contentLength})
 	}
 
+	succeeded := response.StatusCode >= 200 && response.StatusCode < 400
+	summary := fmt.Sprintf("Live validation failed with HTTP %d.", response.StatusCode)
+	if succeeded {
+		summary = fmt.Sprintf("Live validation succeeded with HTTP %d.", response.StatusCode)
+	}
+
 	return ValidationResult{
 		URL:          raw,
-		Succeeded:    response.StatusCode >= 200 && response.StatusCode < 400,
-		Summary:      fmt.Sprintf("Live validation succeeded with HTTP %d.", response.StatusCode),
+		Succeeded:    succeeded,
+		Summary:      summary,
 		DetailFields: fields,
 	}
 }

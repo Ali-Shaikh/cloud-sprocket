@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,12 +13,15 @@ import (
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
 	"cloudsprocket/backend/daemon/internal/store"
+	"cloudsprocket/backend/daemon/internal/urlinspector"
 )
 
 type S3Inventory interface {
 	ListBuckets(ctx context.Context, profile models.ProfileSummary) ([]models.AwsS3Bucket, error)
 	ListObjects(ctx context.Context, profile models.ProfileSummary, bucketName string, prefix string) ([]models.AwsS3Object, error)
 	HeadObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string) ([]models.DetailField, error)
+	UploadFile(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, sourcePath string) (models.AwsS3UploadResult, error)
+	PresignGetObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, durationSeconds int) (models.AwsS3PresignResult, error)
 }
 
 type Notifier interface {
@@ -163,6 +167,101 @@ func (s *Service) Handle(
 			"info",
 			fmt.Sprintf("Updated S3 prefix filter to %q.", request.Prefix),
 		)
+	case "aws.s3.uploadObject":
+		var request struct {
+			SourcePath string `json:"sourcePath"`
+			ObjectKey  string `json:"objectKey"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(request.SourcePath) == "" || strings.TrimSpace(request.ObjectKey) == "" {
+			return nil, errors.New("source path and destination object key are required")
+		}
+		s.mu.Lock()
+		snapshot, session, err := s.currentState(ctx)
+		if err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
+		profile, bucketName, err := s.activeS3Selection(snapshot, session, true)
+		if err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
+		prefix := session.S3PrefixFilter
+		s.mu.Unlock()
+
+		job := models.JobStatus{
+			JobID:   fmt.Sprintf("job-%d", s.now().UnixNano()),
+			Label:   "S3 Upload",
+			Status:  "queued",
+			Message: fmt.Sprintf("Uploading %s to s3://%s/%s.", request.SourcePath, bucketName, request.ObjectKey),
+		}
+		go s.runS3Upload(job, notifier, snapshot, session, profile, bucketName, request.ObjectKey, request.SourcePath, prefix)
+		return job, nil
+	case "aws.s3.presignObject":
+		var request struct {
+			DurationSeconds int `json:"durationSeconds"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		snapshot, session, err := s.currentState(ctx)
+		if err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
+		profile, bucketName, err := s.activeS3Selection(snapshot, session, true)
+		if err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
+		objectKey := session.SelectedS3ObjectKey
+		if objectKey == "" {
+			objectKey = s.selectedS3ObjectKey(session, s.s3Objects(ctx, profile, bucketName, session.S3PrefixFilter))
+		}
+		if objectKey == "" {
+			s.mu.Unlock()
+			return nil, errors.New("select an S3 object before generating a signed URL")
+		}
+		s.mu.Unlock()
+
+		job := models.JobStatus{
+			JobID:   fmt.Sprintf("job-%d", s.now().UnixNano()),
+			Label:   "S3 Signed URL",
+			Status:  "queued",
+			Message: fmt.Sprintf("Generating a signed URL for %s.", objectKey),
+		}
+		go s.runS3Presign(job, notifier, profile, bucketName, objectKey, request.DurationSeconds)
+		return job, nil
+	case "aws.s3.analyseUrl":
+		var request struct {
+			URL string `json:"url"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		return urlinspector.AnalyseURL(request.URL, s.now()), nil
+	case "aws.s3.validateUrl":
+		var request struct {
+			URL string `json:"url"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(request.URL) == "" {
+			return nil, errors.New("URL is required")
+		}
+		job := models.JobStatus{
+			JobID:   fmt.Sprintf("job-%d", s.now().UnixNano()),
+			Label:   "S3 URL Validation",
+			Status:  "queued",
+			Message: "Validating the pasted URL.",
+		}
+		go s.runURLValidation(job, notifier, request.URL)
+		return job, nil
 	case "session.selectProvider":
 		var request struct {
 			ProviderID string `json:"providerId"`
@@ -372,6 +471,149 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 	}
 }
 
+func (s *Service) runS3Upload(
+	job models.JobStatus,
+	notifier Notifier,
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	profile models.ProfileSummary,
+	bucketName string,
+	objectKey string,
+	sourcePath string,
+	prefix string,
+) {
+	background := context.Background()
+	s.notifyJob(notifier, models.JobStatus{
+		JobID:   job.JobID,
+		Label:   job.Label,
+		Status:  "running",
+		Message: fmt.Sprintf("Uploading %s to s3://%s/%s.", sourcePath, bucketName, objectKey),
+	})
+
+	result, err := s.s3.UploadFile(background, profile, bucketName, objectKey, sourcePath)
+	if err != nil {
+		s.notifyJob(notifier, models.JobStatus{
+			JobID:   job.JobID,
+			Label:   job.Label,
+			Status:  "failed",
+			Message: fmt.Sprintf("S3 upload failed: %v", err),
+		})
+		return
+	}
+
+	s.mu.Lock()
+	if prefix == "" || strings.HasPrefix(objectKey, prefix) {
+		session.SelectedS3ObjectKey = objectKey
+	}
+	if saveErr := s.store.SaveSession(background, session); saveErr != nil {
+		s.mu.Unlock()
+		s.notifyJob(notifier, models.JobStatus{
+			JobID:   job.JobID,
+			Label:   job.Label,
+			Status:  "failed",
+			Message: fmt.Sprintf("S3 upload completed, but session state could not be saved: %v", saveErr),
+		})
+		return
+	}
+	err = s.notifyStateAndLog(
+		background,
+		snapshot,
+		session,
+		notifier,
+		"success",
+		fmt.Sprintf("Uploaded %s to %s.", objectKey, result.DestinationURI),
+	)
+	s.mu.Unlock()
+	if err != nil {
+		s.notifyJob(notifier, models.JobStatus{
+			JobID:   job.JobID,
+			Label:   job.Label,
+			Status:  "failed",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	message := fmt.Sprintf("Uploaded %s to %s.", objectKey, result.DestinationURI)
+	if prefix != "" && !strings.HasPrefix(objectKey, prefix) {
+		message += " The current prefix filter hides the uploaded object."
+	}
+	s.notifyJob(notifier, models.JobStatus{
+		JobID:       job.JobID,
+		Label:       job.Label,
+		Status:      "completed",
+		Message:     message,
+		CompletedAt: s.timestamp(),
+		Result:      result,
+	})
+}
+
+func (s *Service) runS3Presign(
+	job models.JobStatus,
+	notifier Notifier,
+	profile models.ProfileSummary,
+	bucketName string,
+	objectKey string,
+	durationSeconds int,
+) {
+	background := context.Background()
+	s.notifyJob(notifier, models.JobStatus{
+		JobID:   job.JobID,
+		Label:   job.Label,
+		Status:  "running",
+		Message: fmt.Sprintf("Generating a signed URL for %s.", objectKey),
+	})
+
+	result, err := s.s3.PresignGetObject(background, profile, bucketName, objectKey, durationSeconds)
+	if err != nil {
+		s.notifyJob(notifier, models.JobStatus{
+			JobID:   job.JobID,
+			Label:   job.Label,
+			Status:  "failed",
+			Message: fmt.Sprintf("Signed URL generation failed: %v", err),
+		})
+		return
+	}
+
+	s.notifyJob(notifier, models.JobStatus{
+		JobID:       job.JobID,
+		Label:       job.Label,
+		Status:      "completed",
+		Message:     fmt.Sprintf("Generated a signed URL for %s.", objectKey),
+		CompletedAt: s.timestamp(),
+		Result:      result,
+	})
+}
+
+func (s *Service) runURLValidation(job models.JobStatus, notifier Notifier, rawURL string) {
+	s.notifyJob(notifier, models.JobStatus{
+		JobID:   job.JobID,
+		Label:   job.Label,
+		Status:  "running",
+		Message: "Validating the pasted URL.",
+	})
+
+	result := urlinspector.ValidateURL(nil, rawURL)
+	status := "completed"
+	if !result.Succeeded {
+		status = "failed"
+	}
+	s.notifyJob(notifier, models.JobStatus{
+		JobID:       job.JobID,
+		Label:       job.Label,
+		Status:      status,
+		Message:     result.Summary,
+		CompletedAt: s.timestamp(),
+		Result:      result,
+	})
+}
+
+func (s *Service) notifyJob(notifier Notifier, job models.JobStatus) {
+	if notifier != nil {
+		_ = notifier.Notify("job.updated", job)
+	}
+}
+
 func (s *Service) notifyStateAndLog(
 	ctx context.Context,
 	snapshot discovery.Snapshot,
@@ -452,6 +694,10 @@ func (s *Service) buildWorkspaceSnapshot(
 			workspace.SelectedS3BucketName,
 			workspace.SelectedS3ObjectKey,
 		)
+		workspace.S3ExportSnippets = s.s3ExportSnippets(
+			workspace.SelectedS3BucketName,
+			workspace.SelectedS3ObjectKey,
+		)
 		if workspace.SelectedS3BucketName == "" {
 			workspace.S3StatusMessage = "No buckets are currently available for this locked AWS session."
 		} else if len(workspace.S3Objects) == 0 {
@@ -474,6 +720,28 @@ func (s *Service) buildWorkspaceSnapshot(
 	}
 
 	return workspace
+}
+
+func (s *Service) activeS3Selection(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	requireBucket bool,
+) (models.ProfileSummary, string, error) {
+	if !session.IsLocked || session.CurrentProviderID != "aws" {
+		return models.ProfileSummary{}, "", errors.New("lock an AWS session before using S3 actions")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		return models.ProfileSummary{}, "", errors.New("the locked AWS profile is not available")
+	}
+	bucketName := session.SelectedS3BucketName
+	if bucketName == "" && requireBucket {
+		bucketName = s.selectedS3BucketName(session, s.s3Buckets(context.Background(), profile))
+	}
+	if requireBucket && bucketName == "" {
+		return models.ProfileSummary{}, "", errors.New("select an S3 bucket before using this action")
+	}
+	return profile, bucketName, nil
 }
 
 func (s *Service) selectedS3BucketName(
@@ -596,6 +864,27 @@ func (s *Service) s3ObjectMetadata(
 	}
 
 	return []models.DetailField{}
+}
+
+func (s *Service) s3ExportSnippets(bucketName string, objectKey string) []models.AwsS3ExportSnippet {
+	if bucketName == "" || objectKey == "" {
+		return []models.AwsS3ExportSnippet{}
+	}
+	s3URI := fmt.Sprintf("s3://%s/%s", bucketName, objectKey)
+	return []models.AwsS3ExportSnippet{
+		{
+			Label: "S3 URI",
+			Value: s3URI,
+		},
+		{
+			Label: "AWS CLI copy command",
+			Value: fmt.Sprintf("aws s3 cp %q .", s3URI),
+		},
+		{
+			Label: "AWS CLI presign command",
+			Value: fmt.Sprintf("aws s3 presign %q --expires-in 3600", s3URI),
+		},
+	}
 }
 
 func statePayload(snapshot discovery.Snapshot, session models.SessionSnapshot) models.StateChangedPayload {

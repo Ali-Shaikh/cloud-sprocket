@@ -84,6 +84,38 @@ type AwsS3Object struct {
 	StorageClass string `json:"storageClass,omitempty"`
 }
 
+type AwsS3ExportSnippet struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+type AwsS3UploadResult struct {
+	BucketName     string `json:"bucketName"`
+	ObjectKey      string `json:"objectKey"`
+	DestinationURI string `json:"destinationUri"`
+}
+
+type AwsS3PresignResult struct {
+	BucketName       string `json:"bucketName"`
+	ObjectKey        string `json:"objectKey"`
+	URL              string `json:"url"`
+	DurationSeconds  int    `json:"durationSeconds"`
+	ExpiresAt        string `json:"expiresAt"`
+	EffectiveWarning string `json:"effectiveWarning,omitempty"`
+}
+
+type URLInspection struct {
+	Summary      string        `json:"summary"`
+	DetailFields []DetailField `json:"detailFields"`
+}
+
+type URLValidationResult struct {
+	URL          string        `json:"url"`
+	Succeeded    bool          `json:"succeeded"`
+	Summary      string        `json:"summary"`
+	DetailFields []DetailField `json:"detailFields"`
+}
+
 type AwsEc2Instance struct {
 	InstanceID       string `json:"instanceId"`
 	Name             string `json:"name,omitempty"`
@@ -95,18 +127,19 @@ type AwsEc2Instance struct {
 }
 
 type WorkspaceSnapshot struct {
-	Provider             *ProviderSummary    `json:"provider,omitempty"`
-	Profile              *ProfileSummary     `json:"profile,omitempty"`
-	AuthMethod           AuthMethod          `json:"authMethod,omitempty"`
-	RuntimeSettings      AppSettingsSnapshot `json:"runtimeSettings"`
-	SelectedS3BucketName string              `json:"selectedS3BucketName,omitempty"`
-	SelectedS3ObjectKey  string              `json:"selectedS3ObjectKey,omitempty"`
-	S3PrefixFilter       string              `json:"s3PrefixFilter,omitempty"`
-	S3StatusMessage      string              `json:"s3StatusMessage,omitempty"`
-	S3Buckets            []AwsS3Bucket       `json:"s3Buckets"`
-	S3Objects            []AwsS3Object       `json:"s3Objects"`
-	S3ObjectMetadata     []DetailField       `json:"s3ObjectMetadata"`
-	EC2Instances         []AwsEc2Instance    `json:"ec2Instances"`
+	Provider             *ProviderSummary     `json:"provider,omitempty"`
+	Profile              *ProfileSummary      `json:"profile,omitempty"`
+	AuthMethod           AuthMethod           `json:"authMethod,omitempty"`
+	RuntimeSettings      AppSettingsSnapshot  `json:"runtimeSettings"`
+	SelectedS3BucketName string               `json:"selectedS3BucketName,omitempty"`
+	SelectedS3ObjectKey  string               `json:"selectedS3ObjectKey,omitempty"`
+	S3PrefixFilter       string               `json:"s3PrefixFilter,omitempty"`
+	S3StatusMessage      string               `json:"s3StatusMessage,omitempty"`
+	S3Buckets            []AwsS3Bucket        `json:"s3Buckets"`
+	S3Objects            []AwsS3Object        `json:"s3Objects"`
+	S3ObjectMetadata     []DetailField        `json:"s3ObjectMetadata"`
+	S3ExportSnippets     []AwsS3ExportSnippet `json:"s3ExportSnippets"`
+	EC2Instances         []AwsEc2Instance     `json:"ec2Instances"`
 }
 
 type ActivityLogEntry struct {
@@ -130,6 +163,7 @@ type JobStatus struct {
 	Status      string `json:"status"`
 	Message     string `json:"message"`
 	CompletedAt string `json:"completedAt,omitempty"`
+	Result      any    `json:"result,omitempty"`
 }
 
 type StateChangedPayload struct {

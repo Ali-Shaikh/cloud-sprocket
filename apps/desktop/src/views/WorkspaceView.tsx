@@ -8,13 +8,21 @@ import {
   StatusIndicator,
   Table,
   Tabs,
+  Textarea,
 } from "@cloudscape-design/components";
 import type { TableProps } from "@cloudscape-design/components";
+import {
+  useEffect,
+  useState,
+} from "react";
 import type {
   ActivityLogEntry,
+  AwsS3PresignResult,
   AwsS3Bucket,
   AwsS3Object,
   SessionSnapshot,
+  UrlInspection,
+  UrlValidationResult,
   WorkspaceSnapshot,
 } from "../types/backend";
 import {
@@ -38,7 +46,50 @@ type Props = {
   onSelectS3Bucket: (bucketName: string) => void;
   onSelectS3Object: (objectKey: string) => void;
   onSetS3PrefixFilter: (prefix: string) => void;
+  s3UploadStatus: string;
+  s3SignedUrlStatus: string;
+  s3SignedUrlResult?: AwsS3PresignResult;
+  s3UrlInspection?: UrlInspection;
+  s3UrlValidation?: UrlValidationResult;
+  onUploadS3Object: (sourcePath: string, objectKey: string) => void;
+  onPresignS3Object: (durationSeconds: number) => void;
+  onAnalyseS3Url: (url: string) => void;
+  onValidateS3Url: (url: string) => void;
 };
+
+function defaultUploadKey(sourcePath: string, prefix?: string): string {
+  const fileName = sourcePath.split(/[\\/]/).filter(Boolean).pop() ?? "";
+  const cleanPrefix = (prefix ?? "").replace(/^\/+/, "");
+  if (!cleanPrefix) {
+    return fileName;
+  }
+  return `${cleanPrefix.replace(/\/?$/, "/")}${fileName}`;
+}
+
+function renderDetailFields(fields: { label: string; value: string }[], emptyText: string) {
+  if (fields.length === 0) {
+    return <Box color="text-status-inactive">{emptyText}</Box>;
+  }
+  return (
+    <div className="detail-grid">
+      {fields.map((field) => (
+        <div
+          key={`${field.label}-${field.value}`}
+          className="detail-card"
+        >
+          <Box variant="awsui-key-label">{field.label}</Box>
+          <Box variant="p">{field.value}</Box>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function copyToClipboard(value: string): void {
+  if (navigator.clipboard) {
+    void navigator.clipboard.writeText(value);
+  }
+}
 
 export default function WorkspaceView({
   session,
@@ -53,7 +104,27 @@ export default function WorkspaceView({
   onSelectS3Bucket,
   onSelectS3Object,
   onSetS3PrefixFilter,
+  s3UploadStatus,
+  s3SignedUrlStatus,
+  s3SignedUrlResult,
+  s3UrlInspection,
+  s3UrlValidation,
+  onUploadS3Object,
+  onPresignS3Object,
+  onAnalyseS3Url,
+  onValidateS3Url,
 }: Props) {
+  const [uploadSourcePath, setUploadSourcePath] = useState("");
+  const [uploadObjectKey, setUploadObjectKey] = useState("");
+  const [signedUrlDurationSeconds, setSignedUrlDurationSeconds] = useState("3600");
+  const [urlTesterValue, setUrlTesterValue] = useState("");
+
+  useEffect(() => {
+    if (!uploadObjectKey && uploadSourcePath) {
+      setUploadObjectKey(defaultUploadKey(uploadSourcePath, workspace.s3PrefixFilter));
+    }
+  }, [uploadObjectKey, uploadSourcePath, workspace.s3PrefixFilter]);
+
   const workspaceSummaryPanel = (
     <Container
       header={
@@ -294,21 +365,196 @@ export default function WorkspaceView({
             </Header>
           }
         >
-          {workspace.s3ObjectMetadata.length === 0 ? (
-            <Box color="text-status-inactive">No metadata loaded for the selected object.</Box>
+          {renderDetailFields(
+            workspace.s3ObjectMetadata,
+            "No metadata loaded for the selected object.",
+          )}
+        </Container>
+
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description="Generated locally from the selected bucket and object. No snippet is stored."
+            >
+              Copy Snippets
+            </Header>
+          }
+        >
+          {workspace.s3ExportSnippets.length === 0 ? (
+            <Box color="text-status-inactive">Select an object to generate copy snippets.</Box>
           ) : (
-            <div className="detail-grid">
-              {workspace.s3ObjectMetadata.map((field) => (
+            <SpaceBetween size="s">
+              {workspace.s3ExportSnippets.map((snippet) => (
                 <div
-                  key={`${field.label}-${field.value}`}
-                  className="detail-card"
+                  key={snippet.label}
+                  className="snippet-card"
                 >
-                  <Box variant="awsui-key-label">{field.label}</Box>
-                  <Box variant="p">{field.value}</Box>
+                  <div className="snippet-header">
+                    <Box variant="awsui-key-label">{snippet.label}</Box>
+                    <Button
+                      variant="link"
+                      onClick={() => {
+                        copyToClipboard(snippet.value);
+                      }}
+                    >
+                      Copy
+                    </Button>
+                  </div>
+                  <pre>{snippet.value}</pre>
                 </div>
               ))}
-            </div>
+            </SpaceBetween>
           )}
+        </Container>
+
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description="Upload uses the Go daemon and AWS SDK transfer manager."
+            >
+              Upload Object
+            </Header>
+          }
+        >
+          <SpaceBetween size="m">
+            <Input
+              value={uploadSourcePath}
+              placeholder="Local file path, for example D:\\Downloads\\report.csv"
+              onChange={({ detail }) => {
+                setUploadSourcePath(detail.value);
+                if (!uploadObjectKey) {
+                  setUploadObjectKey(defaultUploadKey(detail.value, workspace.s3PrefixFilter));
+                }
+              }}
+            />
+            <Input
+              value={uploadObjectKey}
+              placeholder="Destination object key"
+              onChange={({ detail }) => {
+                setUploadObjectKey(detail.value);
+              }}
+            />
+            <Button
+              disabled={!workspace.selectedS3BucketName || !uploadSourcePath || !uploadObjectKey}
+              onClick={() => {
+                onUploadS3Object(uploadSourcePath, uploadObjectKey);
+              }}
+            >
+              Upload
+            </Button>
+            <Box color="text-body-secondary">{s3UploadStatus}</Box>
+          </SpaceBetween>
+        </Container>
+
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description="Signed URLs are returned through job events and kept in memory only."
+            >
+              Signed URL
+            </Header>
+          }
+        >
+          <SpaceBetween size="m">
+            <Input
+              value={signedUrlDurationSeconds}
+              placeholder="Duration in seconds"
+              onChange={({ detail }) => {
+                setSignedUrlDurationSeconds(detail.value.replace(/\D/g, ""));
+              }}
+            />
+            <Button
+              disabled={!workspace.selectedS3ObjectKey}
+              onClick={() => {
+                onPresignS3Object(Number(signedUrlDurationSeconds || "3600"));
+              }}
+            >
+              Generate Signed URL
+            </Button>
+            <Box color="text-body-secondary">{s3SignedUrlStatus}</Box>
+            {s3SignedUrlResult ? (
+              <div className="snippet-card">
+                <div className="snippet-header">
+                  <Box variant="awsui-key-label">
+                    Expires {s3SignedUrlResult.expiresAt}
+                  </Box>
+                  <Button
+                    variant="link"
+                    onClick={() => {
+                      copyToClipboard(s3SignedUrlResult.url);
+                    }}
+                  >
+                    Copy URL
+                  </Button>
+                </div>
+                <pre>{s3SignedUrlResult.url}</pre>
+                {s3SignedUrlResult.effectiveWarning ? (
+                  <Box color="text-body-secondary">
+                    {s3SignedUrlResult.effectiveWarning}
+                  </Box>
+                ) : null}
+              </div>
+            ) : null}
+          </SpaceBetween>
+        </Container>
+
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description="Inspect expiry fields locally, then optionally make a range request."
+            >
+              URL Tester
+            </Header>
+          }
+        >
+          <SpaceBetween size="m">
+            <Textarea
+              value={urlTesterValue}
+              placeholder="Paste an S3 signed URL or public object URL."
+              onChange={({ detail }) => {
+                setUrlTesterValue(detail.value);
+              }}
+            />
+            <SpaceBetween
+              direction="horizontal"
+              size="xs"
+            >
+              <Button
+                disabled={!urlTesterValue}
+                onClick={() => {
+                  onAnalyseS3Url(urlTesterValue);
+                }}
+              >
+                Analyse
+              </Button>
+              <Button
+                disabled={!urlTesterValue}
+                onClick={() => {
+                  onValidateS3Url(urlTesterValue);
+                }}
+              >
+                Validate
+              </Button>
+            </SpaceBetween>
+            {s3UrlInspection ? (
+              <SpaceBetween size="s">
+                <Box variant="p">{s3UrlInspection.summary}</Box>
+                {renderDetailFields(s3UrlInspection.detailFields, "No URL details available.")}
+              </SpaceBetween>
+            ) : null}
+            {s3UrlValidation ? (
+              <SpaceBetween size="s">
+                <StatusIndicator type={s3UrlValidation.succeeded ? "success" : "error"}>
+                  {s3UrlValidation.summary}
+                </StatusIndicator>
+                {renderDetailFields(s3UrlValidation.detailFields, "No validation details available.")}
+              </SpaceBetween>
+            ) : null}
+          </SpaceBetween>
         </Container>
       </div>
     </SpaceBetween>

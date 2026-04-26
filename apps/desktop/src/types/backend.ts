@@ -71,6 +71,38 @@ export interface AwsS3Object {
   storageClass?: string;
 }
 
+export interface AwsS3ExportSnippet {
+  label: string;
+  value: string;
+}
+
+export interface AwsS3UploadResult {
+  bucketName: string;
+  objectKey: string;
+  destinationUri: string;
+}
+
+export interface AwsS3PresignResult {
+  bucketName: string;
+  objectKey: string;
+  url: string;
+  durationSeconds: number;
+  expiresAt: string;
+  effectiveWarning?: string;
+}
+
+export interface UrlInspection {
+  summary: string;
+  detailFields: DetailField[];
+}
+
+export interface UrlValidationResult {
+  url: string;
+  succeeded: boolean;
+  summary: string;
+  detailFields: DetailField[];
+}
+
 export interface AwsEc2Instance {
   instanceId: string;
   name?: string;
@@ -93,6 +125,7 @@ export interface WorkspaceSnapshot {
   s3Buckets: AwsS3Bucket[];
   s3Objects: AwsS3Object[];
   s3ObjectMetadata: DetailField[];
+  s3ExportSnippets: AwsS3ExportSnippet[];
   ec2Instances: AwsEc2Instance[];
 }
 
@@ -102,6 +135,7 @@ export interface JobStatus {
   status: JobLifecycle;
   message: string;
   completedAt?: string;
+  result?: unknown;
 }
 
 export interface ActivityLogEntry {
