@@ -6,6 +6,7 @@ CHECKPOINT.local.md
 .DS_Store
 __pycache__/
 .pytest_cache/
+pytest-temp/
 .coverage
 pytest-cache-files-*
 *.py[cod]
