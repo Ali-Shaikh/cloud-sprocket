@@ -19,10 +19,17 @@ const targetTriple = (
 const isWindows = targetTriple.includes("windows");
 const executableName = `cloudsprocketd-${targetTriple}${isWindows ? ".exe" : ""}`;
 const outputPath = path.resolve(binariesDir, executableName);
+const buildArgs = ["build", "-o", outputPath];
+
+if (isWindows) {
+  buildArgs.push("-ldflags", "-H=windowsgui");
+}
+
+buildArgs.push("./cmd/cloudsprocketd");
 
 execFileSync(
   "go",
-  ["build", "-o", outputPath, "./cmd/cloudsprocketd"],
+  buildArgs,
   {
     cwd: backendRoot,
     stdio: "inherit",
