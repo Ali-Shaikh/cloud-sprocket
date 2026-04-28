@@ -57,18 +57,20 @@ type WorkspaceTab struct {
 }
 
 type SessionSnapshot struct {
-	CurrentProviderID    string             `json:"currentProviderId,omitempty"`
-	SelectedProfileID    string             `json:"selectedProfileId,omitempty"`
-	SelectedAuthMethod   AuthMethod         `json:"selectedAuthMethod,omitempty"`
-	SelectedS3BucketName string             `json:"selectedS3BucketName,omitempty"`
-	SelectedS3ObjectKey  string             `json:"selectedS3ObjectKey,omitempty"`
-	S3PrefixFilter       string             `json:"s3PrefixFilter,omitempty"`
-	LockedProviderID     string             `json:"lockedProviderId,omitempty"`
-	LockedProfileID      string             `json:"lockedProfileId,omitempty"`
-	LockedAuthMethod     AuthMethod         `json:"lockedAuthMethod,omitempty"`
-	IsLocked             bool               `json:"isLocked"`
-	AvailableAuthMethods []AuthMethodStatus `json:"availableAuthMethods"`
-	WorkspaceTabs        []WorkspaceTab     `json:"workspaceTabs"`
+	CurrentProviderID     string             `json:"currentProviderId,omitempty"`
+	SelectedProfileID     string             `json:"selectedProfileId,omitempty"`
+	SelectedAuthMethod    AuthMethod         `json:"selectedAuthMethod,omitempty"`
+	SelectedS3BucketName  string             `json:"selectedS3BucketName,omitempty"`
+	SelectedS3ObjectKey   string             `json:"selectedS3ObjectKey,omitempty"`
+	S3PrefixFilter        string             `json:"s3PrefixFilter,omitempty"`
+	SelectedEC2Region     string             `json:"selectedEc2Region,omitempty"`
+	SelectedEC2InstanceID string             `json:"selectedEc2InstanceId,omitempty"`
+	LockedProviderID      string             `json:"lockedProviderId,omitempty"`
+	LockedProfileID       string             `json:"lockedProfileId,omitempty"`
+	LockedAuthMethod      AuthMethod         `json:"lockedAuthMethod,omitempty"`
+	IsLocked              bool               `json:"isLocked"`
+	AvailableAuthMethods  []AuthMethodStatus `json:"availableAuthMethods"`
+	WorkspaceTabs         []WorkspaceTab     `json:"workspaceTabs"`
 }
 
 type AwsS3Bucket struct {
@@ -127,19 +129,23 @@ type AwsEc2Instance struct {
 }
 
 type WorkspaceSnapshot struct {
-	Provider             *ProviderSummary     `json:"provider,omitempty"`
-	Profile              *ProfileSummary      `json:"profile,omitempty"`
-	AuthMethod           AuthMethod           `json:"authMethod,omitempty"`
-	RuntimeSettings      AppSettingsSnapshot  `json:"runtimeSettings"`
-	SelectedS3BucketName string               `json:"selectedS3BucketName,omitempty"`
-	SelectedS3ObjectKey  string               `json:"selectedS3ObjectKey,omitempty"`
-	S3PrefixFilter       string               `json:"s3PrefixFilter,omitempty"`
-	S3StatusMessage      string               `json:"s3StatusMessage,omitempty"`
-	S3Buckets            []AwsS3Bucket        `json:"s3Buckets"`
-	S3Objects            []AwsS3Object        `json:"s3Objects"`
-	S3ObjectMetadata     []DetailField        `json:"s3ObjectMetadata"`
-	S3ExportSnippets     []AwsS3ExportSnippet `json:"s3ExportSnippets"`
-	EC2Instances         []AwsEc2Instance     `json:"ec2Instances"`
+	Provider              *ProviderSummary     `json:"provider,omitempty"`
+	Profile               *ProfileSummary      `json:"profile,omitempty"`
+	AuthMethod            AuthMethod           `json:"authMethod,omitempty"`
+	RuntimeSettings       AppSettingsSnapshot  `json:"runtimeSettings"`
+	SelectedS3BucketName  string               `json:"selectedS3BucketName,omitempty"`
+	SelectedS3ObjectKey   string               `json:"selectedS3ObjectKey,omitempty"`
+	S3PrefixFilter        string               `json:"s3PrefixFilter,omitempty"`
+	S3StatusMessage       string               `json:"s3StatusMessage,omitempty"`
+	S3Buckets             []AwsS3Bucket        `json:"s3Buckets"`
+	S3Objects             []AwsS3Object        `json:"s3Objects"`
+	S3ObjectMetadata      []DetailField        `json:"s3ObjectMetadata"`
+	S3ExportSnippets      []AwsS3ExportSnippet `json:"s3ExportSnippets"`
+	SelectedEC2Region     string               `json:"selectedEc2Region,omitempty"`
+	SelectedEC2InstanceID string               `json:"selectedEc2InstanceId,omitempty"`
+	EC2StatusMessage      string               `json:"ec2StatusMessage,omitempty"`
+	EC2Regions            []string             `json:"ec2Regions"`
+	EC2Instances          []AwsEc2Instance     `json:"ec2Instances"`
 }
 
 type ActivityLogEntry struct {

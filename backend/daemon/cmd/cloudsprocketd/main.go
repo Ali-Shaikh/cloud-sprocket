@@ -28,7 +28,8 @@ func main() {
 
 	discoveryService := discovery.New(settings, exec.LookPath)
 	s3Inventory := awsadapter.NewS3Inventory(settings)
-	service := app.New(settings, dataStore, discoveryService, s3Inventory)
+	ec2Inventory := awsadapter.NewEC2Inventory(settings)
+	service := app.New(settings, dataStore, discoveryService, s3Inventory, ec2Inventory)
 	server := rpc.New(service)
 
 	if err := server.Serve(context.Background(), os.Stdin, os.Stdout); err != nil {

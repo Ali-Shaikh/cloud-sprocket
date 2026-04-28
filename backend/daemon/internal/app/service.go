@@ -24,6 +24,14 @@ type S3Inventory interface {
 	PresignGetObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, durationSeconds int) (models.AwsS3PresignResult, error)
 }
 
+type EC2Inventory interface {
+	ListRegions(ctx context.Context, profile models.ProfileSummary) ([]string, error)
+	ListInstances(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsEc2Instance, error)
+	StartInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
+	StopInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
+	RebootInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
+}
+
 type Notifier interface {
 	Notify(method string, payload any) error
 }
@@ -33,6 +41,7 @@ type Service struct {
 	store     *store.Store
 	discovery *discovery.Service
 	s3        S3Inventory
+	ec2       EC2Inventory
 	now       func() time.Time
 	mu        sync.Mutex
 }
@@ -42,12 +51,14 @@ func New(
 	store *store.Store,
 	discoveryService *discovery.Service,
 	s3Inventory S3Inventory,
+	ec2Inventory EC2Inventory,
 ) *Service {
 	return &Service{
 		settings:  settings,
 		store:     store,
 		discovery: discoveryService,
 		s3:        s3Inventory,
+		ec2:       ec2Inventory,
 		now:       func() time.Time { return time.Now().UTC() },
 	}
 }
@@ -262,6 +273,85 @@ func (s *Service) Handle(
 		}
 		go s.runURLValidation(job, notifier, request.URL)
 		return job, nil
+	case "aws.ec2.selectRegion":
+		var request struct {
+			Region string `json:"region"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		snapshot, session, err := s.currentState(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			return nil, errors.New("lock an AWS session before selecting an EC2 region")
+		}
+		session.SelectedEC2Region = request.Region
+		session.SelectedEC2InstanceID = ""
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), s.notifyStateAndLog(
+			ctx,
+			snapshot,
+			session,
+			notifier,
+			"info",
+			fmt.Sprintf("Selected EC2 region %s.", request.Region),
+		)
+	case "aws.ec2.selectInstance":
+		var request struct {
+			InstanceID string `json:"instanceId"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		snapshot, session, err := s.currentState(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			return nil, errors.New("lock an AWS session before selecting an EC2 instance")
+		}
+		session.SelectedEC2InstanceID = request.InstanceID
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), nil
+	case "aws.ec2.invokeAction":
+		var request struct {
+			Action     string `json:"action"`
+			InstanceID string `json:"instanceId"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		snapshot, session, err := s.currentState(ctx)
+		if err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
+		profile, region, instanceID, err := s.activeEC2Selection(snapshot, session, request.InstanceID)
+		if err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
+		s.mu.Unlock()
+
+		job := models.JobStatus{
+			JobID:   fmt.Sprintf("job-%d", s.now().UnixNano()),
+			Label:   "EC2 Action",
+			Status:  "queued",
+			Message: fmt.Sprintf("Queueing EC2 %s for %s in %s.", request.Action, instanceID, region),
+		}
+		go s.runEC2Action(job, notifier, snapshot, session, profile, region, instanceID, request.Action)
+		return job, nil
 	case "session.selectProvider":
 		var request struct {
 			ProviderID string `json:"providerId"`
@@ -282,6 +372,8 @@ func (s *Service) Handle(
 		session.SelectedS3BucketName = ""
 		session.SelectedS3ObjectKey = ""
 		session.S3PrefixFilter = ""
+		session.SelectedEC2Region = ""
+		session.SelectedEC2InstanceID = ""
 		session = reconcileSession(session, snapshot)
 		if err := s.store.SaveSession(ctx, session); err != nil {
 			return nil, err
@@ -308,6 +400,8 @@ func (s *Service) Handle(
 		session.SelectedS3BucketName = ""
 		session.SelectedS3ObjectKey = ""
 		session.S3PrefixFilter = ""
+		session.SelectedEC2Region = ""
+		session.SelectedEC2InstanceID = ""
 		session = reconcileSession(session, snapshot)
 		if err := s.store.SaveSession(ctx, session); err != nil {
 			return nil, err
@@ -608,6 +702,87 @@ func (s *Service) runURLValidation(job models.JobStatus, notifier Notifier, rawU
 	})
 }
 
+func (s *Service) runEC2Action(
+	job models.JobStatus,
+	notifier Notifier,
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	profile models.ProfileSummary,
+	region string,
+	instanceID string,
+	action string,
+) {
+	background := context.Background()
+	normalisedAction := strings.ToLower(strings.TrimSpace(action))
+	s.notifyJob(notifier, models.JobStatus{
+		JobID:   job.JobID,
+		Label:   job.Label,
+		Status:  "running",
+		Message: fmt.Sprintf("Running EC2 %s for %s in %s.", normalisedAction, instanceID, region),
+	})
+
+	var err error
+	switch normalisedAction {
+	case "start":
+		err = s.ec2.StartInstance(background, profile, region, instanceID)
+	case "stop":
+		err = s.ec2.StopInstance(background, profile, region, instanceID)
+	case "reboot":
+		err = s.ec2.RebootInstance(background, profile, region, instanceID)
+	default:
+		err = fmt.Errorf("EC2 action %q is not implemented", action)
+	}
+	if err != nil {
+		s.notifyJob(notifier, models.JobStatus{
+			JobID:   job.JobID,
+			Label:   job.Label,
+			Status:  "failed",
+			Message: fmt.Sprintf("EC2 %s failed for %s: %v", normalisedAction, instanceID, err),
+		})
+		return
+	}
+
+	session.SelectedEC2Region = region
+	session.SelectedEC2InstanceID = instanceID
+	s.mu.Lock()
+	if saveErr := s.store.SaveSession(background, session); saveErr != nil {
+		s.mu.Unlock()
+		s.notifyJob(notifier, models.JobStatus{
+			JobID:   job.JobID,
+			Label:   job.Label,
+			Status:  "failed",
+			Message: fmt.Sprintf("EC2 %s completed, but session state could not be saved: %v", normalisedAction, saveErr),
+		})
+		return
+	}
+	err = s.notifyStateAndLog(
+		background,
+		snapshot,
+		session,
+		notifier,
+		"success",
+		fmt.Sprintf("Requested EC2 %s for %s in %s.", normalisedAction, instanceID, region),
+	)
+	s.mu.Unlock()
+	if err != nil {
+		s.notifyJob(notifier, models.JobStatus{
+			JobID:   job.JobID,
+			Label:   job.Label,
+			Status:  "failed",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	s.notifyJob(notifier, models.JobStatus{
+		JobID:       job.JobID,
+		Label:       job.Label,
+		Status:      "completed",
+		Message:     fmt.Sprintf("Requested EC2 %s for %s.", normalisedAction, instanceID),
+		CompletedAt: s.timestamp(),
+	})
+}
+
 func (s *Service) notifyJob(notifier Notifier, job models.JobStatus) {
 	if notifier != nil {
 		_ = notifier.Notify("job.updated", job)
@@ -663,6 +838,7 @@ func (s *Service) buildWorkspaceSnapshot(
 		S3Buckets:        []models.AwsS3Bucket{},
 		S3Objects:        []models.AwsS3Object{},
 		S3ObjectMetadata: []models.DetailField{},
+		EC2Regions:       []string{},
 		EC2Instances:     []models.AwsEc2Instance{},
 	}
 
@@ -715,6 +891,27 @@ func (s *Service) buildWorkspaceSnapshot(
 				"Loaded %d objects from %s.",
 				len(workspace.S3Objects),
 				workspace.SelectedS3BucketName,
+			)
+		}
+	}
+
+	if workspace.Provider != nil &&
+		workspace.Provider.ProviderID == "aws" &&
+		workspace.Profile != nil &&
+		s.ec2 != nil {
+		workspace.EC2Regions = s.ec2Regions(context.Background(), *workspace.Profile)
+		workspace.SelectedEC2Region = s.selectedEC2Region(session, workspace.EC2Regions, *workspace.Profile)
+		workspace.EC2Instances = s.ec2Instances(context.Background(), *workspace.Profile, workspace.SelectedEC2Region)
+		workspace.SelectedEC2InstanceID = s.selectedEC2InstanceID(session, workspace.EC2Instances)
+		if workspace.SelectedEC2Region == "" {
+			workspace.EC2StatusMessage = "No EC2 region is available for this locked AWS session."
+		} else if len(workspace.EC2Instances) == 0 {
+			workspace.EC2StatusMessage = fmt.Sprintf("No EC2 instances were returned for %s.", workspace.SelectedEC2Region)
+		} else {
+			workspace.EC2StatusMessage = fmt.Sprintf(
+				"Loaded %d EC2 instances from %s.",
+				len(workspace.EC2Instances),
+				workspace.SelectedEC2Region,
 			)
 		}
 	}
@@ -887,6 +1084,133 @@ func (s *Service) s3ExportSnippets(bucketName string, objectKey string) []models
 	}
 }
 
+func (s *Service) activeEC2Selection(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	instanceIDOverride string,
+) (models.ProfileSummary, string, string, error) {
+	if !session.IsLocked || session.CurrentProviderID != "aws" {
+		return models.ProfileSummary{}, "", "", errors.New("lock an AWS session before using EC2 actions")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		return models.ProfileSummary{}, "", "", errors.New("the locked AWS profile is not available")
+	}
+	regions := s.ec2Regions(context.Background(), profile)
+	region := s.selectedEC2Region(session, regions, profile)
+	if region == "" {
+		return models.ProfileSummary{}, "", "", errors.New("select an EC2 region before using this action")
+	}
+	instanceID := strings.TrimSpace(instanceIDOverride)
+	if instanceID == "" {
+		instanceID = session.SelectedEC2InstanceID
+	}
+	if instanceID == "" {
+		instanceID = s.selectedEC2InstanceID(session, s.ec2Instances(context.Background(), profile, region))
+	}
+	if instanceID == "" {
+		return models.ProfileSummary{}, "", "", errors.New("select an EC2 instance before using this action")
+	}
+	return profile, region, instanceID, nil
+}
+
+func (s *Service) ec2Regions(ctx context.Context, profile models.ProfileSummary) []string {
+	const scope = "aws.ec2.regions"
+	queryHash := profile.ProfileID
+	regions, err := s.ec2.ListRegions(ctx, profile)
+	if err == nil && len(regions) > 0 {
+		_ = s.store.SaveResourceCache(ctx, scope, queryHash, regions, s.timestamp())
+		return regions
+	}
+
+	var cached []string
+	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
+	if cacheErr == nil && ok && len(cached) > 0 {
+		return cached
+	}
+
+	if hint := profileRegionHint(profile); hint != "" {
+		return []string{hint}
+	}
+	return []string{}
+}
+
+func (s *Service) selectedEC2Region(
+	session models.SessionSnapshot,
+	regions []string,
+	profile models.ProfileSummary,
+) string {
+	if session.SelectedEC2Region != "" {
+		for _, region := range regions {
+			if region == session.SelectedEC2Region {
+				return session.SelectedEC2Region
+			}
+		}
+	}
+	hint := profileRegionHint(profile)
+	for _, region := range regions {
+		if region == hint {
+			return hint
+		}
+	}
+	if len(regions) == 0 {
+		return ""
+	}
+	return regions[0]
+}
+
+func (s *Service) ec2Instances(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+) []models.AwsEc2Instance {
+	if region == "" {
+		return []models.AwsEc2Instance{}
+	}
+
+	const scope = "aws.ec2.instances"
+	queryHash := profile.ProfileID + "|" + region
+	instances, err := s.ec2.ListInstances(ctx, profile, region)
+	if err == nil {
+		_ = s.store.SaveResourceCache(ctx, scope, queryHash, instances, s.timestamp())
+		return instances
+	}
+
+	var cached []models.AwsEc2Instance
+	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
+	if cacheErr == nil && ok {
+		return cached
+	}
+
+	return []models.AwsEc2Instance{}
+}
+
+func (s *Service) selectedEC2InstanceID(
+	session models.SessionSnapshot,
+	instances []models.AwsEc2Instance,
+) string {
+	if session.SelectedEC2InstanceID != "" {
+		for _, instance := range instances {
+			if instance.InstanceID == session.SelectedEC2InstanceID {
+				return session.SelectedEC2InstanceID
+			}
+		}
+	}
+	if len(instances) == 0 {
+		return ""
+	}
+	return instances[0].InstanceID
+}
+
+func profileRegionHint(profile models.ProfileSummary) string {
+	for _, field := range profile.Attributes {
+		if field.Label == "Region" && field.Value != "" {
+			return field.Value
+		}
+	}
+	return "us-east-1"
+}
+
 func statePayload(snapshot discovery.Snapshot, session models.SessionSnapshot) models.StateChangedPayload {
 	return models.StateChangedPayload{
 		Providers: snapshot.Providers,
@@ -946,6 +1270,8 @@ func clearLockState(session models.SessionSnapshot) models.SessionSnapshot {
 	session.SelectedS3BucketName = ""
 	session.SelectedS3ObjectKey = ""
 	session.S3PrefixFilter = ""
+	session.SelectedEC2Region = ""
+	session.SelectedEC2InstanceID = ""
 	session.AvailableAuthMethods = append([]models.AuthMethodStatus(nil), session.AvailableAuthMethods...)
 	if session.SelectedProfileID == "" {
 		session.SelectedAuthMethod = ""
