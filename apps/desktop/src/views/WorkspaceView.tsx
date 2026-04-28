@@ -4,19 +4,22 @@ import {
   Container,
   Header,
   Input,
+  PropertyFilter,
+  Select,
   SpaceBetween,
   StatusIndicator,
   Table,
   Tabs,
   Textarea,
 } from "@cloudscape-design/components";
-import type { TableProps } from "@cloudscape-design/components";
+import type { PropertyFilterProps, TableProps } from "@cloudscape-design/components";
 import {
   useEffect,
   useState,
 } from "react";
 import type {
   ActivityLogEntry,
+  AwsEc2Instance,
   AwsS3PresignResult,
   AwsS3Bucket,
   AwsS3Object,
@@ -26,8 +29,13 @@ import type {
   WorkspaceSnapshot,
 } from "../types/backend";
 import {
+  type CollectionField,
   countLabel,
+  defaultQuery,
+  filterCollection,
   makeWorkspaceTab,
+  makeFilteringOptions,
+  propertyFilterStrings,
   renderProfileDetailPanel,
   renderRuntimeSettingsPanel,
   statusType,
@@ -55,6 +63,10 @@ type Props = {
   onPresignS3Object: (durationSeconds: number) => void;
   onAnalyseS3Url: (url: string) => void;
   onValidateS3Url: (url: string) => void;
+  ec2ActionStatus: string;
+  onSelectEC2Region: (region: string) => void;
+  onSelectEC2Instance: (instanceId: string) => void;
+  onInvokeEC2Action: (action: "start" | "stop" | "reboot", instanceId: string) => void;
 };
 
 function defaultUploadKey(sourcePath: string, prefix?: string): string {
@@ -91,6 +103,24 @@ function copyToClipboard(value: string): void {
   }
 }
 
+function instanceStateType(state?: string): "success" | "warning" | "error" | "info" {
+  if (state === "running") {
+    return "success";
+  }
+  if (state === "stopped" || state === "stopping") {
+    return "warning";
+  }
+  if (state === "terminated" || state === "shutting-down") {
+    return "error";
+  }
+  return "info";
+}
+
+function ec2Command(region: string | undefined, action: string, instanceId: string): string {
+  const regionFlag = region ? ` --region ${region}` : "";
+  return `aws ec2 ${action}-instances --instance-ids ${instanceId}${regionFlag}`;
+}
+
 export default function WorkspaceView({
   session,
   workspace,
@@ -113,11 +143,16 @@ export default function WorkspaceView({
   onPresignS3Object,
   onAnalyseS3Url,
   onValidateS3Url,
+  ec2ActionStatus,
+  onSelectEC2Region,
+  onSelectEC2Instance,
+  onInvokeEC2Action,
 }: Props) {
   const [uploadSourcePath, setUploadSourcePath] = useState("");
   const [uploadObjectKey, setUploadObjectKey] = useState("");
   const [signedUrlDurationSeconds, setSignedUrlDurationSeconds] = useState("3600");
   const [urlTesterValue, setUrlTesterValue] = useState("");
+  const [ec2Query, setEC2Query] = useState<PropertyFilterProps.Query>(defaultQuery);
 
   useEffect(() => {
     if (!uploadObjectKey && uploadSourcePath) {
@@ -560,6 +595,339 @@ export default function WorkspaceView({
     </SpaceBetween>
   );
 
+  const ec2Fields: CollectionField<AwsEc2Instance>[] = [
+    {
+      key: "instanceId",
+      label: "Instance ID",
+      getValue: (instance) => instance.instanceId,
+    },
+    {
+      key: "name",
+      label: "Name",
+      getValue: (instance) => instance.name,
+    },
+    {
+      key: "state",
+      label: "State",
+      getValue: (instance) => instance.state,
+    },
+    {
+      key: "type",
+      label: "Type",
+      getValue: (instance) => instance.instanceType,
+    },
+    {
+      key: "zone",
+      label: "Availability Zone",
+      getValue: (instance) => instance.availabilityZone,
+    },
+    {
+      key: "ip",
+      label: "IP Address",
+      getValue: (instance) =>
+        [instance.publicIp, instance.privateIp].filter(
+          (value): value is string => Boolean(value),
+        ),
+    },
+  ];
+  const filteredEC2Instances = filterCollection(workspace.ec2Instances, ec2Query, ec2Fields);
+  const selectedEC2Instance =
+    workspace.ec2Instances.find(
+      (instance) => instance.instanceId === workspace.selectedEc2InstanceId,
+    ) ?? workspace.ec2Instances[0];
+  const selectedEC2TableItem = filteredEC2Instances.find(
+    (instance) => instance.instanceId === selectedEC2Instance?.instanceId,
+  );
+  const selectedEC2RegionOption = workspace.selectedEc2Region
+    ? {
+        label: workspace.selectedEc2Region,
+        value: workspace.selectedEc2Region,
+      }
+    : null;
+  const ec2RegionOptions = workspace.ec2Regions.map((region) => ({
+    label: region,
+    value: region,
+  }));
+  const ec2InstanceColumns: TableProps.ColumnDefinition<AwsEc2Instance>[] = [
+    {
+      id: "name",
+      header: "Name",
+      cell: (instance) => instance.name || "Unnamed",
+    },
+    {
+      id: "instanceId",
+      header: "Instance ID",
+      cell: (instance) => instance.instanceId,
+    },
+    {
+      id: "state",
+      header: "State",
+      cell: (instance) => (
+        <StatusIndicator type={instanceStateType(instance.state)}>
+          {instance.state || "Unknown"}
+        </StatusIndicator>
+      ),
+    },
+    {
+      id: "type",
+      header: "Type",
+      cell: (instance) => instance.instanceType || "Unknown",
+    },
+    {
+      id: "zone",
+      header: "Zone",
+      cell: (instance) => instance.availabilityZone || "Unknown",
+    },
+    {
+      id: "privateIp",
+      header: "Private IP",
+      cell: (instance) => instance.privateIp || "Unavailable",
+    },
+    {
+      id: "publicIp",
+      header: "Public IP",
+      cell: (instance) => instance.publicIp || "Unavailable",
+    },
+  ];
+  const ec2FilteringProperties: PropertyFilterProps.FilteringProperty[] = ec2Fields.map(
+    (field) => ({
+      key: field.key,
+      propertyLabel: field.label,
+      groupValuesLabel: `${field.label} values`,
+      operators: [":", "!:", "=", "!="],
+    }),
+  );
+  const ec2CopySnippets = selectedEC2Instance
+    ? [
+        {
+          label: "Instance ID",
+          value: selectedEC2Instance.instanceId,
+        },
+        {
+          label: "AWS CLI describe command",
+          value: `aws ec2 describe-instances --instance-ids ${selectedEC2Instance.instanceId}${
+            workspace.selectedEc2Region ? ` --region ${workspace.selectedEc2Region}` : ""
+          }`,
+        },
+        {
+          label: "AWS CLI start command",
+          value: ec2Command(workspace.selectedEc2Region, "start", selectedEC2Instance.instanceId),
+        },
+        {
+          label: "AWS CLI stop command",
+          value: ec2Command(workspace.selectedEc2Region, "stop", selectedEC2Instance.instanceId),
+        },
+        {
+          label: "AWS CLI reboot command",
+          value: ec2Command(workspace.selectedEc2Region, "reboot", selectedEC2Instance.instanceId),
+        },
+      ]
+    : [];
+  const selectedEC2State = selectedEC2Instance?.state?.toLowerCase();
+  const ec2CanStart = Boolean(selectedEC2Instance) && selectedEC2State === "stopped";
+  const ec2CanStop = Boolean(selectedEC2Instance) && selectedEC2State === "running";
+  const ec2CanReboot = Boolean(selectedEC2Instance) && selectedEC2State === "running";
+
+  const ec2Tab = (
+    <SpaceBetween
+      size="l"
+      className="page-stack"
+    >
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description="EC2 inventory and lifecycle actions are served by the Go daemon."
+          >
+            EC2 Fleet
+          </Header>
+        }
+      >
+        <div className="status-strip">
+          <div className="status-pill">
+            <Box variant="awsui-key-label">Selected Region</Box>
+            <Box variant="p">{workspace.selectedEc2Region || "No region selected"}</Box>
+          </div>
+          <div className="status-pill">
+            <Box variant="awsui-key-label">Selected Instance</Box>
+            <Box variant="p">{selectedEC2Instance?.instanceId || "No instance selected"}</Box>
+          </div>
+          <div className="status-pill">
+            <Box variant="awsui-key-label">Instances</Box>
+            <Box variant="p">{countLabel(workspace.ec2Instances.length, "instance", "instances")}</Box>
+          </div>
+        </div>
+        <Box color="text-body-secondary">
+          {workspace.ec2StatusMessage || "EC2 inventory is waiting for a locked AWS workspace."}
+        </Box>
+      </Container>
+
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description="Select a region, filter instances, then choose one instance for lifecycle actions."
+            actions={
+              <Select
+                selectedOption={selectedEC2RegionOption}
+                options={ec2RegionOptions}
+                placeholder="Select region"
+                empty="No EC2 regions available"
+                selectedAriaLabel="Selected"
+                onChange={({ detail }) => {
+                  const region = detail.selectedOption.value;
+                  if (region) {
+                    onSelectEC2Region(region);
+                  }
+                }}
+              />
+            }
+          >
+            Instances
+          </Header>
+        }
+      >
+        <Table
+          items={filteredEC2Instances}
+          columnDefinitions={ec2InstanceColumns}
+          selectionType="single"
+          selectedItems={selectedEC2TableItem ? [selectedEC2TableItem] : []}
+          trackBy="instanceId"
+          variant="embedded"
+          filter={
+            <PropertyFilter
+              query={ec2Query}
+              filteringProperties={ec2FilteringProperties}
+              filteringOptions={makeFilteringOptions(workspace.ec2Instances, ec2Fields)}
+              i18nStrings={propertyFilterStrings}
+              onChange={({ detail }) => {
+                setEC2Query(detail);
+              }}
+              countText={countLabel(filteredEC2Instances.length, "match", "matches")}
+              expandToViewport
+            />
+          }
+          onSelectionChange={({ detail }) => {
+            const instance = detail.selectedItems[0];
+            if (instance) {
+              onSelectEC2Instance(instance.instanceId);
+            }
+          }}
+          empty={<Box color="text-status-inactive">No EC2 instances loaded for this region.</Box>}
+          header={
+            <Header
+              counter={`(${filteredEC2Instances.length}/${workspace.ec2Instances.length})`}
+              actions={
+                <SpaceBetween
+                  direction="horizontal"
+                  size="xs"
+                >
+                  <Button
+                    disabled={!ec2CanStart}
+                    onClick={() => {
+                      if (selectedEC2Instance) {
+                        onInvokeEC2Action("start", selectedEC2Instance.instanceId);
+                      }
+                    }}
+                  >
+                    Start
+                  </Button>
+                  <Button
+                    disabled={!ec2CanStop}
+                    onClick={() => {
+                      if (selectedEC2Instance) {
+                        onInvokeEC2Action("stop", selectedEC2Instance.instanceId);
+                      }
+                    }}
+                  >
+                    Stop
+                  </Button>
+                  <Button
+                    disabled={!ec2CanReboot}
+                    onClick={() => {
+                      if (selectedEC2Instance) {
+                        onInvokeEC2Action("reboot", selectedEC2Instance.instanceId);
+                      }
+                    }}
+                  >
+                    Reboot
+                  </Button>
+                </SpaceBetween>
+              }
+            >
+              Instance Inventory
+            </Header>
+          }
+        />
+        <Box color="text-body-secondary">{ec2ActionStatus}</Box>
+      </Container>
+
+      <div className="setup-grid">
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description={selectedEC2Instance?.instanceId || "Select an instance for details."}
+            >
+              Instance Detail
+            </Header>
+          }
+        >
+          {selectedEC2Instance
+            ? renderDetailFields(
+                [
+                  { label: "Name", value: selectedEC2Instance.name || "Unnamed" },
+                  { label: "State", value: selectedEC2Instance.state || "Unknown" },
+                  { label: "Instance Type", value: selectedEC2Instance.instanceType || "Unknown" },
+                  { label: "Availability Zone", value: selectedEC2Instance.availabilityZone || "Unknown" },
+                  { label: "Private IP", value: selectedEC2Instance.privateIp || "Unavailable" },
+                  { label: "Public IP", value: selectedEC2Instance.publicIp || "Unavailable" },
+                ],
+                "No instance details are available.",
+              )
+            : <Box color="text-status-inactive">No EC2 instance selected.</Box>}
+        </Container>
+
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description="Generated locally from the selected region and instance. No snippet is stored."
+            >
+              Copy Actions
+            </Header>
+          }
+        >
+          {ec2CopySnippets.length === 0 ? (
+            <Box color="text-status-inactive">Select an instance to generate copy actions.</Box>
+          ) : (
+            <SpaceBetween size="s">
+              {ec2CopySnippets.map((snippet) => (
+                <div
+                  key={snippet.label}
+                  className="snippet-card"
+                >
+                  <div className="snippet-header">
+                    <Box variant="awsui-key-label">{snippet.label}</Box>
+                    <Button
+                      variant="link"
+                      onClick={() => {
+                        copyToClipboard(snippet.value);
+                      }}
+                    >
+                      Copy
+                    </Button>
+                  </div>
+                  <pre>{snippet.value}</pre>
+                </div>
+              ))}
+            </SpaceBetween>
+          )}
+        </Container>
+      </div>
+    </SpaceBetween>
+  );
+
   return (
     <SpaceBetween
       size="l"
@@ -622,7 +990,13 @@ export default function WorkspaceView({
                   label: tab.label,
                   content: s3Tab,
                 }
-            : makeWorkspaceTab(tab),
+              : tab.tabId === "ec2"
+                ? {
+                    id: tab.tabId,
+                    label: tab.label,
+                    content: ec2Tab,
+                  }
+                : makeWorkspaceTab(tab),
         )}
       />
     </SpaceBetween>

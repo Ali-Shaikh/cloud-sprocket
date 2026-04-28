@@ -78,6 +78,7 @@ const emptyWorkspace: WorkspaceSnapshot = {
   s3Objects: [],
   s3ObjectMetadata: [],
   s3ExportSnippets: [],
+  ec2Regions: [],
   ec2Instances: [],
 };
 
@@ -94,6 +95,7 @@ export default function App() {
   const [s3SignedUrlResult, setS3SignedUrlResult] = useState<AwsS3PresignResult>();
   const [s3UrlInspection, setS3UrlInspection] = useState<UrlInspection>();
   const [s3UrlValidation, setS3UrlValidation] = useState<UrlValidationResult>();
+  const [ec2ActionStatus, setEC2ActionStatus] = useState("Select an EC2 instance to run lifecycle actions.");
   const [loading, setLoading] = useState(true);
   const [showSensitiveValues, setShowSensitiveValues] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
@@ -212,6 +214,12 @@ export default function App() {
     if (job.label === "S3 URL Validation") {
       if (isUrlValidationResult(job.result)) {
         setS3UrlValidation(job.result);
+      }
+    }
+    if (job.label === "EC2 Action") {
+      setEC2ActionStatus(job.message);
+      if (job.status === "completed") {
+        void loadWorkspace(session);
       }
     }
     startTransition(() => {
@@ -396,6 +404,35 @@ export default function App() {
       }}
       onValidateS3Url={(url) => {
         void backendRequest<JobStatus>("aws.s3.validateUrl", { url });
+      }}
+      ec2ActionStatus={ec2ActionStatus}
+      onSelectEC2Region={(region) => {
+        setEC2ActionStatus("Select an instance to run lifecycle actions.");
+        void backendRequest<WorkspaceSnapshot>("aws.ec2.selectRegion", { region }).then(
+          (workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(workspaceResult);
+            });
+          },
+        );
+      }}
+      onSelectEC2Instance={(instanceId) => {
+        setEC2ActionStatus("Instance selected. Choose a lifecycle action.");
+        void backendRequest<WorkspaceSnapshot>("aws.ec2.selectInstance", { instanceId }).then(
+          (workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(workspaceResult);
+            });
+          },
+        );
+      }}
+      onInvokeEC2Action={(action, instanceId) => {
+        setEC2ActionStatus(`Queueing EC2 ${action} for ${instanceId}.`);
+        void backendRequest<JobStatus>("aws.ec2.invokeAction", { action, instanceId }).then(
+          (job) => {
+            setEC2ActionStatus(job.message);
+          },
+        );
       }}
     />
   ) : (

@@ -139,6 +139,26 @@ vi.mock("./lib/backend", () => ({
           status: "queued",
           message: "Validating the pasted URL.",
         };
+      case "aws.ec2.selectRegion":
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedEc2Region: String(params?.region ?? ""),
+          selectedEc2InstanceId: "i-0123456789abcdef0",
+        };
+        return workspaceFixture;
+      case "aws.ec2.selectInstance":
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedEc2InstanceId: String(params?.instanceId ?? ""),
+        };
+        return workspaceFixture;
+      case "aws.ec2.invokeAction":
+        return {
+          jobId: "job-ec2",
+          label: "EC2 Action",
+          status: "queued",
+          message: `Queueing EC2 ${params?.action} for ${params?.instanceId}.`,
+        };
       default:
         return sessionFixture;
     }
@@ -194,7 +214,20 @@ describe("App", () => {
           value: "s3://cloudsprocket-artifacts/reports/weekly-summary.json",
         },
       ],
-      ec2Instances: [{ instanceId: "i-0123456789abcdef0" }],
+      selectedEc2Region: "us-east-1",
+      selectedEc2InstanceId: "i-0123456789abcdef0",
+      ec2StatusMessage: "Loaded 1 EC2 instances from us-east-1.",
+      ec2Regions: ["us-east-1"],
+      ec2Instances: [
+        {
+          instanceId: "i-0123456789abcdef0",
+          name: "sandbox-api-1",
+          state: "running",
+          instanceType: "t3.medium",
+          availabilityZone: "us-east-1a",
+          privateIp: "10.0.14.22",
+        },
+      ],
     };
   });
 
@@ -294,5 +327,43 @@ describe("App", () => {
     expect(await screen.findByText("analytics")).toBeInTheDocument();
     expect(await screen.findByText("Copy Snippets")).toBeInTheDocument();
     expect(await screen.findByText(/s3:\/\/cloudsprocket-artifacts\/logs\/filtered-object\.json/i)).toBeInTheDocument();
+  });
+
+  it("renders EC2 inventory and queues lifecycle actions", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+        {
+          tabId: "ec2",
+          label: "EC2",
+          summary: "EC2 summary",
+          detail: "EC2 panel",
+        },
+      ],
+    };
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByText("EC2"));
+
+    expect(await screen.findByText("EC2 Fleet")).toBeInTheDocument();
+    expect(await screen.findByText("Instance Inventory")).toBeInTheDocument();
+    expect((await screen.findAllByText("sandbox-api-1")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("i-0123456789abcdef0")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("AWS CLI stop command")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+
+    expect(await screen.findByText(/Queueing EC2 stop for i-0123456789abcdef0/i)).toBeInTheDocument();
   });
 });

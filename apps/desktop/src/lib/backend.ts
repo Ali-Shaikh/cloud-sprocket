@@ -133,6 +133,8 @@ const mockWorkspaceInstances = [
   },
 ];
 
+const mockWorkspaceRegions = ["us-east-1", "eu-west-2"];
+
 const mockProfiles: ProfileSummary[] = [
   {
     providerId: "aws",
@@ -235,6 +237,8 @@ const mockState: MockState = {
     selectedS3BucketName: "cloudsprocket-artifacts",
     selectedS3ObjectKey: "reports/weekly-summary.json",
     s3PrefixFilter: "",
+    selectedEc2Region: "us-east-1",
+    selectedEc2InstanceId: "i-0123456789abcdef0",
     isLocked: false,
     availableAuthMethods: mockProfiles[0].authMethods,
     workspaceTabs: [],
@@ -377,6 +381,14 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       ? mockWorkspaceObjectMetadata[selectedS3ObjectKey] ?? []
       : [],
     s3ExportSnippets: mockExportSnippets(selectedS3BucketName, selectedS3ObjectKey),
+    selectedEc2Region: isAWSWorkspace ? mockState.session.selectedEc2Region ?? mockWorkspaceRegions[0] : undefined,
+    selectedEc2InstanceId: isAWSWorkspace
+      ? mockState.session.selectedEc2InstanceId ?? mockWorkspaceInstances[0]?.instanceId
+      : undefined,
+    ec2StatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceInstances.length} EC2 instances from ${mockState.session.selectedEc2Region ?? mockWorkspaceRegions[0]}.`
+      : "EC2 inventory is only available for locked AWS workspaces.",
+    ec2Regions: isAWSWorkspace ? mockWorkspaceRegions : [],
     ec2Instances: isAWSWorkspace ? mockWorkspaceInstances : [],
   };
 }
@@ -506,6 +518,39 @@ function handleMockRequest<T>(
               { label: "Content Type", value: "application/octet-stream" },
             ],
           },
+        });
+      }, 30);
+      return Promise.resolve(job as T);
+    }
+    case "aws.ec2.selectRegion":
+      mockState.session.selectedEc2Region = String(params.region ?? "");
+      mockState.session.selectedEc2InstanceId = undefined;
+      appendLog("info", `Selected EC2 region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.ec2.selectInstance":
+      mockState.session.selectedEc2InstanceId = String(params.instanceId ?? "");
+      appendLog("info", `Selected EC2 instance ${params.instanceId}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.ec2.invokeAction": {
+      const action = String(params.action ?? "");
+      const instanceId =
+        String(params.instanceId ?? "") ||
+        mockState.session.selectedEc2InstanceId ||
+        mockWorkspaceInstances[0]?.instanceId;
+      const region = mockState.session.selectedEc2Region ?? mockWorkspaceRegions[0];
+      const job: JobStatus = {
+        jobId: `job-${Date.now()}`,
+        label: "EC2 Action",
+        status: "queued",
+        message: `Queueing EC2 ${action} for ${instanceId} in ${region}.`,
+      };
+      setTimeout(() => {
+        appendLog("success", `Requested EC2 ${action} for ${instanceId} in ${region}.`);
+        emitMockEvent("job.updated", {
+          ...job,
+          status: "completed",
+          message: `Requested EC2 ${action} for ${instanceId}.`,
+          completedAt: new Date().toISOString(),
         });
       }, 30);
       return Promise.resolve(job as T);
