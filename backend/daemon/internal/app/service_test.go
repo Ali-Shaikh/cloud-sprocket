@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,6 +27,7 @@ type stubEC2Inventory struct {
 	regions        []string
 	instances      map[string][]models.AwsEc2Instance
 	actionRequests []string
+	actionErrors   map[string]error
 }
 
 func (s stubS3Inventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.AwsS3Bucket, error) {
@@ -84,17 +86,17 @@ func (s stubEC2Inventory) ListInstances(_ context.Context, _ models.ProfileSumma
 
 func (s *stubEC2Inventory) StartInstance(_ context.Context, _ models.ProfileSummary, region string, instanceID string) error {
 	s.actionRequests = append(s.actionRequests, "start|"+region+"|"+instanceID)
-	return nil
+	return s.actionErrors["start"]
 }
 
 func (s *stubEC2Inventory) StopInstance(_ context.Context, _ models.ProfileSummary, region string, instanceID string) error {
 	s.actionRequests = append(s.actionRequests, "stop|"+region+"|"+instanceID)
-	return nil
+	return s.actionErrors["stop"]
 }
 
 func (s *stubEC2Inventory) RebootInstance(_ context.Context, _ models.ProfileSummary, region string, instanceID string) error {
 	s.actionRequests = append(s.actionRequests, "reboot|"+region+"|"+instanceID)
-	return nil
+	return s.actionErrors["reboot"]
 }
 
 type recordingNotifier struct {
@@ -302,6 +304,9 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	if ec2RegionWorkspace.SelectedEC2Region != "eu-west-2" {
 		t.Fatalf("expected selected EC2 region to be persisted, got %q", ec2RegionWorkspace.SelectedEC2Region)
 	}
+	if len(ec2RegionWorkspace.EC2Instances) != 0 || !strings.Contains(ec2RegionWorkspace.EC2StatusMessage, "No EC2 instances") {
+		t.Fatalf("expected empty EC2 state for eu-west-2, got instances=%+v message=%q", ec2RegionWorkspace.EC2Instances, ec2RegionWorkspace.EC2StatusMessage)
+	}
 
 	if _, err := service.Handle(ctx, "aws.ec2.selectRegion", []byte(`{"region":"us-east-1"}`), nil); err != nil {
 		t.Fatalf("expected aws.ec2.selectRegion reset to succeed, got %v", err)
@@ -328,6 +333,75 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	}
 	if len(logs.([]models.ActivityLogEntry)) == 0 {
 		t.Fatalf("expected lock action to append a log entry")
+	}
+}
+
+func TestServiceReportsFailedEC2ActionJob(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+
+	mustWriteFile(t, filepath.Join(home, ".aws", "config"), "[profile sandbox]\nregion = us-east-1\n")
+	mustWriteFile(t, filepath.Join(home, ".aws", "credentials"), "[sandbox]\naws_access_key_id = AKIAEXAMPLE\n")
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("expected runtime dirs to be created, got %v", err)
+	}
+
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("expected sqlite store to open, got %v", err)
+	}
+	defer dataStore.Close()
+
+	ec2Inventory := &stubEC2Inventory{
+		regions: []string{"us-east-1"},
+		instances: map[string][]models.AwsEc2Instance{
+			"us-east-1": {
+				{InstanceID: "i-0123456789abcdef0", Name: "sandbox-app", State: "running", InstanceType: "t3.small"},
+			},
+		},
+		actionErrors: map[string]error{
+			"stop": errors.New("simulated stop failure"),
+		},
+	}
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(command string) (string, error) {
+			if command == "aws" {
+				return "/usr/bin/aws", nil
+			}
+			return "", nil
+		}),
+		&stubS3Inventory{},
+		ec2Inventory,
+	)
+	service.now = func() time.Time { return time.Date(2026, 4, 26, 10, 0, 0, 0, time.UTC) }
+
+	ctx := context.Background()
+	if _, err := service.Handle(ctx, "session.lock", nil, nil); err != nil {
+		t.Fatalf("expected session.lock to succeed, got %v", err)
+	}
+	if _, err := service.Handle(ctx, "aws.ec2.selectInstance", []byte(`{"instanceId":"i-0123456789abcdef0"}`), nil); err != nil {
+		t.Fatalf("expected aws.ec2.selectInstance to succeed, got %v", err)
+	}
+
+	notifier := recordingNotifier{events: make(chan models.JobStatus, 4)}
+	result, err := service.Handle(ctx, "aws.ec2.invokeAction", []byte(`{"action":"stop"}`), notifier)
+	if err != nil {
+		t.Fatalf("expected aws.ec2.invokeAction to queue a job, got %v", err)
+	}
+	if result.(models.JobStatus).Status != "queued" {
+		t.Fatalf("expected queued EC2 job, got %+v", result)
+	}
+
+	failedJob := waitForJobStatus(t, notifier.events, "failed")
+	if !strings.Contains(failedJob.Message, "simulated stop failure") {
+		t.Fatalf("expected failed job to include adapter error, got %+v", failedJob)
+	}
+	if len(ec2Inventory.actionRequests) != 1 || ec2Inventory.actionRequests[0] != "stop|us-east-1|i-0123456789abcdef0" {
+		t.Fatalf("expected stop request to hit EC2 inventory, got %+v", ec2Inventory.actionRequests)
 	}
 }
 

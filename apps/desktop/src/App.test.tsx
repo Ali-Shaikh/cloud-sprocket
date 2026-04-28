@@ -366,4 +366,47 @@ describe("App", () => {
 
     expect(await screen.findByText(/Queueing EC2 stop for i-0123456789abcdef0/i)).toBeInTheDocument();
   });
+
+  it("renders a safe EC2 empty state", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+        {
+          tabId: "ec2",
+          label: "EC2",
+          summary: "EC2 summary",
+          detail: "EC2 panel",
+        },
+      ],
+    };
+    workspaceFixture = {
+      ...workspaceFixture,
+      selectedEc2Region: undefined,
+      selectedEc2InstanceId: undefined,
+      ec2StatusMessage: "No EC2 region is available for this locked AWS session.",
+      ec2Regions: [],
+      ec2Instances: [],
+    };
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByText("EC2"));
+
+    expect(await screen.findByText("No EC2 region is available for this locked AWS session.")).toBeInTheDocument();
+    expect(await screen.findByText("No EC2 instances loaded for this region.")).toBeInTheDocument();
+    expect(await screen.findByText("No EC2 instance selected.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Stop" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reboot" })).toBeDisabled();
+  });
 });
