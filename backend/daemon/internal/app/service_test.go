@@ -405,6 +405,99 @@ func TestServiceReportsFailedEC2ActionJob(t *testing.T) {
 	}
 }
 
+func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+
+	mustWriteFile(t, filepath.Join(home, ".aws", "config"), "[profile sandbox]\nregion = eu-west-2\n")
+	mustWriteFile(t, filepath.Join(home, ".aws", "credentials"), "[sandbox]\naws_access_key_id = AKIAEXAMPLE\n")
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("expected runtime dirs to be created, got %v", err)
+	}
+
+	firstStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("expected sqlite store to open, got %v", err)
+	}
+
+	s3Inventory := &stubS3Inventory{
+		buckets: []models.AwsS3Bucket{{Name: "cloudsprocket-artifacts"}},
+		objects: map[string][]models.AwsS3Object{
+			"cloudsprocket-artifacts": {
+				{Key: "reports/daily.json", Size: "12 MB"},
+			},
+		},
+		metadata: map[string][]models.DetailField{
+			"cloudsprocket-artifacts|reports/daily.json": {
+				{Label: "Bucket", Value: "cloudsprocket-artifacts"},
+				{Label: "Key", Value: "reports/daily.json"},
+			},
+		},
+	}
+	ec2Inventory := &stubEC2Inventory{
+		regions: []string{"eu-west-2"},
+		instances: map[string][]models.AwsEc2Instance{
+			"eu-west-2": {
+				{InstanceID: "i-0123456789abcdef0", Name: "restored-app", State: "running", InstanceType: "t3.small"},
+			},
+		},
+	}
+	discoveryService := discovery.New(settings, func(command string) (string, error) {
+		if command == "aws" {
+			return "/usr/bin/aws", nil
+		}
+		return "", nil
+	})
+	firstService := New(settings, firstStore, discoveryService, s3Inventory, ec2Inventory)
+	ctx := context.Background()
+
+	if _, err := firstService.Handle(ctx, "session.lock", nil, nil); err != nil {
+		t.Fatalf("expected session.lock to succeed, got %v", err)
+	}
+	if _, err := firstService.Handle(ctx, "aws.s3.selectBucket", []byte(`{"bucketName":"cloudsprocket-artifacts"}`), nil); err != nil {
+		t.Fatalf("expected aws.s3.selectBucket to succeed, got %v", err)
+	}
+	if _, err := firstService.Handle(ctx, "aws.s3.setPrefixFilter", []byte(`{"prefix":"reports/"}`), nil); err != nil {
+		t.Fatalf("expected aws.s3.setPrefixFilter to succeed, got %v", err)
+	}
+	if _, err := firstService.Handle(ctx, "aws.ec2.selectRegion", []byte(`{"region":"eu-west-2"}`), nil); err != nil {
+		t.Fatalf("expected aws.ec2.selectRegion to succeed, got %v", err)
+	}
+	if err := firstStore.Close(); err != nil {
+		t.Fatalf("expected first store to close, got %v", err)
+	}
+
+	secondStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("expected sqlite store to reopen, got %v", err)
+	}
+	defer secondStore.Close()
+	secondService := New(settings, secondStore, discoveryService, s3Inventory, ec2Inventory)
+
+	sessionResult, err := secondService.Handle(ctx, "session.get", nil, nil)
+	if err != nil {
+		t.Fatalf("expected session.get to succeed after reopen, got %v", err)
+	}
+	session := sessionResult.(models.SessionSnapshot)
+	if !session.IsLocked || session.LockedProfileID != "sandbox" || session.S3PrefixFilter != "reports/" || session.SelectedEC2Region != "eu-west-2" {
+		t.Fatalf("expected locked session selections to be restored, got %+v", session)
+	}
+
+	workspaceResult, err := secondService.Handle(ctx, "workspace.get", nil, nil)
+	if err != nil {
+		t.Fatalf("expected workspace.get to succeed after reopen, got %v", err)
+	}
+	workspace := workspaceResult.(models.WorkspaceSnapshot)
+	if workspace.SelectedS3BucketName != "cloudsprocket-artifacts" || workspace.S3PrefixFilter != "reports/" {
+		t.Fatalf("expected restored S3 workspace state, got bucket=%q prefix=%q", workspace.SelectedS3BucketName, workspace.S3PrefixFilter)
+	}
+	if workspace.SelectedEC2Region != "eu-west-2" || len(workspace.EC2Instances) != 1 {
+		t.Fatalf("expected restored EC2 workspace state, got region=%q instances=%+v", workspace.SelectedEC2Region, workspace.EC2Instances)
+	}
+}
+
 func waitForJobStatus(t *testing.T, events <-chan models.JobStatus, status string) models.JobStatus {
 	t.Helper()
 	timeout := time.After(2 * time.Second)

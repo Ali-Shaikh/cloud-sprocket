@@ -36,6 +36,7 @@ import {
   makeWorkspaceTab,
   makeFilteringOptions,
   propertyFilterStrings,
+  renderLogEntries,
   renderProfileDetailPanel,
   renderRuntimeSettingsPanel,
   statusType,
@@ -44,6 +45,7 @@ import {
 type Props = {
   session: SessionSnapshot;
   workspace: WorkspaceSnapshot;
+  logs: ActivityLogEntry[];
   latestLog?: ActivityLogEntry;
   splitPanelOpen: boolean;
   showSensitiveValues: boolean;
@@ -51,6 +53,7 @@ type Props = {
   onRefreshDiscovery: () => void;
   onUnlockSession: () => void;
   onToggleSensitiveValues: () => void;
+  onInvokeWorkspaceAction: (actionId: "refresh") => void;
   onSelectS3Bucket: (bucketName: string) => void;
   onSelectS3Object: (objectKey: string) => void;
   onSetS3PrefixFilter: (prefix: string) => void;
@@ -124,6 +127,7 @@ function ec2Command(region: string | undefined, action: string, instanceId: stri
 export default function WorkspaceView({
   session,
   workspace,
+  logs,
   latestLog,
   splitPanelOpen,
   showSensitiveValues,
@@ -131,6 +135,7 @@ export default function WorkspaceView({
   onRefreshDiscovery,
   onUnlockSession,
   onToggleSensitiveValues,
+  onInvokeWorkspaceAction,
   onSelectS3Bucket,
   onSelectS3Object,
   onSetS3PrefixFilter,
@@ -928,6 +933,69 @@ export default function WorkspaceView({
     </SpaceBetween>
   );
 
+  const actionsTab = (
+    <SpaceBetween
+      size="l"
+      className="page-stack"
+    >
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description="Non-destructive workspace actions exposed by the backend action contract."
+          >
+            Workspace Actions
+          </Header>
+        }
+      >
+        <div className="detail-grid">
+          <div className="detail-card detail-card-strong">
+            <Box variant="awsui-key-label">Refresh Discovery</Box>
+            <Box variant="p">Reload provider, profile, session, and cached workspace state.</Box>
+            <Box color="text-body-secondary">
+              Safe action. It does not modify cloud resources.
+            </Box>
+            <Button
+              iconName="refresh"
+              onClick={() => {
+                onInvokeWorkspaceAction("refresh");
+              }}
+            >
+              Run Refresh
+            </Button>
+          </div>
+          <div className="detail-card">
+            <Box variant="awsui-key-label">S3 Operations</Box>
+            <Box variant="p">Browse, upload, presign, copy snippets, analyse URLs, and validate URLs.</Box>
+            <Box color="text-body-secondary">
+              Upload is the only approved write path in this milestone.
+            </Box>
+          </div>
+          <div className="detail-card">
+            <Box variant="awsui-key-label">EC2 Operations</Box>
+            <Box variant="p">Browse regions and instances, then copy lifecycle commands.</Box>
+            <Box color="text-body-secondary">
+              Live EC2 write actions are intentionally not smoke-tested without explicit disposable targets.
+            </Box>
+          </div>
+        </div>
+      </Container>
+
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description="Most recent backend activity, mirrored from the split panel for auditability."
+          >
+            Recent Activity
+          </Header>
+        }
+      >
+        <div className="log-stream">{renderLogEntries(logs.slice(0, 12))}</div>
+      </Container>
+    </SpaceBetween>
+  );
+
   return (
     <SpaceBetween
       size="l"
@@ -996,6 +1064,12 @@ export default function WorkspaceView({
                     label: tab.label,
                     content: ec2Tab,
                   }
+                : tab.tabId === "actions"
+                  ? {
+                      id: tab.tabId,
+                      label: tab.label,
+                      content: actionsTab,
+                    }
                 : makeWorkspaceTab(tab),
         )}
       />

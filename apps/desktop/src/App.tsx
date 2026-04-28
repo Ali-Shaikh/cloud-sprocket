@@ -331,6 +331,7 @@ export default function App() {
     <WorkspaceView
       session={session}
       workspace={workspace}
+      logs={logs}
       latestLog={latestLog}
       splitPanelOpen={splitPanelOpen}
       showSensitiveValues={showSensitiveValues}
@@ -345,6 +346,9 @@ export default function App() {
       }}
       onToggleSensitiveValues={() => {
         setShowSensitiveValues((current) => !current);
+      }}
+      onInvokeWorkspaceAction={(actionId) => {
+        void backendRequest<JobStatus>("actions.invoke", { actionId });
       }}
       onSelectS3Bucket={(bucketName) => {
         setS3SignedUrlResult(undefined);

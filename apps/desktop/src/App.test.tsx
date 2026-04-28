@@ -182,6 +182,7 @@ describe("App", () => {
         level: "info",
         message: "Initial discovery loaded.",
         timestamp: "2026-04-14T09:00:00Z",
+        details: "Provider discovery completed in test mode.",
       },
     ];
     workspaceFixture = {
@@ -408,5 +409,41 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Stop" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Reboot" })).toBeDisabled();
+  });
+
+  it("renders workspace actions and recent activity details", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+        {
+          tabId: "actions",
+          label: "Actions",
+          summary: "Actions summary",
+          detail: "Actions panel",
+        },
+      ],
+    };
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByText("Actions"));
+
+    expect(await screen.findByText("Workspace Actions")).toBeInTheDocument();
+    expect(await screen.findByText("Refresh Discovery")).toBeInTheDocument();
+    expect((await screen.findAllByText("Provider discovery completed in test mode.")).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Run Refresh" }));
+
+    expect(await screen.findByText("Refresh Discovery")).toBeInTheDocument();
   });
 });

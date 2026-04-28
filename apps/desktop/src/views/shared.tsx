@@ -327,6 +327,14 @@ export function renderLogEntries(entries: ActivityLogEntry[]): ReactNode {
         <Badge color={badgeColour(entry.level)}>{entry.level}</Badge>
       </div>
       <div>{entry.message}</div>
+      {entry.details ? (
+        <Box
+          variant="small"
+          color="text-body-secondary"
+        >
+          {entry.details}
+        </Box>
+      ) : null}
     </div>
   ));
 }
