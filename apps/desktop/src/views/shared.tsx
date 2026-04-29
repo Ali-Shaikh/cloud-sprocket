@@ -13,6 +13,10 @@ import type {
   TabsProps,
 } from "@cloudscape-design/components";
 import type { ReactNode } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 import type {
   ActivityLogEntry,
   AppSettingsSnapshot,
@@ -100,6 +104,22 @@ export function defaultQuery(): PropertyFilterProps.Query {
     operation: "and",
     tokens: [],
   };
+}
+
+export function useDebouncedValue<T>(value: T, delayMs = 180): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedValue(value);
+    }, delayMs);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [delayMs, value]);
+
+  return debouncedValue;
 }
 
 function normaliseValue(

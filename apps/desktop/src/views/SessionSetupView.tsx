@@ -22,6 +22,10 @@ import type {
 } from "../types/backend";
 import type { CollectionField, TablePreferences } from "./shared";
 import {
+  useDeferredValue,
+  useMemo,
+} from "react";
+import {
   badgeColour,
   countLabel,
   filterCollection,
@@ -30,6 +34,7 @@ import {
   renderProfileDetailPanel,
   renderRuntimeSettingsPanel,
   statusType,
+  useDebouncedValue,
   visibleColumnIds,
 } from "./shared";
 
@@ -90,19 +95,32 @@ export default function SessionSetupView({
   onSelectAuthMethod,
   onLockSession,
 }: Props) {
-  const providerFields: CollectionField<ProviderSummary>[] = [
-    { key: "provider", label: "Provider", getValue: (provider) => provider.label },
-    { key: "state", label: "State", getValue: (provider) => provider.state },
-    { key: "profiles", label: "Profiles", getValue: (provider) => provider.profileCount },
-    { key: "summary", label: "Summary", getValue: (provider) => provider.summary },
-    { key: "location", label: "Location", getValue: (provider) => provider.locations },
-  ];
-  const profileFields: CollectionField<ProfileSummary>[] = [
-    { key: "name", label: "Profile", getValue: (profile) => profile.displayName },
-    { key: "identifier", label: "Identifier", getValue: (profile) => profile.profileId },
-    { key: "summary", label: "Summary", getValue: (profile) => profile.summary },
-    { key: "source", label: "Source Path", getValue: (profile) => profile.sourcePaths },
-  ];
+  const debouncedProviderQuery = useDebouncedValue(providerQuery);
+  const debouncedProfileQuery = useDebouncedValue(profileQuery);
+  const deferredProviderQuery = useDeferredValue(debouncedProviderQuery);
+  const deferredProfileQuery = useDeferredValue(debouncedProfileQuery);
+  const providerResultsArePending = providerQuery !== debouncedProviderQuery;
+  const profileResultsArePending = profileQuery !== debouncedProfileQuery;
+
+  const providerFields: CollectionField<ProviderSummary>[] = useMemo(
+    () => [
+      { key: "provider", label: "Provider", getValue: (provider) => provider.label },
+      { key: "state", label: "State", getValue: (provider) => provider.state },
+      { key: "profiles", label: "Profiles", getValue: (provider) => provider.profileCount },
+      { key: "summary", label: "Summary", getValue: (provider) => provider.summary },
+      { key: "location", label: "Location", getValue: (provider) => provider.locations },
+    ],
+    [],
+  );
+  const profileFields: CollectionField<ProfileSummary>[] = useMemo(
+    () => [
+      { key: "name", label: "Profile", getValue: (profile) => profile.displayName },
+      { key: "identifier", label: "Identifier", getValue: (profile) => profile.profileId },
+      { key: "summary", label: "Summary", getValue: (profile) => profile.summary },
+      { key: "source", label: "Source Path", getValue: (profile) => profile.sourcePaths },
+    ],
+    [],
+  );
 
   const providerColumns: TableProps.ColumnDefinition<ProviderSummary>[] = [
     {
@@ -147,24 +165,36 @@ export default function SessionSetupView({
     },
   ];
 
-  const filteredProviders = filterCollection(providers, providerQuery, providerFields);
-  const filteredProfiles = filterCollection(profiles, profileQuery, profileFields);
+  const filteredProviders = useMemo(
+    () => filterCollection(providers, deferredProviderQuery, providerFields),
+    [deferredProviderQuery, providerFields, providers],
+  );
+  const filteredProfiles = useMemo(
+    () => filterCollection(profiles, deferredProfileQuery, profileFields),
+    [deferredProfileQuery, profileFields, profiles],
+  );
   const providerFilteringProperties: PropertyFilterProps.FilteringProperty[] =
-    providerFields.map((field) => ({
+    useMemo(() => providerFields.map((field) => ({
       key: field.key,
       propertyLabel: field.label,
       groupValuesLabel: `${field.label} values`,
       operators: [":", "!:", "=", "!="],
-    }));
+    })), [providerFields]);
   const profileFilteringProperties: PropertyFilterProps.FilteringProperty[] =
-    profileFields.map((field) => ({
+    useMemo(() => profileFields.map((field) => ({
       key: field.key,
       propertyLabel: field.label,
       groupValuesLabel: `${field.label} values`,
       operators: [":", "!:", "=", "!="],
-    }));
-  const providerFilteringOptions = makeFilteringOptions(providers, providerFields);
-  const profileFilteringOptions = makeFilteringOptions(profiles, profileFields);
+    })), [profileFields]);
+  const providerFilteringOptions = useMemo(
+    () => makeFilteringOptions(providers, providerFields),
+    [providerFields, providers],
+  );
+  const profileFilteringOptions = useMemo(
+    () => makeFilteringOptions(profiles, profileFields),
+    [profileFields, profiles],
+  );
   const visibleProviderIds = visibleColumnIds(providerPreferences);
   const visibleProfileIds = visibleColumnIds(profilePreferences);
   const providerTableColumns = providerColumns.filter((column) =>
@@ -239,7 +269,9 @@ export default function SessionSetupView({
       }}
       countText={
         providerQuery.tokens.length
-          ? countLabel(filteredProviders.length, "match", "matches")
+          ? providerResultsArePending
+            ? "Updating matches"
+            : countLabel(filteredProviders.length, "match", "matches")
           : undefined
       }
       filteringPlaceholder="Filter providers"
@@ -258,7 +290,9 @@ export default function SessionSetupView({
       }}
       countText={
         profileQuery.tokens.length
-          ? countLabel(filteredProfiles.length, "match", "matches")
+          ? profileResultsArePending
+            ? "Updating matches"
+            : countLabel(filteredProfiles.length, "match", "matches")
           : undefined
       }
       filteringPlaceholder="Filter profiles"

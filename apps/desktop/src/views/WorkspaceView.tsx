@@ -14,7 +14,9 @@ import {
 } from "@cloudscape-design/components";
 import type { PropertyFilterProps, TableProps } from "@cloudscape-design/components";
 import {
+  useDeferredValue,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import type {
@@ -40,6 +42,7 @@ import {
   renderProfileDetailPanel,
   renderRuntimeSettingsPanel,
   statusType,
+  useDebouncedValue,
 } from "./shared";
 
 type Props = {
@@ -157,13 +160,28 @@ export default function WorkspaceView({
   const [uploadObjectKey, setUploadObjectKey] = useState("");
   const [signedUrlDurationSeconds, setSignedUrlDurationSeconds] = useState("3600");
   const [urlTesterValue, setUrlTesterValue] = useState("");
+  const [s3PrefixDraft, setS3PrefixDraft] = useState(workspace.s3PrefixFilter || "");
+  const debouncedS3PrefixDraft = useDebouncedValue(s3PrefixDraft, 350);
   const [ec2Query, setEC2Query] = useState<PropertyFilterProps.Query>(defaultQuery);
+  const debouncedEC2Query = useDebouncedValue(ec2Query);
+  const deferredEC2Query = useDeferredValue(debouncedEC2Query);
+  const ec2ResultsArePending = ec2Query !== debouncedEC2Query;
 
   useEffect(() => {
     if (!uploadObjectKey && uploadSourcePath) {
       setUploadObjectKey(defaultUploadKey(uploadSourcePath, workspace.s3PrefixFilter));
     }
   }, [uploadObjectKey, uploadSourcePath, workspace.s3PrefixFilter]);
+
+  useEffect(() => {
+    setS3PrefixDraft(workspace.s3PrefixFilter || "");
+  }, [workspace.s3PrefixFilter, workspace.selectedS3BucketName]);
+
+  useEffect(() => {
+    if (debouncedS3PrefixDraft !== (workspace.s3PrefixFilter || "")) {
+      onSetS3PrefixFilter(debouncedS3PrefixDraft);
+    }
+  }, [debouncedS3PrefixDraft, onSetS3PrefixFilter, workspace.s3PrefixFilter]);
 
   const workspaceSummaryPanel = (
     <Container
@@ -371,12 +389,15 @@ export default function WorkspaceView({
         >
           <SpaceBetween size="m">
             <Input
-              value={workspace.s3PrefixFilter || ""}
+              value={s3PrefixDraft}
               placeholder="Filter by prefix, for example reports/"
               onChange={({ detail }) => {
-                onSetS3PrefixFilter(detail.value);
+                setS3PrefixDraft(detail.value);
               }}
             />
+            {s3PrefixDraft !== (workspace.s3PrefixFilter || "") ? (
+              <Box color="text-body-secondary">Updating object listing after typing pauses.</Box>
+            ) : null}
             <Table
               items={workspace.s3Objects}
               columnDefinitions={s3ObjectColumns}
@@ -600,42 +621,48 @@ export default function WorkspaceView({
     </SpaceBetween>
   );
 
-  const ec2Fields: CollectionField<AwsEc2Instance>[] = [
-    {
-      key: "instanceId",
-      label: "Instance ID",
-      getValue: (instance) => instance.instanceId,
-    },
-    {
-      key: "name",
-      label: "Name",
-      getValue: (instance) => instance.name,
-    },
-    {
-      key: "state",
-      label: "State",
-      getValue: (instance) => instance.state,
-    },
-    {
-      key: "type",
-      label: "Type",
-      getValue: (instance) => instance.instanceType,
-    },
-    {
-      key: "zone",
-      label: "Availability Zone",
-      getValue: (instance) => instance.availabilityZone,
-    },
-    {
-      key: "ip",
-      label: "IP Address",
-      getValue: (instance) =>
-        [instance.publicIp, instance.privateIp].filter(
-          (value): value is string => Boolean(value),
-        ),
-    },
-  ];
-  const filteredEC2Instances = filterCollection(workspace.ec2Instances, ec2Query, ec2Fields);
+  const ec2Fields: CollectionField<AwsEc2Instance>[] = useMemo(
+    () => [
+      {
+        key: "instanceId",
+        label: "Instance ID",
+        getValue: (instance) => instance.instanceId,
+      },
+      {
+        key: "name",
+        label: "Name",
+        getValue: (instance) => instance.name,
+      },
+      {
+        key: "state",
+        label: "State",
+        getValue: (instance) => instance.state,
+      },
+      {
+        key: "type",
+        label: "Type",
+        getValue: (instance) => instance.instanceType,
+      },
+      {
+        key: "zone",
+        label: "Availability Zone",
+        getValue: (instance) => instance.availabilityZone,
+      },
+      {
+        key: "ip",
+        label: "IP Address",
+        getValue: (instance) =>
+          [instance.publicIp, instance.privateIp].filter(
+            (value): value is string => Boolean(value),
+          ),
+      },
+    ],
+    [],
+  );
+  const filteredEC2Instances = useMemo(
+    () => filterCollection(workspace.ec2Instances, deferredEC2Query, ec2Fields),
+    [deferredEC2Query, ec2Fields, workspace.ec2Instances],
+  );
   const selectedEC2Instance =
     workspace.ec2Instances.find(
       (instance) => instance.instanceId === workspace.selectedEc2InstanceId,
@@ -694,13 +721,19 @@ export default function WorkspaceView({
       cell: (instance) => instance.publicIp || "Unavailable",
     },
   ];
-  const ec2FilteringProperties: PropertyFilterProps.FilteringProperty[] = ec2Fields.map(
-    (field) => ({
-      key: field.key,
-      propertyLabel: field.label,
-      groupValuesLabel: `${field.label} values`,
-      operators: [":", "!:", "=", "!="],
-    }),
+  const ec2FilteringProperties: PropertyFilterProps.FilteringProperty[] = useMemo(
+    () =>
+      ec2Fields.map((field) => ({
+        key: field.key,
+        propertyLabel: field.label,
+        groupValuesLabel: `${field.label} values`,
+        operators: [":", "!:", "=", "!="],
+      })),
+    [ec2Fields],
+  );
+  const ec2FilteringOptions = useMemo(
+    () => makeFilteringOptions(workspace.ec2Instances, ec2Fields),
+    [ec2Fields, workspace.ec2Instances],
   );
   const ec2CopySnippets = selectedEC2Instance
     ? [
@@ -803,12 +836,16 @@ export default function WorkspaceView({
             <PropertyFilter
               query={ec2Query}
               filteringProperties={ec2FilteringProperties}
-              filteringOptions={makeFilteringOptions(workspace.ec2Instances, ec2Fields)}
+              filteringOptions={ec2FilteringOptions}
               i18nStrings={propertyFilterStrings}
               onChange={({ detail }) => {
                 setEC2Query(detail);
               }}
-              countText={countLabel(filteredEC2Instances.length, "match", "matches")}
+              countText={
+                ec2ResultsArePending
+                  ? "Updating matches"
+                  : countLabel(filteredEC2Instances.length, "match", "matches")
+              }
               expandToViewport
             />
           }
