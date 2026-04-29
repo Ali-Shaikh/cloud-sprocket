@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import type {
@@ -44,6 +44,7 @@ const profileFixtures: ProfileSummary[] = [
 let sessionFixture: SessionSnapshot;
 let logFixtures: ActivityLogEntry[];
 let workspaceFixture: WorkspaceSnapshot;
+let s3PrefixDelays: Map<string, number>;
 const settingsFixture: AppSettingsSnapshot = {
   platformName: "windows",
   configDir: "C:/Users/Ali/AppData/Local/CloudSprocket",
@@ -75,6 +76,12 @@ vi.mock("./lib/backend", () => ({
         };
       case "aws.s3.setPrefixFilter": {
         const prefix = String(params?.prefix ?? "");
+        const delayMs = s3PrefixDelays.get(prefix) ?? 0;
+        if (delayMs > 0) {
+          await new Promise((resolve) => {
+            window.setTimeout(resolve, delayMs);
+          });
+        }
         workspaceFixture = {
           ...workspaceFixture,
           s3PrefixFilter: prefix,
@@ -230,6 +237,7 @@ describe("App", () => {
         },
       ],
     };
+    s3PrefixDelays = new Map();
   });
 
   it("renders the session setup view while unlocked", async () => {
@@ -328,6 +336,60 @@ describe("App", () => {
     expect(await screen.findByText("analytics")).toBeInTheDocument();
     expect(await screen.findByText("Copy Snippets")).toBeInTheDocument();
     expect(await screen.findByText(/s3:\/\/cloudsprocket-artifacts\/logs\/filtered-object\.json/i)).toBeInTheDocument();
+  });
+
+  it("keeps the S3 prefix input stable when older filter responses finish late", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+        {
+          tabId: "s3",
+          label: "S3",
+          summary: "S3 summary",
+          detail: "S3 panel",
+        },
+      ],
+    };
+    s3PrefixDelays.set("l", 650);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByText("S3"));
+    const prefixInput = await screen.findByPlaceholderText(
+      "Filter by prefix, for example reports/",
+    );
+
+    fireEvent.change(prefixInput, { target: { value: "l" } });
+    await act(async () => {
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, 390);
+      });
+    });
+    fireEvent.change(prefixInput, { target: { value: "lo" } });
+
+    expect(prefixInput).toHaveValue("lo");
+    expect((await screen.findAllByText("lofiltered-object.json")).length).toBeGreaterThan(0);
+
+    await act(async () => {
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, 700);
+      });
+    });
+
+    await waitFor(() => {
+      expect(prefixInput).toHaveValue("lo");
+    });
+    expect(screen.queryByText("lfiltered-object.json")).not.toBeInTheDocument();
   });
 
   it("renders EC2 inventory and queues lifecycle actions", async () => {

@@ -11,6 +11,7 @@ import {
   startTransition,
   useEffect,
   useEffectEvent,
+  useRef,
   useState,
 } from "react";
 import { backendRequest, subscribeToBackendEvent } from "./lib/backend";
@@ -107,6 +108,7 @@ export default function App() {
     defaultQuery,
   );
   const [profileQuery, setProfileQuery] = useState<PropertyFilterProps.Query>(defaultQuery);
+  const s3PrefixRequestIdRef = useRef(0);
   const [providerPreferences, setProviderPreferences] = useState<TablePreferences>({
     wrapLines: false,
     stripedRows: true,
@@ -371,11 +373,15 @@ export default function App() {
         );
       }}
       onSetS3PrefixFilter={(prefix) => {
+        const requestId = s3PrefixRequestIdRef.current + 1;
+        s3PrefixRequestIdRef.current = requestId;
         void backendRequest<WorkspaceSnapshot>("aws.s3.setPrefixFilter", { prefix }).then(
           (workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(workspaceResult);
-            });
+            if (requestId === s3PrefixRequestIdRef.current) {
+              startTransition(() => {
+                setWorkspace(workspaceResult);
+              });
+            }
           },
         );
       }}
