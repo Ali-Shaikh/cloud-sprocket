@@ -45,6 +45,7 @@ let sessionFixture: SessionSnapshot;
 let logFixtures: ActivityLogEntry[];
 let workspaceFixture: WorkspaceSnapshot;
 let s3PrefixDelays: Map<string, number>;
+let backendEventHandlers: Record<string, (payload: unknown) => void>;
 const settingsFixture: AppSettingsSnapshot = {
   platformName: "windows",
   configDir: "C:/Users/Ali/AppData/Local/CloudSprocket",
@@ -170,7 +171,14 @@ vi.mock("./lib/backend", () => ({
         return sessionFixture;
     }
   }),
-  subscribeToBackendEvent: vi.fn(async () => () => undefined),
+  subscribeToBackendEvent: vi.fn(
+    async (eventName: string, handler: (payload: unknown) => void) => {
+      backendEventHandlers[eventName] = handler;
+      return () => {
+        delete backendEventHandlers[eventName];
+      };
+    },
+  ),
 }));
 
 describe("App", () => {
@@ -238,6 +246,7 @@ describe("App", () => {
       ],
     };
     s3PrefixDelays = new Map();
+    backendEventHandlers = {};
   });
 
   it("renders the session setup view while unlocked", async () => {
@@ -390,6 +399,65 @@ describe("App", () => {
       expect(prefixInput).toHaveValue("lo");
     });
     expect(screen.queryByText("lfiltered-object.json")).not.toBeInTheDocument();
+  });
+
+  it("does not restore a previous S3 prefix when a workspace refresh finishes", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+        {
+          tabId: "s3",
+          label: "S3",
+          summary: "S3 summary",
+          detail: "S3 panel",
+        },
+      ],
+    };
+    workspaceFixture = {
+      ...workspaceFixture,
+      s3PrefixFilter: "previous/",
+    };
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByText("S3"));
+    const prefixInput = await screen.findByPlaceholderText(
+      "Filter by prefix, for example reports/",
+    );
+
+    expect(prefixInput).toHaveValue("previous/");
+
+    fireEvent.change(prefixInput, { target: { value: "current/" } });
+    workspaceFixture = {
+      ...workspaceFixture,
+      s3PrefixFilter: "previous/",
+    };
+
+    await act(async () => {
+      backendEventHandlers["job.updated"]?.({
+        jobId: "job-upload",
+        label: "S3 Upload",
+        status: "completed",
+        message: "Upload completed.",
+        result: {
+          destinationUri: "s3://cloudsprocket-artifacts/reports/uploaded.json",
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(prefixInput).toHaveValue("current/");
+    });
   });
 
   it("renders EC2 inventory and queues lifecycle actions", async () => {

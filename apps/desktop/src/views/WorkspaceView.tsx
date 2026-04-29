@@ -162,7 +162,6 @@ export default function WorkspaceView({
   const [signedUrlDurationSeconds, setSignedUrlDurationSeconds] = useState("3600");
   const [urlTesterValue, setUrlTesterValue] = useState("");
   const [s3PrefixDraft, setS3PrefixDraft] = useState(workspace.s3PrefixFilter || "");
-  const lastSyncedS3PrefixRef = useRef(workspace.s3PrefixFilter || "");
   const lastSelectedS3BucketRef = useRef(workspace.selectedS3BucketName || "");
   const lastRequestedS3PrefixRef = useRef(workspace.s3PrefixFilter || "");
   const debouncedS3PrefixDraft = useDebouncedValue(s3PrefixDraft, 350);
@@ -178,31 +177,21 @@ export default function WorkspaceView({
   }, [uploadObjectKey, uploadSourcePath, workspace.s3PrefixFilter]);
 
   useEffect(() => {
-    const nextPrefix = workspace.s3PrefixFilter || "";
     const nextBucket = workspace.selectedS3BucketName || "";
-    const bucketChanged = nextBucket !== lastSelectedS3BucketRef.current;
-    const draftWasSynced = s3PrefixDraft === lastSyncedS3PrefixRef.current;
-
-    lastSyncedS3PrefixRef.current = nextPrefix;
-    lastSelectedS3BucketRef.current = nextBucket;
-
-    if (bucketChanged || draftWasSynced) {
+    if (nextBucket !== lastSelectedS3BucketRef.current) {
+      const nextPrefix = workspace.s3PrefixFilter || "";
+      lastSelectedS3BucketRef.current = nextBucket;
       setS3PrefixDraft(nextPrefix);
       lastRequestedS3PrefixRef.current = nextPrefix;
     }
-  }, [s3PrefixDraft, workspace.s3PrefixFilter, workspace.selectedS3BucketName]);
+  }, [workspace.s3PrefixFilter, workspace.selectedS3BucketName]);
 
   useEffect(() => {
-    const appliedPrefix = workspace.s3PrefixFilter || "";
-    if (debouncedS3PrefixDraft === appliedPrefix) {
-      lastRequestedS3PrefixRef.current = appliedPrefix;
-      return;
-    }
     if (debouncedS3PrefixDraft !== lastRequestedS3PrefixRef.current) {
       lastRequestedS3PrefixRef.current = debouncedS3PrefixDraft;
       onSetS3PrefixFilter(debouncedS3PrefixDraft);
     }
-  }, [debouncedS3PrefixDraft, onSetS3PrefixFilter, workspace.s3PrefixFilter]);
+  }, [debouncedS3PrefixDraft, onSetS3PrefixFilter]);
 
   const workspaceSummaryPanel = (
     <Container
