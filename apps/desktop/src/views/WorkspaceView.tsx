@@ -46,6 +46,8 @@ import {
   useDebouncedValue,
 } from "./shared";
 
+type EC2LifecycleAction = "start" | "stop" | "reboot";
+
 type Props = {
   session: SessionSnapshot;
   workspace: WorkspaceSnapshot;
@@ -71,9 +73,10 @@ type Props = {
   onAnalyseS3Url: (url: string) => void;
   onValidateS3Url: (url: string) => void;
   ec2ActionStatus: string;
+  ec2ActionInFlight: boolean;
   onSelectEC2Region: (region: string) => void;
   onSelectEC2Instance: (instanceId: string) => void;
-  onInvokeEC2Action: (action: "start" | "stop" | "reboot", instanceId: string) => void;
+  onInvokeEC2Action: (action: EC2LifecycleAction, instanceId: string) => void;
 };
 
 function defaultUploadKey(sourcePath: string, prefix?: string): string {
@@ -128,6 +131,22 @@ function ec2Command(region: string | undefined, action: string, instanceId: stri
   return `aws ec2 ${action}-instances --instance-ids ${instanceId}${regionFlag}`;
 }
 
+function ec2ConsoleUrl(region: string | undefined, instanceId: string): string {
+  const consoleRegion = region || "us-east-1";
+  return `https://${consoleRegion}.console.aws.amazon.com/ec2/home?region=${consoleRegion}#InstanceDetails:instanceId=${instanceId}`;
+}
+
+function joinedValues(values: string[] | undefined, emptyText = "Unavailable"): string {
+  return values && values.length > 0 ? values.join(", ") : emptyText;
+}
+
+function ec2TagValues(tags: AwsEc2Instance["tags"]): string {
+  if (!tags || tags.length === 0) {
+    return "No tags returned";
+  }
+  return tags.map((tag) => `${tag.label}=${tag.value}`).join(", ");
+}
+
 export default function WorkspaceView({
   session,
   workspace,
@@ -153,6 +172,7 @@ export default function WorkspaceView({
   onAnalyseS3Url,
   onValidateS3Url,
   ec2ActionStatus,
+  ec2ActionInFlight,
   onSelectEC2Region,
   onSelectEC2Instance,
   onInvokeEC2Action,
@@ -166,6 +186,10 @@ export default function WorkspaceView({
   const lastRequestedS3PrefixRef = useRef(workspace.s3PrefixFilter || "");
   const debouncedS3PrefixDraft = useDebouncedValue(s3PrefixDraft, 350);
   const [ec2Query, setEC2Query] = useState<PropertyFilterProps.Query>(defaultQuery);
+  const [pendingEC2Action, setPendingEC2Action] = useState<{
+    action: EC2LifecycleAction;
+    instance: AwsEc2Instance;
+  }>();
   const debouncedEC2Query = useDebouncedValue(ec2Query);
   const deferredEC2Query = useDeferredValue(debouncedEC2Query);
   const ec2ResultsArePending = ec2Query !== debouncedEC2Query;
@@ -666,6 +690,26 @@ export default function WorkspaceView({
             (value): value is string => Boolean(value),
           ),
       },
+      {
+        key: "vpc",
+        label: "VPC",
+        getValue: (instance) => instance.vpcId,
+      },
+      {
+        key: "subnet",
+        label: "Subnet",
+        getValue: (instance) => instance.subnetId,
+      },
+      {
+        key: "securityGroup",
+        label: "Security Group",
+        getValue: (instance) => instance.securityGroups,
+      },
+      {
+        key: "tag",
+        label: "Tag",
+        getValue: (instance) => instance.tags?.map((tag) => `${tag.label}:${tag.value}`),
+      },
     ],
     [],
   );
@@ -721,6 +765,16 @@ export default function WorkspaceView({
       cell: (instance) => instance.availabilityZone || "Unknown",
     },
     {
+      id: "vpc",
+      header: "VPC",
+      cell: (instance) => instance.vpcId || "Unavailable",
+    },
+    {
+      id: "subnet",
+      header: "Subnet",
+      cell: (instance) => instance.subnetId || "Unavailable",
+    },
+    {
       id: "privateIp",
       header: "Private IP",
       cell: (instance) => instance.privateIp || "Unavailable",
@@ -758,29 +812,105 @@ export default function WorkspaceView({
           }`,
         },
         {
-          label: "AWS CLI start command",
-          value: ec2Command(workspace.selectedEc2Region, "start", selectedEC2Instance.instanceId),
+          label: "AWS Console URL",
+          value: ec2ConsoleUrl(workspace.selectedEc2Region, selectedEC2Instance.instanceId),
         },
         {
-          label: "AWS CLI stop command",
-          value: ec2Command(workspace.selectedEc2Region, "stop", selectedEC2Instance.instanceId),
-        },
-        {
-          label: "AWS CLI reboot command",
-          value: ec2Command(workspace.selectedEc2Region, "reboot", selectedEC2Instance.instanceId),
+          label: "Private connection hint",
+          value: selectedEC2Instance.privateIp
+            ? `ssh ec2-user@${selectedEC2Instance.privateIp}`
+            : "No private IP address is available for this instance.",
         },
       ]
     : [];
   const selectedEC2State = selectedEC2Instance?.state?.toLowerCase();
-  const ec2CanStart = Boolean(selectedEC2Instance) && selectedEC2State === "stopped";
-  const ec2CanStop = Boolean(selectedEC2Instance) && selectedEC2State === "running";
-  const ec2CanReboot = Boolean(selectedEC2Instance) && selectedEC2State === "running";
+  const ec2CanWrite = Boolean(selectedEC2Instance) && workspace.awsWritesEnabled && !ec2ActionInFlight;
+  const ec2CanStart = ec2CanWrite && selectedEC2State === "stopped";
+  const ec2CanStop = ec2CanWrite && selectedEC2State === "running";
+  const ec2CanReboot = ec2CanWrite && selectedEC2State === "running";
+  const pendingEC2ActionLabel = pendingEC2Action
+    ? pendingEC2Action.action[0].toUpperCase() + pendingEC2Action.action.slice(1)
+    : "";
+  const ec2ConfirmationPanel = pendingEC2Action ? (
+    <Container className="ec2-confirmation-panel">
+      <div
+        role="dialog"
+        aria-label={`${pendingEC2ActionLabel} EC2 instance`}
+      >
+        <SpaceBetween size="s">
+          <Header
+            variant="h3"
+            actions={
+              <SpaceBetween
+                direction="horizontal"
+                size="xs"
+              >
+                <Button
+                  variant="link"
+                  onClick={() => {
+                    setPendingEC2Action(undefined);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    onInvokeEC2Action(pendingEC2Action.action, pendingEC2Action.instance.instanceId);
+                    setPendingEC2Action(undefined);
+                  }}
+                >
+                  Confirm {pendingEC2ActionLabel}
+                </Button>
+              </SpaceBetween>
+            }
+          >
+            {pendingEC2ActionLabel} EC2 instance
+          </Header>
+          <Box>
+            This will send a live EC2 {pendingEC2Action.action} request to the selected profile endpoint.
+          </Box>
+          <div className="detail-grid">
+            <div className="detail-card">
+              <Box variant="awsui-key-label">Instance</Box>
+              <Box variant="p">{pendingEC2Action.instance.instanceId}</Box>
+            </div>
+            <div className="detail-card">
+              <Box variant="awsui-key-label">Current State</Box>
+              <Box variant="p">{pendingEC2Action.instance.state || "Unknown"}</Box>
+            </div>
+            <div className="detail-card">
+              <Box variant="awsui-key-label">Region</Box>
+              <Box variant="p">{workspace.selectedEc2Region || "Unknown"}</Box>
+            </div>
+            <div className="detail-card">
+              <Box variant="awsui-key-label">Endpoint</Box>
+              <Box variant="p">{workspace.awsEndpointUrl || "Default AWS endpoint"}</Box>
+            </div>
+          </div>
+        </SpaceBetween>
+      </div>
+    </Container>
+  ) : null;
 
   const ec2Tab = (
     <SpaceBetween
       size="l"
       className="page-stack"
     >
+      {ec2ConfirmationPanel}
+      {ec2ActionInFlight ? (
+        <Container className="ec2-progress-panel">
+          <SpaceBetween
+            direction="horizontal"
+            size="s"
+            alignItems="center"
+          >
+            <StatusIndicator type="loading">EC2 operation running</StatusIndicator>
+            <Box>{ec2ActionStatus}</Box>
+          </SpaceBetween>
+        </Container>
+      ) : null}
       <Container
         header={
           <Header
@@ -804,9 +934,14 @@ export default function WorkspaceView({
             <Box variant="awsui-key-label">Instances</Box>
             <Box variant="p">{countLabel(workspace.ec2Instances.length, "instance", "instances")}</Box>
           </div>
+          <div className="status-pill">
+            <Box variant="awsui-key-label">Write Mode</Box>
+            <Box variant="p">{workspace.awsWritesEnabled ? "Local endpoint enabled" : "Read-only"}</Box>
+          </div>
         </div>
         <Box color="text-body-secondary">
           {workspace.ec2StatusMessage || "EC2 inventory is waiting for a locked AWS workspace."}
+          {workspace.awsEndpointUrl ? ` Endpoint: ${workspace.awsEndpointUrl}.` : ""}
         </Box>
       </Container>
 
@@ -814,7 +949,7 @@ export default function WorkspaceView({
         header={
           <Header
             variant="h2"
-            description="Select a region, filter instances, then choose one instance for lifecycle actions."
+            description="Select a region, filter instances, then choose one instance for read-only inspection."
             actions={
               <Select
                 selectedOption={selectedEC2RegionOption}
@@ -878,7 +1013,7 @@ export default function WorkspaceView({
                     disabled={!ec2CanStart}
                     onClick={() => {
                       if (selectedEC2Instance) {
-                        onInvokeEC2Action("start", selectedEC2Instance.instanceId);
+                        setPendingEC2Action({ action: "start", instance: selectedEC2Instance });
                       }
                     }}
                   >
@@ -888,7 +1023,7 @@ export default function WorkspaceView({
                     disabled={!ec2CanStop}
                     onClick={() => {
                       if (selectedEC2Instance) {
-                        onInvokeEC2Action("stop", selectedEC2Instance.instanceId);
+                        setPendingEC2Action({ action: "stop", instance: selectedEC2Instance });
                       }
                     }}
                   >
@@ -898,7 +1033,7 @@ export default function WorkspaceView({
                     disabled={!ec2CanReboot}
                     onClick={() => {
                       if (selectedEC2Instance) {
-                        onInvokeEC2Action("reboot", selectedEC2Instance.instanceId);
+                        setPendingEC2Action({ action: "reboot", instance: selectedEC2Instance });
                       }
                     }}
                   >
@@ -911,7 +1046,9 @@ export default function WorkspaceView({
             </Header>
           }
         />
-        <Box color="text-body-secondary">{ec2ActionStatus}</Box>
+        <Box color={ec2ActionInFlight ? "text-status-info" : "text-body-secondary"}>
+          {ec2ActionStatus}
+        </Box>
       </Container>
 
       <div className="setup-grid">
@@ -932,8 +1069,16 @@ export default function WorkspaceView({
                   { label: "State", value: selectedEC2Instance.state || "Unknown" },
                   { label: "Instance Type", value: selectedEC2Instance.instanceType || "Unknown" },
                   { label: "Availability Zone", value: selectedEC2Instance.availabilityZone || "Unknown" },
+                  { label: "VPC", value: selectedEC2Instance.vpcId || "Unavailable" },
+                  { label: "Subnet", value: selectedEC2Instance.subnetId || "Unavailable" },
+                  { label: "Security Groups", value: joinedValues(selectedEC2Instance.securityGroups) },
+                  { label: "Key Pair", value: selectedEC2Instance.keyName || "Unavailable" },
+                  { label: "Platform", value: selectedEC2Instance.platformDetails || "Unavailable" },
+                  { label: "Architecture", value: selectedEC2Instance.architecture || "Unavailable" },
+                  { label: "Launch Time", value: selectedEC2Instance.launchTime || "Unavailable" },
                   { label: "Private IP", value: selectedEC2Instance.privateIp || "Unavailable" },
                   { label: "Public IP", value: selectedEC2Instance.publicIp || "Unavailable" },
+                  { label: "Tags", value: ec2TagValues(selectedEC2Instance.tags) },
                 ],
                 "No instance details are available.",
               )
@@ -1022,7 +1167,7 @@ export default function WorkspaceView({
             <Box variant="awsui-key-label">EC2 Operations</Box>
             <Box variant="p">Browse regions and instances, then copy lifecycle commands.</Box>
             <Box color="text-body-secondary">
-              Live EC2 write actions are intentionally not smoke-tested without explicit disposable targets.
+              Live EC2 write actions are disabled unless the selected AWS profile uses a local endpoint URL and explicit write opt-in.
             </Box>
           </div>
         </div>

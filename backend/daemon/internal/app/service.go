@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -342,6 +344,10 @@ func (s *Service) Handle(
 			s.mu.Unlock()
 			return nil, err
 		}
+		if !profileAllowsAWSWrites(profile) {
+			s.mu.Unlock()
+			return nil, errors.New("EC2 write actions require a selected AWS profile with local endpoint_url and cloudsprocket_allow_writes = true")
+		}
 		s.mu.Unlock()
 
 		job := models.JobStatus{
@@ -349,6 +355,15 @@ func (s *Service) Handle(
 			Label:   "EC2 Action",
 			Status:  "queued",
 			Message: fmt.Sprintf("Queueing EC2 %s for %s in %s.", request.Action, instanceID, region),
+		}
+		entry, err := s.store.AppendLog(ctx, "info", job.Message, "", s.timestamp())
+		if err != nil {
+			return nil, err
+		}
+		if notifier != nil {
+			if err := notifier.Notify("log.appended", entry); err != nil {
+				return nil, err
+			}
 		}
 		go s.runEC2Action(job, notifier, snapshot, session, profile, region, instanceID, request.Action)
 		return job, nil
@@ -714,11 +729,13 @@ func (s *Service) runEC2Action(
 ) {
 	background := context.Background()
 	normalisedAction := strings.ToLower(strings.TrimSpace(action))
+	runningMessage := fmt.Sprintf("Running EC2 %s for %s in %s.", normalisedAction, instanceID, region)
+	_ = s.appendActivity(background, notifier, "info", runningMessage)
 	s.notifyJob(notifier, models.JobStatus{
 		JobID:   job.JobID,
 		Label:   job.Label,
 		Status:  "running",
-		Message: fmt.Sprintf("Running EC2 %s for %s in %s.", normalisedAction, instanceID, region),
+		Message: runningMessage,
 	})
 
 	var err error
@@ -733,11 +750,13 @@ func (s *Service) runEC2Action(
 		err = fmt.Errorf("EC2 action %q is not implemented", action)
 	}
 	if err != nil {
+		failureMessage := fmt.Sprintf("EC2 %s failed for %s: %v", normalisedAction, instanceID, err)
+		_ = s.appendActivity(background, notifier, "error", failureMessage)
 		s.notifyJob(notifier, models.JobStatus{
 			JobID:   job.JobID,
 			Label:   job.Label,
 			Status:  "failed",
-			Message: fmt.Sprintf("EC2 %s failed for %s: %v", normalisedAction, instanceID, err),
+			Message: failureMessage,
 		})
 		return
 	}
@@ -755,14 +774,21 @@ func (s *Service) runEC2Action(
 		})
 		return
 	}
-	err = s.notifyStateAndLog(
-		background,
-		snapshot,
-		session,
-		notifier,
-		"success",
-		fmt.Sprintf("Requested EC2 %s for %s in %s.", normalisedAction, instanceID, region),
-	)
+	s.mu.Unlock()
+
+	instances := s.waitForEC2ActionState(background, notifier, job, profile, region, instanceID, normalisedAction)
+	finalState := selectedEC2State(instances, instanceID)
+	successMessage := fmt.Sprintf("EC2 %s completed for %s in %s.", normalisedAction, instanceID, region)
+	if finalState != "" {
+		successMessage = fmt.Sprintf("%s Current state: %s.", successMessage, finalState)
+	}
+
+	s.mu.Lock()
+	workspace := s.buildWorkspaceSnapshot(snapshot, session)
+	workspace.EC2Instances = instances
+	workspace.SelectedEC2Region = region
+	workspace.SelectedEC2InstanceID = instanceID
+	err = s.notifyStateAndLog(background, snapshot, session, notifier, "success", successMessage)
 	s.mu.Unlock()
 	if err != nil {
 		s.notifyJob(notifier, models.JobStatus{
@@ -778,9 +804,74 @@ func (s *Service) runEC2Action(
 		JobID:       job.JobID,
 		Label:       job.Label,
 		Status:      "completed",
-		Message:     fmt.Sprintf("Requested EC2 %s for %s.", normalisedAction, instanceID),
+		Message:     successMessage,
 		CompletedAt: s.timestamp(),
+		Result:      workspace,
 	})
+}
+
+func (s *Service) waitForEC2ActionState(
+	ctx context.Context,
+	notifier Notifier,
+	job models.JobStatus,
+	profile models.ProfileSummary,
+	region string,
+	instanceID string,
+	action string,
+) []models.AwsEc2Instance {
+	desiredState := ec2DesiredState(action)
+	deadline := time.Now().Add(30 * time.Second)
+	var instances []models.AwsEc2Instance
+	for attempt := 1; ; attempt++ {
+		instances = s.ec2Instances(ctx, profile, region)
+		currentState := selectedEC2State(instances, instanceID)
+		if desiredState == "" || currentState == desiredState || time.Now().After(deadline) {
+			return instances
+		}
+		s.notifyJob(notifier, models.JobStatus{
+			JobID:   job.JobID,
+			Label:   job.Label,
+			Status:  "running",
+			Message: fmt.Sprintf("Waiting for EC2 %s to reach %s. Current state: %s.", instanceID, desiredState, firstNonEmpty(currentState, "unknown")),
+		})
+		if attempt >= 15 {
+			return instances
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
+func ec2DesiredState(action string) string {
+	switch action {
+	case "start", "reboot":
+		return "running"
+	case "stop":
+		return "stopped"
+	default:
+		return ""
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func (s *Service) appendActivity(ctx context.Context, notifier Notifier, level string, message string) error {
+	entry, err := s.store.AppendLog(ctx, level, message, "", s.timestamp())
+	if err != nil {
+		return err
+	}
+	if notifier != nil {
+		if err := notifier.Notify("log.appended", entry); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) notifyJob(notifier Notifier, job models.JobStatus) {
@@ -849,6 +940,8 @@ func (s *Service) buildWorkspaceSnapshot(
 	profiles := filterProfiles(snapshot.Profiles, session.CurrentProviderID)
 	if profile, ok := findProfile(profiles, session.SelectedProfileID); ok {
 		workspace.Profile = &profile
+		workspace.AWSEndpointURL = profileEndpointURL(profile)
+		workspace.AWSWritesEnabled = profileAllowsAWSWrites(profile)
 	}
 
 	if workspace.Provider != nil &&
@@ -1202,6 +1295,15 @@ func (s *Service) selectedEC2InstanceID(
 	return instances[0].InstanceID
 }
 
+func selectedEC2State(instances []models.AwsEc2Instance, instanceID string) string {
+	for _, instance := range instances {
+		if instance.InstanceID == instanceID {
+			return instance.State
+		}
+	}
+	return ""
+}
+
 func profileRegionHint(profile models.ProfileSummary) string {
 	for _, field := range profile.Attributes {
 		if field.Label == "Region" && field.Value != "" {
@@ -1209,6 +1311,50 @@ func profileRegionHint(profile models.ProfileSummary) string {
 		}
 	}
 	return "us-east-1"
+}
+
+func profileEndpointURL(profile models.ProfileSummary) string {
+	for _, field := range profile.Attributes {
+		if normaliseProfileFieldLabel(field.Label) == "endpointurl" {
+			return strings.TrimSpace(field.Value)
+		}
+	}
+	return ""
+}
+
+func profileAllowsAWSWrites(profile models.ProfileSummary) bool {
+	if !profileAllowsWriteOptIn(profile) {
+		return false
+	}
+	endpointURL := profileEndpointURL(profile)
+	if endpointURL == "" {
+		return false
+	}
+	parsed, err := url.Parse(endpointURL)
+	if err != nil {
+		return false
+	}
+	host := parsed.Hostname()
+	if strings.Contains(strings.ToLower(host), "localstack") || host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsPrivate()
+}
+
+func profileAllowsWriteOptIn(profile models.ProfileSummary) bool {
+	for _, field := range profile.Attributes {
+		if normaliseProfileFieldLabel(field.Label) == "cloudsprocketallowwrites" {
+			value := strings.ToLower(strings.TrimSpace(field.Value))
+			return value == "1" || value == "true" || value == "yes"
+		}
+	}
+	return false
+}
+
+func normaliseProfileFieldLabel(label string) string {
+	replacer := strings.NewReplacer(" ", "", "_", "", "-", "")
+	return strings.ToLower(replacer.Replace(label))
 }
 
 func statePayload(snapshot discovery.Snapshot, session models.SessionSnapshot) models.StateChangedPayload {

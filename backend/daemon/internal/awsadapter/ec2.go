@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awscfg "github.com/aws/aws-sdk-go-v2/config"
@@ -28,7 +29,7 @@ func (e *EC2Inventory) ListRegions(ctx context.Context, profile models.ProfileSu
 		return nil, err
 	}
 
-	result, err := ec2.NewFromConfig(cfg).DescribeRegions(ctx, &ec2.DescribeRegionsInput{
+	result, err := ec2Client(cfg, profile).DescribeRegions(ctx, &ec2.DescribeRegionsInput{
 		AllRegions: aws.Bool(false),
 	})
 	if err != nil {
@@ -60,7 +61,7 @@ func (e *EC2Inventory) ListInstances(
 		return nil, err
 	}
 
-	client := ec2.NewFromConfig(cfg)
+	client := ec2Client(cfg, profile)
 	paginator := ec2.NewDescribeInstancesPaginator(client, &ec2.DescribeInstancesInput{})
 	instances := []models.AwsEc2Instance{}
 	for paginator.HasMorePages() {
@@ -127,7 +128,15 @@ func (e *EC2Inventory) client(ctx context.Context, profile models.ProfileSummary
 	if err != nil {
 		return nil, err
 	}
-	return ec2.NewFromConfig(cfg), nil
+	return ec2Client(cfg, profile), nil
+}
+
+func ec2Client(cfg aws.Config, profile models.ProfileSummary) *ec2.Client {
+	return ec2.NewFromConfig(cfg, func(options *ec2.Options) {
+		if endpointURL := awsEndpointURL(profile); endpointURL != "" {
+			options.BaseEndpoint = aws.String(endpointURL)
+		}
+	})
 }
 
 func (e *EC2Inventory) loadConfig(ctx context.Context, profile models.ProfileSummary, region string) (aws.Config, error) {
@@ -149,6 +158,16 @@ func ec2InstanceSummary(instance types.Instance) models.AwsEc2Instance {
 		PublicIP:         awsString(instance.PublicIpAddress),
 		PrivateIP:        awsString(instance.PrivateIpAddress),
 		AvailabilityZone: awsString(instance.Placement.AvailabilityZone),
+		VpcID:            awsString(instance.VpcId),
+		SubnetID:         awsString(instance.SubnetId),
+		KeyName:          awsString(instance.KeyName),
+		PlatformDetails:  awsString(instance.PlatformDetails),
+		Architecture:     string(instance.Architecture),
+		SecurityGroups:   ec2SecurityGroups(instance.SecurityGroups),
+		Tags:             ec2Tags(instance.Tags),
+	}
+	if instance.LaunchTime != nil {
+		summary.LaunchTime = instance.LaunchTime.UTC().Format(time.RFC3339)
 	}
 	if summary.Name == "" {
 		summary.Name = summary.InstanceID
@@ -163,4 +182,43 @@ func ec2Name(tags []types.Tag) string {
 		}
 	}
 	return ""
+}
+
+func ec2SecurityGroups(groups []types.GroupIdentifier) []string {
+	values := make([]string, 0, len(groups))
+	for _, group := range groups {
+		groupID := awsString(group.GroupId)
+		groupName := awsString(group.GroupName)
+		if groupName != "" && groupID != "" {
+			values = append(values, fmt.Sprintf("%s (%s)", groupName, groupID))
+			continue
+		}
+		if groupID != "" {
+			values = append(values, groupID)
+			continue
+		}
+		if groupName != "" {
+			values = append(values, groupName)
+		}
+	}
+	sort.Strings(values)
+	return values
+}
+
+func ec2Tags(tags []types.Tag) []models.DetailField {
+	values := make([]models.DetailField, 0, len(tags))
+	for _, tag := range tags {
+		key := awsString(tag.Key)
+		if key == "" {
+			continue
+		}
+		values = append(values, models.DetailField{
+			Label: key,
+			Value: awsString(tag.Value),
+		})
+	}
+	sort.SliceStable(values, func(left int, right int) bool {
+		return values[left].Label < values[right].Label
+	})
+	return values
 }

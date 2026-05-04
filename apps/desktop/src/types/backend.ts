@@ -113,6 +113,14 @@ export interface AwsEc2Instance {
   availabilityZone?: string;
   publicIp?: string;
   privateIp?: string;
+  vpcId?: string;
+  subnetId?: string;
+  keyName?: string;
+  platformDetails?: string;
+  architecture?: string;
+  launchTime?: string;
+  securityGroups?: string[];
+  tags?: DetailField[];
 }
 
 export interface WorkspaceSnapshot {
@@ -120,6 +128,8 @@ export interface WorkspaceSnapshot {
   profile?: ProfileSummary;
   authMethod?: AuthMethod;
   runtimeSettings: AppSettingsSnapshot;
+  awsEndpointUrl?: string;
+  awsWritesEnabled: boolean;
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;

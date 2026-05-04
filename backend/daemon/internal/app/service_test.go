@@ -117,7 +117,7 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	tempDir := t.TempDir()
 	home := filepath.Join(tempDir, "home")
 
-	mustWriteFile(t, filepath.Join(home, ".aws", "config"), "[profile sandbox]\nregion = us-east-1\nsso_start_url = https://example.awsapps.com/start\n")
+	mustWriteFile(t, filepath.Join(home, ".aws", "config"), "[profile sandbox]\nregion = us-east-1\nsso_start_url = https://example.awsapps.com/start\nendpoint_url = http://192.168.50.168:4566\ncloudsprocket_allow_writes = true\n")
 	mustWriteFile(t, filepath.Join(home, ".aws", "credentials"), "[sandbox]\naws_access_key_id = AKIAEXAMPLE\n")
 
 	settings := config.FromEnv(map[string]string{}, "linux", home)
@@ -340,7 +340,7 @@ func TestServiceReportsFailedEC2ActionJob(t *testing.T) {
 	tempDir := t.TempDir()
 	home := filepath.Join(tempDir, "home")
 
-	mustWriteFile(t, filepath.Join(home, ".aws", "config"), "[profile sandbox]\nregion = us-east-1\n")
+	mustWriteFile(t, filepath.Join(home, ".aws", "config"), "[profile sandbox]\nregion = us-east-1\nendpoint_url = http://192.168.50.168:4566\ncloudsprocket_allow_writes = true\n")
 	mustWriteFile(t, filepath.Join(home, ".aws", "credentials"), "[sandbox]\naws_access_key_id = AKIAEXAMPLE\n")
 
 	settings := config.FromEnv(map[string]string{}, "linux", home)
@@ -402,6 +402,112 @@ func TestServiceReportsFailedEC2ActionJob(t *testing.T) {
 	}
 	if len(ec2Inventory.actionRequests) != 1 || ec2Inventory.actionRequests[0] != "stop|us-east-1|i-0123456789abcdef0" {
 		t.Fatalf("expected stop request to hit EC2 inventory, got %+v", ec2Inventory.actionRequests)
+	}
+}
+
+func TestServiceRejectsEC2ActionWithoutLocalEndpoint(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+
+	mustWriteFile(t, filepath.Join(home, ".aws", "config"), "[profile sandbox]\nregion = us-east-1\n")
+	mustWriteFile(t, filepath.Join(home, ".aws", "credentials"), "[sandbox]\naws_access_key_id = AKIAEXAMPLE\n")
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("expected runtime dirs to be created, got %v", err)
+	}
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("expected sqlite store to open, got %v", err)
+	}
+	defer dataStore.Close()
+
+	ec2Inventory := &stubEC2Inventory{
+		regions: []string{"us-east-1"},
+		instances: map[string][]models.AwsEc2Instance{
+			"us-east-1": {
+				{InstanceID: "i-0123456789abcdef0", Name: "prod-app", State: "running", InstanceType: "t3.small"},
+			},
+		},
+	}
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(command string) (string, error) {
+			if command == "aws" {
+				return "/usr/bin/aws", nil
+			}
+			return "", nil
+		}),
+		&stubS3Inventory{},
+		ec2Inventory,
+	)
+
+	ctx := context.Background()
+	if _, err := service.Handle(ctx, "session.lock", nil, nil); err != nil {
+		t.Fatalf("expected session.lock to succeed, got %v", err)
+	}
+	if _, err := service.Handle(ctx, "aws.ec2.selectInstance", []byte(`{"instanceId":"i-0123456789abcdef0"}`), nil); err != nil {
+		t.Fatalf("expected aws.ec2.selectInstance to succeed, got %v", err)
+	}
+	if _, err := service.Handle(ctx, "aws.ec2.invokeAction", []byte(`{"action":"stop"}`), recordingNotifier{events: make(chan models.JobStatus, 1)}); err == nil {
+		t.Fatalf("expected EC2 write action to be rejected without a local endpoint")
+	}
+	if len(ec2Inventory.actionRequests) != 0 {
+		t.Fatalf("expected rejected action to avoid EC2 adapter calls, got %+v", ec2Inventory.actionRequests)
+	}
+}
+
+func TestServiceRejectsEC2ActionWithoutWriteOptIn(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+
+	mustWriteFile(t, filepath.Join(home, ".aws", "config"), "[profile sandbox]\nregion = us-east-1\nendpoint_url = http://192.168.50.168:4566\n")
+	mustWriteFile(t, filepath.Join(home, ".aws", "credentials"), "[sandbox]\naws_access_key_id = AKIAEXAMPLE\n")
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("expected runtime dirs to be created, got %v", err)
+	}
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("expected sqlite store to open, got %v", err)
+	}
+	defer dataStore.Close()
+
+	ec2Inventory := &stubEC2Inventory{
+		regions: []string{"us-east-1"},
+		instances: map[string][]models.AwsEc2Instance{
+			"us-east-1": {
+				{InstanceID: "i-0123456789abcdef0", Name: "localstack-app", State: "running", InstanceType: "t3.small"},
+			},
+		},
+	}
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(command string) (string, error) {
+			if command == "aws" {
+				return "/usr/bin/aws", nil
+			}
+			return "", nil
+		}),
+		&stubS3Inventory{},
+		ec2Inventory,
+	)
+
+	ctx := context.Background()
+	if _, err := service.Handle(ctx, "session.lock", nil, nil); err != nil {
+		t.Fatalf("expected session.lock to succeed, got %v", err)
+	}
+	if _, err := service.Handle(ctx, "aws.ec2.selectInstance", []byte(`{"instanceId":"i-0123456789abcdef0"}`), nil); err != nil {
+		t.Fatalf("expected aws.ec2.selectInstance to succeed, got %v", err)
+	}
+	if _, err := service.Handle(ctx, "aws.ec2.invokeAction", []byte(`{"action":"stop"}`), recordingNotifier{events: make(chan models.JobStatus, 1)}); err == nil {
+		t.Fatalf("expected EC2 write action to be rejected without explicit profile write opt-in")
+	}
+	if len(ec2Inventory.actionRequests) != 0 {
+		t.Fatalf("expected rejected action to avoid EC2 adapter calls, got %+v", ec2Inventory.actionRequests)
 	}
 }
 

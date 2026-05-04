@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,7 +44,7 @@ func (s *S3Inventory) ListBuckets(
 		return nil, err
 	}
 
-	client := s3.NewFromConfig(cfg)
+	client := s3Client(cfg, profile)
 	result, err := client.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err != nil {
 		return nil, err
@@ -82,7 +83,7 @@ func (s *S3Inventory) ListObjects(
 		return nil, err
 	}
 
-	client := s3.NewFromConfig(cfg)
+	client := s3Client(cfg, profile)
 	input := &s3.ListObjectsV2Input{
 		Bucket: &bucketName,
 	}
@@ -132,7 +133,7 @@ func (s *S3Inventory) HeadObject(
 		return nil, err
 	}
 
-	client := s3.NewFromConfig(cfg)
+	client := s3Client(cfg, profile)
 	result, err := client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: &bucketName,
 		Key:    &objectKey,
@@ -229,7 +230,7 @@ func (s *S3Inventory) UploadFile(
 		return models.AwsS3UploadResult{}, err
 	}
 
-	client := s3.NewFromConfig(cfg)
+	client := s3Client(cfg, profile)
 	uploader := s3manager.NewUploader(client)
 	_, err = uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucketName),
@@ -276,7 +277,7 @@ func (s *S3Inventory) PresignGetObject(
 		return models.AwsS3PresignResult{}, err
 	}
 
-	client := s3.NewFromConfig(cfg)
+	client := s3Client(cfg, profile)
 	presigner := s3.NewPresignClient(client)
 	request, err := presigner.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
@@ -310,12 +311,16 @@ func (s *S3Inventory) bucketRegion(
 		return cachedRegion, nil
 	}
 
+	if endpointURL := awsEndpointURL(profile); endpointURL != "" {
+		return awsRegionHint(profile), nil
+	}
+
 	cfg, err := s.loadConfig(ctx, profile, awsRegionHint(profile))
 	if err != nil {
 		return "", err
 	}
 
-	region, err := s3manager.GetBucketRegion(ctx, s3.NewFromConfig(cfg), bucketName)
+	region, err := s3manager.GetBucketRegion(ctx, s3Client(cfg, profile), bucketName)
 	if err != nil {
 		return "", err
 	}
@@ -341,6 +346,15 @@ func (s *S3Inventory) loadConfig(
 	)
 }
 
+func s3Client(cfg aws.Config, profile models.ProfileSummary) *s3.Client {
+	return s3.NewFromConfig(cfg, func(options *s3.Options) {
+		if endpointURL := awsEndpointURL(profile); endpointURL != "" {
+			options.BaseEndpoint = aws.String(endpointURL)
+			options.UsePathStyle = true
+		}
+	})
+}
+
 func awsRegionHint(profile models.ProfileSummary) string {
 	for _, field := range profile.Attributes {
 		if field.Label == "Region" && field.Value != "" {
@@ -348,6 +362,20 @@ func awsRegionHint(profile models.ProfileSummary) string {
 		}
 	}
 	return "us-east-1"
+}
+
+func awsEndpointURL(profile models.ProfileSummary) string {
+	for _, field := range profile.Attributes {
+		if normaliseAWSProfileField(field.Label) == "endpointurl" {
+			return strings.TrimSpace(field.Value)
+		}
+	}
+	return ""
+}
+
+func normaliseAWSProfileField(label string) string {
+	replacer := strings.NewReplacer(" ", "", "_", "", "-", "")
+	return strings.ToLower(replacer.Replace(label))
 }
 
 func awsString(value *string) string {

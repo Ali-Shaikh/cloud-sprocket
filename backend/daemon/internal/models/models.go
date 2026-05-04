@@ -119,13 +119,21 @@ type URLValidationResult struct {
 }
 
 type AwsEc2Instance struct {
-	InstanceID       string `json:"instanceId"`
-	Name             string `json:"name,omitempty"`
-	State            string `json:"state,omitempty"`
-	InstanceType     string `json:"instanceType,omitempty"`
-	AvailabilityZone string `json:"availabilityZone,omitempty"`
-	PublicIP         string `json:"publicIp,omitempty"`
-	PrivateIP        string `json:"privateIp,omitempty"`
+	InstanceID       string        `json:"instanceId"`
+	Name             string        `json:"name,omitempty"`
+	State            string        `json:"state,omitempty"`
+	InstanceType     string        `json:"instanceType,omitempty"`
+	AvailabilityZone string        `json:"availabilityZone,omitempty"`
+	PublicIP         string        `json:"publicIp,omitempty"`
+	PrivateIP        string        `json:"privateIp,omitempty"`
+	VpcID            string        `json:"vpcId,omitempty"`
+	SubnetID         string        `json:"subnetId,omitempty"`
+	KeyName          string        `json:"keyName,omitempty"`
+	PlatformDetails  string        `json:"platformDetails,omitempty"`
+	Architecture     string        `json:"architecture,omitempty"`
+	LaunchTime       string        `json:"launchTime,omitempty"`
+	SecurityGroups   []string      `json:"securityGroups,omitempty"`
+	Tags             []DetailField `json:"tags,omitempty"`
 }
 
 type WorkspaceSnapshot struct {
@@ -133,6 +141,8 @@ type WorkspaceSnapshot struct {
 	Profile               *ProfileSummary      `json:"profile,omitempty"`
 	AuthMethod            AuthMethod           `json:"authMethod,omitempty"`
 	RuntimeSettings       AppSettingsSnapshot  `json:"runtimeSettings"`
+	AWSEndpointURL        string               `json:"awsEndpointUrl,omitempty"`
+	AWSWritesEnabled      bool                 `json:"awsWritesEnabled"`
 	SelectedS3BucketName  string               `json:"selectedS3BucketName,omitempty"`
 	SelectedS3ObjectKey   string               `json:"selectedS3ObjectKey,omitempty"`
 	S3PrefixFilter        string               `json:"s3PrefixFilter,omitempty"`

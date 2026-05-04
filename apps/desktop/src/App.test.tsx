@@ -211,6 +211,7 @@ describe("App", () => {
         ...settingsFixture,
         databasePath: "D:/Workspace/runtime/cloudsprocket-workspace.db",
       },
+      awsWritesEnabled: false,
       selectedS3BucketName: "cloudsprocket-artifacts",
       selectedS3ObjectKey: "reports/weekly-summary.json",
       s3PrefixFilter: "",
@@ -293,6 +294,11 @@ describe("App", () => {
           detail: "S3 panel",
         },
       ],
+    };
+    workspaceFixture = {
+      ...workspaceFixture,
+      awsEndpointUrl: "http://192.168.50.168:4566",
+      awsWritesEnabled: true,
     };
 
     render(<App />);
@@ -482,6 +488,11 @@ describe("App", () => {
         },
       ],
     };
+    workspaceFixture = {
+      ...workspaceFixture,
+      awsEndpointUrl: "http://192.168.50.168:4566",
+      awsWritesEnabled: true,
+    };
 
     render(<App />);
 
@@ -491,11 +502,72 @@ describe("App", () => {
     expect(await screen.findByText("Instance Inventory")).toBeInTheDocument();
     expect((await screen.findAllByText("sandbox-api-1")).length).toBeGreaterThan(0);
     expect((await screen.findAllByText("i-0123456789abcdef0")).length).toBeGreaterThan(0);
-    expect(await screen.findByText("AWS CLI stop command")).toBeInTheDocument();
+    expect(await screen.findByText("AWS Console URL")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    const stopButton = screen.getByRole("button", { name: "Stop" });
+    expect(stopButton).not.toBeDisabled();
+    await act(async () => {
+      fireEvent.click(stopButton);
+    });
+    expect(await screen.findByRole("dialog", { name: "Stop EC2 instance" })).toBeInTheDocument();
+    expect(await screen.findByText(/send a live EC2 stop request/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Stop" }));
 
-    expect(await screen.findByText(/Queueing EC2 stop for i-0123456789abcdef0/i)).toBeInTheDocument();
+    expect((await screen.findAllByText(/Queueing EC2 stop for i-0123456789abcdef0/i)).length).toBeGreaterThan(0);
+    expect(await screen.findByText("EC2 operation running")).toBeInTheDocument();
+
+    await act(async () => {
+      backendEventHandlers["job.updated"]?.({
+        jobId: "job-ec2",
+        label: "EC2 Action",
+        status: "completed",
+        message: "EC2 stop completed for i-0123456789abcdef0 in us-east-1. Current state: stopped.",
+        result: {
+          ...workspaceFixture,
+          ec2Instances: [
+            {
+              ...workspaceFixture.ec2Instances[0],
+              state: "stopped",
+            },
+          ],
+        },
+      });
+    });
+
+    expect((await screen.findAllByText(/Current state: stopped/i)).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("stopped")).length).toBeGreaterThan(0);
+  });
+
+  it("keeps EC2 lifecycle actions disabled for normal AWS profiles", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+        {
+          tabId: "ec2",
+          label: "EC2",
+          summary: "EC2 summary",
+          detail: "EC2 panel",
+        },
+      ],
+    };
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByText("EC2"));
+
+    expect(await screen.findByText("Read-only")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Stop" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reboot" })).toBeDisabled();
   });
 
   it("renders a safe EC2 empty state", async () => {

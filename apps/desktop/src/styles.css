@@ -177,6 +177,32 @@ body {
   background: rgba(8, 48, 78, 0.05);
 }
 
+.ec2-confirmation-panel {
+  border-radius: 18px;
+  box-shadow:
+    0 0 0 2px rgba(180, 119, 0, 0.42),
+    0 18px 38px rgba(74, 49, 0, 0.16);
+}
+
+.ec2-confirmation-panel [class*="awsui_content-wrapper"] {
+  background: linear-gradient(135deg, #fff6d7 0%, #ffe6a6 100%);
+}
+
+.ec2-confirmation-panel .detail-card {
+  background: rgba(122, 84, 0, 0.11);
+}
+
+.ec2-progress-panel {
+  border-radius: 18px;
+  box-shadow:
+    0 0 0 1px rgba(15, 108, 189, 0.24),
+    0 14px 30px rgba(15, 108, 189, 0.12);
+}
+
+.ec2-progress-panel [class*="awsui_content-wrapper"] {
+  background: linear-gradient(135deg, rgba(232, 244, 255, 0.94), rgba(214, 236, 255, 0.86));
+}
+
 .snippet-card {
   min-width: 0;
   padding: 0.9rem 1rem;

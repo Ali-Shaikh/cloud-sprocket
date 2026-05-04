@@ -122,6 +122,18 @@ const mockWorkspaceInstances = [
     instanceType: "t3.medium",
     availabilityZone: "us-east-1a",
     privateIp: "10.0.14.22",
+    vpcId: "vpc-0sandbox001",
+    subnetId: "subnet-0app001",
+    keyName: "sandbox-key",
+    platformDetails: "Linux/UNIX",
+    architecture: "x86_64",
+    launchTime: "2026-04-14T07:15:00Z",
+    securityGroups: ["app-sg (sg-0123456789abcdef0)"],
+    tags: [
+      { label: "Name", value: "sandbox-app-1" },
+      { label: "Environment", value: "sandbox" },
+      { label: "Owner", value: "platform" },
+    ],
   },
   {
     instanceId: "i-0fedcba9876543210",
@@ -130,6 +142,18 @@ const mockWorkspaceInstances = [
     instanceType: "t3.small",
     availabilityZone: "us-east-1b",
     privateIp: "10.0.18.11",
+    vpcId: "vpc-0sandbox001",
+    subnetId: "subnet-0worker001",
+    keyName: "sandbox-key",
+    platformDetails: "Linux/UNIX",
+    architecture: "x86_64",
+    launchTime: "2026-04-13T19:20:00Z",
+    securityGroups: ["worker-sg (sg-0fedcba9876543210)"],
+    tags: [
+      { label: "Name", value: "sandbox-worker-1" },
+      { label: "Environment", value: "sandbox" },
+      { label: "Owner", value: "platform" },
+    ],
   },
 ];
 
@@ -145,6 +169,8 @@ const mockProfiles: ProfileSummary[] = [
     attributes: [
       { label: "Region", value: "us-east-1" },
       { label: "SSO Start URL", value: "https://example.awsapps.com/start" },
+      { label: "Endpoint Url", value: "http://192.168.50.168:4566" },
+      { label: "Cloudsprocket Allow Writes", value: "true" },
     ],
     authMethods: [
       { method: "cli", label: "CLI", summary: "AWS CLI detected.", available: true },
@@ -369,6 +395,8 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     profile,
     authMethod: mockState.session.selectedAuthMethod,
     runtimeSettings: mockState.settings,
+    awsEndpointUrl: "http://192.168.50.168:4566",
+    awsWritesEnabled: true,
     selectedS3BucketName,
     selectedS3ObjectKey,
     s3PrefixFilter: mockState.session.s3PrefixFilter,

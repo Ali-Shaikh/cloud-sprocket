@@ -34,6 +34,8 @@ import { defaultQuery, renderLogEntries, type TablePreferences } from "./views/s
 const SessionSetupView = lazy(() => import("./views/SessionSetupView"));
 const WorkspaceView = lazy(() => import("./views/WorkspaceView"));
 
+type EC2LifecycleAction = "start" | "stop" | "reboot";
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -48,6 +50,24 @@ function isS3PresignResult(value: unknown): value is AwsS3PresignResult {
 
 function isUrlValidationResult(value: unknown): value is UrlValidationResult {
   return isRecord(value) && typeof value.url === "string" && typeof value.summary === "string";
+}
+
+function isWorkspaceSnapshot(value: unknown): value is WorkspaceSnapshot {
+  return isRecord(value) && Array.isArray(value.ec2Instances) && typeof value.runtimeSettings === "object";
+}
+
+function expectedEC2State(action: EC2LifecycleAction): string {
+  return action === "stop" ? "stopped" : "running";
+}
+
+function ec2InstanceState(workspaceSnapshot: WorkspaceSnapshot, instanceId: string): string {
+  return workspaceSnapshot.ec2Instances.find((instance) => instance.instanceId === instanceId)?.state?.toLowerCase() ?? "";
+}
+
+function wait(durationMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, durationMs);
+  });
 }
 
 function getDefaultSplitPanelSize(viewportWidth: number): number {
@@ -75,6 +95,7 @@ const emptySettings: AppSettingsSnapshot = {
 
 const emptyWorkspace: WorkspaceSnapshot = {
   runtimeSettings: emptySettings,
+  awsWritesEnabled: false,
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -97,6 +118,7 @@ export default function App() {
   const [s3UrlInspection, setS3UrlInspection] = useState<UrlInspection>();
   const [s3UrlValidation, setS3UrlValidation] = useState<UrlValidationResult>();
   const [ec2ActionStatus, setEC2ActionStatus] = useState("Select an EC2 instance to run lifecycle actions.");
+  const [ec2ActionInFlight, setEC2ActionInFlight] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showSensitiveValues, setShowSensitiveValues] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
@@ -109,6 +131,7 @@ export default function App() {
   );
   const [profileQuery, setProfileQuery] = useState<PropertyFilterProps.Query>(defaultQuery);
   const s3PrefixRequestIdRef = useRef(0);
+  const ec2ActionPollRef = useRef(0);
   const [providerPreferences, setProviderPreferences] = useState<TablePreferences>({
     wrapLines: false,
     stripedRows: true,
@@ -141,6 +164,41 @@ export default function App() {
     (profile) => profile.profileId === session.selectedProfileId,
   );
   const latestLog = logs[0];
+
+  function cancelEC2Polling(): void {
+    ec2ActionPollRef.current += 1;
+  }
+
+  async function pollEC2ActionResult(action: EC2LifecycleAction, instanceId: string): Promise<void> {
+    const pollId = ec2ActionPollRef.current + 1;
+    ec2ActionPollRef.current = pollId;
+    const desiredState = expectedEC2State(action);
+    let latestState = "";
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await wait(attempt === 0 ? 900 : 1500);
+      if (pollId !== ec2ActionPollRef.current) {
+        return;
+      }
+
+      const workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
+      latestState = ec2InstanceState(workspaceResult, instanceId);
+      startTransition(() => {
+        setWorkspace(workspaceResult);
+      });
+
+      if (latestState === desiredState) {
+        setEC2ActionStatus(`EC2 ${action} completed for ${instanceId}. Current state: ${latestState}.`);
+        setEC2ActionInFlight(false);
+        return;
+      }
+    }
+
+    setEC2ActionStatus(
+      `EC2 ${action} request was sent for ${instanceId}. Latest observed state: ${latestState || "unknown"}.`,
+    );
+    setEC2ActionInFlight(false);
+  }
 
   const loadState = useEffectEvent(async () => {
     setLoading(true);
@@ -220,7 +278,15 @@ export default function App() {
     }
     if (job.label === "EC2 Action") {
       setEC2ActionStatus(job.message);
-      if (job.status === "completed") {
+      setEC2ActionInFlight(job.status === "queued" || job.status === "running");
+      const workspaceResult = job.result;
+      if (job.status === "completed" && isWorkspaceSnapshot(workspaceResult)) {
+        cancelEC2Polling();
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+      } else if (job.status === "completed" || job.status === "failed") {
+        cancelEC2Polling();
         void loadWorkspace(session);
       }
     }
@@ -416,8 +482,11 @@ export default function App() {
         void backendRequest<JobStatus>("aws.s3.validateUrl", { url });
       }}
       ec2ActionStatus={ec2ActionStatus}
+      ec2ActionInFlight={ec2ActionInFlight}
       onSelectEC2Region={(region) => {
         setEC2ActionStatus("Select an instance to run lifecycle actions.");
+        setEC2ActionInFlight(false);
+        cancelEC2Polling();
         void backendRequest<WorkspaceSnapshot>("aws.ec2.selectRegion", { region }).then(
           (workspaceResult) => {
             startTransition(() => {
@@ -427,7 +496,9 @@ export default function App() {
         );
       }}
       onSelectEC2Instance={(instanceId) => {
-        setEC2ActionStatus("Instance selected. Choose a lifecycle action.");
+        setEC2ActionStatus("Instance selected. EC2 lifecycle writes require a local endpoint profile with write opt-in.");
+        setEC2ActionInFlight(false);
+        cancelEC2Polling();
         void backendRequest<WorkspaceSnapshot>("aws.ec2.selectInstance", { instanceId }).then(
           (workspaceResult) => {
             startTransition(() => {
@@ -438,11 +509,17 @@ export default function App() {
       }}
       onInvokeEC2Action={(action, instanceId) => {
         setEC2ActionStatus(`Queueing EC2 ${action} for ${instanceId}.`);
+        setEC2ActionInFlight(true);
         void backendRequest<JobStatus>("aws.ec2.invokeAction", { action, instanceId }).then(
           (job) => {
             setEC2ActionStatus(job.message);
+            setEC2ActionInFlight(job.status === "queued" || job.status === "running");
+            void pollEC2ActionResult(action, instanceId);
           },
-        );
+        ).catch((error: unknown) => {
+          setEC2ActionStatus(error instanceof Error ? error.message : String(error));
+          setEC2ActionInFlight(false);
+        });
       }}
     />
   ) : (
