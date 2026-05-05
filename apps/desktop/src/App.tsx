@@ -502,6 +502,24 @@ export default function App() {
       ec2ActionStatus={ec2ActionStatus}
       ec2ActionInFlight={ec2ActionInFlight}
       ec2ActionHistory={ec2ActionHistory}
+      onRefreshEC2Instances={() => {
+        const region = workspace.selectedEc2Region;
+        if (!region) {
+          setEC2ActionStatus("Select an EC2 region before refreshing inventory.");
+          return;
+        }
+        setEC2ActionStatus(`Refreshing EC2 inventory for ${region}.`);
+        void backendRequest<WorkspaceSnapshot>("aws.ec2.selectRegion", { region }).then(
+          (workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(workspaceResult);
+            });
+            setEC2ActionStatus(workspaceResult.ec2StatusMessage || `EC2 inventory refreshed for ${region}.`);
+          },
+        ).catch((error: unknown) => {
+          setEC2ActionStatus(error instanceof Error ? error.message : String(error));
+        });
+      }}
       onSelectEC2Region={(region) => {
         setEC2ActionStatus("Select an instance to run lifecycle actions.");
         setEC2ActionInFlight(false);

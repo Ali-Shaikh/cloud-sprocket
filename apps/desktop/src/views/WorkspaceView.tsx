@@ -83,6 +83,7 @@ type Props = {
   ec2ActionStatus: string;
   ec2ActionInFlight: boolean;
   ec2ActionHistory: EC2ActionHistoryItem[];
+  onRefreshEC2Instances: () => void;
   onSelectEC2Region: (region: string) => void;
   onSelectEC2Instance: (instanceId: string) => void;
   onInvokeEC2Action: (action: EC2LifecycleAction, instanceId: string) => void;
@@ -196,6 +197,7 @@ export default function WorkspaceView({
   ec2ActionStatus,
   ec2ActionInFlight,
   ec2ActionHistory,
+  onRefreshEC2Instances,
   onSelectEC2Region,
   onSelectEC2Instance,
   onInvokeEC2Action,
@@ -974,19 +976,31 @@ export default function WorkspaceView({
             variant="h2"
             description="Select a region, filter instances, then choose one instance for read-only inspection."
             actions={
-              <Select
-                selectedOption={selectedEC2RegionOption}
-                options={ec2RegionOptions}
-                placeholder="Select region"
-                empty="No EC2 regions available"
-                selectedAriaLabel="Selected"
-                onChange={({ detail }) => {
-                  const region = detail.selectedOption.value;
-                  if (region) {
-                    onSelectEC2Region(region);
-                  }
-                }}
-              />
+              <SpaceBetween
+                direction="horizontal"
+                size="xs"
+              >
+                <Button
+                  iconName="refresh"
+                  disabled={!workspace.selectedEc2Region || ec2ActionInFlight}
+                  onClick={onRefreshEC2Instances}
+                >
+                  Refresh EC2
+                </Button>
+                <Select
+                  selectedOption={selectedEC2RegionOption}
+                  options={ec2RegionOptions}
+                  placeholder="Select region"
+                  empty="No EC2 regions available"
+                  selectedAriaLabel="Selected"
+                  onChange={({ detail }) => {
+                    const region = detail.selectedOption.value;
+                    if (region) {
+                      onSelectEC2Region(region);
+                    }
+                  }}
+                />
+              </SpaceBetween>
             }
           >
             Instances

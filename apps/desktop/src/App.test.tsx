@@ -152,6 +152,7 @@ vi.mock("./lib/backend", () => ({
           ...workspaceFixture,
           selectedEc2Region: String(params?.region ?? ""),
           selectedEc2InstanceId: "i-0123456789abcdef0",
+          ec2StatusMessage: `Loaded ${workspaceFixture.ec2Instances.length} EC2 instances from ${String(params?.region ?? "")}.`,
         };
         return workspaceFixture;
       case "aws.ec2.selectInstance":
@@ -503,6 +504,8 @@ describe("App", () => {
     expect((await screen.findAllByText("sandbox-api-1")).length).toBeGreaterThan(0);
     expect((await screen.findAllByText("i-0123456789abcdef0")).length).toBeGreaterThan(0);
     expect(await screen.findByText("AWS Console URL")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh EC2" }));
+    expect(await screen.findByText("Loaded 1 EC2 instances from us-east-1.")).toBeInTheDocument();
 
     const stopButton = screen.getByRole("button", { name: "Stop" });
     expect(stopButton).not.toBeDisabled();
