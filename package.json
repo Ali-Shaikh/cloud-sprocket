@@ -6,8 +6,13 @@
   "scripts": {
     "dev": "pnpm --dir apps/desktop dev",
     "dev:desktop": "pnpm --dir apps/desktop dev:desktop",
+    "dev:desktop:local": "pnpm --dir apps/desktop dev:desktop:local",
     "build": "pnpm --dir apps/desktop build",
     "build:desktop": "pnpm --dir apps/desktop build:desktop",
+    "build:desktop:local": "pnpm --dir apps/desktop build:desktop:local",
+    "bundle:macos:local:app": "pnpm --dir apps/desktop bundle:macos:local:app",
+    "bundle:macos:local:dmg": "pnpm --dir apps/desktop bundle:macos:local:dmg",
+    "bundle:macos:release:dmg": "pnpm --dir apps/desktop bundle:macos:release:dmg",
     "test": "pnpm run test:desktop && pnpm run test:backend",
     "test:desktop": "pnpm --dir apps/desktop test",
     "test:backend": "go -C backend/daemon test ./...",
