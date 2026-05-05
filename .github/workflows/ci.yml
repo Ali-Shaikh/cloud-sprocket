@@ -5,6 +5,8 @@ on:
     branches:
       - dev
       - main
+    tags:
+      - "v*"
   pull_request:
     branches:
       - dev
@@ -29,10 +31,19 @@ jobs:
         include:
           - os: windows-latest
             artifact_name: cloudsprocket-windows
+            dev_artifact_paths: |
+              apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe
+              apps/desktop/src-tauri/binaries/cloudsprocketd-*.exe
           - os: macos-latest
             artifact_name: cloudsprocket-macos
+            dev_artifact_paths: |
+              apps/desktop/src-tauri/target/release/cloudsprocket-desktop
+              apps/desktop/src-tauri/binaries/cloudsprocketd-*
           - os: ubuntu-latest
             artifact_name: cloudsprocket-linux
+            dev_artifact_paths: |
+              apps/desktop/src-tauri/target/release/cloudsprocket-desktop
+              apps/desktop/src-tauri/binaries/cloudsprocketd-*
 
     steps:
       - name: Check out repository
@@ -85,13 +96,30 @@ jobs:
       - name: Run backend tests
         run: pnpm run test:backend
 
-      - name: Build desktop bundle
+      - name: Build desktop verification binary
+        if: github.event_name != 'push' || github.ref_type != 'tag'
+        run: pnpm run build:desktop:exe
+
+      - name: Build desktop release bundle
+        if: github.event_name == 'push' && github.ref_type == 'tag'
         run: pnpm run build:desktop
 
-      - name: Upload desktop bundle
+      - name: Upload desktop verification artefact
+        if: github.event_name != 'push' || github.ref_type != 'tag'
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.artifact_name }}
+          name: ${{ matrix.artifact_name }}-verification
+          path: ${{ matrix.dev_artifact_paths }}
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+      - name: Upload desktop release bundle
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_name }}-release
           path: apps/desktop/src-tauri/target/release/bundle
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
+          compression-level: 0
