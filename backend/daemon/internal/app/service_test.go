@@ -322,7 +322,10 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	if ec2ActionResult.(models.JobStatus).Status != "queued" {
 		t.Fatalf("expected queued EC2 job, got %+v", ec2ActionResult)
 	}
-	waitForJobStatus(t, ec2Notifier.events, "completed")
+	completedEC2Job := waitForJobStatus(t, ec2Notifier.events, "completed")
+	if !strings.Contains(completedEC2Job.Message, "Desired state reached: running") {
+		t.Fatalf("expected completed EC2 job to report desired state, got %+v", completedEC2Job)
+	}
 	if len(ec2Inventory.actionRequests) != 1 || ec2Inventory.actionRequests[0] != "reboot|us-east-1|i-0123456789abcdef0" {
 		t.Fatalf("expected reboot request to hit EC2 inventory, got %+v", ec2Inventory.actionRequests)
 	}

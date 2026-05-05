@@ -21,6 +21,7 @@ import type {
   AwsS3PresignResult,
   AwsS3UploadResult,
   JobStatus,
+  JobLifecycle,
   ProfileSummary,
   ProviderSummary,
   SessionSnapshot,
@@ -35,6 +36,13 @@ const SessionSetupView = lazy(() => import("./views/SessionSetupView"));
 const WorkspaceView = lazy(() => import("./views/WorkspaceView"));
 
 type EC2LifecycleAction = "start" | "stop" | "reboot";
+
+type EC2ActionHistoryItem = {
+  jobId: string;
+  status: JobLifecycle;
+  message: string;
+  completedAt?: string;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -119,6 +127,7 @@ export default function App() {
   const [s3UrlValidation, setS3UrlValidation] = useState<UrlValidationResult>();
   const [ec2ActionStatus, setEC2ActionStatus] = useState("Select an EC2 instance to run lifecycle actions.");
   const [ec2ActionInFlight, setEC2ActionInFlight] = useState(false);
+  const [ec2ActionHistory, setEC2ActionHistory] = useState<EC2ActionHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSensitiveValues, setShowSensitiveValues] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
@@ -279,6 +288,15 @@ export default function App() {
     if (job.label === "EC2 Action") {
       setEC2ActionStatus(job.message);
       setEC2ActionInFlight(job.status === "queued" || job.status === "running");
+      setEC2ActionHistory((current) => {
+        const next: EC2ActionHistoryItem = {
+          jobId: job.jobId,
+          status: job.status,
+          message: job.message,
+          completedAt: job.completedAt,
+        };
+        return [next, ...current.filter((item) => item.jobId !== job.jobId)].slice(0, 6);
+      });
       const workspaceResult = job.result;
       if (job.status === "completed" && isWorkspaceSnapshot(workspaceResult)) {
         cancelEC2Polling();
@@ -483,6 +501,7 @@ export default function App() {
       }}
       ec2ActionStatus={ec2ActionStatus}
       ec2ActionInFlight={ec2ActionInFlight}
+      ec2ActionHistory={ec2ActionHistory}
       onSelectEC2Region={(region) => {
         setEC2ActionStatus("Select an instance to run lifecycle actions.");
         setEC2ActionInFlight(false);

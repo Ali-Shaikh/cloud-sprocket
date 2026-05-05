@@ -26,6 +26,7 @@ import type {
   AwsS3PresignResult,
   AwsS3Bucket,
   AwsS3Object,
+  JobLifecycle,
   SessionSnapshot,
   UrlInspection,
   UrlValidationResult,
@@ -47,6 +48,13 @@ import {
 } from "./shared";
 
 type EC2LifecycleAction = "start" | "stop" | "reboot";
+
+type EC2ActionHistoryItem = {
+  jobId: string;
+  status: JobLifecycle;
+  message: string;
+  completedAt?: string;
+};
 
 type Props = {
   session: SessionSnapshot;
@@ -74,6 +82,7 @@ type Props = {
   onValidateS3Url: (url: string) => void;
   ec2ActionStatus: string;
   ec2ActionInFlight: boolean;
+  ec2ActionHistory: EC2ActionHistoryItem[];
   onSelectEC2Region: (region: string) => void;
   onSelectEC2Instance: (instanceId: string) => void;
   onInvokeEC2Action: (action: EC2LifecycleAction, instanceId: string) => void;
@@ -126,6 +135,19 @@ function instanceStateType(state?: string): "success" | "warning" | "error" | "i
   return "info";
 }
 
+function jobStatusType(status: JobLifecycle): "success" | "warning" | "error" | "info" | "loading" {
+  if (status === "completed") {
+    return "success";
+  }
+  if (status === "failed") {
+    return "error";
+  }
+  if (status === "running" || status === "queued") {
+    return "loading";
+  }
+  return "info";
+}
+
 function ec2Command(region: string | undefined, action: string, instanceId: string): string {
   const regionFlag = region ? ` --region ${region}` : "";
   return `aws ec2 ${action}-instances --instance-ids ${instanceId}${regionFlag}`;
@@ -173,6 +195,7 @@ export default function WorkspaceView({
   onValidateS3Url,
   ec2ActionStatus,
   ec2ActionInFlight,
+  ec2ActionHistory,
   onSelectEC2Region,
   onSelectEC2Instance,
   onInvokeEC2Action,
@@ -1122,6 +1145,44 @@ export default function WorkspaceView({
           )}
         </Container>
       </div>
+
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description="Recent lifecycle job messages for this workspace session."
+          >
+            EC2 Action History
+          </Header>
+        }
+      >
+        {ec2ActionHistory.length === 0 ? (
+          <Box color="text-status-inactive">No EC2 lifecycle actions have run in this session.</Box>
+        ) : (
+          <SpaceBetween size="s">
+            {ec2ActionHistory.map((item) => (
+              <div
+                key={item.jobId}
+                className="detail-card"
+              >
+                <SpaceBetween
+                  direction="horizontal"
+                  size="s"
+                  alignItems="center"
+                >
+                  <StatusIndicator type={jobStatusType(item.status)}>
+                    {item.status}
+                  </StatusIndicator>
+                  <Box>{item.message}</Box>
+                </SpaceBetween>
+                {item.completedAt ? (
+                  <Box color="text-body-secondary">{item.completedAt}</Box>
+                ) : null}
+              </div>
+            ))}
+          </SpaceBetween>
+        )}
+      </Container>
     </SpaceBetween>
   );
 

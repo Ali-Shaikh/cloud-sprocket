@@ -780,7 +780,12 @@ func (s *Service) runEC2Action(
 	finalState := selectedEC2State(instances, instanceID)
 	successMessage := fmt.Sprintf("EC2 %s completed for %s in %s.", normalisedAction, instanceID, region)
 	if finalState != "" {
-		successMessage = fmt.Sprintf("%s Current state: %s.", successMessage, finalState)
+		desiredState := ec2DesiredState(normalisedAction)
+		if desiredState != "" && finalState == desiredState {
+			successMessage = fmt.Sprintf("%s Desired state reached: %s.", successMessage, finalState)
+		} else {
+			successMessage = fmt.Sprintf("%s Latest observed state: %s.", successMessage, finalState)
+		}
 	}
 
 	s.mu.Lock()

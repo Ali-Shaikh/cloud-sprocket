@@ -521,7 +521,7 @@ describe("App", () => {
         jobId: "job-ec2",
         label: "EC2 Action",
         status: "completed",
-        message: "EC2 stop completed for i-0123456789abcdef0 in us-east-1. Current state: stopped.",
+        message: "EC2 stop completed for i-0123456789abcdef0 in us-east-1. Desired state reached: stopped.",
         result: {
           ...workspaceFixture,
           ec2Instances: [
@@ -534,7 +534,8 @@ describe("App", () => {
       });
     });
 
-    expect((await screen.findAllByText(/Current state: stopped/i)).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/Desired state reached: stopped/i)).length).toBeGreaterThan(0);
+    expect(await screen.findByText("EC2 Action History")).toBeInTheDocument();
     expect((await screen.findAllByText("stopped")).length).toBeGreaterThan(0);
   });
 
