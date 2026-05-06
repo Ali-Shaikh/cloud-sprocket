@@ -294,16 +294,25 @@ function nextMockLogId(): number {
 }
 
 function currentProfile(): ProfileSummary | undefined {
+  const providerId = mockState.session.isLocked
+    ? mockState.session.lockedProviderId
+    : mockState.session.currentProviderId;
+  const profileId = mockState.session.isLocked
+    ? mockState.session.lockedProfileId
+    : mockState.session.selectedProfileId;
   return mockState.profiles.find(
     (profile) =>
-      profile.providerId === mockState.session.currentProviderId &&
-      profile.profileId === mockState.session.selectedProfileId,
+      profile.providerId === providerId &&
+      profile.profileId === profileId,
   );
 }
 
 function currentProvider(): ProviderSummary | undefined {
+  const providerId = mockState.session.isLocked
+    ? mockState.session.lockedProviderId
+    : mockState.session.currentProviderId;
   return mockState.providers.find(
-    (provider) => provider.providerId === mockState.session.currentProviderId,
+    (provider) => provider.providerId === providerId,
   );
 }
 

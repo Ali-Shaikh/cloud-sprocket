@@ -49,13 +49,11 @@ type Props = {
   loading: boolean;
   isTablet: boolean;
   showSensitiveValues: boolean;
-  splitPanelOpen: boolean;
   providerQuery: PropertyFilterProps.Query;
   profileQuery: PropertyFilterProps.Query;
   providerPreferences: TablePreferences;
   profilePreferences: TablePreferences;
   onToggleSensitiveValues: () => void;
-  onToggleSplitPanel: () => void;
   onProviderQueryChange: (query: PropertyFilterProps.Query) => void;
   onProfileQueryChange: (query: PropertyFilterProps.Query) => void;
   onProviderPreferencesChange: (preferences: TablePreferences) => void;
@@ -78,13 +76,11 @@ export default function SessionSetupView({
   loading,
   isTablet,
   showSensitiveValues,
-  splitPanelOpen,
   providerQuery,
   profileQuery,
   providerPreferences,
   profilePreferences,
   onToggleSensitiveValues,
-  onToggleSplitPanel,
   onProviderQueryChange,
   onProfileQueryChange,
   onProviderPreferencesChange,
@@ -203,6 +199,10 @@ export default function SessionSetupView({
   const profileTableColumns = profileColumns.filter((column) =>
     visibleProfileIds.includes(String(column.id)),
   );
+  const selectedProfileSummary = selectedProfile
+    ? `${selectedProvider?.label ?? selectedProfile.providerId} / ${selectedProfile.displayName} / ${selectedProfile.summary || "No region"}`
+    : "";
+  const canLockWorkspace = Boolean(selectedProfile && session.selectedAuthMethod);
 
   const providerPreferencesControl = (
     <CollectionPreferences
@@ -362,41 +362,20 @@ export default function SessionSetupView({
       className="page-stack"
     >
       <Container>
-        <div className="hero-banner">
+        <div className="page-heading">
           <div>
             <Box variant="awsui-key-label">Control Desktop</Box>
             <Header
               variant="h1"
-              description="Move through provider selection, profile selection, auth choice, and lock review in one deliberate flow."
+              description="Pick a provider, profile, and auth path before locking the local workspace."
             >
               Session Setup
             </Header>
-            <Box color="text-body-secondary">
-              AWS remains the full milestone 1 target. Azure and GCP stay visible
-              here as discovery-only surfaces.
-            </Box>
           </div>
-          <div className="hero-metrics">
-            <div className="hero-metric">
-              <span className="hero-metric-value">{providers.length}</span>
-              <span className="hero-metric-label">Providers</span>
-            </div>
-            <div className="hero-metric">
-              <span className="hero-metric-value">{profiles.length}</span>
-              <span className="hero-metric-label">Profiles</span>
-            </div>
-            <div className="hero-metric">
-              <span className="hero-metric-value">
-                {session.selectedAuthMethod?.toUpperCase() ?? "NONE"}
-              </span>
-              <span className="hero-metric-label">Auth Path</span>
-            </div>
-            <div className="hero-metric">
-              <span className="hero-metric-value">
-                {selectedProfile ? "READY" : "WAITING"}
-              </span>
-              <span className="hero-metric-label">Lock State</span>
-            </div>
+          <div className="heading-metrics">
+            <span>{countLabel(providers.length, "provider", "providers")}</span>
+            <span>{countLabel(profiles.length, "profile", "profiles")}</span>
+            <span>{session.selectedAuthMethod?.toUpperCase() ?? "No auth"}</span>
           </div>
         </div>
       </Container>
@@ -406,7 +385,7 @@ export default function SessionSetupView({
           header={
             <Header
               variant="h2"
-              description="Step 1 of 4"
+              description="Step 1 of 3"
               actions={
                 <Button
                   iconName="refresh"
@@ -481,7 +460,7 @@ export default function SessionSetupView({
           header={
             <Header
               variant="h2"
-              description={`Step 2 of 4${selectedProvider ? ` · ${selectedProvider.label}` : ""}`}
+              description={`Step 2 of 3${selectedProvider ? ` · ${selectedProvider.label}` : ""}`}
             >
               Choose Profile
             </Header>
@@ -546,88 +525,65 @@ export default function SessionSetupView({
             {selectedProfile ? (
               <div className="selection-summary">
                 <Badge color={badgeColour("success")}>Selected</Badge>
-                <Box variant="p">{selectedProfile.summary}</Box>
+                <Box variant="p">{selectedProfileSummary}</Box>
               </div>
             ) : null}
           </SpaceBetween>
         </Container>
       </div>
 
-      <div className="setup-stage-grid">
-        <Container
-          header={
-            <Header
-              variant="h2"
-              description="Step 3 of 4"
-            >
-              Choose Authentication Path
-            </Header>
-          }
-        >
-          <SpaceBetween size="m">
-            <RadioGroup
-              value={session.selectedAuthMethod ?? null}
-              items={session.availableAuthMethods.map((method) => ({
-                value: method.method,
-                label: method.label,
-                description: method.summary,
-                disabled: !method.available,
-              }))}
-              onChange={({ detail }) => {
-                onSelectAuthMethod(detail.value);
-              }}
-            />
-            <Box color="text-body-secondary">
-              Pick the auth flow that the locked workspace should use for Overview,
-              S3, EC2, and Actions.
-            </Box>
-          </SpaceBetween>
-        </Container>
-
-        <Container
-          header={
-            <Header
-              variant="h2"
-              description="Step 4 of 4"
-            >
-              Review And Lock
-            </Header>
-          }
-          footer={
-            <div className="session-actions">
-              <Button onClick={onToggleSplitPanel}>
-                {splitPanelOpen ? "Hide Activity" : "Show Activity"}
-              </Button>
-              <Button
-                variant="primary"
-                disabled={!selectedProfile || !session.selectedAuthMethod}
-                onClick={onLockSession}
-              >
-                Lock Session
-              </Button>
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description="Step 3 of 3"
+          >
+            Choose Authentication Path
+          </Header>
+        }
+      >
+        <SpaceBetween size="m">
+          <RadioGroup
+            value={session.selectedAuthMethod ?? null}
+            items={session.availableAuthMethods.map((method) => ({
+              value: method.method,
+              label: method.label,
+              description: method.summary,
+              disabled: !method.available,
+            }))}
+            onChange={({ detail }) => {
+              onSelectAuthMethod(detail.value);
+            }}
+          />
+          <div className={`lock-next-step${canLockWorkspace ? " lock-next-step-ready" : ""}`}>
+            <div className="lock-next-step-copy">
+              <StatusIndicator type={canLockWorkspace ? "success" : "pending"}>
+                {canLockWorkspace ? "Ready to lock" : "Waiting for selections"}
+              </StatusIndicator>
+              <strong>Lock workspace</strong>
+              <span>
+                {canLockWorkspace
+                  ? "The selected profile and auth path are ready."
+                  : "Choose a profile and auth path to continue."}
+              </span>
             </div>
-          }
-        >
+            <Button
+              variant="primary"
+              iconName="lock-private"
+              disabled={!canLockWorkspace}
+              onClick={onLockSession}
+            >
+              Lock Workspace
+            </Button>
+          </div>
           <div className="detail-grid">
-            <div className="detail-card detail-card-strong">
-              <Box variant="awsui-key-label">Provider</Box>
-              <Box variant="p">{selectedProvider?.label ?? "Choose a provider"}</Box>
-            </div>
-            <div className="detail-card detail-card-strong">
-              <Box variant="awsui-key-label">Profile</Box>
-              <Box variant="p">{selectedProfile?.displayName ?? "Choose a profile"}</Box>
-            </div>
-            <div className="detail-card detail-card-strong">
-              <Box variant="awsui-key-label">Auth Path</Box>
-              <Box variant="p">{session.selectedAuthMethod?.toUpperCase() ?? "Choose auth"}</Box>
-            </div>
             <div className="detail-card">
               <Box variant="awsui-key-label">Latest Activity</Box>
               <Box variant="p">{latestLog?.message ?? "No activity recorded yet."}</Box>
             </div>
           </div>
-        </Container>
-      </div>
+        </SpaceBetween>
+      </Container>
 
       <div className="setup-grid">
         <Container
@@ -636,7 +592,7 @@ export default function SessionSetupView({
               variant="h2"
               description="Selected profile context and auth capability."
             >
-              Review Details
+              Selected Context
             </Header>
           }
         >

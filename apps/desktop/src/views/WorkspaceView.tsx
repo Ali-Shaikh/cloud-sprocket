@@ -9,7 +9,6 @@ import {
   SpaceBetween,
   StatusIndicator,
   Table,
-  Tabs,
   Textarea,
 } from "@cloudscape-design/components";
 import type { PropertyFilterProps, TableProps } from "@cloudscape-design/components";
@@ -37,7 +36,6 @@ import {
   countLabel,
   defaultQuery,
   filterCollection,
-  makeWorkspaceTab,
   makeFilteringOptions,
   propertyFilterStrings,
   renderLogEntries,
@@ -61,6 +59,7 @@ type Props = {
   workspace: WorkspaceSnapshot;
   logs: ActivityLogEntry[];
   latestLog?: ActivityLogEntry;
+  activeTabId: string;
   splitPanelOpen: boolean;
   showSensitiveValues: boolean;
   onToggleSplitPanel: () => void;
@@ -175,6 +174,7 @@ export default function WorkspaceView({
   workspace,
   logs,
   latestLog,
+  activeTabId,
   splitPanelOpen,
   showSensitiveValues,
   onToggleSplitPanel,
@@ -1263,6 +1263,37 @@ export default function WorkspaceView({
     </SpaceBetween>
   );
 
+  const activeWorkspaceTab = session.workspaceTabs.find((tab) => tab.tabId === activeTabId);
+  const activeTabContent =
+    activeTabId === "overview"
+      ? overviewTab
+      : activeTabId === "s3"
+        ? s3Tab
+        : activeTabId === "ec2"
+          ? ec2Tab
+          : activeTabId === "actions"
+            ? actionsTab
+            : (
+                <Container
+                  header={
+                    <Header
+                      variant="h2"
+                      description={activeWorkspaceTab?.summary}
+                    >
+                      {activeWorkspaceTab?.label ?? "Workspace"}
+                    </Header>
+                  }
+                >
+                  <SpaceBetween size="m">
+                    <Box variant="p">{activeWorkspaceTab?.detail ?? "Select a workspace view."}</Box>
+                    <Box color="text-body-secondary">
+                      This view is wired into the new workspace contract now, with the old
+                      Python controller being replaced slice by slice behind it.
+                    </Box>
+                  </SpaceBetween>
+                </Container>
+              );
+
   return (
     <SpaceBetween
       size="l"
@@ -1311,35 +1342,7 @@ export default function WorkspaceView({
         </div>
       </Container>
 
-      <Tabs
-        tabs={session.workspaceTabs.map((tab) =>
-          tab.tabId === "overview"
-            ? {
-                id: tab.tabId,
-                label: tab.label,
-                content: overviewTab,
-              }
-            : tab.tabId === "s3"
-              ? {
-                  id: tab.tabId,
-                  label: tab.label,
-                  content: s3Tab,
-                }
-              : tab.tabId === "ec2"
-                ? {
-                    id: tab.tabId,
-                    label: tab.label,
-                    content: ec2Tab,
-                  }
-                : tab.tabId === "actions"
-                  ? {
-                      id: tab.tabId,
-                      label: tab.label,
-                      content: actionsTab,
-                    }
-                : makeWorkspaceTab(tab),
-        )}
-      />
+      <div role="tabpanel">{activeTabContent}</div>
     </SpaceBetween>
   );
 }

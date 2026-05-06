@@ -263,7 +263,7 @@ describe("App", () => {
     expect(
       screen.getByRole("heading", { name: "Runtime Settings" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Lock Session" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Lock workspace" })).toBeInTheDocument();
   });
 
   it("masks sensitive profile values until they are revealed", async () => {

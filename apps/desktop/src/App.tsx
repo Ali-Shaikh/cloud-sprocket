@@ -1,10 +1,9 @@
 import {
-  AppLayout,
   Box,
   Flashbar,
-  SplitPanel,
+  Icon,
 } from "@cloudscape-design/components";
-import type { FlashbarProps, PropertyFilterProps } from "@cloudscape-design/components";
+import type { FlashbarProps, IconProps, PropertyFilterProps } from "@cloudscape-design/components";
 import {
   lazy,
   Suspense,
@@ -14,6 +13,11 @@ import {
   useRef,
   useState,
 } from "react";
+import awsIconUrl from "./assets/cloud-icons/aws.svg";
+import awsEc2IconUrl from "./assets/cloud-icons/aws-ec2.svg";
+import awsS3IconUrl from "./assets/cloud-icons/aws-s3.svg";
+import azureIconUrl from "./assets/cloud-icons/azure.svg";
+import gcpIconUrl from "./assets/cloud-icons/gcp.svg";
 import { backendRequest, subscribeToBackendEvent } from "./lib/backend";
 import type {
   ActivityLogEntry,
@@ -34,6 +38,7 @@ import { defaultQuery, renderLogEntries, type TablePreferences } from "./views/s
 
 const SessionSetupView = lazy(() => import("./views/SessionSetupView"));
 const WorkspaceView = lazy(() => import("./views/WorkspaceView"));
+const appVersion = "0.1.15";
 
 type EC2LifecycleAction = "start" | "stop" | "reboot";
 
@@ -43,6 +48,93 @@ type EC2ActionHistoryItem = {
   message: string;
   completedAt?: string;
 };
+
+type SidebarItem = {
+  id: string;
+  label: string;
+  detail: string;
+  iconName?: IconProps.Name;
+  iconUrl?: string;
+  providerId?: string;
+  badge?: string;
+};
+
+const providerIconUrls: Record<string, string> = {
+  aws: awsIconUrl,
+  azure: azureIconUrl,
+  gcp: gcpIconUrl,
+  google: gcpIconUrl,
+  "google-cloud": gcpIconUrl,
+};
+
+function CloudProviderIcon({ providerId }: { providerId?: string }) {
+  const iconUrl = providerIconUrls[providerId?.toLowerCase() ?? ""];
+  if (iconUrl) {
+    return (
+      <img
+        className="cloud-provider-icon"
+        src={iconUrl}
+        alt=""
+        aria-hidden="true"
+      />
+    );
+  }
+  return (
+    <Icon
+      name="globe"
+      variant="inverted"
+    />
+  );
+}
+
+function sidebarItemIconClass(item: SidebarItem): string {
+  return `sidebar-item-icon${item.providerId || item.iconUrl ? " sidebar-item-icon-provider" : ""}`;
+}
+
+function SidebarGlyph({ item }: { item: SidebarItem }) {
+  if (item.iconUrl) {
+    return (
+      <img
+        className="cloud-provider-icon"
+        src={item.iconUrl}
+        alt=""
+        aria-hidden="true"
+      />
+    );
+  }
+  if (item.providerId) {
+    return <CloudProviderIcon providerId={item.providerId} />;
+  }
+  return (
+    <Icon
+      name={item.iconName ?? "status-info"}
+      variant="inverted"
+    />
+  );
+}
+
+function workspaceTabIconUrl(tabId: string): string | undefined {
+  if (tabId === "s3") {
+    return awsS3IconUrl;
+  }
+  if (tabId === "ec2") {
+    return awsEc2IconUrl;
+  }
+  return undefined;
+}
+
+function workspaceTabIcon(tabId: string): IconProps.Name {
+  if (tabId === "s3") {
+    return "folder";
+  }
+  if (tabId === "ec2") {
+    return "grid-view";
+  }
+  if (tabId === "actions") {
+    return "settings";
+  }
+  return "view-full";
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -78,14 +170,219 @@ function wait(durationMs: number): Promise<void> {
   });
 }
 
-function getDefaultSplitPanelSize(viewportWidth: number): number {
-  if (viewportWidth < 820) {
-    return 280;
-  }
-  if (viewportWidth < 1180) {
-    return 300;
-  }
-  return 360;
+function AppSidebar({
+  session,
+  selectedProvider,
+  selectedProfile,
+  workspace,
+  activeWorkspaceTabId,
+  collapsed,
+  activityOpen,
+  onToggleCollapsed,
+  onToggleActivity,
+  onLockSession,
+  onWorkspaceTabChange,
+  onRefreshDiscovery,
+}: {
+  session: SessionSnapshot;
+  selectedProvider?: ProviderSummary;
+  selectedProfile?: ProfileSummary;
+  workspace: WorkspaceSnapshot;
+  activeWorkspaceTabId: string;
+  collapsed: boolean;
+  activityOpen: boolean;
+  onToggleCollapsed: () => void;
+  onToggleActivity: () => void;
+  onLockSession: () => void;
+  onWorkspaceTabChange: (tabId: string) => void;
+  onRefreshDiscovery: () => void;
+}) {
+  const setupItems: SidebarItem[] = [
+    {
+      id: "provider",
+      label: "Provider",
+      detail: selectedProvider?.label ?? "Choose provider",
+      providerId: selectedProvider?.providerId,
+      badge: selectedProvider ? "Done" : "Open",
+    },
+    {
+      id: "profile",
+      label: "Profile",
+      detail: selectedProfile?.displayName ?? "Choose profile",
+      iconName: "user-profile",
+      badge: selectedProfile ? "Done" : "Open",
+    },
+    {
+      id: "auth",
+      label: "Auth",
+      detail: session.selectedAuthMethod?.toUpperCase() ?? "Choose auth",
+      iconName: "key",
+      badge: session.selectedAuthMethod ? "Done" : "Open",
+    },
+    {
+      id: "lock",
+      label: "Lock",
+      detail: selectedProfile && session.selectedAuthMethod ? "Ready" : "Waiting",
+      iconName: "lock-private",
+      badge: selectedProfile && session.selectedAuthMethod ? "Ready" : "Open",
+    },
+  ];
+
+  const workspaceItems: SidebarItem[] = session.workspaceTabs.map((tab) => {
+    const badge =
+      tab.tabId === "s3"
+        ? String(workspace.s3Buckets.length)
+        : tab.tabId === "ec2"
+          ? String(workspace.ec2Instances.length)
+          : undefined;
+    return {
+      id: tab.tabId,
+      label: tab.label,
+      detail: tab.summary,
+      iconName: workspaceTabIcon(tab.tabId),
+      iconUrl: workspaceTabIconUrl(tab.tabId),
+      badge,
+    };
+  });
+
+  return (
+    <aside className={`app-sidebar${collapsed ? " app-sidebar-collapsed" : ""}`}>
+      <div className="sidebar-brand">
+        <div className="brand-mark">CS</div>
+        <div className="brand-copy">
+          <div className="brand-title">CloudSprocket</div>
+          <div className="brand-subtitle">
+            {session.isLocked ? "Locked workspace" : "Session setup"}
+          </div>
+        </div>
+        <button
+          type="button"
+          className="sidebar-collapse-button"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={onToggleCollapsed}
+        >
+          <Icon
+            name={collapsed ? "angle-right" : "angle-left"}
+            variant="inverted"
+          />
+        </button>
+      </div>
+
+      <div className="sidebar-section">
+        <div className="sidebar-section-label">
+          {session.isLocked ? "Workspace" : "Setup"}
+        </div>
+        <div className="sidebar-menu">
+          {(session.isLocked ? workspaceItems : setupItems).map((item) => {
+            const active = session.isLocked
+              ? item.id === activeWorkspaceTabId
+              : item.badge === "Open" || item.badge === "Ready";
+            return session.isLocked ? (
+              <button
+                key={item.id}
+                type="button"
+                className={`sidebar-menu-item${active ? " sidebar-menu-item-active" : ""}`}
+                onClick={() => {
+                  onWorkspaceTabChange(item.id);
+                }}
+                title={`${item.label}: ${item.detail}`}
+              >
+                <span className={sidebarItemIconClass(item)}>
+                  <SidebarGlyph item={item} />
+                </span>
+                <span className="sidebar-item-copy">
+                  <strong>{item.label}</strong>
+                  <small>{item.detail}</small>
+                </span>
+                {item.badge ? <em>{item.badge}</em> : null}
+              </button>
+            ) : (
+              <div
+                key={item.id}
+                className={`sidebar-menu-item${active ? " sidebar-menu-item-active" : ""}`}
+                title={`${item.label}: ${item.detail}`}
+              >
+                <span className={sidebarItemIconClass(item)}>
+                  <SidebarGlyph item={item} />
+                </span>
+                <span className="sidebar-item-copy">
+                  <strong>{item.label}</strong>
+                  <small>{item.detail}</small>
+                </span>
+                {item.badge ? <em>{item.badge}</em> : null}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="sidebar-section sidebar-context">
+        <div className="sidebar-section-label">Context</div>
+        <dl>
+          <div>
+            <dt>Provider</dt>
+            <dd>{selectedProvider?.label ?? workspace.provider?.label ?? "None"}</dd>
+          </div>
+          <div>
+            <dt>Profile</dt>
+            <dd>{selectedProfile?.displayName ?? workspace.profile?.displayName ?? "None"}</dd>
+          </div>
+          <div>
+            <dt>Auth</dt>
+            <dd>{session.lockedAuthMethod ?? session.selectedAuthMethod ?? "None"}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div className="sidebar-footer">
+        {!session.isLocked ? (
+          <button
+            type="button"
+            className="sidebar-action sidebar-lock-action"
+            disabled={!selectedProfile || !session.selectedAuthMethod}
+            onClick={onLockSession}
+            title="Lock workspace"
+            aria-label="Lock workspace"
+          >
+            <span className="sidebar-action-icon">
+              <Icon name="lock-private" />
+            </span>
+            <span className="sidebar-action-copy">Lock Workspace</span>
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className={`sidebar-action sidebar-action-secondary${activityOpen ? " sidebar-action-active" : ""}`}
+          onClick={onToggleActivity}
+          title={activityOpen ? "Hide Activity" : "Show Activity"}
+          aria-label={activityOpen ? "Hide Activity" : "Show Activity"}
+        >
+          <span className="sidebar-action-icon">
+            <Icon
+              name="history"
+              variant="inverted"
+            />
+          </span>
+          <span className="sidebar-action-copy">
+            {activityOpen ? "Hide Activity" : "Activity"}
+          </span>
+        </button>
+        <button
+          type="button"
+          className="sidebar-action"
+          onClick={onRefreshDiscovery}
+          title="Refresh discovery"
+          aria-label="Refresh discovery"
+        >
+          <span className="sidebar-action-icon">
+            <Icon name="refresh" />
+          </span>
+          <span className="sidebar-action-copy">Refresh</span>
+        </button>
+      </div>
+    </aside>
+  );
 }
 
 const emptySession: SessionSnapshot = {
@@ -131,16 +428,16 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [showSensitiveValues, setShowSensitiveValues] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
-  const [splitPanelOpen, setSplitPanelOpen] = useState(() => window.innerWidth >= 1180);
-  const [splitPanelSize, setSplitPanelSize] = useState(() =>
-    getDefaultSplitPanelSize(window.innerWidth),
-  );
+  const [splitPanelOpen, setSplitPanelOpen] = useState(false);
+  const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState("overview");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [providerQuery, setProviderQuery] = useState<PropertyFilterProps.Query>(
     defaultQuery,
   );
   const [profileQuery, setProfileQuery] = useState<PropertyFilterProps.Query>(defaultQuery);
   const s3PrefixRequestIdRef = useRef(0);
   const ec2ActionPollRef = useRef(0);
+  const workspaceLoadRequestIdRef = useRef(0);
   const [providerPreferences, setProviderPreferences] = useState<TablePreferences>({
     wrapLines: false,
     stripedRows: true,
@@ -164,8 +461,6 @@ export default function App() {
   });
 
   const isTablet = viewportWidth < 1180;
-  const defaultSplitPanelSize = getDefaultSplitPanelSize(viewportWidth);
-
   const selectedProvider = providers.find(
     (provider) => provider.providerId === session.currentProviderId,
   );
@@ -234,16 +529,22 @@ export default function App() {
   });
 
   const loadWorkspace = useEffectEvent(async (nextSession: SessionSnapshot) => {
+    const requestId = workspaceLoadRequestIdRef.current + 1;
+    workspaceLoadRequestIdRef.current = requestId;
     if (!nextSession.isLocked) {
       startTransition(() => {
-        setWorkspace(emptyWorkspace);
+        if (requestId === workspaceLoadRequestIdRef.current) {
+          setWorkspace(emptyWorkspace);
+        }
       });
       return;
     }
 
     const workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
     startTransition(() => {
-      setWorkspace(workspaceResult);
+      if (requestId === workspaceLoadRequestIdRef.current) {
+        setWorkspace(workspaceResult);
+      }
     });
   });
 
@@ -390,14 +691,27 @@ export default function App() {
   }, [isTablet]);
 
   useEffect(() => {
-    setSplitPanelSize(defaultSplitPanelSize);
-  }, [defaultSplitPanelSize]);
+    if (!session.isLocked) {
+      setActiveWorkspaceTabId("overview");
+      return;
+    }
+    if (
+      session.workspaceTabs.length > 0 &&
+      !session.workspaceTabs.some((tab) => tab.tabId === activeWorkspaceTabId)
+    ) {
+      setActiveWorkspaceTabId(session.workspaceTabs[0].tabId);
+    }
+  }, [activeWorkspaceTabId, session.isLocked, session.workspaceTabs]);
 
   async function mutateSession(
     method: string,
     params: Record<string, unknown> = {},
   ): Promise<void> {
-    await backendRequest<SessionSnapshot>(method, params);
+    const nextSession = await backendRequest<SessionSnapshot>(method, params);
+    startTransition(() => {
+      setSession(nextSession);
+    });
+    await loadWorkspace(nextSession);
     await loadState();
   }
 
@@ -407,11 +721,31 @@ export default function App() {
     });
   }
 
-  const splitPanel = (
-    <SplitPanel header="Recent Activity">
+  const activityDrawer = splitPanelOpen ? (
+    <aside
+      className="activity-drawer"
+      aria-label="Recent Activity"
+    >
+      <div className="activity-drawer-header">
+        <div>
+          <Box variant="awsui-key-label">
+            {session.isLocked ? "Workspace" : "Discovery"}
+          </Box>
+          <h2>Recent Activity</h2>
+        </div>
+        <button
+          type="button"
+          className="activity-drawer-close"
+          onClick={() => {
+            setSplitPanelOpen(false);
+          }}
+        >
+          Close
+        </button>
+      </div>
       <div className="log-stream">{renderLogEntries(logs)}</div>
-    </SplitPanel>
-  );
+    </aside>
+  ) : null;
 
   const content = session.isLocked ? (
     <WorkspaceView
@@ -419,6 +753,7 @@ export default function App() {
       workspace={workspace}
       logs={logs}
       latestLog={latestLog}
+      activeTabId={activeWorkspaceTabId}
       splitPanelOpen={splitPanelOpen}
       showSensitiveValues={showSensitiveValues}
       onToggleSplitPanel={() => {
@@ -571,16 +906,12 @@ export default function App() {
       loading={loading}
       isTablet={isTablet}
       showSensitiveValues={showSensitiveValues}
-      splitPanelOpen={splitPanelOpen}
       providerQuery={providerQuery}
       profileQuery={profileQuery}
       providerPreferences={providerPreferences}
       profilePreferences={profilePreferences}
       onToggleSensitiveValues={() => {
         setShowSensitiveValues((current) => !current);
-      }}
-      onToggleSplitPanel={() => {
-        setSplitPanelOpen((current) => !current);
       }}
       onProviderQueryChange={setProviderQuery}
       onProfileQueryChange={setProfileQuery}
@@ -606,21 +937,31 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <AppLayout
-        navigationHide
-        toolsHide
-        contentType="default"
-        notifications={<Flashbar items={notifications} />}
-        splitPanel={splitPanel}
-        splitPanelOpen={splitPanelOpen}
-        splitPanelSize={splitPanelSize}
-        onSplitPanelResize={({ detail }) => {
-          setSplitPanelSize(detail.size);
-        }}
-        onSplitPanelToggle={({ detail }) => {
-          setSplitPanelOpen(detail.open);
-        }}
-        content={
+      <div className={`app-frame${sidebarCollapsed ? " app-frame-sidebar-collapsed" : ""}`}>
+        <AppSidebar
+          session={session}
+          selectedProvider={selectedProvider}
+          selectedProfile={selectedProfile}
+          workspace={workspace}
+          activeWorkspaceTabId={activeWorkspaceTabId}
+          collapsed={sidebarCollapsed}
+          activityOpen={splitPanelOpen}
+          onToggleCollapsed={() => {
+            setSidebarCollapsed((current) => !current);
+          }}
+          onToggleActivity={() => {
+            setSplitPanelOpen((current) => !current);
+          }}
+          onLockSession={() => {
+            void mutateSession("session.lock");
+          }}
+          onWorkspaceTabChange={setActiveWorkspaceTabId}
+          onRefreshDiscovery={() => {
+            void refreshDiscovery();
+          }}
+        />
+        <main className="app-main">
+          <Flashbar items={notifications} />
           <Suspense
             fallback={
               <Box padding="l" color="text-body-secondary">
@@ -630,8 +971,19 @@ export default function App() {
           >
             {content}
           </Suspense>
-        }
-      />
+          <footer className="app-footer">
+            <div>
+              <strong>CloudSprocket Desktop</strong>
+              <span>Version {appVersion}</span>
+            </div>
+            <div>
+              <span>Copyright © {new Date().getFullYear()} CloudSprocket.</span>
+              <span>Local-first cloud workspace.</span>
+            </div>
+          </footer>
+        </main>
+        {activityDrawer}
+      </div>
     </div>
   );
 }
