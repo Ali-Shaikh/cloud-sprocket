@@ -24,6 +24,7 @@
     "@cloudscape-design/components": "^3.0.0",
     "@cloudscape-design/global-styles": "^1.0.0",
     "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

@@ -348,9 +348,11 @@ describe("App", () => {
     fireEvent.change(prefixInput, { target: { value: "logs/" } });
 
     expect((await screen.findAllByText("logs/filtered-object.json")).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("complementary", { name: "S3 object details" })).toBeInTheDocument();
+    expect(await screen.findByText("Object Detail")).toBeInTheDocument();
     expect(await screen.findByText("Metadata: owner")).toBeInTheDocument();
     expect(await screen.findByText("analytics")).toBeInTheDocument();
-    expect(await screen.findByText("Copy Snippets")).toBeInTheDocument();
+    expect(await screen.findByText("Copy snippets")).toBeInTheDocument();
     expect(await screen.findByText(/s3:\/\/cloudsprocket-artifacts\/logs\/filtered-object\.json/i)).toBeInTheDocument();
   });
 

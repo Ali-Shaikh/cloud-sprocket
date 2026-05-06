@@ -23,6 +23,7 @@
         }
       ]
     },
+    "dialog:allow-open",
     "shell:allow-kill",
     "shell:allow-stdin-write"
   ]

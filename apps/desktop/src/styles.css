@@ -211,6 +211,11 @@ body {
   gap: 0.25rem;
 }
 
+.sidebar-menu-group {
+  display: grid;
+  gap: 0.2rem;
+}
+
 .sidebar-menu-item {
   display: flex;
   width: 100%;
@@ -261,6 +266,39 @@ button.sidebar-menu-item {
 .sidebar-menu-item:hover,
 .sidebar-menu-item-active {
   background: var(--sidebar-active);
+}
+
+.sidebar-submenu {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0.15rem 0 0.45rem 2.7rem;
+  padding-left: 0.8rem;
+  border-left: 1px solid rgba(148, 163, 184, 0.32);
+}
+
+.sidebar-submenu-item {
+  width: 100%;
+  min-width: 0;
+  padding: 0.35rem 0.45rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #cbd5e1;
+  font: inherit;
+  font-size: 0.86rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-submenu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.sidebar-submenu-item-active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  font-weight: 700;
 }
 
 .sidebar-item-copy {
@@ -428,6 +466,11 @@ button.sidebar-menu-item {
   gap: 0.55rem;
 }
 
+.app-sidebar-collapsed .sidebar-menu-group {
+  display: grid;
+  place-items: center;
+}
+
 .app-sidebar-collapsed .sidebar-menu-item {
   display: flex;
   align-items: center;
@@ -557,11 +600,94 @@ button.sidebar-menu-item {
   background: var(--surface-muted);
 }
 
-.s3-workspace-grid {
+.s3-object-panel,
+.s3-object-workbench {
+  min-width: 0;
+}
+
+.s3-objects-layout {
   display: grid;
-  grid-template-columns: minmax(15rem, 0.45fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
+}
+
+.s3-object-panel [class*="awsui_table-container"] {
+  max-width: 100%;
+}
+
+.s3-object-workbench .detail-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
+  gap: 0.65rem;
+}
+
+.s3-object-workbench .detail-card,
+.s3-object-workbench .snippet-card {
+  padding: 0.75rem;
+}
+
+.s3-object-workbench pre {
+  max-height: 13rem;
+}
+
+.s3-object-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 24;
+  width: min(480px, calc(100vw - 2rem));
+  height: 100vh;
+  padding: 1rem;
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: -16px 0 40px rgba(15, 23, 42, 0.16);
+  box-sizing: border-box;
+}
+
+.s3-object-drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.s3-object-drawer-header h2 {
+  margin: 0.15rem 0 0;
+}
+
+.object-workbench-grid {
+  display: grid;
+  grid-template-columns: minmax(17rem, 0.65fr) minmax(0, 1.35fr) minmax(18rem, 0.65fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.object-workbench-section {
+  min-width: 0;
+}
+
+.snippet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+  gap: 0.75rem;
+}
+
+.s3-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: end;
+}
+
+.s3-upload-file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: end;
 }
 
 .workspace-secondary-grid {
@@ -874,7 +1000,9 @@ button.sidebar-menu-item {
   .page-heading,
   .workspace-summary-grid,
   .workspace-metric-grid,
-  .s3-workspace-grid,
+  .object-workbench-grid,
+  .s3-form-grid,
+  .s3-upload-file-row,
   .workspace-secondary-grid,
   .setup-stage-grid,
   .setup-grid,

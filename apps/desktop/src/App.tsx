@@ -59,6 +59,11 @@ type SidebarItem = {
   badge?: string;
 };
 
+type SidebarSubItem = {
+  id: string;
+  label: string;
+};
+
 const providerIconUrls: Record<string, string> = {
   aws: awsIconUrl,
   azure: azureIconUrl,
@@ -176,12 +181,16 @@ function AppSidebar({
   selectedProfile,
   workspace,
   activeWorkspaceTabId,
+  activeS3PageId,
+  activeActionsPageId,
   collapsed,
   activityOpen,
   onToggleCollapsed,
   onToggleActivity,
   onLockSession,
   onWorkspaceTabChange,
+  onS3PageChange,
+  onActionsPageChange,
   onRefreshDiscovery,
 }: {
   session: SessionSnapshot;
@@ -189,12 +198,16 @@ function AppSidebar({
   selectedProfile?: ProfileSummary;
   workspace: WorkspaceSnapshot;
   activeWorkspaceTabId: string;
+  activeS3PageId: string;
+  activeActionsPageId: string;
   collapsed: boolean;
   activityOpen: boolean;
   onToggleCollapsed: () => void;
   onToggleActivity: () => void;
   onLockSession: () => void;
   onWorkspaceTabChange: (tabId: string) => void;
+  onS3PageChange: (pageId: string) => void;
+  onActionsPageChange: (pageId: string) => void;
   onRefreshDiscovery: () => void;
 }) {
   const setupItems: SidebarItem[] = [
@@ -245,6 +258,27 @@ function AppSidebar({
     };
   });
 
+  const workspaceSubItems: Record<string, SidebarSubItem[]> = {
+    s3: [
+      { id: "objects", label: "Objects" },
+      { id: "upload", label: "Upload" },
+    ],
+    actions: [
+      { id: "workspace", label: "Workspace" },
+      { id: "url-tester", label: "URL tester" },
+    ],
+  };
+
+  const openWorkspaceSubPage = (tabId: string, pageId: string) => {
+    onWorkspaceTabChange(tabId);
+    if (tabId === "s3") {
+      onS3PageChange(pageId);
+    }
+    if (tabId === "actions") {
+      onActionsPageChange(pageId);
+    }
+  };
+
   return (
     <aside className={`app-sidebar${collapsed ? " app-sidebar-collapsed" : ""}`}>
       <div className="sidebar-brand">
@@ -279,24 +313,55 @@ function AppSidebar({
               ? item.id === activeWorkspaceTabId
               : item.badge === "Open" || item.badge === "Ready";
             return session.isLocked ? (
-              <button
+              <div
                 key={item.id}
-                type="button"
-                className={`sidebar-menu-item${active ? " sidebar-menu-item-active" : ""}`}
-                onClick={() => {
-                  onWorkspaceTabChange(item.id);
-                }}
-                title={`${item.label}: ${item.detail}`}
+                className="sidebar-menu-group"
               >
-                <span className={sidebarItemIconClass(item)}>
-                  <SidebarGlyph item={item} />
-                </span>
-                <span className="sidebar-item-copy">
-                  <strong>{item.label}</strong>
-                  <small>{item.detail}</small>
-                </span>
-                {item.badge ? <em>{item.badge}</em> : null}
-              </button>
+                <button
+                  type="button"
+                  className={`sidebar-menu-item${active ? " sidebar-menu-item-active" : ""}`}
+                  onClick={() => {
+                    onWorkspaceTabChange(item.id);
+                    if (item.id === "s3") {
+                      onS3PageChange("objects");
+                    }
+                    if (item.id === "actions") {
+                      onActionsPageChange("workspace");
+                    }
+                  }}
+                  title={`${item.label}: ${item.detail}`}
+                >
+                  <span className={sidebarItemIconClass(item)}>
+                    <SidebarGlyph item={item} />
+                  </span>
+                  <span className="sidebar-item-copy">
+                    <strong>{item.label}</strong>
+                    <small>{item.detail}</small>
+                  </span>
+                  {item.badge ? <em>{item.badge}</em> : null}
+                </button>
+                {active && workspaceSubItems[item.id] && !collapsed ? (
+                  <div className="sidebar-submenu">
+                    {workspaceSubItems[item.id].map((subItem) => (
+                      <button
+                        key={subItem.id}
+                        type="button"
+                        className={`sidebar-submenu-item${
+                          (item.id === "s3" && activeS3PageId === subItem.id) ||
+                          (item.id === "actions" && activeActionsPageId === subItem.id)
+                            ? " sidebar-submenu-item-active"
+                            : ""
+                        }`}
+                        onClick={() => {
+                          openWorkspaceSubPage(item.id, subItem.id);
+                        }}
+                      >
+                        {subItem.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             ) : (
               <div
                 key={item.id}
@@ -430,6 +495,8 @@ export default function App() {
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [splitPanelOpen, setSplitPanelOpen] = useState(false);
   const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState("overview");
+  const [activeS3PageId, setActiveS3PageId] = useState("objects");
+  const [activeActionsPageId, setActiveActionsPageId] = useState("workspace");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [providerQuery, setProviderQuery] = useState<PropertyFilterProps.Query>(
     defaultQuery,
@@ -693,6 +760,8 @@ export default function App() {
   useEffect(() => {
     if (!session.isLocked) {
       setActiveWorkspaceTabId("overview");
+      setActiveS3PageId("objects");
+      setActiveActionsPageId("workspace");
       return;
     }
     if (
@@ -754,6 +823,8 @@ export default function App() {
       logs={logs}
       latestLog={latestLog}
       activeTabId={activeWorkspaceTabId}
+      activeS3PageId={activeS3PageId}
+      activeActionsPageId={activeActionsPageId}
       splitPanelOpen={splitPanelOpen}
       showSensitiveValues={showSensitiveValues}
       onToggleSplitPanel={() => {
@@ -944,6 +1015,8 @@ export default function App() {
           selectedProfile={selectedProfile}
           workspace={workspace}
           activeWorkspaceTabId={activeWorkspaceTabId}
+          activeS3PageId={activeS3PageId}
+          activeActionsPageId={activeActionsPageId}
           collapsed={sidebarCollapsed}
           activityOpen={splitPanelOpen}
           onToggleCollapsed={() => {
@@ -956,6 +1029,8 @@ export default function App() {
             void mutateSession("session.lock");
           }}
           onWorkspaceTabChange={setActiveWorkspaceTabId}
+          onS3PageChange={setActiveS3PageId}
+          onActionsPageChange={setActiveActionsPageId}
           onRefreshDiscovery={() => {
             void refreshDiscovery();
           }}

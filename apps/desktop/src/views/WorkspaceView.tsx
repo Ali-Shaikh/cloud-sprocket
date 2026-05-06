@@ -11,6 +11,7 @@ import {
   Table,
   Textarea,
 } from "@cloudscape-design/components";
+import { open } from "@tauri-apps/plugin-dialog";
 import type { PropertyFilterProps, TableProps } from "@cloudscape-design/components";
 import {
   useDeferredValue,
@@ -23,7 +24,6 @@ import type {
   ActivityLogEntry,
   AwsEc2Instance,
   AwsS3PresignResult,
-  AwsS3Bucket,
   AwsS3Object,
   JobLifecycle,
   SessionSnapshot,
@@ -60,6 +60,8 @@ type Props = {
   logs: ActivityLogEntry[];
   latestLog?: ActivityLogEntry;
   activeTabId: string;
+  activeS3PageId: string;
+  activeActionsPageId: string;
   splitPanelOpen: boolean;
   showSensitiveValues: boolean;
   onToggleSplitPanel: () => void;
@@ -185,6 +187,8 @@ export default function WorkspaceView({
   logs,
   latestLog,
   activeTabId,
+  activeS3PageId,
+  activeActionsPageId,
   splitPanelOpen,
   showSensitiveValues,
   onToggleSplitPanel,
@@ -217,8 +221,10 @@ export default function WorkspaceView({
   const [signedUrlDurationSeconds, setSignedUrlDurationSeconds] = useState("3600");
   const [urlTesterValue, setUrlTesterValue] = useState("");
   const [s3PrefixDraft, setS3PrefixDraft] = useState(workspace.s3PrefixFilter || "");
+  const [s3ObjectDrawerOpen, setS3ObjectDrawerOpen] = useState(Boolean(workspace.selectedS3ObjectKey));
   const lastSelectedS3BucketRef = useRef(workspace.selectedS3BucketName || "");
   const lastRequestedS3PrefixRef = useRef(workspace.s3PrefixFilter || "");
+  const lastSelectedS3ObjectRef = useRef(workspace.selectedS3ObjectKey || "");
   const debouncedS3PrefixDraft = useDebouncedValue(s3PrefixDraft, 350);
   const [ec2Query, setEC2Query] = useState<PropertyFilterProps.Query>(defaultQuery);
   const [pendingEC2Action, setPendingEC2Action] = useState<{
@@ -229,11 +235,31 @@ export default function WorkspaceView({
   const deferredEC2Query = useDeferredValue(debouncedEC2Query);
   const ec2ResultsArePending = ec2Query !== debouncedEC2Query;
 
+  const chooseUploadFile = async () => {
+    const selectedPath = await open({
+      multiple: false,
+      directory: false,
+    });
+    if (typeof selectedPath !== "string") {
+      return;
+    }
+    setUploadSourcePath(selectedPath);
+    setUploadObjectKey(defaultUploadKey(selectedPath, workspace.s3PrefixFilter));
+  };
+
   useEffect(() => {
     if (!uploadObjectKey && uploadSourcePath) {
       setUploadObjectKey(defaultUploadKey(uploadSourcePath, workspace.s3PrefixFilter));
     }
   }, [uploadObjectKey, uploadSourcePath, workspace.s3PrefixFilter]);
+
+  useEffect(() => {
+    const nextObjectKey = workspace.selectedS3ObjectKey || "";
+    if (nextObjectKey !== lastSelectedS3ObjectRef.current) {
+      lastSelectedS3ObjectRef.current = nextObjectKey;
+      setS3ObjectDrawerOpen(Boolean(nextObjectKey));
+    }
+  }, [workspace.selectedS3ObjectKey]);
 
   useEffect(() => {
     const nextBucket = workspace.selectedS3BucketName || "";
@@ -338,25 +364,20 @@ export default function WorkspaceView({
     </SpaceBetween>
   );
 
-  const selectedBucket = workspace.s3Buckets.find(
-    (bucket) => bucket.name === workspace.selectedS3BucketName,
-  );
   const selectedObject = workspace.s3Objects.find(
     (object) => object.key === workspace.selectedS3ObjectKey,
   );
-
-  const s3BucketColumns: TableProps.ColumnDefinition<AwsS3Bucket>[] = [
-    {
-      id: "name",
-      header: "Bucket",
-      cell: (bucket) => bucket.name,
-    },
-    {
-      id: "createdAt",
-      header: "Created",
-      cell: (bucket) => bucket.createdAt || "Unknown",
-    },
-  ];
+  const effectiveS3PageId = activeS3PageId === "upload" ? "upload" : "objects";
+  const s3BucketOptions = workspace.s3Buckets.map((bucket) => ({
+    label: bucket.name,
+    value: bucket.name,
+  }));
+  const selectedBucketOption = workspace.selectedS3BucketName
+    ? {
+        label: workspace.selectedS3BucketName,
+        value: workspace.selectedS3BucketName,
+      }
+    : null;
 
   const s3ObjectColumns: TableProps.ColumnDefinition<AwsS3Object>[] = [
     {
@@ -381,137 +402,41 @@ export default function WorkspaceView({
     },
   ];
 
-  const s3Tab = (
-    <SpaceBetween
-      size="l"
-      className="page-stack"
+  const s3ObjectDetailsDrawer = selectedObject && s3ObjectDrawerOpen ? (
+    <aside
+      className="s3-object-drawer"
+      aria-label="S3 object details"
     >
-      <Container
-        header={
-          <Header
-            variant="h2"
-            description="Real bucket inventory and object listings now come from the Go daemon."
-          >
-            S3 Inventory
-          </Header>
-        }
-      >
-        <div className="status-strip">
-          <div className="status-pill">
-            <Box variant="awsui-key-label">Selected Bucket</Box>
-            <Box variant="p">{workspace.selectedS3BucketName || "No bucket selected"}</Box>
-          </div>
-          <div className="status-pill">
-            <Box variant="awsui-key-label">Prefix Filter</Box>
-            <Box variant="p">{workspace.s3PrefixFilter || "No prefix filter"}</Box>
-          </div>
-          <div className="status-pill">
-            <Box variant="awsui-key-label">Objects</Box>
-            <Box variant="p">{countLabel(workspace.s3Objects.length, "object", "objects")}</Box>
-          </div>
+      <div className="s3-object-drawer-header">
+        <div>
+          <Box variant="awsui-key-label">Selected object</Box>
+          <h2>Object Detail</h2>
         </div>
-        <Box color="text-body-secondary">
-          {workspace.s3StatusMessage || "S3 inventory is waiting for a locked AWS workspace."}
-        </Box>
-      </Container>
-
-      <div className="s3-workspace-grid">
-        <Container
-          header={
-            <Header
-              variant="h2"
-              description="Select a bucket to load its object list."
-            >
-              Buckets
-            </Header>
-          }
-        >
-          <Table
-            items={workspace.s3Buckets}
-            columnDefinitions={s3BucketColumns}
-            selectionType="single"
-            selectedItems={selectedBucket ? [selectedBucket] : []}
-            trackBy="name"
-            variant="embedded"
-            onSelectionChange={({ detail }) => {
-              const bucket = detail.selectedItems[0];
-              if (bucket) {
-                onSelectS3Bucket(bucket.name);
-              }
-            }}
-            empty={<Box color="text-status-inactive">No S3 buckets loaded for this workspace.</Box>}
-          />
-        </Container>
-
-        <Container
-          header={
-            <Header
-              variant="h2"
-              description={workspace.selectedS3BucketName || "Select a bucket to inspect its objects."}
-            >
-              Objects
-            </Header>
-          }
-        >
-          <SpaceBetween size="m">
-            <Input
-              value={s3PrefixDraft}
-              placeholder="Filter by prefix, for example reports/"
-              onChange={({ detail }) => {
-                setS3PrefixDraft(detail.value);
-              }}
-            />
-            {s3PrefixDraft !== (workspace.s3PrefixFilter || "") ? (
-              <Box color="text-body-secondary">Updating object listing after typing pauses.</Box>
-            ) : null}
-            <Table
-              items={workspace.s3Objects}
-              columnDefinitions={s3ObjectColumns}
-              selectionType="single"
-              selectedItems={selectedObject ? [selectedObject] : []}
-              trackBy="key"
-              variant="embedded"
-              onSelectionChange={({ detail }) => {
-                const object = detail.selectedItems[0];
-                if (object) {
-                  onSelectS3Object(object.key);
-                }
-              }}
-              empty={<Box color="text-status-inactive">No S3 objects loaded for the selected bucket.</Box>}
-            />
-          </SpaceBetween>
-        </Container>
+        <Button
+          iconName="close"
+          variant="icon"
+          ariaLabel="Close object detail"
+          onClick={() => {
+            setS3ObjectDrawerOpen(false);
+          }}
+        />
       </div>
-
-      <div className="workspace-secondary-grid">
-        <Container
-          header={
-            <Header
-              variant="h2"
-              description={workspace.selectedS3ObjectKey || "Select an object to inspect metadata."}
-            >
-              Object Metadata
-            </Header>
-          }
-        >
+      <SpaceBetween size="m">
+        <div className="detail-card">
+          <Box variant="awsui-key-label">Object key</Box>
+          <Box variant="p">{workspace.selectedS3ObjectKey}</Box>
+        </div>
+        <div className="object-workbench-section">
+          <Box variant="awsui-key-label">Metadata</Box>
           {renderDetailFields(
             workspace.s3ObjectMetadata,
             "No metadata loaded for the selected object.",
           )}
-        </Container>
-
-        <Container
-          header={
-            <Header
-              variant="h2"
-              description="Generated locally from the selected bucket and object. No snippet is stored."
-            >
-              Copy Snippets
-            </Header>
-          }
-        >
+        </div>
+        <div className="object-workbench-section">
+          <Box variant="awsui-key-label">Copy snippets</Box>
           {workspace.s3ExportSnippets.length === 0 ? (
-            <Box color="text-status-inactive">Select an object to generate copy snippets.</Box>
+            <Box color="text-status-inactive">No copy snippets are available for this object.</Box>
           ) : (
             <SpaceBetween size="s">
               {workspace.s3ExportSnippets.map((snippet) => (
@@ -535,61 +460,10 @@ export default function WorkspaceView({
               ))}
             </SpaceBetween>
           )}
-        </Container>
-      </div>
-
-      <div className="workspace-secondary-grid">
-        <Container
-          header={
-            <Header
-              variant="h2"
-              description="Upload uses the Go daemon and AWS SDK transfer manager."
-            >
-              Upload Object
-            </Header>
-          }
-        >
-          <SpaceBetween size="m">
-            <Input
-              value={uploadSourcePath}
-              placeholder="Local file path, for example D:\\Downloads\\report.csv"
-              onChange={({ detail }) => {
-                setUploadSourcePath(detail.value);
-                if (!uploadObjectKey) {
-                  setUploadObjectKey(defaultUploadKey(detail.value, workspace.s3PrefixFilter));
-                }
-              }}
-            />
-            <Input
-              value={uploadObjectKey}
-              placeholder="Destination object key"
-              onChange={({ detail }) => {
-                setUploadObjectKey(detail.value);
-              }}
-            />
-            <Button
-              disabled={!workspace.selectedS3BucketName || !uploadSourcePath || !uploadObjectKey}
-              onClick={() => {
-                onUploadS3Object(uploadSourcePath, uploadObjectKey);
-              }}
-            >
-              Upload
-            </Button>
-            <Box color="text-body-secondary">{s3UploadStatus}</Box>
-          </SpaceBetween>
-        </Container>
-
-        <Container
-          header={
-            <Header
-              variant="h2"
-              description="Signed URLs are returned through job events and kept in memory only."
-            >
-              Signed URL
-            </Header>
-          }
-        >
-          <SpaceBetween size="m">
+        </div>
+        <div className="object-workbench-section">
+          <Box variant="awsui-key-label">Signed URL</Box>
+          <SpaceBetween size="s">
             <Input
               value={signedUrlDurationSeconds}
               placeholder="Duration in seconds"
@@ -630,66 +504,249 @@ export default function WorkspaceView({
               </div>
             ) : null}
           </SpaceBetween>
-        </Container>
-      </div>
+        </div>
+      </SpaceBetween>
+    </aside>
+  ) : null;
 
-      <div className="workspace-secondary-grid">
+  const s3ObjectBrowser = (
+    <div className="s3-objects-layout">
+      <Container
+        className="s3-object-panel"
+        header={
+          <Header
+            variant="h2"
+            counter={`(${workspace.s3Objects.length})`}
+            description={workspace.selectedS3BucketName || "Select a bucket to inspect its objects."}
+          >
+            Objects
+          </Header>
+        }
+      >
+        <SpaceBetween size="m">
+          <Input
+            value={s3PrefixDraft}
+            placeholder="Filter by prefix, for example reports/"
+            onChange={({ detail }) => {
+              setS3PrefixDraft(detail.value);
+            }}
+          />
+          {s3PrefixDraft !== (workspace.s3PrefixFilter || "") ? (
+            <Box color="text-body-secondary">Updating object listing after typing pauses.</Box>
+          ) : null}
+          <Table
+            items={workspace.s3Objects}
+            columnDefinitions={s3ObjectColumns}
+            selectionType="single"
+            selectedItems={selectedObject ? [selectedObject] : []}
+            trackBy="key"
+            variant="embedded"
+            onSelectionChange={({ detail }) => {
+              const object = detail.selectedItems[0];
+              if (object) {
+                onSelectS3Object(object.key);
+                setS3ObjectDrawerOpen(true);
+              }
+            }}
+            empty={<Box color="text-status-inactive">No S3 objects loaded for the selected bucket.</Box>}
+          />
+        </SpaceBetween>
+      </Container>
+      {s3ObjectDetailsDrawer}
+    </div>
+  );
+
+  const urlTesterPanel = (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description="Inspect a pasted S3 signed URL or public object URL, then optionally make a range request."
+        >
+          URL Tester
+        </Header>
+      }
+    >
+      <SpaceBetween size="m">
+        {s3SignedUrlResult ? (
+          <div className="snippet-card">
+            <div className="snippet-header">
+              <Box variant="awsui-key-label">
+                Latest signed URL for {s3SignedUrlResult.objectKey}
+              </Box>
+              <Button
+                variant="link"
+                onClick={() => {
+                  setUrlTesterValue(s3SignedUrlResult.url);
+                }}
+              >
+                Use latest signed URL
+              </Button>
+            </div>
+            <pre>{s3SignedUrlResult.url}</pre>
+          </div>
+        ) : null}
+        <Textarea
+          value={urlTesterValue}
+          placeholder="Paste an S3 signed URL or public object URL."
+          onChange={({ detail }) => {
+            setUrlTesterValue(detail.value);
+          }}
+        />
+        <SpaceBetween
+          direction="horizontal"
+          size="xs"
+        >
+          <Button
+            disabled={!urlTesterValue}
+            onClick={() => {
+              onAnalyseS3Url(urlTesterValue);
+            }}
+          >
+            Analyse
+          </Button>
+          <Button
+            disabled={!urlTesterValue}
+            onClick={() => {
+              onValidateS3Url(urlTesterValue);
+            }}
+          >
+            Validate
+          </Button>
+        </SpaceBetween>
+        {s3UrlInspection ? (
+          <SpaceBetween size="s">
+            <Box variant="p">{s3UrlInspection.summary}</Box>
+            {renderDetailFields(s3UrlInspection.detailFields, "No URL details available.")}
+          </SpaceBetween>
+        ) : null}
+        {s3UrlValidation ? (
+          <SpaceBetween size="s">
+            <StatusIndicator type={s3UrlValidation.succeeded ? "success" : "error"}>
+              {s3UrlValidation.summary}
+            </StatusIndicator>
+            {renderDetailFields(s3UrlValidation.detailFields, "No validation details available.")}
+          </SpaceBetween>
+        ) : null}
+      </SpaceBetween>
+    </Container>
+  );
+
+  const s3Tab = (
+    <SpaceBetween
+      size="l"
+      className="page-stack"
+    >
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description={
+              effectiveS3PageId === "objects"
+                ? "Browse objects and select one to open details and share actions."
+                : "Upload a local file into the selected bucket and prefix."
+            }
+          >
+            {effectiveS3PageId === "objects"
+              ? "S3 Objects"
+              : "S3 Upload"}
+          </Header>
+        }
+      >
+        <div className="status-strip">
+          <div className="status-pill">
+            <Box variant="awsui-key-label">Bucket</Box>
+            <Select
+              selectedOption={selectedBucketOption}
+              options={s3BucketOptions}
+              placeholder="Select bucket"
+              onChange={({ detail }) => {
+                if (detail.selectedOption.value) {
+                  onSelectS3Bucket(detail.selectedOption.value);
+                }
+              }}
+            />
+          </div>
+          <div className="status-pill">
+            <Box variant="awsui-key-label">Prefix Filter</Box>
+            <Box variant="p">{workspace.s3PrefixFilter || "No prefix filter"}</Box>
+          </div>
+          <div className="status-pill">
+            <Box variant="awsui-key-label">Objects</Box>
+            <Box variant="p">{countLabel(workspace.s3Objects.length, "object", "objects")}</Box>
+          </div>
+          <div className="status-pill">
+            <Box variant="awsui-key-label">Selected Object</Box>
+            <Box variant="p">{workspace.selectedS3ObjectKey || "No object selected"}</Box>
+          </div>
+        </div>
+        <Box color="text-body-secondary">
+          {workspace.s3StatusMessage || "S3 inventory is waiting for a locked AWS workspace."}
+        </Box>
+      </Container>
+
+      {effectiveS3PageId === "objects" ? s3ObjectBrowser : null}
+      {effectiveS3PageId === "upload" ? (
         <Container
           header={
             <Header
               variant="h2"
-              description="Inspect expiry fields locally, then optionally make a range request."
+              description="Upload uses the Go daemon and AWS SDK transfer manager."
             >
-              URL Tester
+              Upload Object
             </Header>
           }
         >
-          <SpaceBetween size="m">
-            <Textarea
-              value={urlTesterValue}
-              placeholder="Paste an S3 signed URL or public object URL."
+          <SpaceBetween size="l">
+            <div className="s3-form-grid">
+              <div>
+                <Box variant="awsui-key-label">Target bucket</Box>
+                <Box variant="p">{workspace.selectedS3BucketName || "Select a bucket above"}</Box>
+              </div>
+              <div>
+                <Box variant="awsui-key-label">Current prefix</Box>
+                <Box variant="p">{workspace.s3PrefixFilter || "Bucket root"}</Box>
+              </div>
+            </div>
+            <div className="s3-upload-file-row">
+              <Input
+                value={uploadSourcePath}
+                placeholder="Local file path, for example D:\\Downloads\\report.csv"
+                onChange={({ detail }) => {
+                  setUploadSourcePath(detail.value);
+                  if (!uploadObjectKey) {
+                    setUploadObjectKey(defaultUploadKey(detail.value, workspace.s3PrefixFilter));
+                  }
+                }}
+              />
+              <Button
+                iconName="folder"
+                onClick={() => {
+                  void chooseUploadFile();
+                }}
+              >
+                Browse...
+              </Button>
+            </div>
+            <Input
+              value={uploadObjectKey}
+              placeholder="Destination object key"
               onChange={({ detail }) => {
-                setUrlTesterValue(detail.value);
+                setUploadObjectKey(detail.value);
               }}
             />
-            <SpaceBetween
-              direction="horizontal"
-              size="xs"
+            <Button
+              disabled={!workspace.selectedS3BucketName || !uploadSourcePath || !uploadObjectKey}
+              onClick={() => {
+                onUploadS3Object(uploadSourcePath, uploadObjectKey);
+              }}
             >
-              <Button
-                disabled={!urlTesterValue}
-                onClick={() => {
-                  onAnalyseS3Url(urlTesterValue);
-                }}
-              >
-                Analyse
-              </Button>
-              <Button
-                disabled={!urlTesterValue}
-                onClick={() => {
-                  onValidateS3Url(urlTesterValue);
-                }}
-              >
-                Validate
-              </Button>
-            </SpaceBetween>
-            {s3UrlInspection ? (
-              <SpaceBetween size="s">
-                <Box variant="p">{s3UrlInspection.summary}</Box>
-                {renderDetailFields(s3UrlInspection.detailFields, "No URL details available.")}
-              </SpaceBetween>
-            ) : null}
-            {s3UrlValidation ? (
-              <SpaceBetween size="s">
-                <StatusIndicator type={s3UrlValidation.succeeded ? "success" : "error"}>
-                  {s3UrlValidation.summary}
-                </StatusIndicator>
-                {renderDetailFields(s3UrlValidation.detailFields, "No validation details available.")}
-              </SpaceBetween>
-            ) : null}
+              Upload
+            </Button>
+            <Box color="text-body-secondary">{s3UploadStatus}</Box>
           </SpaceBetween>
         </Container>
-      </div>
+      ) : null}
     </SpaceBetween>
   );
 
@@ -1213,66 +1270,86 @@ export default function WorkspaceView({
     </SpaceBetween>
   );
 
+  const workspaceActionsPanel = (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description="Operational shortcuts for the locked workspace. Cloud writes stay where the resource context is visible."
+        >
+          Workspace Actions
+        </Header>
+      }
+    >
+      <div className="action-list">
+        <div className="action-row action-row-primary">
+          <div>
+            <Box variant="awsui-key-label">Safe action</Box>
+            <strong>Refresh discovery</strong>
+            <span>Reload provider, profile, session, and cached workspace state.</span>
+          </div>
+          <Button
+            iconName="refresh"
+            onClick={() => {
+              onInvokeWorkspaceAction("refresh");
+            }}
+          >
+            Run Refresh
+          </Button>
+        </div>
+        <div className="action-row">
+          <div>
+            <Box variant="awsui-key-label">S3 operations</Box>
+            <strong>S3 tasks live in S3</strong>
+            <span>Use Objects, Upload, and Share from the S3 sidebar section.</span>
+          </div>
+        </div>
+        <div className="action-row">
+          <div>
+            <Box variant="awsui-key-label">URL utilities</Box>
+            <strong>URL tester lives in Actions</strong>
+            <span>Analyse pasted S3 URLs and validate signed URLs without bucket context.</span>
+          </div>
+        </div>
+        <div className="action-row">
+          <div>
+            <Box variant="awsui-key-label">EC2 operations</Box>
+            <strong>Lifecycle actions live in EC2</strong>
+            <span>Start, stop, and reboot stay beside the selected instance and are enabled only for local endpoint profiles with explicit write opt-in.</span>
+          </div>
+        </div>
+      </div>
+    </Container>
+  );
+
+  const recentActivityPanel = (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description="Most recent backend activity, mirrored from the split panel for auditability."
+        >
+          Recent Activity
+        </Header>
+      }
+    >
+      <div className="log-stream">{renderLogEntries(logs.slice(0, 12))}</div>
+    </Container>
+  );
+
   const actionsTab = (
     <SpaceBetween
       size="l"
       className="page-stack"
     >
-      <Container
-        header={
-          <Header
-            variant="h2"
-            description="Operational shortcuts for the locked workspace. Cloud writes stay where the resource context is visible."
-          >
-            Workspace Actions
-          </Header>
-        }
-      >
-        <div className="action-list">
-          <div className="action-row action-row-primary">
-            <div>
-              <Box variant="awsui-key-label">Safe action</Box>
-              <strong>Refresh discovery</strong>
-              <span>Reload provider, profile, session, and cached workspace state.</span>
-            </div>
-            <Button
-              iconName="refresh"
-              onClick={() => {
-                onInvokeWorkspaceAction("refresh");
-              }}
-            >
-              Run Refresh
-            </Button>
-          </div>
-          <div className="action-row">
-            <div>
-              <Box variant="awsui-key-label">S3 operations</Box>
-              <strong>Object tools live in S3</strong>
-              <span>Browse, upload, presign, copy snippets, analyse URLs, and validate URLs from the S3 tab.</span>
-            </div>
-          </div>
-          <div className="action-row">
-            <div>
-              <Box variant="awsui-key-label">EC2 operations</Box>
-              <strong>Lifecycle actions live in EC2</strong>
-              <span>Start, stop, and reboot stay beside the selected instance and are enabled only for local endpoint profiles with explicit write opt-in.</span>
-            </div>
-          </div>
-        </div>
-      </Container>
-
-      <Container
-        header={
-          <Header
-            variant="h2"
-            description="Most recent backend activity, mirrored from the split panel for auditability."
-          >
-            Recent Activity
-          </Header>
-        }
-      >
-        <div className="log-stream">{renderLogEntries(logs.slice(0, 12))}</div>
-      </Container>
+      {activeActionsPageId === "url-tester" ? (
+        urlTesterPanel
+      ) : (
+        <>
+          {workspaceActionsPanel}
+          {recentActivityPanel}
+        </>
+      )}
     </SpaceBetween>
   );
 
