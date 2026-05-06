@@ -116,6 +116,16 @@ function renderDetailFields(fields: { label: string; value: string }[], emptyTex
   );
 }
 
+function renderMetricCard(label: string, value: string, detail: string) {
+  return (
+    <div className="workspace-metric-card">
+      <Box variant="awsui-key-label">{label}</Box>
+      <strong>{value}</strong>
+      <span>{detail}</span>
+    </div>
+  );
+}
+
 function copyToClipboard(value: string): void {
   if (navigator.clipboard) {
     void navigator.clipboard.writeText(value);
@@ -247,58 +257,55 @@ export default function WorkspaceView({
       header={
         <Header
           variant="h2"
-          description="Workspace scope and AWS inventory counts coming from the backend workspace snapshot."
+          description="Locked context and the resource inventory currently available in this session."
         >
           Workspace Summary
         </Header>
       }
     >
-      <div className="detail-grid">
-        <div className="detail-card">
-          <Box variant="awsui-key-label">Provider</Box>
-          <Box variant="p">{workspace.provider?.label || "Unavailable"}</Box>
-          {workspace.provider ? (
-            <StatusIndicator type={statusType(workspace.provider)}>
-              {workspace.provider.state}
-            </StatusIndicator>
-          ) : null}
+      <div className="workspace-summary-grid">
+        <div className="workspace-context-card">
+          <div>
+            <Box variant="awsui-key-label">Provider</Box>
+            <strong>{workspace.provider?.label || "Unavailable"}</strong>
+            {workspace.provider ? (
+              <StatusIndicator type={statusType(workspace.provider)}>
+                {workspace.provider.state}
+              </StatusIndicator>
+            ) : null}
+          </div>
+          <div>
+            <Box variant="awsui-key-label">Profile</Box>
+            <strong>{workspace.profile?.displayName || "Unavailable"}</strong>
+            <span>{workspace.profile?.profileId || "No locked profile selected."}</span>
+          </div>
+          <div>
+            <Box variant="awsui-key-label">Auth path</Box>
+            <strong>{workspace.authMethod?.toUpperCase() || "Unavailable"}</strong>
+            <span>Used by Overview, S3, EC2, and Actions.</span>
+          </div>
         </div>
-        <div className="detail-card">
-          <Box variant="awsui-key-label">Profile</Box>
-          <Box variant="p">{workspace.profile?.displayName || "Unavailable"}</Box>
-          <Box color="text-body-secondary">
-            {workspace.profile?.profileId || "No locked profile selected."}
-          </Box>
-        </div>
-        <div className="detail-card">
-          <Box variant="awsui-key-label">Auth Path</Box>
-          <Box variant="p">{workspace.authMethod?.toUpperCase() || "Unavailable"}</Box>
-          <Box color="text-body-secondary">
-            Active auth method for the locked workspace.
-          </Box>
-        </div>
-        <div className="detail-card">
-          <Box variant="awsui-key-label">S3 Buckets</Box>
-          <Box variant="p">{countLabel(workspace.s3Buckets.length, "bucket", "buckets")}</Box>
-          <Box color="text-body-secondary">
-            Resource inventory will expand as the AWS adapters are ported.
-          </Box>
-        </div>
-        <div className="detail-card">
-          <Box variant="awsui-key-label">S3 Objects</Box>
-          <Box variant="p">{countLabel(workspace.s3Objects.length, "object", "objects")}</Box>
-          <Box color="text-body-secondary">
-            Current object sample visible through the workspace contract.
-          </Box>
-        </div>
-        <div className="detail-card">
-          <Box variant="awsui-key-label">EC2 Instances</Box>
-          <Box variant="p">
-            {countLabel(workspace.ec2Instances.length, "instance", "instances")}
-          </Box>
-          <Box color="text-body-secondary">
-            Lifecycle actions will attach to this inventory next.
-          </Box>
+        <div className="workspace-metric-grid">
+          {renderMetricCard(
+            "S3 buckets",
+            countLabel(workspace.s3Buckets.length, "bucket", "buckets"),
+            workspace.selectedS3BucketName || "No bucket selected",
+          )}
+          {renderMetricCard(
+            "S3 objects",
+            countLabel(workspace.s3Objects.length, "object", "objects"),
+            workspace.s3PrefixFilter ? `Prefix: ${workspace.s3PrefixFilter}` : "No prefix filter",
+          )}
+          {renderMetricCard(
+            "EC2 instances",
+            countLabel(workspace.ec2Instances.length, "instance", "instances"),
+            workspace.selectedEc2Region || "No region selected",
+          )}
+          {renderMetricCard(
+            "Write mode",
+            workspace.awsWritesEnabled ? "Local endpoint" : "Read-only",
+            workspace.awsEndpointUrl || "Default AWS endpoint",
+          )}
         </div>
       </div>
     </Container>
@@ -408,12 +415,12 @@ export default function WorkspaceView({
         </Box>
       </Container>
 
-      <div className="setup-grid">
+      <div className="s3-workspace-grid">
         <Container
           header={
             <Header
               variant="h2"
-              description="Select a bucket to refresh the workspace object listing."
+              description="Select a bucket to load its object list."
             >
               Buckets
             </Header>
@@ -474,7 +481,9 @@ export default function WorkspaceView({
             />
           </SpaceBetween>
         </Container>
+      </div>
 
+      <div className="workspace-secondary-grid">
         <Container
           header={
             <Header
@@ -527,7 +536,9 @@ export default function WorkspaceView({
             </SpaceBetween>
           )}
         </Container>
+      </div>
 
+      <div className="workspace-secondary-grid">
         <Container
           header={
             <Header
@@ -620,7 +631,9 @@ export default function WorkspaceView({
             ) : null}
           </SpaceBetween>
         </Container>
+      </div>
 
+      <div className="workspace-secondary-grid">
         <Container
           header={
             <Header
@@ -940,7 +953,7 @@ export default function WorkspaceView({
         header={
           <Header
             variant="h2"
-            description="EC2 inventory and lifecycle actions are served by the Go daemon."
+            description="Region-scoped instance inventory with local-endpoint write protection."
           >
             EC2 Fleet
           </Header>
@@ -974,7 +987,7 @@ export default function WorkspaceView({
         header={
           <Header
             variant="h2"
-            description="Select a region, filter instances, then choose one instance for read-only inspection."
+            description="Select a region, filter instances, then choose one instance for details and actions."
             actions={
               <SpaceBetween
                 direction="horizontal"
@@ -1209,19 +1222,19 @@ export default function WorkspaceView({
         header={
           <Header
             variant="h2"
-            description="Non-destructive workspace actions exposed by the backend action contract."
+            description="Operational shortcuts for the locked workspace. Cloud writes stay where the resource context is visible."
           >
             Workspace Actions
           </Header>
         }
       >
-        <div className="detail-grid">
-          <div className="detail-card detail-card-strong">
-            <Box variant="awsui-key-label">Refresh Discovery</Box>
-            <Box variant="p">Reload provider, profile, session, and cached workspace state.</Box>
-            <Box color="text-body-secondary">
-              Safe action. It does not modify cloud resources.
-            </Box>
+        <div className="action-list">
+          <div className="action-row action-row-primary">
+            <div>
+              <Box variant="awsui-key-label">Safe action</Box>
+              <strong>Refresh discovery</strong>
+              <span>Reload provider, profile, session, and cached workspace state.</span>
+            </div>
             <Button
               iconName="refresh"
               onClick={() => {
@@ -1231,19 +1244,19 @@ export default function WorkspaceView({
               Run Refresh
             </Button>
           </div>
-          <div className="detail-card">
-            <Box variant="awsui-key-label">S3 Operations</Box>
-            <Box variant="p">Browse, upload, presign, copy snippets, analyse URLs, and validate URLs.</Box>
-            <Box color="text-body-secondary">
-              Upload is the only approved write path in this milestone.
-            </Box>
+          <div className="action-row">
+            <div>
+              <Box variant="awsui-key-label">S3 operations</Box>
+              <strong>Object tools live in S3</strong>
+              <span>Browse, upload, presign, copy snippets, analyse URLs, and validate URLs from the S3 tab.</span>
+            </div>
           </div>
-          <div className="detail-card">
-            <Box variant="awsui-key-label">EC2 Operations</Box>
-            <Box variant="p">Browse regions and instances, then copy lifecycle commands.</Box>
-            <Box color="text-body-secondary">
-              Live EC2 write actions are disabled unless the selected AWS profile uses a local endpoint URL and explicit write opt-in.
-            </Box>
+          <div className="action-row">
+            <div>
+              <Box variant="awsui-key-label">EC2 operations</Box>
+              <strong>Lifecycle actions live in EC2</strong>
+              <span>Start, stop, and reboot stay beside the selected instance and are enabled only for local endpoint profiles with explicit write opt-in.</span>
+            </div>
           </div>
         </div>
       </Container>
@@ -1327,13 +1340,20 @@ export default function WorkspaceView({
         }
       >
         <Box color="text-body-secondary">
-          The new shell keeps the full milestone 1 boundary visible while the Go
-          daemon ports the old AWS behaviours behind the new RPC contract.
+          Review the locked profile, inspect S3 and EC2 inventory, and run workspace actions from a stable local session.
         </Box>
         <div className="status-strip">
           <div className="status-pill">
             <Box variant="awsui-key-label">Latest Activity</Box>
             <Box variant="p">{latestLog?.message ?? "No activity recorded yet."}</Box>
+          </div>
+          <div className="status-pill">
+            <Box variant="awsui-key-label">Provider</Box>
+            <Box variant="p">{workspace.provider?.label || session.lockedProviderId || "Unavailable"}</Box>
+          </div>
+          <div className="status-pill">
+            <Box variant="awsui-key-label">Profile</Box>
+            <Box variant="p">{workspace.profile?.displayName || session.lockedProfileId || "Unavailable"}</Box>
           </div>
           <div className="status-pill">
             <Box variant="awsui-key-label">Open Tabs</Box>

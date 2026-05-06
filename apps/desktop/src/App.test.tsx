@@ -308,7 +308,7 @@ describe("App", () => {
     expect(await screen.findByText("Workspace Summary")).toBeInTheDocument();
     expect(screen.getByText("Overview")).toBeInTheDocument();
     expect(screen.getByText("S3")).toBeInTheDocument();
-    expect(await screen.findByText("workspace sandbox")).toBeInTheDocument();
+    expect((await screen.findAllByText("workspace sandbox")).length).toBeGreaterThan(0);
     expect(await screen.findByText("2 buckets")).toBeInTheDocument();
     expect(
       await screen.findByText(/cloudsprocket-workspace\.db/i),
@@ -645,11 +645,11 @@ describe("App", () => {
     fireEvent.click(await screen.findByText("Actions"));
 
     expect(await screen.findByText("Workspace Actions")).toBeInTheDocument();
-    expect(await screen.findByText("Refresh Discovery")).toBeInTheDocument();
+    expect(await screen.findByText("Refresh discovery")).toBeInTheDocument();
     expect((await screen.findAllByText("Provider discovery completed in test mode.")).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Run Refresh" }));
 
-    expect(await screen.findByText("Refresh Discovery")).toBeInTheDocument();
+    expect(await screen.findByText("Refresh discovery")).toBeInTheDocument();
   });
 });
