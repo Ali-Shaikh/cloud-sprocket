@@ -165,17 +165,70 @@ func (s *S3Inventory) HeadObject(
 			Value: *result.ContentType,
 		})
 	}
+	appendStringField := func(label string, value *string) {
+		if value != nil && *value != "" {
+			fields = append(fields, models.DetailField{Label: label, Value: *value})
+		}
+	}
+	appendBoolField := func(label string, value *bool) {
+		if value != nil {
+			if *value {
+				fields = append(fields, models.DetailField{Label: label, Value: "true"})
+			} else {
+				fields = append(fields, models.DetailField{Label: label, Value: "false"})
+			}
+		}
+	}
+	appendStringField("Cache Control", result.CacheControl)
+	appendStringField("Content Disposition", result.ContentDisposition)
+	appendStringField("Content Encoding", result.ContentEncoding)
+	appendStringField("Content Language", result.ContentLanguage)
 	if result.ETag != nil && *result.ETag != "" {
 		fields = append(fields, models.DetailField{
 			Label: "ETag",
 			Value: *result.ETag,
 		})
 	}
+	appendStringField("Checksum CRC32", result.ChecksumCRC32)
+	appendStringField("Checksum CRC32C", result.ChecksumCRC32C)
+	appendStringField("Checksum CRC64NVME", result.ChecksumCRC64NVME)
+	appendStringField("Checksum SHA1", result.ChecksumSHA1)
+	appendStringField("Checksum SHA256", result.ChecksumSHA256)
+	if result.ChecksumType != "" {
+		fields = append(fields, models.DetailField{Label: "Checksum Type", Value: string(result.ChecksumType)})
+	}
 	if result.StorageClass != "" {
 		fields = append(fields, models.DetailField{
 			Label: "Storage Class",
 			Value: string(result.StorageClass),
 		})
+	}
+	if result.ServerSideEncryption != "" {
+		fields = append(fields, models.DetailField{Label: "Server Side Encryption", Value: string(result.ServerSideEncryption)})
+	}
+	if result.SSEKMSKeyId != nil && *result.SSEKMSKeyId != "" {
+		fields = append(fields, models.DetailField{Label: "SSE KMS Key ID", Value: *result.SSEKMSKeyId, Sensitive: true})
+	}
+	appendBoolField("Bucket Key Enabled", result.BucketKeyEnabled)
+	if result.ReplicationStatus != "" {
+		fields = append(fields, models.DetailField{Label: "Replication Status", Value: string(result.ReplicationStatus)})
+	}
+	appendStringField("Expiration", result.Expiration)
+	appendStringField("Restore", result.Restore)
+	if result.ObjectLockMode != "" {
+		fields = append(fields, models.DetailField{Label: "Object Lock Mode", Value: string(result.ObjectLockMode)})
+	}
+	if result.ObjectLockLegalHoldStatus != "" {
+		fields = append(fields, models.DetailField{Label: "Object Lock Legal Hold", Value: string(result.ObjectLockLegalHoldStatus)})
+	}
+	if result.ObjectLockRetainUntilDate != nil {
+		fields = append(fields, models.DetailField{Label: "Object Lock Retain Until", Value: result.ObjectLockRetainUntilDate.UTC().Format(time.RFC3339)})
+	}
+	if result.PartsCount != nil {
+		fields = append(fields, models.DetailField{Label: "Multipart Parts", Value: fmt.Sprintf("%d", *result.PartsCount)})
+	}
+	if result.MissingMeta != nil && *result.MissingMeta > 0 {
+		fields = append(fields, models.DetailField{Label: "Missing Metadata Entries", Value: fmt.Sprintf("%d", *result.MissingMeta)})
 	}
 	metadataKeys := make([]string, 0, len(result.Metadata))
 	for key := range result.Metadata {

@@ -465,6 +465,7 @@ const emptySettings: AppSettingsSnapshot = {
 
 const emptyWorkspace: WorkspaceSnapshot = {
   runtimeSettings: emptySettings,
+  environmentDiagnostics: [],
   awsWritesEnabled: false,
   s3Buckets: [],
   s3Objects: [],

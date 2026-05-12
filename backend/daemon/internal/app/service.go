@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -202,6 +204,14 @@ func (s *Service) Handle(
 			s.mu.Unlock()
 			return nil, err
 		}
+		if !profileAllowsAWSWrites(profile) {
+			s.mu.Unlock()
+			return nil, errors.New("S3 uploads require a selected AWS profile with local endpoint_url and cloudsprocket_allow_writes = true")
+		}
+		if err := validateS3UploadRequest(request.SourcePath, request.ObjectKey); err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
 		prefix := session.S3PrefixFilter
 		s.mu.Unlock()
 
@@ -231,6 +241,7 @@ func (s *Service) Handle(
 			s.mu.Unlock()
 			return nil, err
 		}
+		request.DurationSeconds = clampPresignDuration(request.DurationSeconds)
 		objectKey := session.SelectedS3ObjectKey
 		if objectKey == "" {
 			objectKey = s.selectedS3ObjectKey(session, s.s3Objects(ctx, profile, bucketName, session.S3PrefixFilter))
@@ -923,19 +934,77 @@ func (s *Service) settingsSnapshot() models.AppSettingsSnapshot {
 	}
 }
 
+func (s *Service) environmentDiagnostics(snapshot discovery.Snapshot, session models.SessionSnapshot) []models.DetailField {
+	fields := []models.DetailField{
+		{Label: "Platform", Value: s.settings.PlatformName},
+		{Label: "Config Directory", Value: pathStatus(s.settings.ConfigDir, true)},
+		{Label: "Database", Value: pathStatus(s.settings.DatabasePath, false)},
+		{Label: "Log Directory", Value: pathStatus(filepath.Dir(s.settings.LogPath), true)},
+		{Label: "AWS Config", Value: pathStatus(s.settings.AWSConfigPath, false)},
+		{Label: "AWS Credentials", Value: pathStatus(s.settings.AWSCredentialsPath, false), Sensitive: true},
+		{Label: "Azure Profile", Value: pathStatus(s.settings.AzureProfilePath(), false)},
+		{Label: "GCloud Config", Value: pathStatus(s.settings.GCloudConfigDir(), true)},
+	}
+	if provider, ok := findProvider(snapshot.Providers, session.CurrentProviderID); ok {
+		cliStatus := "Not detected"
+		if provider.CommandPath != "" {
+			cliStatus = provider.CommandPath
+		}
+		fields = append(fields, models.DetailField{Label: provider.Label + " CLI", Value: cliStatus})
+	}
+	if profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID); ok {
+		fields = append(fields,
+			models.DetailField{Label: "Selected Profile", Value: profile.ProfileID},
+			models.DetailField{Label: "Write Policy", Value: writePolicySummary(profile)},
+		)
+	}
+	return fields
+}
+
+func pathStatus(path string, directory bool) string {
+	if strings.TrimSpace(path) == "" {
+		return "Not configured"
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return path + " (missing)"
+		}
+		return path + " (" + err.Error() + ")"
+	}
+	if directory && !info.IsDir() {
+		return path + " (not a directory)"
+	}
+	if !directory && info.IsDir() {
+		return path + " (directory)"
+	}
+	return path + " (available)"
+}
+
+func writePolicySummary(profile models.ProfileSummary) string {
+	if profileAllowsAWSWrites(profile) {
+		return "Writes enabled for local endpoint profile"
+	}
+	if profileAllowsWriteOptIn(profile) {
+		return "Write opt-in present, but endpoint is not local"
+	}
+	return "Read-only until cloudsprocket_allow_writes and a local endpoint_url are configured"
+}
+
 func (s *Service) buildWorkspaceSnapshot(
 	snapshot discovery.Snapshot,
 	session models.SessionSnapshot,
 ) models.WorkspaceSnapshot {
 	workspace := models.WorkspaceSnapshot{
-		AuthMethod:       session.SelectedAuthMethod,
-		RuntimeSettings:  s.settingsSnapshot(),
-		S3PrefixFilter:   session.S3PrefixFilter,
-		S3Buckets:        []models.AwsS3Bucket{},
-		S3Objects:        []models.AwsS3Object{},
-		S3ObjectMetadata: []models.DetailField{},
-		EC2Regions:       []string{},
-		EC2Instances:     []models.AwsEc2Instance{},
+		AuthMethod:             session.SelectedAuthMethod,
+		RuntimeSettings:        s.settingsSnapshot(),
+		EnvironmentDiagnostics: s.environmentDiagnostics(snapshot, session),
+		S3PrefixFilter:         session.S3PrefixFilter,
+		S3Buckets:              []models.AwsS3Bucket{},
+		S3Objects:              []models.AwsS3Object{},
+		S3ObjectMetadata:       []models.DetailField{},
+		EC2Regions:             []string{},
+		EC2Instances:           []models.AwsEc2Instance{},
 	}
 
 	if provider, ok := findProvider(snapshot.Providers, session.CurrentProviderID); ok {
@@ -1345,6 +1414,50 @@ func profileAllowsAWSWrites(profile models.ProfileSummary) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsPrivate()
+}
+
+func validateS3UploadRequest(sourcePath string, objectKey string) error {
+	sourcePath = strings.TrimSpace(sourcePath)
+	objectKey = strings.TrimSpace(objectKey)
+	if sourcePath == "" || objectKey == "" {
+		return errors.New("source path and destination object key are required")
+	}
+	if strings.HasPrefix(objectKey, "/") || strings.HasPrefix(objectKey, "\\") {
+		return errors.New("destination object key must be relative to the selected bucket")
+	}
+	if strings.Contains(objectKey, "\\") {
+		return errors.New("destination object key must use forward slashes")
+	}
+	for _, segment := range strings.Split(objectKey, "/") {
+		if segment == "." || segment == ".." {
+			return errors.New("destination object key must not contain dot path segments")
+		}
+	}
+	if strings.ContainsAny(objectKey, "\x00\r\n\t") {
+		return errors.New("destination object key contains unsupported control characters")
+	}
+	info, err := os.Stat(sourcePath)
+	if err != nil {
+		return fmt.Errorf("source file is not available: %w", err)
+	}
+	if info.IsDir() || !info.Mode().IsRegular() {
+		return errors.New("source path must be a regular file")
+	}
+	const maxUploadBytes = 512 * 1024 * 1024
+	if info.Size() > maxUploadBytes {
+		return errors.New("source file is larger than the current 512 MiB upload safety limit")
+	}
+	return nil
+}
+
+func clampPresignDuration(durationSeconds int) int {
+	if durationSeconds <= 0 {
+		return 900
+	}
+	if durationSeconds > 3600 {
+		return 3600
+	}
+	return durationSeconds
 }
 
 func profileAllowsWriteOptIn(profile models.ProfileSummary) bool {
