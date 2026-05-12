@@ -1,6 +1,6 @@
 {
   "name": "cloud-sprocket-workspace",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "private": true,
   "packageManager": "pnpm@10.17.0",
   "scripts": {
