@@ -404,6 +404,13 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     profile,
     authMethod: mockState.session.selectedAuthMethod,
     runtimeSettings: mockState.settings,
+    environmentDiagnostics: [
+      { label: "Platform", value: "windows" },
+      { label: "AWS Config", value: "C:/Users/Ali/.aws/config (available)" },
+      { label: "AWS Credentials", value: "C:/Users/Ali/.aws/credentials (available)", sensitive: true },
+      { label: "AWS CLI", value: "C:/Program Files/Amazon/AWSCLIV2/aws.exe" },
+      { label: "Write Policy", value: "Writes enabled for local endpoint profile" },
+    ],
     awsEndpointUrl: "http://192.168.50.168:4566",
     awsWritesEnabled: true,
     selectedS3BucketName,

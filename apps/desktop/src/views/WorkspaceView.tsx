@@ -1,6 +1,7 @@
 import {
   Box,
   Button,
+  Checkbox,
   Container,
   Header,
   Input,
@@ -25,6 +26,7 @@ import type {
   AwsEc2Instance,
   AwsS3PresignResult,
   AwsS3Object,
+  DetailField,
   JobLifecycle,
   SessionSnapshot,
   UrlInspection,
@@ -99,7 +101,7 @@ function defaultUploadKey(sourcePath: string, prefix?: string): string {
   return `${cleanPrefix.replace(/\/?$/, "/")}${fileName}`;
 }
 
-function renderDetailFields(fields: { label: string; value: string }[], emptyText: string) {
+function renderDetailFields(fields: DetailField[] = [], emptyText: string, showSensitiveValues = true) {
   if (fields.length === 0) {
     return <Box color="text-status-inactive">{emptyText}</Box>;
   }
@@ -111,10 +113,19 @@ function renderDetailFields(fields: { label: string; value: string }[], emptyTex
           className="detail-card"
         >
           <Box variant="awsui-key-label">{field.label}</Box>
-          <Box variant="p">{field.value}</Box>
+          <Box variant="p">{field.sensitive && !showSensitiveValues ? "Hidden" : field.value}</Box>
         </div>
       ))}
     </div>
+  );
+}
+
+function detailFieldsAsObject(fields: DetailField[], showSensitiveValues: boolean): Record<string, string> {
+  return Object.fromEntries(
+    fields.map((field) => [
+      field.label,
+      field.sensitive && !showSensitiveValues ? "Hidden" : field.value,
+    ]),
   );
 }
 
@@ -218,7 +229,8 @@ export default function WorkspaceView({
 }: Props) {
   const [uploadSourcePath, setUploadSourcePath] = useState("");
   const [uploadObjectKey, setUploadObjectKey] = useState("");
-  const [signedUrlDurationSeconds, setSignedUrlDurationSeconds] = useState("3600");
+  const [uploadAcknowledged, setUploadAcknowledged] = useState(false);
+  const [signedUrlDurationSeconds, setSignedUrlDurationSeconds] = useState("900");
   const [urlTesterValue, setUrlTesterValue] = useState("");
   const [s3PrefixDraft, setS3PrefixDraft] = useState(workspace.s3PrefixFilter || "");
   const [s3ObjectDrawerOpen, setS3ObjectDrawerOpen] = useState(Boolean(workspace.selectedS3ObjectKey));
@@ -245,6 +257,7 @@ export default function WorkspaceView({
     }
     setUploadSourcePath(selectedPath);
     setUploadObjectKey(defaultUploadKey(selectedPath, workspace.s3PrefixFilter));
+    setUploadAcknowledged(false);
   };
 
   useEffect(() => {
@@ -350,6 +363,24 @@ export default function WorkspaceView({
     workspace.runtimeSettings,
     "Runtime settings embedded in the backend workspace snapshot.",
   );
+  const environmentDiagnosticsPanel = (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description="Backend path, CLI, and write-policy checks for the locked workspace."
+        >
+          Environment Diagnostics
+        </Header>
+      }
+    >
+      {renderDetailFields(
+        workspace.environmentDiagnostics,
+        "No environment diagnostics are available yet.",
+        showSensitiveValues,
+      )}
+    </Container>
+  );
 
   const overviewTab = (
     <SpaceBetween
@@ -361,12 +392,29 @@ export default function WorkspaceView({
         {workspaceProfileDetails}
         {workspaceRuntimeSettingsPanel}
       </div>
+      {environmentDiagnosticsPanel}
     </SpaceBetween>
   );
 
   const selectedObject = workspace.s3Objects.find(
     (object) => object.key === workspace.selectedS3ObjectKey,
   );
+  const selectedObjectMetadataJson = JSON.stringify(
+    {
+      bucket: workspace.selectedS3BucketName,
+      key: workspace.selectedS3ObjectKey,
+      fields: detailFieldsAsObject(workspace.s3ObjectMetadata, showSensitiveValues),
+    },
+    null,
+    2,
+  );
+  const selectedObjectMetadataCsv = [
+    "label,value",
+    ...workspace.s3ObjectMetadata.map((field) => {
+      const value = field.sensitive && !showSensitiveValues ? "Hidden" : field.value;
+      return `"${field.label.replaceAll("\"", "\"\"")}","${value.replaceAll("\"", "\"\"")}"`;
+    }),
+  ].join("\n");
   const effectiveS3PageId = activeS3PageId === "upload" ? "upload" : "objects";
   const s3BucketOptions = workspace.s3Buckets.map((bucket) => ({
     label: bucket.name,
@@ -431,7 +479,31 @@ export default function WorkspaceView({
           {renderDetailFields(
             workspace.s3ObjectMetadata,
             "No metadata loaded for the selected object.",
+            showSensitiveValues,
           )}
+          {workspace.s3ObjectMetadata.length > 0 ? (
+            <SpaceBetween
+              direction="horizontal"
+              size="xs"
+            >
+              <Button
+                variant="link"
+                onClick={() => {
+                  copyToClipboard(selectedObjectMetadataJson);
+                }}
+              >
+                Copy Metadata JSON
+              </Button>
+              <Button
+                variant="link"
+                onClick={() => {
+                  copyToClipboard(selectedObjectMetadataCsv);
+                }}
+              >
+                Copy Metadata CSV
+              </Button>
+            </SpaceBetween>
+          ) : null}
         </div>
         <div className="object-workbench-section">
           <Box variant="awsui-key-label">Copy snippets</Box>
@@ -707,6 +779,16 @@ export default function WorkspaceView({
                 <Box variant="awsui-key-label">Current prefix</Box>
                 <Box variant="p">{workspace.s3PrefixFilter || "Bucket root"}</Box>
               </div>
+              <div>
+                <Box variant="awsui-key-label">Write policy</Box>
+                <StatusIndicator type={workspace.awsWritesEnabled ? "success" : "warning"}>
+                  {workspace.awsWritesEnabled ? "Local endpoint write enabled" : "Read-only"}
+                </StatusIndicator>
+              </div>
+              <div>
+                <Box variant="awsui-key-label">Endpoint</Box>
+                <Box variant="p">{workspace.awsEndpointUrl || "Default AWS endpoint"}</Box>
+              </div>
             </div>
             <div className="s3-upload-file-row">
               <Input
@@ -714,6 +796,7 @@ export default function WorkspaceView({
                 placeholder="Local file path, for example D:\\Downloads\\report.csv"
                 onChange={({ detail }) => {
                   setUploadSourcePath(detail.value);
+                  setUploadAcknowledged(false);
                   if (!uploadObjectKey) {
                     setUploadObjectKey(defaultUploadKey(detail.value, workspace.s3PrefixFilter));
                   }
@@ -733,12 +816,28 @@ export default function WorkspaceView({
               placeholder="Destination object key"
               onChange={({ detail }) => {
                 setUploadObjectKey(detail.value);
+                setUploadAcknowledged(false);
               }}
             />
+            <div className="s3-upload-safety">
+              <Checkbox
+                checked={uploadAcknowledged}
+                disabled={!workspace.awsWritesEnabled || !workspace.selectedS3BucketName || !uploadSourcePath || !uploadObjectKey}
+                onChange={({ detail }) => {
+                  setUploadAcknowledged(detail.checked);
+                }}
+              >
+                I have checked the selected bucket, destination key, local endpoint, and source file.
+              </Checkbox>
+              <Box color="text-body-secondary">
+                Uploads are accepted only when the backend sees a local endpoint profile with explicit write opt-in. The daemon rejects directories, hidden absolute object keys, control characters, dot path segments, and files above 512 MiB.
+              </Box>
+            </div>
             <Button
-              disabled={!workspace.selectedS3BucketName || !uploadSourcePath || !uploadObjectKey}
+              disabled={!workspace.awsWritesEnabled || !workspace.selectedS3BucketName || !uploadSourcePath || !uploadObjectKey || !uploadAcknowledged}
               onClick={() => {
                 onUploadS3Object(uploadSourcePath, uploadObjectKey);
+                setUploadAcknowledged(false);
               }}
             >
               Upload
@@ -915,6 +1014,34 @@ export default function WorkspaceView({
           value: selectedEC2Instance.privateIp
             ? `ssh ec2-user@${selectedEC2Instance.privateIp}`
             : "No private IP address is available for this instance.",
+        },
+        {
+          label: "Instance detail JSON",
+          value: JSON.stringify(
+            {
+              region: workspace.selectedEc2Region,
+              instance: selectedEC2Instance,
+            },
+            null,
+            2,
+          ),
+        },
+        {
+          label: "Instance CSV row",
+          value: [
+            "region,instanceId,name,state,instanceType,privateIp,publicIp,vpcId,subnetId",
+            [
+              workspace.selectedEc2Region || "",
+              selectedEC2Instance.instanceId,
+              selectedEC2Instance.name || "",
+              selectedEC2Instance.state || "",
+              selectedEC2Instance.instanceType || "",
+              selectedEC2Instance.privateIp || "",
+              selectedEC2Instance.publicIp || "",
+              selectedEC2Instance.vpcId || "",
+              selectedEC2Instance.subnetId || "",
+            ].map((value) => `"${value.replaceAll("\"", "\"\"")}"`).join(","),
+          ].join("\n"),
         },
       ]
     : [];

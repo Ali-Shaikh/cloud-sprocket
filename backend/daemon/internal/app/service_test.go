@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -262,8 +263,11 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 		t.Fatalf("expected export snippets for the selected object, got %+v", filteredWorkspace.S3ExportSnippets)
 	}
 
+	uploadPath := filepath.Join(tempDir, "demo.txt")
+	mustWriteFile(t, uploadPath, "demo upload")
 	uploadNotifier := recordingNotifier{events: make(chan models.JobStatus, 4)}
-	uploadResult, err := service.Handle(ctx, "aws.s3.uploadObject", []byte(`{"sourcePath":"/tmp/demo.txt","objectKey":"reports/uploaded.txt"}`), uploadNotifier)
+	uploadRequest := `{"sourcePath":` + strconv.Quote(uploadPath) + `,"objectKey":"reports/uploaded.txt"}`
+	uploadResult, err := service.Handle(ctx, "aws.s3.uploadObject", []byte(uploadRequest), uploadNotifier)
 	if err != nil {
 		t.Fatalf("expected aws.s3.uploadObject to queue a job, got %v", err)
 	}

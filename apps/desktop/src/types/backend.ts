@@ -128,6 +128,7 @@ export interface WorkspaceSnapshot {
   profile?: ProfileSummary;
   authMethod?: AuthMethod;
   runtimeSettings: AppSettingsSnapshot;
+  environmentDiagnostics?: DetailField[];
   awsEndpointUrl?: string;
   awsWritesEnabled: boolean;
   selectedS3BucketName?: string;

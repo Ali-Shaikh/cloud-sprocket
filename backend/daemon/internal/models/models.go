@@ -137,25 +137,26 @@ type AwsEc2Instance struct {
 }
 
 type WorkspaceSnapshot struct {
-	Provider              *ProviderSummary     `json:"provider,omitempty"`
-	Profile               *ProfileSummary      `json:"profile,omitempty"`
-	AuthMethod            AuthMethod           `json:"authMethod,omitempty"`
-	RuntimeSettings       AppSettingsSnapshot  `json:"runtimeSettings"`
-	AWSEndpointURL        string               `json:"awsEndpointUrl,omitempty"`
-	AWSWritesEnabled      bool                 `json:"awsWritesEnabled"`
-	SelectedS3BucketName  string               `json:"selectedS3BucketName,omitempty"`
-	SelectedS3ObjectKey   string               `json:"selectedS3ObjectKey,omitempty"`
-	S3PrefixFilter        string               `json:"s3PrefixFilter,omitempty"`
-	S3StatusMessage       string               `json:"s3StatusMessage,omitempty"`
-	S3Buckets             []AwsS3Bucket        `json:"s3Buckets"`
-	S3Objects             []AwsS3Object        `json:"s3Objects"`
-	S3ObjectMetadata      []DetailField        `json:"s3ObjectMetadata"`
-	S3ExportSnippets      []AwsS3ExportSnippet `json:"s3ExportSnippets"`
-	SelectedEC2Region     string               `json:"selectedEc2Region,omitempty"`
-	SelectedEC2InstanceID string               `json:"selectedEc2InstanceId,omitempty"`
-	EC2StatusMessage      string               `json:"ec2StatusMessage,omitempty"`
-	EC2Regions            []string             `json:"ec2Regions"`
-	EC2Instances          []AwsEc2Instance     `json:"ec2Instances"`
+	Provider               *ProviderSummary     `json:"provider,omitempty"`
+	Profile                *ProfileSummary      `json:"profile,omitempty"`
+	AuthMethod             AuthMethod           `json:"authMethod,omitempty"`
+	RuntimeSettings        AppSettingsSnapshot  `json:"runtimeSettings"`
+	EnvironmentDiagnostics []DetailField        `json:"environmentDiagnostics"`
+	AWSEndpointURL         string               `json:"awsEndpointUrl,omitempty"`
+	AWSWritesEnabled       bool                 `json:"awsWritesEnabled"`
+	SelectedS3BucketName   string               `json:"selectedS3BucketName,omitempty"`
+	SelectedS3ObjectKey    string               `json:"selectedS3ObjectKey,omitempty"`
+	S3PrefixFilter         string               `json:"s3PrefixFilter,omitempty"`
+	S3StatusMessage        string               `json:"s3StatusMessage,omitempty"`
+	S3Buckets              []AwsS3Bucket        `json:"s3Buckets"`
+	S3Objects              []AwsS3Object        `json:"s3Objects"`
+	S3ObjectMetadata       []DetailField        `json:"s3ObjectMetadata"`
+	S3ExportSnippets       []AwsS3ExportSnippet `json:"s3ExportSnippets"`
+	SelectedEC2Region      string               `json:"selectedEc2Region,omitempty"`
+	SelectedEC2InstanceID  string               `json:"selectedEc2InstanceId,omitempty"`
+	EC2StatusMessage       string               `json:"ec2StatusMessage,omitempty"`
+	EC2Regions             []string             `json:"ec2Regions"`
+	EC2Instances           []AwsEc2Instance     `json:"ec2Instances"`
 }
 
 type ActivityLogEntry struct {

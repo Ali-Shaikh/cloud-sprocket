@@ -690,6 +690,15 @@ button.sidebar-menu-item {
   align-items: end;
 }
 
+.s3-upload-safety {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.9rem;
+  border: 1px solid rgba(185, 78, 0, 0.28);
+  border-radius: 8px;
+  background: #fff8f1;
+}
+
 .workspace-secondary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
