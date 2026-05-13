@@ -15,7 +15,7 @@ importers:
         version: 3.0.1274(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@cloudscape-design/global-styles':
         specifier: ^1.0.0
-        version: 1.0.57
+        version: 1.0.59
       '@tauri-apps/api':
         specifier: ^2.0.0
         version: 2.10.1
@@ -173,8 +173,8 @@ packages:
     peerDependencies:
       react: '>=16.8.0'
 
-  '@cloudscape-design/global-styles@1.0.57':
-    resolution: {integrity: sha512-pKmahu6Ekv7lTOeVXgIJfaF5V0XmbFUKoZD8mA3LDaUtBmTlOOZHK7MVFrTcITy1Ak23NjXe2RzXDN5Kg6oCcA==}
+  '@cloudscape-design/global-styles@1.0.59':
+    resolution: {integrity: sha512-no87kLqFUMLOrKWUKm+NU8mm5cSokJCl302TOb/BNvbq8iL8ltHZAsUApRAnrH4H6wkIhw7Y5RYNxzRsehRhQA==}
 
   '@cloudscape-design/test-utils-core@1.0.81':
     resolution: {integrity: sha512-c9abt/vnYykkL+LF0nwxFk+Yyr1fsURsrWv9ArMPp47Jt+SlxRFo4+RLkwvu0+Yd2IeCMIKJdZjNxUnBguUA/Q==}
@@ -1436,7 +1436,7 @@ snapshots:
     transitivePeerDependencies:
       - react-dom
 
-  '@cloudscape-design/global-styles@1.0.57': {}
+  '@cloudscape-design/global-styles@1.0.59': {}
 
   '@cloudscape-design/test-utils-core@1.0.81':
     dependencies:
