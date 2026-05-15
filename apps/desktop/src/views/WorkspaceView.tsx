@@ -63,7 +63,6 @@ type Props = {
   latestLog?: ActivityLogEntry;
   activeTabId: string;
   activeS3PageId: string;
-  activeActionsPageId: string;
   splitPanelOpen: boolean;
   showSensitiveValues: boolean;
   onToggleSplitPanel: () => void;
@@ -199,7 +198,6 @@ export default function WorkspaceView({
   latestLog,
   activeTabId,
   activeS3PageId,
-  activeActionsPageId,
   splitPanelOpen,
   showSensitiveValues,
   onToggleSplitPanel,
@@ -415,7 +413,10 @@ export default function WorkspaceView({
       return `"${field.label.replaceAll("\"", "\"\"")}","${value.replaceAll("\"", "\"\"")}"`;
     }),
   ].join("\n");
-  const effectiveS3PageId = activeS3PageId === "upload" ? "upload" : "objects";
+  const effectiveS3PageId =
+    activeS3PageId === "upload" || activeS3PageId === "url-tester"
+      ? activeS3PageId
+      : "objects";
   const s3BucketOptions = workspace.s3Buckets.map((bucket) => ({
     label: bucket.name,
     value: bucket.name,
@@ -716,12 +717,16 @@ export default function WorkspaceView({
             description={
               effectiveS3PageId === "objects"
                 ? "Browse objects and select one to open details and share actions."
-                : "Upload a local file into the selected bucket and prefix."
+                : effectiveS3PageId === "upload"
+                  ? "Upload a local file into the selected bucket and prefix."
+                  : "Inspect and validate S3 URLs without changing the selected bucket context."
             }
           >
             {effectiveS3PageId === "objects"
               ? "S3 Objects"
-              : "S3 Upload"}
+              : effectiveS3PageId === "upload"
+                ? "S3 Upload"
+                : "S3 URL Tools"}
           </Header>
         }
       >
@@ -846,6 +851,7 @@ export default function WorkspaceView({
           </SpaceBetween>
         </Container>
       ) : null}
+      {effectiveS3PageId === "url-tester" ? urlTesterPanel : null}
     </SpaceBetween>
   );
 
@@ -1397,66 +1403,24 @@ export default function WorkspaceView({
     </SpaceBetween>
   );
 
-  const workspaceActionsPanel = (
-    <Container
-      header={
-        <Header
-          variant="h2"
-          description="Operational shortcuts for the locked workspace. Cloud writes stay where the resource context is visible."
-        >
-          Workspace Actions
-        </Header>
-      }
-    >
-      <div className="action-list">
-        <div className="action-row action-row-primary">
-          <div>
-            <Box variant="awsui-key-label">Safe action</Box>
-            <strong>Refresh discovery</strong>
-            <span>Reload provider, profile, session, and cached workspace state.</span>
-          </div>
-          <Button
-            iconName="refresh"
-            onClick={() => {
-              onInvokeWorkspaceAction("refresh");
-            }}
-          >
-            Run Refresh
-          </Button>
-        </div>
-        <div className="action-row">
-          <div>
-            <Box variant="awsui-key-label">S3 operations</Box>
-            <strong>S3 tasks live in S3</strong>
-            <span>Use Objects, Upload, and Share from the S3 sidebar section.</span>
-          </div>
-        </div>
-        <div className="action-row">
-          <div>
-            <Box variant="awsui-key-label">URL utilities</Box>
-            <strong>URL tester lives in Actions</strong>
-            <span>Analyse pasted S3 URLs and validate signed URLs without bucket context.</span>
-          </div>
-        </div>
-        <div className="action-row">
-          <div>
-            <Box variant="awsui-key-label">EC2 operations</Box>
-            <strong>Lifecycle actions live in EC2</strong>
-            <span>Start, stop, and reboot stay beside the selected instance and are enabled only for local endpoint profiles with explicit write opt-in.</span>
-          </div>
-        </div>
-      </div>
-    </Container>
-  );
-
   const recentActivityPanel = (
     <Container
       header={
         <Header
           variant="h2"
-          description="Most recent backend activity, mirrored from the split panel for auditability."
+          description="Backend log stream and recent job history for the current locked workspace."
+          actions={
+            <Button
+              iconName="refresh"
+              onClick={() => {
+                onInvokeWorkspaceAction("refresh");
+              }}
+            >
+              Refresh Discovery
+            </Button>
+          }
         >
-          Recent Activity
+          Activity
         </Header>
       }
     >
@@ -1464,21 +1428,7 @@ export default function WorkspaceView({
     </Container>
   );
 
-  const actionsTab = (
-    <SpaceBetween
-      size="l"
-      className="page-stack"
-    >
-      {activeActionsPageId === "url-tester" ? (
-        urlTesterPanel
-      ) : (
-        <>
-          {workspaceActionsPanel}
-          {recentActivityPanel}
-        </>
-      )}
-    </SpaceBetween>
-  );
+  const actionsTab = recentActivityPanel;
 
   const activeWorkspaceTab = session.workspaceTabs.find((tab) => tab.tabId === activeTabId);
   const activeTabContent =
@@ -1542,29 +1492,29 @@ export default function WorkspaceView({
             Locked Workspace
           </Header>
         }
-      >
-        <Box color="text-body-secondary">
-          Review the locked profile, inspect S3 and EC2 inventory, and run workspace actions from a stable local session.
-        </Box>
-        <div className="status-strip">
-          <div className="status-pill">
-            <Box variant="awsui-key-label">Latest Activity</Box>
-            <Box variant="p">{latestLog?.message ?? "No activity recorded yet."}</Box>
+        >
+          <Box color="text-body-secondary">
+          Review the locked profile, inspect resource inventory, and track live activity from a stable local session.
+          </Box>
+          <div className="status-strip">
+            <div className="status-pill">
+              <Box variant="awsui-key-label">Latest Activity</Box>
+              <Box variant="p">{latestLog?.message ?? "No activity recorded yet."}</Box>
+            </div>
+            <div className="status-pill">
+              <Box variant="awsui-key-label">Provider Context</Box>
+              <Box variant="p">
+                {workspace.provider?.label || session.lockedProviderId || "Unavailable"}
+                {" / "}
+                {workspace.profile?.displayName || session.lockedProfileId || "Unavailable"}
+              </Box>
+            </div>
+            <div className="status-pill">
+              <Box variant="awsui-key-label">Available Views</Box>
+              <Box variant="p">{session.workspaceTabs.map((tab) => tab.label).join(", ")}</Box>
+            </div>
           </div>
-          <div className="status-pill">
-            <Box variant="awsui-key-label">Provider</Box>
-            <Box variant="p">{workspace.provider?.label || session.lockedProviderId || "Unavailable"}</Box>
-          </div>
-          <div className="status-pill">
-            <Box variant="awsui-key-label">Profile</Box>
-            <Box variant="p">{workspace.profile?.displayName || session.lockedProfileId || "Unavailable"}</Box>
-          </div>
-          <div className="status-pill">
-            <Box variant="awsui-key-label">Open Tabs</Box>
-            <Box variant="p">{countLabel(session.workspaceTabs.length, "tab", "tabs")}</Box>
-          </div>
-        </div>
-      </Container>
+        </Container>
 
       <div role="tabpanel">{activeTabContent}</div>
     </SpaceBetween>

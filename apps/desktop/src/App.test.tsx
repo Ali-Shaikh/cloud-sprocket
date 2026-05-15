@@ -619,7 +619,7 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Reboot" })).toBeDisabled();
   });
 
-  it("renders workspace actions and recent activity details", async () => {
+  it("renders the activity tab and refresh action", async () => {
     sessionFixture = {
       ...sessionFixture,
       isLocked: true,
@@ -635,23 +635,23 @@ describe("App", () => {
         },
         {
           tabId: "actions",
-          label: "Actions",
-          summary: "Actions summary",
-          detail: "Actions panel",
+          label: "Activity",
+          summary: "Activity summary",
+          detail: "Activity panel",
         },
       ],
     };
 
     render(<App />);
 
-    fireEvent.click(await screen.findByText("Actions"));
+    fireEvent.click(await screen.findByTitle("Activity: Activity summary"));
 
-    expect(await screen.findByText("Workspace Actions")).toBeInTheDocument();
-    expect(await screen.findByText("Refresh discovery")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Activity" })).toBeInTheDocument();
+    expect(await screen.findByText("Refresh Discovery")).toBeInTheDocument();
     expect((await screen.findAllByText("Provider discovery completed in test mode.")).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "Run Refresh" }));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh Discovery" }));
 
-    expect(await screen.findByText("Refresh discovery")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Activity" })).toBeInTheDocument();
   });
 });

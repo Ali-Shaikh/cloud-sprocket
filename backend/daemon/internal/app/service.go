@@ -1567,9 +1567,9 @@ func workspaceTabs() []models.WorkspaceTab {
 		},
 		{
 			TabID:   "actions",
-			Label:   "Actions",
-			Summary: "Cross-provider command actions.",
-			Detail:  "Provider actions remain visible while the rewrite reaches parity.",
+			Label:   "Activity",
+			Summary: "Recent job, log, and refresh history.",
+			Detail:  "Shows the latest backend activity while the workspace shell continues to expand.",
 		},
 	}
 }
