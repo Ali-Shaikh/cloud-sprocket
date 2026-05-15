@@ -1890,10 +1890,6 @@ export default function WorkspaceView({
                   value: `az vm show --subscription ${workspace.profile?.profileId || "<subscription>"} --resource-group ${selectedAzureVM.resourceGroup || workspace.selectedAzureResourceGroup || "<resource-group>"} --name ${selectedAzureVM.name}`,
                 },
                 {
-                  label: "Azure CLI start command",
-                  value: `az vm start --subscription ${workspace.profile?.profileId || "<subscription>"} --resource-group ${selectedAzureVM.resourceGroup || workspace.selectedAzureResourceGroup || "<resource-group>"} --name ${selectedAzureVM.name}`,
-                },
-                {
                   label: "Virtual machine JSON",
                   value: JSON.stringify(selectedAzureVM, null, 2),
                 },
