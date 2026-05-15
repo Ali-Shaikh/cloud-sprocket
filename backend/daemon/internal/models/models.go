@@ -60,6 +60,8 @@ type SessionSnapshot struct {
 	CurrentProviderID     string             `json:"currentProviderId,omitempty"`
 	SelectedProfileID     string             `json:"selectedProfileId,omitempty"`
 	SelectedAuthMethod    AuthMethod         `json:"selectedAuthMethod,omitempty"`
+	SelectedAzureResourceGroup string        `json:"selectedAzureResourceGroup,omitempty"`
+	SelectedAzureVMID          string        `json:"selectedAzureVmId,omitempty"`
 	SelectedS3BucketName  string             `json:"selectedS3BucketName,omitempty"`
 	SelectedS3ObjectKey   string             `json:"selectedS3ObjectKey,omitempty"`
 	S3PrefixFilter        string             `json:"s3PrefixFilter,omitempty"`
@@ -136,6 +138,28 @@ type AwsEc2Instance struct {
 	Tags             []DetailField `json:"tags,omitempty"`
 }
 
+type AzureResourceGroup struct {
+	Name             string        `json:"name"`
+	Location         string        `json:"location,omitempty"`
+	ProvisioningState string       `json:"provisioningState,omitempty"`
+	ManagedBy        string        `json:"managedBy,omitempty"`
+	Tags             []DetailField `json:"tags,omitempty"`
+}
+
+type AzureVirtualMachine struct {
+	VMID             string        `json:"vmId"`
+	Name             string        `json:"name"`
+	ResourceGroup    string        `json:"resourceGroup,omitempty"`
+	Location         string        `json:"location,omitempty"`
+	PowerState       string        `json:"powerState,omitempty"`
+	ProvisioningState string       `json:"provisioningState,omitempty"`
+	Size             string        `json:"size,omitempty"`
+	OSType           string        `json:"osType,omitempty"`
+	PrivateIP        string        `json:"privateIp,omitempty"`
+	PublicIP         string        `json:"publicIp,omitempty"`
+	Tags             []DetailField `json:"tags,omitempty"`
+}
+
 type WorkspaceSnapshot struct {
 	Provider               *ProviderSummary     `json:"provider,omitempty"`
 	Profile                *ProfileSummary      `json:"profile,omitempty"`
@@ -157,6 +181,11 @@ type WorkspaceSnapshot struct {
 	EC2StatusMessage       string               `json:"ec2StatusMessage,omitempty"`
 	EC2Regions             []string             `json:"ec2Regions"`
 	EC2Instances           []AwsEc2Instance     `json:"ec2Instances"`
+	SelectedAzureResourceGroup string            `json:"selectedAzureResourceGroup,omitempty"`
+	SelectedAzureVMID          string            `json:"selectedAzureVmId,omitempty"`
+	AzureStatusMessage         string            `json:"azureStatusMessage,omitempty"`
+	AzureResourceGroups        []AzureResourceGroup `json:"azureResourceGroups"`
+	AzureVirtualMachines       []AzureVirtualMachine `json:"azureVirtualMachines"`
 }
 
 type ActivityLogEntry struct {

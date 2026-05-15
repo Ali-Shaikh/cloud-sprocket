@@ -36,6 +36,11 @@ type EC2Inventory interface {
 	RebootInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
 }
 
+type AzureInventory interface {
+	ListResourceGroups(ctx context.Context, profile models.ProfileSummary) ([]models.AzureResourceGroup, error)
+	ListVirtualMachines(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureVirtualMachine, error)
+}
+
 type Notifier interface {
 	Notify(method string, payload any) error
 }
@@ -46,6 +51,7 @@ type Service struct {
 	discovery *discovery.Service
 	s3        S3Inventory
 	ec2       EC2Inventory
+	azure     AzureInventory
 	now       func() time.Time
 	mu        sync.Mutex
 }
@@ -56,6 +62,7 @@ func New(
 	discoveryService *discovery.Service,
 	s3Inventory S3Inventory,
 	ec2Inventory EC2Inventory,
+	azureInventory AzureInventory,
 ) *Service {
 	return &Service{
 		settings:  settings,
@@ -63,6 +70,7 @@ func New(
 		discovery: discoveryService,
 		s3:        s3Inventory,
 		ec2:       ec2Inventory,
+		azure:     azureInventory,
 		now:       func() time.Time { return time.Now().UTC() },
 	}
 }
@@ -378,6 +386,56 @@ func (s *Service) Handle(
 		}
 		go s.runEC2Action(job, notifier, snapshot, session, profile, region, instanceID, request.Action)
 		return job, nil
+	case "azure.selectResourceGroup":
+		var request struct {
+			ResourceGroup string `json:"resourceGroup"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		snapshot, session, err := s.currentState(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "azure" {
+			return nil, errors.New("lock an Azure session before selecting a resource group")
+		}
+		session.SelectedAzureResourceGroup = request.ResourceGroup
+		session.SelectedAzureVMID = ""
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), s.notifyStateAndLog(
+			ctx,
+			snapshot,
+			session,
+			notifier,
+			"info",
+			fmt.Sprintf("Selected Azure resource group %s.", request.ResourceGroup),
+		)
+	case "azure.selectVirtualMachine":
+		var request struct {
+			VMID string `json:"vmId"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		snapshot, session, err := s.currentState(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "azure" {
+			return nil, errors.New("lock an Azure session before selecting a virtual machine")
+		}
+		session.SelectedAzureVMID = request.VMID
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), nil
 	case "session.selectProvider":
 		var request struct {
 			ProviderID string `json:"providerId"`
@@ -395,6 +453,8 @@ func (s *Service) Handle(
 		session.CurrentProviderID = request.ProviderID
 		session.SelectedProfileID = ""
 		session.SelectedAuthMethod = ""
+		session.SelectedAzureResourceGroup = ""
+		session.SelectedAzureVMID = ""
 		session.SelectedS3BucketName = ""
 		session.SelectedS3ObjectKey = ""
 		session.S3PrefixFilter = ""
@@ -423,6 +483,8 @@ func (s *Service) Handle(
 		session.CurrentProviderID = request.ProviderID
 		session.SelectedProfileID = request.ProfileID
 		session.SelectedAuthMethod = ""
+		session.SelectedAzureResourceGroup = ""
+		session.SelectedAzureVMID = ""
 		session.SelectedS3BucketName = ""
 		session.SelectedS3ObjectKey = ""
 		session.S3PrefixFilter = ""
@@ -999,6 +1061,8 @@ func (s *Service) buildWorkspaceSnapshot(
 		AuthMethod:             session.SelectedAuthMethod,
 		RuntimeSettings:        s.settingsSnapshot(),
 		EnvironmentDiagnostics: s.environmentDiagnostics(snapshot, session),
+		AzureResourceGroups:    []models.AzureResourceGroup{},
+		AzureVirtualMachines:   []models.AzureVirtualMachine{},
 		S3PrefixFilter:         session.S3PrefixFilter,
 		S3Buckets:              []models.AwsS3Bucket{},
 		S3Objects:              []models.AwsS3Object{},
@@ -1016,6 +1080,33 @@ func (s *Service) buildWorkspaceSnapshot(
 		workspace.Profile = &profile
 		workspace.AWSEndpointURL = profileEndpointURL(profile)
 		workspace.AWSWritesEnabled = profileAllowsAWSWrites(profile)
+	}
+
+	if workspace.Provider != nil &&
+		workspace.Provider.ProviderID == "azure" &&
+		workspace.Profile != nil &&
+		s.azure != nil {
+		workspace.AzureResourceGroups = s.azureResourceGroups(context.Background(), *workspace.Profile)
+		workspace.SelectedAzureResourceGroup = s.selectedAzureResourceGroup(session, workspace.AzureResourceGroups)
+		workspace.AzureVirtualMachines = s.azureVirtualMachines(
+			context.Background(),
+			*workspace.Profile,
+			workspace.SelectedAzureResourceGroup,
+		)
+		workspace.SelectedAzureVMID = s.selectedAzureVMID(session, workspace.AzureVirtualMachines)
+		if len(workspace.AzureResourceGroups) == 0 {
+			workspace.AzureStatusMessage = "No Azure resource groups are currently available for this locked session."
+		} else if workspace.SelectedAzureResourceGroup == "" {
+			workspace.AzureStatusMessage = "Select an Azure resource group to inspect its virtual machines."
+		} else if len(workspace.AzureVirtualMachines) == 0 {
+			workspace.AzureStatusMessage = fmt.Sprintf("No Azure virtual machines were returned for %s.", workspace.SelectedAzureResourceGroup)
+		} else {
+			workspace.AzureStatusMessage = fmt.Sprintf(
+				"Loaded %d Azure virtual machines from %s.",
+				len(workspace.AzureVirtualMachines),
+				workspace.SelectedAzureResourceGroup,
+			)
+		}
 	}
 
 	if workspace.Provider != nil &&
@@ -1123,6 +1214,87 @@ func (s *Service) selectedS3BucketName(
 		return ""
 	}
 	return buckets[0].Name
+}
+
+func (s *Service) azureResourceGroups(
+	ctx context.Context,
+	profile models.ProfileSummary,
+) []models.AzureResourceGroup {
+	const scope = "azure.resource-groups"
+	queryHash := profile.ProfileID
+	groups, err := s.azure.ListResourceGroups(ctx, profile)
+	if err == nil {
+		_ = s.store.SaveResourceCache(ctx, scope, queryHash, groups, s.timestamp())
+		return groups
+	}
+
+	var cached []models.AzureResourceGroup
+	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
+	if cacheErr == nil && ok {
+		return cached
+	}
+
+	return []models.AzureResourceGroup{}
+}
+
+func (s *Service) selectedAzureResourceGroup(
+	session models.SessionSnapshot,
+	groups []models.AzureResourceGroup,
+) string {
+	if session.SelectedAzureResourceGroup != "" {
+		for _, group := range groups {
+			if group.Name == session.SelectedAzureResourceGroup {
+				return session.SelectedAzureResourceGroup
+			}
+		}
+	}
+	if len(groups) == 0 {
+		return ""
+	}
+	return groups[0].Name
+}
+
+func (s *Service) azureVirtualMachines(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	resourceGroup string,
+) []models.AzureVirtualMachine {
+	if resourceGroup == "" {
+		return []models.AzureVirtualMachine{}
+	}
+
+	const scope = "azure.virtual-machines"
+	queryHash := profile.ProfileID + "|" + resourceGroup
+	vms, err := s.azure.ListVirtualMachines(ctx, profile, resourceGroup)
+	if err == nil {
+		_ = s.store.SaveResourceCache(ctx, scope, queryHash, vms, s.timestamp())
+		return vms
+	}
+
+	var cached []models.AzureVirtualMachine
+	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
+	if cacheErr == nil && ok {
+		return cached
+	}
+
+	return []models.AzureVirtualMachine{}
+}
+
+func (s *Service) selectedAzureVMID(
+	session models.SessionSnapshot,
+	vms []models.AzureVirtualMachine,
+) string {
+	if session.SelectedAzureVMID != "" {
+		for _, vm := range vms {
+			if vm.VMID == session.SelectedAzureVMID {
+				return session.SelectedAzureVMID
+			}
+		}
+	}
+	if len(vms) == 0 {
+		return ""
+	}
+	return vms[0].VMID
 }
 
 func (s *Service) selectedS3ObjectKey(
@@ -1519,7 +1691,7 @@ func reconcileSession(session models.SessionSnapshot, snapshot discovery.Snapsho
 		if session.LockedProviderID != session.CurrentProviderID || session.LockedProfileID != session.SelectedProfileID || session.LockedAuthMethod != session.SelectedAuthMethod {
 			return clearLockState(session)
 		}
-		session.WorkspaceTabs = workspaceTabs()
+		session.WorkspaceTabs = workspaceTabs(session.LockedProviderID)
 		return session
 	}
 
@@ -1531,6 +1703,8 @@ func clearLockState(session models.SessionSnapshot) models.SessionSnapshot {
 	session.LockedProviderID = ""
 	session.LockedProfileID = ""
 	session.LockedAuthMethod = ""
+	session.SelectedAzureResourceGroup = ""
+	session.SelectedAzureVMID = ""
 	session.SelectedS3BucketName = ""
 	session.SelectedS3ObjectKey = ""
 	session.S3PrefixFilter = ""
@@ -1545,14 +1719,60 @@ func clearLockState(session models.SessionSnapshot) models.SessionSnapshot {
 	return session
 }
 
-func workspaceTabs() []models.WorkspaceTab {
+func workspaceTabs(providerID string) []models.WorkspaceTab {
+	overviewTab := models.WorkspaceTab{
+		TabID:   "overview",
+		Label:   "Overview",
+		Summary: "Session-wide provider context and health.",
+		Detail:  "Shows the locked cloud context and recent operator activity.",
+	}
+	activityTab := models.WorkspaceTab{
+		TabID:   "actions",
+		Label:   "Activity",
+		Summary: "Recent job, log, and refresh history.",
+		Detail:  "Shows the latest backend activity while the workspace shell continues to expand.",
+	}
+
+	if providerID == "azure" {
+		return []models.WorkspaceTab{
+			overviewTab,
+			{
+				TabID:   "azure-overview",
+				Label:   "Azure",
+				Summary: "Subscription context and readiness.",
+				Detail:  "Surfaces the locked Azure subscription details and the next read-only inventory slices.",
+			},
+			{
+				TabID:   "azure-resource-groups",
+				Label:   "Resource Groups",
+				Summary: "Read-only Azure resource group inventory.",
+				Detail:  "Browse resource groups discovered for the locked Azure subscription.",
+			},
+			{
+				TabID:   "azure-vms",
+				Label:   "Virtual Machines",
+				Summary: "Read-only Azure virtual machine inventory.",
+				Detail:  "Browse virtual machines for the selected Azure resource group.",
+			},
+			activityTab,
+		}
+	}
+
+	if providerID == "gcp" {
+		return []models.WorkspaceTab{
+			overviewTab,
+			{
+				TabID:   "gcp-overview",
+				Label:   "GCP",
+				Summary: "Project context and readiness.",
+				Detail:  "Surfaces the locked GCP configuration details while provider-specific inventory is ported.",
+			},
+			activityTab,
+		}
+	}
+
 	return []models.WorkspaceTab{
-		{
-			TabID:   "overview",
-			Label:   "Overview",
-			Summary: "Session-wide provider context and health.",
-			Detail:  "Shows the locked cloud context and recent operator activity.",
-		},
+		overviewTab,
 		{
 			TabID:   "s3",
 			Label:   "S3",
@@ -1565,12 +1785,7 @@ func workspaceTabs() []models.WorkspaceTab {
 			Summary: "Fleet and instance operations.",
 			Detail:  "Instance inventory and lifecycle actions are being ported.",
 		},
-		{
-			TabID:   "actions",
-			Label:   "Activity",
-			Summary: "Recent job, log, and refresh history.",
-			Detail:  "Shows the latest backend activity while the workspace shell continues to expand.",
-		},
+		activityTab,
 	}
 }
 
