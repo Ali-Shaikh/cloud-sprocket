@@ -2,7 +2,7 @@
   "name": "cloud-sprocket-workspace",
   "version": "0.1.16",
   "private": true,
-  "packageManager": "pnpm@10.17.0",
+  "packageManager": "pnpm@11.1.2",
   "scripts": {
     "dev": "pnpm --dir apps/desktop dev",
     "dev:desktop": "pnpm --dir apps/desktop dev:desktop",

@@ -21,24 +21,24 @@
     "bundle:macos:release:dmg": "pnpm run build && pnpm run build:sidecar && tauri build --bundles dmg"
   },
   "dependencies": {
-    "@cloudscape-design/components": "^3.0.0",
-    "@cloudscape-design/global-styles": "^1.0.0",
-    "@tauri-apps/api": "^2.0.0",
+    "@cloudscape-design/components": "^3.0.1296",
+    "@cloudscape-design/global-styles": "^1.0.59",
+    "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.0.0",
+    "@tauri-apps/cli": "^2.11.1",
     "@testing-library/jest-dom": "^6.0.0",
     "@testing-library/react": "^16.0.0",
     "@testing-library/user-event": "^14.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "jsdom": "^26.0.0",
-    "typescript": "^5.8.0",
-    "vite": "^7.0.0",
-    "vitest": "^3.0.0"
+    "@vitejs/plugin-react": "^6.0.2",
+    "jsdom": "^29.1.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.13",
+    "vitest": "^4.1.6"
   }
 }
