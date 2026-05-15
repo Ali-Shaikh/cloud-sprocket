@@ -47,6 +47,8 @@ export interface SessionSnapshot {
   currentProviderId?: string;
   selectedProfileId?: string;
   selectedAuthMethod?: AuthMethod;
+  selectedAzureResourceGroup?: string;
+  selectedAzureVmId?: string;
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;
@@ -123,6 +125,28 @@ export interface AwsEc2Instance {
   tags?: DetailField[];
 }
 
+export interface AzureResourceGroup {
+  name: string;
+  location?: string;
+  provisioningState?: string;
+  managedBy?: string;
+  tags?: DetailField[];
+}
+
+export interface AzureVirtualMachine {
+  vmId: string;
+  name: string;
+  resourceGroup?: string;
+  location?: string;
+  powerState?: string;
+  provisioningState?: string;
+  size?: string;
+  osType?: string;
+  privateIp?: string;
+  publicIp?: string;
+  tags?: DetailField[];
+}
+
 export interface WorkspaceSnapshot {
   provider?: ProviderSummary;
   profile?: ProfileSummary;
@@ -131,6 +155,11 @@ export interface WorkspaceSnapshot {
   environmentDiagnostics?: DetailField[];
   awsEndpointUrl?: string;
   awsWritesEnabled: boolean;
+  selectedAzureResourceGroup?: string;
+  selectedAzureVmId?: string;
+  azureStatusMessage?: string;
+  azureResourceGroups: AzureResourceGroup[];
+  azureVirtualMachines: AzureVirtualMachine[];
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;

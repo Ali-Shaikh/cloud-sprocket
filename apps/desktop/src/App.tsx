@@ -125,6 +125,9 @@ function workspaceTabIconUrl(tabId: string): string | undefined {
   if (tabId === "ec2") {
     return awsEc2IconUrl;
   }
+  if (tabId === "azure-overview" || tabId === "azure-resource-groups" || tabId === "azure-vms") {
+    return azureIconUrl;
+  }
   return undefined;
 }
 
@@ -133,6 +136,15 @@ function workspaceTabIcon(tabId: string): IconProps.Name {
     return "folder";
   }
   if (tabId === "ec2") {
+    return "grid-view";
+  }
+  if (tabId === "azure-overview" || tabId === "gcp-overview") {
+    return "settings";
+  }
+  if (tabId === "azure-resource-groups") {
+    return "folder";
+  }
+  if (tabId === "azure-vms") {
     return "grid-view";
   }
   if (tabId === "actions") {
@@ -182,6 +194,7 @@ function AppSidebar({
   workspace,
   activeWorkspaceTabId,
   activeS3PageId,
+  activeAzurePageId,
   collapsed,
   activityOpen,
   onToggleCollapsed,
@@ -189,6 +202,7 @@ function AppSidebar({
   onLockSession,
   onWorkspaceTabChange,
   onS3PageChange,
+  onAzurePageChange,
   onRefreshDiscovery,
 }: {
   session: SessionSnapshot;
@@ -197,6 +211,7 @@ function AppSidebar({
   workspace: WorkspaceSnapshot;
   activeWorkspaceTabId: string;
   activeS3PageId: string;
+  activeAzurePageId: string;
   collapsed: boolean;
   activityOpen: boolean;
   onToggleCollapsed: () => void;
@@ -204,6 +219,7 @@ function AppSidebar({
   onLockSession: () => void;
   onWorkspaceTabChange: (tabId: string) => void;
   onS3PageChange: (pageId: string) => void;
+  onAzurePageChange: (pageId: string) => void;
   onRefreshDiscovery: () => void;
 }) {
   const setupItems: SidebarItem[] = [
@@ -243,6 +259,10 @@ function AppSidebar({
         ? String(workspace.s3Buckets.length)
         : tab.tabId === "ec2"
           ? String(workspace.ec2Instances.length)
+          : tab.tabId === "azure-resource-groups"
+            ? String(workspace.azureResourceGroups.length)
+            : tab.tabId === "azure-vms"
+              ? String(workspace.azureVirtualMachines.length)
           : undefined;
     return {
       id: tab.tabId,
@@ -260,12 +280,20 @@ function AppSidebar({
       { id: "upload", label: "Upload" },
       { id: "url-tester", label: "URL Tools" },
     ],
+    "azure-overview": [
+      { id: "overview", label: "Overview" },
+      { id: "resource-groups", label: "Resource Groups" },
+      { id: "virtual-machines", label: "Virtual Machines" },
+    ],
   };
 
   const openWorkspaceSubPage = (tabId: string, pageId: string) => {
     onWorkspaceTabChange(tabId);
     if (tabId === "s3") {
       onS3PageChange(pageId);
+    }
+    if (tabId === "azure-overview") {
+      onAzurePageChange(pageId);
     }
   };
 
@@ -310,12 +338,15 @@ function AppSidebar({
                 <button
                   type="button"
                   className={`sidebar-menu-item${active ? " sidebar-menu-item-active" : ""}`}
-                  onClick={() => {
-                    onWorkspaceTabChange(item.id);
-                    if (item.id === "s3") {
-                      onS3PageChange("objects");
-                    }
-                  }}
+                    onClick={() => {
+                      onWorkspaceTabChange(item.id);
+                      if (item.id === "s3") {
+                        onS3PageChange("objects");
+                      }
+                      if (item.id === "azure-overview") {
+                        onAzurePageChange("overview");
+                      }
+                    }}
                   title={`${item.label}: ${item.detail}`}
                 >
                   <span className={sidebarItemIconClass(item)}>
@@ -334,7 +365,8 @@ function AppSidebar({
                         key={subItem.id}
                         type="button"
                         className={`sidebar-submenu-item${
-                          item.id === "s3" && activeS3PageId === subItem.id
+                          (item.id === "s3" && activeS3PageId === subItem.id) ||
+                          (item.id === "azure-overview" && activeAzurePageId === subItem.id)
                             ? " sidebar-submenu-item-active"
                             : ""
                         }`}
@@ -453,6 +485,8 @@ const emptyWorkspace: WorkspaceSnapshot = {
   runtimeSettings: emptySettings,
   environmentDiagnostics: [],
   awsWritesEnabled: false,
+  azureResourceGroups: [],
+  azureVirtualMachines: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -483,6 +517,7 @@ export default function App() {
   const [splitPanelOpen, setSplitPanelOpen] = useState(false);
   const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState("overview");
   const [activeS3PageId, setActiveS3PageId] = useState("objects");
+  const [activeAzurePageId, setActiveAzurePageId] = useState("overview");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [providerQuery, setProviderQuery] = useState<PropertyFilterProps.Query>(
     defaultQuery,
@@ -747,6 +782,7 @@ export default function App() {
     if (!session.isLocked) {
       setActiveWorkspaceTabId("overview");
       setActiveS3PageId("objects");
+      setActiveAzurePageId("overview");
       return;
     }
     if (
@@ -809,6 +845,7 @@ export default function App() {
       latestLog={latestLog}
       activeTabId={activeWorkspaceTabId}
       activeS3PageId={activeS3PageId}
+      activeAzurePageId={activeAzurePageId}
       splitPanelOpen={splitPanelOpen}
       showSensitiveValues={showSensitiveValues}
       onToggleSplitPanel={() => {
@@ -948,6 +985,24 @@ export default function App() {
           setEC2ActionInFlight(false);
         });
       }}
+      onSelectAzureResourceGroup={(resourceGroup) => {
+        void backendRequest<WorkspaceSnapshot>("azure.selectResourceGroup", { resourceGroup }).then(
+          (workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(workspaceResult);
+            });
+          },
+        );
+      }}
+      onSelectAzureVirtualMachine={(vmId) => {
+        void backendRequest<WorkspaceSnapshot>("azure.selectVirtualMachine", { vmId }).then(
+          (workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(workspaceResult);
+            });
+          },
+        );
+      }}
     />
   ) : (
     <SessionSetupView
@@ -1000,6 +1055,7 @@ export default function App() {
           workspace={workspace}
           activeWorkspaceTabId={activeWorkspaceTabId}
           activeS3PageId={activeS3PageId}
+          activeAzurePageId={activeAzurePageId}
           collapsed={sidebarCollapsed}
           activityOpen={splitPanelOpen}
           onToggleCollapsed={() => {
@@ -1013,6 +1069,7 @@ export default function App() {
           }}
           onWorkspaceTabChange={setActiveWorkspaceTabId}
           onS3PageChange={setActiveS3PageId}
+          onAzurePageChange={setActiveAzurePageId}
           onRefreshDiscovery={() => {
             void refreshDiscovery();
           }}

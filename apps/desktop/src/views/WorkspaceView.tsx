@@ -23,6 +23,8 @@ import {
 } from "react";
 import type {
   ActivityLogEntry,
+  AzureResourceGroup,
+  AzureVirtualMachine,
   AwsEc2Instance,
   AwsS3PresignResult,
   AwsS3Object,
@@ -63,6 +65,7 @@ type Props = {
   latestLog?: ActivityLogEntry;
   activeTabId: string;
   activeS3PageId: string;
+  activeAzurePageId: string;
   splitPanelOpen: boolean;
   showSensitiveValues: boolean;
   onToggleSplitPanel: () => void;
@@ -89,6 +92,8 @@ type Props = {
   onSelectEC2Region: (region: string) => void;
   onSelectEC2Instance: (instanceId: string) => void;
   onInvokeEC2Action: (action: EC2LifecycleAction, instanceId: string) => void;
+  onSelectAzureResourceGroup: (resourceGroup: string) => void;
+  onSelectAzureVirtualMachine: (vmId: string) => void;
 };
 
 function defaultUploadKey(sourcePath: string, prefix?: string): string {
@@ -191,6 +196,24 @@ function ec2TagValues(tags: AwsEc2Instance["tags"]): string {
   return tags.map((tag) => `${tag.label}=${tag.value}`).join(", ");
 }
 
+function profileFieldValue(profile: WorkspaceSnapshot["profile"], label: string): string | undefined {
+  return profile?.attributes.find((field) => field.label.toLowerCase() === label.toLowerCase())?.value;
+}
+
+function azureStatusType(value?: string): "success" | "warning" | "error" | "info" {
+  const normalised = value?.toLowerCase() ?? "";
+  if (normalised === "succeeded" || normalised === "running") {
+    return "success";
+  }
+  if (normalised === "stopped" || normalised === "deallocated") {
+    return "warning";
+  }
+  if (normalised === "failed") {
+    return "error";
+  }
+  return "info";
+}
+
 export default function WorkspaceView({
   session,
   workspace,
@@ -198,6 +221,7 @@ export default function WorkspaceView({
   latestLog,
   activeTabId,
   activeS3PageId,
+  activeAzurePageId,
   splitPanelOpen,
   showSensitiveValues,
   onToggleSplitPanel,
@@ -224,6 +248,8 @@ export default function WorkspaceView({
   onSelectEC2Region,
   onSelectEC2Instance,
   onInvokeEC2Action,
+  onSelectAzureResourceGroup,
+  onSelectAzureVirtualMachine,
 }: Props) {
   const [uploadSourcePath, setUploadSourcePath] = useState("");
   const [uploadObjectKey, setUploadObjectKey] = useState("");
@@ -1455,38 +1481,497 @@ export default function WorkspaceView({
     </Container>
   );
 
+  const activeWorkspaceTab = session.workspaceTabs.find((tab) => tab.tabId === activeTabId);
+  const lockedProviderId = session.lockedProviderId?.toLowerCase() ?? "";
+  const azureSubscriptionId = profileFieldValue(workspace.profile, "Subscription ID") || workspace.profile?.profileId;
+  const azureTenantId = profileFieldValue(workspace.profile, "Tenant ID") || "Unavailable";
+  const azureUserName =
+    profileFieldValue(workspace.profile, "User Name") ||
+    profileFieldValue(workspace.profile, "User") ||
+    "Unavailable";
+  const azureAuthSummary =
+    workspace.profile?.authMethods.find((method) => method.method === workspace.authMethod)?.summary ||
+    "The locked Azure auth path is ready for read-only workspace views.";
+  const effectiveAzurePageId =
+    activeAzurePageId === "resource-groups" || activeAzurePageId === "virtual-machines"
+      ? activeAzurePageId
+      : "overview";
+  const azureResourceGroupOptions = workspace.azureResourceGroups.map((group) => ({
+    label: group.name,
+    value: group.name,
+  }));
+  const selectedAzureResourceGroupOption = workspace.selectedAzureResourceGroup
+    ? { label: workspace.selectedAzureResourceGroup, value: workspace.selectedAzureResourceGroup }
+    : null;
+  const selectedAzureVM =
+    workspace.azureVirtualMachines.find((vm) => vm.vmId === workspace.selectedAzureVmId) ??
+    workspace.azureVirtualMachines[0];
+  const selectedAzureVMTableItem =
+    workspace.azureVirtualMachines.find((vm) => vm.vmId === selectedAzureVM?.vmId) ?? undefined;
+  const azureResourceGroupColumns: TableProps.ColumnDefinition<AzureResourceGroup>[] = [
+    {
+      id: "name",
+      header: "Name",
+      cell: (group) => group.name,
+    },
+    {
+      id: "location",
+      header: "Location",
+      cell: (group) => group.location || "Unknown",
+    },
+    {
+      id: "state",
+      header: "Provisioning",
+      cell: (group) => (
+        <StatusIndicator type={azureStatusType(group.provisioningState)}>
+          {group.provisioningState || "Unknown"}
+        </StatusIndicator>
+      ),
+    },
+    {
+      id: "managedBy",
+      header: "Managed By",
+      cell: (group) => group.managedBy || "Direct subscription resource",
+    },
+  ];
+  const azureVirtualMachineColumns: TableProps.ColumnDefinition<AzureVirtualMachine>[] = [
+    {
+      id: "name",
+      header: "Name",
+      cell: (vm) => vm.name,
+    },
+    {
+      id: "state",
+      header: "Power State",
+      cell: (vm) => (
+        <StatusIndicator type={azureStatusType(vm.powerState)}>
+          {vm.powerState || "Unknown"}
+        </StatusIndicator>
+      ),
+    },
+    {
+      id: "size",
+      header: "Size",
+      cell: (vm) => vm.size || "Unknown",
+    },
+    {
+      id: "osType",
+      header: "OS",
+      cell: (vm) => vm.osType || "Unknown",
+    },
+    {
+      id: "privateIp",
+      header: "Private IP",
+      cell: (vm) => vm.privateIp || "Unavailable",
+    },
+    {
+      id: "publicIp",
+      header: "Public IP",
+      cell: (vm) => vm.publicIp || "Unavailable",
+    },
+  ];
+  const azureOverviewTab = (
+    <SpaceBetween
+      size="l"
+      className="page-stack"
+    >
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description="Read-only Azure workspace context for the locked subscription."
+          >
+            Azure Workspace
+          </Header>
+        }
+      >
+        <div className="workspace-summary-grid">
+          <div className="workspace-context-card">
+            <div>
+              <Box variant="awsui-key-label">Subscription</Box>
+              <strong>{workspace.profile?.displayName || "Unavailable"}</strong>
+              <span>{azureSubscriptionId || "No subscription ID available"}</span>
+            </div>
+            <div>
+              <Box variant="awsui-key-label">Tenant</Box>
+              <strong>{azureTenantId}</strong>
+              <span>User: {azureUserName}</span>
+            </div>
+            <div>
+              <Box variant="awsui-key-label">Auth path</Box>
+              <strong>{workspace.authMethod?.toUpperCase() || "Unavailable"}</strong>
+              <span>{azureAuthSummary}</span>
+            </div>
+          </div>
+          <div className="workspace-metric-grid">
+            {renderMetricCard(
+              "Workspace mode",
+              "Read-only",
+              "Azure inventory starts with subscription context before resource explorers land.",
+            )}
+            {renderMetricCard(
+              "CLI readiness",
+              workspace.provider?.commandPath ? "Azure CLI detected" : "CLI not detected",
+              workspace.provider?.commandPath || "Using local profile cache only",
+            )}
+            {renderMetricCard(
+              "Profile source",
+              countLabel(workspace.profile?.sourcePaths.length || 0, "path", "paths"),
+              workspace.profile?.sourcePaths[0] || "No profile path recorded",
+            )}
+            {renderMetricCard(
+              "Next slices",
+              "Resource Groups, VMs",
+              "Provider-aware inventory views are being added incrementally.",
+            )}
+          </div>
+        </div>
+      </Container>
+
+      <div className="setup-grid">
+        {workspaceProfileDetails}
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description="What this Azure foundation branch is establishing before resource-specific views are added."
+            >
+              Azure Roadmap
+            </Header>
+          }
+        >
+          <SpaceBetween size="m">
+            <Box variant="p">
+              The workspace shell is now provider-aware, so locked Azure sessions no longer expose AWS-only tabs such as S3 and EC2.
+            </Box>
+            <div className="detail-grid">
+              <div className="detail-card">
+                <Box variant="awsui-key-label">Now</Box>
+                <Box variant="p">Subscription identity, tenant context, auth readiness, runtime diagnostics.</Box>
+              </div>
+              <div className="detail-card">
+                <Box variant="awsui-key-label">Next</Box>
+                <Box variant="p">Read-only Azure Resource Groups and Virtual Machines inventory.</Box>
+              </div>
+              <div className="detail-card">
+                <Box variant="awsui-key-label">Later</Box>
+                <Box variant="p">Provider-specific actions once safe write guards and inventory seams are in place.</Box>
+              </div>
+            </div>
+          </SpaceBetween>
+        </Container>
+      </div>
+
+      {environmentDiagnosticsPanel}
+    </SpaceBetween>
+  );
+
+  const azureWorkspaceStatusPanel = (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description="Read-only Azure inventory scoped to the locked subscription and selected resource group."
+        >
+          Azure Inventory
+        </Header>
+      }
+    >
+      <div className="status-strip">
+        <div className="status-pill">
+          <Box variant="awsui-key-label">Resource Groups</Box>
+          <Box variant="p">{countLabel(workspace.azureResourceGroups.length, "group", "groups")}</Box>
+        </div>
+        <div className="status-pill">
+          <Box variant="awsui-key-label">Selected Group</Box>
+          <Box variant="p">{workspace.selectedAzureResourceGroup || "No resource group selected"}</Box>
+        </div>
+        <div className="status-pill">
+          <Box variant="awsui-key-label">Virtual Machines</Box>
+          <Box variant="p">{countLabel(workspace.azureVirtualMachines.length, "VM", "VMs")}</Box>
+        </div>
+        <div className="status-pill">
+          <Box variant="awsui-key-label">Selected VM</Box>
+          <Box variant="p">{selectedAzureVM?.name || "No VM selected"}</Box>
+        </div>
+      </div>
+      <Box color="text-body-secondary">
+        {workspace.azureStatusMessage || "Azure inventory is waiting for a locked Azure workspace."}
+      </Box>
+    </Container>
+  );
+
+  const azureResourceGroupsTab = (
+    <SpaceBetween
+      size="l"
+      className="page-stack"
+    >
+      {azureWorkspaceStatusPanel}
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description="Browse resource groups discovered for the locked Azure subscription."
+          >
+            Azure Resource Groups
+          </Header>
+        }
+      >
+        <Table
+          items={workspace.azureResourceGroups}
+          columnDefinitions={azureResourceGroupColumns}
+          selectionType="single"
+          selectedItems={
+            workspace.selectedAzureResourceGroup
+              ? workspace.azureResourceGroups.filter((group) => group.name === workspace.selectedAzureResourceGroup)
+              : []
+          }
+          trackBy="name"
+          variant="embedded"
+          onSelectionChange={({ detail }) => {
+            const group = detail.selectedItems[0];
+            if (group) {
+              onSelectAzureResourceGroup(group.name);
+            }
+          }}
+          empty={<Box color="text-status-inactive">No Azure resource groups were returned for this subscription.</Box>}
+        />
+      </Container>
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description={workspace.selectedAzureResourceGroup || "Select a resource group for detail."}
+          >
+            Resource Group Detail
+          </Header>
+        }
+      >
+        {workspace.selectedAzureResourceGroup
+          ? renderDetailFields(
+              [
+                {
+                  label: "Name",
+                  value:
+                    workspace.azureResourceGroups.find((group) => group.name === workspace.selectedAzureResourceGroup)?.name ||
+                    workspace.selectedAzureResourceGroup,
+                },
+                {
+                  label: "Location",
+                  value:
+                    workspace.azureResourceGroups.find((group) => group.name === workspace.selectedAzureResourceGroup)?.location ||
+                    "Unknown",
+                },
+                {
+                  label: "Provisioning State",
+                  value:
+                    workspace.azureResourceGroups.find((group) => group.name === workspace.selectedAzureResourceGroup)?.provisioningState ||
+                    "Unknown",
+                },
+                {
+                  label: "Managed By",
+                  value:
+                    workspace.azureResourceGroups.find((group) => group.name === workspace.selectedAzureResourceGroup)?.managedBy ||
+                    "Direct subscription resource",
+                },
+                {
+                  label: "Tags",
+                  value: joinedValues(
+                    workspace.azureResourceGroups
+                      .find((group) => group.name === workspace.selectedAzureResourceGroup)
+                      ?.tags?.map((tag) => `${tag.label}=${tag.value}`),
+                    "No tags returned",
+                  ),
+                },
+              ],
+              "No resource group details are available.",
+            )
+          : <Box color="text-status-inactive">No Azure resource group selected.</Box>}
+      </Container>
+    </SpaceBetween>
+  );
+
+  const azureVirtualMachinesTab = (
+    <SpaceBetween
+      size="l"
+      className="page-stack"
+    >
+      {azureWorkspaceStatusPanel}
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description="Select a resource group, then browse its Azure virtual machines."
+            actions={
+              <Select
+                selectedOption={selectedAzureResourceGroupOption}
+                options={azureResourceGroupOptions}
+                placeholder="Select resource group"
+                empty="No Azure resource groups available"
+                selectedAriaLabel="Selected"
+                onChange={({ detail }) => {
+                  const resourceGroup = detail.selectedOption.value;
+                  if (resourceGroup) {
+                    onSelectAzureResourceGroup(resourceGroup);
+                  }
+                }}
+              />
+            }
+          >
+            Azure Virtual Machines
+          </Header>
+        }
+      >
+        <Table
+          items={workspace.azureVirtualMachines}
+          columnDefinitions={azureVirtualMachineColumns}
+          selectionType="single"
+          selectedItems={selectedAzureVMTableItem ? [selectedAzureVMTableItem] : []}
+          trackBy="vmId"
+          variant="embedded"
+          onSelectionChange={({ detail }) => {
+            const vm = detail.selectedItems[0];
+            if (vm) {
+              onSelectAzureVirtualMachine(vm.vmId);
+            }
+          }}
+          empty={<Box color="text-status-inactive">No Azure virtual machines loaded for the selected resource group.</Box>}
+        />
+      </Container>
+      <div className="setup-grid">
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description={selectedAzureVM?.vmId || "Select a virtual machine for detail."}
+            >
+              Virtual Machine Detail
+            </Header>
+          }
+        >
+          {selectedAzureVM
+            ? renderDetailFields(
+                [
+                  { label: "Name", value: selectedAzureVM.name },
+                  { label: "Resource Group", value: selectedAzureVM.resourceGroup || "Unknown" },
+                  { label: "Power State", value: selectedAzureVM.powerState || "Unknown" },
+                  { label: "Provisioning State", value: selectedAzureVM.provisioningState || "Unknown" },
+                  { label: "Size", value: selectedAzureVM.size || "Unknown" },
+                  { label: "OS Type", value: selectedAzureVM.osType || "Unknown" },
+                  { label: "Location", value: selectedAzureVM.location || "Unknown" },
+                  { label: "Private IP", value: selectedAzureVM.privateIp || "Unavailable" },
+                  { label: "Public IP", value: selectedAzureVM.publicIp || "Unavailable" },
+                  {
+                    label: "Tags",
+                    value: joinedValues(selectedAzureVM.tags?.map((tag) => `${tag.label}=${tag.value}`), "No tags returned"),
+                  },
+                ],
+                "No virtual machine details are available.",
+              )
+            : <Box color="text-status-inactive">No Azure virtual machine selected.</Box>}
+        </Container>
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description="Generated locally for the selected Azure VM. No data is persisted beyond the current snapshot."
+            >
+              Copy Actions
+            </Header>
+          }
+        >
+          {!selectedAzureVM ? (
+            <Box color="text-status-inactive">Select a virtual machine to generate copy actions.</Box>
+          ) : (
+            <SpaceBetween size="s">
+              {[
+                {
+                  label: "Azure CLI show command",
+                  value: `az vm show --subscription ${workspace.profile?.profileId || "<subscription>"} --resource-group ${selectedAzureVM.resourceGroup || workspace.selectedAzureResourceGroup || "<resource-group>"} --name ${selectedAzureVM.name}`,
+                },
+                {
+                  label: "Azure CLI start command",
+                  value: `az vm start --subscription ${workspace.profile?.profileId || "<subscription>"} --resource-group ${selectedAzureVM.resourceGroup || workspace.selectedAzureResourceGroup || "<resource-group>"} --name ${selectedAzureVM.name}`,
+                },
+                {
+                  label: "Virtual machine JSON",
+                  value: JSON.stringify(selectedAzureVM, null, 2),
+                },
+              ].map((snippet) => (
+                <div
+                  key={snippet.label}
+                  className="snippet-card"
+                >
+                  <div className="snippet-header">
+                    <Box variant="awsui-key-label">{snippet.label}</Box>
+                    <Button
+                      variant="link"
+                      onClick={() => {
+                        copyToClipboard(snippet.value);
+                      }}
+                    >
+                      Copy
+                    </Button>
+                  </div>
+                  <pre>{snippet.value}</pre>
+                </div>
+              ))}
+            </SpaceBetween>
+          )}
+        </Container>
+      </div>
+    </SpaceBetween>
+  );
+
+  const providerPlaceholderTab = (
+    <SpaceBetween
+      size="l"
+      className="page-stack"
+    >
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description={activeWorkspaceTab?.summary}
+          >
+            {activeWorkspaceTab?.label ?? "Workspace"}
+          </Header>
+        }
+      >
+        <SpaceBetween size="m">
+          <Box variant="p">{activeWorkspaceTab?.detail ?? "Select a workspace view."}</Box>
+          <Box color="text-body-secondary">
+            This provider-specific workspace surface is attached to the locked session and ready for the next inventory slice.
+          </Box>
+          {workspaceProfileDetails}
+        </SpaceBetween>
+      </Container>
+      {environmentDiagnosticsPanel}
+    </SpaceBetween>
+  );
+
   const actionsTab = recentActivityPanel;
 
-  const activeWorkspaceTab = session.workspaceTabs.find((tab) => tab.tabId === activeTabId);
   const activeTabContent =
     activeTabId === "overview"
       ? overviewTab
       : activeTabId === "s3"
         ? s3Tab
-        : activeTabId === "ec2"
+      : activeTabId === "ec2"
           ? ec2Tab
+          : activeTabId === "azure-overview"
+            ? effectiveAzurePageId === "resource-groups"
+              ? azureResourceGroupsTab
+              : effectiveAzurePageId === "virtual-machines"
+                ? azureVirtualMachinesTab
+                : azureOverviewTab
+          : activeTabId === "azure-resource-groups"
+            ? azureResourceGroupsTab
+          : activeTabId === "azure-vms"
+            ? azureVirtualMachinesTab
           : activeTabId === "actions"
             ? actionsTab
-            : (
-                <Container
-                  header={
-                    <Header
-                      variant="h2"
-                      description={activeWorkspaceTab?.summary}
-                    >
-                      {activeWorkspaceTab?.label ?? "Workspace"}
-                    </Header>
-                  }
-                >
-                  <SpaceBetween size="m">
-                    <Box variant="p">{activeWorkspaceTab?.detail ?? "Select a workspace view."}</Box>
-                    <Box color="text-body-secondary">
-                      This view is wired into the new workspace contract now, with the old
-                      Python controller being replaced slice by slice behind it.
-                    </Box>
-                  </SpaceBetween>
-                </Container>
-              );
+            : providerPlaceholderTab;
 
   return (
     <SpaceBetween
@@ -1521,7 +2006,11 @@ export default function WorkspaceView({
         }
         >
           <Box color="text-body-secondary">
-          Review the locked profile, inspect resource inventory, and track live activity from a stable local session.
+          {lockedProviderId === "azure"
+            ? "Review the locked Azure subscription, confirm local auth context, and prepare for provider-specific inventory views."
+            : lockedProviderId === "gcp"
+              ? "Review the locked GCP configuration, confirm local auth context, and prepare for provider-specific inventory views."
+              : "Review the locked profile, inspect resource inventory, and track live activity from a stable local session."}
           </Box>
           <div className="status-strip">
             <div className="status-pill">

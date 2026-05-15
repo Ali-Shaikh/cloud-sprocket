@@ -20,6 +20,15 @@ const providerFixtures: ProviderSummary[] = [
     commandPath: "aws",
     locations: ["~/.aws/config"],
   },
+  {
+    providerId: "azure",
+    label: "Azure",
+    state: "configured",
+    summary: "Azure profile cache detected.",
+    profileCount: 1,
+    commandPath: "az",
+    locations: ["~/.azure/azureProfile.json"],
+  },
 ];
 
 const profileFixtures: ProfileSummary[] = [
@@ -36,6 +45,23 @@ const profileFixtures: ProfileSummary[] = [
     authMethods: [
       { method: "cli", label: "CLI", summary: "AWS CLI detected.", available: true },
       { method: "sso", label: "SSO", summary: "SSO metadata detected.", available: true },
+      { method: "local-files", label: "Local Files", summary: "Read-only data.", available: true },
+    ],
+  },
+  {
+    providerId: "azure",
+    profileId: "sub-001",
+    displayName: "Marketing Subscription",
+    summary: "tenant-marketing, ali@example.com",
+    sourcePaths: ["~/.azure/azureProfile.json"],
+    attributes: [
+      { label: "Subscription ID", value: "sub-001" },
+      { label: "Tenant ID", value: "tenant-marketing" },
+      { label: "User Name", value: "ali@example.com" },
+    ],
+    authMethods: [
+      { method: "cli", label: "CLI", summary: "Azure CLI detected.", available: true },
+      { method: "sso", label: "SSO", summary: "Provider-specific SSO not yet exposed.", available: false },
       { method: "local-files", label: "Local Files", summary: "Read-only data.", available: true },
     ],
   },
@@ -213,6 +239,8 @@ describe("App", () => {
         databasePath: "D:/Workspace/runtime/cloudsprocket-workspace.db",
       },
       awsWritesEnabled: false,
+      azureResourceGroups: [],
+      azureVirtualMachines: [],
       selectedS3BucketName: "cloudsprocket-artifacts",
       selectedS3ObjectKey: "reports/weekly-summary.json",
       s3PrefixFilter: "",
@@ -653,5 +681,127 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh Discovery" }));
 
     expect(screen.getByRole("heading", { name: "Activity" })).toBeInTheDocument();
+  });
+
+  it("shows Azure-specific workspace tabs and hides AWS-only views for locked Azure sessions", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      currentProviderId: "azure",
+      selectedProfileId: "sub-001",
+      selectedAuthMethod: "cli",
+      isLocked: true,
+      lockedProviderId: "azure",
+      lockedProfileId: "sub-001",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+        {
+          tabId: "azure-overview",
+          label: "Azure",
+          summary: "Azure summary",
+          detail: "Azure panel",
+        },
+        {
+          tabId: "azure-resource-groups",
+          label: "Resource Groups",
+          summary: "Azure groups",
+          detail: "Resource groups panel",
+        },
+        {
+          tabId: "azure-vms",
+          label: "Virtual Machines",
+          summary: "Azure virtual machines",
+          detail: "Virtual machines panel",
+        },
+        {
+          tabId: "actions",
+          label: "Activity",
+          summary: "Activity summary",
+          detail: "Activity panel",
+        },
+      ],
+    };
+    workspaceFixture = {
+      ...workspaceFixture,
+      provider: providerFixtures[1],
+      profile: profileFixtures[1],
+      authMethod: "cli",
+      awsEndpointUrl: undefined,
+      awsWritesEnabled: false,
+      selectedAzureResourceGroup: "rg-marketing-prod",
+      selectedAzureVmId: "/subscriptions/sub-001/resourceGroups/rg-marketing-prod/providers/Microsoft.Compute/virtualMachines/mkt-api-01",
+      azureStatusMessage: "Loaded 1 Azure virtual machines from rg-marketing-prod.",
+      azureResourceGroups: [
+        {
+          name: "rg-marketing-prod",
+          location: "uaenorth",
+          provisioningState: "Succeeded",
+          tags: [{ label: "Environment", value: "prod" }],
+        },
+        {
+          name: "rg-marketing-dev",
+          location: "uaenorth",
+          provisioningState: "Succeeded",
+          tags: [{ label: "Environment", value: "dev" }],
+        },
+      ],
+      azureVirtualMachines: [
+        {
+          vmId: "/subscriptions/sub-001/resourceGroups/rg-marketing-prod/providers/Microsoft.Compute/virtualMachines/mkt-api-01",
+          name: "mkt-api-01",
+          resourceGroup: "rg-marketing-prod",
+          location: "uaenorth",
+          powerState: "VM running",
+          provisioningState: "Succeeded",
+          size: "Standard_D2s_v5",
+          osType: "Linux",
+          privateIp: "10.10.2.14",
+          publicIp: "20.74.10.10",
+          tags: [{ label: "Tier", value: "api" }],
+        },
+      ],
+      selectedS3BucketName: undefined,
+      selectedS3ObjectKey: undefined,
+      s3PrefixFilter: undefined,
+      s3StatusMessage: undefined,
+      s3Buckets: [],
+      s3Objects: [],
+      s3ObjectMetadata: [],
+      s3ExportSnippets: [],
+      selectedEc2Region: undefined,
+      selectedEc2InstanceId: undefined,
+      ec2StatusMessage: undefined,
+      ec2Regions: [],
+      ec2Instances: [],
+      environmentDiagnostics: [{ label: "Azure Profile", value: "~/.azure/azureProfile.json" }],
+    };
+
+    render(<App />);
+
+    expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
+    expect(screen.getByTitle("Azure: Azure summary")).toBeInTheDocument();
+    expect(screen.queryByText("S3")).not.toBeInTheDocument();
+    expect(screen.queryByText("EC2")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle("Azure: Azure summary"));
+
+    expect(await screen.findByRole("heading", { name: "Azure Workspace" })).toBeInTheDocument();
+    expect((await screen.findAllByText("Marketing Subscription")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("tenant-marketing")).length).toBeGreaterThan(0);
+    expect(screen.getByText("Resource Groups, VMs")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle("Resource Groups: Azure groups"));
+    expect(await screen.findByRole("heading", { name: "Azure Resource Groups" })).toBeInTheDocument();
+    expect((await screen.findAllByText("rg-marketing-prod")).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByTitle("Virtual Machines: Azure virtual machines"));
+    expect(await screen.findByRole("heading", { name: "Azure Virtual Machines" })).toBeInTheDocument();
+    expect((await screen.findAllByText("mkt-api-01")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Standard_D2s_v5")).length).toBeGreaterThan(0);
   });
 });

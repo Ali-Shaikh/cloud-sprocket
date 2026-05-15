@@ -31,6 +31,11 @@ type stubEC2Inventory struct {
 	actionErrors   map[string]error
 }
 
+type stubAzureInventory struct {
+	resourceGroups []models.AzureResourceGroup
+	virtualMachines map[string][]models.AzureVirtualMachine
+}
+
 func (s stubS3Inventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.AwsS3Bucket, error) {
 	return append([]models.AwsS3Bucket(nil), s.buckets...), nil
 }
@@ -98,6 +103,14 @@ func (s *stubEC2Inventory) StopInstance(_ context.Context, _ models.ProfileSumma
 func (s *stubEC2Inventory) RebootInstance(_ context.Context, _ models.ProfileSummary, region string, instanceID string) error {
 	s.actionRequests = append(s.actionRequests, "reboot|"+region+"|"+instanceID)
 	return s.actionErrors["reboot"]
+}
+
+func (s stubAzureInventory) ListResourceGroups(context.Context, models.ProfileSummary) ([]models.AzureResourceGroup, error) {
+	return append([]models.AzureResourceGroup(nil), s.resourceGroups...), nil
+}
+
+func (s stubAzureInventory) ListVirtualMachines(_ context.Context, _ models.ProfileSummary, resourceGroup string) ([]models.AzureVirtualMachine, error) {
+	return append([]models.AzureVirtualMachine(nil), s.virtualMachines[resourceGroup]...), nil
 }
 
 type recordingNotifier struct {
@@ -171,6 +184,7 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 		}),
 		s3Inventory,
 		ec2Inventory,
+		stubAzureInventory{},
 	)
 	service.now = func() time.Time { return time.Date(2026, 4, 26, 10, 0, 0, 0, time.UTC) }
 
@@ -383,6 +397,7 @@ func TestServiceReportsFailedEC2ActionJob(t *testing.T) {
 		}),
 		&stubS3Inventory{},
 		ec2Inventory,
+		stubAzureInventory{},
 	)
 	service.now = func() time.Time { return time.Date(2026, 4, 26, 10, 0, 0, 0, time.UTC) }
 
@@ -448,6 +463,7 @@ func TestServiceRejectsEC2ActionWithoutLocalEndpoint(t *testing.T) {
 		}),
 		&stubS3Inventory{},
 		ec2Inventory,
+		stubAzureInventory{},
 	)
 
 	ctx := context.Background()
@@ -501,6 +517,7 @@ func TestServiceRejectsEC2ActionWithoutWriteOptIn(t *testing.T) {
 		}),
 		&stubS3Inventory{},
 		ec2Inventory,
+		stubAzureInventory{},
 	)
 
 	ctx := context.Background()
@@ -563,7 +580,7 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 		}
 		return "", nil
 	})
-	firstService := New(settings, firstStore, discoveryService, s3Inventory, ec2Inventory)
+	firstService := New(settings, firstStore, discoveryService, s3Inventory, ec2Inventory, stubAzureInventory{})
 	ctx := context.Background()
 
 	if _, err := firstService.Handle(ctx, "session.lock", nil, nil); err != nil {
@@ -587,7 +604,7 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 		t.Fatalf("expected sqlite store to reopen, got %v", err)
 	}
 	defer secondStore.Close()
-	secondService := New(settings, secondStore, discoveryService, s3Inventory, ec2Inventory)
+	secondService := New(settings, secondStore, discoveryService, s3Inventory, ec2Inventory, stubAzureInventory{})
 
 	sessionResult, err := secondService.Handle(ctx, "session.get", nil, nil)
 	if err != nil {

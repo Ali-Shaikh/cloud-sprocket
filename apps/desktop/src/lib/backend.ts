@@ -55,9 +55,42 @@ const mockWorkspaceTabs: WorkspaceTab[] = [
   },
   {
     tabId: "actions",
-    label: "Actions",
-    summary: "Cross-provider command actions.",
-    detail: "Command and session actions remain visible while the backend reaches parity.",
+    label: "Activity",
+    summary: "Recent job, log, and refresh history.",
+    detail: "Shows the latest backend activity while the workspace shell continues to expand.",
+  },
+];
+
+const mockAzureWorkspaceTabs: WorkspaceTab[] = [
+  {
+    tabId: "overview",
+    label: "Overview",
+    summary: "Session-wide provider context and health.",
+    detail: "Shows the locked cloud context and recent operator activity.",
+  },
+  {
+    tabId: "azure-overview",
+    label: "Azure",
+    summary: "Subscription context and readiness.",
+    detail: "Surfaces the locked Azure subscription details and the next read-only inventory slices.",
+  },
+  {
+    tabId: "azure-resource-groups",
+    label: "Resource Groups",
+    summary: "Read-only Azure resource group inventory.",
+    detail: "Browse resource groups discovered for the locked Azure subscription.",
+  },
+  {
+    tabId: "azure-vms",
+    label: "Virtual Machines",
+    summary: "Read-only Azure virtual machine inventory.",
+    detail: "Browse virtual machines for the selected Azure resource group.",
+  },
+  {
+    tabId: "actions",
+    label: "Activity",
+    summary: "Recent job, log, and refresh history.",
+    detail: "Shows the latest backend activity while the workspace shell continues to expand.",
   },
 ];
 
@@ -158,6 +191,62 @@ const mockWorkspaceInstances = [
 ];
 
 const mockWorkspaceRegions = ["us-east-1", "eu-west-2"];
+
+const mockAzureResourceGroups = [
+  {
+    name: "rg-marketing-prod",
+    location: "uaenorth",
+    provisioningState: "Succeeded",
+    managedBy: "",
+    tags: [
+      { label: "Environment", value: "prod" },
+      { label: "Owner", value: "marketing" },
+    ],
+  },
+  {
+    name: "rg-marketing-dev",
+    location: "uaenorth",
+    provisioningState: "Succeeded",
+    managedBy: "",
+    tags: [{ label: "Environment", value: "dev" }],
+  },
+];
+
+const mockAzureVirtualMachines = {
+  "rg-marketing-prod": [
+    {
+      vmId: "/subscriptions/sub-001/resourceGroups/rg-marketing-prod/providers/Microsoft.Compute/virtualMachines/mkt-api-01",
+      name: "mkt-api-01",
+      resourceGroup: "rg-marketing-prod",
+      location: "uaenorth",
+      powerState: "VM running",
+      provisioningState: "Succeeded",
+      size: "Standard_D2s_v5",
+      osType: "Linux",
+      privateIp: "10.10.2.14",
+      publicIp: "20.74.10.10",
+      tags: [
+        { label: "Tier", value: "api" },
+        { label: "Owner", value: "marketing" },
+      ],
+    },
+  ],
+  "rg-marketing-dev": [
+    {
+      vmId: "/subscriptions/sub-001/resourceGroups/rg-marketing-dev/providers/Microsoft.Compute/virtualMachines/mkt-worker-01",
+      name: "mkt-worker-01",
+      resourceGroup: "rg-marketing-dev",
+      location: "uaenorth",
+      powerState: "VM deallocated",
+      provisioningState: "Succeeded",
+      size: "Standard_B2s",
+      osType: "Linux",
+      privateIp: "10.20.1.9",
+      publicIp: "",
+      tags: [{ label: "Tier", value: "worker" }],
+    },
+  ],
+};
 
 const mockProfiles: ProfileSummary[] = [
   {
@@ -329,7 +418,14 @@ function rebuildSessionDerivedState(): void {
     mockState.session.selectedAuthMethod =
       mockState.session.availableAuthMethods.find((method) => method.available)?.method;
   }
-  mockState.session.workspaceTabs = mockState.session.isLocked ? mockWorkspaceTabs : [];
+  const providerId = mockState.session.isLocked
+    ? mockState.session.lockedProviderId
+    : mockState.session.currentProviderId;
+  mockState.session.workspaceTabs = !mockState.session.isLocked
+    ? []
+    : providerId === "azure"
+      ? mockAzureWorkspaceTabs
+      : mockWorkspaceTabs;
 }
 
 function emitMockEvent<K extends BackendEventName>(
@@ -386,6 +482,7 @@ function buildMockWorkspace(): WorkspaceSnapshot {
   const provider = currentProvider();
   const profile = currentProfile();
   const isAWSWorkspace = provider?.providerId === "aws";
+  const isAzureWorkspace = provider?.providerId === "azure";
   const selectedS3BucketName = isAWSWorkspace
     ? mockState.session.selectedS3BucketName ?? mockWorkspaceBuckets[0]?.name
     : undefined;
@@ -398,6 +495,15 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     : [];
   const selectedS3ObjectKey =
     mockState.session.selectedS3ObjectKey ?? filteredObjects[0]?.key;
+  const selectedAzureResourceGroup = isAzureWorkspace
+    ? mockState.session.selectedAzureResourceGroup ?? mockAzureResourceGroups[0]?.name
+    : undefined;
+  const azureVirtualMachines = isAzureWorkspace && selectedAzureResourceGroup
+    ? mockAzureVirtualMachines[selectedAzureResourceGroup as keyof typeof mockAzureVirtualMachines] ?? []
+    : [];
+  const selectedAzureVmId = isAzureWorkspace
+    ? mockState.session.selectedAzureVmId ?? azureVirtualMachines[0]?.vmId
+    : undefined;
 
   return {
     provider,
@@ -408,11 +514,21 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       { label: "Platform", value: "windows" },
       { label: "AWS Config", value: "C:/Users/Ali/.aws/config (available)" },
       { label: "AWS Credentials", value: "C:/Users/Ali/.aws/credentials (available)", sensitive: true },
+      { label: "Azure Profile", value: "C:/Users/Ali/.azure/azureProfile.json (available)" },
       { label: "AWS CLI", value: "C:/Program Files/Amazon/AWSCLIV2/aws.exe" },
       { label: "Write Policy", value: "Writes enabled for local endpoint profile" },
     ],
     awsEndpointUrl: "http://192.168.50.168:4566",
     awsWritesEnabled: true,
+    selectedAzureResourceGroup,
+    selectedAzureVmId,
+    azureStatusMessage: isAzureWorkspace
+      ? azureVirtualMachines.length > 0
+        ? `Loaded ${azureVirtualMachines.length} Azure virtual machines from ${selectedAzureResourceGroup}.`
+        : `No Azure virtual machines were returned for ${selectedAzureResourceGroup}.`
+      : undefined,
+    azureResourceGroups: isAzureWorkspace ? mockAzureResourceGroups : [],
+    azureVirtualMachines: isAzureWorkspace ? azureVirtualMachines : [],
     selectedS3BucketName,
     selectedS3ObjectKey,
     s3PrefixFilter: mockState.session.s3PrefixFilter,
@@ -599,6 +715,15 @@ function handleMockRequest<T>(
       }, 30);
       return Promise.resolve(job as T);
     }
+    case "azure.selectResourceGroup":
+      mockState.session.selectedAzureResourceGroup = String(params.resourceGroup ?? "");
+      mockState.session.selectedAzureVmId = undefined;
+      appendLog("info", `Selected Azure resource group ${params.resourceGroup}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.selectVirtualMachine":
+      mockState.session.selectedAzureVmId = String(params.vmId ?? "");
+      appendLog("info", `Selected Azure virtual machine ${params.vmId}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
     case "session.selectProvider":
       setCurrentProvider(String(params.providerId ?? ""));
       emitStateChanged();
@@ -634,6 +759,8 @@ function handleMockRequest<T>(
       mockState.session.lockedProviderId = undefined;
       mockState.session.lockedProfileId = undefined;
       mockState.session.lockedAuthMethod = undefined;
+      mockState.session.selectedAzureResourceGroup = undefined;
+      mockState.session.selectedAzureVmId = undefined;
       rebuildSessionDerivedState();
       emitStateChanged();
       appendLog("info", "Unlocked the active cloud session.");
