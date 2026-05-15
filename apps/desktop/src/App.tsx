@@ -136,7 +136,7 @@ function workspaceTabIcon(tabId: string): IconProps.Name {
     return "grid-view";
   }
   if (tabId === "actions") {
-    return "settings";
+    return "notification";
   }
   return "view-full";
 }
@@ -182,7 +182,6 @@ function AppSidebar({
   workspace,
   activeWorkspaceTabId,
   activeS3PageId,
-  activeActionsPageId,
   collapsed,
   activityOpen,
   onToggleCollapsed,
@@ -190,7 +189,6 @@ function AppSidebar({
   onLockSession,
   onWorkspaceTabChange,
   onS3PageChange,
-  onActionsPageChange,
   onRefreshDiscovery,
 }: {
   session: SessionSnapshot;
@@ -199,7 +197,6 @@ function AppSidebar({
   workspace: WorkspaceSnapshot;
   activeWorkspaceTabId: string;
   activeS3PageId: string;
-  activeActionsPageId: string;
   collapsed: boolean;
   activityOpen: boolean;
   onToggleCollapsed: () => void;
@@ -207,7 +204,6 @@ function AppSidebar({
   onLockSession: () => void;
   onWorkspaceTabChange: (tabId: string) => void;
   onS3PageChange: (pageId: string) => void;
-  onActionsPageChange: (pageId: string) => void;
   onRefreshDiscovery: () => void;
 }) {
   const setupItems: SidebarItem[] = [
@@ -262,10 +258,7 @@ function AppSidebar({
     s3: [
       { id: "objects", label: "Objects" },
       { id: "upload", label: "Upload" },
-    ],
-    actions: [
-      { id: "workspace", label: "Workspace" },
-      { id: "url-tester", label: "URL tester" },
+      { id: "url-tester", label: "URL Tools" },
     ],
   };
 
@@ -273,9 +266,6 @@ function AppSidebar({
     onWorkspaceTabChange(tabId);
     if (tabId === "s3") {
       onS3PageChange(pageId);
-    }
-    if (tabId === "actions") {
-      onActionsPageChange(pageId);
     }
   };
 
@@ -325,9 +315,6 @@ function AppSidebar({
                     if (item.id === "s3") {
                       onS3PageChange("objects");
                     }
-                    if (item.id === "actions") {
-                      onActionsPageChange("workspace");
-                    }
                   }}
                   title={`${item.label}: ${item.detail}`}
                 >
@@ -347,8 +334,7 @@ function AppSidebar({
                         key={subItem.id}
                         type="button"
                         className={`sidebar-submenu-item${
-                          (item.id === "s3" && activeS3PageId === subItem.id) ||
-                          (item.id === "actions" && activeActionsPageId === subItem.id)
+                          item.id === "s3" && activeS3PageId === subItem.id
                             ? " sidebar-submenu-item-active"
                             : ""
                         }`}
@@ -497,7 +483,6 @@ export default function App() {
   const [splitPanelOpen, setSplitPanelOpen] = useState(false);
   const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState("overview");
   const [activeS3PageId, setActiveS3PageId] = useState("objects");
-  const [activeActionsPageId, setActiveActionsPageId] = useState("workspace");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [providerQuery, setProviderQuery] = useState<PropertyFilterProps.Query>(
     defaultQuery,
@@ -762,7 +747,6 @@ export default function App() {
     if (!session.isLocked) {
       setActiveWorkspaceTabId("overview");
       setActiveS3PageId("objects");
-      setActiveActionsPageId("workspace");
       return;
     }
     if (
@@ -825,7 +809,6 @@ export default function App() {
       latestLog={latestLog}
       activeTabId={activeWorkspaceTabId}
       activeS3PageId={activeS3PageId}
-      activeActionsPageId={activeActionsPageId}
       splitPanelOpen={splitPanelOpen}
       showSensitiveValues={showSensitiveValues}
       onToggleSplitPanel={() => {
@@ -1017,7 +1000,6 @@ export default function App() {
           workspace={workspace}
           activeWorkspaceTabId={activeWorkspaceTabId}
           activeS3PageId={activeS3PageId}
-          activeActionsPageId={activeActionsPageId}
           collapsed={sidebarCollapsed}
           activityOpen={splitPanelOpen}
           onToggleCollapsed={() => {
@@ -1031,7 +1013,6 @@ export default function App() {
           }}
           onWorkspaceTabChange={setActiveWorkspaceTabId}
           onS3PageChange={setActiveS3PageId}
-          onActionsPageChange={setActiveActionsPageId}
           onRefreshDiscovery={() => {
             void refreshDiscovery();
           }}
