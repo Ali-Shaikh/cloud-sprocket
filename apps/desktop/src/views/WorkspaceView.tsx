@@ -705,62 +705,89 @@ export default function WorkspaceView({
     </Container>
   );
 
+  const s3WorkspaceStatusPanel = effectiveS3PageId === "url-tester" ? (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description="URL tools work on pasted S3 links directly and do not require the current bucket selection."
+        >
+          S3 URL Context
+        </Header>
+      }
+    >
+      <div className="status-strip">
+        <div className="status-pill">
+          <Box variant="awsui-key-label">URL Scope</Box>
+          <Box variant="p">Any pasted S3 URL</Box>
+        </div>
+        <div className="status-pill">
+          <Box variant="awsui-key-label">Latest Signed URL</Box>
+          <Box variant="p">{s3SignedUrlResult?.objectKey || "No signed URL generated in this session"}</Box>
+        </div>
+        <div className="status-pill">
+          <Box variant="awsui-key-label">Selected Bucket</Box>
+          <Box variant="p">{workspace.selectedS3BucketName || "Not required for URL tools"}</Box>
+        </div>
+      </div>
+      <Box color="text-body-secondary">
+        Paste a signed or public S3 URL to analyse or validate it. Bucket selection only affects object browsing and upload workflows.
+      </Box>
+    </Container>
+  ) : (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description={
+            effectiveS3PageId === "objects"
+              ? "Browse objects and select one to open details and share actions."
+              : "Upload a local file into the selected bucket and prefix."
+          }
+        >
+          {effectiveS3PageId === "objects" ? "S3 Objects" : "S3 Upload"}
+        </Header>
+      }
+    >
+      <div className="status-strip">
+        <div className="status-pill">
+          <Box variant="awsui-key-label">Bucket</Box>
+          <Select
+            selectedOption={selectedBucketOption}
+            options={s3BucketOptions}
+            placeholder="Select bucket"
+            onChange={({ detail }) => {
+              if (detail.selectedOption.value) {
+                onSelectS3Bucket(detail.selectedOption.value);
+              }
+            }}
+          />
+        </div>
+        <div className="status-pill">
+          <Box variant="awsui-key-label">Prefix Filter</Box>
+          <Box variant="p">{workspace.s3PrefixFilter || "No prefix filter"}</Box>
+        </div>
+        <div className="status-pill">
+          <Box variant="awsui-key-label">Objects</Box>
+          <Box variant="p">{countLabel(workspace.s3Objects.length, "object", "objects")}</Box>
+        </div>
+        <div className="status-pill">
+          <Box variant="awsui-key-label">Selected Object</Box>
+          <Box variant="p">{workspace.selectedS3ObjectKey || "No object selected"}</Box>
+        </div>
+      </div>
+      <Box color="text-body-secondary">
+        {workspace.s3StatusMessage || "S3 inventory is waiting for a locked AWS workspace."}
+      </Box>
+    </Container>
+  );
+
   const s3Tab = (
     <SpaceBetween
       size="l"
       className="page-stack"
     >
-      <Container
-        header={
-          <Header
-            variant="h2"
-            description={
-              effectiveS3PageId === "objects"
-                ? "Browse objects and select one to open details and share actions."
-                : effectiveS3PageId === "upload"
-                  ? "Upload a local file into the selected bucket and prefix."
-                  : "Inspect and validate S3 URLs without changing the selected bucket context."
-            }
-          >
-            {effectiveS3PageId === "objects"
-              ? "S3 Objects"
-              : effectiveS3PageId === "upload"
-                ? "S3 Upload"
-                : "S3 URL Tools"}
-          </Header>
-        }
-      >
-        <div className="status-strip">
-          <div className="status-pill">
-            <Box variant="awsui-key-label">Bucket</Box>
-            <Select
-              selectedOption={selectedBucketOption}
-              options={s3BucketOptions}
-              placeholder="Select bucket"
-              onChange={({ detail }) => {
-                if (detail.selectedOption.value) {
-                  onSelectS3Bucket(detail.selectedOption.value);
-                }
-              }}
-            />
-          </div>
-          <div className="status-pill">
-            <Box variant="awsui-key-label">Prefix Filter</Box>
-            <Box variant="p">{workspace.s3PrefixFilter || "No prefix filter"}</Box>
-          </div>
-          <div className="status-pill">
-            <Box variant="awsui-key-label">Objects</Box>
-            <Box variant="p">{countLabel(workspace.s3Objects.length, "object", "objects")}</Box>
-          </div>
-          <div className="status-pill">
-            <Box variant="awsui-key-label">Selected Object</Box>
-            <Box variant="p">{workspace.selectedS3ObjectKey || "No object selected"}</Box>
-          </div>
-        </div>
-        <Box color="text-body-secondary">
-          {workspace.s3StatusMessage || "S3 inventory is waiting for a locked AWS workspace."}
-        </Box>
-      </Container>
+      {s3WorkspaceStatusPanel}
 
       {effectiveS3PageId === "objects" ? s3ObjectBrowser : null}
       {effectiveS3PageId === "upload" ? (
