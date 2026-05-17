@@ -32,7 +32,7 @@ type stubEC2Inventory struct {
 }
 
 type stubAzureInventory struct {
-	resourceGroups []models.AzureResourceGroup
+	resourceGroups  []models.AzureResourceGroup
 	virtualMachines map[string][]models.AzureVirtualMachine
 }
 
@@ -130,6 +130,8 @@ func (r recordingNotifier) Notify(method string, payload any) error {
 func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	tempDir := t.TempDir()
 	home := filepath.Join(tempDir, "home")
+	t.Setenv("DOCKER_HOST", "unix:///tmp/cloudsprocket-test-docker.sock")
+	t.Setenv("DOCKER_CONTEXT", "desktop-linux")
 
 	mustWriteFile(t, filepath.Join(home, ".aws", "config"), "[profile sandbox]\nregion = us-east-1\nsso_start_url = https://example.awsapps.com/start\nendpoint_url = http://192.168.50.168:4566\ncloudsprocket_allow_writes = true\n")
 	mustWriteFile(t, filepath.Join(home, ".aws", "credentials"), "[sandbox]\naws_access_key_id = AKIAEXAMPLE\n")
@@ -233,6 +235,24 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	}
 	if workspace.RuntimeSettings.DatabasePath == "" {
 		t.Fatalf("expected workspace runtime settings to include a database path")
+	}
+	if workspace.RuntimeSettings.RuntimeMode != models.RuntimeModeCloud {
+		t.Fatalf("expected default runtime mode to be cloud, got %s", workspace.RuntimeSettings.RuntimeMode)
+	}
+	if workspace.RuntimeSettings.LocalConfigDir == "" || workspace.RuntimeSettings.EmulatorStateDir == "" {
+		t.Fatalf("expected local runtime directories in settings, got %+v", workspace.RuntimeSettings)
+	}
+	if workspace.DockerDiagnostics.EngineState != models.DockerEngineStateAvailable {
+		t.Fatalf("expected docker diagnostics to use test endpoint, got %+v", workspace.DockerDiagnostics)
+	}
+	if workspace.DockerDiagnostics.Host != "unix:///tmp/cloudsprocket-test-docker.sock" {
+		t.Fatalf("expected docker host to reflect DOCKER_HOST, got %+v", workspace.DockerDiagnostics)
+	}
+	if len(workspace.EmulatorSummaries) != 2 {
+		t.Fatalf("expected emulator summaries, got %+v", workspace.EmulatorSummaries)
+	}
+	if len(workspace.LocalConfigArtifacts) != 3 {
+		t.Fatalf("expected local config artifacts, got %+v", workspace.LocalConfigArtifacts)
 	}
 	if workspace.SelectedEC2Region != "us-east-1" || len(workspace.EC2Instances) != 1 {
 		t.Fatalf("expected EC2 inventory for default region, got region=%q instances=%+v", workspace.SelectedEC2Region, workspace.EC2Instances)
