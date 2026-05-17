@@ -316,6 +316,10 @@ export function renderRuntimeSettingsPanel(
           <Box variant="p">{settings.platformName || "Unknown"}</Box>
         </div>
         <div className="detail-card">
+          <Box variant="awsui-key-label">Runtime Mode</Box>
+          <Box variant="p">{settings.runtimeMode || "cloud"}</Box>
+        </div>
+        <div className="detail-card">
           <Box variant="awsui-key-label">Config Root</Box>
           <Box variant="code">{settings.configDir || "Unavailable"}</Box>
         </div>
@@ -326,6 +330,14 @@ export function renderRuntimeSettingsPanel(
         <div className="detail-card">
           <Box variant="awsui-key-label">Log Path</Box>
           <Box variant="code">{settings.logPath || "Unavailable"}</Box>
+        </div>
+        <div className="detail-card">
+          <Box variant="awsui-key-label">Local Config Root</Box>
+          <Box variant="code">{settings.localConfigDir || "Unavailable"}</Box>
+        </div>
+        <div className="detail-card">
+          <Box variant="awsui-key-label">Emulator State Root</Box>
+          <Box variant="code">{settings.emulatorStateDir || "Unavailable"}</Box>
         </div>
       </div>
     </Container>
