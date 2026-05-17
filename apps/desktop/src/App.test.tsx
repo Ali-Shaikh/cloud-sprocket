@@ -77,6 +77,9 @@ const settingsFixture: AppSettingsSnapshot = {
   configDir: "C:/Users/Ali/AppData/Local/CloudSprocket",
   databasePath: "C:/Users/Ali/AppData/Local/CloudSprocket/cloudsprocket.db",
   logPath: "C:/Users/Ali/AppData/Local/CloudSprocket/logs/cloudsprocket.log",
+  runtimeMode: "cloud",
+  localConfigDir: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config",
+  emulatorStateDir: "C:/Users/Ali/AppData/Local/CloudSprocket/emulators",
 };
 
 vi.mock("./lib/backend", () => ({
@@ -238,6 +241,63 @@ describe("App", () => {
         ...settingsFixture,
         databasePath: "D:/Workspace/runtime/cloudsprocket-workspace.db",
       },
+      dockerDiagnostics: {
+        engineState: "available",
+        summary: "Docker engine endpoint detected. Active container control is not wired into this slice yet.",
+        contextName: "desktop-linux",
+        host: "npipe:////./pipe/docker_engine",
+        details: [
+          { label: "Detection", value: "DOCKER_HOST" },
+          { label: "Host", value: "npipe:////./pipe/docker_engine" },
+          { label: "Context", value: "desktop-linux" },
+        ],
+      },
+      emulatorSummaries: [
+        {
+          emulatorId: "localstack",
+          providerId: "aws",
+          label: "LocalStack",
+          kind: "docker",
+          status: "not-configured",
+          summary: "Managed AWS local runtime is planned but not configured yet.",
+          details: [
+            { label: "Image", value: "localstack/localstack" },
+            { label: "Managed Config Root", value: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config/aws" },
+          ],
+        },
+        {
+          emulatorId: "floci-az",
+          providerId: "azure",
+          label: "floci-az",
+          kind: "docker",
+          status: "not-configured",
+          summary: "Managed Azure local runtime is planned but not configured yet.",
+          details: [
+            { label: "Image", value: "floci/floci-az:latest" },
+            { label: "Managed Config Root", value: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config/azure" },
+          ],
+        },
+      ],
+      localConfigArtifacts: [
+        {
+          artifactId: "aws-local-config",
+          providerId: "aws",
+          label: "AWS Local Config",
+          path: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config/aws/config",
+          status: "not-created",
+          managed: true,
+          summary: "App-managed AWS local profile configuration will be written here.",
+        },
+        {
+          artifactId: "azure-local-env",
+          providerId: "azure",
+          label: "Azure Local Env File",
+          path: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config/azure/floci-az.env",
+          status: "not-created",
+          managed: true,
+          summary: "App-managed Azure local connection strings and env values will be written here.",
+        },
+      ],
       awsWritesEnabled: false,
       azureResourceGroups: [],
       azureVirtualMachines: [],
@@ -338,6 +398,10 @@ describe("App", () => {
     expect(screen.getByText("S3")).toBeInTheDocument();
     expect((await screen.findAllByText("workspace sandbox")).length).toBeGreaterThan(0);
     expect(await screen.findByText("2 buckets")).toBeInTheDocument();
+    expect(await screen.findByText("Docker Diagnostics")).toBeInTheDocument();
+    expect(await screen.findByText("Local Emulators")).toBeInTheDocument();
+    expect(await screen.findByText("Local Config Artifacts")).toBeInTheDocument();
+    expect(await screen.findByText("LocalStack")).toBeInTheDocument();
     expect(
       await screen.findByText(/cloudsprocket-workspace\.db/i),
     ).toBeInTheDocument();
