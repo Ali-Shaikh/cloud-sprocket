@@ -479,11 +479,21 @@ const emptySettings: AppSettingsSnapshot = {
   configDir: "",
   databasePath: "",
   logPath: "",
+  runtimeMode: "cloud",
+  localConfigDir: "",
+  emulatorStateDir: "",
 };
 
 const emptyWorkspace: WorkspaceSnapshot = {
   runtimeSettings: emptySettings,
   environmentDiagnostics: [],
+  dockerDiagnostics: {
+    engineState: "unknown",
+    summary: "Docker diagnostics are not available yet.",
+    details: [],
+  },
+  emulatorSummaries: [],
+  localConfigArtifacts: [],
   awsWritesEnabled: false,
   azureResourceGroups: [],
   azureVirtualMachines: [],

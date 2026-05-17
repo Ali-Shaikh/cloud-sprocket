@@ -16,6 +16,9 @@ type Settings struct {
 	AppDataDir         string
 	LocalAppDataDir    string
 	ConfigDir          string
+	RuntimeMode        string
+	LocalConfigDir     string
+	EmulatorStateDir   string
 	AWSConfigPath      string
 	AWSCredentialsPath string
 	AzureDir           string
@@ -50,6 +53,9 @@ func FromEnv(env map[string]string, goos string, home string) Settings {
 	}
 
 	configDir = firstNonEmpty(env["CLOUDSPROCKET_CONFIG_DIR"], configDir)
+	runtimeMode := firstNonEmpty(env["CLOUDSPROCKET_RUNTIME_MODE"], "cloud")
+	localConfigDir := firstNonEmpty(env["CLOUDSPROCKET_LOCAL_CONFIG_DIR"], filepath.Join(configDir, "local-config"))
+	emulatorStateDir := firstNonEmpty(env["CLOUDSPROCKET_EMULATOR_STATE_DIR"], filepath.Join(configDir, "emulators"))
 	awsConfig := firstNonEmpty(env["AWS_CONFIG_FILE"], filepath.Join(home, ".aws", "config"))
 	awsCredentials := firstNonEmpty(env["AWS_SHARED_CREDENTIALS_FILE"], filepath.Join(home, ".aws", "credentials"))
 	azureDir := firstNonEmpty(env["AZURE_CONFIG_DIR"], filepath.Join(home, ".azure"))
@@ -61,6 +67,9 @@ func FromEnv(env map[string]string, goos string, home string) Settings {
 		AppDataDir:         appDataDir,
 		LocalAppDataDir:    localAppDataDir,
 		ConfigDir:          configDir,
+		RuntimeMode:        runtimeMode,
+		LocalConfigDir:     localConfigDir,
+		EmulatorStateDir:   emulatorStateDir,
 		AWSConfigPath:      awsConfig,
 		AWSCredentialsPath: awsCredentials,
 		AzureDir:           azureDir,
@@ -71,7 +80,12 @@ func FromEnv(env map[string]string, goos string, home string) Settings {
 }
 
 func (s Settings) EnsureRuntimeDirs() error {
-	return os.MkdirAll(filepath.Dir(s.LogPath), 0o755)
+	for _, directory := range []string{filepath.Dir(s.LogPath), s.LocalConfigDir, s.EmulatorStateDir} {
+		if err := os.MkdirAll(directory, 0o755); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s Settings) AzureProfilePath() string {
