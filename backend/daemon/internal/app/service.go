@@ -989,10 +989,171 @@ func (s *Service) timestamp() string {
 
 func (s *Service) settingsSnapshot() models.AppSettingsSnapshot {
 	return models.AppSettingsSnapshot{
-		PlatformName: s.settings.PlatformName,
-		ConfigDir:    s.settings.ConfigDir,
-		DatabasePath: s.settings.DatabasePath,
-		LogPath:      s.settings.LogPath,
+		PlatformName:     s.settings.PlatformName,
+		ConfigDir:        s.settings.ConfigDir,
+		DatabasePath:     s.settings.DatabasePath,
+		LogPath:          s.settings.LogPath,
+		RuntimeMode:      runtimeModeFromSettings(s.settings.RuntimeMode),
+		LocalConfigDir:   s.settings.LocalConfigDir,
+		EmulatorStateDir: s.settings.EmulatorStateDir,
+	}
+}
+
+func runtimeModeFromSettings(value string) models.RuntimeMode {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case string(models.RuntimeModeLocalEmulator):
+		return models.RuntimeModeLocalEmulator
+	default:
+		return models.RuntimeModeCloud
+	}
+}
+
+func (s *Service) dockerDiagnostics() models.DockerDiagnostics {
+	host, source := s.detectDockerHost()
+	contextName := strings.TrimSpace(os.Getenv("DOCKER_CONTEXT"))
+	state := models.DockerEngineStateUnavailable
+	summary := "Docker engine was not detected in the current local runtime."
+	if host != "" {
+		state = models.DockerEngineStateAvailable
+		summary = "Docker engine endpoint detected. Active container control is not wired into this slice yet."
+	}
+
+	details := []models.DetailField{
+		{Label: "Detection", Value: source},
+		{Label: "Host", Value: firstNonEmpty(host, "Not detected")},
+		{Label: "Context", Value: firstNonEmpty(contextName, "Default context")},
+	}
+	if s.settings.PlatformName == "windows" && host == "" {
+		details = append(details, models.DetailField{
+			Label: "Note",
+			Value: "Windows named-pipe verification is deferred until the Docker runtime slice.",
+		})
+	}
+
+	return models.DockerDiagnostics{
+		EngineState: state,
+		Summary:     summary,
+		ContextName: contextName,
+		Host:        host,
+		Details:     details,
+	}
+}
+
+func (s *Service) detectDockerHost() (string, string) {
+	if host := strings.TrimSpace(os.Getenv("DOCKER_HOST")); host != "" {
+		return host, "DOCKER_HOST"
+	}
+
+	if s.settings.PlatformName == "windows" {
+		return "", "No named-pipe probe in foundation slice"
+	}
+
+	candidates := []string{}
+	if home := strings.TrimSpace(s.settings.HomeDir); home != "" {
+		if s.settings.PlatformName == "linux" {
+			candidates = append(candidates,
+				filepath.Join(home, ".docker", "desktop", "docker.sock"),
+			)
+			if runtimeDir := strings.TrimSpace(os.Getenv("XDG_RUNTIME_DIR")); runtimeDir != "" {
+				candidates = append(candidates, filepath.Join(runtimeDir, "docker.sock"))
+			}
+		}
+		if s.settings.PlatformName == "macos" {
+			candidates = append(candidates, filepath.Join(home, ".docker", "run", "docker.sock"))
+		}
+	}
+	candidates = append(candidates, "/var/run/docker.sock")
+
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return "unix://" + candidate, "Local socket"
+		}
+	}
+
+	return "", "No Docker host detected"
+}
+
+func (s *Service) emulatorSummaries() []models.EmulatorSummary {
+	artifacts := s.localConfigArtifacts()
+	awsDetails := []models.DetailField{
+		{Label: "Image", Value: "localstack/localstack"},
+		{Label: "Managed Config Root", Value: filepath.Join(s.settings.LocalConfigDir, "aws")},
+	}
+	azureDetails := []models.DetailField{
+		{Label: "Image", Value: "floci/floci-az:latest"},
+		{Label: "Managed Config Root", Value: filepath.Join(s.settings.LocalConfigDir, "azure")},
+	}
+	if len(artifacts) > 0 {
+		awsDetails = append(awsDetails, models.DetailField{Label: "Managed Artifacts", Value: "Prepared paths only in this slice"})
+		azureDetails = append(azureDetails, models.DetailField{Label: "Managed Artifacts", Value: "Prepared paths only in this slice"})
+	}
+
+	return []models.EmulatorSummary{
+		{
+			EmulatorID: "localstack",
+			ProviderID: "aws",
+			Label:      "LocalStack",
+			Kind:       "docker",
+			Status:     models.EmulatorStatusNotConfigured,
+			Summary:    "Managed AWS local runtime is planned but not configured yet.",
+			Details:    awsDetails,
+		},
+		{
+			EmulatorID: "floci-az",
+			ProviderID: "azure",
+			Label:      "floci-az",
+			Kind:       "docker",
+			Status:     models.EmulatorStatusNotConfigured,
+			Summary:    "Managed Azure local runtime is planned but not configured yet.",
+			Details:    azureDetails,
+		},
+	}
+}
+
+func (s *Service) localConfigArtifacts() []models.LocalConfigArtifact {
+	artifacts := []models.LocalConfigArtifact{
+		newLocalConfigArtifact(
+			"aws-local-config",
+			"aws",
+			"AWS Local Config",
+			filepath.Join(s.settings.LocalConfigDir, "aws", "config"),
+			"App-managed AWS local profile configuration will be written here.",
+		),
+		newLocalConfigArtifact(
+			"aws-local-credentials",
+			"aws",
+			"AWS Local Credentials",
+			filepath.Join(s.settings.LocalConfigDir, "aws", "credentials"),
+			"App-managed AWS local dummy credentials will be written here.",
+		),
+		newLocalConfigArtifact(
+			"azure-local-env",
+			"azure",
+			"Azure Local Env File",
+			filepath.Join(s.settings.LocalConfigDir, "azure", "floci-az.env"),
+			"App-managed Azure local connection strings and env values will be written here.",
+		),
+	}
+	return artifacts
+}
+
+func newLocalConfigArtifact(id string, providerID string, label string, path string, pendingSummary string) models.LocalConfigArtifact {
+	status := "not-created"
+	summary := pendingSummary
+	if strings.TrimSpace(path) != "" {
+		if _, err := os.Stat(path); err == nil {
+			status = "available"
+			summary = "Managed local configuration artefact is present."
+		}
+	}
+	return models.LocalConfigArtifact{
+		ArtifactID: id,
+		ProviderID: providerID,
+		Label:      label,
+		Path:       path,
+		Status:     status,
+		Managed:    true,
+		Summary:    summary,
 	}
 }
 
@@ -1000,6 +1161,8 @@ func (s *Service) environmentDiagnostics(snapshot discovery.Snapshot, session mo
 	fields := []models.DetailField{
 		{Label: "Platform", Value: s.settings.PlatformName},
 		{Label: "Config Directory", Value: pathStatus(s.settings.ConfigDir, true)},
+		{Label: "Local Config Directory", Value: pathStatus(s.settings.LocalConfigDir, true)},
+		{Label: "Emulator State Directory", Value: pathStatus(s.settings.EmulatorStateDir, true)},
 		{Label: "Database", Value: pathStatus(s.settings.DatabasePath, false)},
 		{Label: "Log Directory", Value: pathStatus(filepath.Dir(s.settings.LogPath), true)},
 		{Label: "AWS Config", Value: pathStatus(s.settings.AWSConfigPath, false)},
@@ -1061,6 +1224,9 @@ func (s *Service) buildWorkspaceSnapshot(
 		AuthMethod:             session.SelectedAuthMethod,
 		RuntimeSettings:        s.settingsSnapshot(),
 		EnvironmentDiagnostics: s.environmentDiagnostics(snapshot, session),
+		DockerDiagnostics:      s.dockerDiagnostics(),
+		EmulatorSummaries:      s.emulatorSummaries(),
+		LocalConfigArtifacts:   s.localConfigArtifacts(),
 		AzureResourceGroups:    []models.AzureResourceGroup{},
 		AzureVirtualMachines:   []models.AzureVirtualMachine{},
 		S3PrefixFilter:         session.S3PrefixFilter,

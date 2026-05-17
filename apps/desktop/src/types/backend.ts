@@ -2,6 +2,14 @@ export type ProviderState = "configured" | "tooling-only" | "missing";
 export type AuthMethod = "cli" | "sso" | "local-files";
 export type JobLifecycle = "queued" | "running" | "completed" | "failed";
 export type LogLevel = "info" | "success" | "warning" | "error";
+export type RuntimeMode = "cloud" | "local-emulator";
+export type DockerEngineState = "unknown" | "unavailable" | "available";
+export type EmulatorStatus =
+  | "unknown"
+  | "not-configured"
+  | "stopped"
+  | "running"
+  | "unhealthy";
 
 export interface DetailField {
   label: string;
@@ -41,6 +49,34 @@ export interface WorkspaceTab {
   label: string;
   summary: string;
   detail: string;
+}
+
+export interface DockerDiagnostics {
+  engineState: DockerEngineState;
+  summary: string;
+  contextName?: string;
+  host?: string;
+  details: DetailField[];
+}
+
+export interface EmulatorSummary {
+  emulatorId: string;
+  providerId: string;
+  label: string;
+  kind: string;
+  status: EmulatorStatus;
+  summary: string;
+  details: DetailField[];
+}
+
+export interface LocalConfigArtifact {
+  artifactId: string;
+  providerId: string;
+  label: string;
+  path: string;
+  status: string;
+  managed: boolean;
+  summary: string;
 }
 
 export interface SessionSnapshot {
@@ -153,6 +189,9 @@ export interface WorkspaceSnapshot {
   authMethod?: AuthMethod;
   runtimeSettings: AppSettingsSnapshot;
   environmentDiagnostics?: DetailField[];
+  dockerDiagnostics: DockerDiagnostics;
+  emulatorSummaries: EmulatorSummary[];
+  localConfigArtifacts: LocalConfigArtifact[];
   awsEndpointUrl?: string;
   awsWritesEnabled: boolean;
   selectedAzureResourceGroup?: string;
@@ -197,6 +236,9 @@ export interface AppSettingsSnapshot {
   configDir: string;
   databasePath: string;
   logPath: string;
+  runtimeMode: RuntimeMode;
+  localConfigDir: string;
+  emulatorStateDir: string;
 }
 
 export interface StateChangedPayload {

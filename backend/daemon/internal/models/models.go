@@ -16,6 +16,31 @@ const (
 	AuthMethodLocalFiles AuthMethod = "local-files"
 )
 
+type RuntimeMode string
+
+const (
+	RuntimeModeCloud         RuntimeMode = "cloud"
+	RuntimeModeLocalEmulator RuntimeMode = "local-emulator"
+)
+
+type DockerEngineState string
+
+const (
+	DockerEngineStateUnknown     DockerEngineState = "unknown"
+	DockerEngineStateUnavailable DockerEngineState = "unavailable"
+	DockerEngineStateAvailable   DockerEngineState = "available"
+)
+
+type EmulatorStatus string
+
+const (
+	EmulatorStatusUnknown       EmulatorStatus = "unknown"
+	EmulatorStatusNotConfigured EmulatorStatus = "not-configured"
+	EmulatorStatusStopped       EmulatorStatus = "stopped"
+	EmulatorStatusRunning       EmulatorStatus = "running"
+	EmulatorStatusUnhealthy     EmulatorStatus = "unhealthy"
+)
+
 type DetailField struct {
 	Label     string `json:"label"`
 	Value     string `json:"value"`
@@ -56,23 +81,51 @@ type WorkspaceTab struct {
 	Detail  string `json:"detail"`
 }
 
+type DockerDiagnostics struct {
+	EngineState DockerEngineState `json:"engineState"`
+	Summary     string            `json:"summary"`
+	ContextName string            `json:"contextName,omitempty"`
+	Host        string            `json:"host,omitempty"`
+	Details     []DetailField     `json:"details"`
+}
+
+type EmulatorSummary struct {
+	EmulatorID string         `json:"emulatorId"`
+	ProviderID string         `json:"providerId"`
+	Label      string         `json:"label"`
+	Kind       string         `json:"kind"`
+	Status     EmulatorStatus `json:"status"`
+	Summary    string         `json:"summary"`
+	Details    []DetailField  `json:"details"`
+}
+
+type LocalConfigArtifact struct {
+	ArtifactID string `json:"artifactId"`
+	ProviderID string `json:"providerId"`
+	Label      string `json:"label"`
+	Path       string `json:"path"`
+	Status     string `json:"status"`
+	Managed    bool   `json:"managed"`
+	Summary    string `json:"summary"`
+}
+
 type SessionSnapshot struct {
-	CurrentProviderID     string             `json:"currentProviderId,omitempty"`
-	SelectedProfileID     string             `json:"selectedProfileId,omitempty"`
-	SelectedAuthMethod    AuthMethod         `json:"selectedAuthMethod,omitempty"`
-	SelectedAzureResourceGroup string        `json:"selectedAzureResourceGroup,omitempty"`
-	SelectedAzureVMID          string        `json:"selectedAzureVmId,omitempty"`
-	SelectedS3BucketName  string             `json:"selectedS3BucketName,omitempty"`
-	SelectedS3ObjectKey   string             `json:"selectedS3ObjectKey,omitempty"`
-	S3PrefixFilter        string             `json:"s3PrefixFilter,omitempty"`
-	SelectedEC2Region     string             `json:"selectedEc2Region,omitempty"`
-	SelectedEC2InstanceID string             `json:"selectedEc2InstanceId,omitempty"`
-	LockedProviderID      string             `json:"lockedProviderId,omitempty"`
-	LockedProfileID       string             `json:"lockedProfileId,omitempty"`
-	LockedAuthMethod      AuthMethod         `json:"lockedAuthMethod,omitempty"`
-	IsLocked              bool               `json:"isLocked"`
-	AvailableAuthMethods  []AuthMethodStatus `json:"availableAuthMethods"`
-	WorkspaceTabs         []WorkspaceTab     `json:"workspaceTabs"`
+	CurrentProviderID          string             `json:"currentProviderId,omitempty"`
+	SelectedProfileID          string             `json:"selectedProfileId,omitempty"`
+	SelectedAuthMethod         AuthMethod         `json:"selectedAuthMethod,omitempty"`
+	SelectedAzureResourceGroup string             `json:"selectedAzureResourceGroup,omitempty"`
+	SelectedAzureVMID          string             `json:"selectedAzureVmId,omitempty"`
+	SelectedS3BucketName       string             `json:"selectedS3BucketName,omitempty"`
+	SelectedS3ObjectKey        string             `json:"selectedS3ObjectKey,omitempty"`
+	S3PrefixFilter             string             `json:"s3PrefixFilter,omitempty"`
+	SelectedEC2Region          string             `json:"selectedEc2Region,omitempty"`
+	SelectedEC2InstanceID      string             `json:"selectedEc2InstanceId,omitempty"`
+	LockedProviderID           string             `json:"lockedProviderId,omitempty"`
+	LockedProfileID            string             `json:"lockedProfileId,omitempty"`
+	LockedAuthMethod           AuthMethod         `json:"lockedAuthMethod,omitempty"`
+	IsLocked                   bool               `json:"isLocked"`
+	AvailableAuthMethods       []AuthMethodStatus `json:"availableAuthMethods"`
+	WorkspaceTabs              []WorkspaceTab     `json:"workspaceTabs"`
 }
 
 type AwsS3Bucket struct {
@@ -139,52 +192,55 @@ type AwsEc2Instance struct {
 }
 
 type AzureResourceGroup struct {
-	Name             string        `json:"name"`
-	Location         string        `json:"location,omitempty"`
-	ProvisioningState string       `json:"provisioningState,omitempty"`
-	ManagedBy        string        `json:"managedBy,omitempty"`
-	Tags             []DetailField `json:"tags,omitempty"`
+	Name              string        `json:"name"`
+	Location          string        `json:"location,omitempty"`
+	ProvisioningState string        `json:"provisioningState,omitempty"`
+	ManagedBy         string        `json:"managedBy,omitempty"`
+	Tags              []DetailField `json:"tags,omitempty"`
 }
 
 type AzureVirtualMachine struct {
-	VMID             string        `json:"vmId"`
-	Name             string        `json:"name"`
-	ResourceGroup    string        `json:"resourceGroup,omitempty"`
-	Location         string        `json:"location,omitempty"`
-	PowerState       string        `json:"powerState,omitempty"`
-	ProvisioningState string       `json:"provisioningState,omitempty"`
-	Size             string        `json:"size,omitempty"`
-	OSType           string        `json:"osType,omitempty"`
-	PrivateIP        string        `json:"privateIp,omitempty"`
-	PublicIP         string        `json:"publicIp,omitempty"`
-	Tags             []DetailField `json:"tags,omitempty"`
+	VMID              string        `json:"vmId"`
+	Name              string        `json:"name"`
+	ResourceGroup     string        `json:"resourceGroup,omitempty"`
+	Location          string        `json:"location,omitempty"`
+	PowerState        string        `json:"powerState,omitempty"`
+	ProvisioningState string        `json:"provisioningState,omitempty"`
+	Size              string        `json:"size,omitempty"`
+	OSType            string        `json:"osType,omitempty"`
+	PrivateIP         string        `json:"privateIp,omitempty"`
+	PublicIP          string        `json:"publicIp,omitempty"`
+	Tags              []DetailField `json:"tags,omitempty"`
 }
 
 type WorkspaceSnapshot struct {
-	Provider               *ProviderSummary     `json:"provider,omitempty"`
-	Profile                *ProfileSummary      `json:"profile,omitempty"`
-	AuthMethod             AuthMethod           `json:"authMethod,omitempty"`
-	RuntimeSettings        AppSettingsSnapshot  `json:"runtimeSettings"`
-	EnvironmentDiagnostics []DetailField        `json:"environmentDiagnostics"`
-	AWSEndpointURL         string               `json:"awsEndpointUrl,omitempty"`
-	AWSWritesEnabled       bool                 `json:"awsWritesEnabled"`
-	SelectedS3BucketName   string               `json:"selectedS3BucketName,omitempty"`
-	SelectedS3ObjectKey    string               `json:"selectedS3ObjectKey,omitempty"`
-	S3PrefixFilter         string               `json:"s3PrefixFilter,omitempty"`
-	S3StatusMessage        string               `json:"s3StatusMessage,omitempty"`
-	S3Buckets              []AwsS3Bucket        `json:"s3Buckets"`
-	S3Objects              []AwsS3Object        `json:"s3Objects"`
-	S3ObjectMetadata       []DetailField        `json:"s3ObjectMetadata"`
-	S3ExportSnippets       []AwsS3ExportSnippet `json:"s3ExportSnippets"`
-	SelectedEC2Region      string               `json:"selectedEc2Region,omitempty"`
-	SelectedEC2InstanceID  string               `json:"selectedEc2InstanceId,omitempty"`
-	EC2StatusMessage       string               `json:"ec2StatusMessage,omitempty"`
-	EC2Regions             []string             `json:"ec2Regions"`
-	EC2Instances           []AwsEc2Instance     `json:"ec2Instances"`
-	SelectedAzureResourceGroup string            `json:"selectedAzureResourceGroup,omitempty"`
-	SelectedAzureVMID          string            `json:"selectedAzureVmId,omitempty"`
-	AzureStatusMessage         string            `json:"azureStatusMessage,omitempty"`
-	AzureResourceGroups        []AzureResourceGroup `json:"azureResourceGroups"`
+	Provider                   *ProviderSummary      `json:"provider,omitempty"`
+	Profile                    *ProfileSummary       `json:"profile,omitempty"`
+	AuthMethod                 AuthMethod            `json:"authMethod,omitempty"`
+	RuntimeSettings            AppSettingsSnapshot   `json:"runtimeSettings"`
+	EnvironmentDiagnostics     []DetailField         `json:"environmentDiagnostics"`
+	DockerDiagnostics          DockerDiagnostics     `json:"dockerDiagnostics"`
+	EmulatorSummaries          []EmulatorSummary     `json:"emulatorSummaries"`
+	LocalConfigArtifacts       []LocalConfigArtifact `json:"localConfigArtifacts"`
+	AWSEndpointURL             string                `json:"awsEndpointUrl,omitempty"`
+	AWSWritesEnabled           bool                  `json:"awsWritesEnabled"`
+	SelectedS3BucketName       string                `json:"selectedS3BucketName,omitempty"`
+	SelectedS3ObjectKey        string                `json:"selectedS3ObjectKey,omitempty"`
+	S3PrefixFilter             string                `json:"s3PrefixFilter,omitempty"`
+	S3StatusMessage            string                `json:"s3StatusMessage,omitempty"`
+	S3Buckets                  []AwsS3Bucket         `json:"s3Buckets"`
+	S3Objects                  []AwsS3Object         `json:"s3Objects"`
+	S3ObjectMetadata           []DetailField         `json:"s3ObjectMetadata"`
+	S3ExportSnippets           []AwsS3ExportSnippet  `json:"s3ExportSnippets"`
+	SelectedEC2Region          string                `json:"selectedEc2Region,omitempty"`
+	SelectedEC2InstanceID      string                `json:"selectedEc2InstanceId,omitempty"`
+	EC2StatusMessage           string                `json:"ec2StatusMessage,omitempty"`
+	EC2Regions                 []string              `json:"ec2Regions"`
+	EC2Instances               []AwsEc2Instance      `json:"ec2Instances"`
+	SelectedAzureResourceGroup string                `json:"selectedAzureResourceGroup,omitempty"`
+	SelectedAzureVMID          string                `json:"selectedAzureVmId,omitempty"`
+	AzureStatusMessage         string                `json:"azureStatusMessage,omitempty"`
+	AzureResourceGroups        []AzureResourceGroup  `json:"azureResourceGroups"`
 	AzureVirtualMachines       []AzureVirtualMachine `json:"azureVirtualMachines"`
 }
 
@@ -197,10 +253,13 @@ type ActivityLogEntry struct {
 }
 
 type AppSettingsSnapshot struct {
-	PlatformName string `json:"platformName"`
-	ConfigDir    string `json:"configDir"`
-	DatabasePath string `json:"databasePath"`
-	LogPath      string `json:"logPath"`
+	PlatformName     string      `json:"platformName"`
+	ConfigDir        string      `json:"configDir"`
+	DatabasePath     string      `json:"databasePath"`
+	LogPath          string      `json:"logPath"`
+	RuntimeMode      RuntimeMode `json:"runtimeMode"`
+	LocalConfigDir   string      `json:"localConfigDir"`
+	EmulatorStateDir string      `json:"emulatorStateDir"`
 }
 
 type JobStatus struct {
