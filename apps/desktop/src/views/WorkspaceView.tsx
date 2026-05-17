@@ -214,6 +214,29 @@ function azureStatusType(value?: string): "success" | "warning" | "error" | "inf
   return "info";
 }
 
+function emulatorStatusType(value?: string): "success" | "warning" | "error" | "info" {
+  if (value === "running") {
+    return "success";
+  }
+  if (value === "stopped" || value === "not-configured") {
+    return "warning";
+  }
+  if (value === "unhealthy") {
+    return "error";
+  }
+  return "info";
+}
+
+function dockerEngineStatusType(value?: string): "success" | "warning" | "error" | "info" {
+  if (value === "available") {
+    return "success";
+  }
+  if (value === "unavailable") {
+    return "warning";
+  }
+  return "info";
+}
+
 export default function WorkspaceView({
   session,
   workspace,
@@ -406,6 +429,106 @@ export default function WorkspaceView({
     </Container>
   );
 
+  const dockerDiagnosticsPanel = (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description="Current Docker endpoint visibility for planned local emulator runtime management."
+        >
+          Docker Diagnostics
+        </Header>
+      }
+    >
+      <SpaceBetween size="m">
+        <div className="detail-grid">
+          <div className="detail-card">
+            <Box variant="awsui-key-label">Engine State</Box>
+            <StatusIndicator type={dockerEngineStatusType(workspace.dockerDiagnostics.engineState)}>
+              {workspace.dockerDiagnostics.engineState}
+            </StatusIndicator>
+          </div>
+          <div className="detail-card">
+            <Box variant="awsui-key-label">Summary</Box>
+            <Box variant="p">{workspace.dockerDiagnostics.summary}</Box>
+          </div>
+        </div>
+        {renderDetailFields(
+          workspace.dockerDiagnostics.details,
+          "No Docker diagnostics are available yet.",
+          showSensitiveValues,
+        )}
+      </SpaceBetween>
+    </Container>
+  );
+
+  const emulatorSummariesPanel = (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description="Planned managed local runtimes for AWS and Azure."
+        >
+          Local Emulators
+        </Header>
+      }
+    >
+      {workspace.emulatorSummaries.length === 0 ? (
+        <Box color="text-status-inactive">No emulator summaries are available yet.</Box>
+      ) : (
+        <SpaceBetween size="m">
+          {workspace.emulatorSummaries.map((emulator) => (
+            <div
+              key={emulator.emulatorId}
+              className="detail-card"
+            >
+              <Box variant="awsui-key-label">{emulator.label}</Box>
+              <StatusIndicator type={emulatorStatusType(emulator.status)}>
+                {emulator.status}
+              </StatusIndicator>
+              <Box variant="p">{emulator.summary}</Box>
+              <Box color="text-body-secondary">{emulator.providerId.toUpperCase()} via {emulator.kind}</Box>
+              {renderDetailFields(emulator.details, "No emulator details are available yet.", showSensitiveValues)}
+            </div>
+          ))}
+        </SpaceBetween>
+      )}
+    </Container>
+  );
+
+  const localConfigArtifactsPanel = (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description="App-managed local configuration artefacts are isolated from the user's default cloud configuration."
+        >
+          Local Config Artifacts
+        </Header>
+      }
+    >
+      {workspace.localConfigArtifacts.length === 0 ? (
+        <Box color="text-status-inactive">No local config artifacts are defined yet.</Box>
+      ) : (
+        <div className="detail-grid">
+          {workspace.localConfigArtifacts.map((artifact) => (
+            <div
+              key={artifact.artifactId}
+              className="detail-card"
+            >
+              <Box variant="awsui-key-label">{artifact.label}</Box>
+              <StatusIndicator type={artifact.status === "available" ? "success" : "warning"}>
+                {artifact.status}
+              </StatusIndicator>
+              <Box variant="code">{artifact.path}</Box>
+              <Box color="text-body-secondary">{artifact.summary}</Box>
+            </div>
+          ))}
+        </div>
+      )}
+    </Container>
+  );
+
   const overviewTab = (
     <SpaceBetween
       size="l"
@@ -416,6 +539,11 @@ export default function WorkspaceView({
         {workspaceProfileDetails}
         {workspaceRuntimeSettingsPanel}
       </div>
+      <div className="setup-grid">
+        {dockerDiagnosticsPanel}
+        {emulatorSummariesPanel}
+      </div>
+      {localConfigArtifactsPanel}
       {environmentDiagnosticsPanel}
     </SpaceBetween>
   );
