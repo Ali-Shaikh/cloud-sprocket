@@ -109,6 +109,39 @@ type LocalConfigArtifact struct {
 	Summary    string `json:"summary"`
 }
 
+type DockerOwnershipPolicy struct {
+	LabelKey        string `json:"labelKey"`
+	LabelValue      string `json:"labelValue"`
+	ProjectLabelKey string `json:"projectLabelKey"`
+	ProjectName     string `json:"projectName"`
+	Summary         string `json:"summary"`
+}
+
+type DockerRuntimeSnapshot struct {
+	Reachable         bool                  `json:"reachable"`
+	Host              string                `json:"host,omitempty"`
+	HostSource        string                `json:"hostSource,omitempty"`
+	ContextName       string                `json:"contextName,omitempty"`
+	ServerVersion     string                `json:"serverVersion,omitempty"`
+	APIVersion        string                `json:"apiVersion,omitempty"`
+	OperatingSystem   string                `json:"operatingSystem,omitempty"`
+	Architecture      string                `json:"architecture,omitempty"`
+	EngineName        string                `json:"engineName,omitempty"`
+	ResourceOwnership DockerOwnershipPolicy `json:"resourceOwnership"`
+	Summary           string                `json:"summary"`
+	Details           []DetailField         `json:"details"`
+}
+
+type ManagedDockerResource struct {
+	ResourceID string        `json:"resourceId"`
+	Kind       string        `json:"kind"`
+	Name       string        `json:"name"`
+	State      string        `json:"state,omitempty"`
+	Summary    string        `json:"summary"`
+	Details    []DetailField `json:"details"`
+	Owned      bool          `json:"owned"`
+}
+
 type SessionSnapshot struct {
 	CurrentProviderID          string             `json:"currentProviderId,omitempty"`
 	SelectedProfileID          string             `json:"selectedProfileId,omitempty"`
@@ -214,34 +247,36 @@ type AzureVirtualMachine struct {
 }
 
 type WorkspaceSnapshot struct {
-	Provider                   *ProviderSummary      `json:"provider,omitempty"`
-	Profile                    *ProfileSummary       `json:"profile,omitempty"`
-	AuthMethod                 AuthMethod            `json:"authMethod,omitempty"`
-	RuntimeSettings            AppSettingsSnapshot   `json:"runtimeSettings"`
-	EnvironmentDiagnostics     []DetailField         `json:"environmentDiagnostics"`
-	DockerDiagnostics          DockerDiagnostics     `json:"dockerDiagnostics"`
-	EmulatorSummaries          []EmulatorSummary     `json:"emulatorSummaries"`
-	LocalConfigArtifacts       []LocalConfigArtifact `json:"localConfigArtifacts"`
-	AWSEndpointURL             string                `json:"awsEndpointUrl,omitempty"`
-	AWSWritesEnabled           bool                  `json:"awsWritesEnabled"`
-	SelectedS3BucketName       string                `json:"selectedS3BucketName,omitempty"`
-	SelectedS3ObjectKey        string                `json:"selectedS3ObjectKey,omitempty"`
-	S3PrefixFilter             string                `json:"s3PrefixFilter,omitempty"`
-	S3StatusMessage            string                `json:"s3StatusMessage,omitempty"`
-	S3Buckets                  []AwsS3Bucket         `json:"s3Buckets"`
-	S3Objects                  []AwsS3Object         `json:"s3Objects"`
-	S3ObjectMetadata           []DetailField         `json:"s3ObjectMetadata"`
-	S3ExportSnippets           []AwsS3ExportSnippet  `json:"s3ExportSnippets"`
-	SelectedEC2Region          string                `json:"selectedEc2Region,omitempty"`
-	SelectedEC2InstanceID      string                `json:"selectedEc2InstanceId,omitempty"`
-	EC2StatusMessage           string                `json:"ec2StatusMessage,omitempty"`
-	EC2Regions                 []string              `json:"ec2Regions"`
-	EC2Instances               []AwsEc2Instance      `json:"ec2Instances"`
-	SelectedAzureResourceGroup string                `json:"selectedAzureResourceGroup,omitempty"`
-	SelectedAzureVMID          string                `json:"selectedAzureVmId,omitempty"`
-	AzureStatusMessage         string                `json:"azureStatusMessage,omitempty"`
-	AzureResourceGroups        []AzureResourceGroup  `json:"azureResourceGroups"`
-	AzureVirtualMachines       []AzureVirtualMachine `json:"azureVirtualMachines"`
+	Provider                   *ProviderSummary        `json:"provider,omitempty"`
+	Profile                    *ProfileSummary         `json:"profile,omitempty"`
+	AuthMethod                 AuthMethod              `json:"authMethod,omitempty"`
+	RuntimeSettings            AppSettingsSnapshot     `json:"runtimeSettings"`
+	EnvironmentDiagnostics     []DetailField           `json:"environmentDiagnostics"`
+	DockerDiagnostics          DockerDiagnostics       `json:"dockerDiagnostics"`
+	DockerRuntime              DockerRuntimeSnapshot   `json:"dockerRuntime"`
+	DockerResources            []ManagedDockerResource `json:"dockerResources"`
+	EmulatorSummaries          []EmulatorSummary       `json:"emulatorSummaries"`
+	LocalConfigArtifacts       []LocalConfigArtifact   `json:"localConfigArtifacts"`
+	AWSEndpointURL             string                  `json:"awsEndpointUrl,omitempty"`
+	AWSWritesEnabled           bool                    `json:"awsWritesEnabled"`
+	SelectedS3BucketName       string                  `json:"selectedS3BucketName,omitempty"`
+	SelectedS3ObjectKey        string                  `json:"selectedS3ObjectKey,omitempty"`
+	S3PrefixFilter             string                  `json:"s3PrefixFilter,omitempty"`
+	S3StatusMessage            string                  `json:"s3StatusMessage,omitempty"`
+	S3Buckets                  []AwsS3Bucket           `json:"s3Buckets"`
+	S3Objects                  []AwsS3Object           `json:"s3Objects"`
+	S3ObjectMetadata           []DetailField           `json:"s3ObjectMetadata"`
+	S3ExportSnippets           []AwsS3ExportSnippet    `json:"s3ExportSnippets"`
+	SelectedEC2Region          string                  `json:"selectedEc2Region,omitempty"`
+	SelectedEC2InstanceID      string                  `json:"selectedEc2InstanceId,omitempty"`
+	EC2StatusMessage           string                  `json:"ec2StatusMessage,omitempty"`
+	EC2Regions                 []string                `json:"ec2Regions"`
+	EC2Instances               []AwsEc2Instance        `json:"ec2Instances"`
+	SelectedAzureResourceGroup string                  `json:"selectedAzureResourceGroup,omitempty"`
+	SelectedAzureVMID          string                  `json:"selectedAzureVmId,omitempty"`
+	AzureStatusMessage         string                  `json:"azureStatusMessage,omitempty"`
+	AzureResourceGroups        []AzureResourceGroup    `json:"azureResourceGroups"`
+	AzureVirtualMachines       []AzureVirtualMachine   `json:"azureVirtualMachines"`
 }
 
 type ActivityLogEntry struct {
