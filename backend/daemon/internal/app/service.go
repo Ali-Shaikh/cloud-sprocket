@@ -41,6 +41,11 @@ type AzureInventory interface {
 	ListVirtualMachines(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureVirtualMachine, error)
 }
 
+type DockerRuntime interface {
+	Snapshot(ctx context.Context) (models.DockerRuntimeSnapshot, error)
+	ListOwnedResources(ctx context.Context) ([]models.ManagedDockerResource, error)
+}
+
 type Notifier interface {
 	Notify(method string, payload any) error
 }
@@ -52,6 +57,7 @@ type Service struct {
 	s3        S3Inventory
 	ec2       EC2Inventory
 	azure     AzureInventory
+	docker    DockerRuntime
 	now       func() time.Time
 	mu        sync.Mutex
 }
@@ -63,6 +69,7 @@ func New(
 	s3Inventory S3Inventory,
 	ec2Inventory EC2Inventory,
 	azureInventory AzureInventory,
+	dockerRuntime DockerRuntime,
 ) *Service {
 	return &Service{
 		settings:  settings,
@@ -71,6 +78,7 @@ func New(
 		s3:        s3Inventory,
 		ec2:       ec2Inventory,
 		azure:     azureInventory,
+		docker:    dockerRuntime,
 		now:       func() time.Time { return time.Now().UTC() },
 	}
 }
@@ -559,6 +567,10 @@ func (s *Service) Handle(
 		return s.store.ListLogs(ctx, request.Limit)
 	case "app.settings.get":
 		return s.settingsSnapshot(), nil
+	case "docker.runtime.get":
+		return s.dockerRuntimeSnapshot(), nil
+	case "docker.resources.list":
+		return s.dockerResources(), nil
 	case "actions.invoke":
 		var request struct {
 			ActionID string `json:"actionId"`
@@ -1008,22 +1020,68 @@ func runtimeModeFromSettings(value string) models.RuntimeMode {
 	}
 }
 
-func (s *Service) dockerDiagnostics() models.DockerDiagnostics {
-	host, source := s.detectDockerHost()
-	contextName := strings.TrimSpace(os.Getenv("DOCKER_CONTEXT"))
-	state := models.DockerEngineStateUnavailable
-	summary := "Docker engine was not detected in the current local runtime."
-	if host != "" {
-		state = models.DockerEngineStateAvailable
-		summary = "Docker engine endpoint detected. Active container control is not wired into this slice yet."
+func (s *Service) dockerRuntimeSnapshot() models.DockerRuntimeSnapshot {
+	if s.docker != nil {
+		snapshot, err := s.docker.Snapshot(context.Background())
+		if err == nil {
+			return snapshot
+		}
 	}
 
-	details := []models.DetailField{
-		{Label: "Detection", Value: source},
-		{Label: "Host", Value: firstNonEmpty(host, "Not detected")},
-		{Label: "Context", Value: firstNonEmpty(contextName, "Default context")},
+	host, source := s.detectDockerHost()
+	contextName := strings.TrimSpace(os.Getenv("DOCKER_CONTEXT"))
+	summary := "Docker engine was not detected in the current local runtime."
+	if host != "" {
+		summary = "Docker engine endpoint was detected, but live runtime probing is unavailable."
 	}
-	if s.settings.PlatformName == "windows" && host == "" {
+
+	return models.DockerRuntimeSnapshot{
+		Reachable:   false,
+		Host:        host,
+		HostSource:  source,
+		ContextName: contextName,
+		EngineName:  "docker",
+		ResourceOwnership: models.DockerOwnershipPolicy{
+			LabelKey:        "com.cloudsprocket.managed",
+			LabelValue:      "true",
+			ProjectLabelKey: "com.cloudsprocket.project",
+			ProjectName:     "cloud-sprocket",
+			Summary:         "Only CloudSprocket-managed Docker resources are eligible for future lifecycle control.",
+		},
+		Summary: summary,
+		Details: []models.DetailField{
+			{Label: "Host Source", Value: firstNonEmpty(source, "Not detected")},
+			{Label: "Host", Value: firstNonEmpty(host, "Not detected")},
+			{Label: "Context", Value: firstNonEmpty(contextName, "Default context")},
+		},
+	}
+}
+
+func (s *Service) dockerResources() []models.ManagedDockerResource {
+	if s.docker == nil {
+		return []models.ManagedDockerResource{}
+	}
+	resources, err := s.docker.ListOwnedResources(context.Background())
+	if err != nil {
+		return []models.ManagedDockerResource{}
+	}
+	return resources
+}
+
+func (s *Service) dockerDiagnostics() models.DockerDiagnostics {
+	return s.dockerDiagnosticsFromSnapshot(s.dockerRuntimeSnapshot())
+}
+
+func (s *Service) dockerDiagnosticsFromSnapshot(runtime models.DockerRuntimeSnapshot) models.DockerDiagnostics {
+	state := models.DockerEngineStateUnknown
+	if runtime.Host != "" {
+		state = models.DockerEngineStateUnavailable
+	}
+	if runtime.Reachable {
+		state = models.DockerEngineStateAvailable
+	}
+	details := append([]models.DetailField{}, runtime.Details...)
+	if s.settings.PlatformName == "windows" && runtime.Host == "" {
 		details = append(details, models.DetailField{
 			Label: "Note",
 			Value: "Windows named-pipe verification is deferred until the Docker runtime slice.",
@@ -1032,9 +1090,9 @@ func (s *Service) dockerDiagnostics() models.DockerDiagnostics {
 
 	return models.DockerDiagnostics{
 		EngineState: state,
-		Summary:     summary,
-		ContextName: contextName,
-		Host:        host,
+		Summary:     runtime.Summary,
+		ContextName: runtime.ContextName,
+		Host:        runtime.Host,
 		Details:     details,
 	}
 }
@@ -1220,11 +1278,14 @@ func (s *Service) buildWorkspaceSnapshot(
 	snapshot discovery.Snapshot,
 	session models.SessionSnapshot,
 ) models.WorkspaceSnapshot {
+	dockerRuntime := s.dockerRuntimeSnapshot()
 	workspace := models.WorkspaceSnapshot{
 		AuthMethod:             session.SelectedAuthMethod,
 		RuntimeSettings:        s.settingsSnapshot(),
 		EnvironmentDiagnostics: s.environmentDiagnostics(snapshot, session),
-		DockerDiagnostics:      s.dockerDiagnostics(),
+		DockerDiagnostics:      s.dockerDiagnosticsFromSnapshot(dockerRuntime),
+		DockerRuntime:          dockerRuntime,
+		DockerResources:        s.dockerResources(),
 		EmulatorSummaries:      s.emulatorSummaries(),
 		LocalConfigArtifacts:   s.localConfigArtifacts(),
 		AzureResourceGroups:    []models.AzureResourceGroup{},
