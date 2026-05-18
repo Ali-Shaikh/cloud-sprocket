@@ -36,6 +36,11 @@ type stubAzureInventory struct {
 	virtualMachines map[string][]models.AzureVirtualMachine
 }
 
+type stubDockerRuntime struct {
+	snapshot  models.DockerRuntimeSnapshot
+	resources []models.ManagedDockerResource
+}
+
 func (s stubS3Inventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.AwsS3Bucket, error) {
 	return append([]models.AwsS3Bucket(nil), s.buckets...), nil
 }
@@ -113,6 +118,14 @@ func (s stubAzureInventory) ListVirtualMachines(_ context.Context, _ models.Prof
 	return append([]models.AzureVirtualMachine(nil), s.virtualMachines[resourceGroup]...), nil
 }
 
+func (s stubDockerRuntime) Snapshot(context.Context) (models.DockerRuntimeSnapshot, error) {
+	return s.snapshot, nil
+}
+
+func (s stubDockerRuntime) ListOwnedResources(context.Context) ([]models.ManagedDockerResource, error) {
+	return append([]models.ManagedDockerResource(nil), s.resources...), nil
+}
+
 type recordingNotifier struct {
 	events chan models.JobStatus
 }
@@ -175,6 +188,34 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 			},
 		},
 	}
+	dockerRuntime := stubDockerRuntime{
+		snapshot: models.DockerRuntimeSnapshot{
+			Reachable:     true,
+			Host:          "unix:///tmp/cloudsprocket-test-docker.sock",
+			HostSource:    "DOCKER_HOST",
+			ContextName:   "desktop-linux",
+			ServerVersion: "28.5.1",
+			APIVersion:    "1.51",
+			EngineName:    "docker",
+			ResourceOwnership: models.DockerOwnershipPolicy{
+				LabelKey:        "com.cloudsprocket.managed",
+				LabelValue:      "true",
+				ProjectLabelKey: "com.cloudsprocket.project",
+				ProjectName:     "cloud-sprocket",
+				Summary:         "Only CloudSprocket-managed Docker resources are eligible for future lifecycle control.",
+			},
+			Summary: "Docker engine is reachable and ready for managed runtime operations.",
+			Details: []models.DetailField{{Label: "Host", Value: "unix:///tmp/cloudsprocket-test-docker.sock"}},
+		},
+		resources: []models.ManagedDockerResource{{
+			ResourceID: "ctr-123",
+			Kind:       "container",
+			Name:       "cloudsprocket-localstack",
+			State:      "running",
+			Summary:    "CloudSprocket-managed emulator container.",
+			Owned:      true,
+		}},
+	}
 	service := New(
 		settings,
 		dataStore,
@@ -187,6 +228,7 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 		s3Inventory,
 		ec2Inventory,
 		stubAzureInventory{},
+		dockerRuntime,
 	)
 	service.now = func() time.Time { return time.Date(2026, 4, 26, 10, 0, 0, 0, time.UTC) }
 
@@ -248,6 +290,12 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	if workspace.DockerDiagnostics.Host != "unix:///tmp/cloudsprocket-test-docker.sock" {
 		t.Fatalf("expected docker host to reflect DOCKER_HOST, got %+v", workspace.DockerDiagnostics)
 	}
+	if !workspace.DockerRuntime.Reachable || workspace.DockerRuntime.ServerVersion != "28.5.1" {
+		t.Fatalf("expected live docker runtime snapshot, got %+v", workspace.DockerRuntime)
+	}
+	if len(workspace.DockerResources) != 1 || workspace.DockerResources[0].Name != "cloudsprocket-localstack" {
+		t.Fatalf("expected docker resources from runtime, got %+v", workspace.DockerResources)
+	}
 	if len(workspace.EmulatorSummaries) != 2 {
 		t.Fatalf("expected emulator summaries, got %+v", workspace.EmulatorSummaries)
 	}
@@ -256,6 +304,22 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	}
 	if workspace.SelectedEC2Region != "us-east-1" || len(workspace.EC2Instances) != 1 {
 		t.Fatalf("expected EC2 inventory for default region, got region=%q instances=%+v", workspace.SelectedEC2Region, workspace.EC2Instances)
+	}
+
+	dockerRuntimeResult, err := service.Handle(ctx, "docker.runtime.get", nil, nil)
+	if err != nil {
+		t.Fatalf("expected docker.runtime.get to succeed, got %v", err)
+	}
+	if !dockerRuntimeResult.(models.DockerRuntimeSnapshot).Reachable {
+		t.Fatalf("expected dedicated docker runtime snapshot to be reachable, got %+v", dockerRuntimeResult)
+	}
+
+	dockerResourcesResult, err := service.Handle(ctx, "docker.resources.list", nil, nil)
+	if err != nil {
+		t.Fatalf("expected docker.resources.list to succeed, got %v", err)
+	}
+	if len(dockerResourcesResult.([]models.ManagedDockerResource)) != 1 {
+		t.Fatalf("expected dedicated docker resource list, got %+v", dockerResourcesResult)
 	}
 
 	selectionResult, err := service.Handle(ctx, "aws.s3.selectBucket", []byte(`{"bucketName":"cloudsprocket-artifacts"}`), nil)
@@ -418,6 +482,7 @@ func TestServiceReportsFailedEC2ActionJob(t *testing.T) {
 		&stubS3Inventory{},
 		ec2Inventory,
 		stubAzureInventory{},
+		stubDockerRuntime{},
 	)
 	service.now = func() time.Time { return time.Date(2026, 4, 26, 10, 0, 0, 0, time.UTC) }
 
@@ -484,6 +549,7 @@ func TestServiceRejectsEC2ActionWithoutLocalEndpoint(t *testing.T) {
 		&stubS3Inventory{},
 		ec2Inventory,
 		stubAzureInventory{},
+		stubDockerRuntime{},
 	)
 
 	ctx := context.Background()
@@ -538,6 +604,7 @@ func TestServiceRejectsEC2ActionWithoutWriteOptIn(t *testing.T) {
 		&stubS3Inventory{},
 		ec2Inventory,
 		stubAzureInventory{},
+		stubDockerRuntime{},
 	)
 
 	ctx := context.Background()
@@ -600,7 +667,7 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 		}
 		return "", nil
 	})
-	firstService := New(settings, firstStore, discoveryService, s3Inventory, ec2Inventory, stubAzureInventory{})
+	firstService := New(settings, firstStore, discoveryService, s3Inventory, ec2Inventory, stubAzureInventory{}, stubDockerRuntime{})
 	ctx := context.Background()
 
 	if _, err := firstService.Handle(ctx, "session.lock", nil, nil); err != nil {
@@ -624,7 +691,7 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 		t.Fatalf("expected sqlite store to reopen, got %v", err)
 	}
 	defer secondStore.Close()
-	secondService := New(settings, secondStore, discoveryService, s3Inventory, ec2Inventory, stubAzureInventory{})
+	secondService := New(settings, secondStore, discoveryService, s3Inventory, ec2Inventory, stubAzureInventory{}, stubDockerRuntime{})
 
 	sessionResult, err := secondService.Handle(ctx, "session.get", nil, nil)
 	if err != nil {
