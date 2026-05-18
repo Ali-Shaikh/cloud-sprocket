@@ -95,6 +95,10 @@ vi.mock("./lib/backend", () => ({
         return settingsFixture;
       case "workspace.get":
         return workspaceFixture;
+      case "docker.runtime.get":
+        return workspaceFixture.dockerRuntime;
+      case "docker.resources.list":
+        return workspaceFixture.dockerResources;
       case "logs.list":
         return logFixtures;
       case "actions.invoke":
@@ -252,6 +256,45 @@ describe("App", () => {
           { label: "Context", value: "desktop-linux" },
         ],
       },
+      dockerRuntime: {
+        reachable: true,
+        host: "npipe:////./pipe/docker_engine",
+        hostSource: "DOCKER_HOST",
+        contextName: "desktop-linux",
+        serverVersion: "28.5.1",
+        apiVersion: "1.51",
+        operatingSystem: "Docker Desktop",
+        architecture: "x86_64",
+        engineName: "docker",
+        resourceOwnership: {
+          labelKey: "com.cloudsprocket.managed",
+          labelValue: "true",
+          projectLabelKey: "com.cloudsprocket.project",
+          projectName: "cloud-sprocket",
+          summary: "Only CloudSprocket-managed Docker resources are eligible for future lifecycle control.",
+        },
+        summary: "Docker engine is reachable and ready for managed runtime operations.",
+        details: [
+          { label: "Host Source", value: "DOCKER_HOST" },
+          { label: "Host", value: "npipe:////./pipe/docker_engine" },
+          { label: "Context", value: "desktop-linux" },
+          { label: "Server Version", value: "28.5.1" },
+        ],
+      },
+      dockerResources: [
+        {
+          resourceId: "ctr-001",
+          kind: "container",
+          name: "cloudsprocket-localstack",
+          state: "running",
+          summary: "CloudSprocket-managed emulator container.",
+          owned: true,
+          details: [
+            { label: "Image", value: "localstack/localstack" },
+            { label: "Status", value: "Up 10 seconds" },
+          ],
+        },
+      ],
       emulatorSummaries: [
         {
           emulatorId: "localstack",
@@ -398,8 +441,9 @@ describe("App", () => {
     expect(screen.getByText("S3")).toBeInTheDocument();
     expect((await screen.findAllByText("workspace sandbox")).length).toBeGreaterThan(0);
     expect(await screen.findByText("2 buckets")).toBeInTheDocument();
-    expect(await screen.findByText("Docker Diagnostics")).toBeInTheDocument();
+    expect(await screen.findByText("Docker Runtime")).toBeInTheDocument();
     expect(await screen.findByText("Local Emulators")).toBeInTheDocument();
+    expect(await screen.findByText("Managed Docker Resources")).toBeInTheDocument();
     expect(await screen.findByText("Local Config Artifacts")).toBeInTheDocument();
     expect(await screen.findByText("LocalStack")).toBeInTheDocument();
     expect(
