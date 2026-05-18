@@ -7,10 +7,11 @@ import (
 	"os/exec"
 
 	"cloudsprocket/backend/daemon/internal/app"
-	"cloudsprocket/backend/daemon/internal/azureadapter"
 	"cloudsprocket/backend/daemon/internal/awsadapter"
+	"cloudsprocket/backend/daemon/internal/azureadapter"
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/discovery"
+	"cloudsprocket/backend/daemon/internal/dockerruntime"
 	"cloudsprocket/backend/daemon/internal/rpc"
 	"cloudsprocket/backend/daemon/internal/store"
 )
@@ -31,7 +32,8 @@ func main() {
 	s3Inventory := awsadapter.NewS3Inventory(settings)
 	ec2Inventory := awsadapter.NewEC2Inventory(settings)
 	azureInventory := azureadapter.NewInventory(settings)
-	service := app.New(settings, dataStore, discoveryService, s3Inventory, ec2Inventory, azureInventory)
+	dockerRuntime := dockerruntime.New(settings)
+	service := app.New(settings, dataStore, discoveryService, s3Inventory, ec2Inventory, azureInventory, dockerRuntime)
 	server := rpc.New(service)
 
 	if err := server.Serve(context.Background(), os.Stdin, os.Stdout); err != nil {
