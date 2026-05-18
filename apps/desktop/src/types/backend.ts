@@ -79,6 +79,39 @@ export interface LocalConfigArtifact {
   summary: string;
 }
 
+export interface DockerOwnershipPolicy {
+  labelKey: string;
+  labelValue: string;
+  projectLabelKey: string;
+  projectName: string;
+  summary: string;
+}
+
+export interface DockerRuntimeSnapshot {
+  reachable: boolean;
+  host?: string;
+  hostSource?: string;
+  contextName?: string;
+  serverVersion?: string;
+  apiVersion?: string;
+  operatingSystem?: string;
+  architecture?: string;
+  engineName?: string;
+  resourceOwnership: DockerOwnershipPolicy;
+  summary: string;
+  details: DetailField[];
+}
+
+export interface ManagedDockerResource {
+  resourceId: string;
+  kind: string;
+  name: string;
+  state?: string;
+  summary: string;
+  details: DetailField[];
+  owned: boolean;
+}
+
 export interface SessionSnapshot {
   currentProviderId?: string;
   selectedProfileId?: string;
@@ -190,6 +223,8 @@ export interface WorkspaceSnapshot {
   runtimeSettings: AppSettingsSnapshot;
   environmentDiagnostics?: DetailField[];
   dockerDiagnostics: DockerDiagnostics;
+  dockerRuntime: DockerRuntimeSnapshot;
+  dockerResources: ManagedDockerResource[];
   emulatorSummaries: EmulatorSummary[];
   localConfigArtifacts: LocalConfigArtifact[];
   awsEndpointUrl?: string;
