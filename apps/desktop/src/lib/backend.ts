@@ -534,6 +534,60 @@ function buildMockWorkspace(): WorkspaceSnapshot {
         { label: "Context", value: "desktop-linux" },
       ],
     },
+    dockerRuntime: {
+      reachable: true,
+      host: "npipe:////./pipe/docker_engine",
+      hostSource: "DOCKER_HOST",
+      contextName: "desktop-linux",
+      serverVersion: "28.5.1",
+      apiVersion: "1.51",
+      operatingSystem: "Docker Desktop",
+      architecture: "x86_64",
+      engineName: "docker",
+      resourceOwnership: {
+        labelKey: "com.cloudsprocket.managed",
+        labelValue: "true",
+        projectLabelKey: "com.cloudsprocket.project",
+        projectName: "cloud-sprocket",
+        summary: "Only CloudSprocket-managed Docker resources are eligible for future lifecycle control.",
+      },
+      summary: "Docker engine is reachable and ready for managed runtime operations.",
+      details: [
+        { label: "Host Source", value: "DOCKER_HOST" },
+        { label: "Host", value: "npipe:////./pipe/docker_engine" },
+        { label: "Context", value: "desktop-linux" },
+        { label: "Server Version", value: "28.5.1" },
+        { label: "API Version", value: "1.51" },
+        { label: "Operating System", value: "Docker Desktop" },
+        { label: "Architecture", value: "x86_64" },
+      ],
+    },
+    dockerResources: [
+      {
+        resourceId: "ctr-001",
+        kind: "container",
+        name: "cloudsprocket-localstack",
+        state: "running",
+        summary: "CloudSprocket-managed emulator container.",
+        owned: true,
+        details: [
+          { label: "Image", value: "localstack/localstack" },
+          { label: "Status", value: "Up 10 seconds" },
+        ],
+      },
+      {
+        resourceId: "net-001",
+        kind: "network",
+        name: "cloudsprocket-net",
+        state: "local",
+        summary: "bridge network managed by CloudSprocket.",
+        owned: true,
+        details: [
+          { label: "Driver", value: "bridge" },
+          { label: "Scope", value: "local" },
+        ],
+      },
+    ],
     emulatorSummaries: [
       {
         emulatorId: "localstack",
@@ -639,6 +693,10 @@ function handleMockRequest<T>(
     case "workspace.get":
       rebuildSessionDerivedState();
       return Promise.resolve(buildMockWorkspace() as T);
+    case "docker.runtime.get":
+      return Promise.resolve(buildMockWorkspace().dockerRuntime as T);
+    case "docker.resources.list":
+      return Promise.resolve(buildMockWorkspace().dockerResources as T);
     case "aws.s3.selectBucket":
       mockState.session.selectedS3BucketName = String(params.bucketName ?? "");
       mockState.session.selectedS3ObjectKey = undefined;

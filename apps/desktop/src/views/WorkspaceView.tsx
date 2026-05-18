@@ -70,6 +70,7 @@ type Props = {
   showSensitiveValues: boolean;
   onToggleSplitPanel: () => void;
   onRefreshDiscovery: () => void;
+  onRefreshDockerRuntime: () => void;
   onUnlockSession: () => void;
   onToggleSensitiveValues: () => void;
   onInvokeWorkspaceAction: (actionId: "refresh") => void;
@@ -249,6 +250,7 @@ export default function WorkspaceView({
   showSensitiveValues,
   onToggleSplitPanel,
   onRefreshDiscovery,
+  onRefreshDockerRuntime,
   onUnlockSession,
   onToggleSensitiveValues,
   onInvokeWorkspaceAction,
@@ -434,9 +436,12 @@ export default function WorkspaceView({
       header={
         <Header
           variant="h2"
-          description="Current Docker endpoint visibility for planned local emulator runtime management."
+          description="Live Docker engine status, endpoint resolution, and CloudSprocket ownership policy for local runtime control."
+          actions={
+            <Button onClick={onRefreshDockerRuntime}>Refresh Docker</Button>
+          }
         >
-          Docker Diagnostics
+          Docker Runtime
         </Header>
       }
     >
@@ -449,16 +454,59 @@ export default function WorkspaceView({
             </StatusIndicator>
           </div>
           <div className="detail-card">
-            <Box variant="awsui-key-label">Summary</Box>
-            <Box variant="p">{workspace.dockerDiagnostics.summary}</Box>
+            <Box variant="awsui-key-label">Endpoint</Box>
+            <Box variant="code">{workspace.dockerRuntime.host || "Not detected"}</Box>
+          </div>
+          <div className="detail-card">
+            <Box variant="awsui-key-label">Server Version</Box>
+            <Box variant="p">{workspace.dockerRuntime.serverVersion || "Unavailable"}</Box>
+          </div>
+          <div className="detail-card">
+            <Box variant="awsui-key-label">Ownership Policy</Box>
+            <Box variant="p">{workspace.dockerRuntime.resourceOwnership.summary}</Box>
           </div>
         </div>
+        <Box color="text-body-secondary">{workspace.dockerRuntime.summary}</Box>
         {renderDetailFields(
-          workspace.dockerDiagnostics.details,
+          workspace.dockerRuntime.details,
           "No Docker diagnostics are available yet.",
           showSensitiveValues,
         )}
       </SpaceBetween>
+    </Container>
+  );
+
+  const dockerResourcesPanel = (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description="Only resources carrying the CloudSprocket ownership labels appear here."
+        >
+          Managed Docker Resources
+        </Header>
+      }
+    >
+      {workspace.dockerResources.length === 0 ? (
+        <Box color="text-status-inactive">No CloudSprocket-managed Docker resources are currently detected.</Box>
+      ) : (
+        <div className="detail-grid">
+          {workspace.dockerResources.map((resource) => (
+            <div
+              key={`${resource.kind}-${resource.resourceId}`}
+              className="detail-card"
+            >
+              <Box variant="awsui-key-label">{resource.kind.toUpperCase()}</Box>
+              <strong>{resource.name}</strong>
+              <StatusIndicator type={resource.state === "running" ? "success" : "info"}>
+                {resource.state || "detected"}
+              </StatusIndicator>
+              <Box color="text-body-secondary">{resource.summary}</Box>
+              {renderDetailFields(resource.details, "No resource details are available yet.", showSensitiveValues)}
+            </div>
+          ))}
+        </div>
+      )}
     </Container>
   );
 
@@ -543,6 +591,7 @@ export default function WorkspaceView({
         {dockerDiagnosticsPanel}
         {emulatorSummariesPanel}
       </div>
+      {dockerResourcesPanel}
       {localConfigArtifactsPanel}
       {environmentDiagnosticsPanel}
     </SpaceBetween>

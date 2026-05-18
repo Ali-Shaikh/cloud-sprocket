@@ -24,8 +24,10 @@ import type {
   AppSettingsSnapshot,
   AwsS3PresignResult,
   AwsS3UploadResult,
+  DockerRuntimeSnapshot,
   JobStatus,
   JobLifecycle,
+  ManagedDockerResource,
   ProfileSummary,
   ProviderSummary,
   SessionSnapshot,
@@ -171,6 +173,16 @@ function isUrlValidationResult(value: unknown): value is UrlValidationResult {
 
 function isWorkspaceSnapshot(value: unknown): value is WorkspaceSnapshot {
   return isRecord(value) && Array.isArray(value.ec2Instances) && typeof value.runtimeSettings === "object";
+}
+
+function dockerDiagnosticsFromRuntime(runtime: DockerRuntimeSnapshot): WorkspaceSnapshot["dockerDiagnostics"] {
+  return {
+    engineState: runtime.reachable ? "available" : runtime.host ? "unavailable" : "unknown",
+    summary: runtime.summary,
+    contextName: runtime.contextName,
+    host: runtime.host,
+    details: runtime.details,
+  };
 }
 
 function expectedEC2State(action: EC2LifecycleAction): string {
@@ -492,6 +504,19 @@ const emptyWorkspace: WorkspaceSnapshot = {
     summary: "Docker diagnostics are not available yet.",
     details: [],
   },
+  dockerRuntime: {
+    reachable: false,
+    resourceOwnership: {
+      labelKey: "com.cloudsprocket.managed",
+      labelValue: "true",
+      projectLabelKey: "com.cloudsprocket.project",
+      projectName: "cloud-sprocket",
+      summary: "Only CloudSprocket-managed Docker resources are eligible for future lifecycle control.",
+    },
+    summary: "Docker runtime details are not available yet.",
+    details: [],
+  },
+  dockerResources: [],
   emulatorSummaries: [],
   localConfigArtifacts: [],
   awsWritesEnabled: false,
@@ -821,6 +846,21 @@ export default function App() {
     });
   }
 
+  async function refreshDockerRuntime(): Promise<void> {
+    const [dockerRuntime, dockerResources] = await Promise.all([
+      backendRequest<DockerRuntimeSnapshot>("docker.runtime.get"),
+      backendRequest<ManagedDockerResource[]>("docker.resources.list"),
+    ]);
+    startTransition(() => {
+      setWorkspace((current) => ({
+        ...current,
+        dockerRuntime,
+        dockerResources,
+        dockerDiagnostics: dockerDiagnosticsFromRuntime(dockerRuntime),
+      }));
+    });
+  }
+
   const activityDrawer = splitPanelOpen ? (
     <aside
       className="activity-drawer"
@@ -863,6 +903,9 @@ export default function App() {
       }}
       onRefreshDiscovery={() => {
         void refreshDiscovery();
+      }}
+      onRefreshDockerRuntime={() => {
+        void refreshDockerRuntime();
       }}
       onUnlockSession={() => {
         void mutateSession("session.unlock");
