@@ -88,7 +88,7 @@ func TestSnapshotUsesDockerClientData(t *testing.T) {
 		},
 		infoResult: client.SystemInfoResult{Info: systemapi.Info{OperatingSystem: "Docker Desktop", DockerRootDir: "/var/lib/docker", Architecture: "x86_64"}},
 	}
-	runtime := &Runtime{settings: settings, newClient: func(host string) (apiClient, error) {
+	runtime := &Runtime{settings: settings, newClient: func(host string) (ApiClient, error) {
 		if host != "unix:///tmp/cloudsprocket-docker.sock" {
 			t.Fatalf("unexpected host %s", host)
 		}
@@ -113,7 +113,7 @@ func TestSnapshotUsesDockerClientData(t *testing.T) {
 func TestSnapshotReportsConnectionFailure(t *testing.T) {
 	t.Setenv("DOCKER_HOST", "unix:///tmp/cloudsprocket-docker.sock")
 	settings := config.FromEnv(map[string]string{}, "linux", filepath.Join(t.TempDir(), "home"))
-	runtime := &Runtime{settings: settings, newClient: func(host string) (apiClient, error) {
+	runtime := &Runtime{settings: settings, newClient: func(host string) (ApiClient, error) {
 		return &stubAPIClient{pingErr: errors.New("connection refused")}, nil
 	}}
 
@@ -132,7 +132,7 @@ func TestSnapshotReportsConnectionFailure(t *testing.T) {
 func TestListOwnedResourcesMapsDockerObjects(t *testing.T) {
 	t.Setenv("DOCKER_HOST", "unix:///tmp/cloudsprocket-docker.sock")
 	settings := config.FromEnv(map[string]string{}, "linux", filepath.Join(t.TempDir(), "home"))
-	runtime := &Runtime{settings: settings, newClient: func(host string) (apiClient, error) {
+	runtime := &Runtime{settings: settings, newClient: func(host string) (ApiClient, error) {
 		return &stubAPIClient{
 			containerResult: client.ContainerListResult{Items: []containerapi.Summary{{
 				ID:     "ctr-123",
