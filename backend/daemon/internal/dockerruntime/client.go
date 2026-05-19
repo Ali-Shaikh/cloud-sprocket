@@ -6,7 +6,7 @@ import (
 	"github.com/moby/moby/client"
 )
 
-type apiClient interface {
+type ApiClient interface {
 	Ping(ctx context.Context, options client.PingOptions) (client.PingResult, error)
 	ServerVersion(ctx context.Context, options client.ServerVersionOptions) (client.ServerVersionResult, error)
 	Info(ctx context.Context, options client.InfoOptions) (client.SystemInfoResult, error)
@@ -16,9 +16,9 @@ type apiClient interface {
 	Close() error
 }
 
-type clientFactory func(host string) (apiClient, error)
+type clientFactory func(host string) (ApiClient, error)
 
-func defaultClientFactory(host string) (apiClient, error) {
+func defaultClientFactory(host string) (ApiClient, error) {
 	return client.New(
 		client.WithHost(host),
 		client.WithAPIVersionNegotiation(),
