@@ -15,6 +15,7 @@ import (
 
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/discovery"
+	"cloudsprocket/backend/daemon/internal/localstack"
 	"cloudsprocket/backend/daemon/internal/models"
 	"cloudsprocket/backend/daemon/internal/store"
 	"cloudsprocket/backend/daemon/internal/urlinspector"
@@ -46,6 +47,11 @@ type DockerRuntime interface {
 	ListOwnedResources(ctx context.Context) ([]models.ManagedDockerResource, error)
 }
 
+type LocalStackManager interface {
+	Status(ctx context.Context) (models.LocalStackStatus, error)
+	EnsureManagedProfile() error
+}
+
 type Notifier interface {
 	Notify(method string, payload any) error
 }
@@ -58,6 +64,7 @@ type Service struct {
 	ec2       EC2Inventory
 	azure     AzureInventory
 	docker    DockerRuntime
+	localstackMgr LocalStackManager
 	now       func() time.Time
 	mu        sync.Mutex
 }
@@ -71,6 +78,20 @@ func New(
 	azureInventory AzureInventory,
 	dockerRuntime DockerRuntime,
 ) *Service {
+	localStackMgr := localstack.NewManager(settings)
+	return NewWithLocalStack(settings, store, discoveryService, s3Inventory, ec2Inventory, azureInventory, dockerRuntime, localStackMgr)
+}
+
+func NewWithLocalStack(
+	settings config.Settings,
+	store *store.Store,
+	discoveryService *discovery.Service,
+	s3Inventory S3Inventory,
+	ec2Inventory EC2Inventory,
+	azureInventory AzureInventory,
+	dockerRuntime DockerRuntime,
+	localStackMgr LocalStackManager,
+) *Service {
 	return &Service{
 		settings:  settings,
 		store:     store,
@@ -79,6 +100,7 @@ func New(
 		ec2:       ec2Inventory,
 		azure:     azureInventory,
 		docker:    dockerRuntime,
+		localstackMgr: localStackMgr,
 		now:       func() time.Time { return time.Now().UTC() },
 	}
 }
@@ -571,6 +593,14 @@ func (s *Service) Handle(
 		return s.dockerRuntimeSnapshot(), nil
 	case "docker.resources.list":
 		return s.dockerResources(), nil
+	case "emulators.list":
+		return s.emulatorsList(), nil
+	case "emulators.prepareProfile":
+		result, err := s.emulatorsPrepareProfile()
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
 	case "actions.invoke":
 		var request struct {
 			ActionID string `json:"actionId"`
@@ -1286,7 +1316,7 @@ func (s *Service) buildWorkspaceSnapshot(
 		DockerDiagnostics:      s.dockerDiagnosticsFromSnapshot(dockerRuntime),
 		DockerRuntime:          dockerRuntime,
 		DockerResources:        s.dockerResources(),
-		EmulatorSummaries:      s.emulatorSummaries(),
+		EmulatorSummaries:      s.emulatorsList(),
 		LocalConfigArtifacts:   s.localConfigArtifacts(),
 		AzureResourceGroups:    []models.AzureResourceGroup{},
 		AzureVirtualMachines:   []models.AzureVirtualMachine{},
@@ -2078,4 +2108,57 @@ func firstAvailableAuthMethod(methods []models.AuthMethodStatus) models.AuthMeth
 		}
 	}
 	return ""
+}
+
+func (s *Service) emulatorsList() []models.EmulatorSummary {
+	summaries := []models.EmulatorSummary{}
+
+	// Get LocalStack status if available
+	if s.localstackMgr != nil {
+		status, err := s.localstackMgr.Status(context.Background())
+		if err == nil {
+			summaries = append(summaries, models.EmulatorSummary{
+				EmulatorID: status.EmulatorID,
+				ProviderID: status.ProviderID,
+				Label:      status.Label,
+				Kind:       status.Kind,
+				Status:     status.Status,
+				Summary:    status.Summary,
+				Details:    status.Details,
+			})
+		}
+	}
+
+	// Add floci-az placeholder
+	summaries = append(summaries, models.EmulatorSummary{
+		EmulatorID: "floci-az",
+		ProviderID: "azure",
+		Label:      "floci-az",
+		Kind:       "docker",
+		Status:     models.EmulatorStatusNotConfigured,
+		Summary:    "Azure local emulator is not yet implemented.",
+		Details:    []models.DetailField{
+			{Label: "Image", Value: "floci/floci-az:latest"},
+			{Label: "Status", Value: "Planned for future slice"},
+		},
+	})
+
+	return summaries
+}
+
+func (s *Service) emulatorsPrepareProfile() (map[string]string, error) {
+	if s.localstackMgr == nil {
+		return nil, errors.New("LocalStack manager not available")
+	}
+
+	if err := s.localstackMgr.EnsureManagedProfile(); err != nil {
+		return nil, fmt.Errorf("failed to prepare managed profile: %w", err)
+	}
+
+	return map[string]string{
+		"profile":  "cloudsprocket-localstack",
+		"config":   s.settings.LocalConfigDir + "/aws/config",
+		"credPath": s.settings.LocalConfigDir + "/aws/credentials",
+		"endpoint": "http://localhost:4566",
+	}, nil
 }
