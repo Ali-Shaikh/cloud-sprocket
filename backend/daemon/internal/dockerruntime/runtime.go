@@ -35,7 +35,7 @@ func New(settings config.Settings) *Runtime {
 }
 
 func (r *Runtime) Snapshot(ctx context.Context) (models.DockerRuntimeSnapshot, error) {
-	host, source := resolveDockerHost(r.settings)
+	host, source := ResolveDockerHost(r.settings)
 	snapshot := models.DockerRuntimeSnapshot{
 		Reachable:   false,
 		Host:        host,
@@ -108,7 +108,7 @@ func (r *Runtime) Snapshot(ctx context.Context) (models.DockerRuntimeSnapshot, e
 }
 
 func (r *Runtime) ListOwnedResources(ctx context.Context) ([]models.ManagedDockerResource, error) {
-	host, _ := resolveDockerHost(r.settings)
+	host, _ := ResolveDockerHost(r.settings)
 	if host == "" {
 		return []models.ManagedDockerResource{}, nil
 	}
@@ -149,7 +149,7 @@ func (r *Runtime) ListOwnedResources(ctx context.Context) ([]models.ManagedDocke
 	return resources, nil
 }
 
-func resolveDockerHost(settings config.Settings) (string, string) {
+func ResolveDockerHost(settings config.Settings) (string, string) {
 	if host := strings.TrimSpace(os.Getenv("DOCKER_HOST")); host != "" {
 		return host, "DOCKER_HOST"
 	}

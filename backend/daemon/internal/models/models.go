@@ -109,6 +109,23 @@ type LocalConfigArtifact struct {
 	Summary    string `json:"summary"`
 }
 
+type LocalStackStatus struct {
+	EmulatorID   string         `json:"emulatorId"`
+	ProviderID   string         `json:"providerId"`
+	Label        string         `json:"label"`
+	Kind         string         `json:"kind"`
+	Status       EmulatorStatus `json:"status"`
+	Summary      string         `json:"summary"`
+	ContainerID  string         `json:"containerId,omitempty"`
+	Image        string         `json:"image,omitempty"`
+	Port         string         `json:"port,omitempty"`
+	Endpoint     string         `json:"endpoint,omitempty"`
+	ProfileName  string         `json:"profileName,omitempty"`
+	ConfigPath   string         `json:"configPath,omitempty"`
+	CredsPath    string         `json:"credsPath,omitempty"`
+	Details      []DetailField  `json:"details"`
+}
+
 type DockerOwnershipPolicy struct {
 	LabelKey        string `json:"labelKey"`
 	LabelValue      string `json:"labelValue"`
