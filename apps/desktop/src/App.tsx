@@ -175,6 +175,36 @@ function isWorkspaceSnapshot(value: unknown): value is WorkspaceSnapshot {
   return isRecord(value) && Array.isArray(value.ec2Instances) && typeof value.runtimeSettings === "object";
 }
 
+function normaliseArray<T>(value: T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function normaliseProvider(provider: ProviderSummary): ProviderSummary {
+  return {
+    ...provider,
+    locations: normaliseArray(provider.locations),
+  };
+}
+
+function normaliseProfile(profile: ProfileSummary): ProfileSummary {
+  return {
+    ...profile,
+    sourcePaths: normaliseArray(profile.sourcePaths),
+    attributes: normaliseArray(profile.attributes),
+    authMethods: normaliseArray(profile.authMethods),
+  };
+}
+
+function normaliseSessionSnapshot(snapshot: Partial<SessionSnapshot> | null | undefined): SessionSnapshot {
+  return {
+    ...emptySession,
+    ...(snapshot ?? {}),
+    isLocked: snapshot?.isLocked ?? false,
+    availableAuthMethods: normaliseArray(snapshot?.availableAuthMethods),
+    workspaceTabs: normaliseArray(snapshot?.workspaceTabs),
+  };
+}
+
 function dockerDiagnosticsFromRuntime(runtime: DockerRuntimeSnapshot): WorkspaceSnapshot["dockerDiagnostics"] {
   return {
     engineState: runtime.reachable ? "available" : runtime.host ? "unavailable" : "unknown",
@@ -530,22 +560,21 @@ const emptyWorkspace: WorkspaceSnapshot = {
   ec2Instances: [],
 };
 
-function normaliseArray<T>(value: T[] | undefined): T[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot>): WorkspaceSnapshot {
-  const dockerRuntime = snapshot.dockerRuntime ?? emptyWorkspace.dockerRuntime;
-  const dockerDiagnostics = snapshot.dockerDiagnostics ?? emptyWorkspace.dockerDiagnostics;
+function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null | undefined): WorkspaceSnapshot {
+  const source = snapshot ?? {};
+  const dockerRuntime = source.dockerRuntime ?? emptyWorkspace.dockerRuntime;
+  const dockerDiagnostics = source.dockerDiagnostics ?? emptyWorkspace.dockerDiagnostics;
 
   return {
     ...emptyWorkspace,
-    ...snapshot,
+    ...source,
+    provider: source.provider ? normaliseProvider(source.provider) : undefined,
+    profile: source.profile ? normaliseProfile(source.profile) : undefined,
     runtimeSettings: {
       ...emptySettings,
-      ...(snapshot.runtimeSettings ?? {}),
+      ...(source.runtimeSettings ?? {}),
     },
-    environmentDiagnostics: normaliseArray(snapshot.environmentDiagnostics),
+    environmentDiagnostics: normaliseArray(source.environmentDiagnostics),
     dockerDiagnostics: {
       ...emptyWorkspace.dockerDiagnostics,
       ...dockerDiagnostics,
@@ -560,18 +589,18 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot>): Works
       },
       details: normaliseArray(dockerRuntime.details),
     },
-    dockerResources: normaliseArray(snapshot.dockerResources),
-    emulatorSummaries: normaliseArray(snapshot.emulatorSummaries),
-    localConfigArtifacts: normaliseArray(snapshot.localConfigArtifacts),
-    awsWritesEnabled: snapshot.awsWritesEnabled ?? false,
-    azureResourceGroups: normaliseArray(snapshot.azureResourceGroups),
-    azureVirtualMachines: normaliseArray(snapshot.azureVirtualMachines),
-    s3Buckets: normaliseArray(snapshot.s3Buckets),
-    s3Objects: normaliseArray(snapshot.s3Objects),
-    s3ObjectMetadata: normaliseArray(snapshot.s3ObjectMetadata),
-    s3ExportSnippets: normaliseArray(snapshot.s3ExportSnippets),
-    ec2Regions: normaliseArray(snapshot.ec2Regions),
-    ec2Instances: normaliseArray(snapshot.ec2Instances),
+    dockerResources: normaliseArray(source.dockerResources),
+    emulatorSummaries: normaliseArray(source.emulatorSummaries),
+    localConfigArtifacts: normaliseArray(source.localConfigArtifacts),
+    awsWritesEnabled: source.awsWritesEnabled ?? false,
+    azureResourceGroups: normaliseArray(source.azureResourceGroups),
+    azureVirtualMachines: normaliseArray(source.azureVirtualMachines),
+    s3Buckets: normaliseArray(source.s3Buckets),
+    s3Objects: normaliseArray(source.s3Objects),
+    s3ObjectMetadata: normaliseArray(source.s3ObjectMetadata),
+    s3ExportSnippets: normaliseArray(source.s3ExportSnippets),
+    ec2Regions: normaliseArray(source.ec2Regions),
+    ec2Instances: normaliseArray(source.ec2Instances),
   };
 }
 
@@ -677,17 +706,18 @@ export default function App() {
     try {
       const providersResult = await backendRequest<ProviderSummary[]>("providers.list");
       const sessionResult = await backendRequest<SessionSnapshot>("session.get");
+      const nextSession = normaliseSessionSnapshot(sessionResult);
       const profilesResult = await backendRequest<ProfileSummary[]>("profiles.list", {
-        providerId: sessionResult.currentProviderId,
+        providerId: nextSession.currentProviderId,
       });
       const settingsResult = await backendRequest<AppSettingsSnapshot>("app.settings.get");
       const logsResult = await backendRequest<ActivityLogEntry[]>("logs.list", {
         limit: 50,
       });
       startTransition(() => {
-        setProviders(providersResult);
-        setProfiles(profilesResult);
-        setSession(sessionResult);
+        setProviders(normaliseArray(providersResult).map(normaliseProvider));
+        setProfiles(normaliseArray(profilesResult).map(normaliseProfile));
+        setSession(nextSession);
         setAppSettings(settingsResult);
         setLogs(logsResult);
       });
@@ -718,9 +748,9 @@ export default function App() {
 
   const onStateChanged = useEffectEvent((payload: StateChangedPayload) => {
     startTransition(() => {
-      setProviders(payload.providers);
-      setProfiles(payload.profiles);
-      setSession(payload.session);
+      setProviders(normaliseArray(payload.providers).map(normaliseProvider));
+      setProfiles(normaliseArray(payload.profiles).map(normaliseProfile));
+      setSession(normaliseSessionSnapshot(payload.session));
     });
   });
 
@@ -878,10 +908,11 @@ export default function App() {
     params: Record<string, unknown> = {},
   ): Promise<void> {
     const nextSession = await backendRequest<SessionSnapshot>(method, params);
+    const normalisedSession = normaliseSessionSnapshot(nextSession);
     startTransition(() => {
-      setSession(nextSession);
+      setSession(normalisedSession);
     });
-    await loadWorkspace(nextSession);
+    await loadWorkspace(normalisedSession);
     await loadState();
   }
 

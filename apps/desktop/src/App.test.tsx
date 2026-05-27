@@ -432,6 +432,33 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Lock workspace" })).toBeInTheDocument();
   });
 
+  it("renders startup when backend list fields are null", async () => {
+    const originalProvider = providerFixtures[0];
+    const originalProfile = profileFixtures[0];
+    sessionFixture = {
+      ...sessionFixture,
+      availableAuthMethods: null,
+      workspaceTabs: null,
+    } as unknown as SessionSnapshot;
+    providerFixtures[0] = {
+      ...providerFixtures[0],
+      locations: null,
+    } as unknown as ProviderSummary;
+    profileFixtures[0] = {
+      ...profileFixtures[0],
+      sourcePaths: null,
+      attributes: null,
+      authMethods: null,
+    } as unknown as ProfileSummary;
+
+    render(<App />);
+
+    expect(await screen.findByText("Session Setup")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Choose Provider" })).toBeInTheDocument();
+    providerFixtures[0] = originalProvider;
+    profileFixtures[0] = originalProfile;
+  });
+
   it("masks sensitive profile values until they are revealed", async () => {
     render(<App />);
 
