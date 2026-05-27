@@ -36,6 +36,10 @@ const mockListeners = new Map<
   Set<(payload: BackendEventMap[BackendEventName]) => void>
 >();
 
+function tauriEventName(eventName: BackendEventName): string {
+  return eventName.replaceAll(".", ":");
+}
+
 const mockWorkspaceTabs: WorkspaceTab[] = [
   {
     tabId: "overview",
@@ -1015,7 +1019,7 @@ export async function subscribeToBackendEvent<K extends BackendEventName>(
   handler: (payload: BackendEventMap[K]) => void,
 ): Promise<() => void> {
   if (isTauriRuntime()) {
-    const unlisten = await listen<BackendEventMap[K]>(eventName, (event) => {
+    const unlisten = await listen<BackendEventMap[K]>(tauriEventName(eventName), (event) => {
       handler(event.payload);
     });
     return () => {
