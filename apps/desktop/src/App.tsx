@@ -22,11 +22,20 @@ import { backendRequest, subscribeToBackendEvent } from "./lib/backend";
 import type {
   ActivityLogEntry,
   AppSettingsSnapshot,
+  AwsEc2Instance,
   AwsS3PresignResult,
   AwsS3UploadResult,
+  AwsS3Bucket,
+  AwsS3ExportSnippet,
+  AwsS3Object,
+  AzureResourceGroup,
+  AzureVirtualMachine,
+  DetailField,
   DockerRuntimeSnapshot,
+  EmulatorSummary,
   JobStatus,
   JobLifecycle,
+  LocalConfigArtifact,
   ManagedDockerResource,
   ProfileSummary,
   ProviderSummary,
@@ -192,6 +201,62 @@ function normaliseProfile(profile: ProfileSummary): ProfileSummary {
     sourcePaths: normaliseArray(profile.sourcePaths),
     attributes: normaliseArray(profile.attributes),
     authMethods: normaliseArray(profile.authMethods),
+  };
+}
+
+function normaliseDetailFields(fields: DetailField[] | null | undefined): DetailField[] {
+  return normaliseArray(fields);
+}
+
+function normaliseDockerResource(resource: ManagedDockerResource): ManagedDockerResource {
+  return {
+    ...resource,
+    details: normaliseDetailFields(resource.details),
+  };
+}
+
+function normaliseEmulatorSummary(emulator: EmulatorSummary): EmulatorSummary {
+  return {
+    ...emulator,
+    details: normaliseDetailFields(emulator.details),
+  };
+}
+
+function normaliseLocalConfigArtifact(artifact: LocalConfigArtifact): LocalConfigArtifact {
+  return { ...artifact };
+}
+
+function normaliseAzureResourceGroup(resourceGroup: AzureResourceGroup): AzureResourceGroup {
+  return {
+    ...resourceGroup,
+    tags: normaliseDetailFields(resourceGroup.tags),
+  };
+}
+
+function normaliseAzureVirtualMachine(vm: AzureVirtualMachine): AzureVirtualMachine {
+  return {
+    ...vm,
+    tags: normaliseDetailFields(vm.tags),
+  };
+}
+
+function normaliseS3Bucket(bucket: AwsS3Bucket): AwsS3Bucket {
+  return { ...bucket };
+}
+
+function normaliseS3Object(object: AwsS3Object): AwsS3Object {
+  return { ...object };
+}
+
+function normaliseS3ExportSnippet(snippet: AwsS3ExportSnippet): AwsS3ExportSnippet {
+  return { ...snippet };
+}
+
+function normaliseEC2Instance(instance: AwsEc2Instance): AwsEc2Instance {
+  return {
+    ...instance,
+    securityGroups: normaliseArray(instance.securityGroups),
+    tags: normaliseDetailFields(instance.tags),
   };
 }
 
@@ -589,18 +654,18 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
       },
       details: normaliseArray(dockerRuntime.details),
     },
-    dockerResources: normaliseArray(source.dockerResources),
-    emulatorSummaries: normaliseArray(source.emulatorSummaries),
-    localConfigArtifacts: normaliseArray(source.localConfigArtifacts),
+    dockerResources: normaliseArray(source.dockerResources).map(normaliseDockerResource),
+    emulatorSummaries: normaliseArray(source.emulatorSummaries).map(normaliseEmulatorSummary),
+    localConfigArtifacts: normaliseArray(source.localConfigArtifacts).map(normaliseLocalConfigArtifact),
     awsWritesEnabled: source.awsWritesEnabled ?? false,
-    azureResourceGroups: normaliseArray(source.azureResourceGroups),
-    azureVirtualMachines: normaliseArray(source.azureVirtualMachines),
-    s3Buckets: normaliseArray(source.s3Buckets),
-    s3Objects: normaliseArray(source.s3Objects),
-    s3ObjectMetadata: normaliseArray(source.s3ObjectMetadata),
-    s3ExportSnippets: normaliseArray(source.s3ExportSnippets),
+    azureResourceGroups: normaliseArray(source.azureResourceGroups).map(normaliseAzureResourceGroup),
+    azureVirtualMachines: normaliseArray(source.azureVirtualMachines).map(normaliseAzureVirtualMachine),
+    s3Buckets: normaliseArray(source.s3Buckets).map(normaliseS3Bucket),
+    s3Objects: normaliseArray(source.s3Objects).map(normaliseS3Object),
+    s3ObjectMetadata: normaliseDetailFields(source.s3ObjectMetadata),
+    s3ExportSnippets: normaliseArray(source.s3ExportSnippets).map(normaliseS3ExportSnippet),
     ec2Regions: normaliseArray(source.ec2Regions),
-    ec2Instances: normaliseArray(source.ec2Instances),
+    ec2Instances: normaliseArray(source.ec2Instances).map(normaliseEC2Instance),
   };
 }
 

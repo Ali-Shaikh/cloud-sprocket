@@ -159,7 +159,7 @@ impl SidecarManager {
         if payload.get("method").is_some() && payload.get("id").is_none() {
             if let Some(method) = payload.get("method").and_then(Value::as_str) {
                 let event_payload = payload.get("params").cloned().unwrap_or(Value::Null);
-                let _ = app.emit(method, event_payload);
+                let _ = app.emit(&tauri_event_name(method), event_payload);
             }
             return;
         }
@@ -222,7 +222,7 @@ impl SidecarManager {
         message: String,
     ) -> Result<(), tauri::Error> {
         app.emit(
-            "log.appended",
+            &tauri_event_name("log.appended"),
             json!({
                 "id": self.next_log_id.fetch_add(1, Ordering::SeqCst),
                 "level": level,
@@ -231,6 +231,10 @@ impl SidecarManager {
             }),
         )
     }
+}
+
+fn tauri_event_name(method: &str) -> String {
+    method.replace('.', ":")
 }
 
 fn response_id(value: &Value) -> String {

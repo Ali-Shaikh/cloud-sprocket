@@ -3,8 +3,8 @@
 - Date: `2026-05-27`
 - Branch: `feat/local-emulator-foundation`
 - Head after local commit: `feat: add LocalStack runtime controls`
-- Working tree: local runtime work and blank startup/locked-workspace fixes are committed; unrelated untracked image artefacts still present
-- Status: LocalStack start and stop wiring is implemented and verified locally. Startup and locked workspace rendering now tolerate sparse or null backend payload arrays.
+- Working tree: local runtime work and blank-screen fixes are committed; unrelated untracked image artefacts still present
+- Status: LocalStack start and stop wiring is implemented and verified locally. The built desktop app has been launched and verified through WebView debugging with visible locked workspace content.
 
 ## Current State
 
@@ -25,6 +25,9 @@
 - Replaced the previous top `wip` commit with `feat: add LocalStack runtime controls`, authored and committed by `Ali Shaikh <me@alishaikh.net>`.
 - After testing the local executable, locking the workspace could show a blank page if the frontend received sparse Docker/runtime fields. Added workspace snapshot normalisation in `App.tsx` and a regression test for the locked workspace view.
 - After a follow-up report that the app blanked immediately on launch, extended the frontend normalisers to handle `null` arrays from Go JSON payloads for session, provider, profile, and workspace state.
+- Reproduced the blank screen in the actual built app with WebView2 remote debugging. Fixed the production-only failures:
+  - Tauri event names cannot contain `.`, so frontend event subscriptions and Rust event emission now bridge backend names like `state.changed` to Tauri names like `state:changed`.
+  - Nested resource arrays such as EC2 security groups/tags and Azure tags are normalised before `WorkspaceView` renders.
 
 ## Files Changed In This Resume
 
@@ -35,6 +38,7 @@
 - `apps/desktop/src/views/WorkspaceView.tsx`
 - `apps/desktop/src/lib/backend.ts`
 - `apps/desktop/src/App.test.tsx`
+- `apps/desktop/src-tauri/src/main.rs`
 - `CHECKPOINT.md`
 
 ## Verification On 2026-05-27
@@ -44,6 +48,14 @@
 - `pnpm run build:desktop:exe` passed and rebuilt `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe`.
 - Re-ran `pnpm run build:desktop:exe` after commit `255a463`; it passed and rebuilt the same executable.
 - Re-ran `pnpm --dir apps/desktop test`, `pnpm run typecheck:desktop`, and `pnpm run build:desktop:exe` after the startup null-array fix; all passed.
+- Reproduced the blank screen in the built executable on 2026-05-28. The WebView reported:
+  - invalid Tauri event name for `listen`
+  - `TypeError: Cannot read properties of null (reading 'length')` inside `WorkspaceView`
+- After the event bridge and nested array fixes:
+  - `pnpm --dir apps/desktop test` passed, 14 tests.
+  - `pnpm run typecheck:desktop` passed.
+  - `pnpm run build:desktop:exe` passed.
+  - Relaunched `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe` and verified via WebView2 debugging that the React root renders locked workspace content.
 
 ## Earlier Verification On 2026-05-26
 
@@ -62,7 +74,7 @@
 
 - The first type-check failure from the previous checkpoint cleared after dependencies were materialised by the desktop test run. No TypeScript config change was required.
 - Go tests needed elevated execution because the sandbox could not access the local Go build cache.
-- The blank-screen fixes are frontend-only, so Go tests were not rerun for those patches.
+- The latest blank-screen fix touches the Tauri Rust bridge and frontend normalisation. The desktop build covered the Rust bridge compile path; Go daemon tests were not rerun because daemon code was not changed.
 - LocalStack image remains `localstack/localstack:latest` because that was already the branch default. A later hardening slice should replace this with a configured tag or digest policy.
 - LocalStack health currently probes `http://localhost:4566/_localstack/health` with a short timeout.
 - Start binds LocalStack to `127.0.0.1:4566` and only manages containers with the CloudSprocket ownership labels.
@@ -78,4 +90,4 @@
 
 ## Resume Point
 
-- Have the user retest launching and locking the workspace in `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe`. If it renders correctly, the next branch step is deciding whether LocalStack `latest` is acceptable before pushing the rewritten branch.
+- The rebuilt app is currently launched for user testing. If it renders correctly, the next branch step is deciding whether LocalStack `latest` is acceptable before pushing the rewritten branch.
