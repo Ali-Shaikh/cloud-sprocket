@@ -530,6 +530,51 @@ const emptyWorkspace: WorkspaceSnapshot = {
   ec2Instances: [],
 };
 
+function normaliseArray<T>(value: T[] | undefined): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot>): WorkspaceSnapshot {
+  const dockerRuntime = snapshot.dockerRuntime ?? emptyWorkspace.dockerRuntime;
+  const dockerDiagnostics = snapshot.dockerDiagnostics ?? emptyWorkspace.dockerDiagnostics;
+
+  return {
+    ...emptyWorkspace,
+    ...snapshot,
+    runtimeSettings: {
+      ...emptySettings,
+      ...(snapshot.runtimeSettings ?? {}),
+    },
+    environmentDiagnostics: normaliseArray(snapshot.environmentDiagnostics),
+    dockerDiagnostics: {
+      ...emptyWorkspace.dockerDiagnostics,
+      ...dockerDiagnostics,
+      details: normaliseArray(dockerDiagnostics.details),
+    },
+    dockerRuntime: {
+      ...emptyWorkspace.dockerRuntime,
+      ...dockerRuntime,
+      resourceOwnership: {
+        ...emptyWorkspace.dockerRuntime.resourceOwnership,
+        ...(dockerRuntime.resourceOwnership ?? {}),
+      },
+      details: normaliseArray(dockerRuntime.details),
+    },
+    dockerResources: normaliseArray(snapshot.dockerResources),
+    emulatorSummaries: normaliseArray(snapshot.emulatorSummaries),
+    localConfigArtifacts: normaliseArray(snapshot.localConfigArtifacts),
+    awsWritesEnabled: snapshot.awsWritesEnabled ?? false,
+    azureResourceGroups: normaliseArray(snapshot.azureResourceGroups),
+    azureVirtualMachines: normaliseArray(snapshot.azureVirtualMachines),
+    s3Buckets: normaliseArray(snapshot.s3Buckets),
+    s3Objects: normaliseArray(snapshot.s3Objects),
+    s3ObjectMetadata: normaliseArray(snapshot.s3ObjectMetadata),
+    s3ExportSnippets: normaliseArray(snapshot.s3ExportSnippets),
+    ec2Regions: normaliseArray(snapshot.ec2Regions),
+    ec2Instances: normaliseArray(snapshot.ec2Instances),
+  };
+}
+
 export default function App() {
   const [providers, setProviders] = useState<ProviderSummary[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
@@ -611,7 +656,7 @@ export default function App() {
       const workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
       latestState = ec2InstanceState(workspaceResult, instanceId);
       startTransition(() => {
-        setWorkspace(workspaceResult);
+        setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
       });
 
       if (latestState === desiredState) {
@@ -666,7 +711,7 @@ export default function App() {
     const workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
     startTransition(() => {
       if (requestId === workspaceLoadRequestIdRef.current) {
-        setWorkspace(workspaceResult);
+        setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
       }
     });
   });
@@ -725,7 +770,7 @@ export default function App() {
       if (job.status === "completed" && isWorkspaceSnapshot(workspaceResult)) {
         cancelEC2Polling();
         startTransition(() => {
-          setWorkspace(workspaceResult);
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
         });
       } else if (job.status === "completed" || job.status === "failed") {
         cancelEC2Polling();
@@ -852,8 +897,8 @@ export default function App() {
       backendRequest<ManagedDockerResource[]>("docker.resources.list"),
     ]);
     startTransition(() => {
-      setWorkspace((current) => ({
-        ...current,
+      setWorkspace((current) => normaliseWorkspaceSnapshot({
+        ...normaliseWorkspaceSnapshot(current),
         dockerRuntime,
         dockerResources,
         dockerDiagnostics: dockerDiagnosticsFromRuntime(dockerRuntime),
@@ -935,7 +980,7 @@ export default function App() {
         void backendRequest<WorkspaceSnapshot>("aws.s3.selectBucket", { bucketName }).then(
           (workspaceResult) => {
             startTransition(() => {
-              setWorkspace(workspaceResult);
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
             });
           },
         );
@@ -945,7 +990,7 @@ export default function App() {
         void backendRequest<WorkspaceSnapshot>("aws.s3.selectObject", { objectKey }).then(
           (workspaceResult) => {
             startTransition(() => {
-              setWorkspace(workspaceResult);
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
             });
           },
         );
@@ -957,7 +1002,7 @@ export default function App() {
           (workspaceResult) => {
             if (requestId === s3PrefixRequestIdRef.current) {
               startTransition(() => {
-                setWorkspace(workspaceResult);
+                setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
               });
             }
           },
@@ -1006,7 +1051,7 @@ export default function App() {
         void backendRequest<WorkspaceSnapshot>("aws.ec2.selectRegion", { region }).then(
           (workspaceResult) => {
             startTransition(() => {
-              setWorkspace(workspaceResult);
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
             });
             setEC2ActionStatus(workspaceResult.ec2StatusMessage || `EC2 inventory refreshed for ${region}.`);
           },
@@ -1021,7 +1066,7 @@ export default function App() {
         void backendRequest<WorkspaceSnapshot>("aws.ec2.selectRegion", { region }).then(
           (workspaceResult) => {
             startTransition(() => {
-              setWorkspace(workspaceResult);
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
             });
           },
         );
@@ -1033,7 +1078,7 @@ export default function App() {
         void backendRequest<WorkspaceSnapshot>("aws.ec2.selectInstance", { instanceId }).then(
           (workspaceResult) => {
             startTransition(() => {
-              setWorkspace(workspaceResult);
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
             });
           },
         );
@@ -1056,7 +1101,7 @@ export default function App() {
         void backendRequest<WorkspaceSnapshot>("azure.selectResourceGroup", { resourceGroup }).then(
           (workspaceResult) => {
             startTransition(() => {
-              setWorkspace(workspaceResult);
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
             });
           },
         );
@@ -1065,7 +1110,7 @@ export default function App() {
         void backendRequest<WorkspaceSnapshot>("azure.selectVirtualMachine", { vmId }).then(
           (workspaceResult) => {
             startTransition(() => {
-              setWorkspace(workspaceResult);
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
             });
           },
         );

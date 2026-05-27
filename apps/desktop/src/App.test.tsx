@@ -489,6 +489,46 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Unlock" })).toBeInTheDocument();
   });
 
+  it("renders the locked workspace when backend runtime fields are sparse", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+      ],
+    };
+    workspaceFixture = {
+      provider: providerFixtures[0],
+      profile: profileFixtures[0],
+      authMethod: "cli",
+      runtimeSettings: settingsFixture,
+      dockerDiagnostics: {
+        engineState: "available",
+        summary: "Docker is available.",
+      },
+      dockerRuntime: {
+        reachable: true,
+        summary: "Docker is reachable.",
+      },
+      awsWritesEnabled: false,
+    } as WorkspaceSnapshot;
+
+    render(<App />);
+
+    expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
+    expect(await screen.findByText("Docker Runtime")).toBeInTheDocument();
+    expect(await screen.findByText("Local Emulators")).toBeInTheDocument();
+    expect(await screen.findByText("Managed Docker Resources")).toBeInTheDocument();
+  });
+
   it("starts and stops LocalStack from the workspace overview", async () => {
     sessionFixture = {
       ...sessionFixture,

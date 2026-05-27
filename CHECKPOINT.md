@@ -1,10 +1,10 @@
 # Checkpoint
 
-- Date: `2026-05-26`
+- Date: `2026-05-27`
 - Branch: `feat/local-emulator-foundation`
 - Head after local commit: `feat: add LocalStack runtime controls`
-- Working tree: local runtime work committed; unrelated untracked image artefacts still present
-- Status: LocalStack start and stop wiring is implemented and verified locally.
+- Working tree: local runtime work and blank locked-workspace fix are committed; unrelated untracked image artefacts still present
+- Status: LocalStack start and stop wiring is implemented and verified locally. The locked workspace view now tolerates sparse backend runtime payloads.
 
 ## Current State
 
@@ -23,6 +23,7 @@
   - verified `origin/dev..HEAD` has no `ali@example.com` author or committer emails
   - branch now diverges from `origin/feat/local-emulator-foundation` and will need a force-with-lease push when ready
 - Replaced the previous top `wip` commit with `feat: add LocalStack runtime controls`, authored and committed by `Ali Shaikh <me@alishaikh.net>`.
+- After testing the local executable, locking the workspace could show a blank page if the frontend received sparse Docker/runtime fields. Added workspace snapshot normalisation in `App.tsx` and a regression test for the locked workspace view.
 
 ## Files Changed In This Resume
 
@@ -35,11 +36,18 @@
 - `apps/desktop/src/App.test.tsx`
 - `CHECKPOINT.md`
 
-## Verification On 2026-05-26
+## Verification On 2026-05-27
+
+- `pnpm --dir apps/desktop test` passed, 13 tests.
+- `pnpm run typecheck:desktop` passed.
+- `pnpm run build:desktop:exe` passed and rebuilt `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe`.
+
+## Earlier Verification On 2026-05-26
 
 - `go -C backend/daemon test ./...` passed.
 - `pnpm --dir apps/desktop test` passed, 12 tests.
 - `pnpm run typecheck:desktop` passed.
+- `pnpm run build:desktop:exe` passed and produced `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe`.
 - Browser verification passed against local Vite:
   - workspace locked successfully
   - LocalStack card rendered `Prepare Profile`, `Start`, and disabled `Stop`
@@ -51,6 +59,7 @@
 
 - The first type-check failure from the previous checkpoint cleared after dependencies were materialised by the desktop test run. No TypeScript config change was required.
 - Go tests needed elevated execution because the sandbox could not access the local Go build cache.
+- The blank locked-workspace fix is frontend-only, so Go tests were not rerun for that patch.
 - LocalStack image remains `localstack/localstack:latest` because that was already the branch default. A later hardening slice should replace this with a configured tag or digest policy.
 - LocalStack health currently probes `http://localhost:4566/_localstack/health` with a short timeout.
 - Start binds LocalStack to `127.0.0.1:4566` and only manages containers with the CloudSprocket ownership labels.
@@ -66,4 +75,4 @@
 
 ## Resume Point
 
-- Continue with LocalStack hardening only if needed for the branch. The next concrete code step should be image version policy or action result/error UX, not Azure local runtime.
+- Have the user retest locking the workspace in `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe`. If it renders correctly, the next branch step is deciding whether LocalStack `latest` is acceptable before pushing the rewritten branch.
