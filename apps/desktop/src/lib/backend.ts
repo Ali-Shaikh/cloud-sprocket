@@ -4,6 +4,7 @@ import type {
   ActivityLogEntry,
   AppSettingsSnapshot,
   AuthMethod,
+  EmulatorStatus,
   JobStatus,
   ProfileSummary,
   ProviderSummary,
@@ -27,6 +28,7 @@ type MockState = {
   session: SessionSnapshot;
   logs: ActivityLogEntry[];
   settings: AppSettingsSnapshot;
+  localStackStatus: EmulatorStatus;
 };
 
 const mockListeners = new Map<
@@ -375,6 +377,7 @@ const mockState: MockState = {
     localConfigDir: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config",
     emulatorStateDir: "C:/Users/Ali/AppData/Local/CloudSprocket/emulators",
   },
+  localStackStatus: "stopped",
 };
 
 function isTauriRuntime(): boolean {
@@ -594,10 +597,15 @@ function buildMockWorkspace(): WorkspaceSnapshot {
         providerId: "aws",
         label: "LocalStack",
         kind: "docker",
-        status: "not-configured",
-        summary: "Managed AWS local runtime is planned but not configured yet.",
+        status: mockState.localStackStatus,
+        summary:
+          mockState.localStackStatus === "running"
+            ? "LocalStack is running at http://localhost:4566."
+            : "LocalStack is ready to start after preparing the managed profile.",
         details: [
-          { label: "Image", value: "localstack/localstack" },
+          { label: "Image", value: "localstack/localstack:latest" },
+          { label: "Endpoint", value: "http://localhost:4566" },
+          { label: "Managed Profile", value: "cloudsprocket-localstack" },
           { label: "Managed Config Root", value: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config/aws" },
         ],
       },
@@ -697,6 +705,66 @@ function handleMockRequest<T>(
       return Promise.resolve(buildMockWorkspace().dockerRuntime as T);
     case "docker.resources.list":
       return Promise.resolve(buildMockWorkspace().dockerResources as T);
+    case "emulators.list":
+      return Promise.resolve([
+        {
+          emulatorId: "localstack",
+          providerId: "aws",
+          label: "LocalStack",
+          kind: "docker",
+          status: "not-configured" as EmulatorStatus,
+          summary: "Click Prepare Profile to set up LocalStack access.",
+          details: [
+            { label: "Image", value: "localstack/localstack:latest" },
+            { label: "Port", value: "4566" },
+            { label: "Managed Profile", value: "cloudsprocket-localstack" },
+          ],
+        },
+        {
+          emulatorId: "floci-az",
+          providerId: "azure",
+          label: "floci-az",
+          kind: "docker",
+          status: "not-configured" as EmulatorStatus,
+          summary: "Azure local emulator is planned for a future slice.",
+          details: [
+            { label: "Image", value: "floci/floci-az:latest" },
+            { label: "Status", value: "Planned" },
+          ],
+        },
+      ] as T);
+    case "emulators.prepareProfile":
+      appendLog("info", "Preparing LocalStack managed profile...");
+      return Promise.resolve({
+        profile: "cloudsprocket-localstack",
+        config: `${mockState.settings.localConfigDir}/aws/config`,
+        credPath: `${mockState.settings.localConfigDir}/aws/credentials`,
+        endpoint: "http://localhost:4566",
+      } as T);
+    case "emulators.start":
+      mockState.localStackStatus = "running";
+      appendLog("success", "Started LocalStack.");
+      return Promise.resolve({
+        emulatorId: "localstack",
+        providerId: "aws",
+        label: "LocalStack",
+        kind: "docker",
+        status: "running",
+        summary: "LocalStack is running at http://localhost:4566.",
+        details: [],
+      } as T);
+    case "emulators.stop":
+      mockState.localStackStatus = "stopped";
+      appendLog("info", "Stopped LocalStack.");
+      return Promise.resolve({
+        emulatorId: "localstack",
+        providerId: "aws",
+        label: "LocalStack",
+        kind: "docker",
+        status: "stopped",
+        summary: "LocalStack container is present but not running.",
+        details: [],
+      } as T);
     case "aws.s3.selectBucket":
       mockState.session.selectedS3BucketName = String(params.bucketName ?? "");
       mockState.session.selectedS3ObjectKey = undefined;

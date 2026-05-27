@@ -49,6 +49,8 @@ type DockerRuntime interface {
 
 type LocalStackManager interface {
 	Status(ctx context.Context) (models.LocalStackStatus, error)
+	Start(ctx context.Context) (models.LocalStackStatus, error)
+	Stop(ctx context.Context) (models.LocalStackStatus, error)
 	EnsureManagedProfile() error
 }
 
@@ -57,16 +59,16 @@ type Notifier interface {
 }
 
 type Service struct {
-	settings  config.Settings
-	store     *store.Store
-	discovery *discovery.Service
-	s3        S3Inventory
-	ec2       EC2Inventory
-	azure     AzureInventory
-	docker    DockerRuntime
+	settings      config.Settings
+	store         *store.Store
+	discovery     *discovery.Service
+	s3            S3Inventory
+	ec2           EC2Inventory
+	azure         AzureInventory
+	docker        DockerRuntime
 	localstackMgr LocalStackManager
-	now       func() time.Time
-	mu        sync.Mutex
+	now           func() time.Time
+	mu            sync.Mutex
 }
 
 func New(
@@ -93,15 +95,15 @@ func NewWithLocalStack(
 	localStackMgr LocalStackManager,
 ) *Service {
 	return &Service{
-		settings:  settings,
-		store:     store,
-		discovery: discoveryService,
-		s3:        s3Inventory,
-		ec2:       ec2Inventory,
-		azure:     azureInventory,
-		docker:    dockerRuntime,
+		settings:      settings,
+		store:         store,
+		discovery:     discoveryService,
+		s3:            s3Inventory,
+		ec2:           ec2Inventory,
+		azure:         azureInventory,
+		docker:        dockerRuntime,
 		localstackMgr: localStackMgr,
-		now:       func() time.Time { return time.Now().UTC() },
+		now:           func() time.Time { return time.Now().UTC() },
 	}
 }
 
@@ -601,6 +603,10 @@ func (s *Service) Handle(
 			return nil, err
 		}
 		return result, nil
+	case "emulators.start":
+		return s.emulatorsStart(ctx)
+	case "emulators.stop":
+		return s.emulatorsStop(ctx)
 	case "actions.invoke":
 		var request struct {
 			ActionID string `json:"actionId"`
@@ -2137,7 +2143,7 @@ func (s *Service) emulatorsList() []models.EmulatorSummary {
 		Kind:       "docker",
 		Status:     models.EmulatorStatusNotConfigured,
 		Summary:    "Azure local emulator is not yet implemented.",
-		Details:    []models.DetailField{
+		Details: []models.DetailField{
 			{Label: "Image", Value: "floci/floci-az:latest"},
 			{Label: "Status", Value: "Planned for future slice"},
 		},
@@ -2161,4 +2167,18 @@ func (s *Service) emulatorsPrepareProfile() (map[string]string, error) {
 		"credPath": s.settings.LocalConfigDir + "/aws/credentials",
 		"endpoint": "http://localhost:4566",
 	}, nil
+}
+
+func (s *Service) emulatorsStart(ctx context.Context) (models.LocalStackStatus, error) {
+	if s.localstackMgr == nil {
+		return models.LocalStackStatus{}, errors.New("LocalStack manager not available")
+	}
+	return s.localstackMgr.Start(ctx)
+}
+
+func (s *Service) emulatorsStop(ctx context.Context) (models.LocalStackStatus, error) {
+	if s.localstackMgr == nil {
+		return models.LocalStackStatus{}, errors.New("LocalStack manager not available")
+	}
+	return s.localstackMgr.Stop(ctx)
 }

@@ -99,6 +99,41 @@ vi.mock("./lib/backend", () => ({
         return workspaceFixture.dockerRuntime;
       case "docker.resources.list":
         return workspaceFixture.dockerResources;
+      case "emulators.prepareProfile":
+        workspaceFixture = {
+          ...workspaceFixture,
+          localConfigArtifacts: workspaceFixture.localConfigArtifacts.map((artifact) =>
+            artifact.providerId === "aws"
+              ? { ...artifact, status: "available", summary: "App-managed LocalStack profile is prepared." }
+              : artifact,
+          ),
+        };
+        return {
+          profile: "cloudsprocket-localstack",
+          config: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config/aws/config",
+          credPath: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config/aws/credentials",
+          endpoint: "http://localhost:4566",
+        };
+      case "emulators.start":
+        workspaceFixture = {
+          ...workspaceFixture,
+          emulatorSummaries: workspaceFixture.emulatorSummaries.map((emulator) =>
+            emulator.emulatorId === "localstack"
+              ? { ...emulator, status: "running", summary: "LocalStack is running at http://localhost:4566." }
+              : emulator,
+          ),
+        };
+        return workspaceFixture.emulatorSummaries[0];
+      case "emulators.stop":
+        workspaceFixture = {
+          ...workspaceFixture,
+          emulatorSummaries: workspaceFixture.emulatorSummaries.map((emulator) =>
+            emulator.emulatorId === "localstack"
+              ? { ...emulator, status: "stopped", summary: "LocalStack container is present but not running." }
+              : emulator,
+          ),
+        };
+        return workspaceFixture.emulatorSummaries[0];
       case "logs.list":
         return logFixtures;
       case "actions.invoke":
@@ -446,10 +481,38 @@ describe("App", () => {
     expect(await screen.findByText("Managed Docker Resources")).toBeInTheDocument();
     expect(await screen.findByText("Local Config Artifacts")).toBeInTheDocument();
     expect(await screen.findByText("LocalStack")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prepare Profile" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
     expect(
       await screen.findByText(/cloudsprocket-workspace\.db/i),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Unlock" })).toBeInTheDocument();
+  });
+
+  it("starts and stops LocalStack from the workspace overview", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+      ],
+    };
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start" }));
+    expect(await screen.findByText("LocalStack is running at http://localhost:4566.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    expect(await screen.findByText("LocalStack container is present but not running.")).toBeInTheDocument();
   });
 
   it("applies S3 prefix filtering and renders selected object metadata", async () => {

@@ -3,11 +3,17 @@ package localstack
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/netip"
 	"os"
+	"path/filepath"
+	"time"
 
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/dockerruntime"
 	"cloudsprocket/backend/daemon/internal/models"
+	containerapi "github.com/moby/moby/api/types/container"
+	networkapi "github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 )
 
@@ -15,6 +21,7 @@ const (
 	containerName     = "cloudsprocket-localstack"
 	containerImage    = "localstack/localstack:latest"
 	containerPort     = "4566"
+	containerPortSpec = "4566/tcp"
 	profileName       = "cloudsprocket-localstack"
 	managedLabelKey   = "com.cloudsprocket.managed"
 	managedLabelValue = "true"
@@ -22,56 +29,162 @@ const (
 	projectLabelValue = "cloud-sprocket"
 )
 
+type dockerClient interface {
+	ContainerCreate(ctx context.Context, options client.ContainerCreateOptions) (client.ContainerCreateResult, error)
+	ContainerList(ctx context.Context, options client.ContainerListOptions) (client.ContainerListResult, error)
+	ContainerStart(ctx context.Context, container string, options client.ContainerStartOptions) (client.ContainerStartResult, error)
+	ContainerStop(ctx context.Context, container string, options client.ContainerStopOptions) (client.ContainerStopResult, error)
+	ImagePull(ctx context.Context, ref string, options client.ImagePullOptions) (client.ImagePullResponse, error)
+	Close() error
+}
+
+type dockerClientFactory func(host string) (dockerClient, error)
+
 // Manager handles LocalStack emulator status and managed AWS profile creation.
 type Manager struct {
-	settings config.Settings
+	settings       config.Settings
+	newClient      dockerClientFactory
+	httpClient     *http.Client
+	healthEndpoint string
 }
 
 func NewManager(settings config.Settings) *Manager {
-	return &Manager{settings: settings}
+	return &Manager{
+		settings: settings,
+		newClient: func(host string) (dockerClient, error) {
+			return client.New(client.WithHost(host), client.WithAPIVersionNegotiation())
+		},
+		httpClient:     &http.Client{Timeout: 800 * time.Millisecond},
+		healthEndpoint: "http://localhost:" + containerPort + "/_localstack/health",
+	}
 }
 
 // Status returns the current LocalStack emulator status.
 func (m *Manager) Status(ctx context.Context) (models.LocalStackStatus, error) {
+	api, unavailable, err := m.dockerClient()
+	if err != nil {
+		return unavailable, nil
+	}
+	defer api.Close()
+
+	return m.statusWithClient(ctx, api), nil
+}
+
+// Start ensures the managed LocalStack container exists and is running.
+func (m *Manager) Start(ctx context.Context) (models.LocalStackStatus, error) {
+	api, unavailable, err := m.dockerClient()
+	if err != nil {
+		return unavailable, err
+	}
+	defer api.Close()
+
+	containers, err := m.managedContainers(ctx, api)
+	if err != nil {
+		return m.errorStatus("Failed to query Docker containers: " + err.Error()), err
+	}
+	if len(containers.Items) > 0 {
+		container := containers.Items[0]
+		if container.State != "running" {
+			if _, err := api.ContainerStart(ctx, container.ID, client.ContainerStartOptions{}); err != nil {
+				return m.errorStatus("Failed to start LocalStack container: " + err.Error()), err
+			}
+		}
+		return m.statusWithClient(ctx, api), nil
+	}
+
+	if err := m.pullImage(ctx, api); err != nil {
+		return m.errorStatus("Failed to pull LocalStack image: " + err.Error()), err
+	}
+
+	port, err := networkapi.ParsePort(containerPortSpec)
+	if err != nil {
+		return m.errorStatus("Failed to configure LocalStack port: " + err.Error()), err
+	}
+	hostIP := netip.MustParseAddr("127.0.0.1")
+	_, err = api.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Name: containerName,
+		Config: &containerapi.Config{
+			Image:        containerImage,
+			ExposedPorts: networkapi.PortSet{port: struct{}{}},
+			Labels:       managedLabels(),
+		},
+		HostConfig: &containerapi.HostConfig{
+			PortBindings: networkapi.PortMap{
+				port: []networkapi.PortBinding{{
+					HostIP:   hostIP,
+					HostPort: containerPort,
+				}},
+			},
+			RestartPolicy: containerapi.RestartPolicy{Name: containerapi.RestartPolicyDisabled},
+		},
+	})
+	if err != nil {
+		return m.errorStatus("Failed to create LocalStack container: " + err.Error()), err
+	}
+	if _, err := api.ContainerStart(ctx, containerName, client.ContainerStartOptions{}); err != nil {
+		return m.errorStatus("Failed to start LocalStack container: " + err.Error()), err
+	}
+	return m.statusWithClient(ctx, api), nil
+}
+
+// Stop stops the managed LocalStack container if it exists.
+func (m *Manager) Stop(ctx context.Context) (models.LocalStackStatus, error) {
+	api, unavailable, err := m.dockerClient()
+	if err != nil {
+		return unavailable, err
+	}
+	defer api.Close()
+
+	containers, err := m.managedContainers(ctx, api)
+	if err != nil {
+		return m.errorStatus("Failed to query Docker containers: " + err.Error()), err
+	}
+	if len(containers.Items) == 0 {
+		return m.statusWithClient(ctx, api), nil
+	}
+
+	container := containers.Items[0]
+	if container.State == "running" {
+		timeoutSeconds := 10
+		if _, err := api.ContainerStop(ctx, container.ID, client.ContainerStopOptions{Timeout: &timeoutSeconds}); err != nil {
+			return m.errorStatus("Failed to stop LocalStack container: " + err.Error()), err
+		}
+	}
+	return m.statusWithClient(ctx, api), nil
+}
+
+func (m *Manager) dockerClient() (dockerClient, models.LocalStackStatus, error) {
 	host, _ := dockerruntime.ResolveDockerHost(m.settings)
 	if host == "" {
-		return models.LocalStackStatus{
+		return nil, models.LocalStackStatus{
 			EmulatorID: "localstack",
 			ProviderID: "aws",
 			Label:      "LocalStack",
 			Kind:       "docker",
 			Status:     models.EmulatorStatusNotConfigured,
 			Summary:    "Docker is not available on this system.",
-		}, nil
+		}, fmt.Errorf("docker host is not configured")
 	}
 
-	api, err := client.New(client.WithHost(host), client.WithAPIVersionNegotiation())
+	api, err := m.newClient(host)
 	if err != nil {
-		return models.LocalStackStatus{
-			EmulatorID: "localstack",
-			ProviderID: "aws",
-			Label:      "LocalStack",
-			Kind:       "docker",
-			Status:     models.EmulatorStatusNotConfigured,
-			Summary:    "Failed to connect to Docker: " + err.Error(),
-		}, nil
+		return nil, m.errorStatus("Failed to connect to Docker: " + err.Error()), err
 	}
-	defer api.Close()
+	return api, models.LocalStackStatus{}, nil
+}
 
+func (m *Manager) managedContainers(ctx context.Context, api dockerClient) (client.ContainerListResult, error) {
 	filters := client.Filters{}
 	filters.Add("label", managedLabelKey+"="+managedLabelValue)
 	filters.Add("label", projectLabelKey+"="+projectLabelValue)
+	filters.Add("name", containerName)
+	return api.ContainerList(ctx, client.ContainerListOptions{All: true, Filters: filters})
+}
 
-	containers, err := api.ContainerList(ctx, client.ContainerListOptions{All: true, Filters: filters})
+func (m *Manager) statusWithClient(ctx context.Context, api dockerClient) models.LocalStackStatus {
+	containers, err := m.managedContainers(ctx, api)
 	if err != nil {
-		return models.LocalStackStatus{
-			EmulatorID: "localstack",
-			ProviderID: "aws",
-			Label:      "LocalStack",
-			Kind:       "docker",
-			Status:     models.EmulatorStatusNotConfigured,
-			Summary:    "Failed to query Docker containers: " + err.Error(),
-		}, nil
+		return m.errorStatus("Failed to query Docker containers: " + err.Error())
 	}
 
 	if len(containers.Items) == 0 {
@@ -103,7 +216,7 @@ func (m *Manager) Status(ctx context.Context) (models.LocalStackStatus, error) {
 				{Label: "Managed Profile", Value: profileName},
 				{Label: "Profile Ready", Value: fmt.Sprintf("%v", profileReady)},
 			},
-		}, nil
+		}
 	}
 
 	// Container exists - check state
@@ -114,22 +227,26 @@ func (m *Manager) Status(ctx context.Context) (models.LocalStackStatus, error) {
 	if running {
 		status = models.EmulatorStatusRunning
 		summary = "LocalStack is running at http://localhost:4566"
+		if err := m.healthCheck(ctx); err != nil {
+			status = models.EmulatorStatusUnhealthy
+			summary = "LocalStack container is running but health check failed: " + err.Error()
+		}
 	}
 
 	return models.LocalStackStatus{
-		EmulatorID:   "localstack",
-		ProviderID:   "aws",
-		Label:        "LocalStack",
-		Kind:         "docker",
-		Status:       status,
-		Summary:      summary,
-		ContainerID:  container.ID,
-		Image:        container.Image,
-		Port:         containerPort,
-		Endpoint:     "http://localhost:" + containerPort,
-		ProfileName:  profileName,
-		ConfigPath:   m.localConfigPath("config"),
-		CredsPath:    m.localConfigPath("credentials"),
+		EmulatorID:  "localstack",
+		ProviderID:  "aws",
+		Label:       "LocalStack",
+		Kind:        "docker",
+		Status:      status,
+		Summary:     summary,
+		ContainerID: container.ID,
+		Image:       container.Image,
+		Port:        containerPort,
+		Endpoint:    "http://localhost:" + containerPort,
+		ProfileName: profileName,
+		ConfigPath:  m.localConfigPath("config"),
+		CredsPath:   m.localConfigPath("credentials"),
 		Details: []models.DetailField{
 			{Label: "Container ID", Value: truncateID(container.ID)},
 			{Label: "Image", Value: container.Image},
@@ -138,7 +255,43 @@ func (m *Manager) Status(ctx context.Context) (models.LocalStackStatus, error) {
 			{Label: "Endpoint", Value: "http://localhost:" + containerPort},
 			{Label: "Managed Profile", Value: profileName},
 		},
-	}, nil
+	}
+}
+
+func (m *Manager) errorStatus(summary string) models.LocalStackStatus {
+	return models.LocalStackStatus{
+		EmulatorID: "localstack",
+		ProviderID: "aws",
+		Label:      "LocalStack",
+		Kind:       "docker",
+		Status:     models.EmulatorStatusNotConfigured,
+		Summary:    summary,
+	}
+}
+
+func (m *Manager) pullImage(ctx context.Context, api dockerClient) error {
+	response, err := api.ImagePull(ctx, containerImage, client.ImagePullOptions{})
+	if err != nil {
+		return err
+	}
+	defer response.Close()
+	return response.Wait(ctx)
+}
+
+func (m *Manager) healthCheck(ctx context.Context) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, m.healthEndpoint, nil)
+	if err != nil {
+		return err
+	}
+	response, err := m.httpClient.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return fmt.Errorf("health endpoint returned HTTP %d", response.StatusCode)
+	}
+	return nil
 }
 
 // EnsureManagedProfile creates the app-managed AWS config and credentials files for LocalStack.
@@ -180,11 +333,11 @@ func (m *Manager) managedProfileExists(name string) bool {
 }
 
 func (m *Manager) localAWSConfigDir() string {
-	return m.settings.LocalConfigDir + "/aws"
+	return filepath.Join(m.settings.LocalConfigDir, "aws")
 }
 
 func (m *Manager) localConfigPath(name string) string {
-	return m.localAWSConfigDir() + "/" + name
+	return filepath.Join(m.localAWSConfigDir(), name)
 }
 
 func truncateID(id string) string {
@@ -192,4 +345,11 @@ func truncateID(id string) string {
 		return id[:12]
 	}
 	return id
+}
+
+func managedLabels() map[string]string {
+	return map[string]string{
+		managedLabelKey: managedLabelValue,
+		projectLabelKey: projectLabelValue,
+	}
 }

@@ -71,6 +71,7 @@ type Props = {
   onToggleSplitPanel: () => void;
   onRefreshDiscovery: () => void;
   onRefreshDockerRuntime: () => void;
+  onInvokeLocalStackAction: (action: "prepareProfile" | "start" | "stop") => void;
   onUnlockSession: () => void;
   onToggleSensitiveValues: () => void;
   onInvokeWorkspaceAction: (actionId: "refresh") => void;
@@ -251,6 +252,7 @@ export default function WorkspaceView({
   onToggleSplitPanel,
   onRefreshDiscovery,
   onRefreshDockerRuntime,
+  onInvokeLocalStackAction,
   onUnlockSession,
   onToggleSensitiveValues,
   onInvokeWorkspaceAction,
@@ -537,6 +539,37 @@ export default function WorkspaceView({
               <Box variant="p">{emulator.summary}</Box>
               <Box color="text-body-secondary">{emulator.providerId.toUpperCase()} via {emulator.kind}</Box>
               {renderDetailFields(emulator.details, "No emulator details are available yet.", showSensitiveValues)}
+              {emulator.emulatorId === "localstack" ? (
+                <SpaceBetween
+                  size="xs"
+                  direction="horizontal"
+                >
+                  <Button
+                    onClick={() => onInvokeLocalStackAction("prepareProfile")}
+                  >
+                    Prepare Profile
+                  </Button>
+                  <Button
+                    disabled={
+                      !workspace.dockerRuntime.reachable ||
+                      emulator.status === "running" ||
+                      emulator.status === "unhealthy"
+                    }
+                    onClick={() => onInvokeLocalStackAction("start")}
+                  >
+                    Start
+                  </Button>
+                  <Button
+                    disabled={
+                      !workspace.dockerRuntime.reachable ||
+                      (emulator.status !== "running" && emulator.status !== "unhealthy")
+                    }
+                    onClick={() => onInvokeLocalStackAction("stop")}
+                  >
+                    Stop
+                  </Button>
+                </SpaceBetween>
+              ) : null}
             </div>
           ))}
         </SpaceBetween>

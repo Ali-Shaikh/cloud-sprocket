@@ -1,109 +1,69 @@
 # Checkpoint
 
-- Date: `2026-05-18`
+- Date: `2026-05-26`
 - Branch: `feat/local-emulator-foundation`
-- Head: `27f04d8`
-- Working tree: local changes present
-- Status: local emulator foundation and read-only Docker runtime slices committed and verified on `feat/local-emulator-foundation`
+- Head after local commit: `feat: add LocalStack runtime controls`
+- Working tree: local runtime work committed; unrelated untracked image artefacts still present
+- Status: LocalStack start and stop wiring is implemented and verified locally.
 
 ## Current State
 
-- `CHECKPOINT.local.md` is the detailed local working log; this file stays compact as the shared resume point.
-- Active branch rule: create a feature/bug branch first and do not commit directly to `dev`.
-- Current branch checked out: `feat/local-emulator-foundation`.
-- Latest completed release work in history is `0.1.17`.
-- Latest merged feature work on `dev` is PR `#18` for Azure inventory workspace views.
+- Branch is `feat/local-emulator-foundation`, tracking `origin/feat/local-emulator-foundation`.
+- Existing branch work already had runtime foundation models, Docker runtime discovery, managed Docker resources, LocalStack status, and LocalStack managed profile preparation.
+- This resume added the next narrow runtime slice:
+  - backend `emulators.start`
+  - backend `emulators.stop`
+  - LocalStack Docker container create, image pull, start, stop, and health check support
+  - frontend Overview controls for `Prepare Profile`, `Start`, and `Stop`
+  - browser mock backend support for LocalStack start and stop
+  - backend and frontend tests for the new flow
+- Commit author correction completed:
+  - rewrote the branch commits while preserving the original branch base at `776ede5`
+  - corrected the two `ali@example.com` commits to `Ali Shaikh <me@alishaikh.net>`
+  - verified `origin/dev..HEAD` has no `ali@example.com` author or committer emails
+  - branch now diverges from `origin/feat/local-emulator-foundation` and will need a force-with-lease push when ready
+- Replaced the previous top `wip` commit with `feat: add LocalStack runtime controls`, authored and committed by `Ali Shaikh <me@alishaikh.net>`.
 
-## Latest Verified State
+## Files Changed In This Resume
 
-- `pnpm --dir apps/desktop test` passed.
-- `tsc --noEmit` passed from `apps/desktop`.
+- `backend/daemon/internal/localstack/manager.go`
+- `backend/daemon/internal/localstack/manager_test.go`
+- `backend/daemon/internal/app/service.go`
+- `apps/desktop/src/App.tsx`
+- `apps/desktop/src/views/WorkspaceView.tsx`
+- `apps/desktop/src/lib/backend.ts`
+- `apps/desktop/src/App.test.tsx`
+- `CHECKPOINT.md`
+
+## Verification On 2026-05-26
+
 - `go -C backend/daemon test ./...` passed.
-- `GOFLAGS=-buildvcs=false pnpm --dir apps/desktop build:desktop:exe` passed locally.
+- `pnpm --dir apps/desktop test` passed, 12 tests.
 - `pnpm run typecheck:desktop` passed.
-- `go -C backend/daemon test ./...` passed again after the CI follow-up edits.
-- `pnpm run typecheck:desktop` passed again on `2026-05-15` after resuming.
-- `go -C backend/daemon test ./...` passed after updating `modernc.org/sqlite` to `v1.50.1`.
-- `pnpm --dir apps/desktop test` passed after active dependency updates, including the major Vite toolchain refresh.
-- `pnpm run typecheck:desktop` passed after active dependency updates, including TypeScript `6.0.3`.
-- `GOFLAGS=-buildvcs=false pnpm --dir apps/desktop build:desktop:exe` passed after Tauri `2.11.x`, Vite `8.0.13`, Vitest `4.1.6`, jsdom `29.1.1`, pnpm `11.1.2`, and direct `thiserror` `2` updates.
-- `CI=true pnpm install --frozen-lockfile` passed after allowing the `esbuild` install script required by `pnpm` `11.1.2`.
-- `pnpm run typecheck:desktop` passed on `feat/ui-shell-ia-refresh`.
-- `pnpm --dir apps/desktop test` passed on `feat/ui-shell-ia-refresh`.
-- `go -C backend/daemon test ./...` passed on `feat/ui-shell-ia-refresh`.
-- `GOFLAGS=-buildvcs=false pnpm --dir apps/desktop build:desktop:exe` passed on `feat/ui-shell-ia-refresh` and refreshed the Windows verification executable.
-- `pnpm run typecheck:desktop` passed on `feat/azure-workspace-foundation`.
-- `go -C backend/daemon test ./...` passed on `feat/azure-workspace-foundation`.
-- `GOFLAGS=-buildvcs=false pnpm --dir apps/desktop build:desktop:exe` passed on `feat/azure-workspace-foundation` and refreshed the Windows verification executable.
-- `pnpm --dir apps/desktop test` passed after Azure Resource Groups and Virtual Machines views were completed.
-- `go -C backend/daemon test ./...` passed on `feat/local-emulator-foundation` after adding runtime-mode, Docker diagnostics, emulator summaries, and local-config artifact foundations.
-- `pnpm --dir apps/desktop test` passed on `feat/local-emulator-foundation`.
-- `pnpm run typecheck:desktop` passed on `feat/local-emulator-foundation`.
-- `GOFLAGS=-buildvcs=false pnpm --dir apps/desktop build:desktop:exe` passed on `feat/local-emulator-foundation` and refreshed the local verification executable.
-- `go -C backend/daemon test ./...` passed again on `feat/local-emulator-foundation` after adding the read-only Docker runtime subsystem.
-- `pnpm --dir apps/desktop test` passed again on `feat/local-emulator-foundation` after surfacing live Docker runtime state and managed Docker resources.
-- `pnpm run typecheck:desktop` passed again on `feat/local-emulator-foundation` after the Docker runtime UI updates.
-- `GOFLAGS=-buildvcs=false pnpm --dir apps/desktop build:desktop:exe` passed again on `feat/local-emulator-foundation` after the Docker runtime slice.
+- Browser verification passed against local Vite:
+  - workspace locked successfully
+  - LocalStack card rendered `Prepare Profile`, `Start`, and disabled `Stop`
+  - clicking `Start` changed LocalStack to running and enabled `Stop`
+  - clicking `Stop` returned LocalStack to stopped and disabled `Stop`
+- Re-ran the same automated checks after tightening button gating for `unhealthy` LocalStack containers.
 
-## Open Notes
+## Notes
 
-- Local release bundle build hit Windows Installer service validation limits in this sandbox at WiX `light.exe`.
-- Earlier dependency PR CI failures traced back to the already-fixed Tauri RGBA icon issue, not the dependency bumps themselves.
-- Remaining higher-value parity gaps versus the archived PySide app are provider actions such as AWS `Who Am I`, AWS SSO login/logout, config opening, export snippet copy, clearer discovery warnings, and fuller Azure/GCP action parity.
-- PR `#18` `feat: add azure inventory workspace views` is now merged into `dev`.
-- New planning track in progress:
-  - Goal: let users start and manage LocalStack for AWS and `floci-az` for Azure from the app, with Docker controls and app-assisted local config creation.
-  - Recommended architecture so far: keep emulator lifecycle, Docker access, health checks, and config mutation inside the Go sidecar; the Tauri frontend should send only high-level intents.
-  - Recommended provider model so far: treat LocalStack as AWS local mode and `floci-az` as Azure local mode rather than inventing new top-level providers.
-  - Chosen safety model: generate dedicated local-only profiles, snippets, or env files and avoid mutating the user's default real-cloud profiles.
-  - Known AWS advantage: current daemon already supports profile `endpoint_url` and guarded local write actions.
-  - Known Azure gap: current Azure integration depends on Azure CLI discovery and needs a new emulator-aware configuration and inventory path.
-  - Known platform gap: there is no Docker orchestration layer in the app yet; this must be added as a new daemon subsystem with strict resource allow-lists and labelled ownership.
-- Current branch foundation work:
-  - Branch: `feat/local-emulator-foundation`
-  - Drafted backlog and branch plan in `LOCAL_EMULATOR_FOUNDATION_PLAN.md`.
-  - Drafted the first-slice daemon API and TypeScript model shape before coding.
-  - First implementation slice stays additive by extending existing `app.settings.get` and `workspace.get` snapshots rather than adding new RPC methods.
-  - Completed first implementation slice:
-    - added runtime-mode, Docker diagnostics, emulator summary, and local-config artifact foundation models
-    - added app-owned local runtime paths in backend settings and runtime directory preparation
-    - extended workspace Overview with Docker Diagnostics, Local Emulators, and Local Config Artifacts panels
-    - updated the browser mock backend and empty-state snapshots for the new contract
-    - added backend and frontend test coverage for the new snapshot fields
-  - Planned first-slice files:
-    - `backend/daemon/internal/models/models.go`
-    - `backend/daemon/internal/config/settings.go`
-    - `backend/daemon/internal/app/service.go`
-    - `apps/desktop/src/types/backend.ts`
-    - `apps/desktop/src/App.tsx`
-    - `apps/desktop/src/lib/backend.ts`
-    - `apps/desktop/src/views/WorkspaceView.tsx`
-- Current branch follow-on Docker runtime work:
-  - Added a read-only Docker runtime subsystem in `backend/daemon/internal/dockerruntime/` using the current Moby client modules.
-  - Added dedicated backend methods:
-    - `docker.runtime.get`
-    - `docker.resources.list`
-  - `workspace.get` now includes live Docker runtime state plus CloudSprocket-managed Docker resources.
-  - Overview now shows:
-    - `Docker Runtime`
-    - `Managed Docker Resources`
-    - targeted `Refresh Docker` control
-  - Current committed branch history:
-    - `e414ce1` `feat: add local runtime foundation models`
-    - `b96e5ad` `feat: surface local runtime foundations in desktop shell`
-    - `0d0eaaf` `test: cover local runtime foundation snapshots`
-    - `3492f46` `feat: add docker runtime snapshot models`
-    - `bcf459d` `feat: add docker runtime backend service`
-    - `9ab2727` `feat: surface docker runtime readiness in workspace overview`
-    - `27f04d8` `test: cover docker runtime readiness and resources`
-- Latest dependency refresh merged on `dev`:
-  - Active app stack only; archived `legacy/pyside-v1/` dependency updates intentionally left out.
-  - Applied low-risk active updates: Cloudscape patch updates, React `19.2.6`, Tauri JS and Rust `2.11.x`, tokio `1.52.3`, Vite `7.3.3`, and `modernc.org/sqlite` `v1.50.1`.
-  - Applied major toolchain updates that verified cleanly: `@vitejs/plugin-react` `6.0.2`, `vite` `8.0.13`, `vitest` `4.1.6`, `jsdom` `29.1.1`, `typescript` `6.0.3`, and workspace `pnpm` `11.1.2`.
-  - Updated direct Rust dependency `thiserror` from `1` to `2`; transitive `thiserror` `1` remains in the graph where required by upstream crates.
-  - Added `pnpm-workspace.yaml` `allowBuilds.esbuild: true` so CI can install successfully with `pnpm` `11`.
-- Files changed and not yet committed:
-  - `CHECKPOINT.md`
-  - `CHECKPOINT.local.md`
-- Likely next step on resume:
-  - Start the LocalStack runtime slice on top of the new Docker runtime subsystem and managed local-config foundations.
+- The first type-check failure from the previous checkpoint cleared after dependencies were materialised by the desktop test run. No TypeScript config change was required.
+- Go tests needed elevated execution because the sandbox could not access the local Go build cache.
+- LocalStack image remains `localstack/localstack:latest` because that was already the branch default. A later hardening slice should replace this with a configured tag or digest policy.
+- LocalStack health currently probes `http://localhost:4566/_localstack/health` with a short timeout.
+- Start binds LocalStack to `127.0.0.1:4566` and only manages containers with the CloudSprocket ownership labels.
+- The UI allows `Stop` for both `running` and `unhealthy` LocalStack states because both imply a managed container is present.
+
+## Left To Do
+
+1. Decide whether to keep `latest` or introduce a configured LocalStack image tag before PR.
+2. Add user-facing error/status copy for image pull, create, start, stop, and health failures if the current summaries feel too terse in the desktop app.
+3. Consider adding a structured emulator action result instead of returning raw `LocalStackStatus` for start and stop.
+4. Refresh `LOCAL_EMULATOR_FOUNDATION_PLAN.md`; it still describes this branch as foundation-only and is now stale.
+5. Optional final build gate before PR: `GOFLAGS=-buildvcs=false pnpm --dir apps/desktop build:desktop:exe`.
+
+## Resume Point
+
+- Continue with LocalStack hardening only if needed for the branch. The next concrete code step should be image version policy or action result/error UX, not Azure local runtime.
