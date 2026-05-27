@@ -861,6 +861,17 @@ export default function App() {
     });
   }
 
+  async function invokeLocalStackAction(action: "prepareProfile" | "start" | "stop"): Promise<void> {
+    const method =
+      action === "prepareProfile"
+        ? "emulators.prepareProfile"
+        : action === "start"
+          ? "emulators.start"
+          : "emulators.stop";
+    await backendRequest<unknown>(method);
+    await loadWorkspace(session);
+  }
+
   const activityDrawer = splitPanelOpen ? (
     <aside
       className="activity-drawer"
@@ -906,6 +917,9 @@ export default function App() {
       }}
       onRefreshDockerRuntime={() => {
         void refreshDockerRuntime();
+      }}
+      onInvokeLocalStackAction={(action) => {
+        void invokeLocalStackAction(action);
       }}
       onUnlockSession={() => {
         void mutateSession("session.unlock");
