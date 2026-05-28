@@ -72,6 +72,12 @@ type Props = {
   onRefreshDiscovery: () => void;
   onRefreshDockerRuntime: () => void;
   onInvokeLocalStackAction: (action: "prepareProfile" | "start" | "stop") => void;
+  localStackAuthToken: string;
+  onLocalStackAuthTokenChange: (value: string) => void;
+  localStackPersistence: boolean;
+  onLocalStackPersistenceChange: (value: boolean) => void;
+  localStackEnvironmentText: string;
+  onLocalStackEnvironmentTextChange: (value: string) => void;
   onUnlockSession: () => void;
   onToggleSensitiveValues: () => void;
   onInvokeWorkspaceAction: (actionId: "refresh") => void;
@@ -253,6 +259,12 @@ export default function WorkspaceView({
   onRefreshDiscovery,
   onRefreshDockerRuntime,
   onInvokeLocalStackAction,
+  localStackAuthToken,
+  onLocalStackAuthTokenChange,
+  localStackPersistence,
+  onLocalStackPersistenceChange,
+  localStackEnvironmentText,
+  onLocalStackEnvironmentTextChange,
   onUnlockSession,
   onToggleSensitiveValues,
   onInvokeWorkspaceAction,
@@ -540,34 +552,66 @@ export default function WorkspaceView({
               <Box color="text-body-secondary">{emulator.providerId.toUpperCase()} via {emulator.kind}</Box>
               {renderDetailFields(emulator.details, "No emulator details are available yet.", showSensitiveValues)}
               {emulator.emulatorId === "localstack" ? (
-                <SpaceBetween
-                  size="xs"
-                  direction="horizontal"
-                >
-                  <Button
-                    onClick={() => onInvokeLocalStackAction("prepareProfile")}
+                <SpaceBetween size="s">
+                  <div className="detail-grid">
+                    <div className="detail-card">
+                      <Box variant="awsui-key-label">LocalStack Auth Token</Box>
+                      <Input
+                        type="password"
+                        value={localStackAuthToken}
+                        placeholder="Paste token"
+                        ariaLabel="LocalStack auth token"
+                        onChange={({ detail }) => onLocalStackAuthTokenChange(detail.value)}
+                      />
+                    </div>
+                    <div className="detail-card">
+                      <Box variant="awsui-key-label">Persistence</Box>
+                      <Checkbox
+                        checked={localStackPersistence}
+                        onChange={({ detail }) => onLocalStackPersistenceChange(detail.checked)}
+                      >
+                        Enable persistence
+                      </Checkbox>
+                    </div>
+                    <div className="detail-card">
+                      <Box variant="awsui-key-label">Environment Variables</Box>
+                      <Textarea
+                        value={localStackEnvironmentText}
+                        placeholder="DEBUG=1"
+                        rows={3}
+                        onChange={({ detail }) => onLocalStackEnvironmentTextChange(detail.value)}
+                      />
+                    </div>
+                  </div>
+                  <SpaceBetween
+                    size="xs"
+                    direction="horizontal"
                   >
-                    Prepare Profile
-                  </Button>
-                  <Button
-                    disabled={
-                      !workspace.dockerRuntime.reachable ||
-                      emulator.status === "running" ||
-                      emulator.status === "unhealthy"
-                    }
-                    onClick={() => onInvokeLocalStackAction("start")}
-                  >
-                    Start
-                  </Button>
-                  <Button
-                    disabled={
-                      !workspace.dockerRuntime.reachable ||
-                      (emulator.status !== "running" && emulator.status !== "unhealthy")
-                    }
-                    onClick={() => onInvokeLocalStackAction("stop")}
-                  >
-                    Stop
-                  </Button>
+                    <Button
+                      onClick={() => onInvokeLocalStackAction("prepareProfile")}
+                    >
+                      Prepare Profile
+                    </Button>
+                    <Button
+                      disabled={
+                        !workspace.dockerRuntime.reachable ||
+                        emulator.status === "running" ||
+                        emulator.status === "unhealthy"
+                      }
+                      onClick={() => onInvokeLocalStackAction("start")}
+                    >
+                      Start
+                    </Button>
+                    <Button
+                      disabled={
+                        !workspace.dockerRuntime.reachable ||
+                        (emulator.status !== "running" && emulator.status !== "unhealthy")
+                      }
+                      onClick={() => onInvokeLocalStackAction("stop")}
+                    >
+                      Stop
+                    </Button>
+                  </SpaceBetween>
                 </SpaceBetween>
               ) : null}
             </div>

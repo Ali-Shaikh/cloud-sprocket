@@ -8,12 +8,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/models"
 	containerapi "github.com/moby/moby/api/types/container"
 	jsonstreamapi "github.com/moby/moby/api/types/jsonstream"
+	mountapi "github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/client"
 )
 
@@ -22,13 +24,17 @@ type stubDockerClient struct {
 	createCalls        int
 	startCalls         []string
 	stopCalls          []string
+	removeCalls        []string
 	pullCalls          []string
 	closeCalled        bool
 	containerListError error
 	createError        error
 	startError         error
 	stopError          error
+	removeError        error
 	pullError          error
+	lastCreateEnv      []string
+	lastCreateMounts   []mountapi.Mount
 }
 
 func (s *stubDockerClient) ContainerCreate(_ context.Context, options client.ContainerCreateOptions) (client.ContainerCreateResult, error) {
@@ -43,6 +49,8 @@ func (s *stubDockerClient) ContainerCreate(_ context.Context, options client.Con
 		State:  containerapi.StateCreated,
 		Status: "Created",
 	}}
+	s.lastCreateEnv = append([]string(nil), options.Config.Env...)
+	s.lastCreateMounts = append([]mountapi.Mount(nil), options.HostConfig.Mounts...)
 	return client.ContainerCreateResult{ID: "ctr-created"}, nil
 }
 
@@ -79,6 +87,21 @@ func (s *stubDockerClient) ContainerStop(_ context.Context, container string, _ 
 		}
 	}
 	return client.ContainerStopResult{}, nil
+}
+
+func (s *stubDockerClient) ContainerRemove(_ context.Context, container string, _ client.ContainerRemoveOptions) (client.ContainerRemoveResult, error) {
+	s.removeCalls = append(s.removeCalls, container)
+	if s.removeError != nil {
+		return client.ContainerRemoveResult{}, s.removeError
+	}
+	next := s.containers[:0]
+	for _, item := range s.containers {
+		if item.ID != container {
+			next = append(next, item)
+		}
+	}
+	s.containers = next
+	return client.ContainerRemoveResult{}, nil
 }
 
 func (s *stubDockerClient) ImagePull(_ context.Context, ref string, _ client.ImagePullOptions) (client.ImagePullResponse, error) {
@@ -125,6 +148,7 @@ func newTestManager(t *testing.T, stub *stubDockerClient) *Manager {
 	t.Cleanup(healthServer.Close)
 	return &Manager{
 		settings: settings,
+		image:    settings.LocalStackImage,
 		newClient: func(host string) (dockerClient, error) {
 			if host != "unix:///tmp/cloudsprocket-test-docker.sock" {
 				t.Fatalf("unexpected Docker host %s", host)
@@ -140,7 +164,7 @@ func TestStartCreatesAndStartsManagedContainer(t *testing.T) {
 	dockerClient := &stubDockerClient{}
 	manager := newTestManager(t, dockerClient)
 
-	status, err := manager.Start(context.Background())
+	status, err := manager.Start(context.Background(), models.LocalStackStartOptions{})
 	if err != nil {
 		t.Fatalf("expected start to succeed, got %v", err)
 	}
@@ -150,7 +174,7 @@ func TestStartCreatesAndStartsManagedContainer(t *testing.T) {
 	if dockerClient.createCalls != 1 {
 		t.Fatalf("expected one container create call, got %d", dockerClient.createCalls)
 	}
-	if len(dockerClient.pullCalls) != 1 || dockerClient.pullCalls[0] != containerImage {
+	if len(dockerClient.pullCalls) != 1 || dockerClient.pullCalls[0] != defaultImage {
 		t.Fatalf("expected LocalStack image pull, got %+v", dockerClient.pullCalls)
 	}
 	if len(dockerClient.startCalls) != 1 || dockerClient.startCalls[0] != containerName {
@@ -165,13 +189,13 @@ func TestStartReusesExistingStoppedContainer(t *testing.T) {
 	dockerClient := &stubDockerClient{containers: []containerapi.Summary{{
 		ID:     "ctr-123",
 		Names:  []string{"/" + containerName},
-		Image:  containerImage,
+		Image:  defaultImage,
 		State:  containerapi.StateExited,
 		Status: "Exited",
 	}}}
 	manager := newTestManager(t, dockerClient)
 
-	status, err := manager.Start(context.Background())
+	status, err := manager.Start(context.Background(), models.LocalStackStartOptions{})
 	if err != nil {
 		t.Fatalf("expected start to succeed, got %v", err)
 	}
@@ -190,7 +214,7 @@ func TestStopStopsRunningManagedContainer(t *testing.T) {
 	dockerClient := &stubDockerClient{containers: []containerapi.Summary{{
 		ID:     "ctr-123",
 		Names:  []string{"/" + containerName},
-		Image:  containerImage,
+		Image:  defaultImage,
 		State:  containerapi.StateRunning,
 		Status: "Up 1 second",
 	}}}
@@ -212,11 +236,117 @@ func TestStartReturnsDockerErrors(t *testing.T) {
 	dockerClient := &stubDockerClient{pullError: errors.New("pull failed")}
 	manager := newTestManager(t, dockerClient)
 
-	status, err := manager.Start(context.Background())
+	status, err := manager.Start(context.Background(), models.LocalStackStartOptions{})
 	if err == nil {
 		t.Fatalf("expected start error")
 	}
 	if status.Status != models.EmulatorStatusNotConfigured || status.Summary == "" {
 		t.Fatalf("expected error status, got %+v", status)
+	}
+}
+
+func TestStartUsesConfiguredImage(t *testing.T) {
+	dockerClient := &stubDockerClient{}
+	manager := newTestManager(t, dockerClient)
+	manager.image = "registry.example.com/localstack:2026.05.0"
+
+	status, err := manager.Start(context.Background(), models.LocalStackStartOptions{})
+	if err != nil {
+		t.Fatalf("expected start to succeed, got %v", err)
+	}
+	if status.Image != "registry.example.com/localstack:2026.05.0" {
+		t.Fatalf("expected status image to use configured image, got %+v", status)
+	}
+	if len(dockerClient.pullCalls) != 1 || dockerClient.pullCalls[0] != "registry.example.com/localstack:2026.05.0" {
+		t.Fatalf("expected configured image pull, got %+v", dockerClient.pullCalls)
+	}
+	if dockerClient.containers[0].Image != "registry.example.com/localstack:2026.05.0" {
+		t.Fatalf("expected created container to use configured image, got %+v", dockerClient.containers[0])
+	}
+}
+
+func TestStartReplacesStoppedContainerWithDifferentImage(t *testing.T) {
+	dockerClient := &stubDockerClient{containers: []containerapi.Summary{{
+		ID:     "ctr-old",
+		Names:  []string{"/" + containerName},
+		Image:  "localstack/localstack:latest",
+		State:  containerapi.StateExited,
+		Status: "Exited",
+	}}}
+	manager := newTestManager(t, dockerClient)
+
+	status, err := manager.Start(context.Background(), models.LocalStackStartOptions{})
+	if err != nil {
+		t.Fatalf("expected start to succeed, got %v", err)
+	}
+	if status.Image != defaultImage {
+		t.Fatalf("expected replacement container image, got %+v", status)
+	}
+	if len(dockerClient.removeCalls) != 1 || dockerClient.removeCalls[0] != "ctr-old" {
+		t.Fatalf("expected old container to be removed, got %+v", dockerClient.removeCalls)
+	}
+	if dockerClient.createCalls != 1 {
+		t.Fatalf("expected replacement container create, got %d", dockerClient.createCalls)
+	}
+}
+
+func TestStartPassesLocalStackAuthTokenWhenConfigured(t *testing.T) {
+	dockerClient := &stubDockerClient{}
+	manager := newTestManager(t, dockerClient)
+	manager.image = "localstack/localstack:2026.05.0"
+
+	if _, err := manager.Start(context.Background(), models.LocalStackStartOptions{AuthToken: "test-token"}); err != nil {
+		t.Fatalf("expected start to succeed, got %v", err)
+	}
+	if len(dockerClient.lastCreateEnv) != 1 || dockerClient.lastCreateEnv[0] != "LOCALSTACK_AUTH_TOKEN=test-token" {
+		t.Fatalf("expected auth token env to be passed to LocalStack, got %+v", dockerClient.lastCreateEnv)
+	}
+}
+
+func TestStartRecreatesStoppedContainerWhenAuthTokenProvided(t *testing.T) {
+	dockerClient := &stubDockerClient{containers: []containerapi.Summary{{
+		ID:     "ctr-stopped",
+		Names:  []string{"/" + containerName},
+		Image:  defaultImage,
+		State:  containerapi.StateExited,
+		Status: "Exited",
+	}}}
+	manager := newTestManager(t, dockerClient)
+
+	if _, err := manager.Start(context.Background(), models.LocalStackStartOptions{AuthToken: "test-token"}); err != nil {
+		t.Fatalf("expected start to succeed, got %v", err)
+	}
+	if len(dockerClient.removeCalls) != 1 || dockerClient.removeCalls[0] != "ctr-stopped" {
+		t.Fatalf("expected stopped container to be recreated for token env, got %+v", dockerClient.removeCalls)
+	}
+	if len(dockerClient.lastCreateEnv) != 1 || dockerClient.lastCreateEnv[0] != "LOCALSTACK_AUTH_TOKEN=test-token" {
+		t.Fatalf("expected auth token env on replacement container, got %+v", dockerClient.lastCreateEnv)
+	}
+}
+
+func TestStartConfiguresPersistenceAndExtraEnvironment(t *testing.T) {
+	dockerClient := &stubDockerClient{}
+	manager := newTestManager(t, dockerClient)
+
+	_, err := manager.Start(context.Background(), models.LocalStackStartOptions{
+		Persistence: true,
+		Environment: map[string]string{
+			"DEBUG":                 "1",
+			"bad-name":              "ignored",
+			"LOCALSTACK_AUTH_TOKEN": "ignored",
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected start to succeed, got %v", err)
+	}
+	expectedEnv := []string{"DEBUG=1", "PERSISTENCE=1"}
+	if !reflect.DeepEqual(dockerClient.lastCreateEnv, expectedEnv) {
+		t.Fatalf("expected persistence env, got %+v", dockerClient.lastCreateEnv)
+	}
+	if len(dockerClient.lastCreateMounts) != 1 {
+		t.Fatalf("expected persistence mount, got %+v", dockerClient.lastCreateMounts)
+	}
+	if dockerClient.lastCreateMounts[0].Target != "/var/lib/localstack" {
+		t.Fatalf("expected LocalStack state mount, got %+v", dockerClient.lastCreateMounts[0])
 	}
 }

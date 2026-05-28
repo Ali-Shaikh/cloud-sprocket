@@ -14,6 +14,7 @@ func TestFromEnvUsesWindowsOverrides(t *testing.T) {
 		"CLOUDSPROCKET_RUNTIME_MODE":       "local-emulator",
 		"CLOUDSPROCKET_LOCAL_CONFIG_DIR":   filepath.Join(home, "LocalProfiles"),
 		"CLOUDSPROCKET_EMULATOR_STATE_DIR": filepath.Join(home, "EmulatorState"),
+		"CLOUDSPROCKET_LOCALSTACK_IMAGE":   "registry.example.com/localstack:2026.05.0",
 		"AWS_CONFIG_FILE":                  filepath.Join(home, "custom", "config"),
 		"AWS_SHARED_CREDENTIALS_FILE":      filepath.Join(home, "custom", "credentials"),
 	}, "windows", home)
@@ -36,6 +37,9 @@ func TestFromEnvUsesWindowsOverrides(t *testing.T) {
 	if settings.EmulatorStateDir != filepath.Join(home, "EmulatorState") {
 		t.Fatalf("expected emulator state override, got %s", settings.EmulatorStateDir)
 	}
+	if settings.LocalStackImage != "registry.example.com/localstack:2026.05.0" {
+		t.Fatalf("expected LocalStack image override, got %s", settings.LocalStackImage)
+	}
 }
 
 func TestFromEnvUsesMacOSDefaults(t *testing.T) {
@@ -54,5 +58,8 @@ func TestFromEnvUsesMacOSDefaults(t *testing.T) {
 	}
 	if settings.EmulatorStateDir != filepath.Join(expectedConfigDir, "emulators") {
 		t.Fatalf("unexpected emulator state dir %s", settings.EmulatorStateDir)
+	}
+	if settings.LocalStackImage != "localstack/localstack:stable" {
+		t.Fatalf("unexpected LocalStack image %s", settings.LocalStackImage)
 	}
 }

@@ -339,6 +339,10 @@ export function renderRuntimeSettingsPanel(
           <Box variant="awsui-key-label">Emulator State Root</Box>
           <Box variant="code">{settings.emulatorStateDir || "Unavailable"}</Box>
         </div>
+        <div className="detail-card">
+          <Box variant="awsui-key-label">LocalStack Image</Box>
+          <Box variant="code">{settings.localStackImage || "localstack/localstack:stable"}</Box>
+        </div>
       </div>
     </Container>
   );
