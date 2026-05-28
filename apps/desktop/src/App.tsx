@@ -589,6 +589,7 @@ const emptySettings: AppSettingsSnapshot = {
   runtimeMode: "cloud",
   localConfigDir: "",
   emulatorStateDir: "",
+  localStackImage: "localstack/localstack:stable",
 };
 
 const emptyWorkspace: WorkspaceSnapshot = {
@@ -682,6 +683,9 @@ export default function App() {
   const [s3SignedUrlResult, setS3SignedUrlResult] = useState<AwsS3PresignResult>();
   const [s3UrlInspection, setS3UrlInspection] = useState<UrlInspection>();
   const [s3UrlValidation, setS3UrlValidation] = useState<UrlValidationResult>();
+  const [localStackAuthToken, setLocalStackAuthToken] = useState("");
+  const [localStackPersistence, setLocalStackPersistence] = useState(false);
+  const [localStackEnvironmentText, setLocalStackEnvironmentText] = useState("");
   const [ec2ActionStatus, setEC2ActionStatus] = useState("Select an EC2 instance to run lifecycle actions.");
   const [ec2ActionInFlight, setEC2ActionInFlight] = useState(false);
   const [ec2ActionHistory, setEC2ActionHistory] = useState<EC2ActionHistoryItem[]>([]);
@@ -1002,6 +1006,23 @@ export default function App() {
     });
   }
 
+  function localStackEnvironment(): Record<string, string> {
+    return Object.fromEntries(
+      localStackEnvironmentText
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const separator = line.indexOf("=");
+          if (separator < 1) {
+            return ["", ""] as const;
+          }
+          return [line.slice(0, separator).trim(), line.slice(separator + 1)] as const;
+        })
+        .filter(([key]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && key !== "LOCALSTACK_AUTH_TOKEN"),
+    );
+  }
+
   async function invokeLocalStackAction(action: "prepareProfile" | "start" | "stop"): Promise<void> {
     const method =
       action === "prepareProfile"
@@ -1009,7 +1030,18 @@ export default function App() {
         : action === "start"
           ? "emulators.start"
           : "emulators.stop";
-    await backendRequest<unknown>(method);
+    const startParams =
+      action === "start"
+        ? {
+          authToken: localStackAuthToken.trim(),
+          persistence: localStackPersistence,
+          environment: localStackEnvironment(),
+        }
+        : {};
+    await backendRequest<unknown>(
+      method,
+      startParams,
+    );
     await loadWorkspace(session);
   }
 
@@ -1062,6 +1094,12 @@ export default function App() {
       onInvokeLocalStackAction={(action) => {
         void invokeLocalStackAction(action);
       }}
+      localStackAuthToken={localStackAuthToken}
+      onLocalStackAuthTokenChange={setLocalStackAuthToken}
+      localStackPersistence={localStackPersistence}
+      onLocalStackPersistenceChange={setLocalStackPersistence}
+      localStackEnvironmentText={localStackEnvironmentText}
+      onLocalStackEnvironmentTextChange={setLocalStackEnvironmentText}
       onUnlockSession={() => {
         void mutateSession("session.unlock");
       }}

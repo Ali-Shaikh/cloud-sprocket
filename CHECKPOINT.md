@@ -1,10 +1,10 @@
 # Checkpoint
 
-- Date: `2026-05-27`
+- Date: `2026-05-28`
 - Branch: `feat/local-emulator-foundation`
-- Head after local commit: `feat: add LocalStack runtime controls`
-- Working tree: local runtime work and blank-screen fixes are committed; unrelated untracked image artefacts still present
-- Status: LocalStack start and stop wiring is implemented and verified locally. The built desktop app has been launched and verified through WebView debugging with visible locked workspace content.
+- Head after local commit: `fix: repair desktop event bridge rendering`
+- Working tree: LocalStack runtime work, blank-screen fixes, and image policy work are committed; unrelated untracked image artefacts may still be present
+- Status: LocalStack start and stop wiring is implemented and verified locally. The built desktop app has been launched and verified through WebView debugging with visible locked workspace content. LocalStack now defaults to `localstack/localstack:stable`, accepts an auth token before start, supports persistence, and supports `CLOUDSPROCKET_LOCALSTACK_IMAGE`.
 
 ## Current State
 
@@ -28,20 +28,49 @@
 - Reproduced the blank screen in the actual built app with WebView2 remote debugging. Fixed the production-only failures:
   - Tauri event names cannot contain `.`, so frontend event subscriptions and Rust event emission now bridge backend names like `state.changed` to Tauri names like `state:changed`.
   - Nested resource arrays such as EC2 security groups/tags and Azure tags are normalised before `WorkspaceView` renders.
+- Resumed implementation on 2026-05-28:
+  - checked current LocalStack Docker image, auth token, and persistence documentation
+  - kept the LocalStack default on the current `localstack/localstack:stable` release line
+  - added `CLOUDSPROCKET_LOCALSTACK_IMAGE` for pinned tags or registry mirrors
+  - added a desktop LocalStack auth token field; the token is passed to Docker only when starting LocalStack
+  - added a persistence toggle that sets `PERSISTENCE=1` and mounts app-owned state at `/var/lib/localstack`
+  - added a validated extra environment variable textarea for LocalStack start settings such as `DEBUG=1`
+  - surfaced the configured image in runtime settings and emulator summaries
+  - replaced the stale foundation-only plan with the current runtime plan
+- When the managed container exited with code `55`, Docker logs showed LocalStack license activation failed because no `LOCALSTACK_AUTH_TOKEN` was provided. The UI now collects the token before start, and the daemon recreates stopped managed containers when token or persistence settings need to be applied.
 
 ## Files Changed In This Resume
 
 - `backend/daemon/internal/localstack/manager.go`
 - `backend/daemon/internal/localstack/manager_test.go`
+- `backend/daemon/internal/config/settings.go`
+- `backend/daemon/internal/config/settings_test.go`
+- `backend/daemon/internal/models/models.go`
 - `backend/daemon/internal/app/service.go`
+- `backend/daemon/internal/app/service_test.go`
 - `apps/desktop/src/App.tsx`
 - `apps/desktop/src/views/WorkspaceView.tsx`
+- `apps/desktop/src/views/shared.tsx`
 - `apps/desktop/src/lib/backend.ts`
+- `apps/desktop/src/types/backend.ts`
 - `apps/desktop/src/App.test.tsx`
 - `apps/desktop/src-tauri/src/main.rs`
+- `LOCAL_EMULATOR_FOUNDATION_PLAN.md`
 - `CHECKPOINT.md`
 
-## Verification On 2026-05-27
+## Verification On 2026-05-28
+
+- `go -C backend/daemon test ./...` passed.
+- `pnpm run typecheck:desktop` passed.
+- `pnpm --dir apps/desktop test` passed, 14 tests. One parallel run timed out under load, then the same suite passed when rerun normally.
+- `pnpm run build:desktop:exe` passed and rebuilt `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe`.
+- After adding token, persistence, and extra env controls:
+  - `go -C backend/daemon test ./...` passed.
+  - `pnpm --dir apps/desktop test` passed, 14 tests.
+  - `pnpm run typecheck:desktop` passed.
+  - `pnpm run build:desktop:exe` passed.
+
+## Earlier Verification On 2026-05-27
 
 - `pnpm --dir apps/desktop test` passed, 14 tests.
 - `pnpm run typecheck:desktop` passed.
@@ -75,19 +104,19 @@
 - The first type-check failure from the previous checkpoint cleared after dependencies were materialised by the desktop test run. No TypeScript config change was required.
 - Go tests needed elevated execution because the sandbox could not access the local Go build cache.
 - The latest blank-screen fix touches the Tauri Rust bridge and frontend normalisation. The desktop build covered the Rust bridge compile path; Go daemon tests were not rerun because daemon code was not changed.
-- LocalStack image remains `localstack/localstack:latest` because that was already the branch default. A later hardening slice should replace this with a configured tag or digest policy.
+- LocalStack image now defaults to `localstack/localstack:stable`. Current LocalStack images require an auth token; the desktop app passes the entered token as `LOCALSTACK_AUTH_TOKEN` during container creation. Set `CLOUDSPROCKET_LOCALSTACK_IMAGE` to use a pinned tag or internal registry mirror.
 - LocalStack health currently probes `http://localhost:4566/_localstack/health` with a short timeout.
 - Start binds LocalStack to `127.0.0.1:4566` and only manages containers with the CloudSprocket ownership labels.
 - The UI allows `Stop` for both `running` and `unhealthy` LocalStack states because both imply a managed container is present.
 
 ## Left To Do
 
-1. Decide whether to keep `latest` or introduce a configured LocalStack image tag before PR.
+1. Verify LocalStack start with a valid auth token in the rebuilt executable.
 2. Add user-facing error/status copy for image pull, create, start, stop, and health failures if the current summaries feel too terse in the desktop app.
 3. Consider adding a structured emulator action result instead of returning raw `LocalStackStatus` for start and stop.
-4. Refresh `LOCAL_EMULATOR_FOUNDATION_PLAN.md`; it still describes this branch as foundation-only and is now stale.
-5. Optional final build gate before PR: `GOFLAGS=-buildvcs=false pnpm --dir apps/desktop build:desktop:exe`.
+4. Decide whether to squash the three blank-screen fix commits into the runtime-control commit before PR.
+5. Push with `--force-with-lease` because branch history was rewritten.
 
 ## Resume Point
 
-- The rebuilt app is currently launched for user testing. If it renders correctly, the next branch step is deciding whether LocalStack `latest` is acceptable before pushing the rewritten branch.
+- The next branch step is PR preparation: decide whether to squash fix commits, then push the rewritten branch with `--force-with-lease`.

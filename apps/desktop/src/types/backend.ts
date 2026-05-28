@@ -274,6 +274,7 @@ export interface AppSettingsSnapshot {
   runtimeMode: RuntimeMode;
   localConfigDir: string;
   emulatorStateDir: string;
+  localStackImage: string;
 }
 
 export interface StateChangedPayload {

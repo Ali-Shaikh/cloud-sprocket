@@ -284,6 +284,9 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	if workspace.RuntimeSettings.LocalConfigDir == "" || workspace.RuntimeSettings.EmulatorStateDir == "" {
 		t.Fatalf("expected local runtime directories in settings, got %+v", workspace.RuntimeSettings)
 	}
+	if workspace.RuntimeSettings.LocalStackImage != "localstack/localstack:stable" {
+		t.Fatalf("expected default LocalStack image in settings, got %s", workspace.RuntimeSettings.LocalStackImage)
+	}
 	if workspace.DockerDiagnostics.EngineState != models.DockerEngineStateAvailable {
 		t.Fatalf("expected docker diagnostics to use test endpoint, got %+v", workspace.DockerDiagnostics)
 	}

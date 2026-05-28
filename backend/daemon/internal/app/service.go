@@ -49,7 +49,7 @@ type DockerRuntime interface {
 
 type LocalStackManager interface {
 	Status(ctx context.Context) (models.LocalStackStatus, error)
-	Start(ctx context.Context) (models.LocalStackStatus, error)
+	Start(ctx context.Context, options models.LocalStackStartOptions) (models.LocalStackStatus, error)
 	Stop(ctx context.Context) (models.LocalStackStatus, error)
 	EnsureManagedProfile() error
 }
@@ -604,7 +604,9 @@ func (s *Service) Handle(
 		}
 		return result, nil
 	case "emulators.start":
-		return s.emulatorsStart(ctx)
+		var request models.LocalStackStartOptions
+		_ = json.Unmarshal(params, &request)
+		return s.emulatorsStart(ctx, request)
 	case "emulators.stop":
 		return s.emulatorsStop(ctx)
 	case "actions.invoke":
@@ -1044,6 +1046,7 @@ func (s *Service) settingsSnapshot() models.AppSettingsSnapshot {
 		RuntimeMode:      runtimeModeFromSettings(s.settings.RuntimeMode),
 		LocalConfigDir:   s.settings.LocalConfigDir,
 		EmulatorStateDir: s.settings.EmulatorStateDir,
+		LocalStackImage:  s.settings.LocalStackImage,
 	}
 }
 
@@ -1170,7 +1173,7 @@ func (s *Service) detectDockerHost() (string, string) {
 func (s *Service) emulatorSummaries() []models.EmulatorSummary {
 	artifacts := s.localConfigArtifacts()
 	awsDetails := []models.DetailField{
-		{Label: "Image", Value: "localstack/localstack"},
+		{Label: "Image", Value: s.settings.LocalStackImage},
 		{Label: "Managed Config Root", Value: filepath.Join(s.settings.LocalConfigDir, "aws")},
 	}
 	azureDetails := []models.DetailField{
@@ -2169,11 +2172,11 @@ func (s *Service) emulatorsPrepareProfile() (map[string]string, error) {
 	}, nil
 }
 
-func (s *Service) emulatorsStart(ctx context.Context) (models.LocalStackStatus, error) {
+func (s *Service) emulatorsStart(ctx context.Context, options models.LocalStackStartOptions) (models.LocalStackStatus, error) {
 	if s.localstackMgr == nil {
 		return models.LocalStackStatus{}, errors.New("LocalStack manager not available")
 	}
-	return s.localstackMgr.Start(ctx)
+	return s.localstackMgr.Start(ctx, options)
 }
 
 func (s *Service) emulatorsStop(ctx context.Context) (models.LocalStackStatus, error) {

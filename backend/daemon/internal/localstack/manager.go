@@ -7,19 +7,22 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/dockerruntime"
 	"cloudsprocket/backend/daemon/internal/models"
 	containerapi "github.com/moby/moby/api/types/container"
+	mountapi "github.com/moby/moby/api/types/mount"
 	networkapi "github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 )
 
 const (
 	containerName     = "cloudsprocket-localstack"
-	containerImage    = "localstack/localstack:latest"
+	defaultImage      = "localstack/localstack:stable"
 	containerPort     = "4566"
 	containerPortSpec = "4566/tcp"
 	profileName       = "cloudsprocket-localstack"
@@ -34,6 +37,7 @@ type dockerClient interface {
 	ContainerList(ctx context.Context, options client.ContainerListOptions) (client.ContainerListResult, error)
 	ContainerStart(ctx context.Context, container string, options client.ContainerStartOptions) (client.ContainerStartResult, error)
 	ContainerStop(ctx context.Context, container string, options client.ContainerStopOptions) (client.ContainerStopResult, error)
+	ContainerRemove(ctx context.Context, container string, options client.ContainerRemoveOptions) (client.ContainerRemoveResult, error)
 	ImagePull(ctx context.Context, ref string, options client.ImagePullOptions) (client.ImagePullResponse, error)
 	Close() error
 }
@@ -43,14 +47,20 @@ type dockerClientFactory func(host string) (dockerClient, error)
 // Manager handles LocalStack emulator status and managed AWS profile creation.
 type Manager struct {
 	settings       config.Settings
+	image          string
 	newClient      dockerClientFactory
 	httpClient     *http.Client
 	healthEndpoint string
 }
 
 func NewManager(settings config.Settings) *Manager {
+	image := settings.LocalStackImage
+	if image == "" {
+		image = defaultImage
+	}
 	return &Manager{
 		settings: settings,
+		image:    image,
 		newClient: func(host string) (dockerClient, error) {
 			return client.New(client.WithHost(host), client.WithAPIVersionNegotiation())
 		},
@@ -71,7 +81,7 @@ func (m *Manager) Status(ctx context.Context) (models.LocalStackStatus, error) {
 }
 
 // Start ensures the managed LocalStack container exists and is running.
-func (m *Manager) Start(ctx context.Context) (models.LocalStackStatus, error) {
+func (m *Manager) Start(ctx context.Context, options models.LocalStackStartOptions) (models.LocalStackStatus, error) {
 	api, unavailable, err := m.dockerClient()
 	if err != nil {
 		return unavailable, err
@@ -81,6 +91,14 @@ func (m *Manager) Start(ctx context.Context) (models.LocalStackStatus, error) {
 	containers, err := m.managedContainers(ctx, api)
 	if err != nil {
 		return m.errorStatus("Failed to query Docker containers: " + err.Error()), err
+	}
+	if len(containers.Items) > 0 &&
+		containers.Items[0].State != "running" &&
+		(containers.Items[0].Image != m.image || strings.TrimSpace(options.AuthToken) != "" || options.Persistence) {
+		if _, err := api.ContainerRemove(ctx, containers.Items[0].ID, client.ContainerRemoveOptions{}); err != nil {
+			return m.errorStatus("Failed to replace LocalStack container with configured image: " + err.Error()), err
+		}
+		containers = client.ContainerListResult{}
 	}
 	if len(containers.Items) > 0 {
 		container := containers.Items[0]
@@ -101,10 +119,15 @@ func (m *Manager) Start(ctx context.Context) (models.LocalStackStatus, error) {
 		return m.errorStatus("Failed to configure LocalStack port: " + err.Error()), err
 	}
 	hostIP := netip.MustParseAddr("127.0.0.1")
+	mounts, err := m.containerMounts(options)
+	if err != nil {
+		return m.errorStatus("Failed to configure LocalStack persistence: " + err.Error()), err
+	}
 	_, err = api.ContainerCreate(ctx, client.ContainerCreateOptions{
 		Name: containerName,
 		Config: &containerapi.Config{
-			Image:        containerImage,
+			Image:        m.image,
+			Env:          localStackEnv(options),
 			ExposedPorts: networkapi.PortSet{port: struct{}{}},
 			Labels:       managedLabels(),
 		},
@@ -115,6 +138,7 @@ func (m *Manager) Start(ctx context.Context) (models.LocalStackStatus, error) {
 					HostPort: containerPort,
 				}},
 			},
+			Mounts:        mounts,
 			RestartPolicy: containerapi.RestartPolicy{Name: containerapi.RestartPolicyDisabled},
 		},
 	})
@@ -210,7 +234,7 @@ func (m *Manager) statusWithClient(ctx context.Context, api dockerClient) models
 			ConfigPath:  m.localConfigPath("config"),
 			CredsPath:   m.localConfigPath("credentials"),
 			Details: []models.DetailField{
-				{Label: "Image", Value: containerImage},
+				{Label: "Image", Value: m.image},
 				{Label: "Port", Value: containerPort},
 				{Label: "Endpoint", Value: "http://localhost:" + containerPort},
 				{Label: "Managed Profile", Value: profileName},
@@ -270,12 +294,72 @@ func (m *Manager) errorStatus(summary string) models.LocalStackStatus {
 }
 
 func (m *Manager) pullImage(ctx context.Context, api dockerClient) error {
-	response, err := api.ImagePull(ctx, containerImage, client.ImagePullOptions{})
+	response, err := api.ImagePull(ctx, m.image, client.ImagePullOptions{})
 	if err != nil {
 		return err
 	}
 	defer response.Close()
 	return response.Wait(ctx)
+}
+
+func localStackEnv(options models.LocalStackStartOptions) []string {
+	values := map[string]string{}
+	for key, value := range options.Environment {
+		if validEnvName(key) && key != "LOCALSTACK_AUTH_TOKEN" {
+			values[key] = value
+		}
+	}
+	if options.Persistence {
+		values["PERSISTENCE"] = "1"
+	}
+	token := strings.TrimSpace(options.AuthToken)
+	if token == "" {
+		token = strings.TrimSpace(os.Getenv("LOCALSTACK_AUTH_TOKEN"))
+	}
+	if token != "" {
+		values["LOCALSTACK_AUTH_TOKEN"] = token
+	}
+	if len(values) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	env := make([]string, 0, len(keys))
+	for _, key := range keys {
+		env = append(env, key+"="+values[key])
+	}
+	return env
+}
+
+func (m *Manager) containerMounts(options models.LocalStackStartOptions) ([]mountapi.Mount, error) {
+	if !options.Persistence {
+		return nil, nil
+	}
+	stateDir := filepath.Join(m.settings.EmulatorStateDir, "localstack")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		return nil, err
+	}
+	return []mountapi.Mount{{
+		Type:   mountapi.TypeBind,
+		Source: stateDir,
+		Target: "/var/lib/localstack",
+	}}, nil
+}
+
+func validEnvName(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, r := range value {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || r == '_' || (index > 0 && r >= '0' && r <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func (m *Manager) healthCheck(ctx context.Context) error {

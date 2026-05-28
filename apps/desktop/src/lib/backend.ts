@@ -380,6 +380,7 @@ const mockState: MockState = {
     runtimeMode: "cloud",
     localConfigDir: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config",
     emulatorStateDir: "C:/Users/Ali/AppData/Local/CloudSprocket/emulators",
+    localStackImage: "localstack/localstack:stable",
   },
   localStackStatus: "stopped",
 };
@@ -578,7 +579,7 @@ function buildMockWorkspace(): WorkspaceSnapshot {
         summary: "CloudSprocket-managed emulator container.",
         owned: true,
         details: [
-          { label: "Image", value: "localstack/localstack" },
+          { label: "Image", value: mockState.settings.localStackImage },
           { label: "Status", value: "Up 10 seconds" },
         ],
       },
@@ -607,7 +608,7 @@ function buildMockWorkspace(): WorkspaceSnapshot {
             ? "LocalStack is running at http://localhost:4566."
             : "LocalStack is ready to start after preparing the managed profile.",
         details: [
-          { label: "Image", value: "localstack/localstack:latest" },
+          { label: "Image", value: mockState.settings.localStackImage },
           { label: "Endpoint", value: "http://localhost:4566" },
           { label: "Managed Profile", value: "cloudsprocket-localstack" },
           { label: "Managed Config Root", value: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config/aws" },
@@ -719,7 +720,7 @@ function handleMockRequest<T>(
           status: "not-configured" as EmulatorStatus,
           summary: "Click Prepare Profile to set up LocalStack access.",
           details: [
-            { label: "Image", value: "localstack/localstack:latest" },
+            { label: "Image", value: mockState.settings.localStackImage },
             { label: "Port", value: "4566" },
             { label: "Managed Profile", value: "cloudsprocket-localstack" },
           ],

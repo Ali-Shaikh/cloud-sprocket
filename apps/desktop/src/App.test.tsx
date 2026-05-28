@@ -72,6 +72,7 @@ let logFixtures: ActivityLogEntry[];
 let workspaceFixture: WorkspaceSnapshot;
 let s3PrefixDelays: Map<string, number>;
 let backendEventHandlers: Record<string, (payload: unknown) => void>;
+let emulatorStartParams: Record<string, unknown> | undefined;
 const settingsFixture: AppSettingsSnapshot = {
   platformName: "windows",
   configDir: "C:/Users/Ali/AppData/Local/CloudSprocket",
@@ -80,6 +81,7 @@ const settingsFixture: AppSettingsSnapshot = {
   runtimeMode: "cloud",
   localConfigDir: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config",
   emulatorStateDir: "C:/Users/Ali/AppData/Local/CloudSprocket/emulators",
+  localStackImage: "localstack/localstack:stable",
 };
 
 vi.mock("./lib/backend", () => ({
@@ -115,6 +117,7 @@ vi.mock("./lib/backend", () => ({
           endpoint: "http://localhost:4566",
         };
       case "emulators.start":
+        emulatorStartParams = params;
         workspaceFixture = {
           ...workspaceFixture,
           emulatorSummaries: workspaceFixture.emulatorSummaries.map((emulator) =>
@@ -325,7 +328,7 @@ describe("App", () => {
           summary: "CloudSprocket-managed emulator container.",
           owned: true,
           details: [
-            { label: "Image", value: "localstack/localstack" },
+            { label: "Image", value: "localstack/localstack:stable" },
             { label: "Status", value: "Up 10 seconds" },
           ],
         },
@@ -339,7 +342,7 @@ describe("App", () => {
           status: "not-configured",
           summary: "Managed AWS local runtime is planned but not configured yet.",
           details: [
-            { label: "Image", value: "localstack/localstack" },
+            { label: "Image", value: "localstack/localstack:stable" },
             { label: "Managed Config Root", value: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config/aws" },
           ],
         },
@@ -415,6 +418,7 @@ describe("App", () => {
     };
     s3PrefixDelays = new Map();
     backendEventHandlers = {};
+    emulatorStartParams = undefined;
   });
 
   it("renders the session setup view while unlocked", async () => {
@@ -575,8 +579,20 @@ describe("App", () => {
 
     render(<App />);
 
+    fireEvent.change(await screen.findByLabelText("LocalStack auth token"), {
+      target: { value: "localstack-token" },
+    });
+    fireEvent.click(screen.getByLabelText("Enable persistence"));
+    fireEvent.change(screen.getByPlaceholderText("DEBUG=1"), {
+      target: { value: "DEBUG=1\nLOCALSTACK_AUTH_TOKEN=ignored\nBAD-NAME=ignored" },
+    });
     fireEvent.click(await screen.findByRole("button", { name: "Start" }));
     expect(await screen.findByText("LocalStack is running at http://localhost:4566.")).toBeInTheDocument();
+    expect(emulatorStartParams).toEqual({
+      authToken: "localstack-token",
+      persistence: true,
+      environment: { DEBUG: "1" },
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Stop" }));
     expect(await screen.findByText("LocalStack container is present but not running.")).toBeInTheDocument();
