@@ -1998,10 +1998,17 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 		Summary: "Recent job, log, and refresh history.",
 		Detail:  "Shows the latest backend activity while the workspace shell continues to expand.",
 	}
+	virtualisationTab := models.WorkspaceTab{
+		TabID:   "virtualisation",
+		Label:   "Virtualisation",
+		Summary: "Docker and local cloud runtime controls.",
+		Detail:  "Manage Docker diagnostics, LocalStack, local config artefacts, and app-owned emulator state.",
+	}
 
 	if providerID == "azure" {
 		return []models.WorkspaceTab{
 			overviewTab,
+			virtualisationTab,
 			{
 				TabID:   "azure-overview",
 				Label:   "Azure",
@@ -2027,6 +2034,7 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 	if providerID == "gcp" {
 		return []models.WorkspaceTab{
 			overviewTab,
+			virtualisationTab,
 			{
 				TabID:   "gcp-overview",
 				Label:   "GCP",
@@ -2039,6 +2047,7 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 
 	return []models.WorkspaceTab{
 		overviewTab,
+		virtualisationTab,
 		{
 			TabID:   "s3",
 			Label:   "S3",

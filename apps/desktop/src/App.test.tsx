@@ -486,6 +486,12 @@ describe("App", () => {
           detail: "Overview panel",
         },
         {
+          tabId: "virtualisation",
+          label: "Virtualisation",
+          summary: "Runtime summary",
+          detail: "Runtime panel",
+        },
+        {
           tabId: "s3",
           label: "S3",
           summary: "S3 summary",
@@ -504,9 +510,11 @@ describe("App", () => {
     expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
     expect(await screen.findByText("Workspace Summary")).toBeInTheDocument();
     expect(screen.getByText("Overview")).toBeInTheDocument();
+    expect(screen.getByText("Virtualisation")).toBeInTheDocument();
     expect(screen.getByText("S3")).toBeInTheDocument();
     expect((await screen.findAllByText("workspace sandbox")).length).toBeGreaterThan(0);
     expect(await screen.findByText("2 buckets")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Virtualisation"));
     expect(await screen.findByText("Docker Runtime")).toBeInTheDocument();
     expect(await screen.findByText("Local Emulators")).toBeInTheDocument();
     expect(await screen.findByText("Managed Docker Resources")).toBeInTheDocument();
@@ -534,6 +542,12 @@ describe("App", () => {
           summary: "Summary",
           detail: "Overview panel",
         },
+        {
+          tabId: "virtualisation",
+          label: "Virtualisation",
+          summary: "Runtime summary",
+          detail: "Runtime panel",
+        },
       ],
     };
     workspaceFixture = {
@@ -555,12 +569,13 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Virtualisation"));
     expect(await screen.findByText("Docker Runtime")).toBeInTheDocument();
     expect(await screen.findByText("Local Emulators")).toBeInTheDocument();
     expect(await screen.findByText("Managed Docker Resources")).toBeInTheDocument();
   });
 
-  it("starts and stops LocalStack from the workspace overview", async () => {
+  it("starts and stops LocalStack from the virtualisation workspace", async () => {
     sessionFixture = {
       ...sessionFixture,
       isLocked: true,
@@ -574,11 +589,18 @@ describe("App", () => {
           summary: "Summary",
           detail: "Overview panel",
         },
+        {
+          tabId: "virtualisation",
+          label: "Virtualisation",
+          summary: "Runtime summary",
+          detail: "Runtime panel",
+        },
       ],
     };
 
     render(<App />);
 
+    fireEvent.click(await screen.findByText("Virtualisation"));
     fireEvent.change(await screen.findByLabelText("LocalStack auth token"), {
       target: { value: "localstack-token" },
     });

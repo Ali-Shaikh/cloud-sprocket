@@ -136,6 +136,9 @@ function workspaceTabIconUrl(tabId: string): string | undefined {
   if (tabId === "ec2") {
     return awsEc2IconUrl;
   }
+  if (tabId === "virtualisation") {
+    return undefined;
+  }
   if (tabId === "azure-overview" || tabId === "azure-resource-groups" || tabId === "azure-vms") {
     return azureIconUrl;
   }
@@ -148,6 +151,9 @@ function workspaceTabIcon(tabId: string): IconProps.Name {
   }
   if (tabId === "ec2") {
     return "grid-view";
+  }
+  if (tabId === "virtualisation") {
+    return "settings";
   }
   if (tabId === "azure-overview" || tabId === "gcp-overview") {
     return "settings";
@@ -366,6 +372,8 @@ function AppSidebar({
         ? String(workspace.s3Buckets.length)
         : tab.tabId === "ec2"
           ? String(workspace.ec2Instances.length)
+          : tab.tabId === "virtualisation"
+            ? String(workspace.emulatorSummaries.length)
           : tab.tabId === "azure-resource-groups"
             ? String(workspace.azureResourceGroups.length)
             : tab.tabId === "azure-vms"

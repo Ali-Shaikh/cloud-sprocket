@@ -20,6 +20,7 @@
 - Runtime settings include app-owned local config and emulator state directories.
 - Workspace snapshots include Docker diagnostics, Docker runtime details, managed Docker resources, emulator summaries, and local config artefacts.
 - The desktop overview renders Docker runtime, LocalStack, managed Docker resources, and local config artefacts.
+- Docker runtime, LocalStack, managed Docker resources, local config artefacts, and runtime settings now live under a dedicated `Virtualisation` workspace menu.
 - LocalStack managed AWS profile generation writes app-owned config and credentials under the CloudSprocket local config root.
 - LocalStack start/stop uses Docker Engine API control through the sidecar.
 - LocalStack containers are labelled with CloudSprocket ownership labels and bind to `127.0.0.1:4566`.
@@ -29,7 +30,7 @@
 
 ## Left To Do Before PR
 
-1. Verify the rebuilt executable with a valid LocalStack auth token.
+1. Verify the rebuilt executable with a valid LocalStack auth token from the `Virtualisation` workspace menu.
 2. Re-run the final automated checks if additional code changes are made:
    - `go -C backend/daemon test ./...`
    - `pnpm --dir apps/desktop test`

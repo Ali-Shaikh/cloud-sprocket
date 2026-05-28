@@ -4,7 +4,7 @@
 - Branch: `feat/local-emulator-foundation`
 - Head after local commit: `fix: repair desktop event bridge rendering`
 - Working tree: LocalStack runtime work, blank-screen fixes, and image policy work are committed; unrelated untracked image artefacts may still be present
-- Status: LocalStack start and stop wiring is implemented and verified locally. The built desktop app has been launched and verified through WebView debugging with visible locked workspace content. LocalStack now defaults to `localstack/localstack:stable`, accepts an auth token before start, supports persistence, and supports `CLOUDSPROCKET_LOCALSTACK_IMAGE`.
+- Status: LocalStack start and stop wiring is implemented and verified locally. The built desktop app has been launched and verified through WebView debugging with visible locked workspace content. LocalStack controls now live under a dedicated `Virtualisation` workspace menu, default to `localstack/localstack:stable`, accept an auth token before start, support persistence, and support `CLOUDSPROCKET_LOCALSTACK_IMAGE`.
 
 ## Current State
 
@@ -38,6 +38,7 @@
   - surfaced the configured image in runtime settings and emulator summaries
   - replaced the stale foundation-only plan with the current runtime plan
 - When the managed container exited with code `55`, Docker logs showed LocalStack license activation failed because no `LOCALSTACK_AUTH_TOKEN` was provided. The UI now collects the token before start, and the daemon recreates stopped managed containers when token or persistence settings need to be applied.
+- Moved Docker runtime, LocalStack controls, managed Docker resources, local config artefacts, and runtime settings from Overview into a dedicated `Virtualisation` workspace menu.
 
 ## Files Changed In This Resume
 
@@ -65,6 +66,11 @@
 - `pnpm --dir apps/desktop test` passed, 14 tests. One parallel run timed out under load, then the same suite passed when rerun normally.
 - `pnpm run build:desktop:exe` passed and rebuilt `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe`.
 - After adding token, persistence, and extra env controls:
+  - `go -C backend/daemon test ./...` passed.
+  - `pnpm --dir apps/desktop test` passed, 14 tests.
+  - `pnpm run typecheck:desktop` passed.
+  - `pnpm run build:desktop:exe` passed.
+- After moving runtime controls to the `Virtualisation` menu:
   - `go -C backend/daemon test ./...` passed.
   - `pnpm --dir apps/desktop test` passed, 14 tests.
   - `pnpm run typecheck:desktop` passed.
@@ -111,7 +117,7 @@
 
 ## Left To Do
 
-1. Verify LocalStack start with a valid auth token in the rebuilt executable.
+1. Verify LocalStack start with a valid auth token from the `Virtualisation` menu in the rebuilt executable.
 2. Add user-facing error/status copy for image pull, create, start, stop, and health failures if the current summaries feel too terse in the desktop app.
 3. Consider adding a structured emulator action result instead of returning raw `LocalStackStatus` for start and stop.
 4. Decide whether to squash the three blank-screen fix commits into the runtime-control commit before PR.

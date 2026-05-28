@@ -48,6 +48,12 @@ const mockWorkspaceTabs: WorkspaceTab[] = [
     detail: "Shows the locked cloud context and recent operator activity.",
   },
   {
+    tabId: "virtualisation",
+    label: "Virtualisation",
+    summary: "Docker and local cloud runtime controls.",
+    detail: "Manage Docker diagnostics, LocalStack, local config artefacts, and app-owned emulator state.",
+  },
+  {
     tabId: "s3",
     label: "S3",
     summary: "Bucket and object workbench.",
@@ -73,6 +79,12 @@ const mockAzureWorkspaceTabs: WorkspaceTab[] = [
     label: "Overview",
     summary: "Session-wide provider context and health.",
     detail: "Shows the locked cloud context and recent operator activity.",
+  },
+  {
+    tabId: "virtualisation",
+    label: "Virtualisation",
+    summary: "Docker and local cloud runtime controls.",
+    detail: "Manage Docker diagnostics, LocalStack, local config artefacts, and app-owned emulator state.",
   },
   {
     tabId: "azure-overview",

@@ -660,17 +660,23 @@ export default function WorkspaceView({
       className="page-stack"
     >
       {workspaceSummaryPanel}
+      {workspaceProfileDetails}
+      {environmentDiagnosticsPanel}
+    </SpaceBetween>
+  );
+
+  const virtualisationTab = (
+    <SpaceBetween
+      size="l"
+      className="page-stack"
+    >
       <div className="setup-grid">
-        {workspaceProfileDetails}
         {workspaceRuntimeSettingsPanel}
-      </div>
-      <div className="setup-grid">
         {dockerDiagnosticsPanel}
-        {emulatorSummariesPanel}
       </div>
+      {emulatorSummariesPanel}
       {dockerResourcesPanel}
       {localConfigArtifactsPanel}
-      {environmentDiagnosticsPanel}
     </SpaceBetween>
   );
 
@@ -2205,6 +2211,8 @@ export default function WorkspaceView({
   const activeTabContent =
     activeTabId === "overview"
       ? overviewTab
+      : activeTabId === "virtualisation"
+        ? virtualisationTab
       : activeTabId === "s3"
         ? s3Tab
       : activeTabId === "ec2"
