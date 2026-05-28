@@ -1,7 +1,15 @@
 import {
   Box,
+  Button,
+  Checkbox,
+  Container,
   Flashbar,
+  Header,
   Icon,
+  Input,
+  SpaceBetween,
+  StatusIndicator,
+  Textarea,
 } from "@cloudscape-design/components";
 import type { FlashbarProps, IconProps, PropertyFilterProps } from "@cloudscape-design/components";
 import {
@@ -364,6 +372,13 @@ function AppSidebar({
       iconName: "lock-private",
       badge: selectedProfile && session.selectedAuthMethod ? "Ready" : "Open",
     },
+    {
+      id: "virtualisation",
+      label: "Virtualisation",
+      detail: "Docker and local cloud runtimes",
+      iconName: "settings",
+      badge: activeWorkspaceTabId === "virtualisation" ? "Open" : undefined,
+    },
   ];
 
   const workspaceItems: SidebarItem[] = session.workspaceTabs.map((tab) => {
@@ -444,7 +459,9 @@ function AppSidebar({
           {(session.isLocked ? workspaceItems : setupItems).map((item) => {
             const active = session.isLocked
               ? item.id === activeWorkspaceTabId
-              : item.badge === "Open" || item.badge === "Ready";
+              : item.id === "virtualisation"
+                ? activeWorkspaceTabId === "virtualisation"
+                : activeWorkspaceTabId !== "virtualisation" && (item.badge === "Open" || item.badge === "Ready");
             return session.isLocked ? (
               <div
                 key={item.id}
@@ -495,6 +512,25 @@ function AppSidebar({
                   </div>
                 ) : null}
               </div>
+            ) : item.id === "virtualisation" ? (
+              <button
+                key={item.id}
+                type="button"
+                className={`sidebar-menu-item${active ? " sidebar-menu-item-active" : ""}`}
+                onClick={() => {
+                  onWorkspaceTabChange("virtualisation");
+                }}
+                title={`${item.label}: ${item.detail}`}
+              >
+                <span className={sidebarItemIconClass(item)}>
+                  <SidebarGlyph item={item} />
+                </span>
+                <span className="sidebar-item-copy">
+                  <strong>{item.label}</strong>
+                  <small>{item.detail}</small>
+                </span>
+                {item.badge ? <em>{item.badge}</em> : null}
+              </button>
             ) : (
               <div
                 key={item.id}
@@ -633,6 +669,164 @@ const emptyWorkspace: WorkspaceSnapshot = {
   ec2Regions: [],
   ec2Instances: [],
 };
+
+function SimpleDetailFields({
+  fields,
+}: {
+  fields: Array<{ label: string; value: string }>;
+}) {
+  if (fields.length === 0) {
+    return <Box color="text-status-inactive">No details available.</Box>;
+  }
+  return (
+    <div className="detail-grid">
+      {fields.map((field) => (
+        <div
+          key={`${field.label}-${field.value}`}
+          className="detail-card"
+        >
+          <Box variant="awsui-key-label">{field.label}</Box>
+          <Box variant="p">{field.value}</Box>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GlobalVirtualisationView({
+  workspace,
+  localStackAuthToken,
+  localStackPersistence,
+  localStackEnvironmentText,
+  onLocalStackAuthTokenChange,
+  onLocalStackPersistenceChange,
+  onLocalStackEnvironmentTextChange,
+  onRefreshDockerRuntime,
+  onInvokeLocalStackAction,
+}: {
+  workspace: WorkspaceSnapshot;
+  localStackAuthToken: string;
+  localStackPersistence: boolean;
+  localStackEnvironmentText: string;
+  onLocalStackAuthTokenChange: (value: string) => void;
+  onLocalStackPersistenceChange: (value: boolean) => void;
+  onLocalStackEnvironmentTextChange: (value: string) => void;
+  onRefreshDockerRuntime: () => void;
+  onInvokeLocalStackAction: (action: "prepareProfile" | "start" | "stop") => void;
+}) {
+  const localStack = workspace.emulatorSummaries.find((emulator) => emulator.emulatorId === "localstack");
+
+  return (
+    <SpaceBetween
+      size="l"
+      className="page-stack"
+    >
+      <Container
+        header={
+          <Header
+            variant="h1"
+            description="Docker and local cloud runtime controls are available before locking a cloud profile."
+            actions={<Button onClick={onRefreshDockerRuntime}>Refresh Docker</Button>}
+          >
+            Virtualisation
+          </Header>
+        }
+      >
+        <div className="workspace-summary-grid">
+          <div className="workspace-context-card">
+            <div>
+              <Box variant="awsui-key-label">Docker</Box>
+              <StatusIndicator type={workspace.dockerRuntime.reachable ? "success" : "warning"}>
+                {workspace.dockerRuntime.reachable ? "available" : "unavailable"}
+              </StatusIndicator>
+              <span>{workspace.dockerRuntime.summary}</span>
+            </div>
+            <div>
+              <Box variant="awsui-key-label">LocalStack</Box>
+              <StatusIndicator type={localStack?.status === "running" ? "success" : localStack?.status === "unhealthy" ? "error" : "warning"}>
+                {localStack?.status ?? "unknown"}
+              </StatusIndicator>
+              <span>{localStack?.summary ?? "LocalStack status is not available yet."}</span>
+            </div>
+          </div>
+        </div>
+      </Container>
+
+      <div className="setup-grid">
+        <Container
+          header={<Header variant="h2">Docker Runtime</Header>}
+        >
+          <SpaceBetween size="m">
+            <SimpleDetailFields fields={workspace.dockerRuntime.details} />
+          </SpaceBetween>
+        </Container>
+        <Container
+          header={<Header variant="h2">LocalStack</Header>}
+        >
+          <SpaceBetween size="s">
+            <SimpleDetailFields fields={localStack?.details ?? []} />
+            <div className="detail-grid">
+              <div className="detail-card">
+                <Box variant="awsui-key-label">LocalStack Auth Token</Box>
+                <Input
+                  type="password"
+                  value={localStackAuthToken}
+                  placeholder="Paste token"
+                  ariaLabel="LocalStack auth token"
+                  onChange={({ detail }) => onLocalStackAuthTokenChange(detail.value)}
+                />
+              </div>
+              <div className="detail-card">
+                <Box variant="awsui-key-label">Persistence</Box>
+                <Checkbox
+                  checked={localStackPersistence}
+                  onChange={({ detail }) => onLocalStackPersistenceChange(detail.checked)}
+                >
+                  Enable persistence
+                </Checkbox>
+              </div>
+              <div className="detail-card">
+                <Box variant="awsui-key-label">Environment Variables</Box>
+                <Textarea
+                  value={localStackEnvironmentText}
+                  placeholder="DEBUG=1"
+                  rows={3}
+                  onChange={({ detail }) => onLocalStackEnvironmentTextChange(detail.value)}
+                />
+              </div>
+            </div>
+            <SpaceBetween
+              size="xs"
+              direction="horizontal"
+            >
+              <Button onClick={() => onInvokeLocalStackAction("prepareProfile")}>Prepare Profile</Button>
+              <Button
+                disabled={!workspace.dockerRuntime.reachable || localStack?.status === "running" || localStack?.status === "unhealthy"}
+                onClick={() => onInvokeLocalStackAction("start")}
+              >
+                Start
+              </Button>
+              <Button
+                disabled={!workspace.dockerRuntime.reachable || (localStack?.status !== "running" && localStack?.status !== "unhealthy")}
+                onClick={() => onInvokeLocalStackAction("stop")}
+              >
+                Stop
+              </Button>
+            </SpaceBetween>
+          </SpaceBetween>
+        </Container>
+      </div>
+
+      <Container header={<Header variant="h2">Managed Docker Resources</Header>}>
+        {workspace.dockerResources.length === 0 ? (
+          <Box color="text-status-inactive">No CloudSprocket-managed Docker resources are currently detected.</Box>
+        ) : (
+          <SimpleDetailFields fields={workspace.dockerResources.map((resource) => ({ label: resource.name, value: resource.summary }))} />
+        )}
+      </Container>
+    </SpaceBetween>
+  );
+}
 
 function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null | undefined): WorkspaceSnapshot {
   const source = snapshot ?? {};
@@ -967,7 +1161,6 @@ export default function App() {
 
   useEffect(() => {
     if (!session.isLocked) {
-      setActiveWorkspaceTabId("overview");
       setActiveS3PageId("objects");
       setActiveAzurePageId("overview");
       return;
@@ -979,6 +1172,19 @@ export default function App() {
       setActiveWorkspaceTabId(session.workspaceTabs[0].tabId);
     }
   }, [activeWorkspaceTabId, session.isLocked, session.workspaceTabs]);
+
+  useEffect(() => {
+    if (activeWorkspaceTabId !== "virtualisation") {
+      return undefined;
+    }
+    void refreshVirtualisationState();
+    const interval = window.setInterval(() => {
+      void refreshVirtualisationState();
+    }, 5000);
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [activeWorkspaceTabId]);
 
   async function mutateSession(
     method: string,
@@ -1011,6 +1217,13 @@ export default function App() {
         dockerResources,
         dockerDiagnostics: dockerDiagnosticsFromRuntime(dockerRuntime),
       }));
+    });
+  }
+
+  async function refreshVirtualisationState(): Promise<void> {
+    const workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
+    startTransition(() => {
+      setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
     });
   }
 
@@ -1050,7 +1263,13 @@ export default function App() {
       method,
       startParams,
     );
-    await loadWorkspace(session);
+    await refreshVirtualisationState();
+    if (action === "start" || action === "stop") {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        await wait(2500);
+        await refreshVirtualisationState();
+      }
+    }
   }
 
   const activityDrawer = splitPanelOpen ? (
@@ -1256,6 +1475,22 @@ export default function App() {
             });
           },
         );
+      }}
+    />
+  ) : activeWorkspaceTabId === "virtualisation" ? (
+    <GlobalVirtualisationView
+      workspace={workspace}
+      localStackAuthToken={localStackAuthToken}
+      localStackPersistence={localStackPersistence}
+      localStackEnvironmentText={localStackEnvironmentText}
+      onLocalStackAuthTokenChange={setLocalStackAuthToken}
+      onLocalStackPersistenceChange={setLocalStackPersistence}
+      onLocalStackEnvironmentTextChange={setLocalStackEnvironmentText}
+      onRefreshDockerRuntime={() => {
+        void refreshVirtualisationState();
+      }}
+      onInvokeLocalStackAction={(action) => {
+        void invokeLocalStackAction(action);
       }}
     />
   ) : (
