@@ -1,6 +1,7 @@
 package localstack
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -33,6 +34,8 @@ type stubDockerClient struct {
 	stopError          error
 	removeError        error
 	pullError          error
+	logsError          error
+	logsPayload        string
 	lastCreateEnv      []string
 	lastCreateMounts   []mountapi.Mount
 }
@@ -110,6 +113,13 @@ func (s *stubDockerClient) ImagePull(_ context.Context, ref string, _ client.Ima
 		return nil, s.pullError
 	}
 	return stubImagePullResponse{}, nil
+}
+
+func (s *stubDockerClient) ContainerLogs(_ context.Context, _ string, _ client.ContainerLogsOptions) (client.ContainerLogsResult, error) {
+	if s.logsError != nil {
+		return nil, s.logsError
+	}
+	return io.NopCloser(bytes.NewBufferString(s.logsPayload)), nil
 }
 
 func (s *stubDockerClient) Close() error {
@@ -348,5 +358,44 @@ func TestStartConfiguresPersistenceAndExtraEnvironment(t *testing.T) {
 	}
 	if dockerClient.lastCreateMounts[0].Target != "/var/lib/localstack" {
 		t.Fatalf("expected LocalStack state mount, got %+v", dockerClient.lastCreateMounts[0])
+	}
+}
+
+func TestLogsReturnsManagedContainerLogs(t *testing.T) {
+	dockerClient := &stubDockerClient{
+		containers: []containerapi.Summary{{
+			ID:     "ctr-logs",
+			Names:  []string{"/" + containerName},
+			Image:  defaultImage,
+			State:  containerapi.StateRunning,
+			Status: "Up 1 second",
+		}},
+		logsPayload: "Ready.\nServing edge on 4566\n",
+	}
+	manager := newTestManager(t, dockerClient)
+
+	logs, err := manager.Logs(context.Background(), 200)
+	if err != nil {
+		t.Fatalf("expected logs to succeed, got %v", err)
+	}
+	expected := []string{"Ready.", "Serving edge on 4566"}
+	if !reflect.DeepEqual(logs.Lines, expected) {
+		t.Fatalf("expected log lines, got %+v", logs.Lines)
+	}
+	if logs.Summary == "" {
+		t.Fatalf("expected logs summary")
+	}
+}
+
+func TestLogsHandlesMissingContainer(t *testing.T) {
+	dockerClient := &stubDockerClient{}
+	manager := newTestManager(t, dockerClient)
+
+	logs, err := manager.Logs(context.Background(), 200)
+	if err != nil {
+		t.Fatalf("expected missing container logs to succeed, got %v", err)
+	}
+	if len(logs.Lines) != 0 || logs.Summary == "" {
+		t.Fatalf("expected empty log snapshot, got %+v", logs)
 	}
 }

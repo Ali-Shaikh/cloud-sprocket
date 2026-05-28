@@ -29,6 +29,7 @@ import type {
   AwsS3PresignResult,
   AwsS3Object,
   DetailField,
+  EmulatorLogSnapshot,
   JobLifecycle,
   SessionSnapshot,
   UrlInspection,
@@ -78,6 +79,9 @@ type Props = {
   onLocalStackPersistenceChange: (value: boolean) => void;
   localStackEnvironmentText: string;
   onLocalStackEnvironmentTextChange: (value: string) => void;
+  localStackLogs: EmulatorLogSnapshot;
+  localStackLogsStatus: string;
+  onRefreshLocalStackLogs: () => void;
   onUnlockSession: () => void;
   onToggleSensitiveValues: () => void;
   onInvokeWorkspaceAction: (actionId: "refresh") => void;
@@ -245,6 +249,36 @@ function dockerEngineStatusType(value?: string): "success" | "warning" | "error"
   return "info";
 }
 
+function LocalStackLogsPanel({
+  logs,
+  status,
+  onRefresh,
+}: {
+  logs: EmulatorLogSnapshot;
+  status: string;
+  onRefresh: () => void;
+}) {
+  return (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description={status || logs.summary}
+          actions={<Button onClick={onRefresh}>Refresh Logs</Button>}
+        >
+          LocalStack Logs
+        </Header>
+      }
+    >
+      {logs.lines.length === 0 ? (
+        <Box color="text-status-inactive">No LocalStack log lines are available yet.</Box>
+      ) : (
+        <pre className="container-log-panel">{logs.lines.join("\n")}</pre>
+      )}
+    </Container>
+  );
+}
+
 export default function WorkspaceView({
   session,
   workspace,
@@ -265,6 +299,9 @@ export default function WorkspaceView({
   onLocalStackPersistenceChange,
   localStackEnvironmentText,
   onLocalStackEnvironmentTextChange,
+  localStackLogs,
+  localStackLogsStatus,
+  onRefreshLocalStackLogs,
   onUnlockSession,
   onToggleSensitiveValues,
   onInvokeWorkspaceAction,
@@ -531,7 +568,7 @@ export default function WorkspaceView({
           variant="h2"
           description="Planned managed local runtimes for AWS and Azure."
         >
-          Local Emulators
+          Local Runtimes
         </Header>
       }
     >
@@ -675,6 +712,11 @@ export default function WorkspaceView({
         {dockerDiagnosticsPanel}
       </div>
       {emulatorSummariesPanel}
+      <LocalStackLogsPanel
+        logs={localStackLogs}
+        status={localStackLogsStatus}
+        onRefresh={onRefreshLocalStackLogs}
+      />
       {dockerResourcesPanel}
       {localConfigArtifactsPanel}
     </SpaceBetween>

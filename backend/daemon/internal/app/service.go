@@ -51,6 +51,7 @@ type LocalStackManager interface {
 	Status(ctx context.Context) (models.LocalStackStatus, error)
 	Start(ctx context.Context, options models.LocalStackStartOptions) (models.LocalStackStatus, error)
 	Stop(ctx context.Context) (models.LocalStackStatus, error)
+	Logs(ctx context.Context, tail int) (models.EmulatorLogSnapshot, error)
 	EnsureManagedProfile() error
 }
 
@@ -609,6 +610,16 @@ func (s *Service) Handle(
 		return s.emulatorsStart(ctx, request)
 	case "emulators.stop":
 		return s.emulatorsStop(ctx)
+	case "emulators.logs":
+		var request struct {
+			EmulatorID string `json:"emulatorId"`
+			Tail       int    `json:"tail"`
+		}
+		_ = json.Unmarshal(params, &request)
+		if request.EmulatorID != "" && request.EmulatorID != "localstack" {
+			return nil, fmt.Errorf("emulator %s is not supported", request.EmulatorID)
+		}
+		return s.emulatorsLogs(ctx, request.Tail)
 	case "actions.invoke":
 		var request struct {
 			ActionID string `json:"actionId"`
@@ -2000,7 +2011,7 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 	}
 	virtualisationTab := models.WorkspaceTab{
 		TabID:   "virtualisation",
-		Label:   "Virtualisation",
+		Label:   "Local Runtime",
 		Summary: "Docker and local cloud runtime controls.",
 		Detail:  "Manage Docker diagnostics, LocalStack, local config artefacts, and app-owned emulator state.",
 	}
@@ -2193,4 +2204,11 @@ func (s *Service) emulatorsStop(ctx context.Context) (models.LocalStackStatus, e
 		return models.LocalStackStatus{}, errors.New("LocalStack manager not available")
 	}
 	return s.localstackMgr.Stop(ctx)
+}
+
+func (s *Service) emulatorsLogs(ctx context.Context, tail int) (models.EmulatorLogSnapshot, error) {
+	if s.localstackMgr == nil {
+		return models.EmulatorLogSnapshot{}, errors.New("LocalStack manager not available")
+	}
+	return s.localstackMgr.Logs(ctx, tail)
 }

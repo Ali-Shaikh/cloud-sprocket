@@ -20,10 +20,11 @@
 - Runtime settings include app-owned local config and emulator state directories.
 - Workspace snapshots include Docker diagnostics, Docker runtime details, managed Docker resources, emulator summaries, and local config artefacts.
 - The desktop overview renders Docker runtime, LocalStack, managed Docker resources, and local config artefacts.
-- Docker runtime, LocalStack, managed Docker resources, local config artefacts, and runtime settings now live under a dedicated global `Virtualisation` menu that is available before workspace lock.
-- The Virtualisation menu refreshes status while open and polls after LocalStack start/stop so startup health transitions are reflected.
+- Docker runtime, LocalStack, managed Docker resources, local config artefacts, and runtime settings now live under a dedicated global `Local Runtime` menu that is available before workspace lock.
+- The Local Runtime menu refreshes status while open and polls after LocalStack start/stop so startup health transitions are reflected.
 - LocalStack managed AWS profile generation writes app-owned config and credentials under the CloudSprocket local config root.
 - LocalStack start/stop uses Docker Engine API control through the sidecar.
+- LocalStack logs are available from the app via an `emulators.logs` RPC backed by Docker container logs.
 - LocalStack containers are labelled with CloudSprocket ownership labels and bind to `127.0.0.1:4566`.
 - LocalStack start supports auth token, persistence, and extra environment variables from the desktop app.
 - Persistence sets `PERSISTENCE=1` and mounts the app-owned emulator state directory into `/var/lib/localstack`.
@@ -31,7 +32,7 @@
 
 ## Left To Do Before PR
 
-1. Verify the rebuilt executable with a valid LocalStack auth token from the global `Virtualisation` menu.
+1. Verify LocalStack start with a valid auth token from the global `Local Runtime` menu against Docker on a machine with a valid token.
 2. Re-run the final automated checks if additional code changes are made:
    - `go -C backend/daemon test ./...`
    - `pnpm --dir apps/desktop test`
@@ -43,7 +44,7 @@
 ## Deferred
 
 - Azure `floci-az` lifecycle control and local Azure service views.
-- LocalStack logs, cleanup, rollback, destroy, and reveal-config flows.
+- LocalStack cleanup, rollback, destroy, Compose editing, and reveal-config flows.
 - Secret storage for the LocalStack auth token. The current implementation keeps the token in memory only.
 - Digest pinning and compatibility policy beyond the configurable image reference.
 - Expanded user-facing status copy for every Docker pull/create/start/stop failure path.

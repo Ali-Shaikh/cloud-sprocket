@@ -137,6 +137,14 @@ vi.mock("./lib/backend", () => ({
           ),
         };
         return workspaceFixture.emulatorSummaries[0];
+      case "emulators.logs":
+        return {
+          emulatorId: "localstack",
+          lines: workspaceFixture.emulatorSummaries[0]?.status === "running" ? ["Ready.", "Serving edge on 4566."] : [],
+          summary: workspaceFixture.emulatorSummaries[0]?.status === "running"
+            ? "Showing the latest 2 LocalStack log lines."
+            : "No managed LocalStack container is running.",
+        };
       case "logs.list":
         return logFixtures;
       case "actions.invoke":
@@ -487,7 +495,7 @@ describe("App", () => {
         },
         {
           tabId: "virtualisation",
-          label: "Virtualisation",
+          label: "Local Runtime",
           summary: "Runtime summary",
           detail: "Runtime panel",
         },
@@ -510,13 +518,13 @@ describe("App", () => {
     expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
     expect(await screen.findByText("Workspace Summary")).toBeInTheDocument();
     expect(screen.getByText("Overview")).toBeInTheDocument();
-    expect(screen.getByText("Virtualisation")).toBeInTheDocument();
+    expect(screen.getByText("Local Runtime")).toBeInTheDocument();
     expect(screen.getByText("S3")).toBeInTheDocument();
     expect((await screen.findAllByText("workspace sandbox")).length).toBeGreaterThan(0);
     expect(await screen.findByText("2 buckets")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Virtualisation"));
+    fireEvent.click(screen.getByText("Local Runtime"));
     expect(await screen.findByText("Docker Runtime")).toBeInTheDocument();
-    expect(await screen.findByText("Local Emulators")).toBeInTheDocument();
+    expect(await screen.findByText("Local Runtimes")).toBeInTheDocument();
     expect(await screen.findByText("Managed Docker Resources")).toBeInTheDocument();
     expect(await screen.findByText("Local Config Artifacts")).toBeInTheDocument();
     expect(await screen.findByText("LocalStack")).toBeInTheDocument();
@@ -544,7 +552,7 @@ describe("App", () => {
         },
         {
           tabId: "virtualisation",
-          label: "Virtualisation",
+          label: "Local Runtime",
           summary: "Runtime summary",
           detail: "Runtime panel",
         },
@@ -569,13 +577,13 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Virtualisation"));
+    fireEvent.click(screen.getByText("Local Runtime"));
     expect(await screen.findByText("Docker Runtime")).toBeInTheDocument();
-    expect(await screen.findByText("Local Emulators")).toBeInTheDocument();
+    expect(await screen.findByText("Local Runtimes")).toBeInTheDocument();
     expect(await screen.findByText("Managed Docker Resources")).toBeInTheDocument();
   });
 
-  it("starts and stops LocalStack from the virtualisation workspace", async () => {
+  it("starts and stops LocalStack from the local runtime workspace", async () => {
     sessionFixture = {
       ...sessionFixture,
       isLocked: true,
@@ -591,7 +599,7 @@ describe("App", () => {
         },
         {
           tabId: "virtualisation",
-          label: "Virtualisation",
+          label: "Local Runtime",
           summary: "Runtime summary",
           detail: "Runtime panel",
         },
@@ -600,7 +608,7 @@ describe("App", () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByText("Virtualisation"));
+    fireEvent.click(await screen.findByText("Local Runtime"));
     fireEvent.change(await screen.findByLabelText("LocalStack auth token"), {
       target: { value: "localstack-token" },
     });

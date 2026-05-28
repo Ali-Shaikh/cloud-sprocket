@@ -1,19 +1,23 @@
 package localstack
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/netip"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/dockerruntime"
 	"cloudsprocket/backend/daemon/internal/models"
+	"github.com/moby/moby/api/pkg/stdcopy"
 	containerapi "github.com/moby/moby/api/types/container"
 	mountapi "github.com/moby/moby/api/types/mount"
 	networkapi "github.com/moby/moby/api/types/network"
@@ -38,6 +42,7 @@ type dockerClient interface {
 	ContainerStart(ctx context.Context, container string, options client.ContainerStartOptions) (client.ContainerStartResult, error)
 	ContainerStop(ctx context.Context, container string, options client.ContainerStopOptions) (client.ContainerStopResult, error)
 	ContainerRemove(ctx context.Context, container string, options client.ContainerRemoveOptions) (client.ContainerRemoveResult, error)
+	ContainerLogs(ctx context.Context, container string, options client.ContainerLogsOptions) (client.ContainerLogsResult, error)
 	ImagePull(ctx context.Context, ref string, options client.ImagePullOptions) (client.ImagePullResponse, error)
 	Close() error
 }
@@ -175,6 +180,65 @@ func (m *Manager) Stop(ctx context.Context) (models.LocalStackStatus, error) {
 		}
 	}
 	return m.statusWithClient(ctx, api), nil
+}
+
+// Logs returns recent logs for the managed LocalStack container.
+func (m *Manager) Logs(ctx context.Context, tail int) (models.EmulatorLogSnapshot, error) {
+	api, _, err := m.dockerClient()
+	if err != nil {
+		return models.EmulatorLogSnapshot{
+			EmulatorID: "localstack",
+			Lines:      []string{},
+			Summary:    "Docker is not available.",
+		}, err
+	}
+	defer api.Close()
+
+	containers, err := m.managedContainers(ctx, api)
+	if err != nil {
+		return models.EmulatorLogSnapshot{
+			EmulatorID: "localstack",
+			Lines:      []string{},
+			Summary:    "Failed to query LocalStack container: " + err.Error(),
+		}, err
+	}
+	if len(containers.Items) == 0 {
+		return models.EmulatorLogSnapshot{
+			EmulatorID: "localstack",
+			Lines:      []string{},
+			Summary:    "No managed LocalStack container is present.",
+		}, nil
+	}
+
+	tail = clampLogTail(tail)
+	result, err := api.ContainerLogs(ctx, containers.Items[0].ID, client.ContainerLogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Tail:       strconv.Itoa(tail),
+	})
+	if err != nil {
+		return models.EmulatorLogSnapshot{
+			EmulatorID: "localstack",
+			Lines:      []string{},
+			Summary:    "Failed to read LocalStack logs: " + err.Error(),
+		}, err
+	}
+	defer result.Close()
+
+	text, err := readContainerLogs(result)
+	if err != nil {
+		return models.EmulatorLogSnapshot{
+			EmulatorID: "localstack",
+			Lines:      []string{},
+			Summary:    "Failed to decode LocalStack logs: " + err.Error(),
+		}, err
+	}
+	lines := splitLogLines(text)
+	return models.EmulatorLogSnapshot{
+		EmulatorID: "localstack",
+		Lines:      lines,
+		Summary:    fmt.Sprintf("Showing the latest %d LocalStack log lines.", len(lines)),
+	}, nil
 }
 
 func (m *Manager) dockerClient() (dockerClient, models.LocalStackStatus, error) {
@@ -360,6 +424,48 @@ func validEnvName(value string) bool {
 		return false
 	}
 	return true
+}
+
+func clampLogTail(tail int) int {
+	if tail <= 0 {
+		return 200
+	}
+	if tail > 1000 {
+		return 1000
+	}
+	return tail
+}
+
+func readContainerLogs(result client.ContainerLogsResult) (string, error) {
+	raw, err := io.ReadAll(result)
+	if err != nil {
+		return "", err
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if _, err := stdcopy.StdCopy(&stdout, &stderr, bytes.NewReader(raw)); err == nil {
+		if stderr.Len() == 0 {
+			return stdout.String(), nil
+		}
+		if stdout.Len() == 0 {
+			return stderr.String(), nil
+		}
+		return stdout.String() + stderr.String(), nil
+	}
+	return string(raw), nil
+}
+
+func splitLogLines(text string) []string {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return []string{}
+	}
+	lines := strings.Split(text, "\n")
+	for index := range lines {
+		lines[index] = strings.TrimRight(lines[index], "\r")
+	}
+	return lines
 }
 
 func (m *Manager) healthCheck(ctx context.Context) error {

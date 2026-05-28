@@ -1,10 +1,10 @@
 # Checkpoint
 
-- Date: `2026-05-28`
+- Date: `2026-05-29`
 - Branch: `feat/local-emulator-foundation`
 - Head after local commit: `fix: repair desktop event bridge rendering`
 - Working tree: LocalStack runtime work, blank-screen fixes, and image policy work are committed; unrelated untracked image artefacts may still be present
-- Status: LocalStack start and stop wiring is implemented and verified locally. The built desktop app has been launched and verified through WebView debugging with visible locked workspace content. LocalStack controls now live under a dedicated `Virtualisation` workspace menu, default to `localstack/localstack:stable`, accept an auth token before start, support persistence, and support `CLOUDSPROCKET_LOCALSTACK_IMAGE`.
+- Status: LocalStack start and stop wiring is implemented and verified locally. The built desktop app has been launched and verified through WebView debugging with visible content. LocalStack controls now live under a dedicated `Local Runtime` workspace/global menu, default to `localstack/localstack:stable`, accept an auth token before start, support persistence, show recent container logs, and support `CLOUDSPROCKET_LOCALSTACK_IMAGE`.
 
 ## Current State
 
@@ -42,6 +42,9 @@
 - Made `Virtualisation` available before locking/selecting a cloud profile so Docker and LocalStack can be started first.
 - Added Virtualisation polling while the menu is open and short polling after LocalStack start/stop so transient startup health errors such as EOF refresh once LocalStack is actually ready.
 - Fixed the setup sidebar so `Lock` remains clickable when Virtualisation has been selected before locking a workspace.
+- Renamed the visible runtime area to `Local Runtime` while keeping the internal `virtualisation` tab id stable.
+- Added `emulators.logs` and Docker-backed LocalStack container log retrieval.
+- Added LocalStack log panels to the global and locked Local Runtime views.
 
 ## Files Changed In This Resume
 
@@ -56,6 +59,7 @@
 - `apps/desktop/src/views/WorkspaceView.tsx`
 - `apps/desktop/src/views/shared.tsx`
 - `apps/desktop/src/lib/backend.ts`
+- `apps/desktop/src/styles.css`
 - `apps/desktop/src/types/backend.ts`
 - `apps/desktop/src/App.test.tsx`
 - `apps/desktop/src-tauri/src/main.rs`
@@ -87,6 +91,12 @@
   - `pnpm run typecheck:desktop` passed.
   - `pnpm --dir apps/desktop test` passed, 14 tests.
   - `pnpm run build:desktop:exe` passed after stopping the running desktop process that locked the executable.
+- After renaming the visible area to `Local Runtime` and adding LocalStack logs:
+  - `go -C backend/daemon test ./...` passed.
+  - `pnpm run typecheck:desktop` passed.
+  - `pnpm --dir apps/desktop test` passed, 14 tests.
+  - `pnpm run build:desktop:exe` passed after stopping the running desktop process that locked the executable.
+  - Relaunched `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe` with WebView debugging and verified the app renders with the `Local Runtime` setup sidebar entry visible.
 
 ## Earlier Verification On 2026-05-27
 
@@ -129,12 +139,13 @@
 
 ## Left To Do
 
-1. Verify LocalStack start with a valid auth token from the global `Virtualisation` menu in the rebuilt executable.
-2. Add user-facing error/status copy for image pull, create, start, stop, and health failures if the current summaries feel too terse in the desktop app.
-3. Consider adding a structured emulator action result instead of returning raw `LocalStackStatus` for start and stop.
-4. Decide whether to squash the three blank-screen fix commits into the runtime-control commit before PR.
-5. Push with `--force-with-lease` because branch history was rewritten.
+1. Verify LocalStack start with a valid auth token from the global `Local Runtime` menu against Docker on a machine with a valid token.
+2. Decide whether Compose editing should be added on this branch or deferred to a separate follow-up.
+3. Add user-facing error/status copy for image pull, create, start, stop, and health failures if the current summaries feel too terse in the desktop app.
+4. Consider adding a structured emulator action result instead of returning raw `LocalStackStatus` for start and stop.
+5. Decide whether to squash the blank-screen fix commits into the runtime-control commit before PR.
+6. Push with `--force-with-lease` because branch history was rewritten.
 
 ## Resume Point
 
-- The next branch step is PR preparation: decide whether to squash fix commits, then push the rewritten branch with `--force-with-lease`.
+- The next branch step is either valid-token LocalStack runtime verification or PR preparation: decide whether Compose editing belongs here, decide whether to squash fix commits, then push the rewritten branch with `--force-with-lease`.

@@ -49,7 +49,7 @@ const mockWorkspaceTabs: WorkspaceTab[] = [
   },
   {
     tabId: "virtualisation",
-    label: "Virtualisation",
+    label: "Local Runtime",
     summary: "Docker and local cloud runtime controls.",
     detail: "Manage Docker diagnostics, LocalStack, local config artefacts, and app-owned emulator state.",
   },
@@ -82,7 +82,7 @@ const mockAzureWorkspaceTabs: WorkspaceTab[] = [
   },
   {
     tabId: "virtualisation",
-    label: "Virtualisation",
+    label: "Local Runtime",
     summary: "Docker and local cloud runtime controls.",
     detail: "Manage Docker diagnostics, LocalStack, local config artefacts, and app-owned emulator state.",
   },
@@ -781,6 +781,20 @@ function handleMockRequest<T>(
         status: "stopped",
         summary: "LocalStack container is present but not running.",
         details: [],
+      } as T);
+    case "emulators.logs":
+      return Promise.resolve({
+        emulatorId: "localstack",
+        lines: mockState.localStackStatus === "running"
+          ? [
+            "LocalStack supervisor started.",
+            "Ready.",
+            "Serving edge on http://0.0.0.0:4566.",
+          ]
+          : [],
+        summary: mockState.localStackStatus === "running"
+          ? "Showing the latest 3 LocalStack log lines."
+          : "No managed LocalStack container is running.",
       } as T);
     case "aws.s3.selectBucket":
       mockState.session.selectedS3BucketName = String(params.bucketName ?? "");
