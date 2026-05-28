@@ -39,6 +39,7 @@ import type {
   AzureResourceGroup,
   AzureVirtualMachine,
   DetailField,
+  EmulatorLogSnapshot,
   DockerRuntimeSnapshot,
   EmulatorSummary,
   JobStatus,
@@ -374,7 +375,7 @@ function AppSidebar({
     },
     {
       id: "virtualisation",
-      label: "Virtualisation",
+      label: "Local Runtime",
       detail: "Docker and local cloud runtimes",
       iconName: "settings",
       badge: activeWorkspaceTabId === "virtualisation" ? "Open" : undefined,
@@ -697,25 +698,62 @@ function SimpleDetailFields({
   );
 }
 
+function LocalStackLogsPanel({
+  logs,
+  status,
+  onRefresh,
+}: {
+  logs: EmulatorLogSnapshot;
+  status: string;
+  onRefresh: () => void;
+}) {
+  const logText = logs.lines.join("\n");
+  return (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description={status || logs.summary}
+          actions={<Button onClick={onRefresh}>Refresh Logs</Button>}
+        >
+          LocalStack Logs
+        </Header>
+      }
+    >
+      {logs.lines.length === 0 ? (
+        <Box color="text-status-inactive">No LocalStack log lines are available yet.</Box>
+      ) : (
+        <pre className="container-log-panel">{logText}</pre>
+      )}
+    </Container>
+  );
+}
+
 function GlobalVirtualisationView({
   workspace,
   localStackAuthToken,
   localStackPersistence,
   localStackEnvironmentText,
+  localStackLogs,
+  localStackLogsStatus,
   onLocalStackAuthTokenChange,
   onLocalStackPersistenceChange,
   onLocalStackEnvironmentTextChange,
   onRefreshDockerRuntime,
+  onRefreshLocalStackLogs,
   onInvokeLocalStackAction,
 }: {
   workspace: WorkspaceSnapshot;
   localStackAuthToken: string;
   localStackPersistence: boolean;
   localStackEnvironmentText: string;
+  localStackLogs: EmulatorLogSnapshot;
+  localStackLogsStatus: string;
   onLocalStackAuthTokenChange: (value: string) => void;
   onLocalStackPersistenceChange: (value: boolean) => void;
   onLocalStackEnvironmentTextChange: (value: string) => void;
   onRefreshDockerRuntime: () => void;
+  onRefreshLocalStackLogs: () => void;
   onInvokeLocalStackAction: (action: "prepareProfile" | "start" | "stop") => void;
 }) {
   const localStack = workspace.emulatorSummaries.find((emulator) => emulator.emulatorId === "localstack");
@@ -732,7 +770,7 @@ function GlobalVirtualisationView({
             description="Docker and local cloud runtime controls are available before locking a cloud profile."
             actions={<Button onClick={onRefreshDockerRuntime}>Refresh Docker</Button>}
           >
-            Virtualisation
+            Local Runtime
           </Header>
         }
       >
@@ -821,6 +859,12 @@ function GlobalVirtualisationView({
         </Container>
       </div>
 
+      <LocalStackLogsPanel
+        logs={localStackLogs}
+        status={localStackLogsStatus}
+        onRefresh={onRefreshLocalStackLogs}
+      />
+
       <Container header={<Header variant="h2">Managed Docker Resources</Header>}>
         {workspace.dockerResources.length === 0 ? (
           <Box color="text-status-inactive">No CloudSprocket-managed Docker resources are currently detected.</Box>
@@ -876,6 +920,14 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
   };
 }
 
+function normaliseEmulatorLogSnapshot(snapshot: Partial<EmulatorLogSnapshot> | null | undefined): EmulatorLogSnapshot {
+  return {
+    emulatorId: snapshot?.emulatorId ?? "localstack",
+    lines: normaliseArray(snapshot?.lines).map((line) => String(line)),
+    summary: snapshot?.summary ?? "LocalStack logs have not been loaded yet.",
+  };
+}
+
 export default function App() {
   const [providers, setProviders] = useState<ProviderSummary[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
@@ -892,6 +944,12 @@ export default function App() {
   const [localStackAuthToken, setLocalStackAuthToken] = useState("");
   const [localStackPersistence, setLocalStackPersistence] = useState(false);
   const [localStackEnvironmentText, setLocalStackEnvironmentText] = useState("");
+  const [localStackLogs, setLocalStackLogs] = useState<EmulatorLogSnapshot>({
+    emulatorId: "localstack",
+    lines: [],
+    summary: "LocalStack logs have not been loaded yet.",
+  });
+  const [localStackLogsStatus, setLocalStackLogsStatus] = useState("");
   const [ec2ActionStatus, setEC2ActionStatus] = useState("Select an EC2 instance to run lifecycle actions.");
   const [ec2ActionInFlight, setEC2ActionInFlight] = useState(false);
   const [ec2ActionHistory, setEC2ActionHistory] = useState<EC2ActionHistoryItem[]>([]);
@@ -1225,10 +1283,37 @@ export default function App() {
   }
 
   async function refreshVirtualisationState(): Promise<void> {
-    const workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
+    const [workspaceResult, logResult] = await Promise.all([
+      backendRequest<WorkspaceSnapshot>("workspace.get"),
+      backendRequest<EmulatorLogSnapshot>("emulators.logs", { emulatorId: "localstack", tail: 200 }).catch((error) => ({
+        emulatorId: "localstack",
+        lines: [],
+        summary: error instanceof Error ? error.message : "Failed to load LocalStack logs.",
+      })),
+    ]);
     startTransition(() => {
       setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+      setLocalStackLogs(normaliseEmulatorLogSnapshot(logResult));
+      setLocalStackLogsStatus("");
     });
+  }
+
+  async function refreshLocalStackLogs(): Promise<void> {
+    setLocalStackLogsStatus("Refreshing logs...");
+    try {
+      const logResult = await backendRequest<EmulatorLogSnapshot>("emulators.logs", {
+        emulatorId: "localstack",
+        tail: 200,
+      });
+      startTransition(() => {
+        setLocalStackLogs(normaliseEmulatorLogSnapshot(logResult));
+        setLocalStackLogsStatus("");
+      });
+    } catch (error) {
+      startTransition(() => {
+        setLocalStackLogsStatus(error instanceof Error ? error.message : "Failed to refresh LocalStack logs.");
+      });
+    }
   }
 
   function localStackEnvironment(): Record<string, string> {
@@ -1268,6 +1353,7 @@ export default function App() {
       startParams,
     );
     await refreshVirtualisationState();
+    await refreshLocalStackLogs();
     if (action === "start" || action === "stop") {
       for (let attempt = 0; attempt < 8; attempt += 1) {
         await wait(2500);
@@ -1331,6 +1417,11 @@ export default function App() {
       onLocalStackPersistenceChange={setLocalStackPersistence}
       localStackEnvironmentText={localStackEnvironmentText}
       onLocalStackEnvironmentTextChange={setLocalStackEnvironmentText}
+      localStackLogs={localStackLogs}
+      localStackLogsStatus={localStackLogsStatus}
+      onRefreshLocalStackLogs={() => {
+        void refreshLocalStackLogs();
+      }}
       onUnlockSession={() => {
         void mutateSession("session.unlock");
       }}
@@ -1487,11 +1578,16 @@ export default function App() {
       localStackAuthToken={localStackAuthToken}
       localStackPersistence={localStackPersistence}
       localStackEnvironmentText={localStackEnvironmentText}
+      localStackLogs={localStackLogs}
+      localStackLogsStatus={localStackLogsStatus}
       onLocalStackAuthTokenChange={setLocalStackAuthToken}
       onLocalStackPersistenceChange={setLocalStackPersistence}
       onLocalStackEnvironmentTextChange={setLocalStackEnvironmentText}
       onRefreshDockerRuntime={() => {
         void refreshVirtualisationState();
+      }}
+      onRefreshLocalStackLogs={() => {
+        void refreshLocalStackLogs();
       }}
       onInvokeLocalStackAction={(action) => {
         void invokeLocalStackAction(action);

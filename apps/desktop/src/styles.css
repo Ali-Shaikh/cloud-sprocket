@@ -857,6 +857,19 @@ button.sidebar-menu-item {
   border-left: 4px solid var(--error);
 }
 
+.container-log-panel {
+  max-height: 20rem;
+  margin: 0;
+  padding: 0.85rem;
+  overflow: auto;
+  border-radius: 8px;
+  background: #061521;
+  color: #eef7ff;
+  font: 0.82rem/1.45 "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .log-entry-meta {
   display: flex;
   justify-content: space-between;

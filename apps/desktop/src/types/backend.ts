@@ -277,6 +277,12 @@ export interface AppSettingsSnapshot {
   localStackImage: string;
 }
 
+export interface EmulatorLogSnapshot {
+  emulatorId: string;
+  lines: string[];
+  summary: string;
+}
+
 export interface StateChangedPayload {
   providers: ProviderSummary[];
   profiles: ProfileSummary[];

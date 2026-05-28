@@ -132,6 +132,12 @@ type LocalStackStartOptions struct {
 	Environment map[string]string `json:"environment,omitempty"`
 }
 
+type EmulatorLogSnapshot struct {
+	EmulatorID string   `json:"emulatorId"`
+	Lines      []string `json:"lines"`
+	Summary    string   `json:"summary"`
+}
+
 type DockerOwnershipPolicy struct {
 	LabelKey        string `json:"labelKey"`
 	LabelValue      string `json:"labelValue"`
