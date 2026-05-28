@@ -39,6 +39,8 @@
   - replaced the stale foundation-only plan with the current runtime plan
 - When the managed container exited with code `55`, Docker logs showed LocalStack license activation failed because no `LOCALSTACK_AUTH_TOKEN` was provided. The UI now collects the token before start, and the daemon recreates stopped managed containers when token or persistence settings need to be applied.
 - Moved Docker runtime, LocalStack controls, managed Docker resources, local config artefacts, and runtime settings from Overview into a dedicated `Virtualisation` workspace menu.
+- Made `Virtualisation` available before locking/selecting a cloud profile so Docker and LocalStack can be started first.
+- Added Virtualisation polling while the menu is open and short polling after LocalStack start/stop so transient startup health errors such as EOF refresh once LocalStack is actually ready.
 
 ## Files Changed In This Resume
 
@@ -75,6 +77,11 @@
   - `pnpm --dir apps/desktop test` passed, 14 tests.
   - `pnpm run typecheck:desktop` passed.
   - `pnpm run build:desktop:exe` passed.
+- After making Virtualisation global and adding status polling:
+  - `pnpm run typecheck:desktop` passed.
+  - `pnpm --dir apps/desktop test` passed, 14 tests.
+  - `go -C backend/daemon test ./...` passed.
+  - `pnpm run build:desktop:exe` passed after stopping the running desktop process that locked the executable.
 
 ## Earlier Verification On 2026-05-27
 
@@ -117,7 +124,7 @@
 
 ## Left To Do
 
-1. Verify LocalStack start with a valid auth token from the `Virtualisation` menu in the rebuilt executable.
+1. Verify LocalStack start with a valid auth token from the global `Virtualisation` menu in the rebuilt executable.
 2. Add user-facing error/status copy for image pull, create, start, stop, and health failures if the current summaries feel too terse in the desktop app.
 3. Consider adding a structured emulator action result instead of returning raw `LocalStackStatus` for start and stop.
 4. Decide whether to squash the three blank-screen fix commits into the runtime-control commit before PR.
