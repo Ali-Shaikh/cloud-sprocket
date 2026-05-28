@@ -370,7 +370,7 @@ function AppSidebar({
       label: "Lock",
       detail: selectedProfile && session.selectedAuthMethod ? "Ready" : "Waiting",
       iconName: "lock-private",
-      badge: selectedProfile && session.selectedAuthMethod ? "Ready" : "Open",
+      badge: selectedProfile && session.selectedAuthMethod ? "Ready" : undefined,
     },
     {
       id: "virtualisation",
@@ -459,9 +459,7 @@ function AppSidebar({
           {(session.isLocked ? workspaceItems : setupItems).map((item) => {
             const active = session.isLocked
               ? item.id === activeWorkspaceTabId
-              : item.id === "virtualisation"
-                ? activeWorkspaceTabId === "virtualisation"
-                : activeWorkspaceTabId !== "virtualisation" && (item.badge === "Open" || item.badge === "Ready");
+              : item.id === "virtualisation" && activeWorkspaceTabId === "virtualisation";
             return session.isLocked ? (
               <div
                 key={item.id}
@@ -512,14 +510,20 @@ function AppSidebar({
                   </div>
                 ) : null}
               </div>
-            ) : item.id === "virtualisation" ? (
+            ) : item.id === "virtualisation" || item.id === "lock" ? (
               <button
                 key={item.id}
                 type="button"
                 className={`sidebar-menu-item${active ? " sidebar-menu-item-active" : ""}`}
                 onClick={() => {
-                  onWorkspaceTabChange("virtualisation");
+                  if (item.id === "virtualisation") {
+                    onWorkspaceTabChange("virtualisation");
+                    return;
+                  }
+                  onWorkspaceTabChange("overview");
+                  onLockSession();
                 }}
+                disabled={item.id === "lock" && (!selectedProfile || !session.selectedAuthMethod)}
                 title={`${item.label}: ${item.detail}`}
               >
                 <span className={sidebarItemIconClass(item)}>
