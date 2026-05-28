@@ -41,6 +41,7 @@
 - Moved Docker runtime, LocalStack controls, managed Docker resources, local config artefacts, and runtime settings from Overview into a dedicated `Virtualisation` workspace menu.
 - Made `Virtualisation` available before locking/selecting a cloud profile so Docker and LocalStack can be started first.
 - Added Virtualisation polling while the menu is open and short polling after LocalStack start/stop so transient startup health errors such as EOF refresh once LocalStack is actually ready.
+- Fixed the setup sidebar so `Lock` remains clickable when Virtualisation has been selected before locking a workspace.
 
 ## Files Changed In This Resume
 
@@ -81,6 +82,10 @@
   - `pnpm run typecheck:desktop` passed.
   - `pnpm --dir apps/desktop test` passed, 14 tests.
   - `go -C backend/daemon test ./...` passed.
+  - `pnpm run build:desktop:exe` passed after stopping the running desktop process that locked the executable.
+- After fixing the setup sidebar `Lock` item:
+  - `pnpm run typecheck:desktop` passed.
+  - `pnpm --dir apps/desktop test` passed, 14 tests.
   - `pnpm run build:desktop:exe` passed after stopping the running desktop process that locked the executable.
 
 ## Earlier Verification On 2026-05-27
