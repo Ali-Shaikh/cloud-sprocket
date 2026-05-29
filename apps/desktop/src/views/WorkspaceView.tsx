@@ -81,6 +81,8 @@ type Props = {
   onLocalStackEnvironmentTextChange: (value: string) => void;
   localStackLogs: EmulatorLogSnapshot;
   localStackLogsStatus: string;
+  localStackActionStatus: string;
+  localStackActionInFlight: boolean;
   onRefreshLocalStackLogs: () => void;
   onUnlockSession: () => void;
   onToggleSensitiveValues: () => void;
@@ -301,6 +303,8 @@ export default function WorkspaceView({
   onLocalStackEnvironmentTextChange,
   localStackLogs,
   localStackLogsStatus,
+  localStackActionStatus,
+  localStackActionInFlight,
   onRefreshLocalStackLogs,
   onUnlockSession,
   onToggleSensitiveValues,
@@ -590,6 +594,10 @@ export default function WorkspaceView({
               {renderDetailFields(emulator.details, "No emulator details are available yet.", showSensitiveValues)}
               {emulator.emulatorId === "localstack" ? (
                 <SpaceBetween size="s">
+                  <div className="detail-card detail-card-strong">
+                    <Box variant="awsui-key-label">Runtime Action</Box>
+                    <Box variant="p">{localStackActionStatus}</Box>
+                  </div>
                   <div className="detail-grid">
                     <div className="detail-card">
                       <Box variant="awsui-key-label">LocalStack Auth Token</Box>
@@ -625,12 +633,14 @@ export default function WorkspaceView({
                     direction="horizontal"
                   >
                     <Button
+                      disabled={localStackActionInFlight}
                       onClick={() => onInvokeLocalStackAction("prepareProfile")}
                     >
                       Prepare Profile
                     </Button>
                     <Button
                       disabled={
+                        localStackActionInFlight ||
                         !workspace.dockerRuntime.reachable ||
                         emulator.status === "running" ||
                         emulator.status === "unhealthy"
@@ -641,6 +651,7 @@ export default function WorkspaceView({
                     </Button>
                     <Button
                       disabled={
+                        localStackActionInFlight ||
                         !workspace.dockerRuntime.reachable ||
                         (emulator.status !== "running" && emulator.status !== "unhealthy")
                       }

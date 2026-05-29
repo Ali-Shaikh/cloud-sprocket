@@ -45,6 +45,8 @@
 - Renamed the visible runtime area to `Local Runtime` while keeping the internal `virtualisation` tab id stable.
 - Added `emulators.logs` and Docker-backed LocalStack container log retrieval.
 - Added LocalStack log panels to the global and locked Local Runtime views.
+- Added LocalStack action status copy and failure notifications in the Local Runtime UI.
+- LocalStack post-start/post-stop health polling now runs in the background after the first refresh so the Start/Stop controls do not stay blocked for the full polling window.
 
 ## Files Changed In This Resume
 
@@ -97,6 +99,10 @@
   - `pnpm --dir apps/desktop test` passed, 14 tests.
   - `pnpm run build:desktop:exe` passed after stopping the running desktop process that locked the executable.
   - Relaunched `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe` with WebView debugging and verified the app renders with the `Local Runtime` setup sidebar entry visible.
+- After adding LocalStack action status and background polling:
+  - `pnpm run typecheck:desktop` passed.
+  - `pnpm --dir apps/desktop test` passed, 14 tests.
+  - `pnpm run build:desktop:exe` passed.
 
 ## Earlier Verification On 2026-05-27
 
@@ -141,10 +147,9 @@
 
 1. Verify LocalStack start with a valid auth token from the global `Local Runtime` menu against Docker on a machine with a valid token.
 2. Decide whether Compose editing should be added on this branch or deferred to a separate follow-up.
-3. Add user-facing error/status copy for image pull, create, start, stop, and health failures if the current summaries feel too terse in the desktop app.
-4. Consider adding a structured emulator action result instead of returning raw `LocalStackStatus` for start and stop.
-5. Decide whether to squash the blank-screen fix commits into the runtime-control commit before PR.
-6. Push with `--force-with-lease` because branch history was rewritten.
+3. Consider adding a structured emulator action result instead of returning raw `LocalStackStatus` for start and stop.
+4. Decide whether to squash the blank-screen fix commits into the runtime-control commit before PR.
+5. Push with `--force-with-lease` because branch history was rewritten.
 
 ## Resume Point
 

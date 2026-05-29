@@ -736,6 +736,8 @@ function GlobalVirtualisationView({
   localStackEnvironmentText,
   localStackLogs,
   localStackLogsStatus,
+  localStackActionStatus,
+  localStackActionInFlight,
   onLocalStackAuthTokenChange,
   onLocalStackPersistenceChange,
   onLocalStackEnvironmentTextChange,
@@ -749,6 +751,8 @@ function GlobalVirtualisationView({
   localStackEnvironmentText: string;
   localStackLogs: EmulatorLogSnapshot;
   localStackLogsStatus: string;
+  localStackActionStatus: string;
+  localStackActionInFlight: boolean;
   onLocalStackAuthTokenChange: (value: string) => void;
   onLocalStackPersistenceChange: (value: boolean) => void;
   onLocalStackEnvironmentTextChange: (value: string) => void;
@@ -807,6 +811,10 @@ function GlobalVirtualisationView({
         >
           <SpaceBetween size="s">
             <SimpleDetailFields fields={localStack?.details ?? []} />
+            <div className="detail-card detail-card-strong">
+              <Box variant="awsui-key-label">Runtime Action</Box>
+              <Box variant="p">{localStackActionStatus}</Box>
+            </div>
             <div className="detail-grid">
               <div className="detail-card">
                 <Box variant="awsui-key-label">LocalStack Auth Token</Box>
@@ -841,15 +849,29 @@ function GlobalVirtualisationView({
               size="xs"
               direction="horizontal"
             >
-              <Button onClick={() => onInvokeLocalStackAction("prepareProfile")}>Prepare Profile</Button>
               <Button
-                disabled={!workspace.dockerRuntime.reachable || localStack?.status === "running" || localStack?.status === "unhealthy"}
+                disabled={localStackActionInFlight}
+                onClick={() => onInvokeLocalStackAction("prepareProfile")}
+              >
+                Prepare Profile
+              </Button>
+              <Button
+                disabled={
+                  localStackActionInFlight ||
+                  !workspace.dockerRuntime.reachable ||
+                  localStack?.status === "running" ||
+                  localStack?.status === "unhealthy"
+                }
                 onClick={() => onInvokeLocalStackAction("start")}
               >
                 Start
               </Button>
               <Button
-                disabled={!workspace.dockerRuntime.reachable || (localStack?.status !== "running" && localStack?.status !== "unhealthy")}
+                disabled={
+                  localStackActionInFlight ||
+                  !workspace.dockerRuntime.reachable ||
+                  (localStack?.status !== "running" && localStack?.status !== "unhealthy")
+                }
                 onClick={() => onInvokeLocalStackAction("stop")}
               >
                 Stop
@@ -950,6 +972,8 @@ export default function App() {
     summary: "LocalStack logs have not been loaded yet.",
   });
   const [localStackLogsStatus, setLocalStackLogsStatus] = useState("");
+  const [localStackActionStatus, setLocalStackActionStatus] = useState("No LocalStack action has run yet.");
+  const [localStackActionInFlight, setLocalStackActionInFlight] = useState(false);
   const [ec2ActionStatus, setEC2ActionStatus] = useState("Select an EC2 instance to run lifecycle actions.");
   const [ec2ActionInFlight, setEC2ActionInFlight] = useState(false);
   const [ec2ActionHistory, setEC2ActionHistory] = useState<EC2ActionHistoryItem[]>([]);
@@ -1316,6 +1340,14 @@ export default function App() {
     }
   }
 
+  async function pollLocalStackState(label: string): Promise<void> {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await wait(2500);
+      await refreshVirtualisationState();
+    }
+    setLocalStackActionStatus(`${label} completed.`);
+  }
+
   function localStackEnvironment(): Record<string, string> {
     return Object.fromEntries(
       localStackEnvironmentText
@@ -1348,17 +1380,47 @@ export default function App() {
           environment: localStackEnvironment(),
         }
         : {};
-    await backendRequest<unknown>(
-      method,
-      startParams,
-    );
-    await refreshVirtualisationState();
-    await refreshLocalStackLogs();
-    if (action === "start" || action === "stop") {
-      for (let attempt = 0; attempt < 8; attempt += 1) {
-        await wait(2500);
-        await refreshVirtualisationState();
+    const label =
+      action === "prepareProfile"
+        ? "Prepare profile"
+        : action === "start"
+          ? "Start LocalStack"
+          : "Stop LocalStack";
+    setLocalStackActionInFlight(true);
+    setLocalStackActionStatus(`${label} requested.`);
+    try {
+      await backendRequest<unknown>(
+        method,
+        startParams,
+      );
+      setLocalStackActionStatus(`${label} completed. Refreshing runtime state.`);
+      await refreshVirtualisationState();
+      await refreshLocalStackLogs();
+      if (action === "start" || action === "stop") {
+        void pollLocalStackState(label);
+      } else {
+        setLocalStackActionStatus(`${label} completed.`);
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${label} failed.`;
+      const notificationId = `localstack-${action}-${Date.now()}`;
+      setLocalStackActionStatus(message);
+      setNotifications((current) => [
+        {
+          id: notificationId,
+          type: "error",
+          dismissible: true,
+          header: `${label} failed`,
+          content: message,
+          onDismiss: () => {
+            setNotifications((items) => items.filter((item) => item.id !== notificationId));
+          },
+        },
+        ...current,
+      ]);
+      await refreshVirtualisationState().catch(() => undefined);
+    } finally {
+      setLocalStackActionInFlight(false);
     }
   }
 
@@ -1419,6 +1481,8 @@ export default function App() {
       onLocalStackEnvironmentTextChange={setLocalStackEnvironmentText}
       localStackLogs={localStackLogs}
       localStackLogsStatus={localStackLogsStatus}
+      localStackActionStatus={localStackActionStatus}
+      localStackActionInFlight={localStackActionInFlight}
       onRefreshLocalStackLogs={() => {
         void refreshLocalStackLogs();
       }}
@@ -1580,6 +1644,8 @@ export default function App() {
       localStackEnvironmentText={localStackEnvironmentText}
       localStackLogs={localStackLogs}
       localStackLogsStatus={localStackLogsStatus}
+      localStackActionStatus={localStackActionStatus}
+      localStackActionInFlight={localStackActionInFlight}
       onLocalStackAuthTokenChange={setLocalStackAuthToken}
       onLocalStackPersistenceChange={setLocalStackPersistence}
       onLocalStackEnvironmentTextChange={setLocalStackEnvironmentText}
