@@ -22,6 +22,6 @@ func defaultClientFactory(host string) (ApiClient, error) {
 	return client.New(
 		client.WithHost(host),
 		client.WithAPIVersionNegotiation(),
-		client.WithUserAgent("cloudsprocket-desktop/0.1.17"),
+		client.WithUserAgent("cloudsprocket-desktop/0.1.19"),
 	)
 }

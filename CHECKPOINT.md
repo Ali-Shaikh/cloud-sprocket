@@ -2,8 +2,8 @@
 
 - Date: `2026-05-29`
 - Branch: `feat/local-emulator-foundation`
-- Head after local commit: `fix: repair desktop event bridge rendering`
-- Working tree: LocalStack runtime work, blank-screen fixes, and image policy work are committed; unrelated untracked image artefacts may still be present
+- Head after local commit: `fix: reconcile late LocalStack starts`
+- Working tree: LocalStack runtime work, blank-screen fixes, Local Runtime UX updates, and image policy work are committed; release version bump is staged for `0.1.19`
 - Status: LocalStack start and stop wiring is implemented and verified locally. The built desktop app has been launched and verified through WebView debugging with visible content. LocalStack controls now live under a dedicated `Local Runtime` workspace/global menu, default to `localstack/localstack:stable`, accept an auth token before start, support persistence, show recent container logs, and support `CLOUDSPROCKET_LOCALSTACK_IMAGE`.
 
 ## Current State
@@ -51,6 +51,7 @@
 - Bounded LocalStack start/stop actions so Docker hangs recover in the app with an actionable toast and re-enabled controls.
 - Start is no longer disabled solely because Docker is reported unavailable; clicking it now produces a visible failure if Docker cannot complete the request.
 - Added late-success reconciliation so a Docker start that completes after the frontend timeout updates LocalStack back to success on the next poll.
+- Prepared release `0.1.19` so the feature branch can be pushed and tagged after verification.
 
 ## Files Changed In This Resume
 
@@ -116,6 +117,11 @@
 - After Docker eventually completed the LocalStack start:
   - Docker reported `cloudsprocket-localstack` as `Up ... (healthy)` on `127.0.0.1:4566`.
   - Relaunched `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe` with WebView debugging and verified the Local Runtime view shows LocalStack `running`, `Start` disabled, `Stop` enabled, and recent container logs.
+- Release `0.1.19` verification:
+  - `go -C backend/daemon test ./...` passed.
+  - `pnpm run typecheck:desktop` passed.
+  - `pnpm --dir apps/desktop test` passed, 14 tests.
+  - `pnpm run build:desktop:exe` passed and compiled `cloudsprocket-desktop v0.1.19`.
 
 ## Earlier Verification On 2026-05-27
 
@@ -158,10 +164,9 @@
 
 ## Left To Do
 
-1. Decide whether Compose editing should be added on this branch or deferred to a separate follow-up.
-2. Decide whether to squash the blank-screen fix commits into the runtime-control commit before PR.
-3. Push with `--force-with-lease` because branch history was rewritten.
+1. Push with `--force-with-lease` because branch history was rewritten.
+2. Create and push annotated tag `v0.1.19`.
 
 ## Resume Point
 
-- The next branch step is either valid-token LocalStack runtime verification or PR preparation: decide whether Compose editing belongs here, decide whether to squash fix commits, then push the rewritten branch with `--force-with-lease`.
+- The next branch step is to push the rewritten branch with `--force-with-lease` and tag `v0.1.19`.
