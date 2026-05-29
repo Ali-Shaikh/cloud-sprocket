@@ -59,7 +59,7 @@ import { defaultQuery, renderLogEntries, type TablePreferences } from "./views/s
 
 const SessionSetupView = lazy(() => import("./views/SessionSetupView"));
 const WorkspaceView = lazy(() => import("./views/WorkspaceView"));
-const appVersion = "0.1.18";
+const appVersion = "0.1.19";
 
 type EC2LifecycleAction = "start" | "stop" | "reboot";
 
