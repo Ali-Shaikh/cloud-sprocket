@@ -283,6 +283,14 @@ export interface EmulatorLogSnapshot {
   summary: string;
 }
 
+export interface EmulatorActionResult {
+  emulatorId: string;
+  action: string;
+  state: "succeeded" | "degraded" | "failed";
+  summary: string;
+  status: EmulatorSummary;
+}
+
 export interface StateChangedPayload {
   providers: ProviderSummary[];
   profiles: ProfileSummary[];

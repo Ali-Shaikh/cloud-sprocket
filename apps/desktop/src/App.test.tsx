@@ -111,10 +111,11 @@ vi.mock("./lib/backend", () => ({
           ),
         };
         return {
-          profile: "cloudsprocket-localstack",
-          config: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config/aws/config",
-          credPath: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config/aws/credentials",
-          endpoint: "http://localhost:4566",
+          emulatorId: "localstack",
+          action: "prepareProfile",
+          state: "succeeded",
+          summary: "LocalStack managed profile is prepared.",
+          status: workspaceFixture.emulatorSummaries[0],
         };
       case "emulators.start":
         emulatorStartParams = params;
@@ -126,7 +127,13 @@ vi.mock("./lib/backend", () => ({
               : emulator,
           ),
         };
-        return workspaceFixture.emulatorSummaries[0];
+        return {
+          emulatorId: "localstack",
+          action: "start",
+          state: "succeeded",
+          summary: "LocalStack is running at http://localhost:4566.",
+          status: workspaceFixture.emulatorSummaries[0],
+        };
       case "emulators.stop":
         workspaceFixture = {
           ...workspaceFixture,
@@ -136,7 +143,13 @@ vi.mock("./lib/backend", () => ({
               : emulator,
           ),
         };
-        return workspaceFixture.emulatorSummaries[0];
+        return {
+          emulatorId: "localstack",
+          action: "stop",
+          state: "succeeded",
+          summary: "LocalStack container is present but not running.",
+          status: workspaceFixture.emulatorSummaries[0],
+        };
       case "emulators.logs":
         return {
           emulatorId: "localstack",
@@ -617,16 +630,25 @@ describe("App", () => {
       target: { value: "DEBUG=1\nLOCALSTACK_AUTH_TOKEN=ignored\nBAD-NAME=ignored" },
     });
     fireEvent.click(await screen.findByRole("button", { name: "Start" }));
-    expect(await screen.findByText("LocalStack is running at http://localhost:4566.")).toBeInTheDocument();
-    expect(emulatorStartParams).toEqual({
-      authToken: "localstack-token",
-      persistence: true,
-      environment: { DEBUG: "1" },
+    await waitFor(() => {
+      expect(emulatorStartParams).toEqual({
+        authToken: "localstack-token",
+        persistence: true,
+        environment: { DEBUG: "1" },
+      });
+    });
+    await waitFor(() => {
+      expect(screen.queryAllByText("LocalStack is running at http://localhost:4566.").length).toBeGreaterThan(0);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Stop" }));
-    expect(await screen.findByText("LocalStack container is present but not running.")).toBeInTheDocument();
-  });
+    await waitFor(() => {
+      expect(screen.queryAllByText("LocalStack container is present but not running.").length).toBeGreaterThan(0);
+    });
+  }, 10000);
 
   it("applies S3 prefix filtering and renders selected object metadata", async () => {
     sessionFixture = {

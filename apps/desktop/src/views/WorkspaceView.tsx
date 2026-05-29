@@ -641,7 +641,6 @@ export default function WorkspaceView({
                     <Button
                       disabled={
                         localStackActionInFlight ||
-                        !workspace.dockerRuntime.reachable ||
                         emulator.status === "running" ||
                         emulator.status === "unhealthy"
                       }
@@ -652,7 +651,6 @@ export default function WorkspaceView({
                     <Button
                       disabled={
                         localStackActionInFlight ||
-                        !workspace.dockerRuntime.reachable ||
                         (emulator.status !== "running" && emulator.status !== "unhealthy")
                       }
                       onClick={() => onInvokeLocalStackAction("stop")}

@@ -39,6 +39,7 @@ import type {
   AzureResourceGroup,
   AzureVirtualMachine,
   DetailField,
+  EmulatorActionResult,
   EmulatorLogSnapshot,
   DockerRuntimeSnapshot,
   EmulatorSummary,
@@ -306,6 +307,20 @@ function ec2InstanceState(workspaceSnapshot: WorkspaceSnapshot, instanceId: stri
 function wait(durationMs: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, durationMs);
+  });
+}
+
+function withTimeout<T>(promise: Promise<T>, durationMs: number, message: string): Promise<T> {
+  let timeoutId: number | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(new Error(message));
+    }, durationMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+    }
   });
 }
 
@@ -858,7 +873,6 @@ function GlobalVirtualisationView({
               <Button
                 disabled={
                   localStackActionInFlight ||
-                  !workspace.dockerRuntime.reachable ||
                   localStack?.status === "running" ||
                   localStack?.status === "unhealthy"
                 }
@@ -869,7 +883,6 @@ function GlobalVirtualisationView({
               <Button
                 disabled={
                   localStackActionInFlight ||
-                  !workspace.dockerRuntime.reachable ||
                   (localStack?.status !== "running" && localStack?.status !== "unhealthy")
                 }
                 onClick={() => onInvokeLocalStackAction("stop")}
@@ -1340,12 +1353,15 @@ export default function App() {
     }
   }
 
-  async function pollLocalStackState(label: string): Promise<void> {
+  function pollLocalStackState(label: string): void {
     for (let attempt = 0; attempt < 8; attempt += 1) {
-      await wait(2500);
-      await refreshVirtualisationState();
+      window.setTimeout(() => {
+        void refreshVirtualisationState();
+        if (attempt === 7) {
+          setLocalStackActionStatus(`${label} completed.`);
+        }
+      }, (attempt + 1) * 2500);
     }
-    setLocalStackActionStatus(`${label} completed.`);
   }
 
   function localStackEnvironment(): Record<string, string> {
@@ -1362,6 +1378,37 @@ export default function App() {
           return [line.slice(0, separator).trim(), line.slice(separator + 1)] as const;
         })
         .filter(([key]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && key !== "LOCALSTACK_AUTH_TOKEN"),
+    );
+  }
+
+  function addLocalStackNotification(
+    type: FlashbarProps.MessageDefinition["type"],
+    header: string,
+    content: string,
+  ): void {
+    const notificationId = `localstack-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setNotifications((current) => [
+      {
+        id: notificationId,
+        type,
+        dismissible: true,
+        header,
+        content,
+        onDismiss: () => {
+          setNotifications((items) => items.filter((item) => item.id !== notificationId));
+        },
+      },
+      ...current,
+    ]);
+  }
+
+  function applyLocalStackActionResult(label: string, result: EmulatorActionResult): void {
+    const summary = result.summary || `${label} completed.`;
+    setLocalStackActionStatus(summary);
+    addLocalStackNotification(
+      result.state === "failed" ? "error" : result.state === "degraded" ? "warning" : "success",
+      result.state === "degraded" ? `${label} needs attention` : `${label} ${result.state}`,
+      summary,
     );
   }
 
@@ -1389,35 +1436,28 @@ export default function App() {
     setLocalStackActionInFlight(true);
     setLocalStackActionStatus(`${label} requested.`);
     try {
-      await backendRequest<unknown>(
-        method,
-        startParams,
+      const result = await withTimeout(
+        backendRequest<EmulatorActionResult>(
+          method,
+          startParams,
+        ),
+        22000,
+        `${label} did not finish within 22 seconds. Check Docker and LocalStack logs, then retry.`,
       );
-      setLocalStackActionStatus(`${label} completed. Refreshing runtime state.`);
+      applyLocalStackActionResult(label, result);
       await refreshVirtualisationState();
       await refreshLocalStackLogs();
       if (action === "start" || action === "stop") {
-        void pollLocalStackState(label);
-      } else {
-        setLocalStackActionStatus(`${label} completed.`);
+        pollLocalStackState(label);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : `${label} failed.`;
-      const notificationId = `localstack-${action}-${Date.now()}`;
+      const rawMessage = error instanceof Error ? error.message : `${label} failed.`;
+      const message =
+        rawMessage === `${label} failed.`
+          ? `${label} failed. Docker did not complete the request. Refresh Docker, check the LocalStack logs, then retry.`
+          : rawMessage;
       setLocalStackActionStatus(message);
-      setNotifications((current) => [
-        {
-          id: notificationId,
-          type: "error",
-          dismissible: true,
-          header: `${label} failed`,
-          content: message,
-          onDismiss: () => {
-            setNotifications((items) => items.filter((item) => item.id !== notificationId));
-          },
-        },
-        ...current,
-      ]);
+      addLocalStackNotification("error", `${label} failed`, message);
       await refreshVirtualisationState().catch(() => undefined);
     } finally {
       setLocalStackActionInFlight(false);

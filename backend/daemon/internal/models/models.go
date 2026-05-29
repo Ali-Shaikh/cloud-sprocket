@@ -138,6 +138,22 @@ type EmulatorLogSnapshot struct {
 	Summary    string   `json:"summary"`
 }
 
+type EmulatorActionState string
+
+const (
+	EmulatorActionSucceeded EmulatorActionState = "succeeded"
+	EmulatorActionDegraded  EmulatorActionState = "degraded"
+	EmulatorActionFailed    EmulatorActionState = "failed"
+)
+
+type EmulatorActionResult struct {
+	EmulatorID string              `json:"emulatorId"`
+	Action     string              `json:"action"`
+	State      EmulatorActionState `json:"state"`
+	Summary    string              `json:"summary"`
+	Status     LocalStackStatus    `json:"status"`
+}
+
 type DockerOwnershipPolicy struct {
 	LabelKey        string `json:"labelKey"`
 	LabelValue      string `json:"labelValue"`
