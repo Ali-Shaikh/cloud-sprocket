@@ -26,6 +26,7 @@
 - LocalStack start/stop uses Docker Engine API control through the sidecar.
 - LocalStack logs are available from the app via an `emulators.logs` RPC backed by Docker container logs.
 - LocalStack actions now show in-app status and failure notifications; status polling continues in the background after start/stop.
+- LocalStack start/stop actions return structured emulator action results and are bounded so Docker hangs recover with an actionable notification.
 - LocalStack containers are labelled with CloudSprocket ownership labels and bind to `127.0.0.1:4566`.
 - LocalStack start supports auth token, persistence, and extra environment variables from the desktop app.
 - Persistence sets `PERSISTENCE=1` and mounts the app-owned emulator state directory into `/var/lib/localstack`.
@@ -48,4 +49,4 @@
 - LocalStack cleanup, rollback, destroy, Compose editing, and reveal-config flows.
 - Secret storage for the LocalStack auth token. The current implementation keeps the token in memory only.
 - Digest pinning and compatibility policy beyond the configurable image reference.
-- Structured emulator action results beyond the current `LocalStackStatus` return shape.
+- A successful valid-token LocalStack start verification on the current test machine once Docker completes start requests.

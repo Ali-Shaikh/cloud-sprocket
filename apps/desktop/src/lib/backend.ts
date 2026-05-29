@@ -753,34 +753,55 @@ function handleMockRequest<T>(
     case "emulators.prepareProfile":
       appendLog("info", "Preparing LocalStack managed profile...");
       return Promise.resolve({
-        profile: "cloudsprocket-localstack",
-        config: `${mockState.settings.localConfigDir}/aws/config`,
-        credPath: `${mockState.settings.localConfigDir}/aws/credentials`,
-        endpoint: "http://localhost:4566",
+        emulatorId: "localstack",
+        action: "prepareProfile",
+        state: "succeeded",
+        summary: "LocalStack managed profile is prepared.",
+        status: {
+          emulatorId: "localstack",
+          providerId: "aws",
+          label: "LocalStack",
+          kind: "docker",
+          status: mockState.localStackStatus,
+          summary: "LocalStack managed profile is prepared.",
+          details: [],
+        },
       } as T);
     case "emulators.start":
       mockState.localStackStatus = "running";
       appendLog("success", "Started LocalStack.");
       return Promise.resolve({
         emulatorId: "localstack",
-        providerId: "aws",
-        label: "LocalStack",
-        kind: "docker",
-        status: "running",
+        action: "start",
+        state: "succeeded",
         summary: "LocalStack is running at http://localhost:4566.",
-        details: [],
+        status: {
+          emulatorId: "localstack",
+          providerId: "aws",
+          label: "LocalStack",
+          kind: "docker",
+          status: "running",
+          summary: "LocalStack is running at http://localhost:4566.",
+          details: [],
+        },
       } as T);
     case "emulators.stop":
       mockState.localStackStatus = "stopped";
       appendLog("info", "Stopped LocalStack.");
       return Promise.resolve({
         emulatorId: "localstack",
-        providerId: "aws",
-        label: "LocalStack",
-        kind: "docker",
-        status: "stopped",
+        action: "stop",
+        state: "succeeded",
         summary: "LocalStack container is present but not running.",
-        details: [],
+        status: {
+          emulatorId: "localstack",
+          providerId: "aws",
+          label: "LocalStack",
+          kind: "docker",
+          status: "stopped",
+          summary: "LocalStack container is present but not running.",
+          details: [],
+        },
       } as T);
     case "emulators.logs":
       return Promise.resolve({

@@ -2175,35 +2175,49 @@ func (s *Service) emulatorsList() []models.EmulatorSummary {
 	return summaries
 }
 
-func (s *Service) emulatorsPrepareProfile() (map[string]string, error) {
+func (s *Service) emulatorsPrepareProfile() (models.EmulatorActionResult, error) {
 	if s.localstackMgr == nil {
-		return nil, errors.New("LocalStack manager not available")
+		return models.EmulatorActionResult{}, errors.New("LocalStack manager not available")
 	}
 
 	if err := s.localstackMgr.EnsureManagedProfile(); err != nil {
-		return nil, fmt.Errorf("failed to prepare managed profile: %w", err)
+		return models.EmulatorActionResult{}, fmt.Errorf("failed to prepare managed profile: %w", err)
 	}
 
-	return map[string]string{
-		"profile":  "cloudsprocket-localstack",
-		"config":   s.settings.LocalConfigDir + "/aws/config",
-		"credPath": s.settings.LocalConfigDir + "/aws/credentials",
-		"endpoint": "http://localhost:4566",
-	}, nil
+	status, _ := s.localstackMgr.Status(context.Background())
+	status.ProfileName = "cloudsprocket-localstack"
+	status.ConfigPath = s.settings.LocalConfigDir + "/aws/config"
+	status.CredsPath = s.settings.LocalConfigDir + "/aws/credentials"
+	status.Endpoint = "http://localhost:4566"
+	return emulatorActionResult("prepareProfile", status), nil
 }
 
-func (s *Service) emulatorsStart(ctx context.Context, options models.LocalStackStartOptions) (models.LocalStackStatus, error) {
+func (s *Service) emulatorsStart(ctx context.Context, options models.LocalStackStartOptions) (models.EmulatorActionResult, error) {
 	if s.localstackMgr == nil {
-		return models.LocalStackStatus{}, errors.New("LocalStack manager not available")
+		return models.EmulatorActionResult{}, errors.New("LocalStack manager not available")
 	}
-	return s.localstackMgr.Start(ctx, options)
+	actionCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	status, err := s.localstackMgr.Start(actionCtx, options)
+	result := emulatorActionResult("start", status)
+	if err != nil {
+		return result, errors.New(result.Summary)
+	}
+	return result, nil
 }
 
-func (s *Service) emulatorsStop(ctx context.Context) (models.LocalStackStatus, error) {
+func (s *Service) emulatorsStop(ctx context.Context) (models.EmulatorActionResult, error) {
 	if s.localstackMgr == nil {
-		return models.LocalStackStatus{}, errors.New("LocalStack manager not available")
+		return models.EmulatorActionResult{}, errors.New("LocalStack manager not available")
 	}
-	return s.localstackMgr.Stop(ctx)
+	actionCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	status, err := s.localstackMgr.Stop(actionCtx)
+	result := emulatorActionResult("stop", status)
+	if err != nil {
+		return result, errors.New(result.Summary)
+	}
+	return result, nil
 }
 
 func (s *Service) emulatorsLogs(ctx context.Context, tail int) (models.EmulatorLogSnapshot, error) {
@@ -2211,4 +2225,37 @@ func (s *Service) emulatorsLogs(ctx context.Context, tail int) (models.EmulatorL
 		return models.EmulatorLogSnapshot{}, errors.New("LocalStack manager not available")
 	}
 	return s.localstackMgr.Logs(ctx, tail)
+}
+
+func emulatorActionResult(action string, status models.LocalStackStatus) models.EmulatorActionResult {
+	state := models.EmulatorActionSucceeded
+	switch status.Status {
+	case models.EmulatorStatusRunning, models.EmulatorStatusStopped:
+		state = models.EmulatorActionSucceeded
+	case models.EmulatorStatusUnhealthy:
+		state = models.EmulatorActionDegraded
+	case models.EmulatorStatusNotConfigured, models.EmulatorStatusUnknown:
+		state = models.EmulatorActionFailed
+	default:
+		state = models.EmulatorActionDegraded
+	}
+
+	summary := status.Summary
+	if summary == "" {
+		switch action {
+		case "prepareProfile":
+			summary = "LocalStack managed profile is prepared."
+		case "start":
+			summary = "LocalStack start request completed."
+		case "stop":
+			summary = "LocalStack stop request completed."
+		}
+	}
+	return models.EmulatorActionResult{
+		EmulatorID: "localstack",
+		Action:     action,
+		State:      state,
+		Summary:    summary,
+		Status:     status,
+	}
 }
