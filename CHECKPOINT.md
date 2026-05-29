@@ -50,6 +50,7 @@
 - Added structured emulator action results for LocalStack start, stop, and profile preparation.
 - Bounded LocalStack start/stop actions so Docker hangs recover in the app with an actionable toast and re-enabled controls.
 - Start is no longer disabled solely because Docker is reported unavailable; clicking it now produces a visible failure if Docker cannot complete the request.
+- Added late-success reconciliation so a Docker start that completes after the frontend timeout updates LocalStack back to success on the next poll.
 
 ## Files Changed In This Resume
 
@@ -112,6 +113,9 @@
   - `pnpm --dir apps/desktop test` passed, 14 tests.
   - `pnpm run build:desktop:exe` passed.
   - Relaunched `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe` with WebView debugging, clicked `Start`, and verified the app shows a failure toast plus action text and re-enables controls after Docker fails to complete the request.
+- After Docker eventually completed the LocalStack start:
+  - Docker reported `cloudsprocket-localstack` as `Up ... (healthy)` on `127.0.0.1:4566`.
+  - Relaunched `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe` with WebView debugging and verified the Local Runtime view shows LocalStack `running`, `Start` disabled, `Stop` enabled, and recent container logs.
 
 ## Earlier Verification On 2026-05-27
 
@@ -154,10 +158,9 @@
 
 ## Left To Do
 
-1. Verify a successful LocalStack start with a valid auth token from the global `Local Runtime` menu once Docker completes start requests on the test machine.
-2. Decide whether Compose editing should be added on this branch or deferred to a separate follow-up.
-3. Decide whether to squash the blank-screen fix commits into the runtime-control commit before PR.
-4. Push with `--force-with-lease` because branch history was rewritten.
+1. Decide whether Compose editing should be added on this branch or deferred to a separate follow-up.
+2. Decide whether to squash the blank-screen fix commits into the runtime-control commit before PR.
+3. Push with `--force-with-lease` because branch history was rewritten.
 
 ## Resume Point
 

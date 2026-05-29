@@ -1319,7 +1319,7 @@ export default function App() {
     });
   }
 
-  async function refreshVirtualisationState(): Promise<void> {
+  async function refreshVirtualisationState(): Promise<WorkspaceSnapshot> {
     const [workspaceResult, logResult] = await Promise.all([
       backendRequest<WorkspaceSnapshot>("workspace.get"),
       backendRequest<EmulatorLogSnapshot>("emulators.logs", { emulatorId: "localstack", tail: 200 }).catch((error) => ({
@@ -1328,11 +1328,13 @@ export default function App() {
         summary: error instanceof Error ? error.message : "Failed to load LocalStack logs.",
       })),
     ]);
+    const normalisedWorkspace = normaliseWorkspaceSnapshot(workspaceResult);
     startTransition(() => {
-      setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+      setWorkspace(normalisedWorkspace);
       setLocalStackLogs(normaliseEmulatorLogSnapshot(logResult));
       setLocalStackLogsStatus("");
     });
+    return normalisedWorkspace;
   }
 
   async function refreshLocalStackLogs(): Promise<void> {
@@ -1353,13 +1355,34 @@ export default function App() {
     }
   }
 
-  function pollLocalStackState(label: string): void {
-    for (let attempt = 0; attempt < 8; attempt += 1) {
+  function localStackStatusFromWorkspace(workspaceSnapshot: WorkspaceSnapshot): EmulatorSummary | undefined {
+    return workspaceSnapshot.emulatorSummaries.find((emulator) => emulator.emulatorId === "localstack");
+  }
+
+  function pollLocalStackState(label: string, expectedStatus?: "running" | "stopped"): void {
+    let resolved = false;
+    for (let attempt = 0; attempt < 12; attempt += 1) {
       window.setTimeout(() => {
-        void refreshVirtualisationState();
-        if (attempt === 7) {
-          setLocalStackActionStatus(`${label} completed.`);
+        if (resolved) {
+          return;
         }
+        void refreshVirtualisationState().then((workspaceSnapshot) => {
+          if (resolved) {
+            return;
+          }
+          const localStack = localStackStatusFromWorkspace(workspaceSnapshot);
+          if (expectedStatus && localStack?.status === expectedStatus) {
+            resolved = true;
+            const message = `${label} completed. ${localStack.summary}`;
+            setLocalStackActionStatus(message);
+            addLocalStackNotification("success", `${label} completed`, localStack.summary);
+            return;
+          }
+          if (!expectedStatus && attempt === 11) {
+            resolved = true;
+            setLocalStackActionStatus(`${label} completed.`);
+          }
+        });
       }, (attempt + 1) * 2500);
     }
   }
@@ -1448,17 +1471,21 @@ export default function App() {
       await refreshVirtualisationState();
       await refreshLocalStackLogs();
       if (action === "start" || action === "stop") {
-        pollLocalStackState(label);
+        pollLocalStackState(label, action === "start" ? "running" : "stopped");
       }
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : `${label} failed.`;
+      const timedOut = rawMessage.includes("did not finish within");
       const message =
         rawMessage === `${label} failed.`
           ? `${label} failed. Docker did not complete the request. Refresh Docker, check the LocalStack logs, then retry.`
           : rawMessage;
       setLocalStackActionStatus(message);
-      addLocalStackNotification("error", `${label} failed`, message);
+      addLocalStackNotification(timedOut ? "warning" : "error", timedOut ? `${label} still pending` : `${label} failed`, message);
       await refreshVirtualisationState().catch(() => undefined);
+      if (timedOut && (action === "start" || action === "stop")) {
+        pollLocalStackState(label, action === "start" ? "running" : "stopped");
+      }
     } finally {
       setLocalStackActionInFlight(false);
     }
