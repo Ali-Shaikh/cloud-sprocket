@@ -1,53 +1,57 @@
-# Local Emulator Runtime Plan
+# Local Runtime Plan
 
 ## Current Decision
 
+- LocalStack is the AWS local runtime and is usable from the global `Local Runtime` menu.
 - Keep real-cloud and local-emulator configuration separate.
 - Keep Docker lifecycle control and app-managed config writes inside the Go sidecar.
-- Treat LocalStack as the AWS local runtime target on this branch.
-- Keep Azure `floci-az` as a planned placeholder only.
-- Use `localstack/localstack:stable` by default. Current LocalStack images require `LOCALSTACK_AUTH_TOKEN`; the desktop app collects the token before start and passes it only to Docker.
-- Allow `CLOUDSPROCKET_LOCALSTACK_IMAGE` so developers can use a pinned tag or internal registry mirror.
+- Continue from current `dev` on branch `feat/azure-local-runtime`.
+- Move the next implementation slice to Azure local runtime support instead of adding more optional LocalStack scope.
 
-## Current Branch
+## LocalStack Status
 
-- Branch: `feat/local-emulator-foundation`
-- Actual scope now includes the foundation, Docker runtime discovery, managed LocalStack profile preparation, and LocalStack start/stop lifecycle controls.
-- The branch history was rewritten to fix author metadata and will need a force-with-lease push when ready.
+- Done:
+  - Docker runtime discovery and CloudSprocket-owned Docker resource listing.
+  - Global `Local Runtime` menu available before workspace lock.
+  - LocalStack profile preparation.
+  - LocalStack start and stop through the Docker Engine API.
+  - LocalStack auth token entry before start.
+  - LocalStack persistence toggle using `PERSISTENCE=1` and app-owned emulator state mounted at `/var/lib/localstack`.
+  - Extra environment variable support.
+  - Recent LocalStack container logs in the app.
+  - Action notifications, bounded start/stop recovery, and late-success reconciliation.
+  - Built desktop app verification showing LocalStack running with `Start` disabled, `Stop` enabled, and logs visible.
 
-## Done
+- Remaining LocalStack work is optional hardening:
+  - Secret storage for the LocalStack auth token instead of in-memory entry.
+  - Cleanup, rollback, destroy, Compose editing, and reveal-config flows.
+  - Image digest pinning and a compatibility policy beyond configurable `CLOUDSPROCKET_LOCALSTACK_IMAGE`.
+  - Repeat valid-token start verification after any LocalStack-specific code changes.
 
-- Runtime settings include app-owned local config and emulator state directories.
-- Workspace snapshots include Docker diagnostics, Docker runtime details, managed Docker resources, emulator summaries, and local config artefacts.
-- The desktop overview renders Docker runtime, LocalStack, managed Docker resources, and local config artefacts.
-- Docker runtime, LocalStack, managed Docker resources, local config artefacts, and runtime settings now live under a dedicated global `Local Runtime` menu that is available before workspace lock.
-- The Local Runtime menu refreshes status while open and polls after LocalStack start/stop so startup health transitions are reflected.
-- LocalStack managed AWS profile generation writes app-owned config and credentials under the CloudSprocket local config root.
-- LocalStack start/stop uses Docker Engine API control through the sidecar.
-- LocalStack logs are available from the app via an `emulators.logs` RPC backed by Docker container logs.
-- LocalStack actions now show in-app status and failure notifications; status polling continues in the background after start/stop.
-- LocalStack start/stop actions return structured emulator action results and are bounded so Docker hangs recover with an actionable notification.
-- Late Docker start success is reconciled by polling, so the app updates to running once Docker reports the managed container healthy.
-- LocalStack containers are labelled with CloudSprocket ownership labels and bind to `127.0.0.1:4566`.
-- LocalStack start supports auth token, persistence, and extra environment variables from the desktop app.
-- Persistence sets `PERSISTENCE=1` and mounts the app-owned emulator state directory into `/var/lib/localstack`.
-- The desktop app has been verified against the built executable after fixing production WebView blank-screen crashes.
+## Azure Starting Point
 
-## Left To Do Before PR
+- Azure cloud inventory already exists for subscriptions, resource groups, and virtual machines using the Azure CLI.
+- The workspace shell is provider-aware and already exposes Azure overview, resource group, and VM views.
+- The local runtime model currently exposes `floci-az` as a placeholder only.
+- There is no Azure local runtime manager, Docker lifecycle, profile/config preparation, logs, or start/stop UI yet.
 
-1. Verify LocalStack start with a valid auth token from the global `Local Runtime` menu against Docker on a machine with a valid token.
-2. Re-run the final automated checks if additional code changes are made:
+## Azure Next Slice
+
+1. Define the Azure local runtime target and image/config policy.
+2. Add backend models for Azure local runtime status and start options, matching the LocalStack action-result pattern where possible.
+3. Add a Go sidecar Azure runtime manager for status, start, stop, logs, and app-owned local config artefacts.
+4. Wire backend RPCs through the existing `emulators.*` surface without breaking LocalStack.
+5. Add UI controls in `Local Runtime` for the Azure runtime, keeping controls disabled or explanatory until the manager supports them.
+6. Add focused backend and desktop tests for status, start/stop wiring, logs, and Azure-specific UI rendering.
+7. Run final verification:
    - `go -C backend/daemon test ./...`
-   - `pnpm --dir apps/desktop test`
    - `pnpm run typecheck:desktop`
+   - `pnpm --dir apps/desktop test`
    - `pnpm run build:desktop:exe`
-3. Decide whether this branch should push as-is or squash the three blank-screen fix commits into the runtime-control commit before opening a PR.
-4. Push with `--force-with-lease` because the branch history was rewritten.
 
 ## Deferred
 
-- Azure `floci-az` lifecycle control and local Azure service views.
-- LocalStack cleanup, rollback, destroy, Compose editing, and reveal-config flows.
-- Secret storage for the LocalStack auth token. The current implementation keeps the token in memory only.
-- Digest pinning and compatibility policy beyond the configurable image reference.
-- Compose editing and reveal-config flows.
+- Azure service-specific local views beyond the runtime shell.
+- Destructive cleanup and rollback actions for any local runtime.
+- Docker Compose editing for LocalStack or Azure local runtime.
+- Persisted secret storage for emulator credentials.

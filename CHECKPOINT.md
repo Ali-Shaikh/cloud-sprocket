@@ -1,14 +1,16 @@
 # Checkpoint
 
-- Date: `2026-05-29`
-- Branch: `feat/local-emulator-foundation`
-- Head after local commit: `fix: reconcile late LocalStack starts`
-- Working tree: LocalStack runtime work, blank-screen fixes, Local Runtime UX updates, and image policy work are committed; release version bump is staged for `0.1.19`
-- Status: LocalStack start and stop wiring is implemented and verified locally. The built desktop app has been launched and verified through WebView debugging with visible content. LocalStack controls now live under a dedicated `Local Runtime` workspace/global menu, default to `localstack/localstack:stable`, accept an auth token before start, support persistence, show recent container logs, and support `CLOUDSPROCKET_LOCALSTACK_IMAGE`.
+- Date: `2026-06-06`
+- Branch: `feat/azure-local-runtime`
+- Head after local commit: `519ca76 docs: record fast-forward merge`
+- Working tree: New continuation branch created from current `dev`; checkpoint and local runtime plan are being updated for Azure work.
+- Status: LocalStack work is merged into `dev` and usable from the global `Local Runtime` menu. The remaining LocalStack items are optional hardening. The next implementation slice is Azure local runtime support.
 
 ## Current State
 
-- Branch is `feat/local-emulator-foundation`, tracking `origin/feat/local-emulator-foundation`.
+- Branch is `feat/azure-local-runtime`, created from current `dev`.
+- PR `#23` for `feat/local-emulator-foundation` was merged into `dev` by fast-forward.
+- Local `dev` was pulled before creating this branch and was already up to date with `origin/dev`.
 - Existing branch work already had runtime foundation models, Docker runtime discovery, managed Docker resources, LocalStack status, and LocalStack managed profile preparation.
 - This resume added the next narrow runtime slice:
   - backend `emulators.start`
@@ -55,6 +57,8 @@
 - Created PR `#23` from `feat/local-emulator-foundation` into `dev`: `https://github.com/Ali-Shaikh/cloud-sprocket/pull/23`.
 - Rebased `feat/local-emulator-foundation` onto `origin/dev` to resolve PR conflicts and make a fast-forward merge possible.
 - Fast-forwarded `dev` to PR `#23` at `d62b91d`.
+- Created continuation branch `feat/azure-local-runtime` from current `dev` on 2026-06-06.
+- Updated the local runtime plan to treat LocalStack as usable and move the next implementation slice to Azure local runtime support.
 
 ## Files Changed In This Resume
 
@@ -172,8 +176,9 @@
 
 ## Left To Do
 
-1. Monitor the post-merge CI runs on `dev`.
+1. Implement the Azure local runtime foundation on `feat/azure-local-runtime`.
+2. Keep any further LocalStack changes limited to hardening that is required by Azure integration.
 
 ## Resume Point
 
-- PR `#23` has been merged into `dev` by fast-forward. The next branch step is to monitor the post-merge CI runs on `dev`.
+- Continue on `feat/azure-local-runtime`. Start with Azure local runtime backend models and manager shape, then wire the UI through the existing `Local Runtime` menu.
