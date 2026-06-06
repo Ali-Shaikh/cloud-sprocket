@@ -127,6 +127,7 @@ type LocalStackStatus struct {
 }
 
 type LocalStackStartOptions struct {
+	EmulatorID  string            `json:"emulatorId,omitempty"`
 	AuthToken   string            `json:"authToken,omitempty"`
 	Persistence bool              `json:"persistence,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
@@ -341,6 +342,7 @@ type AppSettingsSnapshot struct {
 	LocalConfigDir   string      `json:"localConfigDir"`
 	EmulatorStateDir string      `json:"emulatorStateDir"`
 	LocalStackImage  string      `json:"localStackImage"`
+	FlociAZImage     string      `json:"flociAzImage"`
 }
 
 type JobStatus struct {

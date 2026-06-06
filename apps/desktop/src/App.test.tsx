@@ -82,6 +82,7 @@ const settingsFixture: AppSettingsSnapshot = {
   localConfigDir: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config",
   emulatorStateDir: "C:/Users/Ali/AppData/Local/CloudSprocket/emulators",
   localStackImage: "localstack/localstack:stable",
+  flociAzImage: "floci/floci-az:latest",
 };
 
 vi.mock("./lib/backend", () => ({
@@ -102,6 +103,23 @@ vi.mock("./lib/backend", () => ({
       case "docker.resources.list":
         return workspaceFixture.dockerResources;
       case "emulators.prepareProfile":
+        if (params?.emulatorId === "floci-az") {
+          workspaceFixture = {
+            ...workspaceFixture,
+            localConfigArtifacts: workspaceFixture.localConfigArtifacts.map((artifact) =>
+              artifact.providerId === "azure"
+                ? { ...artifact, status: "available", summary: "App-managed floci-az env file is prepared." }
+                : artifact,
+            ),
+          };
+          return {
+            emulatorId: "floci-az",
+            action: "prepareProfile",
+            state: "succeeded",
+            summary: "floci-az managed env file is prepared.",
+            status: workspaceFixture.emulatorSummaries.find((emulator) => emulator.emulatorId === "floci-az"),
+          };
+        }
         workspaceFixture = {
           ...workspaceFixture,
           localConfigArtifacts: workspaceFixture.localConfigArtifacts.map((artifact) =>
@@ -119,6 +137,23 @@ vi.mock("./lib/backend", () => ({
         };
       case "emulators.start":
         emulatorStartParams = params;
+        if (params?.emulatorId === "floci-az") {
+          workspaceFixture = {
+            ...workspaceFixture,
+            emulatorSummaries: workspaceFixture.emulatorSummaries.map((emulator) =>
+              emulator.emulatorId === "floci-az"
+                ? { ...emulator, status: "running", summary: "floci-az is running at http://localhost:4577." }
+                : emulator,
+            ),
+          };
+          return {
+            emulatorId: "floci-az",
+            action: "start",
+            state: "succeeded",
+            summary: "floci-az is running at http://localhost:4577.",
+            status: workspaceFixture.emulatorSummaries.find((emulator) => emulator.emulatorId === "floci-az"),
+          };
+        }
         workspaceFixture = {
           ...workspaceFixture,
           emulatorSummaries: workspaceFixture.emulatorSummaries.map((emulator) =>
@@ -135,6 +170,23 @@ vi.mock("./lib/backend", () => ({
           status: workspaceFixture.emulatorSummaries[0],
         };
       case "emulators.stop":
+        if (params?.emulatorId === "floci-az") {
+          workspaceFixture = {
+            ...workspaceFixture,
+            emulatorSummaries: workspaceFixture.emulatorSummaries.map((emulator) =>
+              emulator.emulatorId === "floci-az"
+                ? { ...emulator, status: "stopped", summary: "floci-az container is present but not running." }
+                : emulator,
+            ),
+          };
+          return {
+            emulatorId: "floci-az",
+            action: "stop",
+            state: "succeeded",
+            summary: "floci-az container is present but not running.",
+            status: workspaceFixture.emulatorSummaries.find((emulator) => emulator.emulatorId === "floci-az"),
+          };
+        }
         workspaceFixture = {
           ...workspaceFixture,
           emulatorSummaries: workspaceFixture.emulatorSummaries.map((emulator) =>
@@ -151,6 +203,16 @@ vi.mock("./lib/backend", () => ({
           status: workspaceFixture.emulatorSummaries[0],
         };
       case "emulators.logs":
+        if (params?.emulatorId === "floci-az") {
+          const flociAz = workspaceFixture.emulatorSummaries.find((emulator) => emulator.emulatorId === "floci-az");
+          return {
+            emulatorId: "floci-az",
+            lines: flociAz?.status === "running" ? ["floci-az ready.", "Serving Azure APIs on 4577."] : [],
+            summary: flociAz?.status === "running"
+              ? "Showing the latest 2 floci-az log lines."
+              : "No managed floci-az container is running.",
+          };
+        }
         return {
           emulatorId: "localstack",
           lines: workspaceFixture.emulatorSummaries[0]?.status === "running" ? ["Ready.", "Serving edge on 4566."] : [],
@@ -542,7 +604,8 @@ describe("App", () => {
     expect(await screen.findByText("Local Config Artifacts")).toBeInTheDocument();
     expect(await screen.findByText("LocalStack")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Prepare Profile" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start LocalStack" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start floci-az" })).toBeInTheDocument();
     expect(
       await screen.findByText(/cloudsprocket-workspace\.db/i),
     ).toBeInTheDocument();
@@ -625,11 +688,11 @@ describe("App", () => {
     fireEvent.change(await screen.findByLabelText("LocalStack auth token"), {
       target: { value: "localstack-token" },
     });
-    fireEvent.click(screen.getByLabelText("Enable persistence"));
+    fireEvent.click(screen.getByLabelText("Enable LocalStack persistence"));
     fireEvent.change(screen.getByPlaceholderText("DEBUG=1"), {
       target: { value: "DEBUG=1\nLOCALSTACK_AUTH_TOKEN=ignored\nBAD-NAME=ignored" },
     });
-    fireEvent.click(await screen.findByRole("button", { name: "Start" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start LocalStack" }));
     await waitFor(() => {
       expect(emulatorStartParams).toEqual({
         authToken: "localstack-token",
@@ -641,12 +704,67 @@ describe("App", () => {
       expect(screen.queryAllByText("LocalStack is running at http://localhost:4566.").length).toBeGreaterThan(0);
     });
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Stop LocalStack" })).toBeEnabled();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop LocalStack" }));
     await waitFor(() => {
       expect(screen.queryAllByText("LocalStack container is present but not running.").length).toBeGreaterThan(0);
+    });
+  }, 10000);
+
+  it("starts and stops floci-az from the local runtime workspace", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "azure",
+      lockedProfileId: "sub-001",
+      lockedAuthMethod: "cli",
+      currentProviderId: "azure",
+      selectedProfileId: "sub-001",
+      selectedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+        {
+          tabId: "virtualisation",
+          label: "Local Runtime",
+          summary: "Runtime summary",
+          detail: "Runtime panel",
+        },
+      ],
+    };
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByText("Local Runtime"));
+    expect(await screen.findByRole("button", { name: "Start floci-az" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByLabelText("Enable floci-az persistence"));
+    fireEvent.change(screen.getByPlaceholderText("FLOCI_AZ_SERVICES_FUNCTIONS_ENABLED=false"), {
+      target: { value: "FLOCI_AZ_SERVICES_FUNCTIONS_ENABLED=false\nBAD-NAME=ignored" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Start floci-az" }));
+    await waitFor(() => {
+      expect(emulatorStartParams).toEqual({
+        emulatorId: "floci-az",
+        persistence: true,
+        environment: { FLOCI_AZ_SERVICES_FUNCTIONS_ENABLED: "false" },
+      });
+    });
+    await waitFor(() => {
+      expect(screen.queryAllByText("floci-az is running at http://localhost:4577.").length).toBeGreaterThan(0);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Stop floci-az" })).toBeEnabled();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop floci-az" }));
+    await waitFor(() => {
+      expect(screen.queryAllByText("floci-az container is present but not running.").length).toBeGreaterThan(0);
     });
   }, 10000);
 
