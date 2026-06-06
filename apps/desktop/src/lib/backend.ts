@@ -29,6 +29,8 @@ type MockState = {
   logs: ActivityLogEntry[];
   settings: AppSettingsSnapshot;
   localStackStatus: EmulatorStatus;
+  flociAzStatus: EmulatorStatus;
+  flociAzConfigReady: boolean;
 };
 
 const mockListeners = new Map<
@@ -393,8 +395,11 @@ const mockState: MockState = {
     localConfigDir: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config",
     emulatorStateDir: "C:/Users/Ali/AppData/Local/CloudSprocket/emulators",
     localStackImage: "localstack/localstack:stable",
+    flociAzImage: "floci/floci-az:latest",
   },
   localStackStatus: "stopped",
+  flociAzStatus: "stopped",
+  flociAzConfigReady: false,
 };
 
 function isTauriRuntime(): boolean {
@@ -596,6 +601,18 @@ function buildMockWorkspace(): WorkspaceSnapshot {
         ],
       },
       {
+        resourceId: "ctr-002",
+        kind: "container",
+        name: "cloudsprocket-floci-az",
+        state: mockState.flociAzStatus === "running" ? "running" : "exited",
+        summary: "CloudSprocket-managed Azure emulator container.",
+        owned: true,
+        details: [
+          { label: "Image", value: mockState.settings.flociAzImage },
+          { label: "Status", value: mockState.flociAzStatus === "running" ? "Up 10 seconds" : "Exited" },
+        ],
+      },
+      {
         resourceId: "net-001",
         kind: "network",
         name: "cloudsprocket-net",
@@ -631,10 +648,12 @@ function buildMockWorkspace(): WorkspaceSnapshot {
         providerId: "azure",
         label: "floci-az",
         kind: "docker",
-        status: "not-configured",
-        summary: "Managed Azure local runtime is planned but not configured yet.",
+        status: mockState.flociAzStatus,
+        summary: mockState.flociAzStatus === "running"
+          ? "floci-az is running at http://localhost:4577."
+          : "floci-az is ready to start after preparing the managed env file.",
         details: [
-          { label: "Image", value: "floci/floci-az:latest" },
+          { label: "Image", value: mockState.settings.flociAzImage },
           { label: "Managed Config Root", value: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config/azure" },
         ],
       },
@@ -663,9 +682,11 @@ function buildMockWorkspace(): WorkspaceSnapshot {
         providerId: "azure",
         label: "Azure Local Env File",
         path: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config/azure/floci-az.env",
-        status: "not-created",
+        status: mockState.flociAzConfigReady ? "available" : "not-created",
         managed: true,
-        summary: "App-managed Azure local connection strings and env values will be written here.",
+        summary: mockState.flociAzConfigReady
+          ? "App-managed floci-az env file is prepared."
+          : "App-managed Azure local connection strings and env values will be written here.",
       },
     ],
     awsEndpointUrl: "http://192.168.50.168:4566",
@@ -742,15 +763,36 @@ function handleMockRequest<T>(
           providerId: "azure",
           label: "floci-az",
           kind: "docker",
-          status: "not-configured" as EmulatorStatus,
-          summary: "Azure local emulator is planned for a future slice.",
+          status: mockState.flociAzStatus,
+          summary: mockState.flociAzStatus === "running"
+            ? "floci-az is running at http://localhost:4577."
+            : "Click Prepare Config to set up floci-az access.",
           details: [
-            { label: "Image", value: "floci/floci-az:latest" },
+            { label: "Image", value: mockState.settings.flociAzImage },
             { label: "Status", value: "Planned" },
           ],
         },
       ] as T);
     case "emulators.prepareProfile":
+      if (params.emulatorId === "floci-az") {
+        appendLog("info", "Preparing floci-az managed env file...");
+        mockState.flociAzConfigReady = true;
+        return Promise.resolve({
+          emulatorId: "floci-az",
+          action: "prepareProfile",
+          state: "succeeded",
+          summary: "floci-az managed env file is prepared.",
+          status: {
+            emulatorId: "floci-az",
+            providerId: "azure",
+            label: "floci-az",
+            kind: "docker",
+            status: mockState.flociAzStatus,
+            summary: "floci-az managed env file is prepared.",
+            details: [],
+          },
+        } as T);
+      }
       appendLog("info", "Preparing LocalStack managed profile...");
       return Promise.resolve({
         emulatorId: "localstack",
@@ -768,6 +810,25 @@ function handleMockRequest<T>(
         },
       } as T);
     case "emulators.start":
+      if (params.emulatorId === "floci-az") {
+        mockState.flociAzStatus = "running";
+        appendLog("success", "Started floci-az.");
+        return Promise.resolve({
+          emulatorId: "floci-az",
+          action: "start",
+          state: "succeeded",
+          summary: "floci-az is running at http://localhost:4577.",
+          status: {
+            emulatorId: "floci-az",
+            providerId: "azure",
+            label: "floci-az",
+            kind: "docker",
+            status: "running",
+            summary: "floci-az is running at http://localhost:4577.",
+            details: [],
+          },
+        } as T);
+      }
       mockState.localStackStatus = "running";
       appendLog("success", "Started LocalStack.");
       return Promise.resolve({
@@ -786,6 +847,25 @@ function handleMockRequest<T>(
         },
       } as T);
     case "emulators.stop":
+      if (params.emulatorId === "floci-az") {
+        mockState.flociAzStatus = "stopped";
+        appendLog("info", "Stopped floci-az.");
+        return Promise.resolve({
+          emulatorId: "floci-az",
+          action: "stop",
+          state: "succeeded",
+          summary: "floci-az container is present but not running.",
+          status: {
+            emulatorId: "floci-az",
+            providerId: "azure",
+            label: "floci-az",
+            kind: "docker",
+            status: "stopped",
+            summary: "floci-az container is present but not running.",
+            details: [],
+          },
+        } as T);
+      }
       mockState.localStackStatus = "stopped";
       appendLog("info", "Stopped LocalStack.");
       return Promise.resolve({
@@ -804,6 +884,20 @@ function handleMockRequest<T>(
         },
       } as T);
     case "emulators.logs":
+      if (params.emulatorId === "floci-az") {
+        return Promise.resolve({
+          emulatorId: "floci-az",
+          lines: mockState.flociAzStatus === "running"
+            ? [
+              "floci-az ready.",
+              "Serving Azure APIs on http://0.0.0.0:4577.",
+            ]
+            : [],
+          summary: mockState.flociAzStatus === "running"
+            ? "Showing the latest 2 floci-az log lines."
+            : "No managed floci-az container is running.",
+        } as T);
+      }
       return Promise.resolve({
         emulatorId: "localstack",
         lines: mockState.localStackStatus === "running"

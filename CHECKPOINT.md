@@ -3,8 +3,8 @@
 - Date: `2026-06-06`
 - Branch: `feat/azure-local-runtime`
 - Head after local commit: `519ca76 docs: record fast-forward merge`
-- Working tree: New continuation branch created from current `dev`; checkpoint and local runtime plan are being updated for Azure work.
-- Status: LocalStack work is merged into `dev` and usable from the global `Local Runtime` menu. The remaining LocalStack items are optional hardening. The next implementation slice is Azure local runtime support.
+- Working tree: Azure local runtime implementation is complete locally and awaiting commit.
+- Status: LocalStack work is merged into `dev` and usable from the global `Local Runtime` menu. The first Azure local runtime slice is implemented with floci-az Docker lifecycle, config, logs, UI controls, tests, and desktop build verification.
 
 ## Current State
 
@@ -59,24 +59,30 @@
 - Fast-forwarded `dev` to PR `#23` at `d62b91d`.
 - Created continuation branch `feat/azure-local-runtime` from current `dev` on 2026-06-06.
 - Updated the local runtime plan to treat LocalStack as usable and move the next implementation slice to Azure local runtime support.
+- Implemented the Azure local runtime slice on 2026-06-06:
+  - added `CLOUDSPROCKET_FLOCI_AZ_IMAGE`, defaulting to `floci/floci-az:latest`
+  - added a Docker-backed floci-az manager for status, start, stop, logs, and managed env file preparation
+  - binds floci-az to `127.0.0.1:4577`, AMQP ports `5672` and `5673`, and Kafka port `9093`
+  - added persistence support using `FLOCI_AZ_STORAGE_MODE=persistent`, `FLOCI_AZ_STORAGE_PATH=/app/data`, and app-owned emulator state mounted at `/app/data`
+  - writes managed Azure local env values to `azure/floci-az.env`
+  - routed `emulators.prepareProfile`, `emulators.start`, `emulators.stop`, `emulators.logs`, and `emulators.list` by emulator ID
+  - added floci-az controls, persistence, env variables, action notifications, polling, and logs to global and locked `Local Runtime` views
+  - updated the mock backend and focused desktop tests for the floci-az start/stop flow
 
 ## Files Changed In This Resume
 
-- `backend/daemon/internal/localstack/manager.go`
-- `backend/daemon/internal/localstack/manager_test.go`
+- `backend/daemon/internal/flociaz/manager.go`
+- `backend/daemon/internal/flociaz/manager_test.go`
 - `backend/daemon/internal/config/settings.go`
 - `backend/daemon/internal/config/settings_test.go`
 - `backend/daemon/internal/models/models.go`
 - `backend/daemon/internal/app/service.go`
-- `backend/daemon/internal/app/service_test.go`
 - `apps/desktop/src/App.tsx`
 - `apps/desktop/src/views/WorkspaceView.tsx`
 - `apps/desktop/src/views/shared.tsx`
 - `apps/desktop/src/lib/backend.ts`
-- `apps/desktop/src/styles.css`
 - `apps/desktop/src/types/backend.ts`
 - `apps/desktop/src/App.test.tsx`
-- `apps/desktop/src-tauri/src/main.rs`
 - `LOCAL_EMULATOR_FOUNDATION_PLAN.md`
 - `CHECKPOINT.md`
 
@@ -134,6 +140,12 @@
   - `pnpm run typecheck:desktop` passed.
   - `pnpm --dir apps/desktop test` passed, 14 tests.
   - `pnpm run build:desktop:exe` passed and compiled `cloudsprocket-desktop v0.1.19`.
+- Azure local runtime slice verification on 2026-06-06:
+  - `pnpm --dir apps/desktop test -- --run -t "starts and stops floci-az"` passed.
+  - `pnpm --dir apps/desktop test` passed, 15 tests.
+  - `pnpm run typecheck:desktop` passed.
+  - `go -C backend/daemon test ./...` passed.
+  - `pnpm run build:desktop:exe` passed and compiled `cloudsprocket-desktop v0.1.19`.
 
 ## Earlier Verification On 2026-05-27
 
@@ -173,12 +185,16 @@
 - LocalStack health currently probes `http://localhost:4566/_localstack/health` with a short timeout.
 - Start binds LocalStack to `127.0.0.1:4566` and only manages containers with the CloudSprocket ownership labels.
 - The UI allows `Stop` for both `running` and `unhealthy` LocalStack states because both imply a managed container is present.
+- floci-az status currently uses a TCP probe against `127.0.0.1:4577`.
+- floci-az docs were checked on 2026-06-06 before implementation. Current defaults are image `floci/floci-az:latest`, REST port `4577`, Event Hubs AMQP `5672`, Service Bus AMQP `5673`, Kafka `9093`, and persistence path `/app/data`.
 
 ## Left To Do
 
-1. Implement the Azure local runtime foundation on `feat/azure-local-runtime`.
-2. Keep any further LocalStack changes limited to hardening that is required by Azure integration.
+1. Commit and push the verified Azure local runtime slice.
+2. Manually start floci-az from the built desktop app once Docker is available on the machine.
+3. Decide the next Azure scope: service-specific local views, Azure CLI profile integration with the generated env file, or optional runtime hardening.
+4. Keep any further LocalStack changes limited to hardening that is required by Azure integration.
 
 ## Resume Point
 
-- Continue on `feat/azure-local-runtime`. Start with Azure local runtime backend models and manager shape, then wire the UI through the existing `Local Runtime` menu.
+- Continue on `feat/azure-local-runtime`. Review the local diff, commit with author `Ali Shaikh <me@alishaikh.net>`, push, then manually verify floci-az start/stop in the built app.

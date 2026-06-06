@@ -84,6 +84,16 @@ type Props = {
   localStackActionStatus: string;
   localStackActionInFlight: boolean;
   onRefreshLocalStackLogs: () => void;
+  flociAzPersistence: boolean;
+  onFlociAzPersistenceChange: (value: boolean) => void;
+  flociAzEnvironmentText: string;
+  onFlociAzEnvironmentTextChange: (value: string) => void;
+  flociAzLogs: EmulatorLogSnapshot;
+  flociAzLogsStatus: string;
+  flociAzActionStatus: string;
+  flociAzActionInFlight: boolean;
+  onRefreshFlociAzLogs: () => void;
+  onInvokeFlociAzAction: (action: "prepareProfile" | "start" | "stop") => void;
   onUnlockSession: () => void;
   onToggleSensitiveValues: () => void;
   onInvokeWorkspaceAction: (actionId: "refresh") => void;
@@ -251,11 +261,15 @@ function dockerEngineStatusType(value?: string): "success" | "warning" | "error"
   return "info";
 }
 
-function LocalStackLogsPanel({
+function EmulatorLogsPanel({
+  title,
+  emptyText,
   logs,
   status,
   onRefresh,
 }: {
+  title: string;
+  emptyText: string;
   logs: EmulatorLogSnapshot;
   status: string;
   onRefresh: () => void;
@@ -268,12 +282,12 @@ function LocalStackLogsPanel({
           description={status || logs.summary}
           actions={<Button onClick={onRefresh}>Refresh Logs</Button>}
         >
-          LocalStack Logs
+          {title}
         </Header>
       }
     >
       {logs.lines.length === 0 ? (
-        <Box color="text-status-inactive">No LocalStack log lines are available yet.</Box>
+        <Box color="text-status-inactive">{emptyText}</Box>
       ) : (
         <pre className="container-log-panel">{logs.lines.join("\n")}</pre>
       )}
@@ -306,6 +320,16 @@ export default function WorkspaceView({
   localStackActionStatus,
   localStackActionInFlight,
   onRefreshLocalStackLogs,
+  flociAzPersistence,
+  onFlociAzPersistenceChange,
+  flociAzEnvironmentText,
+  onFlociAzEnvironmentTextChange,
+  flociAzLogs,
+  flociAzLogsStatus,
+  flociAzActionStatus,
+  flociAzActionInFlight,
+  onRefreshFlociAzLogs,
+  onInvokeFlociAzAction,
   onUnlockSession,
   onToggleSensitiveValues,
   onInvokeWorkspaceAction,
@@ -615,7 +639,7 @@ export default function WorkspaceView({
                         checked={localStackPersistence}
                         onChange={({ detail }) => onLocalStackPersistenceChange(detail.checked)}
                       >
-                        Enable persistence
+                        Enable LocalStack persistence
                       </Checkbox>
                     </div>
                     <div className="detail-card">
@@ -646,7 +670,7 @@ export default function WorkspaceView({
                       }
                       onClick={() => onInvokeLocalStackAction("start")}
                     >
-                      Start
+                      Start LocalStack
                     </Button>
                     <Button
                       disabled={
@@ -655,7 +679,65 @@ export default function WorkspaceView({
                       }
                       onClick={() => onInvokeLocalStackAction("stop")}
                     >
-                      Stop
+                      Stop LocalStack
+                    </Button>
+                  </SpaceBetween>
+                </SpaceBetween>
+              ) : null}
+              {emulator.emulatorId === "floci-az" ? (
+                <SpaceBetween size="s">
+                  <div className="detail-card detail-card-strong">
+                    <Box variant="awsui-key-label">Runtime Action</Box>
+                    <Box variant="p">{flociAzActionStatus}</Box>
+                  </div>
+                  <div className="detail-grid">
+                    <div className="detail-card">
+                      <Box variant="awsui-key-label">Persistence</Box>
+                      <Checkbox
+                        checked={flociAzPersistence}
+                        onChange={({ detail }) => onFlociAzPersistenceChange(detail.checked)}
+                      >
+                        Enable floci-az persistence
+                      </Checkbox>
+                    </div>
+                    <div className="detail-card">
+                      <Box variant="awsui-key-label">Environment Variables</Box>
+                      <Textarea
+                        value={flociAzEnvironmentText}
+                        placeholder="FLOCI_AZ_SERVICES_FUNCTIONS_ENABLED=false"
+                        rows={3}
+                        onChange={({ detail }) => onFlociAzEnvironmentTextChange(detail.value)}
+                      />
+                    </div>
+                  </div>
+                  <SpaceBetween
+                    size="xs"
+                    direction="horizontal"
+                  >
+                    <Button
+                      disabled={flociAzActionInFlight}
+                      onClick={() => onInvokeFlociAzAction("prepareProfile")}
+                    >
+                      Prepare Config
+                    </Button>
+                    <Button
+                      disabled={
+                        flociAzActionInFlight ||
+                        emulator.status === "running" ||
+                        emulator.status === "unhealthy"
+                      }
+                      onClick={() => onInvokeFlociAzAction("start")}
+                    >
+                      Start floci-az
+                    </Button>
+                    <Button
+                      disabled={
+                        flociAzActionInFlight ||
+                        (emulator.status !== "running" && emulator.status !== "unhealthy")
+                      }
+                      onClick={() => onInvokeFlociAzAction("stop")}
+                    >
+                      Stop floci-az
                     </Button>
                   </SpaceBetween>
                 </SpaceBetween>
@@ -721,10 +803,19 @@ export default function WorkspaceView({
         {dockerDiagnosticsPanel}
       </div>
       {emulatorSummariesPanel}
-      <LocalStackLogsPanel
+      <EmulatorLogsPanel
+        title="LocalStack Logs"
+        emptyText="No LocalStack log lines are available yet."
         logs={localStackLogs}
         status={localStackLogsStatus}
         onRefresh={onRefreshLocalStackLogs}
+      />
+      <EmulatorLogsPanel
+        title="floci-az Logs"
+        emptyText="No floci-az log lines are available yet."
+        logs={flociAzLogs}
+        status={flociAzLogsStatus}
+        onRefresh={onRefreshFlociAzLogs}
       />
       {dockerResourcesPanel}
       {localConfigArtifactsPanel}

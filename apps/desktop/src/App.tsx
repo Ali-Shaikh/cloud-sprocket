@@ -654,6 +654,7 @@ const emptySettings: AppSettingsSnapshot = {
   localConfigDir: "",
   emulatorStateDir: "",
   localStackImage: "localstack/localstack:stable",
+  flociAzImage: "floci/floci-az:latest",
 };
 
 const emptyWorkspace: WorkspaceSnapshot = {
@@ -713,11 +714,15 @@ function SimpleDetailFields({
   );
 }
 
-function LocalStackLogsPanel({
+function EmulatorLogsPanel({
+  title,
+  emptyText,
   logs,
   status,
   onRefresh,
 }: {
+  title: string;
+  emptyText: string;
   logs: EmulatorLogSnapshot;
   status: string;
   onRefresh: () => void;
@@ -731,12 +736,12 @@ function LocalStackLogsPanel({
           description={status || logs.summary}
           actions={<Button onClick={onRefresh}>Refresh Logs</Button>}
         >
-          LocalStack Logs
+          {title}
         </Header>
       }
     >
       {logs.lines.length === 0 ? (
-        <Box color="text-status-inactive">No LocalStack log lines are available yet.</Box>
+        <Box color="text-status-inactive">{emptyText}</Box>
       ) : (
         <pre className="container-log-panel">{logText}</pre>
       )}
@@ -753,12 +758,22 @@ function GlobalVirtualisationView({
   localStackLogsStatus,
   localStackActionStatus,
   localStackActionInFlight,
+  flociAzPersistence,
+  flociAzEnvironmentText,
+  flociAzLogs,
+  flociAzLogsStatus,
+  flociAzActionStatus,
+  flociAzActionInFlight,
   onLocalStackAuthTokenChange,
   onLocalStackPersistenceChange,
   onLocalStackEnvironmentTextChange,
+  onFlociAzPersistenceChange,
+  onFlociAzEnvironmentTextChange,
   onRefreshDockerRuntime,
   onRefreshLocalStackLogs,
+  onRefreshFlociAzLogs,
   onInvokeLocalStackAction,
+  onInvokeFlociAzAction,
 }: {
   workspace: WorkspaceSnapshot;
   localStackAuthToken: string;
@@ -768,14 +783,25 @@ function GlobalVirtualisationView({
   localStackLogsStatus: string;
   localStackActionStatus: string;
   localStackActionInFlight: boolean;
+  flociAzPersistence: boolean;
+  flociAzEnvironmentText: string;
+  flociAzLogs: EmulatorLogSnapshot;
+  flociAzLogsStatus: string;
+  flociAzActionStatus: string;
+  flociAzActionInFlight: boolean;
   onLocalStackAuthTokenChange: (value: string) => void;
   onLocalStackPersistenceChange: (value: boolean) => void;
   onLocalStackEnvironmentTextChange: (value: string) => void;
+  onFlociAzPersistenceChange: (value: boolean) => void;
+  onFlociAzEnvironmentTextChange: (value: string) => void;
   onRefreshDockerRuntime: () => void;
   onRefreshLocalStackLogs: () => void;
+  onRefreshFlociAzLogs: () => void;
   onInvokeLocalStackAction: (action: "prepareProfile" | "start" | "stop") => void;
+  onInvokeFlociAzAction: (action: "prepareProfile" | "start" | "stop") => void;
 }) {
   const localStack = workspace.emulatorSummaries.find((emulator) => emulator.emulatorId === "localstack");
+  const flociAz = workspace.emulatorSummaries.find((emulator) => emulator.emulatorId === "floci-az");
 
   return (
     <SpaceBetween
@@ -808,6 +834,13 @@ function GlobalVirtualisationView({
                 {localStack?.status ?? "unknown"}
               </StatusIndicator>
               <span>{localStack?.summary ?? "LocalStack status is not available yet."}</span>
+            </div>
+            <div>
+              <Box variant="awsui-key-label">floci-az</Box>
+              <StatusIndicator type={flociAz?.status === "running" ? "success" : flociAz?.status === "unhealthy" ? "error" : "warning"}>
+                {flociAz?.status ?? "unknown"}
+              </StatusIndicator>
+              <span>{flociAz?.summary ?? "floci-az status is not available yet."}</span>
             </div>
           </div>
         </div>
@@ -847,7 +880,7 @@ function GlobalVirtualisationView({
                   checked={localStackPersistence}
                   onChange={({ detail }) => onLocalStackPersistenceChange(detail.checked)}
                 >
-                  Enable persistence
+                  Enable LocalStack persistence
                 </Checkbox>
               </div>
               <div className="detail-card">
@@ -878,7 +911,7 @@ function GlobalVirtualisationView({
                 }
                 onClick={() => onInvokeLocalStackAction("start")}
               >
-                Start
+                Start LocalStack
               </Button>
               <Button
                 disabled={
@@ -887,17 +920,87 @@ function GlobalVirtualisationView({
                 }
                 onClick={() => onInvokeLocalStackAction("stop")}
               >
-                Stop
+                Stop LocalStack
+              </Button>
+            </SpaceBetween>
+          </SpaceBetween>
+        </Container>
+        <Container
+          header={<Header variant="h2">floci-az</Header>}
+        >
+          <SpaceBetween size="s">
+            <SimpleDetailFields fields={flociAz?.details ?? []} />
+            <div className="detail-card detail-card-strong">
+              <Box variant="awsui-key-label">Runtime Action</Box>
+              <Box variant="p">{flociAzActionStatus}</Box>
+            </div>
+            <div className="detail-grid">
+              <div className="detail-card">
+                <Box variant="awsui-key-label">Persistence</Box>
+                <Checkbox
+                  checked={flociAzPersistence}
+                  onChange={({ detail }) => onFlociAzPersistenceChange(detail.checked)}
+                >
+                  Enable floci-az persistence
+                </Checkbox>
+              </div>
+              <div className="detail-card">
+                <Box variant="awsui-key-label">Environment Variables</Box>
+                <Textarea
+                  value={flociAzEnvironmentText}
+                  placeholder="FLOCI_AZ_SERVICES_FUNCTIONS_ENABLED=false"
+                  rows={3}
+                  onChange={({ detail }) => onFlociAzEnvironmentTextChange(detail.value)}
+                />
+              </div>
+            </div>
+            <SpaceBetween
+              size="xs"
+              direction="horizontal"
+            >
+              <Button
+                disabled={flociAzActionInFlight}
+                onClick={() => onInvokeFlociAzAction("prepareProfile")}
+              >
+                Prepare Config
+              </Button>
+              <Button
+                disabled={
+                  flociAzActionInFlight ||
+                  flociAz?.status === "running" ||
+                  flociAz?.status === "unhealthy"
+                }
+                onClick={() => onInvokeFlociAzAction("start")}
+              >
+                Start floci-az
+              </Button>
+              <Button
+                disabled={
+                  flociAzActionInFlight ||
+                  (flociAz?.status !== "running" && flociAz?.status !== "unhealthy")
+                }
+                onClick={() => onInvokeFlociAzAction("stop")}
+              >
+                Stop floci-az
               </Button>
             </SpaceBetween>
           </SpaceBetween>
         </Container>
       </div>
 
-      <LocalStackLogsPanel
+      <EmulatorLogsPanel
+        title="LocalStack Logs"
+        emptyText="No LocalStack log lines are available yet."
         logs={localStackLogs}
         status={localStackLogsStatus}
         onRefresh={onRefreshLocalStackLogs}
+      />
+      <EmulatorLogsPanel
+        title="floci-az Logs"
+        emptyText="No floci-az log lines are available yet."
+        logs={flociAzLogs}
+        status={flociAzLogsStatus}
+        onRefresh={onRefreshFlociAzLogs}
       />
 
       <Container header={<Header variant="h2">Managed Docker Resources</Header>}>
@@ -959,7 +1062,7 @@ function normaliseEmulatorLogSnapshot(snapshot: Partial<EmulatorLogSnapshot> | n
   return {
     emulatorId: snapshot?.emulatorId ?? "localstack",
     lines: normaliseArray(snapshot?.lines).map((line) => String(line)),
-    summary: snapshot?.summary ?? "LocalStack logs have not been loaded yet.",
+    summary: snapshot?.summary ?? "Emulator logs have not been loaded yet.",
   };
 }
 
@@ -987,6 +1090,16 @@ export default function App() {
   const [localStackLogsStatus, setLocalStackLogsStatus] = useState("");
   const [localStackActionStatus, setLocalStackActionStatus] = useState("No LocalStack action has run yet.");
   const [localStackActionInFlight, setLocalStackActionInFlight] = useState(false);
+  const [flociAzPersistence, setFlociAzPersistence] = useState(false);
+  const [flociAzEnvironmentText, setFlociAzEnvironmentText] = useState("FLOCI_AZ_SERVICES_FUNCTIONS_ENABLED=false");
+  const [flociAzLogs, setFlociAzLogs] = useState<EmulatorLogSnapshot>({
+    emulatorId: "floci-az",
+    lines: [],
+    summary: "floci-az logs have not been loaded yet.",
+  });
+  const [flociAzLogsStatus, setFlociAzLogsStatus] = useState("");
+  const [flociAzActionStatus, setFlociAzActionStatus] = useState("No floci-az action has run yet.");
+  const [flociAzActionInFlight, setFlociAzActionInFlight] = useState(false);
   const [ec2ActionStatus, setEC2ActionStatus] = useState("Select an EC2 instance to run lifecycle actions.");
   const [ec2ActionInFlight, setEC2ActionInFlight] = useState(false);
   const [ec2ActionHistory, setEC2ActionHistory] = useState<EC2ActionHistoryItem[]>([]);
@@ -1320,19 +1433,26 @@ export default function App() {
   }
 
   async function refreshVirtualisationState(): Promise<WorkspaceSnapshot> {
-    const [workspaceResult, logResult] = await Promise.all([
+    const [workspaceResult, logResult, flociLogResult] = await Promise.all([
       backendRequest<WorkspaceSnapshot>("workspace.get"),
       backendRequest<EmulatorLogSnapshot>("emulators.logs", { emulatorId: "localstack", tail: 200 }).catch((error) => ({
         emulatorId: "localstack",
         lines: [],
         summary: error instanceof Error ? error.message : "Failed to load LocalStack logs.",
       })),
+      backendRequest<EmulatorLogSnapshot>("emulators.logs", { emulatorId: "floci-az", tail: 200 }).catch((error) => ({
+        emulatorId: "floci-az",
+        lines: [],
+        summary: error instanceof Error ? error.message : "Failed to load floci-az logs.",
+      })),
     ]);
     const normalisedWorkspace = normaliseWorkspaceSnapshot(workspaceResult);
     startTransition(() => {
       setWorkspace(normalisedWorkspace);
       setLocalStackLogs(normaliseEmulatorLogSnapshot(logResult));
+      setFlociAzLogs(normaliseEmulatorLogSnapshot(flociLogResult));
       setLocalStackLogsStatus("");
+      setFlociAzLogsStatus("");
     });
     return normalisedWorkspace;
   }
@@ -1355,8 +1475,30 @@ export default function App() {
     }
   }
 
+  async function refreshFlociAzLogs(): Promise<void> {
+    setFlociAzLogsStatus("Refreshing logs...");
+    try {
+      const logResult = await backendRequest<EmulatorLogSnapshot>("emulators.logs", {
+        emulatorId: "floci-az",
+        tail: 200,
+      });
+      startTransition(() => {
+        setFlociAzLogs(normaliseEmulatorLogSnapshot(logResult));
+        setFlociAzLogsStatus("");
+      });
+    } catch (error) {
+      startTransition(() => {
+        setFlociAzLogsStatus(error instanceof Error ? error.message : "Failed to refresh floci-az logs.");
+      });
+    }
+  }
+
   function localStackStatusFromWorkspace(workspaceSnapshot: WorkspaceSnapshot): EmulatorSummary | undefined {
     return workspaceSnapshot.emulatorSummaries.find((emulator) => emulator.emulatorId === "localstack");
+  }
+
+  function emulatorStatusFromWorkspace(workspaceSnapshot: WorkspaceSnapshot, emulatorId: string): EmulatorSummary | undefined {
+    return workspaceSnapshot.emulatorSummaries.find((emulator) => emulator.emulatorId === emulatorId);
   }
 
   function pollLocalStackState(label: string, expectedStatus?: "running" | "stopped"): void {
@@ -1404,12 +1546,51 @@ export default function App() {
     );
   }
 
+  function flociAzEnvironment(): Record<string, string> {
+    return Object.fromEntries(
+      flociAzEnvironmentText
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const separator = line.indexOf("=");
+          if (separator < 1) {
+            return ["", ""] as const;
+          }
+          return [line.slice(0, separator).trim(), line.slice(separator + 1)] as const;
+        })
+        .filter(([key]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key)),
+    );
+  }
+
   function addLocalStackNotification(
     type: FlashbarProps.MessageDefinition["type"],
     header: string,
     content: string,
   ): void {
     const notificationId = `localstack-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setNotifications((current) => [
+      {
+        id: notificationId,
+        type,
+        dismissible: true,
+        header,
+        content,
+        onDismiss: () => {
+          setNotifications((items) => items.filter((item) => item.id !== notificationId));
+        },
+      },
+      ...current,
+    ]);
+  }
+
+  function addEmulatorNotification(
+    emulatorId: string,
+    type: FlashbarProps.MessageDefinition["type"],
+    header: string,
+    content: string,
+  ): void {
+    const notificationId = `${emulatorId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setNotifications((current) => [
       {
         id: notificationId,
@@ -1491,6 +1672,94 @@ export default function App() {
     }
   }
 
+  function pollFlociAzState(label: string, expectedStatus?: "running" | "stopped"): void {
+    let resolved = false;
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      window.setTimeout(() => {
+        if (resolved) {
+          return;
+        }
+        void refreshVirtualisationState().then((workspaceSnapshot) => {
+          if (resolved) {
+            return;
+          }
+          const flociAz = emulatorStatusFromWorkspace(workspaceSnapshot, "floci-az");
+          if (expectedStatus && flociAz?.status === expectedStatus) {
+            resolved = true;
+            const message = `${label} completed. ${flociAz.summary}`;
+            setFlociAzActionStatus(message);
+            addEmulatorNotification("floci-az", "success", `${label} completed`, flociAz.summary);
+            return;
+          }
+          if (!expectedStatus && attempt === 11) {
+            resolved = true;
+            setFlociAzActionStatus(`${label} completed.`);
+          }
+        });
+      }, (attempt + 1) * 2500);
+    }
+  }
+
+  async function invokeFlociAzAction(action: "prepareProfile" | "start" | "stop"): Promise<void> {
+    const method =
+      action === "prepareProfile"
+        ? "emulators.prepareProfile"
+        : action === "start"
+          ? "emulators.start"
+          : "emulators.stop";
+    const startParams =
+      action === "start"
+        ? {
+          emulatorId: "floci-az",
+          persistence: flociAzPersistence,
+          environment: flociAzEnvironment(),
+        }
+        : { emulatorId: "floci-az" };
+    const label =
+      action === "prepareProfile"
+        ? "Prepare floci-az config"
+        : action === "start"
+          ? "Start floci-az"
+          : "Stop floci-az";
+    setFlociAzActionInFlight(true);
+    setFlociAzActionStatus(`${label} requested.`);
+    try {
+      const result = await withTimeout(
+        backendRequest<EmulatorActionResult>(method, startParams),
+        22000,
+        `${label} did not finish within 22 seconds. Check Docker and floci-az logs, then retry.`,
+      );
+      const summary = result.summary || `${label} completed.`;
+      setFlociAzActionStatus(summary);
+      addEmulatorNotification(
+        "floci-az",
+        result.state === "failed" ? "error" : result.state === "degraded" ? "warning" : "success",
+        result.state === "degraded" ? `${label} needs attention` : `${label} ${result.state}`,
+        summary,
+      );
+      await refreshVirtualisationState();
+      await refreshFlociAzLogs();
+      if (action === "start" || action === "stop") {
+        pollFlociAzState(label, action === "start" ? "running" : "stopped");
+      }
+    } catch (error) {
+      const rawMessage = error instanceof Error ? error.message : `${label} failed.`;
+      const timedOut = rawMessage.includes("did not finish within");
+      const message =
+        rawMessage === `${label} failed.`
+          ? `${label} failed. Docker did not complete the request. Refresh Docker, check the floci-az logs, then retry.`
+          : rawMessage;
+      setFlociAzActionStatus(message);
+      addEmulatorNotification("floci-az", timedOut ? "warning" : "error", timedOut ? `${label} still pending` : `${label} failed`, message);
+      await refreshVirtualisationState().catch(() => undefined);
+      if (timedOut && (action === "start" || action === "stop")) {
+        pollFlociAzState(label, action === "start" ? "running" : "stopped");
+      }
+    } finally {
+      setFlociAzActionInFlight(false);
+    }
+  }
+
   const activityDrawer = splitPanelOpen ? (
     <aside
       className="activity-drawer"
@@ -1550,8 +1819,22 @@ export default function App() {
       localStackLogsStatus={localStackLogsStatus}
       localStackActionStatus={localStackActionStatus}
       localStackActionInFlight={localStackActionInFlight}
+      flociAzPersistence={flociAzPersistence}
+      flociAzEnvironmentText={flociAzEnvironmentText}
+      flociAzLogs={flociAzLogs}
+      flociAzLogsStatus={flociAzLogsStatus}
+      flociAzActionStatus={flociAzActionStatus}
+      flociAzActionInFlight={flociAzActionInFlight}
+      onFlociAzPersistenceChange={setFlociAzPersistence}
+      onFlociAzEnvironmentTextChange={setFlociAzEnvironmentText}
       onRefreshLocalStackLogs={() => {
         void refreshLocalStackLogs();
+      }}
+      onRefreshFlociAzLogs={() => {
+        void refreshFlociAzLogs();
+      }}
+      onInvokeFlociAzAction={(action) => {
+        void invokeFlociAzAction(action);
       }}
       onUnlockSession={() => {
         void mutateSession("session.unlock");
@@ -1713,17 +1996,31 @@ export default function App() {
       localStackLogsStatus={localStackLogsStatus}
       localStackActionStatus={localStackActionStatus}
       localStackActionInFlight={localStackActionInFlight}
+      flociAzPersistence={flociAzPersistence}
+      flociAzEnvironmentText={flociAzEnvironmentText}
+      flociAzLogs={flociAzLogs}
+      flociAzLogsStatus={flociAzLogsStatus}
+      flociAzActionStatus={flociAzActionStatus}
+      flociAzActionInFlight={flociAzActionInFlight}
       onLocalStackAuthTokenChange={setLocalStackAuthToken}
       onLocalStackPersistenceChange={setLocalStackPersistence}
       onLocalStackEnvironmentTextChange={setLocalStackEnvironmentText}
+      onFlociAzPersistenceChange={setFlociAzPersistence}
+      onFlociAzEnvironmentTextChange={setFlociAzEnvironmentText}
       onRefreshDockerRuntime={() => {
         void refreshVirtualisationState();
       }}
       onRefreshLocalStackLogs={() => {
         void refreshLocalStackLogs();
       }}
+      onRefreshFlociAzLogs={() => {
+        void refreshFlociAzLogs();
+      }}
       onInvokeLocalStackAction={(action) => {
         void invokeLocalStackAction(action);
+      }}
+      onInvokeFlociAzAction={(action) => {
+        void invokeFlociAzAction(action);
       }}
     />
   ) : (

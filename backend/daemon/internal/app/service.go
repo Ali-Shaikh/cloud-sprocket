@@ -15,6 +15,7 @@ import (
 
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/discovery"
+	"cloudsprocket/backend/daemon/internal/flociaz"
 	"cloudsprocket/backend/daemon/internal/localstack"
 	"cloudsprocket/backend/daemon/internal/models"
 	"cloudsprocket/backend/daemon/internal/store"
@@ -55,6 +56,14 @@ type LocalStackManager interface {
 	EnsureManagedProfile() error
 }
 
+type AzureRuntimeManager interface {
+	Status(ctx context.Context) (models.LocalStackStatus, error)
+	Start(ctx context.Context, options models.LocalStackStartOptions) (models.LocalStackStatus, error)
+	Stop(ctx context.Context) (models.LocalStackStatus, error)
+	Logs(ctx context.Context, tail int) (models.EmulatorLogSnapshot, error)
+	EnsureManagedConfig() error
+}
+
 type Notifier interface {
 	Notify(method string, payload any) error
 }
@@ -68,6 +77,7 @@ type Service struct {
 	azure         AzureInventory
 	docker        DockerRuntime
 	localstackMgr LocalStackManager
+	azureRuntime  AzureRuntimeManager
 	now           func() time.Time
 	mu            sync.Mutex
 }
@@ -82,10 +92,11 @@ func New(
 	dockerRuntime DockerRuntime,
 ) *Service {
 	localStackMgr := localstack.NewManager(settings)
-	return NewWithLocalStack(settings, store, discoveryService, s3Inventory, ec2Inventory, azureInventory, dockerRuntime, localStackMgr)
+	azureRuntime := flociaz.NewManager(settings)
+	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
 }
 
-func NewWithLocalStack(
+func NewWithRuntimes(
 	settings config.Settings,
 	store *store.Store,
 	discoveryService *discovery.Service,
@@ -94,6 +105,7 @@ func NewWithLocalStack(
 	azureInventory AzureInventory,
 	dockerRuntime DockerRuntime,
 	localStackMgr LocalStackManager,
+	azureRuntime AzureRuntimeManager,
 ) *Service {
 	return &Service{
 		settings:      settings,
@@ -104,6 +116,7 @@ func NewWithLocalStack(
 		azure:         azureInventory,
 		docker:        dockerRuntime,
 		localstackMgr: localStackMgr,
+		azureRuntime:  azureRuntime,
 		now:           func() time.Time { return time.Now().UTC() },
 	}
 }
@@ -599,7 +612,11 @@ func (s *Service) Handle(
 	case "emulators.list":
 		return s.emulatorsList(), nil
 	case "emulators.prepareProfile":
-		result, err := s.emulatorsPrepareProfile()
+		var request struct {
+			EmulatorID string `json:"emulatorId"`
+		}
+		_ = json.Unmarshal(params, &request)
+		result, err := s.emulatorsPrepareProfile(request.EmulatorID)
 		if err != nil {
 			return nil, err
 		}
@@ -609,17 +626,21 @@ func (s *Service) Handle(
 		_ = json.Unmarshal(params, &request)
 		return s.emulatorsStart(ctx, request)
 	case "emulators.stop":
-		return s.emulatorsStop(ctx)
+		var request struct {
+			EmulatorID string `json:"emulatorId"`
+		}
+		_ = json.Unmarshal(params, &request)
+		return s.emulatorsStop(ctx, request.EmulatorID)
 	case "emulators.logs":
 		var request struct {
 			EmulatorID string `json:"emulatorId"`
 			Tail       int    `json:"tail"`
 		}
 		_ = json.Unmarshal(params, &request)
-		if request.EmulatorID != "" && request.EmulatorID != "localstack" {
+		if request.EmulatorID != "" && request.EmulatorID != "localstack" && request.EmulatorID != "floci-az" {
 			return nil, fmt.Errorf("emulator %s is not supported", request.EmulatorID)
 		}
-		return s.emulatorsLogs(ctx, request.Tail)
+		return s.emulatorsLogs(ctx, request.EmulatorID, request.Tail)
 	case "actions.invoke":
 		var request struct {
 			ActionID string `json:"actionId"`
@@ -1058,6 +1079,7 @@ func (s *Service) settingsSnapshot() models.AppSettingsSnapshot {
 		LocalConfigDir:   s.settings.LocalConfigDir,
 		EmulatorStateDir: s.settings.EmulatorStateDir,
 		LocalStackImage:  s.settings.LocalStackImage,
+		FlociAZImage:     s.settings.FlociAZImage,
 	}
 }
 
@@ -1188,7 +1210,7 @@ func (s *Service) emulatorSummaries() []models.EmulatorSummary {
 		{Label: "Managed Config Root", Value: filepath.Join(s.settings.LocalConfigDir, "aws")},
 	}
 	azureDetails := []models.DetailField{
-		{Label: "Image", Value: "floci/floci-az:latest"},
+		{Label: "Image", Value: s.settings.FlociAZImage},
 		{Label: "Managed Config Root", Value: filepath.Join(s.settings.LocalConfigDir, "azure")},
 	}
 	if len(artifacts) > 0 {
@@ -2158,24 +2180,38 @@ func (s *Service) emulatorsList() []models.EmulatorSummary {
 		}
 	}
 
-	// Add floci-az placeholder
-	summaries = append(summaries, models.EmulatorSummary{
-		EmulatorID: "floci-az",
-		ProviderID: "azure",
-		Label:      "floci-az",
-		Kind:       "docker",
-		Status:     models.EmulatorStatusNotConfigured,
-		Summary:    "Azure local emulator is not yet implemented.",
-		Details: []models.DetailField{
-			{Label: "Image", Value: "floci/floci-az:latest"},
-			{Label: "Status", Value: "Planned for future slice"},
-		},
-	})
+	if s.azureRuntime != nil {
+		status, err := s.azureRuntime.Status(context.Background())
+		if err == nil {
+			summaries = append(summaries, models.EmulatorSummary{
+				EmulatorID: status.EmulatorID,
+				ProviderID: status.ProviderID,
+				Label:      status.Label,
+				Kind:       status.Kind,
+				Status:     status.Status,
+				Summary:    status.Summary,
+				Details:    status.Details,
+			})
+		}
+	}
 
 	return summaries
 }
 
-func (s *Service) emulatorsPrepareProfile() (models.EmulatorActionResult, error) {
+func (s *Service) emulatorsPrepareProfile(emulatorID string) (models.EmulatorActionResult, error) {
+	emulatorID = normaliseEmulatorID(emulatorID)
+	if emulatorID == "floci-az" {
+		if s.azureRuntime == nil {
+			return models.EmulatorActionResult{}, errors.New("floci-az manager not available")
+		}
+		if err := s.azureRuntime.EnsureManagedConfig(); err != nil {
+			return models.EmulatorActionResult{}, fmt.Errorf("failed to prepare managed Azure config: %w", err)
+		}
+		status, _ := s.azureRuntime.Status(context.Background())
+		status.ConfigPath = filepath.Join(s.settings.LocalConfigDir, "azure", "floci-az.env")
+		status.Endpoint = "http://localhost:4577"
+		return emulatorActionResult("prepareProfile", status), nil
+	}
 	if s.localstackMgr == nil {
 		return models.EmulatorActionResult{}, errors.New("LocalStack manager not available")
 	}
@@ -2193,6 +2229,20 @@ func (s *Service) emulatorsPrepareProfile() (models.EmulatorActionResult, error)
 }
 
 func (s *Service) emulatorsStart(ctx context.Context, options models.LocalStackStartOptions) (models.EmulatorActionResult, error) {
+	emulatorID := normaliseEmulatorID(options.EmulatorID)
+	if emulatorID == "floci-az" {
+		if s.azureRuntime == nil {
+			return models.EmulatorActionResult{}, errors.New("floci-az manager not available")
+		}
+		actionCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		status, err := s.azureRuntime.Start(actionCtx, options)
+		result := emulatorActionResult("start", status)
+		if err != nil {
+			return result, errors.New(result.Summary)
+		}
+		return result, nil
+	}
 	if s.localstackMgr == nil {
 		return models.EmulatorActionResult{}, errors.New("LocalStack manager not available")
 	}
@@ -2206,7 +2256,21 @@ func (s *Service) emulatorsStart(ctx context.Context, options models.LocalStackS
 	return result, nil
 }
 
-func (s *Service) emulatorsStop(ctx context.Context) (models.EmulatorActionResult, error) {
+func (s *Service) emulatorsStop(ctx context.Context, emulatorID string) (models.EmulatorActionResult, error) {
+	emulatorID = normaliseEmulatorID(emulatorID)
+	if emulatorID == "floci-az" {
+		if s.azureRuntime == nil {
+			return models.EmulatorActionResult{}, errors.New("floci-az manager not available")
+		}
+		actionCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		status, err := s.azureRuntime.Stop(actionCtx)
+		result := emulatorActionResult("stop", status)
+		if err != nil {
+			return result, errors.New(result.Summary)
+		}
+		return result, nil
+	}
 	if s.localstackMgr == nil {
 		return models.EmulatorActionResult{}, errors.New("LocalStack manager not available")
 	}
@@ -2220,7 +2284,14 @@ func (s *Service) emulatorsStop(ctx context.Context) (models.EmulatorActionResul
 	return result, nil
 }
 
-func (s *Service) emulatorsLogs(ctx context.Context, tail int) (models.EmulatorLogSnapshot, error) {
+func (s *Service) emulatorsLogs(ctx context.Context, emulatorID string, tail int) (models.EmulatorLogSnapshot, error) {
+	emulatorID = normaliseEmulatorID(emulatorID)
+	if emulatorID == "floci-az" {
+		if s.azureRuntime == nil {
+			return models.EmulatorLogSnapshot{}, errors.New("floci-az manager not available")
+		}
+		return s.azureRuntime.Logs(ctx, tail)
+	}
 	if s.localstackMgr == nil {
 		return models.EmulatorLogSnapshot{}, errors.New("LocalStack manager not available")
 	}
@@ -2252,10 +2323,18 @@ func emulatorActionResult(action string, status models.LocalStackStatus) models.
 		}
 	}
 	return models.EmulatorActionResult{
-		EmulatorID: "localstack",
+		EmulatorID: status.EmulatorID,
 		Action:     action,
 		State:      state,
 		Summary:    summary,
 		Status:     status,
 	}
+}
+
+func normaliseEmulatorID(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "localstack"
+	}
+	return value
 }

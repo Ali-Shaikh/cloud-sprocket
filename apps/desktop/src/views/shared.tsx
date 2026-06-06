@@ -343,6 +343,10 @@ export function renderRuntimeSettingsPanel(
           <Box variant="awsui-key-label">LocalStack Image</Box>
           <Box variant="code">{settings.localStackImage || "localstack/localstack:stable"}</Box>
         </div>
+        <div className="detail-card">
+          <Box variant="awsui-key-label">floci-az Image</Box>
+          <Box variant="code">{settings.flociAzImage || "floci/floci-az:latest"}</Box>
+        </div>
       </div>
     </Container>
   );

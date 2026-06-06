@@ -275,6 +275,7 @@ export interface AppSettingsSnapshot {
   localConfigDir: string;
   emulatorStateDir: string;
   localStackImage: string;
+  flociAzImage: string;
 }
 
 export interface EmulatorLogSnapshot {
