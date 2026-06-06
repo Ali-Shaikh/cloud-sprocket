@@ -2,9 +2,9 @@
 
 - Date: `2026-06-06`
 - Branch: `feat/azure-local-runtime`
-- Head after local commit: `519ca76 docs: record fast-forward merge`
-- Working tree: Azure local runtime implementation is complete locally and awaiting commit.
-- Status: LocalStack work is merged into `dev` and usable from the global `Local Runtime` menu. The first Azure local runtime slice is implemented with floci-az Docker lifecycle, config, logs, UI controls, tests, and desktop build verification.
+- Head after local commit: `a00ab5a feat: add Azure local runtime controls`
+- Working tree: Local Runtime unlock/menu regression fix is complete locally and awaiting commit.
+- Status: LocalStack work is merged into `dev` and usable from the global `Local Runtime` menu. The first Azure local runtime slice is implemented with floci-az Docker lifecycle, config, logs, UI controls, tests, and desktop build verification. A follow-up fix keeps `Local Runtime` visible in locked workspaces even when the backend omits the synthetic tab, and returns to setup after unlock.
 
 ## Current State
 
@@ -68,6 +68,11 @@
   - routed `emulators.prepareProfile`, `emulators.start`, `emulators.stop`, `emulators.logs`, and `emulators.list` by emulator ID
   - added floci-az controls, persistence, env variables, action notifications, polling, and logs to global and locked `Local Runtime` views
   - updated the mock backend and focused desktop tests for the floci-az start/stop flow
+- Fixed a follow-up Local Runtime navigation regression on 2026-06-06:
+  - locked workspaces now always show the global `Local Runtime` menu item even if `workspaceTabs` omits the synthetic `virtualisation` tab
+  - the active runtime tab is no longer forced back to the first provider tab while locked
+  - unlocking resets the active workspace tab to `overview`, returning the user to session setup
+  - added regression coverage for unlocking from `Local Runtime` and for runtime access when backend runtime tab data is sparse
 
 ## Files Changed In This Resume
 
@@ -146,6 +151,12 @@
   - `pnpm run typecheck:desktop` passed.
   - `go -C backend/daemon test ./...` passed.
   - `pnpm run build:desktop:exe` passed and compiled `cloudsprocket-desktop v0.1.19`.
+- Local Runtime unlock/menu regression verification on 2026-06-06:
+  - `pnpm --dir apps/desktop test -- --run -t "unlocks from the local runtime workspace"` passed.
+  - `pnpm --dir apps/desktop test -- --run -t "local runtime|starts and stops|unlock"` passed, 4 focused tests.
+  - `pnpm --dir apps/desktop test` passed, 16 tests.
+  - `pnpm run typecheck:desktop` passed.
+  - `pnpm run build:desktop:exe` passed after stopping stale sidecar process `cloudsprocketd` that was locking the previous executable.
 
 ## Earlier Verification On 2026-05-27
 
@@ -190,11 +201,11 @@
 
 ## Left To Do
 
-1. Commit and push the verified Azure local runtime slice.
+1. Commit and push the Local Runtime unlock/menu regression fix.
 2. Manually start floci-az from the built desktop app once Docker is available on the machine.
 3. Decide the next Azure scope: service-specific local views, Azure CLI profile integration with the generated env file, or optional runtime hardening.
 4. Keep any further LocalStack changes limited to hardening that is required by Azure integration.
 
 ## Resume Point
 
-- Continue on `feat/azure-local-runtime`. Review the local diff, commit with author `Ali Shaikh <me@alishaikh.net>`, push, then manually verify floci-az start/stop in the built app.
+- Continue on `feat/azure-local-runtime`. Commit and push the Local Runtime unlock/menu fix with author `Ali Shaikh <me@alishaikh.net>`, then manually verify unlock and emulator start/stop in the built app.
