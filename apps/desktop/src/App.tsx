@@ -419,6 +419,15 @@ function AppSidebar({
       badge,
     };
   });
+  if (!workspaceItems.some((item) => item.id === "virtualisation")) {
+    workspaceItems.push({
+      id: "virtualisation",
+      label: "Local Runtime",
+      detail: "Docker and local cloud runtimes",
+      iconName: "settings",
+      badge: String(workspace.emulatorSummaries.length),
+    });
+  }
 
   const workspaceSubItems: Record<string, SidebarSubItem[]> = {
     s3: [
@@ -1379,6 +1388,7 @@ export default function App() {
     }
     if (
       session.workspaceTabs.length > 0 &&
+      activeWorkspaceTabId !== "virtualisation" &&
       !session.workspaceTabs.some((tab) => tab.tabId === activeWorkspaceTabId)
     ) {
       setActiveWorkspaceTabId(session.workspaceTabs[0].tabId);
@@ -1406,6 +1416,9 @@ export default function App() {
     const normalisedSession = normaliseSessionSnapshot(nextSession);
     startTransition(() => {
       setSession(normalisedSession);
+      if (method === "session.unlock") {
+        setActiveWorkspaceTabId("overview");
+      }
     });
     await loadWorkspace(normalisedSession);
     await loadState();

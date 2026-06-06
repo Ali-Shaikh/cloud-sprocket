@@ -94,6 +94,25 @@ vi.mock("./lib/backend", () => ({
         return profileFixtures;
       case "session.get":
         return sessionFixture;
+      case "session.lock":
+        sessionFixture = {
+          ...sessionFixture,
+          isLocked: true,
+          lockedProviderId: sessionFixture.currentProviderId,
+          lockedProfileId: sessionFixture.selectedProfileId,
+          lockedAuthMethod: sessionFixture.selectedAuthMethod,
+        };
+        return sessionFixture;
+      case "session.unlock":
+        sessionFixture = {
+          ...sessionFixture,
+          isLocked: false,
+          lockedProviderId: undefined,
+          lockedProfileId: undefined,
+          lockedAuthMethod: undefined,
+          workspaceTabs: [],
+        };
+        return sessionFixture;
       case "app.settings.get":
         return settingsFixture;
       case "workspace.get":
@@ -626,12 +645,6 @@ describe("App", () => {
           summary: "Summary",
           detail: "Overview panel",
         },
-        {
-          tabId: "virtualisation",
-          label: "Local Runtime",
-          summary: "Runtime summary",
-          detail: "Runtime panel",
-        },
       ],
     };
     workspaceFixture = {
@@ -657,6 +670,34 @@ describe("App", () => {
     expect(await screen.findByText("Docker Runtime")).toBeInTheDocument();
     expect(await screen.findByText("Local Runtimes")).toBeInTheDocument();
     expect(await screen.findByText("Managed Docker Resources")).toBeInTheDocument();
+  });
+
+  it("unlocks from the local runtime workspace back to setup", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+      ],
+    };
+
+    render(<App />);
+
+    expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
+    fireEvent.click(await screen.findByText("Local Runtime"));
+    expect(await screen.findByRole("button", { name: "Start LocalStack" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Unlock" }));
+
+    expect(await screen.findByText("Session Setup")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Lock workspace" })).toBeEnabled();
   });
 
   it("starts and stops LocalStack from the local runtime workspace", async () => {
