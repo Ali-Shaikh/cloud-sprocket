@@ -170,9 +170,13 @@ func (s *Service) Handle(
 		if err != nil {
 			return nil, err
 		}
+		// Hold the service mutex only while reading/reconciling the stored
+		// session. buildWorkspaceSnapshot performs slow external probes (Docker,
+		// AWS) that must not block other requests such as session.unlock, which
+		// the Local Runtime tab polls into contention every few seconds.
 		s.mu.Lock()
-		defer s.mu.Unlock()
 		session, err := s.currentState(ctx, snapshot)
+		s.mu.Unlock()
 		if err != nil {
 			return nil, err
 		}
@@ -1559,8 +1563,14 @@ func (s *Service) buildWorkspaceSnapshot(
 	// timeout to return an empty list, doubling the Docker latency of every
 	// workspace fetch and Local Runtime poll.
 	dockerResources := []models.ManagedDockerResource{}
+	// When the engine is unreachable, skip the per-emulator Docker probes too and
+	// fall back to the static planned summaries. Each live probe would otherwise
+	// wait out its own timeout, and with both LocalStack and floci-az that adds
+	// several seconds to every workspace fetch and Local Runtime poll.
+	emulatorSummaries := s.emulatorSummaries()
 	if dockerRuntime.Reachable {
 		dockerResources = s.dockerResources()
+		emulatorSummaries = s.emulatorsList()
 	}
 	workspace := models.WorkspaceSnapshot{
 		AuthMethod:             session.SelectedAuthMethod,
@@ -1569,7 +1579,7 @@ func (s *Service) buildWorkspaceSnapshot(
 		DockerDiagnostics:      s.dockerDiagnosticsFromSnapshot(dockerRuntime),
 		DockerRuntime:          dockerRuntime,
 		DockerResources:        dockerResources,
-		EmulatorSummaries:      s.emulatorsList(),
+		EmulatorSummaries:      emulatorSummaries,
 		LocalConfigArtifacts:   s.localConfigArtifacts(),
 		AzureResourceGroups:    []models.AzureResourceGroup{},
 		AzureVirtualMachines:   []models.AzureVirtualMachine{},
