@@ -396,6 +396,16 @@ button.sidebar-menu-item {
   color: #0f172a;
 }
 
+.sidebar-action-danger {
+  border-color: rgba(185, 28, 28, 0.5);
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
+.sidebar-action-danger:hover {
+  background: #fecaca;
+}
+
 .sidebar-action-active,
 .sidebar-action-secondary:hover {
   background: rgba(255, 255, 255, 0.08);
@@ -987,7 +997,6 @@ button.sidebar-menu-item {
 
 .snippet-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
 }

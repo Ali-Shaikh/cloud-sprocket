@@ -359,3 +359,9 @@ type StateChangedPayload struct {
 	Profiles  []ProfileSummary  `json:"profiles"`
 	Session   SessionSnapshot   `json:"session"`
 }
+
+type AppResetResult struct {
+	Summary      string   `json:"summary"`
+	ResetPaths   []string `json:"resetPaths"`
+	SkippedPaths []string `json:"skippedPaths"`
+}
