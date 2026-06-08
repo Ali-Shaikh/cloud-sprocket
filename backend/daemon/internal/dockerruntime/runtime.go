@@ -2,6 +2,7 @@ package dockerruntime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -71,7 +72,11 @@ func (r *Runtime) Snapshot(ctx context.Context) (models.DockerRuntimeSnapshot, e
 
 	ping, err := api.Ping(ctx, client.PingOptions{})
 	if err != nil {
-		snapshot.Summary = fmt.Sprintf("Docker engine is configured but unreachable: %v", err)
+		if errors.Is(err, context.DeadlineExceeded) {
+			snapshot.Summary = "Docker did not respond in time. The engine may be starting or asleep. Use Refresh Docker to retry."
+		} else {
+			snapshot.Summary = fmt.Sprintf("Docker engine is configured but unreachable: %v", err)
+		}
 		snapshot.Details = append(snapshot.Details, models.DetailField{Label: "Connection Error", Value: err.Error()})
 		return snapshot, nil
 	}

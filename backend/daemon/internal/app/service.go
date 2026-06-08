@@ -22,6 +22,18 @@ import (
 	"cloudsprocket/backend/daemon/internal/urlinspector"
 )
 
+const (
+	// dockerProbeTimeout bounds Docker status, snapshot, and resource-listing
+	// calls so an unreachable Docker engine fails fast instead of blocking the
+	// request goroutine forever. The Docker host (named pipe or socket) can be
+	// configured but unreachable when the engine is stopped, in which case the
+	// underlying dial would otherwise wait indefinitely.
+	dockerProbeTimeout = 3 * time.Second
+	// dockerLogsTimeout bounds container log retrieval, which can take slightly
+	// longer than a status probe but must still never hang a request.
+	dockerLogsTimeout = 8 * time.Second
+)
+
 type S3Inventory interface {
 	ListBuckets(ctx context.Context, profile models.ProfileSummary) ([]models.AwsS3Bucket, error)
 	ListObjects(ctx context.Context, profile models.ProfileSummary, bucketName string, prefix string) ([]models.AwsS3Object, error)
@@ -145,14 +157,22 @@ func (s *Service) Handle(
 		}
 		return filterProfiles(snapshot.Profiles, request.ProviderID), nil
 	case "session.get":
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		_, session, err := s.currentState(ctx)
+		session, err := s.currentState(ctx, snapshot)
 		return session, err
 	case "workspace.get":
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		snapshot, session, err := s.currentState(ctx)
+		session, err := s.currentState(ctx, snapshot)
 		if err != nil {
 			return nil, err
 		}
@@ -164,9 +184,13 @@ func (s *Service) Handle(
 		if err := json.Unmarshal(params, &request); err != nil {
 			return nil, err
 		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		snapshot, session, err := s.currentState(ctx)
+		session, err := s.currentState(ctx, snapshot)
 		if err != nil {
 			return nil, err
 		}
@@ -193,9 +217,13 @@ func (s *Service) Handle(
 		if err := json.Unmarshal(params, &request); err != nil {
 			return nil, err
 		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		snapshot, session, err := s.currentState(ctx)
+		session, err := s.currentState(ctx, snapshot)
 		if err != nil {
 			return nil, err
 		}
@@ -214,9 +242,13 @@ func (s *Service) Handle(
 		if err := json.Unmarshal(params, &request); err != nil {
 			return nil, err
 		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		snapshot, session, err := s.currentState(ctx)
+		session, err := s.currentState(ctx, snapshot)
 		if err != nil {
 			return nil, err
 		}
@@ -247,8 +279,12 @@ func (s *Service) Handle(
 		if strings.TrimSpace(request.SourcePath) == "" || strings.TrimSpace(request.ObjectKey) == "" {
 			return nil, errors.New("source path and destination object key are required")
 		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
-		snapshot, session, err := s.currentState(ctx)
+		session, err := s.currentState(ctx, snapshot)
 		if err != nil {
 			s.mu.Unlock()
 			return nil, err
@@ -284,8 +320,12 @@ func (s *Service) Handle(
 		if err := json.Unmarshal(params, &request); err != nil {
 			return nil, err
 		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
-		snapshot, session, err := s.currentState(ctx)
+		session, err := s.currentState(ctx, snapshot)
 		if err != nil {
 			s.mu.Unlock()
 			return nil, err
@@ -347,9 +387,13 @@ func (s *Service) Handle(
 		if err := json.Unmarshal(params, &request); err != nil {
 			return nil, err
 		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		snapshot, session, err := s.currentState(ctx)
+		session, err := s.currentState(ctx, snapshot)
 		if err != nil {
 			return nil, err
 		}
@@ -376,9 +420,13 @@ func (s *Service) Handle(
 		if err := json.Unmarshal(params, &request); err != nil {
 			return nil, err
 		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		snapshot, session, err := s.currentState(ctx)
+		session, err := s.currentState(ctx, snapshot)
 		if err != nil {
 			return nil, err
 		}
@@ -398,8 +446,12 @@ func (s *Service) Handle(
 		if err := json.Unmarshal(params, &request); err != nil {
 			return nil, err
 		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
-		snapshot, session, err := s.currentState(ctx)
+		session, err := s.currentState(ctx, snapshot)
 		if err != nil {
 			s.mu.Unlock()
 			return nil, err
@@ -439,9 +491,13 @@ func (s *Service) Handle(
 		if err := json.Unmarshal(params, &request); err != nil {
 			return nil, err
 		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		snapshot, session, err := s.currentState(ctx)
+		session, err := s.currentState(ctx, snapshot)
 		if err != nil {
 			return nil, err
 		}
@@ -468,9 +524,13 @@ func (s *Service) Handle(
 		if err := json.Unmarshal(params, &request); err != nil {
 			return nil, err
 		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		snapshot, session, err := s.currentState(ctx)
+		session, err := s.currentState(ctx, snapshot)
 		if err != nil {
 			return nil, err
 		}
@@ -489,9 +549,13 @@ func (s *Service) Handle(
 		if err := json.Unmarshal(params, &request); err != nil {
 			return nil, err
 		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		snapshot, session, err := s.currentState(ctx)
+		session, err := s.currentState(ctx, snapshot)
 		if err != nil {
 			return nil, err
 		}
@@ -519,9 +583,13 @@ func (s *Service) Handle(
 		if err := json.Unmarshal(params, &request); err != nil {
 			return nil, err
 		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		snapshot, session, err := s.currentState(ctx)
+		session, err := s.currentState(ctx, snapshot)
 		if err != nil {
 			return nil, err
 		}
@@ -548,9 +616,13 @@ func (s *Service) Handle(
 		if err := json.Unmarshal(params, &request); err != nil {
 			return nil, err
 		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		snapshot, session, err := s.currentState(ctx)
+		session, err := s.currentState(ctx, snapshot)
 		if err != nil {
 			return nil, err
 		}
@@ -563,9 +635,13 @@ func (s *Service) Handle(
 		}
 		return session, s.notifyStateAndLog(ctx, snapshot, session, notifier, "info", fmt.Sprintf("Selected auth method %s.", request.AuthMethod))
 	case "session.lock":
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		snapshot, session, err := s.currentState(ctx)
+		session, err := s.currentState(ctx, snapshot)
 		if err != nil {
 			return nil, err
 		}
@@ -585,13 +661,21 @@ func (s *Service) Handle(
 		}
 		return session, s.notifyStateAndLog(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Locked %s session for %s.", session.LockedProviderID, session.LockedProfileID))
 	case "session.unlock":
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		snapshot, session, err := s.currentState(ctx)
+		snapshot, err := s.discovery.Discover()
 		if err != nil {
 			return nil, err
 		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		session, ok, err := s.store.LoadSession(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			session = models.SessionSnapshot{}
+		}
 		session.IsLocked = false
+		session.WorkspaceTabs = []models.WorkspaceTab{}
 		session = reconcileSession(session, snapshot)
 		if err := s.store.SaveSession(ctx, session); err != nil {
 			return nil, err
@@ -605,6 +689,15 @@ func (s *Service) Handle(
 		return s.store.ListLogs(ctx, request.Limit)
 	case "app.settings.get":
 		return s.settingsSnapshot(), nil
+	case "app.reset":
+		var request struct {
+			Confirmation string `json:"confirmation"`
+		}
+		_ = json.Unmarshal(params, &request)
+		if strings.TrimSpace(request.Confirmation) != "RESET" {
+			return nil, errors.New("type RESET to confirm the app reset")
+		}
+		return s.resetAppData(ctx, notifier)
 	case "docker.runtime.get":
 		return s.dockerRuntimeSnapshot(), nil
 	case "docker.resources.list":
@@ -664,15 +757,10 @@ func (s *Service) Handle(
 	}
 }
 
-func (s *Service) currentState(ctx context.Context) (discovery.Snapshot, models.SessionSnapshot, error) {
-	snapshot, err := s.discovery.Discover()
-	if err != nil {
-		return discovery.Snapshot{}, models.SessionSnapshot{}, err
-	}
-
+func (s *Service) currentState(ctx context.Context, snapshot discovery.Snapshot) (models.SessionSnapshot, error) {
 	stored, ok, err := s.store.LoadSession(ctx)
 	if err != nil {
-		return discovery.Snapshot{}, models.SessionSnapshot{}, err
+		return models.SessionSnapshot{}, err
 	}
 	if !ok {
 		stored = models.SessionSnapshot{}
@@ -680,9 +768,107 @@ func (s *Service) currentState(ctx context.Context) (discovery.Snapshot, models.
 
 	session := reconcileSession(stored, snapshot)
 	if err := s.store.SaveSession(ctx, session); err != nil {
-		return discovery.Snapshot{}, models.SessionSnapshot{}, err
+		return models.SessionSnapshot{}, err
 	}
-	return snapshot, session, nil
+	return session, nil
+}
+
+func (s *Service) resetAppData(ctx context.Context, notifier Notifier) (models.AppResetResult, error) {
+	s.mu.Lock()
+	if err := s.store.ResetAppData(ctx); err != nil {
+		s.mu.Unlock()
+		return models.AppResetResult{}, err
+	}
+	session := models.SessionSnapshot{}
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return models.AppResetResult{}, err
+	}
+	s.mu.Unlock()
+
+	resetPaths := []string{}
+	skippedPaths := []string{}
+	for _, target := range []struct {
+		path         string
+		expectedName string
+	}{
+		{path: s.settings.LocalConfigDir, expectedName: "local-config"},
+		{path: s.settings.EmulatorStateDir, expectedName: "emulators"},
+	} {
+		resetPath, skipped, err := managedDirectoryTarget(s.settings.ConfigDir, target.path, target.expectedName)
+		if err != nil {
+			return models.AppResetResult{}, err
+		}
+		if resetPath != "" {
+			resetPaths = append(resetPaths, resetPath)
+			go func(path string) {
+				_ = resetManagedDirectoryPath(path)
+			}(resetPath)
+		}
+		if skipped != "" {
+			skippedPaths = append(skippedPaths, skipped)
+		}
+	}
+
+	if notifier != nil {
+		if err := notifier.Notify("state.changed", statePayload(discovery.Snapshot{}, session)); err != nil {
+			return models.AppResetResult{}, err
+		}
+	}
+
+	return models.AppResetResult{
+		Summary:      "CloudSprocket app state has been reset. External AWS, Azure, and GCP config files were not touched.",
+		ResetPaths:   resetPaths,
+		SkippedPaths: skippedPaths,
+	}, nil
+}
+
+func resetManagedDirectory(configRoot string, targetPath string, expectedName string) (string, string, error) {
+	target, skipped, err := managedDirectoryTarget(configRoot, targetPath, expectedName)
+	if err != nil || target == "" {
+		return target, skipped, err
+	}
+	if err := resetManagedDirectoryPath(target); err != nil {
+		return "", "", err
+	}
+	return target, "", nil
+}
+
+func managedDirectoryTarget(configRoot string, targetPath string, expectedName string) (string, string, error) {
+	if strings.TrimSpace(configRoot) == "" || strings.TrimSpace(targetPath) == "" {
+		return "", targetPath, nil
+	}
+
+	root, err := filepath.Abs(configRoot)
+	if err != nil {
+		return "", targetPath, err
+	}
+	target, err := filepath.Abs(targetPath)
+	if err != nil {
+		return "", targetPath, err
+	}
+	if filepath.Base(target) != expectedName {
+		return "", target, nil
+	}
+	rel, err := filepath.Rel(root, target)
+	if err != nil {
+		return "", target, err
+	}
+	if rel == "." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || rel == ".." || filepath.IsAbs(rel) {
+		return "", target, nil
+	}
+
+	return target, "", nil
+}
+
+func resetManagedDirectoryPath(target string) error {
+	if err := os.RemoveAll(target); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
@@ -696,10 +882,23 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 		})
 	}
 
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		if notifier != nil {
+			_ = notifier.Notify("job.updated", models.JobStatus{
+				JobID:   job.JobID,
+				Label:   job.Label,
+				Status:  "failed",
+				Message: err.Error(),
+			})
+		}
+		return
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	snapshot, session, err := s.currentState(background)
+	session, err := s.currentState(background, snapshot)
 	if err != nil {
 		if notifier != nil {
 			_ = notifier.Notify("job.updated", models.JobStatus{
@@ -1094,7 +1293,9 @@ func runtimeModeFromSettings(value string) models.RuntimeMode {
 
 func (s *Service) dockerRuntimeSnapshot() models.DockerRuntimeSnapshot {
 	if s.docker != nil {
-		snapshot, err := s.docker.Snapshot(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+		defer cancel()
+		snapshot, err := s.docker.Snapshot(ctx)
 		if err == nil {
 			return snapshot
 		}
@@ -1133,7 +1334,9 @@ func (s *Service) dockerResources() []models.ManagedDockerResource {
 	if s.docker == nil {
 		return []models.ManagedDockerResource{}
 	}
-	resources, err := s.docker.ListOwnedResources(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+	defer cancel()
+	resources, err := s.docker.ListOwnedResources(ctx)
 	if err != nil {
 		return []models.ManagedDockerResource{}
 	}
@@ -1351,13 +1554,21 @@ func (s *Service) buildWorkspaceSnapshot(
 	session models.SessionSnapshot,
 ) models.WorkspaceSnapshot {
 	dockerRuntime := s.dockerRuntimeSnapshot()
+	// Only enumerate managed Docker resources when the engine is reachable. When
+	// Docker is stopped the resource probe would otherwise wait out its own
+	// timeout to return an empty list, doubling the Docker latency of every
+	// workspace fetch and Local Runtime poll.
+	dockerResources := []models.ManagedDockerResource{}
+	if dockerRuntime.Reachable {
+		dockerResources = s.dockerResources()
+	}
 	workspace := models.WorkspaceSnapshot{
 		AuthMethod:             session.SelectedAuthMethod,
 		RuntimeSettings:        s.settingsSnapshot(),
 		EnvironmentDiagnostics: s.environmentDiagnostics(snapshot, session),
 		DockerDiagnostics:      s.dockerDiagnosticsFromSnapshot(dockerRuntime),
 		DockerRuntime:          dockerRuntime,
-		DockerResources:        s.dockerResources(),
+		DockerResources:        dockerResources,
 		EmulatorSummaries:      s.emulatorsList(),
 		LocalConfigArtifacts:   s.localConfigArtifacts(),
 		AzureResourceGroups:    []models.AzureResourceGroup{},
@@ -2164,9 +2375,10 @@ func firstAvailableAuthMethod(methods []models.AuthMethodStatus) models.AuthMeth
 func (s *Service) emulatorsList() []models.EmulatorSummary {
 	summaries := []models.EmulatorSummary{}
 
-	// Get LocalStack status if available
 	if s.localstackMgr != nil {
-		status, err := s.localstackMgr.Status(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+		defer cancel()
+		status, err := s.localstackMgr.Status(ctx)
 		if err == nil {
 			summaries = append(summaries, models.EmulatorSummary{
 				EmulatorID: status.EmulatorID,
@@ -2181,7 +2393,9 @@ func (s *Service) emulatorsList() []models.EmulatorSummary {
 	}
 
 	if s.azureRuntime != nil {
-		status, err := s.azureRuntime.Status(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+		defer cancel()
+		status, err := s.azureRuntime.Status(ctx)
 		if err == nil {
 			summaries = append(summaries, models.EmulatorSummary{
 				EmulatorID: status.EmulatorID,
@@ -2207,7 +2421,9 @@ func (s *Service) emulatorsPrepareProfile(emulatorID string) (models.EmulatorAct
 		if err := s.azureRuntime.EnsureManagedConfig(); err != nil {
 			return models.EmulatorActionResult{}, fmt.Errorf("failed to prepare managed Azure config: %w", err)
 		}
-		status, _ := s.azureRuntime.Status(context.Background())
+		statusCtx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+		defer cancel()
+		status, _ := s.azureRuntime.Status(statusCtx)
 		status.ConfigPath = filepath.Join(s.settings.LocalConfigDir, "azure", "floci-az.env")
 		status.Endpoint = "http://localhost:4577"
 		return emulatorActionResult("prepareProfile", status), nil
@@ -2220,7 +2436,9 @@ func (s *Service) emulatorsPrepareProfile(emulatorID string) (models.EmulatorAct
 		return models.EmulatorActionResult{}, fmt.Errorf("failed to prepare managed profile: %w", err)
 	}
 
-	status, _ := s.localstackMgr.Status(context.Background())
+	statusCtx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+	defer cancel()
+	status, _ := s.localstackMgr.Status(statusCtx)
 	status.ProfileName = "cloudsprocket-localstack"
 	status.ConfigPath = s.settings.LocalConfigDir + "/aws/config"
 	status.CredsPath = s.settings.LocalConfigDir + "/aws/credentials"
@@ -2286,16 +2504,18 @@ func (s *Service) emulatorsStop(ctx context.Context, emulatorID string) (models.
 
 func (s *Service) emulatorsLogs(ctx context.Context, emulatorID string, tail int) (models.EmulatorLogSnapshot, error) {
 	emulatorID = normaliseEmulatorID(emulatorID)
+	logsCtx, cancel := context.WithTimeout(ctx, dockerLogsTimeout)
+	defer cancel()
 	if emulatorID == "floci-az" {
 		if s.azureRuntime == nil {
 			return models.EmulatorLogSnapshot{}, errors.New("floci-az manager not available")
 		}
-		return s.azureRuntime.Logs(ctx, tail)
+		return s.azureRuntime.Logs(logsCtx, tail)
 	}
 	if s.localstackMgr == nil {
 		return models.EmulatorLogSnapshot{}, errors.New("LocalStack manager not available")
 	}
-	return s.localstackMgr.Logs(ctx, tail)
+	return s.localstackMgr.Logs(logsCtx, tail)
 }
 
 func emulatorActionResult(action string, status models.LocalStackStatus) models.EmulatorActionResult {

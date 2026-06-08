@@ -6,6 +6,33 @@
 - Working tree: Local Runtime unlock/menu regression fix is complete locally and awaiting commit.
 - Status: LocalStack work is merged into `dev` and usable from the global `Local Runtime` menu. The first Azure local runtime slice is implemented with floci-az Docker lifecycle, config, logs, UI controls, tests, and desktop build verification. A follow-up fix keeps `Local Runtime` visible in locked workspaces even when the backend omits the synthetic tab, and returns to setup after unlock.
 
+## Latest Fix (2026-06-08): Docker-hang regression (could not unlock, no emulators)
+
+- Symptom: after the floci/azure work, the workspace could not be unlocked and no emulators worked.
+- Root cause: Docker status/snapshot/resource/log calls used `context.Background()` with no deadline. On Windows `dockerruntime.ResolveDockerHost` always returns the default named-pipe host (`npipe:////./pipe/docker_engine`) even when Docker Desktop is stopped, so the moby client dial waits for the absent pipe forever. In the original synchronous RPC daemon a single hung Docker call blocked every subsequent request, including `session.unlock` and `workspace.get`. The recovery's goroutine-per-request RPC change stopped the total freeze, but `emulators.list`/`workspace.get` still never returned because the underlying Docker call never completed.
+- Evidence: driving the real built daemon over stdio showed `emulators.list` (id `r2`) never replied while `session.get`/`lock`/`unlock` did; `docker info` and the named pipe `\\.\pipe\docker_engine` confirmed Docker Desktop was not running; a moby `ContainerList` against the absent pipe returned only when given a context deadline (`context deadline exceeded` after the timeout).
+- Fix in `backend/daemon/internal/app/service.go`:
+  - added `dockerProbeTimeout = 3s` and `dockerLogsTimeout = 8s`.
+  - bounded all Docker-touching request paths with `context.WithTimeout`: `emulatorsList`, `emulatorsPrepareProfile`, `emulatorsLogs`, `dockerRuntimeSnapshot`, `dockerResources`.
+  - `buildWorkspaceSnapshot` now skips `dockerResources()` when the Docker runtime snapshot is unreachable, so a stopped engine does not pay two sequential timeouts per workspace fetch/poll.
+  - added regression test `TestDockerRuntimeProbeIsBoundedWhenEngineBlocks` with a `blockingDockerRuntime` stub that proves the probe returns within its timeout instead of hanging.
+- Verified: `go -C backend/daemon test ./...` passes (incl. new bounded-probe test). Real-daemon stdio drive now returns `emulators.list`, `docker.runtime.get`, and `emulators.logs` within their timeouts; `workspace.get` returns while locked (Docker reported unreachable, no hang); `session.unlock` returns immediately. Frontend unlock/lock verified in browser mock with no errors. `pnpm run build:desktop:exe` rebuilt `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe` with the fixed sidecar.
+- The goroutine-per-request RPC change (`rpc/server.go`) is kept: writes are mutex-serialised and the Tauri bridge correlates responses by id, so concurrent handling is safe and prevents one slow request (e.g. a 20s emulator start) from blocking the UI.
+
+### Follow-up fixes after first build test (2026-06-08)
+
+User tested the build and reported three issues; all fixed and re-verified:
+
+1. Un-closable success banner. Several Flashbar notifications set `dismissible: true` but had no `onDismiss`, so the X did nothing (most visibly the discovery "Refresh completed" banner). Added `onDismiss` to the job/discovery notification and routed the ad-hoc error/reset notifications through a new `pushNotification` helper that always assigns an id and `onDismiss`. Verified in the browser mock: the banner now clears when dismissed.
+2. floci-az was missing. The earlier recovery had decoupled floci-az by removing it from the active path; the user wants it back (decoupled from LocalStack). Restored end to end:
+   - backend: `New()` builds the floci-az manager again; `emulators.list/prepareProfile/start/stop/logs` route floci-az by id (Docker probes bounded by the same timeouts); `emulators.logs` handler allows `floci-az`; restored the azure local-config artefact and the floci-az fallback summary.
+   - frontend: `ensureEmulatorSummaries` now keeps a floci-az card (real or `defaultFlociAzSummary` fallback) instead of filtering it out; restored the floci-az card, logs panel, floci-az image in runtime settings, and the floci-az log fetch in `refreshVirtualisationState`.
+   - tests: updated the locked-workspace assertions to expect floci-az present, expect 2 emulator summaries + 3 local-config artefacts, and restored the "starts and stops floci-az" test plus the floci-az fixture entry.
+   - Verified in the browser mock: Start floci-az, Prepare Config, floci-az Logs, and the floci-az image all render in Local Runtime.
+3. Docker asleep-but-running was "not handled". Per user choice, kept fast-fail (the 3s probe) plus manual retry (the existing "Refresh Docker" button), and made the timeout message actionable: when the Docker ping hits the deadline, the snapshot now says "Docker did not respond in time. The engine may be starting or asleep. Use Refresh Docker to retry." (`dockerruntime/runtime.go`).
+- Verification after follow-ups: `go -C backend/daemon test ./...` passes; `pnpm run typecheck:desktop` passes; `pnpm --dir apps/desktop test` passes (18 tests); `pnpm run build:desktop:exe` rebuilt the exe.
+- Still not committed: the user interrupted the in-progress commit to add these three items. Awaiting explicit go-ahead to commit the full working tree on `feat/azure-local-runtime`.
+
 ## Current State
 
 - Branch is `feat/azure-local-runtime`, created from current `dev`.
@@ -189,6 +216,76 @@
 
 ## Notes
 
+- Current user direction:
+  - Do not commit unless the user explicitly says to commit.
+  - Ask before making architecture decisions or deferring scope.
+  - Keep implementation modular, decoupled, and testable.
+  - Build a local executable for verification after each major piece of work.
+  - Azure service-specific local views should be discussed with the user before being deferred or started.
+- Windows UI automation status:
+  - Computer Use failed on 2026-06-06 before listing apps with `windows sandbox failed: spawn setup refresh`.
+  - Retrying after `js_reset` produced the same failure.
+  - Stopping the stale `node_repl.exe` process closed the Node REPL MCP transport, so Windows UI automation is unavailable in this thread until the Codex tool host is restarted.
+  - The rebuilt CloudSprocket executable was launched directly from `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe`; process check showed both `cloudsprocket-desktop.exe` and `cloudsprocketd.exe` running.
+  - On the follow-up attempt, Computer Use remained unavailable because the Node REPL MCP transport was closed.
+  - The latest local exe launch request was rejected by the approval system due usage limits, so no workaround was attempted.
+- Current uncommitted bug fix:
+  - Added fallback LocalStack and floci-az runtime cards in frontend workspace normalisation so Start controls remain visible even when backend emulator summaries are empty or delayed.
+  - Added a locked-session `Unlock Workspace` sidebar action so unlock is always visible, not only in the workspace header.
+  - Verification passed: `pnpm --dir apps/desktop test -- --run -t "local runtime|unlock"`, `pnpm run typecheck:desktop`, `pnpm --dir apps/desktop test`, and `pnpm run build:desktop:exe`.
+  - Fresh executable built at `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe`.
+- Evidence-based blank-screen fix on 2026-06-06:
+  - Root cause was a WIP frontend contract regression in `App.tsx`: `SessionSetupView` was called with missing required props, profiles were no longer loaded, backend state events were read with the wrong payload shape, and workspace snapshot normalisation had been removed.
+  - Restored profile loading, setup view props, provider/profile state updates, workspace normalisation, S3 prefix race protection, EC2 workspace-result handling, EC2 job-result updates, and Azure tab routing.
+  - Added an app error boundary that records React render errors in the debug log and shows an in-app error panel instead of a blank screen.
+  - Removed duplicate sidebar labels that made tests and the UI ambiguous.
+  - Kept emulator Start enabled for `unhealthy` states so Docker sleep/wake or transient health EOF does not grey out Start.
+  - Added regression coverage for unhealthy emulator Start buttons.
+  - Verification passed: `pnpm --dir apps/desktop test` passed, 17 tests; `pnpm run typecheck:desktop` passed; `pnpm run build:desktop:exe` passed.
+  - A rebuild initially failed because the earlier launched executable was still running and Windows denied access; stopped the launched app and sidecar, then reran `pnpm run build:desktop:exe` successfully.
+  - Final built executable launched successfully from `D:\Dev\cloud-sprocket\apps\desktop\src-tauri\target\release\cloudsprocket-desktop.exe`; process check showed `cloudsprocket-desktop.exe` PID `79752` and `cloudsprocketd.exe` PID `12716` running.
+  - No commit was created, per user direction.
+- Follow-up unlock and AWS icon fix on 2026-06-06:
+  - Restored AWS service sidebar icon rendering for S3 and EC2 by routing workspace tabs back to their SVG assets and rendering `iconUrl` before provider fallback.
+  - Fixed `session.unlock` so the daemon discovers the current provider/profile snapshot and emits a reconciled `state.changed` payload instead of an empty discovery snapshot.
+  - Added frontend regression coverage that locked S3 and EC2 sidebar items render custom image glyphs, preventing fallback to generic Cloudscape icons.
+  - Verification passed: `pnpm --dir apps/desktop test` passed, 17 tests; `pnpm run typecheck:desktop` passed; `go test ./...` passed from `backend/daemon`; `pnpm run build:desktop:exe` passed.
+  - Rebuilt executable launched successfully from `D:\Dev\cloud-sprocket\apps\desktop\src-tauri\target\release\cloudsprocket-desktop.exe`; process check showed `cloudsprocket-desktop.exe` PID `63140` and `cloudsprocketd.exe` PID `60672` running.
+  - Computer Use was retried after `js_reset` but still failed before listing Windows apps with `windows sandbox failed: spawn setup refresh`, so visual UI attachment was not possible in this thread.
+  - No commit was created, per user direction.
+- App reset feature on 2026-06-06:
+  - Added backend `app.reset` with required `RESET` confirmation.
+  - Reset clears CloudSprocket-owned SQLite state: session, app settings, resource cache, and activity logs.
+  - Reset removes and recreates only guarded app-managed local folders: `local-config` and `emulators` when they are under the CloudSprocket config root.
+  - External cloud config files such as AWS, Azure, and GCP provider config paths are not touched. Guard tests cover an external AWS config path skip.
+  - Added a sidebar `Reset` action and confirmation modal. The modal copy states that AWS, Azure, and GCP config files outside CloudSprocket app data are not touched.
+  - Reset also clears transient frontend state such as debug logs, LocalStack/floci-az inputs, S3/EC2 statuses, and returns the UI to setup.
+  - Verification passed: `go test ./...` from `backend/daemon`; `pnpm --dir apps/desktop test` passed, 18 tests; `pnpm run typecheck:desktop` passed; `pnpm run build:desktop:exe` passed.
+  - Rebuilt executable launched successfully from `D:\Dev\cloud-sprocket\apps\desktop\src-tauri\target\release\cloudsprocket-desktop.exe`; process check showed `cloudsprocket-desktop.exe` PID `85812` and `cloudsprocketd.exe` PID `78028` running.
+  - No commit was created, per user direction.
+- Stuck reset fix on 2026-06-06:
+  - User reported reset was stuck in the built app.
+  - Evidence showed the old app and sidecar were still running and app-owned LocalStack files remained present.
+  - Fixed the reset path so `app.reset` returns immediately after clearing SQLite app state and saving an empty session.
+  - Moved app-owned `local-config` and `emulators` directory cleanup to a background task so locked emulator files or large LocalStack cache trees cannot block the UI.
+  - Removed provider discovery from the reset RPC response path. The frontend now reloads discovery in the background after reset instead of keeping the modal button in a loading state.
+  - Verification passed: `pnpm --dir apps/desktop test` passed, 18 tests; `pnpm run typecheck:desktop` passed; `go test ./...` from `backend/daemon` passed; `pnpm run build:desktop:exe` passed.
+  - Stopped the old running desktop and sidecar, rebuilt, and launched the corrected executable. Process check showed `cloudsprocket-desktop.exe` PID `85108` and `cloudsprocketd.exe` PID `3572` running.
+  - No commit was created, per user direction.
+- LocalStack-only recovery on 2026-06-06:
+  - User reported the app was not working after the floci integration and requested returning to a working condition with the runtimes decoupled.
+  - Restored the active Local Runtime path to LocalStack-only behaviour.
+  - Removed forced floci card injection from frontend workspace normalisation.
+  - Removed floci log fetch from Local Runtime refresh so opening Local Runtime only asks for `workspace.get` and LocalStack logs.
+  - Removed visible floci controls and floci logs from `WorkspaceView`.
+  - Stopped the default daemon service from constructing the floci manager.
+  - Stopped backend `emulators.list` from probing floci and removed floci from fallback emulator summaries and app-managed local config artefacts.
+  - Backend `emulators.*` now treats floci as not attached to the Local Runtime menu, so floci cannot affect LocalStack start/stop/status/reset from that surface.
+  - Updated tests back to LocalStack-only runtime expectations.
+  - Verification passed: `pnpm --dir apps/desktop test` passed, 17 tests; `pnpm run typecheck:desktop` passed; `go test ./...` from `backend/daemon` passed; `pnpm run build:desktop:exe` passed.
+  - The rebuilt exe is at `D:\Dev\cloud-sprocket\apps\desktop\src-tauri\target\release\cloudsprocket-desktop.exe`.
+  - Launching the rebuilt exe was blocked by the approval system usage limit, so the user needs to start it manually for visual testing.
+  - No commit was created, per user direction.
 - The first type-check failure from the previous checkpoint cleared after dependencies were materialised by the desktop test run. No TypeScript config change was required.
 - Go tests needed elevated execution because the sandbox could not access the local Go build cache.
 - The latest blank-screen fix touches the Tauri Rust bridge and frontend normalisation. The desktop build covered the Rust bridge compile path; Go daemon tests were not rerun because daemon code was not changed.
@@ -201,11 +298,13 @@
 
 ## Left To Do
 
-1. Commit and push the Local Runtime unlock/menu regression fix.
-2. Manually start floci-az from the built desktop app once Docker is available on the machine.
-3. Decide the next Azure scope: service-specific local views, Azure CLI profile integration with the generated env file, or optional runtime hardening.
-4. Keep any further LocalStack changes limited to hardening that is required by Azure integration.
+1. Manually confirm the launched desktop window is visible, S3/EC2 use AWS service icons, and `Unlock Workspace` returns to setup.
+2. Test the new corrected `Reset` sidebar action in the built app and confirm it returns to setup without touching external AWS/Azure/GCP config files.
+3. Start the rebuilt exe manually and confirm Local Runtime only shows LocalStack controls and LocalStack logs.
+4. Start LocalStack from the built app when Docker is awake, then confirm the toast/status flow and Start/Stop buttons.
+5. Decide the next Azure scope with the user before implementation. Azure runtime must be implemented as a separate decoupled surface, not mixed into LocalStack's Local Runtime flow.
+6. Commit only when the user explicitly asks.
 
 ## Resume Point
 
-- Continue on `feat/azure-local-runtime`. Commit and push the Local Runtime unlock/menu fix with author `Ali Shaikh <me@alishaikh.net>`, then manually verify unlock and emulator start/stop in the built app.
+- Continue on `feat/azure-local-runtime`. Do not commit yet. Ask the user to test the launched build, then commit only after explicit approval.

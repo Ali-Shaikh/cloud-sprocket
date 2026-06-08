@@ -665,8 +665,7 @@ export default function WorkspaceView({
                     <Button
                       disabled={
                         localStackActionInFlight ||
-                        emulator.status === "running" ||
-                        emulator.status === "unhealthy"
+                        emulator.status === "running"
                       }
                       onClick={() => onInvokeLocalStackAction("start")}
                     >
@@ -723,8 +722,7 @@ export default function WorkspaceView({
                     <Button
                       disabled={
                         flociAzActionInFlight ||
-                        emulator.status === "running" ||
-                        emulator.status === "unhealthy"
+                        emulator.status === "running"
                       }
                       onClick={() => onInvokeFlociAzAction("start")}
                     >

@@ -86,6 +86,10 @@ const settingsFixture: AppSettingsSnapshot = {
 };
 
 vi.mock("./lib/backend", () => ({
+  addDebugLog: vi.fn(),
+  clearDebugLogs: vi.fn(),
+  getDebugLogs: vi.fn(() => []),
+  subscribeToDebugLogs: vi.fn(() => () => undefined),
   backendRequest: vi.fn(async (method: string, params?: Record<string, unknown>) => {
     switch (method) {
       case "providers.list":
@@ -115,6 +119,32 @@ vi.mock("./lib/backend", () => ({
         return sessionFixture;
       case "app.settings.get":
         return settingsFixture;
+      case "app.reset":
+        if (params?.confirmation !== "RESET") {
+          throw new Error("type RESET to confirm the app reset");
+        }
+        sessionFixture = {
+          currentProviderId: "aws",
+          selectedProfileId: "sandbox",
+          selectedAuthMethod: "cli",
+          isLocked: false,
+          availableAuthMethods: profileFixtures[0].authMethods,
+          workspaceTabs: [],
+        };
+        logFixtures = [];
+        backendEventHandlers["state.changed"]?.({
+          providers: providerFixtures,
+          profiles: profileFixtures.filter((profile) => profile.providerId === "aws"),
+          session: sessionFixture,
+        });
+        return {
+          summary: "CloudSprocket app state has been reset. External AWS, Azure, and GCP config files were not touched.",
+          resetPaths: [
+            settingsFixture.localConfigDir,
+            settingsFixture.emulatorStateDir,
+          ],
+          skippedPaths: [],
+        };
       case "workspace.get":
         return workspaceFixture;
       case "docker.runtime.get":
@@ -471,15 +501,6 @@ describe("App", () => {
           managed: true,
           summary: "App-managed AWS local profile configuration will be written here.",
         },
-        {
-          artifactId: "azure-local-env",
-          providerId: "azure",
-          label: "Azure Local Env File",
-          path: "C:/Users/Ali/AppData/Local/CloudSprocket/local-config/azure/floci-az.env",
-          status: "not-created",
-          managed: true,
-          summary: "App-managed Azure local connection strings and env values will be written here.",
-        },
       ],
       awsWritesEnabled: false,
       azureResourceGroups: [],
@@ -599,6 +620,12 @@ describe("App", () => {
           summary: "S3 summary",
           detail: "S3 panel",
         },
+        {
+          tabId: "ec2",
+          label: "EC2",
+          summary: "EC2 summary",
+          detail: "EC2 panel",
+        },
       ],
     };
     workspaceFixture = {
@@ -614,6 +641,9 @@ describe("App", () => {
     expect(screen.getByText("Overview")).toBeInTheDocument();
     expect(screen.getByText("Local Runtime")).toBeInTheDocument();
     expect(screen.getByText("S3")).toBeInTheDocument();
+    expect(screen.getByText("EC2")).toBeInTheDocument();
+    expect(screen.getByTitle(/S3:/).querySelector("img.cloud-provider-icon")).not.toBeNull();
+    expect(screen.getByTitle(/EC2:/).querySelector("img.cloud-provider-icon")).not.toBeNull();
     expect((await screen.findAllByText("workspace sandbox")).length).toBeGreaterThan(0);
     expect(await screen.findByText("2 buckets")).toBeInTheDocument();
     fireEvent.click(screen.getByText("Local Runtime"));
@@ -670,6 +700,46 @@ describe("App", () => {
     expect(await screen.findByText("Docker Runtime")).toBeInTheDocument();
     expect(await screen.findByText("Local Runtimes")).toBeInTheDocument();
     expect(await screen.findByText("Managed Docker Resources")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Start LocalStack" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Start floci-az" })).toBeInTheDocument();
+  });
+
+  it("keeps emulator start actions enabled while Docker reports unhealthy during wake-up", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+        {
+          tabId: "virtualisation",
+          label: "Local Runtime",
+          summary: "Runtime summary",
+          detail: "Runtime panel",
+        },
+      ],
+    };
+    workspaceFixture = {
+      ...workspaceFixture,
+      emulatorSummaries: workspaceFixture.emulatorSummaries.map((emulator) => ({
+        ...emulator,
+        status: "unhealthy",
+        summary: `${emulator.label} health check is unavailable while Docker wakes up.`,
+      })),
+    };
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByText("Local Runtime"));
+    expect(await screen.findByRole("button", { name: "Start LocalStack" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Start floci-az" })).toBeEnabled();
   });
 
   it("unlocks from the local runtime workspace back to setup", async () => {
@@ -692,11 +762,45 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Unlock workspace" })).toBeInTheDocument();
     fireEvent.click(await screen.findByText("Local Runtime"));
     expect(await screen.findByRole("button", { name: "Start LocalStack" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Unlock" }));
+    fireEvent.click(screen.getByRole("button", { name: "Unlock workspace" }));
 
     expect(await screen.findByText("Session Setup")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Lock workspace" })).toBeEnabled();
+  });
+
+  it("resets app-owned state back to setup without cloud config deletion", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+      ],
+    };
+
+    render(<App />);
+
+    expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reset app data" }));
+    expect(await screen.findByRole("dialog", { name: "Reset app data" })).toBeInTheDocument();
+    expect(screen.getByText(/does not touch AWS, Azure, or GCP config files/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Reset confirmation"), {
+      target: { value: "RESET" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Reset app" }));
+
+    expect(await screen.findByText("Session Setup")).toBeInTheDocument();
+    expect(await screen.findByText("App reset complete")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Lock workspace" })).toBeEnabled();
   });
 
@@ -736,6 +840,7 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Start LocalStack" }));
     await waitFor(() => {
       expect(emulatorStartParams).toEqual({
+        emulatorId: "localstack",
         authToken: "localstack-token",
         persistence: true,
         environment: { DEBUG: "1" },

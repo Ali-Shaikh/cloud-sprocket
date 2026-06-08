@@ -50,37 +50,39 @@ func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 			continue
 		}
 
-		var req request
-		if err := json.Unmarshal(line, &req); err != nil {
-			if err := s.write(response{
+		// Copy the line because scanner.Bytes() is reused on next Scan()
+		lineCopy := make([]byte, len(line))
+		copy(lineCopy, line)
+
+		go func(data []byte) {
+			var req request
+			if err := json.Unmarshal(data, &req); err != nil {
+				_ = s.write(response{
+					JSONRPC: "2.0",
+					Error: &responseError{
+						Code:    -32700,
+						Message: err.Error(),
+					},
+				})
+				return
+			}
+
+			result, err := s.service.Handle(ctx, req.Method, req.Params, s)
+			reply := response{
 				JSONRPC: "2.0",
-				Error: &responseError{
-					Code:    -32700,
+				ID:      req.ID,
+			}
+			if err != nil {
+				reply.Error = &responseError{
+					Code:    -32000,
 					Message: err.Error(),
-				},
-			}); err != nil {
-				return err
+				}
+			} else {
+				reply.Result = result
 			}
-			continue
-		}
 
-		result, err := s.service.Handle(ctx, req.Method, req.Params, s)
-		reply := response{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-		}
-		if err != nil {
-			reply.Error = &responseError{
-				Code:    -32000,
-				Message: err.Error(),
-			}
-		} else {
-			reply.Result = result
-		}
-
-		if err := s.write(reply); err != nil {
-			return err
-		}
+			_ = s.write(reply)
+		}(lineCopy)
 	}
 
 	return scanner.Err()

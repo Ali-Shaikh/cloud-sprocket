@@ -126,6 +126,22 @@ func (s stubDockerRuntime) ListOwnedResources(context.Context) ([]models.Managed
 	return append([]models.ManagedDockerResource(nil), s.resources...), nil
 }
 
+// blockingDockerRuntime simulates a Docker engine whose host is configured but
+// unreachable, so calls block until their context is cancelled. This mirrors a
+// stopped Docker Desktop where dialling the named pipe would otherwise wait
+// forever.
+type blockingDockerRuntime struct{}
+
+func (blockingDockerRuntime) Snapshot(ctx context.Context) (models.DockerRuntimeSnapshot, error) {
+	<-ctx.Done()
+	return models.DockerRuntimeSnapshot{}, ctx.Err()
+}
+
+func (blockingDockerRuntime) ListOwnedResources(ctx context.Context) ([]models.ManagedDockerResource, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
 type recordingNotifier struct {
 	events chan models.JobStatus
 }
@@ -299,8 +315,12 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	if len(workspace.DockerResources) != 1 || workspace.DockerResources[0].Name != "cloudsprocket-localstack" {
 		t.Fatalf("expected docker resources from runtime, got %+v", workspace.DockerResources)
 	}
-	if len(workspace.EmulatorSummaries) != 2 {
-		t.Fatalf("expected emulator summaries, got %+v", workspace.EmulatorSummaries)
+	emulatorIDs := map[string]bool{}
+	for _, summary := range workspace.EmulatorSummaries {
+		emulatorIDs[summary.EmulatorID] = true
+	}
+	if len(workspace.EmulatorSummaries) != 2 || !emulatorIDs["localstack"] || !emulatorIDs["floci-az"] {
+		t.Fatalf("expected localstack and floci-az emulator summaries, got %+v", workspace.EmulatorSummaries)
 	}
 	if len(workspace.LocalConfigArtifacts) != 3 {
 		t.Fatalf("expected local config artifacts, got %+v", workspace.LocalConfigArtifacts)
@@ -718,6 +738,103 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 	}
 }
 
+func TestServiceResetClearsOnlyAppOwnedState(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+	configRoot := filepath.Join(tempDir, "cloudsprocket")
+	settings := config.FromEnv(map[string]string{
+		"CLOUDSPROCKET_CONFIG_DIR": configRoot,
+	}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("expected runtime dirs to be created, got %v", err)
+	}
+
+	awsConfigPath := filepath.Join(home, ".aws", "config")
+	mustWriteFile(t, awsConfigPath, "[profile sandbox]\nregion = us-east-1\n")
+	mustWriteFile(t, filepath.Join(home, ".aws", "credentials"), "[sandbox]\naws_access_key_id = AKIAEXAMPLE\n")
+	mustWriteFile(t, filepath.Join(settings.LocalConfigDir, "aws", "config"), "[profile cloudsprocket-localstack]\n")
+	mustWriteFile(t, filepath.Join(settings.EmulatorStateDir, "localstack", "state", "payload.json"), "{}\n")
+
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("expected sqlite store to open, got %v", err)
+	}
+	defer dataStore.Close()
+
+	ctx := context.Background()
+	if err := dataStore.SaveAppSetting(ctx, "theme", map[string]string{"mode": "dark"}); err != nil {
+		t.Fatalf("expected app setting save to succeed, got %v", err)
+	}
+	if _, err := dataStore.AppendLog(ctx, "info", "Before reset.", "", "2026-04-14T09:00:00Z"); err != nil {
+		t.Fatalf("expected log append to succeed, got %v", err)
+	}
+
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(command string) (string, error) {
+			if command == "aws" {
+				return "/usr/bin/aws", nil
+			}
+			return "", nil
+		}),
+		&stubS3Inventory{},
+		&stubEC2Inventory{},
+		stubAzureInventory{},
+		stubDockerRuntime{},
+	)
+
+	if _, err := service.Handle(ctx, "session.lock", nil, nil); err != nil {
+		t.Fatalf("expected session.lock before reset to succeed, got %v", err)
+	}
+
+	result, err := service.Handle(ctx, "app.reset", []byte(`{"confirmation":"RESET"}`), nil)
+	if err != nil {
+		t.Fatalf("expected app.reset to succeed, got %v", err)
+	}
+	reset := result.(models.AppResetResult)
+	if len(reset.ResetPaths) != 2 {
+		t.Fatalf("expected app-owned local folders to be reset, got %+v", reset)
+	}
+	if _, err := os.Stat(awsConfigPath); err != nil {
+		t.Fatalf("expected real AWS config to remain, got %v", err)
+	}
+	waitForPathRemoved(t, filepath.Join(settings.LocalConfigDir, "aws", "config"))
+	waitForPathRemoved(t, filepath.Join(settings.EmulatorStateDir, "localstack", "state", "payload.json"))
+	var theme map[string]string
+	if ok, err := dataStore.LoadAppSetting(ctx, "theme", &theme); err != nil || ok {
+		t.Fatalf("expected app setting to be reset, ok=%v err=%v", ok, err)
+	}
+	if logs, err := dataStore.ListLogs(ctx, 10); err != nil || len(logs) != 0 {
+		t.Fatalf("expected activity logs to be reset, logs=%+v err=%v", logs, err)
+	}
+	session, _, err := dataStore.LoadSession(ctx)
+	if err != nil {
+		t.Fatalf("expected session load after reset to succeed, got %v", err)
+	}
+	if session.IsLocked || session.LockedProfileID != "" || len(session.WorkspaceTabs) != 0 {
+		t.Fatalf("expected reset session to return to setup state, got %+v", session)
+	}
+}
+
+func TestResetManagedDirectorySkipsExternalCloudConfigPath(t *testing.T) {
+	tempDir := t.TempDir()
+	configRoot := filepath.Join(tempDir, "cloudsprocket")
+	externalConfig := filepath.Join(tempDir, "home", ".aws", "config")
+	mustWriteFile(t, externalConfig, "[profile sandbox]\n")
+
+	removed, skipped, err := resetManagedDirectory(configRoot, externalConfig, "local-config")
+	if err != nil {
+		t.Fatalf("expected external path skip to succeed, got %v", err)
+	}
+	if removed != "" || skipped == "" {
+		t.Fatalf("expected external path to be skipped, removed=%q skipped=%q", removed, skipped)
+	}
+	if _, err := os.Stat(externalConfig); err != nil {
+		t.Fatalf("expected external cloud config to remain, got %v", err)
+	}
+}
+
 func waitForJobStatus(t *testing.T, events <-chan models.JobStatus, status string) models.JobStatus {
 	t.Helper()
 	timeout := time.After(2 * time.Second)
@@ -733,6 +850,20 @@ func waitForJobStatus(t *testing.T, events <-chan models.JobStatus, status strin
 	}
 }
 
+func waitForPathRemoved(t *testing.T, path string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s to be removed", path)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func mustWriteFile(t *testing.T, path string, contents string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -740,5 +871,56 @@ func mustWriteFile(t *testing.T, path string, contents string) {
 	}
 	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
 		t.Fatalf("failed to write %s: %v", path, err)
+	}
+}
+
+// TestDockerRuntimeProbeIsBoundedWhenEngineBlocks is a regression test for the
+// freeze where an unreachable Docker engine hung every request. The probe must
+// return within its own timeout instead of blocking on the Docker dial forever.
+func TestDockerRuntimeProbeIsBoundedWhenEngineBlocks(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+
+	mustWriteFile(t, filepath.Join(home, ".aws", "config"), "[profile sandbox]\nregion = us-east-1\n")
+	mustWriteFile(t, filepath.Join(home, ".aws", "credentials"), "[sandbox]\naws_access_key_id = AKIAEXAMPLE\n")
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("expected runtime dirs to be created, got %v", err)
+	}
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("expected sqlite store to open, got %v", err)
+	}
+	defer dataStore.Close()
+
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(string) (string, error) { return "", nil }),
+		&stubS3Inventory{},
+		&stubEC2Inventory{},
+		stubAzureInventory{},
+		blockingDockerRuntime{},
+	)
+
+	done := make(chan models.DockerRuntimeSnapshot, 1)
+	go func() {
+		result, handleErr := service.Handle(context.Background(), "docker.runtime.get", nil, nil)
+		if handleErr != nil {
+			t.Errorf("expected docker.runtime.get to succeed, got %v", handleErr)
+			done <- models.DockerRuntimeSnapshot{}
+			return
+		}
+		done <- result.(models.DockerRuntimeSnapshot)
+	}()
+
+	select {
+	case snapshot := <-done:
+		if snapshot.Reachable {
+			t.Fatalf("expected an unreachable docker snapshot when the engine blocks, got %+v", snapshot)
+		}
+	case <-time.After(dockerProbeTimeout + 5*time.Second):
+		t.Fatalf("docker.runtime.get hung past the probe timeout; the Docker call is not bounded")
 	}
 }

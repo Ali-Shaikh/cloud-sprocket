@@ -6,6 +6,7 @@ import {
   Header,
   SpaceBetween,
   StatusIndicator,
+  Table,
 } from "@cloudscape-design/components";
 import type {
   CollectionPreferencesProps,
@@ -24,6 +25,63 @@ import type {
   ProviderSummary,
   WorkspaceTab,
 } from "../types/backend";
+import { subscribeToDebugLogs, getDebugLogs, type DebugLogEntry } from "../lib/backend";
+
+export function DebugConsole() {
+  const [logs, setLogs] = useState<DebugLogEntry[]>([]);
+
+  useEffect(() => {
+    setLogs(getDebugLogs());
+    return subscribeToDebugLogs((entry) => {
+      setLogs((current) => [entry, ...current].slice(0, 1000));
+    });
+  }, []);
+
+  return (
+    <Table
+      columnDefinitions={[
+        {
+          id: "timestamp",
+          header: "Time",
+          cell: (item) => new Date(item.timestamp).toLocaleTimeString(),
+          width: 120,
+        },
+        {
+          id: "type",
+          header: "Type",
+          cell: (item) => (
+            <Badge color={item.type === "error" ? "red" : item.type === "request" ? "blue" : item.type === "response" ? "green" : "grey"}>
+              {item.type.toUpperCase()}
+            </Badge>
+          ),
+          width: 100,
+        },
+        {
+          id: "method",
+          header: "Method/Event",
+          cell: (item) => item.method || "-",
+          width: 200,
+        },
+        {
+          id: "payload",
+          header: "Payload",
+          cell: (item) => (
+            <Box variant="code">
+              <pre style={{ margin: 0, whiteSpace: "pre-wrap", maxHeight: "150px", overflow: "auto" }}>
+                {JSON.stringify(item.payload, null, 2)}
+              </pre>
+            </Box>
+          ),
+        },
+      ]}
+      items={logs}
+      stickyHeader
+      variant="embedded"
+      empty={<Box color="text-status-inactive">No debug activity captured yet.</Box>}
+      header={<Header variant="h2">Internal Debug Console</Header>}
+    />
+  );
+}
 
 export function statusType(
   provider: ProviderSummary,

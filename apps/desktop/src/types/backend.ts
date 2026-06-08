@@ -297,3 +297,9 @@ export interface StateChangedPayload {
   profiles: ProfileSummary[];
   session: SessionSnapshot;
 }
+
+export interface AppResetResult {
+  summary: string;
+  resetPaths: string[];
+  skippedPaths: string[];
+}

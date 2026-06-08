@@ -1,19 +1,21 @@
 import {
   Box,
-  Button,
-  Checkbox,
-  Container,
   Flashbar,
-  Header,
   Icon,
-  Input,
   SpaceBetween,
+  Button,
+  Container,
+  Header,
+  Input,
   StatusIndicator,
+  Box as CloudscapeBox,
+  Checkbox,
+  Modal,
   Textarea,
 } from "@cloudscape-design/components";
 import type { FlashbarProps, IconProps, PropertyFilterProps } from "@cloudscape-design/components";
 import {
-  lazy,
+  Component,
   Suspense,
   startTransition,
   useEffect,
@@ -21,14 +23,18 @@ import {
   useRef,
   useState,
 } from "react";
+import type { ErrorInfo, ReactNode } from "react";
 import awsIconUrl from "./assets/cloud-icons/aws.svg";
 import awsEc2IconUrl from "./assets/cloud-icons/aws-ec2.svg";
 import awsS3IconUrl from "./assets/cloud-icons/aws-s3.svg";
 import azureIconUrl from "./assets/cloud-icons/azure.svg";
 import gcpIconUrl from "./assets/cloud-icons/gcp.svg";
-import { backendRequest, subscribeToBackendEvent } from "./lib/backend";
+import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
+import SessionSetupView from "./views/SessionSetupView";
+import WorkspaceView from "./views/WorkspaceView";
 import type {
   ActivityLogEntry,
+  AppResetResult,
   AppSettingsSnapshot,
   AwsEc2Instance,
   AwsS3PresignResult,
@@ -55,10 +61,8 @@ import type {
   UrlValidationResult,
   WorkspaceSnapshot,
 } from "./types/backend";
-import { defaultQuery, renderLogEntries, type TablePreferences } from "./views/shared";
+import { defaultQuery, renderLogEntries, type TablePreferences, DebugConsole } from "./views/shared";
 
-const SessionSetupView = lazy(() => import("./views/SessionSetupView"));
-const WorkspaceView = lazy(() => import("./views/WorkspaceView"));
 const appVersion = "0.1.19";
 
 type EC2LifecycleAction = "start" | "stop" | "reboot";
@@ -84,6 +88,51 @@ type SidebarSubItem = {
   id: string;
   label: string;
 };
+
+class AppErrorBoundary extends Component<{ children: ReactNode }, { error?: Error }> {
+  state: { error?: Error } = {};
+
+  static getDerivedStateFromError(error: Error): { error: Error } {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    console.error("React render error", error, info.componentStack);
+    addDebugLog({
+      timestamp: new Date().toISOString(),
+      type: "error",
+      method: "react.render",
+      payload: {
+        message: error.message,
+        componentStack: info.componentStack,
+      },
+    });
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <Container
+          header={
+            <Header
+              variant="h1"
+              description="The app caught a render error instead of showing a blank screen."
+            >
+              Application Error
+            </Header>
+          }
+        >
+          <SpaceBetween size="s">
+            <StatusIndicator type="error">Render failed</StatusIndicator>
+            <Box variant="code">{this.state.error.message}</Box>
+          </SpaceBetween>
+        </Container>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 const providerIconUrls: Record<string, string> = {
   aws: awsIconUrl,
@@ -113,10 +162,6 @@ function CloudProviderIcon({ providerId }: { providerId?: string }) {
   );
 }
 
-function sidebarItemIconClass(item: SidebarItem): string {
-  return `sidebar-item-icon${item.providerId || item.iconUrl ? " sidebar-item-icon-provider" : ""}`;
-}
-
 function SidebarGlyph({ item }: { item: SidebarItem }) {
   if (item.iconUrl) {
     return (
@@ -133,26 +178,18 @@ function SidebarGlyph({ item }: { item: SidebarItem }) {
   }
   return (
     <Icon
-      name={item.iconName ?? "status-info"}
+      name={item.iconName ?? "settings"}
       variant="inverted"
     />
   );
 }
 
-function workspaceTabIconUrl(tabId: string): string | undefined {
-  if (tabId === "s3") {
-    return awsS3IconUrl;
+function sidebarItemIconClass(item: SidebarItem): string {
+  const base = "sidebar-item-icon";
+  if (item.iconUrl || item.providerId) {
+    return `${base} sidebar-item-icon-provider`;
   }
-  if (tabId === "ec2") {
-    return awsEc2IconUrl;
-  }
-  if (tabId === "virtualisation") {
-    return undefined;
-  }
-  if (tabId === "azure-overview" || tabId === "azure-resource-groups" || tabId === "azure-vms") {
-    return azureIconUrl;
-  }
-  return undefined;
+  return base;
 }
 
 function workspaceTabIcon(tabId: string): IconProps.Name {
@@ -177,7 +214,23 @@ function workspaceTabIcon(tabId: string): IconProps.Name {
   if (tabId === "actions") {
     return "notification";
   }
+  if (tabId === "debug") {
+    return "search";
+  }
   return "view-full";
+}
+
+function workspaceTabIconUrl(tabId: string): string | undefined {
+  if (tabId === "s3") {
+    return awsS3IconUrl;
+  }
+  if (tabId === "ec2") {
+    return awsEc2IconUrl;
+  }
+  if (tabId === "azure-overview" || tabId === "azure-resource-groups" || tabId === "azure-vms") {
+    return azureIconUrl;
+  }
+  return undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -238,6 +291,45 @@ function normaliseEmulatorSummary(emulator: EmulatorSummary): EmulatorSummary {
   };
 }
 
+function defaultLocalStackSummary(): EmulatorSummary {
+  return {
+    emulatorId: "localstack",
+    providerId: "aws",
+    label: "LocalStack",
+    kind: "docker",
+    status: "not-configured",
+    summary: "LocalStack status is not available yet. Start will ask Docker to create the managed container.",
+    details: [
+      { label: "Image", value: "localstack/localstack:stable" },
+      { label: "Endpoint", value: "http://localhost:4566" },
+    ],
+  };
+}
+
+function defaultFlociAzSummary(): EmulatorSummary {
+  return {
+    emulatorId: "floci-az",
+    providerId: "azure",
+    label: "floci-az",
+    kind: "docker",
+    status: "not-configured",
+    summary: "floci-az status is not available yet. Start will ask Docker to create the managed container.",
+    details: [
+      { label: "Image", value: "floci/floci-az:latest" },
+      { label: "Endpoint", value: "http://localhost:4577" },
+    ],
+  };
+}
+
+function ensureEmulatorSummaries(emulators: EmulatorSummary[]): EmulatorSummary[] {
+  const byId = new Map(emulators.map((emulator) => [emulator.emulatorId, emulator]));
+  return [
+    byId.get("localstack") ?? defaultLocalStackSummary(),
+    byId.get("floci-az") ?? defaultFlociAzSummary(),
+    ...emulators.filter((emulator) => emulator.emulatorId !== "localstack" && emulator.emulatorId !== "floci-az"),
+  ];
+}
+
 function normaliseLocalConfigArtifact(artifact: LocalConfigArtifact): LocalConfigArtifact {
   return { ...artifact };
 }
@@ -276,751 +368,27 @@ function normaliseEC2Instance(instance: AwsEc2Instance): AwsEc2Instance {
   };
 }
 
-function normaliseSessionSnapshot(snapshot: Partial<SessionSnapshot> | null | undefined): SessionSnapshot {
+function normaliseSessionSnapshot(session: Partial<SessionSnapshot> | null | undefined): SessionSnapshot {
   return {
     ...emptySession,
-    ...(snapshot ?? {}),
-    isLocked: snapshot?.isLocked ?? false,
-    availableAuthMethods: normaliseArray(snapshot?.availableAuthMethods),
-    workspaceTabs: normaliseArray(snapshot?.workspaceTabs),
+    ...(session ?? {}),
+    isLocked: session?.isLocked ?? false,
+    currentProviderId: session?.currentProviderId,
+    selectedProfileId: session?.selectedProfileId,
+    selectedAuthMethod: session?.selectedAuthMethod,
+    availableAuthMethods: normaliseArray(session?.availableAuthMethods),
+    lockedProviderId: session?.lockedProviderId,
+    lockedProfileId: session?.lockedProfileId,
+    lockedAuthMethod: session?.lockedAuthMethod,
+    workspaceTabs: normaliseArray(session?.workspaceTabs),
+    selectedS3BucketName: session?.selectedS3BucketName,
+    selectedS3ObjectKey: session?.selectedS3ObjectKey,
+    s3PrefixFilter: session?.s3PrefixFilter ?? "",
+    selectedEc2Region: session?.selectedEc2Region,
+    selectedEc2InstanceId: session?.selectedEc2InstanceId,
+    selectedAzureResourceGroup: session?.selectedAzureResourceGroup,
+    selectedAzureVmId: session?.selectedAzureVmId,
   };
-}
-
-function dockerDiagnosticsFromRuntime(runtime: DockerRuntimeSnapshot): WorkspaceSnapshot["dockerDiagnostics"] {
-  return {
-    engineState: runtime.reachable ? "available" : runtime.host ? "unavailable" : "unknown",
-    summary: runtime.summary,
-    contextName: runtime.contextName,
-    host: runtime.host,
-    details: runtime.details,
-  };
-}
-
-function expectedEC2State(action: EC2LifecycleAction): string {
-  return action === "stop" ? "stopped" : "running";
-}
-
-function ec2InstanceState(workspaceSnapshot: WorkspaceSnapshot, instanceId: string): string {
-  return workspaceSnapshot.ec2Instances.find((instance) => instance.instanceId === instanceId)?.state?.toLowerCase() ?? "";
-}
-
-function wait(durationMs: number): Promise<void> {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, durationMs);
-  });
-}
-
-function withTimeout<T>(promise: Promise<T>, durationMs: number, message: string): Promise<T> {
-  let timeoutId: number | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timeoutId = window.setTimeout(() => {
-      reject(new Error(message));
-    }, durationMs);
-  });
-  return Promise.race([promise, timeout]).finally(() => {
-    if (timeoutId !== undefined) {
-      window.clearTimeout(timeoutId);
-    }
-  });
-}
-
-function AppSidebar({
-  session,
-  selectedProvider,
-  selectedProfile,
-  workspace,
-  activeWorkspaceTabId,
-  activeS3PageId,
-  activeAzurePageId,
-  collapsed,
-  activityOpen,
-  onToggleCollapsed,
-  onToggleActivity,
-  onLockSession,
-  onWorkspaceTabChange,
-  onS3PageChange,
-  onAzurePageChange,
-  onRefreshDiscovery,
-}: {
-  session: SessionSnapshot;
-  selectedProvider?: ProviderSummary;
-  selectedProfile?: ProfileSummary;
-  workspace: WorkspaceSnapshot;
-  activeWorkspaceTabId: string;
-  activeS3PageId: string;
-  activeAzurePageId: string;
-  collapsed: boolean;
-  activityOpen: boolean;
-  onToggleCollapsed: () => void;
-  onToggleActivity: () => void;
-  onLockSession: () => void;
-  onWorkspaceTabChange: (tabId: string) => void;
-  onS3PageChange: (pageId: string) => void;
-  onAzurePageChange: (pageId: string) => void;
-  onRefreshDiscovery: () => void;
-}) {
-  const setupItems: SidebarItem[] = [
-    {
-      id: "provider",
-      label: "Provider",
-      detail: selectedProvider?.label ?? "Choose provider",
-      providerId: selectedProvider?.providerId,
-      badge: selectedProvider ? "Done" : "Open",
-    },
-    {
-      id: "profile",
-      label: "Profile",
-      detail: selectedProfile?.displayName ?? "Choose profile",
-      iconName: "user-profile",
-      badge: selectedProfile ? "Done" : "Open",
-    },
-    {
-      id: "auth",
-      label: "Auth",
-      detail: session.selectedAuthMethod?.toUpperCase() ?? "Choose auth",
-      iconName: "key",
-      badge: session.selectedAuthMethod ? "Done" : "Open",
-    },
-    {
-      id: "lock",
-      label: "Lock",
-      detail: selectedProfile && session.selectedAuthMethod ? "Ready" : "Waiting",
-      iconName: "lock-private",
-      badge: selectedProfile && session.selectedAuthMethod ? "Ready" : undefined,
-    },
-    {
-      id: "virtualisation",
-      label: "Local Runtime",
-      detail: "Docker and local cloud runtimes",
-      iconName: "settings",
-      badge: activeWorkspaceTabId === "virtualisation" ? "Open" : undefined,
-    },
-  ];
-
-  const workspaceItems: SidebarItem[] = session.workspaceTabs.map((tab) => {
-    const badge =
-      tab.tabId === "s3"
-        ? String(workspace.s3Buckets.length)
-        : tab.tabId === "ec2"
-          ? String(workspace.ec2Instances.length)
-          : tab.tabId === "virtualisation"
-            ? String(workspace.emulatorSummaries.length)
-          : tab.tabId === "azure-resource-groups"
-            ? String(workspace.azureResourceGroups.length)
-            : tab.tabId === "azure-vms"
-              ? String(workspace.azureVirtualMachines.length)
-          : undefined;
-    return {
-      id: tab.tabId,
-      label: tab.label,
-      detail: tab.summary,
-      iconName: workspaceTabIcon(tab.tabId),
-      iconUrl: workspaceTabIconUrl(tab.tabId),
-      badge,
-    };
-  });
-  if (!workspaceItems.some((item) => item.id === "virtualisation")) {
-    workspaceItems.push({
-      id: "virtualisation",
-      label: "Local Runtime",
-      detail: "Docker and local cloud runtimes",
-      iconName: "settings",
-      badge: String(workspace.emulatorSummaries.length),
-    });
-  }
-
-  const workspaceSubItems: Record<string, SidebarSubItem[]> = {
-    s3: [
-      { id: "objects", label: "Objects" },
-      { id: "upload", label: "Upload" },
-      { id: "url-tester", label: "URL Tools" },
-    ],
-    "azure-overview": [
-      { id: "overview", label: "Overview" },
-      { id: "resource-groups", label: "Resource Groups" },
-      { id: "virtual-machines", label: "Virtual Machines" },
-    ],
-  };
-
-  const openWorkspaceSubPage = (tabId: string, pageId: string) => {
-    onWorkspaceTabChange(tabId);
-    if (tabId === "s3") {
-      onS3PageChange(pageId);
-    }
-    if (tabId === "azure-overview") {
-      onAzurePageChange(pageId);
-    }
-  };
-
-  return (
-    <aside className={`app-sidebar${collapsed ? " app-sidebar-collapsed" : ""}`}>
-      <div className="sidebar-brand">
-        <div className="brand-mark">CS</div>
-        <div className="brand-copy">
-          <div className="brand-title">CloudSprocket</div>
-          <div className="brand-subtitle">
-            {session.isLocked ? "Locked workspace" : "Session setup"}
-          </div>
-        </div>
-        <button
-          type="button"
-          className="sidebar-collapse-button"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          onClick={onToggleCollapsed}
-        >
-          <Icon
-            name={collapsed ? "angle-right" : "angle-left"}
-            variant="inverted"
-          />
-        </button>
-      </div>
-
-      <div className="sidebar-section">
-        <div className="sidebar-section-label">
-          {session.isLocked ? "Workspace" : "Setup"}
-        </div>
-        <div className="sidebar-menu">
-          {(session.isLocked ? workspaceItems : setupItems).map((item) => {
-            const active = session.isLocked
-              ? item.id === activeWorkspaceTabId
-              : item.id === "virtualisation" && activeWorkspaceTabId === "virtualisation";
-            return session.isLocked ? (
-              <div
-                key={item.id}
-                className="sidebar-menu-group"
-              >
-                <button
-                  type="button"
-                  className={`sidebar-menu-item${active ? " sidebar-menu-item-active" : ""}`}
-                    onClick={() => {
-                      onWorkspaceTabChange(item.id);
-                      if (item.id === "s3") {
-                        onS3PageChange("objects");
-                      }
-                      if (item.id === "azure-overview") {
-                        onAzurePageChange("overview");
-                      }
-                    }}
-                  title={`${item.label}: ${item.detail}`}
-                >
-                  <span className={sidebarItemIconClass(item)}>
-                    <SidebarGlyph item={item} />
-                  </span>
-                  <span className="sidebar-item-copy">
-                    <strong>{item.label}</strong>
-                    <small>{item.detail}</small>
-                  </span>
-                  {item.badge ? <em>{item.badge}</em> : null}
-                </button>
-                {active && workspaceSubItems[item.id] && !collapsed ? (
-                  <div className="sidebar-submenu">
-                    {workspaceSubItems[item.id].map((subItem) => (
-                      <button
-                        key={subItem.id}
-                        type="button"
-                        className={`sidebar-submenu-item${
-                          (item.id === "s3" && activeS3PageId === subItem.id) ||
-                          (item.id === "azure-overview" && activeAzurePageId === subItem.id)
-                            ? " sidebar-submenu-item-active"
-                            : ""
-                        }`}
-                        onClick={() => {
-                          openWorkspaceSubPage(item.id, subItem.id);
-                        }}
-                      >
-                        {subItem.label}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : item.id === "virtualisation" || item.id === "lock" ? (
-              <button
-                key={item.id}
-                type="button"
-                className={`sidebar-menu-item${active ? " sidebar-menu-item-active" : ""}`}
-                onClick={() => {
-                  if (item.id === "virtualisation") {
-                    onWorkspaceTabChange("virtualisation");
-                    return;
-                  }
-                  onWorkspaceTabChange("overview");
-                  onLockSession();
-                }}
-                disabled={item.id === "lock" && (!selectedProfile || !session.selectedAuthMethod)}
-                title={`${item.label}: ${item.detail}`}
-              >
-                <span className={sidebarItemIconClass(item)}>
-                  <SidebarGlyph item={item} />
-                </span>
-                <span className="sidebar-item-copy">
-                  <strong>{item.label}</strong>
-                  <small>{item.detail}</small>
-                </span>
-                {item.badge ? <em>{item.badge}</em> : null}
-              </button>
-            ) : (
-              <div
-                key={item.id}
-                className={`sidebar-menu-item${active ? " sidebar-menu-item-active" : ""}`}
-                title={`${item.label}: ${item.detail}`}
-              >
-                <span className={sidebarItemIconClass(item)}>
-                  <SidebarGlyph item={item} />
-                </span>
-                <span className="sidebar-item-copy">
-                  <strong>{item.label}</strong>
-                  <small>{item.detail}</small>
-                </span>
-                {item.badge ? <em>{item.badge}</em> : null}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="sidebar-section sidebar-context">
-        <div className="sidebar-section-label">Context</div>
-        <dl>
-          <div>
-            <dt>Provider</dt>
-            <dd>{selectedProvider?.label ?? workspace.provider?.label ?? "None"}</dd>
-          </div>
-          <div>
-            <dt>Profile</dt>
-            <dd>{selectedProfile?.displayName ?? workspace.profile?.displayName ?? "None"}</dd>
-          </div>
-          <div>
-            <dt>Auth</dt>
-            <dd>{session.lockedAuthMethod ?? session.selectedAuthMethod ?? "None"}</dd>
-          </div>
-        </dl>
-      </div>
-
-      <div className="sidebar-footer">
-        {!session.isLocked ? (
-          <button
-            type="button"
-            className="sidebar-action sidebar-lock-action"
-            disabled={!selectedProfile || !session.selectedAuthMethod}
-            onClick={onLockSession}
-            title="Lock workspace"
-            aria-label="Lock workspace"
-          >
-            <span className="sidebar-action-icon">
-              <Icon name="lock-private" />
-            </span>
-            <span className="sidebar-action-copy">Lock Workspace</span>
-          </button>
-        ) : null}
-        <button
-          type="button"
-          className={`sidebar-action sidebar-action-secondary${activityOpen ? " sidebar-action-active" : ""}`}
-          onClick={onToggleActivity}
-          title={activityOpen ? "Hide Activity" : "Show Activity"}
-          aria-label={activityOpen ? "Hide Activity" : "Show Activity"}
-        >
-          <span className="sidebar-action-icon">
-            <Icon
-              name="history"
-              variant="inverted"
-            />
-          </span>
-          <span className="sidebar-action-copy">
-            {activityOpen ? "Hide Activity" : "Activity"}
-          </span>
-        </button>
-        <button
-          type="button"
-          className="sidebar-action"
-          onClick={onRefreshDiscovery}
-          title="Refresh discovery"
-          aria-label="Refresh discovery"
-        >
-          <span className="sidebar-action-icon">
-            <Icon name="refresh" />
-          </span>
-          <span className="sidebar-action-copy">Refresh</span>
-        </button>
-      </div>
-    </aside>
-  );
-}
-
-const emptySession: SessionSnapshot = {
-  isLocked: false,
-  availableAuthMethods: [],
-  workspaceTabs: [],
-};
-
-const emptySettings: AppSettingsSnapshot = {
-  platformName: "",
-  configDir: "",
-  databasePath: "",
-  logPath: "",
-  runtimeMode: "cloud",
-  localConfigDir: "",
-  emulatorStateDir: "",
-  localStackImage: "localstack/localstack:stable",
-  flociAzImage: "floci/floci-az:latest",
-};
-
-const emptyWorkspace: WorkspaceSnapshot = {
-  runtimeSettings: emptySettings,
-  environmentDiagnostics: [],
-  dockerDiagnostics: {
-    engineState: "unknown",
-    summary: "Docker diagnostics are not available yet.",
-    details: [],
-  },
-  dockerRuntime: {
-    reachable: false,
-    resourceOwnership: {
-      labelKey: "com.cloudsprocket.managed",
-      labelValue: "true",
-      projectLabelKey: "com.cloudsprocket.project",
-      projectName: "cloud-sprocket",
-      summary: "Only CloudSprocket-managed Docker resources are eligible for future lifecycle control.",
-    },
-    summary: "Docker runtime details are not available yet.",
-    details: [],
-  },
-  dockerResources: [],
-  emulatorSummaries: [],
-  localConfigArtifacts: [],
-  awsWritesEnabled: false,
-  azureResourceGroups: [],
-  azureVirtualMachines: [],
-  s3Buckets: [],
-  s3Objects: [],
-  s3ObjectMetadata: [],
-  s3ExportSnippets: [],
-  ec2Regions: [],
-  ec2Instances: [],
-};
-
-function SimpleDetailFields({
-  fields,
-}: {
-  fields: Array<{ label: string; value: string }>;
-}) {
-  if (fields.length === 0) {
-    return <Box color="text-status-inactive">No details available.</Box>;
-  }
-  return (
-    <div className="detail-grid">
-      {fields.map((field) => (
-        <div
-          key={`${field.label}-${field.value}`}
-          className="detail-card"
-        >
-          <Box variant="awsui-key-label">{field.label}</Box>
-          <Box variant="p">{field.value}</Box>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function EmulatorLogsPanel({
-  title,
-  emptyText,
-  logs,
-  status,
-  onRefresh,
-}: {
-  title: string;
-  emptyText: string;
-  logs: EmulatorLogSnapshot;
-  status: string;
-  onRefresh: () => void;
-}) {
-  const logText = logs.lines.join("\n");
-  return (
-    <Container
-      header={
-        <Header
-          variant="h2"
-          description={status || logs.summary}
-          actions={<Button onClick={onRefresh}>Refresh Logs</Button>}
-        >
-          {title}
-        </Header>
-      }
-    >
-      {logs.lines.length === 0 ? (
-        <Box color="text-status-inactive">{emptyText}</Box>
-      ) : (
-        <pre className="container-log-panel">{logText}</pre>
-      )}
-    </Container>
-  );
-}
-
-function GlobalVirtualisationView({
-  workspace,
-  localStackAuthToken,
-  localStackPersistence,
-  localStackEnvironmentText,
-  localStackLogs,
-  localStackLogsStatus,
-  localStackActionStatus,
-  localStackActionInFlight,
-  flociAzPersistence,
-  flociAzEnvironmentText,
-  flociAzLogs,
-  flociAzLogsStatus,
-  flociAzActionStatus,
-  flociAzActionInFlight,
-  onLocalStackAuthTokenChange,
-  onLocalStackPersistenceChange,
-  onLocalStackEnvironmentTextChange,
-  onFlociAzPersistenceChange,
-  onFlociAzEnvironmentTextChange,
-  onRefreshDockerRuntime,
-  onRefreshLocalStackLogs,
-  onRefreshFlociAzLogs,
-  onInvokeLocalStackAction,
-  onInvokeFlociAzAction,
-}: {
-  workspace: WorkspaceSnapshot;
-  localStackAuthToken: string;
-  localStackPersistence: boolean;
-  localStackEnvironmentText: string;
-  localStackLogs: EmulatorLogSnapshot;
-  localStackLogsStatus: string;
-  localStackActionStatus: string;
-  localStackActionInFlight: boolean;
-  flociAzPersistence: boolean;
-  flociAzEnvironmentText: string;
-  flociAzLogs: EmulatorLogSnapshot;
-  flociAzLogsStatus: string;
-  flociAzActionStatus: string;
-  flociAzActionInFlight: boolean;
-  onLocalStackAuthTokenChange: (value: string) => void;
-  onLocalStackPersistenceChange: (value: boolean) => void;
-  onLocalStackEnvironmentTextChange: (value: string) => void;
-  onFlociAzPersistenceChange: (value: boolean) => void;
-  onFlociAzEnvironmentTextChange: (value: string) => void;
-  onRefreshDockerRuntime: () => void;
-  onRefreshLocalStackLogs: () => void;
-  onRefreshFlociAzLogs: () => void;
-  onInvokeLocalStackAction: (action: "prepareProfile" | "start" | "stop") => void;
-  onInvokeFlociAzAction: (action: "prepareProfile" | "start" | "stop") => void;
-}) {
-  const localStack = workspace.emulatorSummaries.find((emulator) => emulator.emulatorId === "localstack");
-  const flociAz = workspace.emulatorSummaries.find((emulator) => emulator.emulatorId === "floci-az");
-
-  return (
-    <SpaceBetween
-      size="l"
-      className="page-stack"
-    >
-      <Container
-        header={
-          <Header
-            variant="h1"
-            description="Docker and local cloud runtime controls are available before locking a cloud profile."
-            actions={<Button onClick={onRefreshDockerRuntime}>Refresh Docker</Button>}
-          >
-            Local Runtime
-          </Header>
-        }
-      >
-        <div className="workspace-summary-grid">
-          <div className="workspace-context-card">
-            <div>
-              <Box variant="awsui-key-label">Docker</Box>
-              <StatusIndicator type={workspace.dockerRuntime.reachable ? "success" : "warning"}>
-                {workspace.dockerRuntime.reachable ? "available" : "unavailable"}
-              </StatusIndicator>
-              <span>{workspace.dockerRuntime.summary}</span>
-            </div>
-            <div>
-              <Box variant="awsui-key-label">LocalStack</Box>
-              <StatusIndicator type={localStack?.status === "running" ? "success" : localStack?.status === "unhealthy" ? "error" : "warning"}>
-                {localStack?.status ?? "unknown"}
-              </StatusIndicator>
-              <span>{localStack?.summary ?? "LocalStack status is not available yet."}</span>
-            </div>
-            <div>
-              <Box variant="awsui-key-label">floci-az</Box>
-              <StatusIndicator type={flociAz?.status === "running" ? "success" : flociAz?.status === "unhealthy" ? "error" : "warning"}>
-                {flociAz?.status ?? "unknown"}
-              </StatusIndicator>
-              <span>{flociAz?.summary ?? "floci-az status is not available yet."}</span>
-            </div>
-          </div>
-        </div>
-      </Container>
-
-      <div className="setup-grid">
-        <Container
-          header={<Header variant="h2">Docker Runtime</Header>}
-        >
-          <SpaceBetween size="m">
-            <SimpleDetailFields fields={workspace.dockerRuntime.details} />
-          </SpaceBetween>
-        </Container>
-        <Container
-          header={<Header variant="h2">LocalStack</Header>}
-        >
-          <SpaceBetween size="s">
-            <SimpleDetailFields fields={localStack?.details ?? []} />
-            <div className="detail-card detail-card-strong">
-              <Box variant="awsui-key-label">Runtime Action</Box>
-              <Box variant="p">{localStackActionStatus}</Box>
-            </div>
-            <div className="detail-grid">
-              <div className="detail-card">
-                <Box variant="awsui-key-label">LocalStack Auth Token</Box>
-                <Input
-                  type="password"
-                  value={localStackAuthToken}
-                  placeholder="Paste token"
-                  ariaLabel="LocalStack auth token"
-                  onChange={({ detail }) => onLocalStackAuthTokenChange(detail.value)}
-                />
-              </div>
-              <div className="detail-card">
-                <Box variant="awsui-key-label">Persistence</Box>
-                <Checkbox
-                  checked={localStackPersistence}
-                  onChange={({ detail }) => onLocalStackPersistenceChange(detail.checked)}
-                >
-                  Enable LocalStack persistence
-                </Checkbox>
-              </div>
-              <div className="detail-card">
-                <Box variant="awsui-key-label">Environment Variables</Box>
-                <Textarea
-                  value={localStackEnvironmentText}
-                  placeholder="DEBUG=1"
-                  rows={3}
-                  onChange={({ detail }) => onLocalStackEnvironmentTextChange(detail.value)}
-                />
-              </div>
-            </div>
-            <SpaceBetween
-              size="xs"
-              direction="horizontal"
-            >
-              <Button
-                disabled={localStackActionInFlight}
-                onClick={() => onInvokeLocalStackAction("prepareProfile")}
-              >
-                Prepare Profile
-              </Button>
-              <Button
-                disabled={
-                  localStackActionInFlight ||
-                  localStack?.status === "running" ||
-                  localStack?.status === "unhealthy"
-                }
-                onClick={() => onInvokeLocalStackAction("start")}
-              >
-                Start LocalStack
-              </Button>
-              <Button
-                disabled={
-                  localStackActionInFlight ||
-                  (localStack?.status !== "running" && localStack?.status !== "unhealthy")
-                }
-                onClick={() => onInvokeLocalStackAction("stop")}
-              >
-                Stop LocalStack
-              </Button>
-            </SpaceBetween>
-          </SpaceBetween>
-        </Container>
-        <Container
-          header={<Header variant="h2">floci-az</Header>}
-        >
-          <SpaceBetween size="s">
-            <SimpleDetailFields fields={flociAz?.details ?? []} />
-            <div className="detail-card detail-card-strong">
-              <Box variant="awsui-key-label">Runtime Action</Box>
-              <Box variant="p">{flociAzActionStatus}</Box>
-            </div>
-            <div className="detail-grid">
-              <div className="detail-card">
-                <Box variant="awsui-key-label">Persistence</Box>
-                <Checkbox
-                  checked={flociAzPersistence}
-                  onChange={({ detail }) => onFlociAzPersistenceChange(detail.checked)}
-                >
-                  Enable floci-az persistence
-                </Checkbox>
-              </div>
-              <div className="detail-card">
-                <Box variant="awsui-key-label">Environment Variables</Box>
-                <Textarea
-                  value={flociAzEnvironmentText}
-                  placeholder="FLOCI_AZ_SERVICES_FUNCTIONS_ENABLED=false"
-                  rows={3}
-                  onChange={({ detail }) => onFlociAzEnvironmentTextChange(detail.value)}
-                />
-              </div>
-            </div>
-            <SpaceBetween
-              size="xs"
-              direction="horizontal"
-            >
-              <Button
-                disabled={flociAzActionInFlight}
-                onClick={() => onInvokeFlociAzAction("prepareProfile")}
-              >
-                Prepare Config
-              </Button>
-              <Button
-                disabled={
-                  flociAzActionInFlight ||
-                  flociAz?.status === "running" ||
-                  flociAz?.status === "unhealthy"
-                }
-                onClick={() => onInvokeFlociAzAction("start")}
-              >
-                Start floci-az
-              </Button>
-              <Button
-                disabled={
-                  flociAzActionInFlight ||
-                  (flociAz?.status !== "running" && flociAz?.status !== "unhealthy")
-                }
-                onClick={() => onInvokeFlociAzAction("stop")}
-              >
-                Stop floci-az
-              </Button>
-            </SpaceBetween>
-          </SpaceBetween>
-        </Container>
-      </div>
-
-      <EmulatorLogsPanel
-        title="LocalStack Logs"
-        emptyText="No LocalStack log lines are available yet."
-        logs={localStackLogs}
-        status={localStackLogsStatus}
-        onRefresh={onRefreshLocalStackLogs}
-      />
-      <EmulatorLogsPanel
-        title="floci-az Logs"
-        emptyText="No floci-az log lines are available yet."
-        logs={flociAzLogs}
-        status={flociAzLogsStatus}
-        onRefresh={onRefreshFlociAzLogs}
-      />
-
-      <Container header={<Header variant="h2">Managed Docker Resources</Header>}>
-        {workspace.dockerResources.length === 0 ? (
-          <Box color="text-status-inactive">No CloudSprocket-managed Docker resources are currently detected.</Box>
-        ) : (
-          <SimpleDetailFields fields={workspace.dockerResources.map((resource) => ({ label: resource.name, value: resource.summary }))} />
-        )}
-      </Container>
-    </SpaceBetween>
-  );
 }
 
 function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null | undefined): WorkspaceSnapshot {
@@ -1053,7 +421,7 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
       details: normaliseArray(dockerRuntime.details),
     },
     dockerResources: normaliseArray(source.dockerResources).map(normaliseDockerResource),
-    emulatorSummaries: normaliseArray(source.emulatorSummaries).map(normaliseEmulatorSummary),
+    emulatorSummaries: ensureEmulatorSummaries(normaliseArray(source.emulatorSummaries).map(normaliseEmulatorSummary)),
     localConfigArtifacts: normaliseArray(source.localConfigArtifacts).map(normaliseLocalConfigArtifact),
     awsWritesEnabled: source.awsWritesEnabled ?? false,
     azureResourceGroups: normaliseArray(source.azureResourceGroups).map(normaliseAzureResourceGroup),
@@ -1067,13 +435,353 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
   };
 }
 
-function normaliseEmulatorLogSnapshot(snapshot: Partial<EmulatorLogSnapshot> | null | undefined): EmulatorLogSnapshot {
-  return {
-    emulatorId: snapshot?.emulatorId ?? "localstack",
-    lines: normaliseArray(snapshot?.lines).map((line) => String(line)),
-    summary: snapshot?.summary ?? "Emulator logs have not been loaded yet.",
+function AppSidebar({
+  session,
+  selectedProvider,
+  selectedProfile,
+  workspace,
+  activeWorkspaceTabId,
+  activeS3PageId,
+  activeAzurePageId,
+  collapsed,
+  activityOpen,
+  onToggleCollapsed,
+  onToggleActivity,
+  onLockSession,
+  onUnlockSession,
+  onResetApp,
+  onWorkspaceTabChange,
+  onS3PageChange,
+  onAzurePageChange,
+  onRefreshDiscovery,
+}: {
+  session: SessionSnapshot;
+  selectedProvider?: ProviderSummary;
+  selectedProfile?: ProfileSummary;
+  workspace: WorkspaceSnapshot;
+  activeWorkspaceTabId: string;
+  activeS3PageId: string;
+  activeAzurePageId: string;
+  collapsed: boolean;
+  activityOpen: boolean;
+  onToggleCollapsed: () => void;
+  onToggleActivity: () => void;
+  onLockSession: () => void;
+  onUnlockSession: () => void;
+  onResetApp: () => void;
+  onWorkspaceTabChange: (tabId: string) => void;
+  onS3PageChange: (pageId: string) => void;
+  onAzurePageChange: (pageId: string) => void;
+  onRefreshDiscovery: () => void;
+}) {
+  const setupItems: SidebarItem[] = [
+    {
+      id: "overview",
+      label: "Overview",
+      detail: "Select profile and auth method",
+      iconName: "settings",
+    },
+    {
+      id: "virtualisation",
+      label: "Local Runtime",
+      detail: "Docker and local cloud runtimes",
+      iconName: "settings",
+      badge: String(workspace.emulatorSummaries.length),
+    },
+    {
+      id: "debug",
+      label: "Debug Console",
+      detail: "Internal logs and RPC activity",
+      iconName: "search",
+    },
+  ];
+
+  const workspaceItems: SidebarItem[] = session.workspaceTabs.map((tab) => {
+    let detail = tab.summary;
+    let badge: string | undefined;
+
+    if (tab.tabId === "s3") {
+      detail = workspace.selectedS3BucketName
+        ? `s3://${workspace.selectedS3BucketName}`
+        : `${workspace.s3Buckets.length} buckets available`;
+      badge = String(workspace.s3Buckets.length);
+    } else if (tab.tabId === "ec2") {
+      detail = workspace.selectedEc2Region
+        ? `${workspace.selectedEc2Region}: ${workspace.ec2Instances.length} instances`
+        : "Select a region to view instances";
+      badge = String(workspace.ec2Instances.length);
+    } else if (tab.tabId === "azure-overview") {
+      detail = tab.summary;
+      badge = String(workspace.azureResourceGroups.length);
+    } else if (tab.tabId === "actions") {
+      detail = tab.summary;
+    }
+
+    return {
+      id: tab.tabId,
+      label: tab.label,
+      detail,
+      iconName: workspaceTabIcon(tab.tabId),
+      iconUrl: workspaceTabIconUrl(tab.tabId),
+      badge,
+    };
+  });
+  if (!workspaceItems.some((item) => item.id === "virtualisation")) {
+    workspaceItems.push({
+      id: "virtualisation",
+      label: "Local Runtime",
+      detail: "Docker and local cloud runtimes",
+      iconName: "settings",
+      badge: String(workspace.emulatorSummaries.length),
+    });
+  }
+  if (!workspaceItems.some((item) => item.id === "debug")) {
+    workspaceItems.push({
+      id: "debug",
+      label: "Debug Console",
+      detail: "Internal logs and RPC activity",
+      iconName: "search",
+    });
+  }
+
+  const workspaceSubItems: Record<string, SidebarSubItem[]> = {
+    s3: [
+      { id: "buckets", label: "Buckets" },
+      { id: "objects", label: "Objects" },
+      { id: "upload", label: "Upload" },
+      { id: "inspect", label: "Inspect URL" },
+    ],
+    "azure-overview": [
+      { id: "resource-groups", label: "Resource Groups" },
+      { id: "virtual-machines", label: "Virtual Machines" },
+    ],
   };
+
+  return (
+    <aside
+      className={`app-sidebar${collapsed ? " app-sidebar-collapsed" : ""}`}
+      aria-label="Application Sidebar"
+    >
+      <div className="sidebar-brand">
+        <div className="brand-mark">CS</div>
+        <div className="brand-copy">
+          <div className="brand-title">CloudSprocket</div>
+          <div className="brand-subtitle">Cloud Native Desktop</div>
+        </div>
+        <button
+          type="button"
+          className="sidebar-collapse-button"
+          onClick={onToggleCollapsed}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? "»" : "«"}
+        </button>
+      </div>
+
+      <div className="sidebar-section">
+        <div className="sidebar-section-label">{session.isLocked ? "Workspace" : "Setup"}</div>
+        <div className="sidebar-menu">
+          {(session.isLocked ? workspaceItems : setupItems).map((item) => {
+            const active = activeWorkspaceTabId === item.id;
+            const subItems = workspaceSubItems[item.id];
+            const activeSubId = item.id === "s3" ? activeS3PageId : item.id === "azure-overview" ? activeAzurePageId : undefined;
+
+            return !collapsed ? (
+              <div
+                key={item.id}
+                className="sidebar-menu-group"
+              >
+                <button
+                  type="button"
+                  className={`sidebar-menu-item${active ? " sidebar-menu-item-active" : ""}`}
+                  onClick={() => {
+                    onWorkspaceTabChange(item.id);
+                    if (item.id === "azure-overview") {
+                      onAzurePageChange("overview");
+                    }
+                  }}
+                  title={`${item.label}: ${item.detail}`}
+                >
+                  <span className={sidebarItemIconClass(item)}>
+                    <SidebarGlyph item={item} />
+                  </span>
+                  <span className="sidebar-item-copy">
+                    <strong>{item.label}</strong>
+                    <small>{item.detail}</small>
+                  </span>
+                  {item.badge ? <em>{item.badge}</em> : null}
+                </button>
+                {active && subItems ? (
+                  <div className="sidebar-submenu">
+                    {subItems.map((sub) => (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        className={`sidebar-submenu-item${activeSubId === sub.id ? " sidebar-submenu-item-active" : ""}`}
+                        onClick={() => {
+                          if (item.id === "s3") {
+                            onS3PageChange(sub.id);
+                          } else if (item.id === "azure-overview") {
+                            onAzurePageChange(sub.id);
+                          }
+                        }}
+                      >
+                        {sub.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <button
+                key={item.id}
+                type="button"
+                className={`sidebar-menu-item${active ? " sidebar-menu-item-active" : ""}`}
+                onClick={() => onWorkspaceTabChange(item.id)}
+                title={`${item.label}: ${item.detail}`}
+              >
+                <span className={sidebarItemIconClass(item)}>
+                  <SidebarGlyph item={item} />
+                </span>
+                {item.badge ? <em>{item.badge}</em> : null}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="sidebar-section sidebar-context">
+        <div className="sidebar-section-label">Context</div>
+        <dl>
+          <div>
+            <dt>Provider</dt>
+            <dd>{selectedProvider?.label ?? workspace.provider?.label ?? "None"}</dd>
+          </div>
+          <div>
+            <dt>Profile</dt>
+            <dd>{selectedProfile?.displayName ?? workspace.profile?.displayName ?? "None"}</dd>
+          </div>
+          <div>
+            <dt>Auth</dt>
+            <dd>{session.lockedAuthMethod ?? session.selectedAuthMethod ?? "None"}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div className="sidebar-footer">
+        <button
+          type="button"
+          className="sidebar-action sidebar-lock-action"
+          disabled={!session.isLocked && (!selectedProfile || !session.selectedAuthMethod)}
+          onClick={session.isLocked ? onUnlockSession : onLockSession}
+          title={session.isLocked ? "Unlock workspace" : "Lock workspace"}
+          aria-label={session.isLocked ? "Unlock workspace" : "Lock workspace"}
+        >
+          <span className="sidebar-action-icon">
+            <Icon name="lock-private" />
+          </span>
+          <span className="sidebar-action-copy">
+            {session.isLocked ? "Unlock Workspace" : "Lock Workspace"}
+          </span>
+        </button>
+        <button
+          type="button"
+          className={`sidebar-action sidebar-action-secondary${activityOpen ? " sidebar-action-active" : ""}`}
+          onClick={onToggleActivity}
+          title={activityOpen ? "Hide Activity" : "Show Activity"}
+          aria-label={activityOpen ? "Hide Activity" : "Show Activity"}
+        >
+          <span className="sidebar-action-icon">
+            <Icon
+              name="history"
+              variant="inverted"
+            />
+          </span>
+          <span className="sidebar-action-copy">
+            {activityOpen ? "Hide Activity" : "Activity"}
+          </span>
+        </button>
+        <button
+          type="button"
+          className="sidebar-action"
+          onClick={onRefreshDiscovery}
+          title="Refresh discovery"
+          aria-label="Refresh discovery"
+        >
+          <span className="sidebar-action-icon">
+            <Icon name="refresh" />
+          </span>
+          <span className="sidebar-action-copy">Refresh</span>
+        </button>
+        <button
+          type="button"
+          className="sidebar-action sidebar-action-danger"
+          onClick={onResetApp}
+          title="Reset app data"
+          aria-label="Reset app data"
+        >
+          <span className="sidebar-action-icon">
+            <Icon name="remove" />
+          </span>
+          <span className="sidebar-action-copy">Reset</span>
+        </button>
+      </div>
+    </aside>
+  );
 }
+
+const emptySession: SessionSnapshot = {
+  isLocked: false,
+  availableAuthMethods: [],
+  workspaceTabs: [],
+};
+
+const emptySettings: AppSettingsSnapshot = {
+  platformName: "",
+  configDir: "",
+  databasePath: "",
+  logPath: "",
+  runtimeMode: "cloud",
+  localConfigDir: "",
+  emulatorStateDir: "",
+  localStackImage: "",
+  flociAzImage: "",
+};
+
+const emptyWorkspace: WorkspaceSnapshot = {
+  environmentDiagnostics: [],
+  dockerDiagnostics: {
+    engineState: "unknown",
+    summary: "Docker runtime was not detected.",
+    details: [],
+  },
+  dockerRuntime: {
+    reachable: false,
+    resourceOwnership: {
+      labelKey: "",
+      labelValue: "",
+      projectLabelKey: "",
+      projectName: "",
+      summary: "",
+    },
+    summary: "Docker runtime was not detected.",
+    details: [],
+  },
+  dockerResources: [],
+  emulatorSummaries: [],
+  localConfigArtifacts: [],
+  awsWritesEnabled: false,
+  azureResourceGroups: [],
+  azureVirtualMachines: [],
+  s3Buckets: [],
+  s3Objects: [],
+  s3ObjectMetadata: [],
+  s3ExportSnippets: [],
+  ec2Regions: [],
+  ec2Instances: [],
+  runtimeSettings: emptySettings,
+};
 
 export default function App() {
   const [providers, setProviders] = useState<ProviderSummary[]>([]);
@@ -1088,6 +796,10 @@ export default function App() {
   const [s3SignedUrlResult, setS3SignedUrlResult] = useState<AwsS3PresignResult>();
   const [s3UrlInspection, setS3UrlInspection] = useState<UrlInspection>();
   const [s3UrlValidation, setS3UrlValidation] = useState<UrlValidationResult>();
+  const [ec2ActionStatus, setEC2ActionStatus] = useState("Select an EC2 region before refreshing inventory.");
+  const [ec2ActionInFlight, setEC2ActionInFlight] = useState(false);
+  const [ec2ActionHistory, setEC2ActionHistory] = useState<EC2ActionHistoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [localStackAuthToken, setLocalStackAuthToken] = useState("");
   const [localStackPersistence, setLocalStackPersistence] = useState(false);
   const [localStackEnvironmentText, setLocalStackEnvironmentText] = useState("");
@@ -1109,24 +821,17 @@ export default function App() {
   const [flociAzLogsStatus, setFlociAzLogsStatus] = useState("");
   const [flociAzActionStatus, setFlociAzActionStatus] = useState("No floci-az action has run yet.");
   const [flociAzActionInFlight, setFlociAzActionInFlight] = useState(false);
-  const [ec2ActionStatus, setEC2ActionStatus] = useState("Select an EC2 instance to run lifecycle actions.");
-  const [ec2ActionInFlight, setEC2ActionInFlight] = useState(false);
-  const [ec2ActionHistory, setEC2ActionHistory] = useState<EC2ActionHistoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showSensitiveValues, setShowSensitiveValues] = useState(false);
-  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
-  const [splitPanelOpen, setSplitPanelOpen] = useState(false);
   const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState("overview");
-  const [activeS3PageId, setActiveS3PageId] = useState("objects");
-  const [activeAzurePageId, setActiveAzurePageId] = useState("overview");
+  const [activeS3PageId, setActiveS3PageId] = useState("buckets");
+  const [activeAzurePageId, setActiveAzurePageId] = useState("resource-groups");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [providerQuery, setProviderQuery] = useState<PropertyFilterProps.Query>(
-    defaultQuery,
-  );
+  const [splitPanelOpen, setSplitPanelOpen] = useState(false);
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resetConfirmation, setResetConfirmation] = useState("");
+  const [resetInFlight, setResetInFlight] = useState(false);
+  const [showSensitiveValues, setShowSensitiveValues] = useState(false);
+  const [providerQuery, setProviderQuery] = useState<PropertyFilterProps.Query>(defaultQuery);
   const [profileQuery, setProfileQuery] = useState<PropertyFilterProps.Query>(defaultQuery);
-  const s3PrefixRequestIdRef = useRef(0);
-  const ec2ActionPollRef = useRef(0);
-  const workspaceLoadRequestIdRef = useRef(0);
   const [providerPreferences, setProviderPreferences] = useState<TablePreferences>({
     wrapLines: false,
     stripedRows: true,
@@ -1148,202 +853,62 @@ export default function App() {
       { id: "summary", visible: true },
     ],
   });
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
 
+  const isInitialLoad = useRef(true);
+  const s3PrefixRequestIdRef = useRef(0);
   const isTablet = viewportWidth < 1180;
-  const selectedProvider = providers.find(
-    (provider) => provider.providerId === session.currentProviderId,
-  );
-  const selectedProfile = profiles.find(
-    (profile) => profile.profileId === session.selectedProfileId,
-  );
+  const selectedProvider = providers.find((provider) => provider.providerId === session.currentProviderId);
+  const selectedProfile = profiles.find((profile) => profile.profileId === session.selectedProfileId);
   const latestLog = logs[0];
 
-  function cancelEC2Polling(): void {
-    ec2ActionPollRef.current += 1;
-  }
-
-  async function pollEC2ActionResult(action: EC2LifecycleAction, instanceId: string): Promise<void> {
-    const pollId = ec2ActionPollRef.current + 1;
-    ec2ActionPollRef.current = pollId;
-    const desiredState = expectedEC2State(action);
-    let latestState = "";
-
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      await wait(attempt === 0 ? 900 : 1500);
-      if (pollId !== ec2ActionPollRef.current) {
-        return;
-      }
-
-      const workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
-      latestState = ec2InstanceState(workspaceResult, instanceId);
-      startTransition(() => {
-        setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
-      });
-
-      if (latestState === desiredState) {
-        setEC2ActionStatus(`EC2 ${action} completed for ${instanceId}. Current state: ${latestState}.`);
-        setEC2ActionInFlight(false);
-        return;
-      }
-    }
-
-    setEC2ActionStatus(
-      `EC2 ${action} request was sent for ${instanceId}. Latest observed state: ${latestState || "unknown"}.`,
-    );
-    setEC2ActionInFlight(false);
-  }
-
-  const loadState = useEffectEvent(async () => {
-    setLoading(true);
-    try {
-      const providersResult = await backendRequest<ProviderSummary[]>("providers.list");
-      const sessionResult = await backendRequest<SessionSnapshot>("session.get");
-      const nextSession = normaliseSessionSnapshot(sessionResult);
-      const profilesResult = await backendRequest<ProfileSummary[]>("profiles.list", {
-        providerId: nextSession.currentProviderId,
-      });
-      const settingsResult = await backendRequest<AppSettingsSnapshot>("app.settings.get");
-      const logsResult = await backendRequest<ActivityLogEntry[]>("logs.list", {
-        limit: 50,
-      });
-      startTransition(() => {
-        setProviders(normaliseArray(providersResult).map(normaliseProvider));
-        setProfiles(normaliseArray(profilesResult).map(normaliseProfile));
-        setSession(nextSession);
-        setAppSettings(settingsResult);
-        setLogs(logsResult);
-      });
-    } finally {
-      setLoading(false);
-    }
-  });
-
-  const loadWorkspace = useEffectEvent(async (nextSession: SessionSnapshot) => {
-    const requestId = workspaceLoadRequestIdRef.current + 1;
-    workspaceLoadRequestIdRef.current = requestId;
-    if (!nextSession.isLocked) {
-      startTransition(() => {
-        if (requestId === workspaceLoadRequestIdRef.current) {
-          setWorkspace(emptyWorkspace);
-        }
-      });
-      return;
-    }
-
-    const workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
-    startTransition(() => {
-      if (requestId === workspaceLoadRequestIdRef.current) {
-        setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
-      }
-    });
-  });
-
-  const onStateChanged = useEffectEvent((payload: StateChangedPayload) => {
-    startTransition(() => {
-      setProviders(normaliseArray(payload.providers).map(normaliseProvider));
-      setProfiles(normaliseArray(payload.profiles).map(normaliseProfile));
-      setSession(normaliseSessionSnapshot(payload.session));
-    });
-  });
-
-  const onLogAppended = useEffectEvent((entry: ActivityLogEntry) => {
-    startTransition(() => {
-      setLogs((current) => [entry, ...current].slice(0, 50));
-    });
-  });
-
-  const onJobUpdated = useEffectEvent((job: JobStatus) => {
-    const type =
-      job.status === "failed"
-        ? "error"
-        : job.status === "completed"
-          ? "success"
-          : "info";
-    if (job.label === "S3 Upload") {
-      setS3UploadStatus(job.message);
-      if (job.status === "completed" && isS3UploadResult(job.result)) {
-        void loadWorkspace(session);
-      }
-    }
-    if (job.label === "S3 Signed URL") {
-      setS3SignedUrlStatus(job.message);
-      if (isS3PresignResult(job.result)) {
-        setS3SignedUrlResult(job.result);
-      }
-    }
-    if (job.label === "S3 URL Validation") {
-      if (isUrlValidationResult(job.result)) {
-        setS3UrlValidation(job.result);
-      }
-    }
-    if (job.label === "EC2 Action") {
-      setEC2ActionStatus(job.message);
-      setEC2ActionInFlight(job.status === "queued" || job.status === "running");
-      setEC2ActionHistory((current) => {
-        const next: EC2ActionHistoryItem = {
-          jobId: job.jobId,
-          status: job.status,
-          message: job.message,
-          completedAt: job.completedAt,
-        };
-        return [next, ...current.filter((item) => item.jobId !== job.jobId)].slice(0, 6);
-      });
-      const workspaceResult = job.result;
-      if (job.status === "completed" && isWorkspaceSnapshot(workspaceResult)) {
-        cancelEC2Polling();
-        startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
-        });
-      } else if (job.status === "completed" || job.status === "failed") {
-        cancelEC2Polling();
-        void loadWorkspace(session);
-      }
-    }
-    startTransition(() => {
-      setNotifications((current) => {
-        const next: FlashbarProps.MessageDefinition = {
-          id: job.jobId,
-          type,
-          content: `${job.label}: ${job.message}`,
-          dismissible: true,
-          onDismiss: () => {
-            setNotifications((items) => items.filter((item) => item.id !== job.jobId));
-          },
-        };
-        return [next, ...current.filter((item) => item.id !== job.jobId)].slice(0, 3);
-      });
-    });
-  });
-
   useEffect(() => {
-    let active = true;
-    const cleanups: Array<() => void> = [];
+    // Intercept console
+    const originals = {
+      log: console.log,
+      error: console.error,
+      warn: console.warn,
+    };
 
-    void loadState();
-    void Promise.all([
-      subscribeToBackendEvent("state.changed", (payload) => {
-        if (active) {
-          onStateChanged(payload);
-        }
-      }),
-      subscribeToBackendEvent("log.appended", (payload) => {
-        if (active) {
-          onLogAppended(payload);
-        }
-      }),
-      subscribeToBackendEvent("job.updated", (payload) => {
-        if (active) {
-          onJobUpdated(payload);
-        }
-      }),
-    ]).then((unsubscribers) => {
-      cleanups.push(...unsubscribers);
-    });
+    console.log = (...args) => {
+      originals.log(...args);
+      addDebugLog({
+        timestamp: new Date().toISOString(),
+        type: "console",
+        payload: { level: "log", args },
+      });
+    };
+
+    console.error = (...args) => {
+      originals.error(...args);
+      addDebugLog({
+        timestamp: new Date().toISOString(),
+        type: "console",
+        payload: { level: "error", args },
+      });
+    };
+
+    console.warn = (...args) => {
+      originals.warn(...args);
+      addDebugLog({
+        timestamp: new Date().toISOString(),
+        type: "console",
+        payload: { level: "warn", args },
+      });
+    };
 
     return () => {
-      active = false;
-      cleanups.forEach((cleanup) => cleanup());
+      console.log = originals.log;
+      console.error = originals.error;
+      console.warn = originals.warn;
     };
+  }, []);
+
+  useEffect(() => {
+    if (isInitialLoad.current) {
+      isInitialLoad.current = false;
+      void loadState();
+    }
   }, []);
 
   useEffect(() => {
@@ -1358,37 +923,75 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    void loadWorkspace(session);
-  }, [
-    session.isLocked,
-    session.lockedAuthMethod,
-    session.lockedProfileId,
-    session.lockedProviderId,
-  ]);
+    const unsubs: (() => void)[] = [];
+    void (async () => {
+      unsubs.push(
+        await subscribeToBackendEvent("state.changed", (payload: StateChangedPayload) => {
+          startTransition(() => {
+            setProviders(normaliseArray(payload.providers).map(normaliseProvider));
+            setProfiles(normaliseArray(payload.profiles).map(normaliseProfile));
+            setSession(normaliseSessionSnapshot(payload.session));
+          });
+        }),
+      );
+      unsubs.push(
+        await subscribeToBackendEvent("log.appended", (entry: ActivityLogEntry) => {
+          setLogs((current) => [entry, ...current].slice(0, 500));
+        }),
+      );
+      unsubs.push(
+        await subscribeToBackendEvent("job.updated", (job: JobStatus) => {
+          if (isWorkspaceSnapshot(job.result)) {
+            const workspaceResult = normaliseWorkspaceSnapshot(job.result);
+            startTransition(() => {
+              setWorkspace(workspaceResult);
+            });
+          }
+          if (job.label.toLowerCase().includes("ec2")) {
+            setEC2ActionStatus(job.message);
+            setEC2ActionInFlight(job.status === "queued" || job.status === "running");
+            setEC2ActionHistory((current) => [
+              {
+                jobId: job.jobId,
+                status: job.status,
+                message: job.message,
+                completedAt: job.completedAt,
+              },
+              ...current.filter((entry) => entry.jobId !== job.jobId),
+            ].slice(0, 10));
+          }
+          setNotifications((current) => {
+            const existing = current.findIndex((n) => n.id === job.jobId);
+            const notification: FlashbarProps.MessageDefinition = {
+              id: job.jobId,
+              type: job.status === "failed" ? "error" : job.status === "completed" ? "success" : "in-progress",
+              header: job.label,
+              content: job.message,
+              dismissible: job.status === "completed" || job.status === "failed",
+              onDismiss: () => setNotifications((prev) => prev.filter((n) => n.id !== job.jobId)),
+              loading: job.status === "running" || job.status === "queued",
+            };
+            if (existing >= 0) {
+              const next = [...current];
+              next[existing] = notification;
+              return next;
+            }
+            return [notification, ...current];
+          });
+        }),
+      );
+    })();
+    return () => {
+      unsubs.forEach((unsub) => unsub());
+    };
+  }, []);
 
   useEffect(() => {
-    setShowSensitiveValues(false);
-  }, [selectedProfile?.profileId, session.isLocked]);
-
-  useEffect(() => {
-    setProfileQuery(defaultQuery());
-  }, [session.currentProviderId]);
-
-  useEffect(() => {
-    if (isTablet) {
-      setSplitPanelOpen(false);
-    }
-  }, [isTablet]);
-
-  useEffect(() => {
-    if (!session.isLocked) {
-      setActiveS3PageId("objects");
-      setActiveAzurePageId("overview");
-      return;
-    }
     if (
+      session.isLocked &&
       session.workspaceTabs.length > 0 &&
       activeWorkspaceTabId !== "virtualisation" &&
+      activeWorkspaceTabId !== "debug" &&
       !session.workspaceTabs.some((tab) => tab.tabId === activeWorkspaceTabId)
     ) {
       setActiveWorkspaceTabId(session.workspaceTabs[0].tabId);
@@ -1412,22 +1015,94 @@ export default function App() {
     method: string,
     params: Record<string, unknown> = {},
   ): Promise<void> {
-    const nextSession = await backendRequest<SessionSnapshot>(method, params);
-    const normalisedSession = normaliseSessionSnapshot(nextSession);
-    startTransition(() => {
-      setSession(normalisedSession);
-      if (method === "session.unlock") {
-        setActiveWorkspaceTabId("overview");
-      }
-    });
-    await loadWorkspace(normalisedSession);
-    await loadState();
+    try {
+      const nextSession = await backendRequest<SessionSnapshot>(method, params);
+      const normalisedSession = normaliseSessionSnapshot(nextSession);
+      startTransition(() => {
+        setSession(normalisedSession);
+        if (method === "session.unlock") {
+          setActiveWorkspaceTabId("overview");
+        }
+      });
+      await loadWorkspace(normalisedSession);
+      await loadState();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Session mutation failed";
+      pushNotification("error", `Failed to execute ${method}`, message);
+    }
   }
 
   async function refreshDiscovery(): Promise<void> {
     await backendRequest<JobStatus>("actions.invoke", {
       actionId: "refresh",
     });
+  }
+
+  async function resetAppData(): Promise<void> {
+    if (resetConfirmation !== "RESET") {
+      return;
+    }
+
+    setResetInFlight(true);
+    try {
+      const result = await backendRequest<AppResetResult>("app.reset", {
+        confirmation: resetConfirmation,
+      });
+      clearDebugLogs();
+      startTransition(() => {
+        setSession(emptySession);
+        setWorkspace(emptyWorkspace);
+        setLogs([]);
+        setS3UploadStatus("Select a bucket and provide a local file path to upload.");
+        setS3SignedUrlStatus("Select an object to generate a signed URL.");
+        setS3SignedUrlResult(undefined);
+        setS3UrlInspection(undefined);
+        setS3UrlValidation(undefined);
+        setEC2ActionStatus("Select an EC2 region before refreshing inventory.");
+        setEC2ActionInFlight(false);
+        setEC2ActionHistory([]);
+        setLocalStackAuthToken("");
+        setLocalStackPersistence(false);
+        setLocalStackEnvironmentText("");
+        setLocalStackLogs({
+          emulatorId: "localstack",
+          lines: [],
+          summary: "LocalStack logs have not been loaded yet.",
+        });
+        setLocalStackLogsStatus("");
+        setLocalStackActionStatus("No LocalStack action has run yet.");
+        setLocalStackActionInFlight(false);
+        setFlociAzPersistence(false);
+        setFlociAzEnvironmentText("FLOCI_AZ_SERVICES_FUNCTIONS_ENABLED=false");
+        setFlociAzLogs({
+          emulatorId: "floci-az",
+          lines: [],
+          summary: "floci-az logs have not been loaded yet.",
+        });
+        setFlociAzLogsStatus("");
+        setFlociAzActionStatus("No floci-az action has run yet.");
+        setFlociAzActionInFlight(false);
+        setActiveWorkspaceTabId("overview");
+        setActiveS3PageId("buckets");
+        setActiveAzurePageId("resource-groups");
+        setSplitPanelOpen(false);
+        setShowSensitiveValues(false);
+        setProviderQuery(defaultQuery);
+        setProfileQuery(defaultQuery);
+      });
+      setResetModalOpen(false);
+      setResetConfirmation("");
+      void loadState().catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "Provider discovery reload failed after reset";
+        pushNotification("warning", "Reset completed, reload failed", message);
+      });
+      pushNotification("success", "App reset complete", result.summary);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "App reset failed";
+      pushNotification("error", "Failed to reset app", message);
+    } finally {
+      setResetInFlight(false);
+    }
   }
 
   async function refreshDockerRuntime(): Promise<void> {
@@ -1459,59 +1134,153 @@ export default function App() {
         summary: error instanceof Error ? error.message : "Failed to load floci-az logs.",
       })),
     ]);
-    const normalisedWorkspace = normaliseWorkspaceSnapshot(workspaceResult);
+    const normalised = normaliseWorkspaceSnapshot(workspaceResult);
     startTransition(() => {
-      setWorkspace(normalisedWorkspace);
+      setWorkspace(normalised);
       setLocalStackLogs(normaliseEmulatorLogSnapshot(logResult));
       setFlociAzLogs(normaliseEmulatorLogSnapshot(flociLogResult));
-      setLocalStackLogsStatus("");
-      setFlociAzLogsStatus("");
     });
-    return normalisedWorkspace;
+    return normalised;
   }
 
   async function refreshLocalStackLogs(): Promise<void> {
-    setLocalStackLogsStatus("Refreshing logs...");
+    setLocalStackLogsStatus("Refreshing LocalStack logs...");
     try {
-      const logResult = await backendRequest<EmulatorLogSnapshot>("emulators.logs", {
-        emulatorId: "localstack",
-        tail: 200,
-      });
-      startTransition(() => {
-        setLocalStackLogs(normaliseEmulatorLogSnapshot(logResult));
-        setLocalStackLogsStatus("");
-      });
+      const logsResult = await backendRequest<EmulatorLogSnapshot>("emulators.logs", { emulatorId: "localstack", tail: 200 });
+      setLocalStackLogs(normaliseEmulatorLogSnapshot(logsResult));
+      setLocalStackLogsStatus("");
     } catch (error) {
-      startTransition(() => {
-        setLocalStackLogsStatus(error instanceof Error ? error.message : "Failed to refresh LocalStack logs.");
-      });
+      setLocalStackLogsStatus(error instanceof Error ? error.message : "Failed to refresh logs.");
     }
   }
 
   async function refreshFlociAzLogs(): Promise<void> {
-    setFlociAzLogsStatus("Refreshing logs...");
+    setFlociAzLogsStatus("Refreshing floci-az logs...");
     try {
-      const logResult = await backendRequest<EmulatorLogSnapshot>("emulators.logs", {
-        emulatorId: "floci-az",
-        tail: 200,
-      });
-      startTransition(() => {
-        setFlociAzLogs(normaliseEmulatorLogSnapshot(logResult));
-        setFlociAzLogsStatus("");
-      });
+      const logsResult = await backendRequest<EmulatorLogSnapshot>("emulators.logs", { emulatorId: "floci-az", tail: 200 });
+      setFlociAzLogs(normaliseEmulatorLogSnapshot(logsResult));
+      setFlociAzLogsStatus("");
     } catch (error) {
-      startTransition(() => {
-        setFlociAzLogsStatus(error instanceof Error ? error.message : "Failed to refresh floci-az logs.");
-      });
+      setFlociAzLogsStatus(error instanceof Error ? error.message : "Failed to refresh logs.");
     }
   }
 
-  function localStackStatusFromWorkspace(workspaceSnapshot: WorkspaceSnapshot): EmulatorSummary | undefined {
-    return workspaceSnapshot.emulatorSummaries.find((emulator) => emulator.emulatorId === "localstack");
+  async function loadState(): Promise<void> {
+    setLoading(true);
+    try {
+      const [providersResult, sessionResult, settingsResult, logsResult] = await Promise.all([
+        backendRequest<ProviderSummary[]>("providers.list"),
+        backendRequest<SessionSnapshot>("session.get"),
+        backendRequest<AppSettingsSnapshot>("app.settings.get"),
+        backendRequest<ActivityLogEntry[]>("logs.list", { limit: 500 }),
+      ]);
+
+      const normalisedSession = normaliseSessionSnapshot(sessionResult);
+      const profilesResult = await backendRequest<ProfileSummary[]>("profiles.list", {
+        providerId: normalisedSession.currentProviderId,
+      });
+      startTransition(() => {
+        setProviders(normaliseArray(providersResult).map(normaliseProvider));
+        setProfiles(normaliseArray(profilesResult).map(normaliseProfile));
+        setSession(normalisedSession);
+        setAppSettings(settingsResult);
+        setLogs(normaliseArray(logsResult));
+      });
+
+      await loadWorkspace(normalisedSession);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function emulatorStatusFromWorkspace(workspaceSnapshot: WorkspaceSnapshot, emulatorId: string): EmulatorSummary | undefined {
-    return workspaceSnapshot.emulatorSummaries.find((emulator) => emulator.emulatorId === emulatorId);
+  async function loadWorkspace(sessionSnapshot: SessionSnapshot): Promise<void> {
+    if (!sessionSnapshot.isLocked) {
+      setWorkspace(emptyWorkspace);
+      return;
+    }
+    const workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
+    startTransition(() => {
+      setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+    });
+  }
+
+  function parseEnvironment(text: string, blockedKeys: string[] = []): Record<string, string> {
+    const env: Record<string, string> = {};
+    const blocked = new Set(blockedKeys);
+    text.split("\n").forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) {
+        return;
+      }
+      const parts = trimmed.split("=");
+      if (parts.length >= 2) {
+        const key = parts[0].trim();
+        if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && !blocked.has(key)) {
+          env[key] = parts.slice(1).join("=").trim();
+        }
+      }
+    });
+    return env;
+  }
+
+  function localStackEnvironment(): Record<string, string> {
+    return parseEnvironment(localStackEnvironmentText, ["LOCALSTACK_AUTH_TOKEN"]);
+  }
+
+  function flociAzEnvironment(): Record<string, string> {
+    return parseEnvironment(flociAzEnvironmentText);
+  }
+
+  function withTimeout<T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> {
+    const timeout = new Promise<never>((_, reject) => {
+      window.setTimeout(() => reject(new Error(errorMessage)), ms);
+    });
+    return Promise.race([promise, timeout]);
+  }
+
+  function pushNotification(type: FlashbarProps.Type, header: string, content: string): void {
+    const id = `notification-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setNotifications((current) => [
+      {
+        id,
+        type,
+        header,
+        content,
+        dismissible: true,
+        onDismiss: () => setNotifications((prev) => prev.filter((n) => n.id !== id)),
+      },
+      ...current,
+    ]);
+  }
+
+  function addLocalStackNotification(type: FlashbarProps.Type, header: string, content: string): void {
+    const id = `ls-action-${Date.now()}`;
+    setNotifications((current) => [
+      {
+        id,
+        type,
+        header,
+        content,
+        dismissible: true,
+        onDismiss: () => setNotifications((prev) => prev.filter((n) => n.id !== id)),
+      },
+      ...current,
+    ]);
+  }
+
+  function addEmulatorNotification(emulatorId: string, type: FlashbarProps.Type, header: string, content: string): void {
+    const id = `${emulatorId}-action-${Date.now()}`;
+    setNotifications((current) => [
+      {
+        id,
+        type,
+        header,
+        content,
+        dismissible: true,
+        onDismiss: () => setNotifications((prev) => prev.filter((n) => n.id !== id)),
+      },
+      ...current,
+    ]);
   }
 
   function pollLocalStackState(label: string, expectedStatus?: "running" | "stopped"): void {
@@ -1525,7 +1294,7 @@ export default function App() {
           if (resolved) {
             return;
           }
-          const localStack = localStackStatusFromWorkspace(workspaceSnapshot);
+          const localStack = emulatorStatusFromWorkspace(workspaceSnapshot, "localstack");
           if (expectedStatus && localStack?.status === expectedStatus) {
             resolved = true;
             const message = `${label} completed. ${localStack.summary}`;
@@ -1542,93 +1311,6 @@ export default function App() {
     }
   }
 
-  function localStackEnvironment(): Record<string, string> {
-    return Object.fromEntries(
-      localStackEnvironmentText
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => {
-          const separator = line.indexOf("=");
-          if (separator < 1) {
-            return ["", ""] as const;
-          }
-          return [line.slice(0, separator).trim(), line.slice(separator + 1)] as const;
-        })
-        .filter(([key]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && key !== "LOCALSTACK_AUTH_TOKEN"),
-    );
-  }
-
-  function flociAzEnvironment(): Record<string, string> {
-    return Object.fromEntries(
-      flociAzEnvironmentText
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => {
-          const separator = line.indexOf("=");
-          if (separator < 1) {
-            return ["", ""] as const;
-          }
-          return [line.slice(0, separator).trim(), line.slice(separator + 1)] as const;
-        })
-        .filter(([key]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key)),
-    );
-  }
-
-  function addLocalStackNotification(
-    type: FlashbarProps.MessageDefinition["type"],
-    header: string,
-    content: string,
-  ): void {
-    const notificationId = `localstack-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    setNotifications((current) => [
-      {
-        id: notificationId,
-        type,
-        dismissible: true,
-        header,
-        content,
-        onDismiss: () => {
-          setNotifications((items) => items.filter((item) => item.id !== notificationId));
-        },
-      },
-      ...current,
-    ]);
-  }
-
-  function addEmulatorNotification(
-    emulatorId: string,
-    type: FlashbarProps.MessageDefinition["type"],
-    header: string,
-    content: string,
-  ): void {
-    const notificationId = `${emulatorId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    setNotifications((current) => [
-      {
-        id: notificationId,
-        type,
-        dismissible: true,
-        header,
-        content,
-        onDismiss: () => {
-          setNotifications((items) => items.filter((item) => item.id !== notificationId));
-        },
-      },
-      ...current,
-    ]);
-  }
-
-  function applyLocalStackActionResult(label: string, result: EmulatorActionResult): void {
-    const summary = result.summary || `${label} completed.`;
-    setLocalStackActionStatus(summary);
-    addLocalStackNotification(
-      result.state === "failed" ? "error" : result.state === "degraded" ? "warning" : "success",
-      result.state === "degraded" ? `${label} needs attention` : `${label} ${result.state}`,
-      summary,
-    );
-  }
-
   async function invokeLocalStackAction(action: "prepareProfile" | "start" | "stop"): Promise<void> {
     const method =
       action === "prepareProfile"
@@ -1639,14 +1321,15 @@ export default function App() {
     const startParams =
       action === "start"
         ? {
-          authToken: localStackAuthToken.trim(),
+          emulatorId: "localstack",
+          authToken: localStackAuthToken,
           persistence: localStackPersistence,
           environment: localStackEnvironment(),
         }
-        : {};
+        : { emulatorId: "localstack" };
     const label =
       action === "prepareProfile"
-        ? "Prepare profile"
+        ? "Prepare LocalStack profile"
         : action === "start"
           ? "Start LocalStack"
           : "Stop LocalStack";
@@ -1654,14 +1337,17 @@ export default function App() {
     setLocalStackActionStatus(`${label} requested.`);
     try {
       const result = await withTimeout(
-        backendRequest<EmulatorActionResult>(
-          method,
-          startParams,
-        ),
+        backendRequest<EmulatorActionResult>(method, startParams),
         22000,
         `${label} did not finish within 22 seconds. Check Docker and LocalStack logs, then retry.`,
       );
-      applyLocalStackActionResult(label, result);
+      const summary = result.summary || `${label} completed.`;
+      setLocalStackActionStatus(summary);
+      addLocalStackNotification(
+        result.state === "failed" ? "error" : result.state === "degraded" ? "warning" : "success",
+        result.state === "degraded" ? `${label} needs attention` : `${label} ${result.state}`,
+        summary,
+      );
       await refreshVirtualisationState();
       await refreshLocalStackLogs();
       if (action === "start" || action === "stop") {
@@ -1780,9 +1466,9 @@ export default function App() {
     >
       <div className="activity-drawer-header">
         <div>
-          <Box variant="awsui-key-label">
+          <CloudscapeBox variant="awsui-key-label">
             {session.isLocked ? "Workspace" : "Discovery"}
-          </Box>
+          </CloudscapeBox>
           <h2>Recent Activity</h2>
         </div>
         <button
@@ -1799,12 +1485,25 @@ export default function App() {
     </aside>
   ) : null;
 
-  const content = session.isLocked ? (
+  const content = activeWorkspaceTabId === "debug" ? (
+    <Container
+      header={
+        <Header
+          variant="h1"
+          description="Real-time RPC and application diagnostics."
+        >
+          Debug Console
+        </Header>
+      }
+    >
+      <DebugConsole />
+    </Container>
+  ) : session.isLocked ? (
     <WorkspaceView
       session={session}
       workspace={workspace}
       logs={logs}
-      latestLog={latestLog}
+      latestLog={logs[0]}
       activeTabId={activeWorkspaceTabId}
       activeS3PageId={activeS3PageId}
       activeAzurePageId={activeAzurePageId}
@@ -1856,40 +1555,24 @@ export default function App() {
         setShowSensitiveValues((current) => !current);
       }}
       onInvokeWorkspaceAction={(actionId) => {
-        void backendRequest<JobStatus>("actions.invoke", { actionId });
+        void backendRequest("actions.invoke", { actionId });
       }}
       onSelectS3Bucket={(bucketName) => {
-        setS3SignedUrlResult(undefined);
-        void backendRequest<WorkspaceSnapshot>("aws.s3.selectBucket", { bucketName }).then(
-          (workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
-            });
-          },
-        );
+        void mutateSession("aws.s3.selectBucket", { bucketName });
       }}
       onSelectS3Object={(objectKey) => {
-        setS3SignedUrlResult(undefined);
-        void backendRequest<WorkspaceSnapshot>("aws.s3.selectObject", { objectKey }).then(
-          (workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
-            });
-          },
-        );
+        void mutateSession("aws.s3.selectObject", { objectKey });
       }}
       onSetS3PrefixFilter={(prefix) => {
         const requestId = s3PrefixRequestIdRef.current + 1;
         s3PrefixRequestIdRef.current = requestId;
-        void backendRequest<WorkspaceSnapshot>("aws.s3.setPrefixFilter", { prefix }).then(
-          (workspaceResult) => {
-            if (requestId === s3PrefixRequestIdRef.current) {
-              startTransition(() => {
-                setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
-              });
-            }
-          },
-        );
+        void backendRequest<WorkspaceSnapshot>("aws.s3.setPrefixFilter", { prefix }).then((workspaceResult) => {
+          if (requestId === s3PrefixRequestIdRef.current) {
+            startTransition(() => {
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            });
+          }
+        });
       }}
       s3UploadStatus={s3UploadStatus}
       s3SignedUrlStatus={s3SignedUrlStatus}
@@ -1898,28 +1581,21 @@ export default function App() {
       s3UrlValidation={s3UrlValidation}
       onUploadS3Object={(sourcePath, objectKey) => {
         setS3UploadStatus(`Queueing upload for ${objectKey}.`);
-        void backendRequest<JobStatus>("aws.s3.uploadObject", { sourcePath, objectKey }).then(
-          (job) => {
-            setS3UploadStatus(job.message);
-          },
-        );
+        void backendRequest("aws.s3.uploadObject", { objectKey, sourcePath });
       }}
       onPresignS3Object={(durationSeconds) => {
-        setS3SignedUrlResult(undefined);
         setS3SignedUrlStatus("Queueing signed URL generation.");
-        void backendRequest<JobStatus>("aws.s3.presignObject", { durationSeconds }).then(
-          (job) => {
-            setS3SignedUrlStatus(job.message);
-          },
-        );
+        void backendRequest("aws.s3.presignObject", { durationSeconds });
       }}
       onAnalyseS3Url={(url) => {
-        void backendRequest<UrlInspection>("aws.s3.analyseUrl", { url }).then((inspection) => {
-          setS3UrlInspection(inspection);
-        });
+        void (async () => {
+          setS3UrlInspection(await backendRequest<UrlInspection>("aws.s3.analyseUrl", { url }));
+        })();
       }}
       onValidateS3Url={(url) => {
-        void backendRequest<JobStatus>("aws.s3.validateUrl", { url });
+        void (async () => {
+          await backendRequest("aws.s3.validateUrl", { url });
+        })();
       }}
       ec2ActionStatus={ec2ActionStatus}
       ec2ActionInFlight={ec2ActionInFlight}
@@ -1931,109 +1607,53 @@ export default function App() {
           return;
         }
         setEC2ActionStatus(`Refreshing EC2 inventory for ${region}.`);
-        void backendRequest<WorkspaceSnapshot>("aws.ec2.selectRegion", { region }).then(
-          (workspaceResult) => {
+        void backendRequest<WorkspaceSnapshot>("aws.ec2.selectRegion", { region })
+          .then((workspaceResult) => {
             startTransition(() => {
               setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
             });
-            setEC2ActionStatus(workspaceResult.ec2StatusMessage || `EC2 inventory refreshed for ${region}.`);
-          },
-        ).catch((error: unknown) => {
-          setEC2ActionStatus(error instanceof Error ? error.message : String(error));
-        });
+            setEC2ActionStatus(workspaceResult.ec2StatusMessage || `Loaded EC2 instances from ${region}.`);
+          })
+          .catch((error: unknown) => {
+            setEC2ActionStatus(error instanceof Error ? error.message : String(error));
+          });
       }}
       onSelectEC2Region={(region) => {
         setEC2ActionStatus("Select an instance to run lifecycle actions.");
         setEC2ActionInFlight(false);
-        cancelEC2Polling();
-        void backendRequest<WorkspaceSnapshot>("aws.ec2.selectRegion", { region }).then(
-          (workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
-            });
-          },
-        );
+        void backendRequest<WorkspaceSnapshot>("aws.ec2.selectRegion", { region }).then((workspaceResult) => {
+          startTransition(() => {
+            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          });
+        });
       }}
       onSelectEC2Instance={(instanceId) => {
         setEC2ActionStatus("Instance selected. EC2 lifecycle writes require a local endpoint profile with write opt-in.");
         setEC2ActionInFlight(false);
-        cancelEC2Polling();
-        void backendRequest<WorkspaceSnapshot>("aws.ec2.selectInstance", { instanceId }).then(
-          (workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
-            });
-          },
-        );
+        void backendRequest<WorkspaceSnapshot>("aws.ec2.selectInstance", { instanceId }).then((workspaceResult) => {
+          startTransition(() => {
+            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          });
+        });
       }}
       onInvokeEC2Action={(action, instanceId) => {
         setEC2ActionStatus(`Queueing EC2 ${action} for ${instanceId}.`);
         setEC2ActionInFlight(true);
-        void backendRequest<JobStatus>("aws.ec2.invokeAction", { action, instanceId }).then(
-          (job) => {
+        void backendRequest<JobStatus>("aws.ec2.invokeAction", { action, instanceId })
+          .then((job) => {
             setEC2ActionStatus(job.message);
             setEC2ActionInFlight(job.status === "queued" || job.status === "running");
-            void pollEC2ActionResult(action, instanceId);
-          },
-        ).catch((error: unknown) => {
-          setEC2ActionStatus(error instanceof Error ? error.message : String(error));
-          setEC2ActionInFlight(false);
-        });
+          })
+          .catch((error: unknown) => {
+            setEC2ActionStatus(error instanceof Error ? error.message : String(error));
+            setEC2ActionInFlight(false);
+          });
       }}
       onSelectAzureResourceGroup={(resourceGroup) => {
-        void backendRequest<WorkspaceSnapshot>("azure.selectResourceGroup", { resourceGroup }).then(
-          (workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
-            });
-          },
-        );
+        void mutateSession("azure.selectResourceGroup", { resourceGroup });
       }}
       onSelectAzureVirtualMachine={(vmId) => {
-        void backendRequest<WorkspaceSnapshot>("azure.selectVirtualMachine", { vmId }).then(
-          (workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
-            });
-          },
-        );
-      }}
-    />
-  ) : activeWorkspaceTabId === "virtualisation" ? (
-    <GlobalVirtualisationView
-      workspace={workspace}
-      localStackAuthToken={localStackAuthToken}
-      localStackPersistence={localStackPersistence}
-      localStackEnvironmentText={localStackEnvironmentText}
-      localStackLogs={localStackLogs}
-      localStackLogsStatus={localStackLogsStatus}
-      localStackActionStatus={localStackActionStatus}
-      localStackActionInFlight={localStackActionInFlight}
-      flociAzPersistence={flociAzPersistence}
-      flociAzEnvironmentText={flociAzEnvironmentText}
-      flociAzLogs={flociAzLogs}
-      flociAzLogsStatus={flociAzLogsStatus}
-      flociAzActionStatus={flociAzActionStatus}
-      flociAzActionInFlight={flociAzActionInFlight}
-      onLocalStackAuthTokenChange={setLocalStackAuthToken}
-      onLocalStackPersistenceChange={setLocalStackPersistence}
-      onLocalStackEnvironmentTextChange={setLocalStackEnvironmentText}
-      onFlociAzPersistenceChange={setFlociAzPersistence}
-      onFlociAzEnvironmentTextChange={setFlociAzEnvironmentText}
-      onRefreshDockerRuntime={() => {
-        void refreshVirtualisationState();
-      }}
-      onRefreshLocalStackLogs={() => {
-        void refreshLocalStackLogs();
-      }}
-      onRefreshFlociAzLogs={() => {
-        void refreshFlociAzLogs();
-      }}
-      onInvokeLocalStackAction={(action) => {
-        void invokeLocalStackAction(action);
-      }}
-      onInvokeFlociAzAction={(action) => {
-        void invokeFlociAzAction(action);
+        void mutateSession("azure.selectVirtualMachine", { vmId });
       }}
     />
   ) : (
@@ -2077,13 +1697,69 @@ export default function App() {
     />
   );
 
+  const resetModal = (
+    <Modal
+      visible={resetModalOpen}
+      header="Reset app data"
+      onDismiss={() => {
+        if (!resetInFlight) {
+          setResetModalOpen(false);
+          setResetConfirmation("");
+        }
+      }}
+      footer={
+        <SpaceBetween
+          direction="horizontal"
+          size="xs"
+        >
+          <Button
+            variant="link"
+            disabled={resetInFlight}
+            onClick={() => {
+              setResetModalOpen(false);
+              setResetConfirmation("");
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            loading={resetInFlight}
+            disabled={resetConfirmation !== "RESET"}
+            onClick={() => {
+              void resetAppData();
+            }}
+          >
+            Reset app
+          </Button>
+        </SpaceBetween>
+      }
+    >
+      <SpaceBetween size="m">
+        <Box>
+          This clears CloudSprocket session state, activity logs, cached inventory, debug logs, and app-managed local runtime files. It does not touch AWS, Azure, or GCP config files outside the CloudSprocket app data folder.
+        </Box>
+        <Input
+          value={resetConfirmation}
+          placeholder="RESET"
+          ariaLabel="Reset confirmation"
+          disabled={resetInFlight}
+          onChange={({ detail }) => {
+            setResetConfirmation(detail.value);
+          }}
+        />
+      </SpaceBetween>
+    </Modal>
+  );
+
   return (
     <div className="app-shell">
+      {resetModal}
       <div className={`app-frame${sidebarCollapsed ? " app-frame-sidebar-collapsed" : ""}`}>
         <AppSidebar
           session={session}
-          selectedProvider={selectedProvider}
-          selectedProfile={selectedProfile}
+          selectedProvider={providers.find((p) => p.providerId === session.currentProviderId)}
+          selectedProfile={profiles.find((p) => p.profileId === session.selectedProfileId)}
           workspace={workspace}
           activeWorkspaceTabId={activeWorkspaceTabId}
           activeS3PageId={activeS3PageId}
@@ -2099,6 +1775,12 @@ export default function App() {
           onLockSession={() => {
             void mutateSession("session.lock");
           }}
+          onUnlockSession={() => {
+            void mutateSession("session.unlock");
+          }}
+          onResetApp={() => {
+            setResetModalOpen(true);
+          }}
           onWorkspaceTabChange={setActiveWorkspaceTabId}
           onS3PageChange={setActiveS3PageId}
           onAzurePageChange={setActiveAzurePageId}
@@ -2108,15 +1790,17 @@ export default function App() {
         />
         <main className="app-main">
           <Flashbar items={notifications} />
-          <Suspense
-            fallback={
-              <Box padding="l" color="text-body-secondary">
-                Loading workspace shell...
-              </Box>
-            }
-          >
-            {content}
-          </Suspense>
+          <AppErrorBoundary>
+            <Suspense
+              fallback={
+                <Box padding="l" color="text-body-secondary">
+                  Loading workspace shell...
+                </Box>
+              }
+            >
+              {content}
+            </Suspense>
+          </AppErrorBoundary>
           <footer className="app-footer">
             <div>
               <strong>CloudSprocket Desktop</strong>
@@ -2132,4 +1816,26 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+function dockerDiagnosticsFromRuntime(runtime: DockerRuntimeSnapshot): WorkspaceSnapshot["dockerDiagnostics"] {
+  return {
+    engineState: runtime.reachable ? "available" : runtime.host ? "unavailable" : "unknown",
+    summary: runtime.summary,
+    details: runtime.details,
+    contextName: runtime.contextName,
+    host: runtime.host,
+  };
+}
+
+function normaliseEmulatorLogSnapshot(snapshot: Partial<EmulatorLogSnapshot> | null | undefined): EmulatorLogSnapshot {
+  return {
+    emulatorId: snapshot?.emulatorId ?? "localstack",
+    lines: normaliseArray(snapshot?.lines).map((line) => String(line)),
+    summary: snapshot?.summary ?? "Emulator logs have not been loaded yet.",
+  };
+}
+
+function emulatorStatusFromWorkspace(workspace: WorkspaceSnapshot, emulatorId: string): EmulatorSummary | undefined {
+  return workspace.emulatorSummaries.find((e) => e.emulatorId === emulatorId);
 }

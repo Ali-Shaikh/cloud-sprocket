@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
+  AppResetResult,
   ActivityLogEntry,
   AppSettingsSnapshot,
   AuthMethod,
@@ -15,6 +16,41 @@ import type {
 } from "../types/backend";
 
 export type BackendEventName = "state.changed" | "job.updated" | "log.appended";
+
+export type DebugLogEntry = {
+  timestamp: string;
+  type: "request" | "response" | "error" | "event" | "console";
+  method?: string;
+  payload: unknown;
+};
+
+const debugLogs: DebugLogEntry[] = [];
+let debugLogListener: ((entry: DebugLogEntry) => void) | null = null;
+
+export function getDebugLogs(): DebugLogEntry[] {
+  return [...debugLogs];
+}
+
+export function subscribeToDebugLogs(listener: (entry: DebugLogEntry) => void): () => void {
+  debugLogListener = listener;
+  return () => {
+    debugLogListener = null;
+  };
+}
+
+export function addDebugLog(entry: DebugLogEntry): void {
+  debugLogs.unshift(entry);
+  if (debugLogs.length > 2000) {
+    debugLogs.pop();
+  }
+  if (debugLogListener) {
+    debugLogListener(entry);
+  }
+}
+
+export function clearDebugLogs(): void {
+  debugLogs.length = 0;
+}
 
 type BackendEventMap = {
   "state.changed": StateChangedPayload;
@@ -400,6 +436,15 @@ const mockState: MockState = {
   localStackStatus: "stopped",
   flociAzStatus: "stopped",
   flociAzConfigReady: false,
+};
+
+const initialMockSession: SessionSnapshot = {
+  currentProviderId: "aws",
+  selectedProfileId: "sandbox",
+  selectedAuthMethod: "cli",
+  isLocked: false,
+  availableAuthMethods: mockProfiles[0].authMethods,
+  workspaceTabs: [],
 };
 
 function isTauriRuntime(): boolean {
@@ -1114,6 +1159,31 @@ function handleMockRequest<T>(
       );
     case "app.settings.get":
       return Promise.resolve(mockState.settings as T);
+    case "app.reset":
+      if (String(params.confirmation ?? "") !== "RESET") {
+        return Promise.reject(new Error("type RESET to confirm the app reset"));
+      }
+      mockState.session = {
+        ...initialMockSession,
+        availableAuthMethods: [...initialMockSession.availableAuthMethods],
+        workspaceTabs: [],
+      };
+      mockState.logs = [];
+      mockState.localStackStatus = "not-configured";
+      mockState.flociAzStatus = "not-configured";
+      mockState.flociAzConfigReady = false;
+      clearDebugLogs();
+      rebuildSessionDerivedState();
+      emitStateChanged();
+      const resetResult = {
+        summary: "CloudSprocket app state has been reset. External AWS, Azure, and GCP config files were not touched.",
+        resetPaths: [
+          mockState.settings.localConfigDir,
+          mockState.settings.emulatorStateDir,
+        ],
+        skippedPaths: [],
+      } satisfies AppResetResult;
+      return Promise.resolve(resetResult as T);
     case "actions.invoke": {
       const job: JobStatus = {
         jobId: `job-${Date.now()}`,
@@ -1149,20 +1219,72 @@ export async function backendRequest<T>(
   method: string,
   params: Record<string, unknown> = {},
 ): Promise<T> {
+  const requestId = Math.floor(Math.random() * 1000000);
+  addDebugLog({
+    timestamp: new Date().toISOString(),
+    type: "request",
+    method,
+    payload: { requestId, params },
+  });
+
   if (!isTauriRuntime()) {
-    return handleMockRequest<T>(method, params);
+    try {
+      const result = await handleMockRequest<T>(method, params);
+      addDebugLog({
+        timestamp: new Date().toISOString(),
+        type: "response",
+        method,
+        payload: { requestId, result },
+      });
+      return result;
+    } catch (error) {
+      addDebugLog({
+        timestamp: new Date().toISOString(),
+        type: "error",
+        method,
+        payload: { requestId, error: error instanceof Error ? error.message : String(error) },
+      });
+      throw error;
+    }
   }
 
-  return invoke<T>("backend_request", { method, params });
+  try {
+    const result = await invoke<T>("backend_request", { method, params });
+    addDebugLog({
+      timestamp: new Date().toISOString(),
+      type: "response",
+      method,
+      payload: { requestId, result },
+    });
+    return result;
+  } catch (error) {
+    addDebugLog({
+      timestamp: new Date().toISOString(),
+      type: "error",
+      method,
+      payload: { requestId, error: error instanceof Error ? error.message : String(error) },
+    });
+    throw error;
+  }
 }
 
 export async function subscribeToBackendEvent<K extends BackendEventName>(
   eventName: K,
   handler: (payload: BackendEventMap[K]) => void,
 ): Promise<() => void> {
+  const wrappedHandler = (payload: BackendEventMap[K]) => {
+    addDebugLog({
+      timestamp: new Date().toISOString(),
+      type: "event",
+      method: eventName,
+      payload,
+    });
+    handler(payload);
+  };
+
   if (isTauriRuntime()) {
     const unlisten = await listen<BackendEventMap[K]>(tauriEventName(eventName), (event) => {
-      handler(event.payload);
+      wrappedHandler(event.payload);
     });
     return () => {
       unlisten();
@@ -1172,10 +1294,10 @@ export async function subscribeToBackendEvent<K extends BackendEventName>(
   const listeners =
     mockListeners.get(eventName) ??
     new Set<(payload: BackendEventMap[BackendEventName]) => void>();
-  listeners.add(handler as (payload: BackendEventMap[BackendEventName]) => void);
+  listeners.add(wrappedHandler as (payload: BackendEventMap[BackendEventName]) => void);
   mockListeners.set(eventName, listeners);
 
   return () => {
-    listeners.delete(handler as (payload: BackendEventMap[BackendEventName]) => void);
+    listeners.delete(wrappedHandler as (payload: BackendEventMap[BackendEventName]) => void);
   };
 }

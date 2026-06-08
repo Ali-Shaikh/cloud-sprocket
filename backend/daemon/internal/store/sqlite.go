@@ -203,6 +203,23 @@ func (s *Store) LoadResourceCache(
 	return fetchedAt, true, nil
 }
 
+func (s *Store) ResetAppData(ctx context.Context) error {
+	statements := []string{
+		`DELETE FROM session_state`,
+		`DELETE FROM app_settings`,
+		`DELETE FROM resource_cache`,
+		`DELETE FROM activity_log`,
+		`DELETE FROM sqlite_sequence WHERE name = 'activity_log'`,
+	}
+
+	for _, statement := range statements {
+		if _, err := s.db.ExecContext(ctx, statement); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Store) ListLogs(ctx context.Context, limit int) ([]models.ActivityLogEntry, error) {
 	if limit <= 0 {
 		limit = 50

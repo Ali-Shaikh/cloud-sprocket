@@ -60,4 +60,25 @@ func TestStorePersistsSessionLogsAndSettings(t *testing.T) {
 	if len(logs) != 1 || logs[0].ID != entry.ID {
 		t.Fatalf("expected one stored log entry, got %+v", logs)
 	}
+
+	if err := store.SaveResourceCache(ctx, "aws:s3", "query", map[string]string{"bucket": "demo"}, "2026-04-14T09:00:00Z"); err != nil {
+		t.Fatalf("expected resource cache save to succeed, got %v", err)
+	}
+
+	if err := store.ResetAppData(ctx); err != nil {
+		t.Fatalf("expected reset to succeed, got %v", err)
+	}
+	if _, ok, err := store.LoadSession(ctx); err != nil || ok {
+		t.Fatalf("expected session to be cleared, ok=%v err=%v", ok, err)
+	}
+	if ok, err := store.LoadAppSetting(ctx, "theme", &theme); err != nil || ok {
+		t.Fatalf("expected app setting to be cleared, ok=%v err=%v", ok, err)
+	}
+	var cached map[string]string
+	if _, ok, err := store.LoadResourceCache(ctx, "aws:s3", "query", &cached); err != nil || ok {
+		t.Fatalf("expected resource cache to be cleared, ok=%v err=%v", ok, err)
+	}
+	if logs, err := store.ListLogs(ctx, 10); err != nil || len(logs) != 0 {
+		t.Fatalf("expected logs to be cleared, logs=%+v err=%v", logs, err)
+	}
 }
