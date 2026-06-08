@@ -31,7 +31,19 @@ User tested the build and reported three issues; all fixed and re-verified:
    - Verified in the browser mock: Start floci-az, Prepare Config, floci-az Logs, and the floci-az image all render in Local Runtime.
 3. Docker asleep-but-running was "not handled". Per user choice, kept fast-fail (the 3s probe) plus manual retry (the existing "Refresh Docker" button), and made the timeout message actionable: when the Docker ping hits the deadline, the snapshot now says "Docker did not respond in time. The engine may be starting or asleep. Use Refresh Docker to retry." (`dockerruntime/runtime.go`).
 - Verification after follow-ups: `go -C backend/daemon test ./...` passes; `pnpm run typecheck:desktop` passes; `pnpm --dir apps/desktop test` passes (18 tests); `pnpm run build:desktop:exe` rebuilt the exe.
-- Still not committed: the user interrupted the in-progress commit to add these three items. Awaiting explicit go-ahead to commit the full working tree on `feat/azure-local-runtime`.
+- Committed as `fad8e31` (no Claude co-author trailer, per user preference).
+
+### Unlock contention fix (2026-06-08, after `fad8e31`)
+
+User reported unlock broke again after the floci restore. Root cause was a second, separate freeze: lock contention, not a hang.
+
+- `workspace.get` held the service mutex (`defer s.mu.Unlock()`) for the entire `buildWorkspaceSnapshot`, which runs slow Docker and AWS probes. The Local Runtime tab polls `workspace.get` every 5s, and restoring floci-az added a second emulator Docker probe, pushing the locked snapshot build to roughly 9s when Docker is off. With the mutex held that long every 5s, `session.unlock` was starved waiting for the lock.
+- Fix in `service.go`:
+  - `workspace.get` now holds the mutex only around `currentState` (the store read/reconcile) and releases it before `buildWorkspaceSnapshot`, which only reads the already-loaded session and immutable settings.
+  - `buildWorkspaceSnapshot` now skips both the managed-resource probe and the per-emulator status probe when the Docker engine is unreachable, using the static fallback `emulatorSummaries()` instead. This cuts a Docker-off workspace fetch from roughly 9s to roughly one 3s probe.
+  - added regression test `TestUnlockNotBlockedBySlowWorkspaceFetch`: with a blocking Docker runtime and an in-flight `workspace.get`, `session.unlock` must still return well under the probe timeout.
+- Verified against the real built daemon over stdio: with three concurrent `workspace.get` calls in flight (Docker off), `session.unlock` replied at about 2.3s while the workspace fetches did not finish until about 9.8s. Previously unlock was queued behind them.
+- Verification: `go -C backend/daemon test ./...` passes; `pnpm run typecheck:desktop` passes; `pnpm --dir apps/desktop test` passes (18 tests); `pnpm run build:desktop:exe` rebuilt the exe.
 
 ## Current State
 

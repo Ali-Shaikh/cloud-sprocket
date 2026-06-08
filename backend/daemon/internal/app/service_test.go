@@ -924,3 +924,76 @@ func TestDockerRuntimeProbeIsBoundedWhenEngineBlocks(t *testing.T) {
 		t.Fatalf("docker.runtime.get hung past the probe timeout; the Docker call is not bounded")
 	}
 }
+
+// TestUnlockNotBlockedBySlowWorkspaceFetch is a regression test for the unlock
+// freeze: the Local Runtime tab polls workspace.get, which builds the snapshot
+// with slow Docker probes. If that snapshot build holds the service mutex,
+// session.unlock is starved and the user cannot leave the locked workspace.
+func TestUnlockNotBlockedBySlowWorkspaceFetch(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+
+	mustWriteFile(t, filepath.Join(home, ".aws", "config"), "[profile sandbox]\nregion = us-east-1\n")
+	mustWriteFile(t, filepath.Join(home, ".aws", "credentials"), "[sandbox]\naws_access_key_id = AKIAEXAMPLE\n")
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("expected runtime dirs to be created, got %v", err)
+	}
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("expected sqlite store to open, got %v", err)
+	}
+	defer dataStore.Close()
+
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(command string) (string, error) {
+			if command == "aws" {
+				return "/usr/bin/aws", nil
+			}
+			return "", nil
+		}),
+		&stubS3Inventory{},
+		&stubEC2Inventory{},
+		stubAzureInventory{},
+		blockingDockerRuntime{},
+	)
+
+	if _, err := service.Handle(context.Background(), "session.lock", nil, nil); err != nil {
+		t.Fatalf("expected session.lock to succeed, got %v", err)
+	}
+
+	// workspace.get is slow because the Docker probe blocks for the full timeout.
+	wsDone := make(chan struct{})
+	go func() {
+		_, _ = service.Handle(context.Background(), "workspace.get", nil, nil)
+		close(wsDone)
+	}()
+
+	// Let the workspace fetch get past the brief locked section and into its
+	// lock-free Docker probe.
+	time.Sleep(250 * time.Millisecond)
+
+	unlockDone := make(chan error, 1)
+	start := time.Now()
+	go func() {
+		_, err := service.Handle(context.Background(), "session.unlock", nil, nil)
+		unlockDone <- err
+	}()
+
+	select {
+	case err := <-unlockDone:
+		if err != nil {
+			t.Fatalf("expected session.unlock to succeed, got %v", err)
+		}
+		if elapsed := time.Since(start); elapsed > dockerProbeTimeout/2 {
+			t.Fatalf("session.unlock took %v; it is blocked behind the slow workspace fetch", elapsed)
+		}
+	case <-time.After(dockerProbeTimeout + 2*time.Second):
+		t.Fatalf("session.unlock is starved while workspace.get holds the lock during Docker probing")
+	}
+
+	<-wsDone
+}
