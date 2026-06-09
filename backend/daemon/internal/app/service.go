@@ -2431,11 +2431,18 @@ func (s *Service) emulatorsPrepareProfile(emulatorID string) (models.EmulatorAct
 		if err := s.azureRuntime.EnsureManagedConfig(); err != nil {
 			return models.EmulatorActionResult{}, fmt.Errorf("failed to prepare managed Azure config: %w", err)
 		}
+		if err := s.writeLocalAzureSubscription(); err != nil {
+			return models.EmulatorActionResult{}, fmt.Errorf("failed to create local Azure profile: %w", err)
+		}
 		statusCtx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
 		defer cancel()
 		status, _ := s.azureRuntime.Status(statusCtx)
-		status.ConfigPath = filepath.Join(s.settings.LocalConfigDir, "azure", "floci-az.env")
+		status.ProfileName = localAzureProfileName
+		status.ConfigPath = s.settings.AzureProfilePath()
 		status.Endpoint = "http://localhost:4577"
+		if strings.TrimSpace(status.Summary) == "" {
+			status.Summary = fmt.Sprintf("Local Azure profile %q is ready in your Azure config. Select and lock it from setup.", localAzureProfileName)
+		}
 		return emulatorActionResult("prepareProfile", status), nil
 	}
 	if s.localstackMgr == nil {
@@ -2445,15 +2452,162 @@ func (s *Service) emulatorsPrepareProfile(emulatorID string) (models.EmulatorAct
 	if err := s.localstackMgr.EnsureManagedProfile(); err != nil {
 		return models.EmulatorActionResult{}, fmt.Errorf("failed to prepare managed profile: %w", err)
 	}
+	if err := s.writeLocalAWSProfile(); err != nil {
+		return models.EmulatorActionResult{}, fmt.Errorf("failed to create local AWS profile: %w", err)
+	}
 
 	statusCtx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
 	defer cancel()
 	status, _ := s.localstackMgr.Status(statusCtx)
-	status.ProfileName = "cloudsprocket-localstack"
-	status.ConfigPath = s.settings.LocalConfigDir + "/aws/config"
-	status.CredsPath = s.settings.LocalConfigDir + "/aws/credentials"
+	status.ProfileName = localAWSProfileName
+	status.ConfigPath = s.settings.AWSConfigPath
+	status.CredsPath = s.settings.AWSCredentialsPath
 	status.Endpoint = "http://localhost:4566"
+	if strings.TrimSpace(status.Summary) == "" {
+		status.Summary = fmt.Sprintf("Local AWS profile %q is ready in your AWS config. Select and lock it from setup.", localAWSProfileName)
+	}
 	return emulatorActionResult("prepareProfile", status), nil
+}
+
+const (
+	localAWSProfileName   = "cloudsprocket-localstack"
+	localAzureProfileName = "cloudsprocket-floci-az"
+)
+
+// writeLocalAWSProfile upserts a LocalStack-targeted profile into the user's
+// real AWS config and credentials files so it is discovered and can be locked.
+// Existing sections are preserved.
+func (s *Service) writeLocalAWSProfile() error {
+	if strings.TrimSpace(s.settings.AWSConfigPath) == "" || strings.TrimSpace(s.settings.AWSCredentialsPath) == "" {
+		return errors.New("AWS config paths are not configured")
+	}
+	configBody := "region = us-east-1\noutput = json\nendpoint_url = http://localhost:4566\ncloudsprocket_allow_writes = true\n"
+	if err := upsertINISection(s.settings.AWSConfigPath, "[profile "+localAWSProfileName+"]", configBody, 0o644); err != nil {
+		return err
+	}
+	credsBody := "aws_access_key_id = test\naws_secret_access_key = test\n"
+	return upsertINISection(s.settings.AWSCredentialsPath, "["+localAWSProfileName+"]", credsBody, 0o600)
+}
+
+// writeLocalAzureSubscription upserts a floci-az-targeted subscription into the
+// user's real Azure profile so it is discovered and can be locked. Existing
+// subscriptions are preserved.
+func (s *Service) writeLocalAzureSubscription() error {
+	path := s.settings.AzureProfilePath()
+	if strings.TrimSpace(path) == "" {
+		return errors.New("Azure profile path is not configured")
+	}
+	subscription := map[string]any{
+		"id":              localAzureProfileName,
+		"name":            "CloudSprocket floci-az (local)",
+		"state":           "Enabled",
+		"isDefault":       false,
+		"tenantId":        "cloudsprocket-local",
+		"environmentName": "FlociAzLocal",
+		"user": map[string]any{
+			"name": "local@cloudsprocket",
+			"type": "user",
+		},
+	}
+	return upsertAzureSubscription(path, localAzureProfileName, subscription)
+}
+
+// upsertINISection writes or replaces a single [header] section's body in an INI
+// file while preserving all other sections, comments, and formatting. The file
+// and its parent directory are created when missing.
+func upsertINISection(path string, header string, body string, perm os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	existing := ""
+	if data, err := os.ReadFile(path); err == nil {
+		existing = string(data)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	bodyLines := strings.Split(strings.TrimRight(body, "\n"), "\n")
+	out := []string{}
+	found := false
+	inTarget := false
+	for _, line := range strings.Split(existing, "\n") {
+		trimmed := strings.TrimSpace(line)
+		isHeader := strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]")
+		if isHeader {
+			if trimmed == header {
+				found = true
+				inTarget = true
+				out = append(out, header)
+				out = append(out, bodyLines...)
+				continue
+			}
+			inTarget = false
+		}
+		if inTarget {
+			// Drop the previous body of the target section until the next header.
+			continue
+		}
+		out = append(out, line)
+	}
+	if !found {
+		for len(out) > 0 && strings.TrimSpace(out[len(out)-1]) == "" {
+			out = out[:len(out)-1]
+		}
+		if len(out) > 0 {
+			out = append(out, "")
+		}
+		out = append(out, header)
+		out = append(out, bodyLines...)
+	}
+	content := strings.TrimRight(strings.Join(out, "\n"), "\n") + "\n"
+	return os.WriteFile(path, []byte(content), perm)
+}
+
+// upsertAzureSubscription writes or replaces a subscription (matched by id) in
+// the user's azureProfile.json while preserving the other subscriptions. A
+// UTF-8 BOM (which the az CLI sometimes writes) is tolerated on read.
+func upsertAzureSubscription(path string, id string, subscription map[string]any) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	profile := map[string]any{}
+	if data, err := os.ReadFile(path); err == nil {
+		text := strings.TrimPrefix(string(data), "\ufeff")
+		if strings.TrimSpace(text) != "" {
+			if err := json.Unmarshal([]byte(text), &profile); err != nil {
+				return fmt.Errorf("failed to parse Azure profile: %w", err)
+			}
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	subscriptions := []any{}
+	if existing, ok := profile["subscriptions"].([]any); ok {
+		subscriptions = existing
+	}
+	replaced := false
+	for index, raw := range subscriptions {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if existingID, ok := entry["id"].(string); ok && existingID == id {
+			subscriptions[index] = subscription
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		subscriptions = append(subscriptions, subscription)
+	}
+	profile["subscriptions"] = subscriptions
+
+	encoded, err := json.MarshalIndent(profile, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, encoded, 0o644)
 }
 
 func (s *Service) emulatorsStart(ctx context.Context, options models.LocalStackStartOptions) (models.EmulatorActionResult, error) {

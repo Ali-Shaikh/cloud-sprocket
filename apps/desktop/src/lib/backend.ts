@@ -370,6 +370,17 @@ const mockProfiles: ProfileSummary[] = [
   },
 ];
 
+function upsertMockProfile(profile: ProfileSummary): void {
+  const index = mockProfiles.findIndex(
+    (existing) => existing.providerId === profile.providerId && existing.profileId === profile.profileId,
+  );
+  if (index >= 0) {
+    mockProfiles[index] = profile;
+  } else {
+    mockProfiles.push(profile);
+  }
+}
+
 const mockState: MockState = {
   providers: [
     {
@@ -822,6 +833,22 @@ function handleMockRequest<T>(
       if (params.emulatorId === "floci-az") {
         appendLog("info", "Preparing floci-az managed env file...");
         mockState.flociAzConfigReady = true;
+        upsertMockProfile({
+          providerId: "azure",
+          profileId: "cloudsprocket-floci-az",
+          displayName: "CloudSprocket floci-az (local)",
+          summary: "Local Azure subscription targeting floci-az at http://localhost:4577.",
+          sourcePaths: ["C:/Users/Ali/.azure/azureProfile.json"],
+          attributes: [
+            { label: "Subscription ID", value: "cloudsprocket-floci-az" },
+            { label: "Endpoint", value: "http://localhost:4577" },
+          ],
+          authMethods: [
+            { method: "cli", label: "CLI", summary: "Azure CLI available.", available: true },
+            { method: "sso", label: "SSO", summary: "Provider-specific SSO not yet exposed.", available: false },
+            { method: "local-files", label: "Local Files", summary: "Read-only profile data.", available: true },
+          ],
+        });
         return Promise.resolve({
           emulatorId: "floci-az",
           action: "prepareProfile",
@@ -839,6 +866,23 @@ function handleMockRequest<T>(
         } as T);
       }
       appendLog("info", "Preparing LocalStack managed profile...");
+      upsertMockProfile({
+        providerId: "aws",
+        profileId: "cloudsprocket-localstack",
+        displayName: "cloudsprocket-localstack",
+        summary: "Local AWS profile targeting LocalStack at http://localhost:4566.",
+        sourcePaths: ["C:/Users/Ali/.aws/config", "C:/Users/Ali/.aws/credentials"],
+        attributes: [
+          { label: "Region", value: "us-east-1" },
+          { label: "Endpoint Url", value: "http://localhost:4566" },
+          { label: "Cloudsprocket Allow Writes", value: "true" },
+        ],
+        authMethods: [
+          { method: "cli", label: "CLI", summary: "AWS CLI detected.", available: true },
+          { method: "sso", label: "SSO", summary: "No SSO metadata detected.", available: false },
+          { method: "local-files", label: "Local Files", summary: "Read-only profile data.", available: true },
+        ],
+      });
       return Promise.resolve({
         emulatorId: "localstack",
         action: "prepareProfile",

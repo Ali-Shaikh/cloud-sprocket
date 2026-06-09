@@ -660,7 +660,7 @@ export default function WorkspaceView({
                       disabled={localStackActionInFlight}
                       onClick={() => onInvokeLocalStackAction("prepareProfile")}
                     >
-                      Prepare Profile
+                      Create AWS Profile
                     </Button>
                     <Button
                       disabled={
@@ -717,7 +717,7 @@ export default function WorkspaceView({
                       disabled={flociAzActionInFlight}
                       onClick={() => onInvokeFlociAzAction("prepareProfile")}
                     >
-                      Prepare Config
+                      Create Azure Profile
                     </Button>
                     <Button
                       disabled={
@@ -2370,6 +2370,39 @@ export default function WorkspaceView({
           : activeTabId === "actions"
             ? actionsTab
             : providerPlaceholderTab;
+
+  if (!session.isLocked) {
+    return (
+      <SpaceBetween
+        size="l"
+        className="page-stack"
+      >
+        <Container
+          header={
+            <Header
+              variant="h1"
+              description="Start and manage local cloud emulators before locking a workspace."
+              actions={
+                <Button
+                  iconName="refresh"
+                  onClick={onRefreshDockerRuntime}
+                >
+                  Refresh Docker
+                </Button>
+              }
+            >
+              Local Runtime
+            </Header>
+          }
+        >
+          <Box color="text-body-secondary">
+            Manage Docker, LocalStack, and floci-az here without a locked session. Prepare a local profile or config, then return to setup to select and lock it.
+          </Box>
+        </Container>
+        <div role="tabpanel">{virtualisationTab}</div>
+      </SpaceBetween>
+    );
+  }
 
   return (
     <SpaceBetween

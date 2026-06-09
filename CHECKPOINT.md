@@ -44,6 +44,21 @@ User reported unlock broke again after the floci restore. Root cause was a secon
   - added regression test `TestUnlockNotBlockedBySlowWorkspaceFetch`: with a blocking Docker runtime and an in-flight `workspace.get`, `session.unlock` must still return well under the probe timeout.
 - Verified against the real built daemon over stdio: with three concurrent `workspace.get` calls in flight (Docker off), `session.unlock` replied at about 2.3s while the workspace fetches did not finish until about 9.8s. Previously unlock was queued behind them.
 - Verification: `go -C backend/daemon test ./...` passes; `pnpm run typecheck:desktop` passes; `pnpm --dir apps/desktop test` passes (18 tests); `pnpm run build:desktop:exe` rebuilt the exe.
+- Committed as `cf73efb`.
+
+### Unlocked Local Runtime + local profile creation (2026-06-09)
+
+User reported the Local Runtime menu does nothing when the workspace is unlocked, and asked for a way to create AWS and Azure profiles that target the local emulators. User chose: write profiles into the real cloud config, covering AWS + Azure together.
+
+1. Unlocked Local Runtime did nothing. The content area always rendered `SessionSetupView` when unlocked, regardless of the active tab, so clicking Local Runtime only highlighted the menu. Fix: render `WorkspaceView` when `session.isLocked || activeWorkspaceTabId === "virtualisation"`, and `WorkspaceView` now early-returns a standalone "Local Runtime" view (no locked-workspace chrome) when the session is unlocked. Verified in the browser: the unlocked Local Runtime shows Docker, LocalStack, floci-az, logs, and config artefacts; Overview still returns to setup.
+2. Create local emulator profiles. `emulators.prepareProfile` now also writes a discoverable profile into the user's real config (in addition to the managed copy):
+   - AWS: upserts `[profile cloudsprocket-localstack]` into `~/.aws/config` (region, output, `endpoint_url = http://localhost:4566`, `cloudsprocket_allow_writes = true`) and `[cloudsprocket-localstack]` into `~/.aws/credentials` (test/test). Existing sections are preserved.
+   - Azure: upserts a `cloudsprocket-floci-az` subscription ("CloudSprocket floci-az (local)") into `~/.azure/azureProfile.json`, preserving existing subscriptions and tolerating a UTF-8 BOM.
+   - Helpers `upsertINISection` and `upsertAzureSubscription` in `service.go` do non-destructive edits. Buttons renamed to "Create AWS Profile" / "Create Azure Profile". After a successful create the frontend reloads providers/profiles (without touching the workspace) so the profile appears in setup immediately.
+   - Note: AWS local profiles work end to end (the adapters honour `endpoint_url`). The Azure local profile is created and lockable, but the Azure inventory adapter does not yet target floci-az, so locked Azure inventory against the local emulator is a future piece.
+- Tests: added `TestPrepareProfileWritesDiscoverableLocalProfiles` (preserves existing AWS/Azure entries, handles BOM, and discovery surfaces both local profiles). `service_test.go` and `service.go` use the \ufeff string escape, never a literal BOM (Go rejects a mid-file BOM).
+- Verified in the browser mock end to end: from the unlocked Local Runtime, "Create AWS Profile" and "Create Azure Profile" make `cloudsprocket-localstack` and "CloudSprocket floci-az (local)" appear in setup for their providers.
+- Verification: `go -C backend/daemon test ./...` passes; `pnpm run typecheck:desktop` passes; `pnpm --dir apps/desktop test` passes (18 tests); `pnpm run build:desktop:exe` rebuilt the exe.
 
 ## Current State
 

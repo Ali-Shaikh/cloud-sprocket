@@ -1204,6 +1204,24 @@ export default function App() {
     });
   }
 
+  // Re-run discovery and refresh the provider/profile lists without touching the
+  // workspace, so a newly created local emulator profile appears in setup
+  // without clearing the Local Runtime view.
+  async function reloadProvidersAndProfiles(): Promise<void> {
+    const [providersResult, sessionResult] = await Promise.all([
+      backendRequest<ProviderSummary[]>("providers.list"),
+      backendRequest<SessionSnapshot>("session.get"),
+    ]);
+    const normalisedSession = normaliseSessionSnapshot(sessionResult);
+    const profilesResult = await backendRequest<ProfileSummary[]>("profiles.list", {
+      providerId: normalisedSession.currentProviderId,
+    });
+    startTransition(() => {
+      setProviders(normaliseArray(providersResult).map(normaliseProvider));
+      setProfiles(normaliseArray(profilesResult).map(normaliseProfile));
+    });
+  }
+
   function parseEnvironment(text: string, blockedKeys: string[] = []): Record<string, string> {
     const env: Record<string, string> = {};
     const blocked = new Set(blockedKeys);
@@ -1350,6 +1368,9 @@ export default function App() {
       );
       await refreshVirtualisationState();
       await refreshLocalStackLogs();
+      if (action === "prepareProfile") {
+        await reloadProvidersAndProfiles().catch(() => undefined);
+      }
       if (action === "start" || action === "stop") {
         pollLocalStackState(label, action === "start" ? "running" : "stopped");
       }
@@ -1438,6 +1459,9 @@ export default function App() {
       );
       await refreshVirtualisationState();
       await refreshFlociAzLogs();
+      if (action === "prepareProfile") {
+        await reloadProvidersAndProfiles().catch(() => undefined);
+      }
       if (action === "start" || action === "stop") {
         pollFlociAzState(label, action === "start" ? "running" : "stopped");
       }
@@ -1498,7 +1522,7 @@ export default function App() {
     >
       <DebugConsole />
     </Container>
-  ) : session.isLocked ? (
+  ) : session.isLocked || activeWorkspaceTabId === "virtualisation" ? (
     <WorkspaceView
       session={session}
       workspace={workspace}

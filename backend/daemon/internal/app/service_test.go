@@ -864,6 +864,92 @@ func waitForPathRemoved(t *testing.T, path string) {
 	}
 }
 
+func TestPrepareProfileWritesDiscoverableLocalProfiles(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+
+	// An existing AWS profile and a BOM-prefixed Azure profile with one real
+	// subscription must both be preserved when the local profiles are written.
+	mustWriteFile(t, filepath.Join(home, ".aws", "config"), "[profile existing]\nregion = eu-west-2\n")
+	mustWriteFile(t, filepath.Join(home, ".azure", "azureProfile.json"), "\ufeff{\n  \"subscriptions\": [\n    {\"id\": \"real-sub\", \"name\": \"Real Sub\", \"tenantId\": \"t1\"}\n  ]\n}\n")
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("expected runtime dirs to be created, got %v", err)
+	}
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("expected sqlite store to open, got %v", err)
+	}
+	defer dataStore.Close()
+
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(string) (string, error) { return "", nil }),
+		&stubS3Inventory{},
+		&stubEC2Inventory{},
+		stubAzureInventory{},
+		stubDockerRuntime{},
+	)
+
+	ctx := context.Background()
+	if _, err := service.Handle(ctx, "emulators.prepareProfile", []byte(`{"emulatorId":"localstack"}`), nil); err != nil {
+		t.Fatalf("expected localstack prepareProfile to succeed, got %v", err)
+	}
+	if _, err := service.Handle(ctx, "emulators.prepareProfile", []byte(`{"emulatorId":"floci-az"}`), nil); err != nil {
+		t.Fatalf("expected floci-az prepareProfile to succeed, got %v", err)
+	}
+
+	awsConfig := mustReadFile(t, settings.AWSConfigPath)
+	if !strings.Contains(awsConfig, "[profile existing]") {
+		t.Fatalf("expected existing AWS profile to be preserved, got:\n%s", awsConfig)
+	}
+	if !strings.Contains(awsConfig, "[profile cloudsprocket-localstack]") || !strings.Contains(awsConfig, "endpoint_url = http://localhost:4566") {
+		t.Fatalf("expected local AWS profile with endpoint, got:\n%s", awsConfig)
+	}
+	awsCreds := mustReadFile(t, settings.AWSCredentialsPath)
+	if !strings.Contains(awsCreds, "[cloudsprocket-localstack]") || !strings.Contains(awsCreds, "aws_access_key_id = test") {
+		t.Fatalf("expected local AWS credentials, got:\n%s", awsCreds)
+	}
+
+	azureProfile := mustReadFile(t, settings.AzureProfilePath())
+	if !strings.Contains(azureProfile, "real-sub") {
+		t.Fatalf("expected existing Azure subscription to be preserved, got:\n%s", azureProfile)
+	}
+	if !strings.Contains(azureProfile, "cloudsprocket-floci-az") {
+		t.Fatalf("expected local Azure subscription to be added, got:\n%s", azureProfile)
+	}
+
+	// Discovery must now surface both local profiles so they can be locked.
+	snapshot, err := service.discovery.Discover()
+	if err != nil {
+		t.Fatalf("expected discovery to succeed, got %v", err)
+	}
+	foundAWS := false
+	foundAzure := false
+	for _, profile := range snapshot.Profiles {
+		if profile.ProviderID == "aws" && profile.ProfileID == "cloudsprocket-localstack" {
+			foundAWS = true
+		}
+		if profile.ProviderID == "azure" && profile.ProfileID == "cloudsprocket-floci-az" {
+			foundAzure = true
+		}
+	}
+	if !foundAWS || !foundAzure {
+		t.Fatalf("expected discovery to surface both local profiles, aws=%v azure=%v", foundAWS, foundAzure)
+	}
+}
+
+func mustReadFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", path, err)
+	}
+	return string(data)
+}
+
 func mustWriteFile(t *testing.T, path string, contents string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
