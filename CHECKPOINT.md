@@ -1,10 +1,11 @@
 # Checkpoint
 
-- Date: `2026-06-06`
+- Date: `2026-06-09`
 - Branch: `feat/azure-local-runtime`
-- Head after local commit: `a00ab5a feat: add Azure local runtime controls`
-- Working tree: Local Runtime unlock/menu regression fix is complete locally and awaiting commit.
-- Status: LocalStack work is merged into `dev` and usable from the global `Local Runtime` menu. The first Azure local runtime slice is implemented with floci-az Docker lifecycle, config, logs, UI controls, tests, and desktop build verification. A follow-up fix keeps `Local Runtime` visible in locked workspaces even when the backend omits the synthetic tab, and returns to setup after unlock.
+- Head: `1179f4e fix: lock emulator persistence and env controls while running`
+- Working tree: clean. All work below is committed (not pushed). Commits ahead of `b27da35`: `fad8e31`, `cf73efb`, `b3b96bb`, `1179f4e`.
+- Latest exe: `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe`, rebuilt from `1179f4e`.
+- Status: Resolved the "cannot unlock / no emulators" regression (Docker probes hanging, then mutex contention), restored floci-az decoupled from LocalStack, made the unlocked Local Runtime view work, added creation of AWS/Azure local-emulator profiles into the real cloud config, fixed un-closable banners, and locked emulator settings while running. See the dated sections below for detail. Quick verify: `pnpm --dir apps/desktop test` (19), `pnpm run typecheck:desktop`, `go -C backend/daemon test ./...`, `pnpm run build:desktop:exe` all pass.
 
 ## Latest Fix (2026-06-08): Docker-hang regression (could not unlock, no emulators)
 
@@ -334,13 +335,11 @@ User asked whether floci-az persistence even works and noted it is not locked on
 
 ## Left To Do
 
-1. Manually confirm the launched desktop window is visible, S3/EC2 use AWS service icons, and `Unlock Workspace` returns to setup.
-2. Test the new corrected `Reset` sidebar action in the built app and confirm it returns to setup without touching external AWS/Azure/GCP config files.
-3. Start the rebuilt exe manually and confirm Local Runtime only shows LocalStack controls and LocalStack logs.
-4. Start LocalStack from the built app when Docker is awake, then confirm the toast/status flow and Start/Stop buttons.
-5. Decide the next Azure scope with the user before implementation. Azure runtime must be implemented as a separate decoupled surface, not mixed into LocalStack's Local Runtime flow.
-6. Commit only when the user explicitly asks.
+1. User to launch the rebuilt exe (`1179f4e`) and confirm in the real app: unlock returns to setup with Docker off; the unlocked Local Runtime view works; Create AWS/Azure Profile makes the profiles selectable and lockable; the discovery success banner is dismissible; persistence/env/auth controls lock once an emulator is running.
+2. Azure inventory against floci-az: the Azure adapter does not yet target the floci-az endpoint (`http://localhost:4577`), so a locked `cloudsprocket-floci-az` session will not list real resource groups/VMs. Implement floci-az-backed Azure inventory as the next slice (decoupled), if the user wants it.
+3. Decide whether to push `feat/azure-local-runtime` and/or open a PR into `dev`.
+4. Optional polish: reduce Local Runtime poll churn when Docker is off (currently each poll still issues a ~3s Docker probe); consider caching reachability briefly.
 
 ## Resume Point
 
-- Continue on `feat/azure-local-runtime`. Do not commit yet. Ask the user to test the launched build, then commit only after explicit approval.
+- Continue on `feat/azure-local-runtime`. Working tree is clean at `1179f4e`; nothing is pushed. Commit when the user asks (no Claude co-author trailer, per memory). Next likely task: floci-az-backed Azure inventory (Left To Do #2) or push/PR (#3). Ask the user to test the latest exe first.
