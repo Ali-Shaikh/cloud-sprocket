@@ -604,7 +604,13 @@ export default function WorkspaceView({
         <Box color="text-status-inactive">No emulator summaries are available yet.</Box>
       ) : (
         <SpaceBetween size="m">
-          {workspace.emulatorSummaries.map((emulator) => (
+          {workspace.emulatorSummaries.map((emulator) => {
+            // Persistence and environment only take effect when the container is
+            // (re)created on start, which requires it to be stopped. Lock those
+            // controls while a container is present so they cannot be changed
+            // ineffectively on a running emulator.
+            const settingsLocked = emulator.status === "running" || emulator.status === "unhealthy";
+            return (
             <div
               key={emulator.emulatorId}
               className="detail-card"
@@ -621,6 +627,11 @@ export default function WorkspaceView({
                   <div className="detail-card detail-card-strong">
                     <Box variant="awsui-key-label">Runtime Action</Box>
                     <Box variant="p">{localStackActionStatus}</Box>
+                    {settingsLocked ? (
+                      <Box color="text-status-info">
+                        Stop LocalStack to change the auth token, persistence, or environment. These apply only when the container is started.
+                      </Box>
+                    ) : null}
                   </div>
                   <div className="detail-grid">
                     <div className="detail-card">
@@ -630,6 +641,7 @@ export default function WorkspaceView({
                         value={localStackAuthToken}
                         placeholder="Paste token"
                         ariaLabel="LocalStack auth token"
+                        disabled={settingsLocked}
                         onChange={({ detail }) => onLocalStackAuthTokenChange(detail.value)}
                       />
                     </div>
@@ -637,6 +649,7 @@ export default function WorkspaceView({
                       <Box variant="awsui-key-label">Persistence</Box>
                       <Checkbox
                         checked={localStackPersistence}
+                        disabled={settingsLocked}
                         onChange={({ detail }) => onLocalStackPersistenceChange(detail.checked)}
                       >
                         Enable LocalStack persistence
@@ -648,6 +661,7 @@ export default function WorkspaceView({
                         value={localStackEnvironmentText}
                         placeholder="DEBUG=1"
                         rows={3}
+                        disabled={settingsLocked}
                         onChange={({ detail }) => onLocalStackEnvironmentTextChange(detail.value)}
                       />
                     </div>
@@ -688,12 +702,18 @@ export default function WorkspaceView({
                   <div className="detail-card detail-card-strong">
                     <Box variant="awsui-key-label">Runtime Action</Box>
                     <Box variant="p">{flociAzActionStatus}</Box>
+                    {settingsLocked ? (
+                      <Box color="text-status-info">
+                        Stop floci-az to change persistence or environment. These apply only when the container is started.
+                      </Box>
+                    ) : null}
                   </div>
                   <div className="detail-grid">
                     <div className="detail-card">
                       <Box variant="awsui-key-label">Persistence</Box>
                       <Checkbox
                         checked={flociAzPersistence}
+                        disabled={settingsLocked}
                         onChange={({ detail }) => onFlociAzPersistenceChange(detail.checked)}
                       >
                         Enable floci-az persistence
@@ -705,6 +725,7 @@ export default function WorkspaceView({
                         value={flociAzEnvironmentText}
                         placeholder="FLOCI_AZ_SERVICES_FUNCTIONS_ENABLED=false"
                         rows={3}
+                        disabled={settingsLocked}
                         onChange={({ detail }) => onFlociAzEnvironmentTextChange(detail.value)}
                       />
                     </div>
@@ -741,7 +762,8 @@ export default function WorkspaceView({
                 </SpaceBetween>
               ) : null}
             </div>
-          ))}
+            );
+          })}
         </SpaceBetween>
       )}
     </Container>

@@ -914,6 +914,45 @@ describe("App", () => {
     });
   }, 10000);
 
+  it("locks persistence and environment controls while emulators are running", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+        {
+          tabId: "virtualisation",
+          label: "Local Runtime",
+          summary: "Runtime summary",
+          detail: "Runtime panel",
+        },
+      ],
+    };
+    workspaceFixture = {
+      ...workspaceFixture,
+      emulatorSummaries: workspaceFixture.emulatorSummaries.map((emulator) => ({
+        ...emulator,
+        status: "running",
+        summary: `${emulator.label} is running.`,
+      })),
+    };
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByText("Local Runtime"));
+    expect(await screen.findByLabelText("Enable LocalStack persistence")).toBeDisabled();
+    expect(screen.getByLabelText("LocalStack auth token")).toBeDisabled();
+    expect(screen.getByLabelText("Enable floci-az persistence")).toBeDisabled();
+  });
+
   it("applies S3 prefix filtering and renders selected object metadata", async () => {
     sessionFixture = {
       ...sessionFixture,
