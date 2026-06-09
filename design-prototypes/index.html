@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en-GB" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CloudSprocket — Redesign Prototype</title>
+<style>
+/* ============ DESIGN TOKENS ============ */
+:root {
+  --font: "Inter", "Segoe UI Variable", -apple-system, system-ui, sans-serif;
+  --mono: "Cascadia Code", "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+
+  /* Light theme */
+  --bg: #f7f8fa;
+  --rail-bg: #1b1d24;
+  --sidebar-bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f3f5f8;
+  --surface-3: #eceff4;
+  --border: #e3e7ee;
+  --border-strong: #d3d9e3;
+  --text: #1a1d24;
+  --text-2: #5a6473;
+  --text-3: #8b95a5;
+  --brand: #5b6cff;
+  --brand-weak: #eef0ff;
+  --brand-ink: #3a47cc;
+  --green: #18a957;
+  --green-weak: #e6f7ee;
+  --amber: #d98c00;
+  --amber-weak: #fdf3e1;
+  --red: #e0413b;
+  --red-weak: #fdecec;
+  --shadow-sm: 0 1px 2px rgba(20,24,33,.06), 0 1px 3px rgba(20,24,33,.04);
+  --shadow-md: 0 4px 12px rgba(20,24,33,.07), 0 2px 4px rgba(20,24,33,.04);
+  --shadow-lg: 0 12px 32px rgba(20,24,33,.12);
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+[data-theme="dark"] {
+  --bg: #0e0f13;
+  --rail-bg: #08090c;
+  --sidebar-bg: #15171d;
+  --surface: #15171d;
+  --surface-2: #1b1e26;
+  --surface-3: #20242d;
+  --border: #262b35;
+  --border-strong: #323845;
+  --text: #e8ebf2;
+  --text-2: #9aa3b2;
+  --text-3: #6b7585;
+  --brand: #7c8aff;
+  --brand-weak: #1c1f33;
+  --brand-ink: #aab4ff;
+  --green-weak: #112318;
+  --amber-weak: #2a2110;
+  --red-weak: #2a1514;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-md: 0 6px 18px rgba(0,0,0,.5);
+  --shadow-lg: 0 16px 40px rgba(0,0,0,.6);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
+  line-height: 1.5;
+}
+button { font-family: inherit; cursor: pointer; }
+
+/* ============ APP SHELL ============ */
+.app {
+  display: grid;
+  grid-template-columns: 68px 256px 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ---- RAIL (Slack-style connection switcher) ---- */
+.rail {
+  background: var(--rail-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  gap: 6px;
+}
+.rail-brand {
+  width: 40px; height: 40px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, var(--brand), #8b5bff);
+  display: grid; place-items: center;
+  color: #fff; font-weight: 800; font-size: 15px;
+  letter-spacing: -.5px;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 12px rgba(91,108,255,.45);
+}
+.rail-sep { width: 28px; height: 1px; background: rgba(255,255,255,.1); margin: 4px 0; }
+.rail-item {
+  position: relative;
+  width: 44px; height: 44px;
+  border-radius: 13px;
+  border: 0;
+  background: rgba(255,255,255,.06);
+  display: grid; place-items: center;
+  transition: all .15s ease;
+  color: #c7ccd6;
+}
+.rail-item img { width: 26px; height: 26px; }
+.rail-item:hover { background: rgba(255,255,255,.14); border-radius: 15px; }
+.rail-item.active { background: #fff; border-radius: 15px; }
+.rail-item.active::before {
+  content: ""; position: absolute; left: -12px; top: 50%; transform: translateY(-50%);
+  width: 4px; height: 26px; border-radius: 0 4px 4px 0; background: #fff;
+}
+.rail-status {
+  position: absolute; right: -2px; bottom: -2px;
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 2.5px solid var(--rail-bg);
+}
+.rail-status.on { background: var(--green); }
+.rail-status.off { background: #6b7585; }
+.rail-status.err { background: var(--red); }
+.rail-spacer { flex: 1; }
+.rail-add {
+  width: 44px; height: 44px; border-radius: 13px;
+  border: 1.5px dashed rgba(255,255,255,.25);
+  background: transparent; color: #9aa3b2; font-size: 22px; font-weight: 300;
+  display: grid; place-items: center;
+}
+.rail-add:hover { border-color: var(--brand); color: #fff; }
+.rail-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: linear-gradient(135deg,#ffb56b,#ff7eb3);
+  display: grid; place-items: center; color:#fff; font-weight: 700; font-size: 13px;
+}
+
+/* ---- SIDEBAR (Docker-style contextual nav) ---- */
+.sidebar {
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.sb-head {
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.sb-conn {
+  display: flex; align-items: center; gap: 10px;
+}
+.sb-conn-icon {
+  width: 32px; height: 32px; border-radius: 9px;
+  background: var(--surface-2);
+  display: grid; place-items: center; flex: 0 0 auto;
+}
+.sb-conn-icon img { width: 22px; height: 22px; }
+.sb-conn-name { font-weight: 700; font-size: 14px; }
+.sb-conn-meta { font-size: 12px; color: var(--text-3); }
+.sb-status-row { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.dot.on { background: var(--green); box-shadow: 0 0 0 3px var(--green-weak); }
+.dot.off { background: #9aa3b2; }
+.dot.err { background: var(--red); box-shadow: 0 0 0 3px var(--red-weak); }
+.sb-status-text { font-size: 12px; color: var(--text-2); }
+
+.sb-nav { padding: 10px 10px; overflow-y: auto; flex: 1; }
+.sb-group-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-3); padding: 12px 8px 6px;
+}
+.sb-item {
+  width: 100%; border: 0; background: transparent;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  color: var(--text-2); font-size: 13.5px; font-weight: 500;
+  text-align: left;
+}
+.sb-item:hover { background: var(--surface-2); color: var(--text); }
+.sb-item.active { background: var(--brand-weak); color: var(--brand-ink); font-weight: 600; }
+.sb-item .ico { width: 18px; height: 18px; flex: 0 0 auto; opacity: .85; }
+.sb-item.active .ico { opacity: 1; }
+.sb-item .count {
+  margin-left: auto; font-size: 11px; font-weight: 700;
+  background: var(--surface-3); color: var(--text-2);
+  padding: 1px 7px; border-radius: 999px;
+}
+.sb-item.active .count { background: #fff; color: var(--brand-ink); }
+
+.sb-foot { padding: 10px; border-top: 1px solid var(--border); display: grid; gap: 4px; }
+
+/* ---- MAIN ---- */
+.main { display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+.topbar {
+  height: 56px; flex: 0 0 auto;
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 20px; border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.crumb { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-3); }
+.crumb b { color: var(--text); font-weight: 600; }
+.crumb .sep { color: var(--text-3); }
+.search {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 999px; padding: 7px 14px; width: 240px;
+  color: var(--text-3); font-size: 13px;
+}
+.search input { border: 0; background: transparent; outline: 0; color: var(--text); width: 100%; font-family: inherit; font-size: 13px; }
+.icon-btn {
+  width: 36px; height: 36px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--surface); display: grid; place-items: center; color: var(--text-2);
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--text); }
+
+.content { overflow-y: auto; padding: 24px 28px 40px; flex: 1; }
+.view { display: none; }
+.view.active { display: block; animation: fade .25s ease; }
+@keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* ---- Page header ---- */
+.page-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 22px; }
+.page-title { font-size: 22px; font-weight: 750; letter-spacing: -.3px; margin: 0; }
+.page-sub { color: var(--text-2); font-size: 13.5px; margin: 3px 0 0; }
+.page-actions { margin-left: auto; display: flex; gap: 8px; }
+
+.btn {
+  border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--text); padding: 8px 14px; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 7px;
+}
+.btn:hover { background: var(--surface-2); }
+.btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; box-shadow: 0 2px 8px rgba(91,108,255,.35); }
+.btn-primary:hover { background: var(--brand-ink); }
+.btn-ghost { border-color: transparent; background: transparent; color: var(--text-2); }
+.btn-ghost:hover { background: var(--surface-2); }
+.btn svg { width: 15px; height: 15px; }
+
+/* ---- Pills / badges ---- */
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+.pill .dot { width: 7px; height: 7px; }
+.pill.on { background: var(--green-weak); color: var(--green); }
+.pill.off { background: var(--surface-3); color: var(--text-2); }
+.pill.err { background: var(--red-weak); color: var(--red); }
+.pill.amber { background: var(--amber-weak); color: var(--amber); }
+.pill.brand { background: var(--brand-weak); color: var(--brand-ink); }
+
+/* ---- Stat cards ---- */
+.stat-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 24px; }
+.stat {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px 18px; box-shadow: var(--shadow-sm);
+}
+.stat-label { font-size: 12px; color: var(--text-3); font-weight: 600; }
+.stat-value { font-size: 26px; font-weight: 750; letter-spacing: -.5px; margin-top: 4px; }
+.stat-foot { font-size: 12px; color: var(--text-2); margin-top: 4px; display:flex; align-items:center; gap:5px; }
+
+/* ---- Connection cards (home) ---- */
+.conn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap: 16px; }
+.conn-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px; box-shadow: var(--shadow-sm); transition: all .18s ease; cursor: pointer;
+}
+.conn-card:hover { box-shadow: var(--shadow-md); border-color: var(--border-strong); transform: translateY(-2px); }
+.conn-card-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.conn-logo { width: 44px; height: 44px; border-radius: 11px; background: var(--surface-2); display: grid; place-items: center; }
+.conn-logo img { width: 30px; height: 30px; }
+.conn-card h3 { margin: 0; font-size: 15px; font-weight: 700; }
+.conn-card .conn-card-sub { font-size: 12.5px; color: var(--text-3); }
+.conn-meta-row { display: flex; gap: 18px; padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--border); }
+.conn-meta { font-size: 12px; }
+.conn-meta b { display: block; font-size: 15px; font-weight: 700; }
+.conn-meta span { color: var(--text-3); }
+.conn-card.add {
+  border-style: dashed; background: transparent; box-shadow: none;
+  display: grid; place-items: center; text-align: center; color: var(--text-2);
+  min-height: 168px;
+}
+.conn-card.add:hover { border-color: var(--brand); color: var(--brand-ink); }
+.conn-card.add .plus { width: 44px; height: 44px; border-radius: 50%; background: var(--brand-weak); color: var(--brand); display: grid; place-items: center; font-size: 24px; margin: 0 auto 10px; }
+
+/* ---- Resource cards (Docker Hub style) ---- */
+.res-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px,1fr)); gap: 14px; }
+.res-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px; box-shadow: var(--shadow-sm); transition: all .15s; cursor: pointer;
+}
+.res-card:hover { box-shadow: var(--shadow-md); border-color: var(--brand); }
+.res-card-top { display: flex; align-items: flex-start; gap: 11px; }
+.res-ico { width: 38px; height: 38px; border-radius: 10px; background: var(--surface-2); display: grid; place-items: center; flex: 0 0 auto; }
+.res-ico img { width: 24px; height: 24px; }
+.res-card h4 { margin: 0; font-size: 14.5px; font-weight: 700; word-break: break-all; }
+.res-card .res-sub { font-size: 12px; color: var(--text-3); margin-top: 1px; }
+.res-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 13px; }
+.tag { font-size: 11.5px; color: var(--text-2); background: var(--surface-2); padding: 2px 8px; border-radius: 6px; font-weight: 500; }
+
+/* ---- Table (Docker Desktop style) ---- */
+.table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
+.table-toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.table-toolbar .region {
+  display:flex; align-items:center; gap:7px; font-size:13px; font-weight:600;
+  background: var(--surface-2); border:1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 11px;
+}
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); padding: 11px 16px; border-bottom: 1px solid var(--border); }
+td { padding: 13px 16px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--surface-2); }
+.cell-main { font-weight: 600; }
+.cell-id { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+.row-actions { display: flex; gap: 6px; opacity: 0; transition: opacity .12s; }
+tbody tr:hover .row-actions { opacity: 1; }
+.mini-btn { width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); display: grid; place-items: center; color: var(--text-2); }
+.mini-btn:hover { background: var(--surface-3); color: var(--text); }
+.mini-btn.danger:hover { background: var(--red-weak); color: var(--red); border-color: var(--red); }
+
+/* ---- Runtime / emulator cards ---- */
+.rt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px,1fr)); gap: 16px; }
+.rt-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; }
+.rt-head { display: flex; align-items: center; gap: 13px; padding: 16px 18px; }
+.rt-logo { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; flex: 0 0 auto; }
+.rt-logo img { width: 28px; height: 28px; }
+.rt-title { font-size: 15px; font-weight: 700; }
+.rt-img { font-family: var(--mono); font-size: 11.5px; color: var(--text-3); }
+.rt-body { padding: 0 18px 16px; }
+.rt-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 14px; background: var(--surface-2); border-radius: var(--radius-sm); margin-bottom: 14px; }
+.rt-meta div span { font-size: 11.5px; color: var(--text-3); display: block; }
+.rt-meta div b { font-size: 13px; font-weight: 600; font-family: var(--mono); }
+.rt-actions { display: flex; gap: 8px; align-items: center; }
+.rt-log { background: #0c1018; color: #cde3ff; font-family: var(--mono); font-size: 11.5px; line-height: 1.6; padding: 12px 14px; border-radius: var(--radius-sm); max-height: 110px; overflow: hidden; margin-top: 14px; }
+.rt-log .ln { white-space: pre; }
+.rt-log .t { color: #5b7a9a; }
+.rt-log .ok { color: #5fd38d; }
+
+/* misc */
+.section-title { font-size: 15px; font-weight: 700; margin: 28px 0 14px; }
+.banner {
+  display: flex; align-items: center; gap: 12px; padding: 13px 16px; border-radius: var(--radius);
+  background: var(--brand-weak); border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent);
+  color: var(--brand-ink); font-size: 13px; margin-bottom: 22px;
+}
+.banner svg { width: 18px; height: 18px; flex: 0 0 auto; }
+.banner .btn { margin-left: auto; }
+
+/* theme + screen switch toolbar (prototype chrome only) */
+.proto-bar {
+  position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+  background: rgba(20,24,33,.92); backdrop-filter: blur(8px); color: #fff;
+  border-radius: 999px; padding: 7px 9px; display: flex; gap: 6px; align-items: center;
+  box-shadow: var(--shadow-lg); z-index: 99; font-size: 12px;
+}
+.proto-bar button { border: 0; background: rgba(255,255,255,.1); color: #cfd6e2; border-radius: 999px; padding: 6px 13px; font-weight: 600; font-size: 12px; }
+.proto-bar button.on { background: #fff; color: #1b1d24; }
+.proto-bar .lbl { color: #8b95a5; padding: 0 6px 0 10px; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ============ RAIL ============ -->
+  <nav class="rail">
+    <div class="rail-brand">CS</div>
+    <button class="rail-item active" data-conn="aws" onclick="setConn('aws')" title="AWS — sandbox">
+      <img src="../apps/desktop/src/assets/cloud-icons/aws.svg" alt="AWS" />
+      <span class="rail-status on"></span>
+    </button>
+    <button class="rail-item" data-conn="azure" onclick="setConn('azure')" title="Azure">
+      <img src="../apps/desktop/src/assets/cloud-icons/azure.svg" alt="Azure" />
+      <span class="rail-status off"></span>
+    </button>
+    <button class="rail-item" data-conn="gcp" onclick="setConn('gcp')" title="Google Cloud">
+      <img src="../apps/desktop/src/assets/cloud-icons/gcp.svg" alt="GCP" />
+      <span class="rail-status off"></span>
+    </button>
+    <div class="rail-sep"></div>
+    <button class="rail-item" data-conn="local" onclick="setConn('local')" title="Local Runtime">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7cc4ff" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10M9 16v4M15 16v4"/></svg>
+      <span class="rail-status on"></span>
+    </button>
+    <button class="rail-add" title="Connect a cloud">+</button>
+    <div class="rail-spacer"></div>
+    <button class="rail-item" title="Settings"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    <button class="rail-avatar">AS</button>
+  </nav>
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="sb-head">
+      <div class="sb-conn">
+        <div class="sb-conn-icon" id="sbIcon"><img src="../apps/desktop/src/assets/cloud-icons/aws.svg" alt=""/></div>
+        <div>
+          <div class="sb-conn-name" id="sbName">AWS</div>
+          <div class="sb-conn-meta" id="sbMeta">sandbox · CLI</div>
+        </div>
+      </div>
+      <div class="sb-status-row">
+        <span class="dot on" id="sbDot"></span>
+        <span class="sb-status-text" id="sbStatus">Connected · eu-west-2</span>
+      </div>
+    </div>
+    <div class="sb-nav" id="sbNav"><!-- filled by JS --></div>
+    <div class="sb-foot">
+      <button class="sb-item"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg> Activity</button>
+      <button class="sb-item"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> Docs</button>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <div class="main">
+    <header class="topbar">
+      <div class="crumb"><b id="crumbConn">AWS</b><span class="sep">/</span><span id="crumbView">Overview</span></div>
+      <div class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input placeholder="Search resources…  ⌘K" /></div>
+      <button class="icon-btn" title="Refresh"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.65 4.36A9 9 0 0 0 20.5 15"/></svg></button>
+      <button class="icon-btn" title="Notifications"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg></button>
+    </header>
+
+    <div class="content" id="content"><!-- views injected --></div>
+  </div>
+</div>
+
+<!-- prototype controls -->
+<div class="proto-bar">
+  <span class="lbl">Screen</span>
+  <button class="on" data-screen="overview" onclick="setScreen('overview')">Overview</button>
+  <button data-screen="s3" onclick="setScreen('s3')">Storage</button>
+  <button data-screen="ec2" onclick="setScreen('ec2')">Compute</button>
+  <button data-screen="local" onclick="setScreen('local'); setConn('local')">Local Runtime</button>
+  <button data-screen="connect" onclick="setScreen('connect')">Connect</button>
+  <span class="lbl">Theme</span>
+  <button onclick="toggleTheme()" id="themeBtn">🌙 Dark</button>
+</div>
+
+<script>
+const AWS = "../apps/desktop/src/assets/cloud-icons/aws.svg";
+const AWS_S3 = "../apps/desktop/src/assets/cloud-icons/aws-s3.svg";
+const AWS_EC2 = "../apps/desktop/src/assets/cloud-icons/aws-ec2.svg";
+const AZ = "../apps/desktop/src/assets/cloud-icons/azure.svg";
+const GCP = "../apps/desktop/src/assets/cloud-icons/gcp.svg";
+
+const ICONS = {
+  overview: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>',
+  storage: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5M3 12a9 3 0 0 0 18 0"/></svg>',
+  compute: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg>',
+  fn: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>',
+  iam: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6z"/></svg>',
+  db: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14a8 3 0 0 0 16 0V5"/></svg>',
+  group: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h6l2 3h10v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg>',
+  vm: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
+  rt: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10M9 16v4M15 16v4"/></svg>',
+};
+
+const NAV = {
+  aws: { name:"AWS", meta:"sandbox · CLI", icon:AWS, dot:"on", status:"Connected · eu-west-2",
+    groups:[ {label:"Workspace", items:[["overview","Overview",ICONS.overview,null]]},
+             {label:"Services", items:[["s3","Storage (S3)",ICONS.storage,"6"],["ec2","Compute (EC2)",ICONS.compute,"4"],["lambda","Functions",ICONS.fn,"2"],["iam","Identity",ICONS.iam,null]]} ] },
+  azure:{ name:"Azure", meta:"not connected", icon:AZ, dot:"off", status:"Disconnected — connect to browse",
+    groups:[ {label:"Workspace", items:[["overview","Overview",ICONS.overview,null]]},
+             {label:"Services", items:[["rg","Resource Groups",ICONS.group,"—"],["vms","Virtual Machines",ICONS.vm,"—"]]} ] },
+  gcp:{ name:"Google Cloud", meta:"not connected", icon:GCP, dot:"off", status:"Disconnected — connect to browse",
+    groups:[ {label:"Workspace", items:[["overview","Overview",ICONS.overview,null]]},
+             {label:"Services", items:[["gce","Compute Engine",ICONS.compute,"—"],["gcs","Cloud Storage",ICONS.storage,"—"]]} ] },
+  local:{ name:"Local Runtime", meta:"Docker · 2 emulators", icon:null, dot:"on", status:"Docker engine running",
+    groups:[ {label:"Runtime", items:[["local","Emulators",ICONS.rt,"2"],["containers","Containers",ICONS.compute,"3"],["images","Images",ICONS.storage,"8"]]} ] },
+};
+
+let conn = "aws";
+let screen = "overview";
+
+function setConn(c){
+  conn = c;
+  document.querySelectorAll('.rail-item[data-conn]').forEach(b=>b.classList.toggle('active', b.dataset.conn===c));
+  const n = NAV[c];
+  document.getElementById('sbName').textContent = n.name;
+  document.getElementById('sbMeta').textContent = n.meta;
+  document.getElementById('sbStatus').textContent = n.status;
+  document.getElementById('sbDot').className = 'dot '+n.dot;
+  document.getElementById('sbIcon').innerHTML = n.icon ? `<img src="${n.icon}" alt=""/>` : ICONS.rt.replace('class="ico"','width="22" height="22"');
+  document.getElementById('crumbConn').textContent = n.name;
+  // build nav
+  const nav = document.getElementById('sbNav'); nav.innerHTML='';
+  n.groups.forEach(g=>{
+    const lbl=document.createElement('div'); lbl.className='sb-group-label'; lbl.textContent=g.label; nav.appendChild(lbl);
+    g.items.forEach(([id,label,ico,count])=>{
+      const b=document.createElement('button'); b.className='sb-item'+((id===screen||(screen==='overview'&&id==='overview'))?' active':'');
+      b.innerHTML = ico + `<span>${label}</span>` + (count?`<span class="count">${count}</span>`:'');
+      b.onclick=()=>{ const map={s3:'s3',ec2:'ec2',local:'local',overview:'overview',containers:'local',images:'local'}; setScreen(map[id]||'overview'); };
+      nav.appendChild(b);
+    });
+  });
+  if(c!=='local' && screen==='local') setScreen('overview'); else renderActiveNav();
+}
+
+function renderActiveNav(){
+  document.querySelectorAll('#sbNav .sb-item').forEach(b=>{
+    const t=b.querySelector('span').textContent;
+    const match = (screen==='s3'&&t.includes('Storage'))||(screen==='ec2'&&t.includes('Compute')&&conn==='aws')||(screen==='local'&&t.includes('Emulator'))||(screen==='overview'&&t==='Overview');
+    b.classList.toggle('active', match);
+  });
+}
+
+function setScreen(s){
+  screen = s;
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.dataset.screen===s));
+  document.querySelectorAll('.proto-bar button[data-screen]').forEach(b=>b.classList.toggle('on', b.dataset.screen===s));
+  const titles={overview:'Overview',s3:'Storage',ec2:'Compute',local:'Emulators',connect:'Connect a cloud'};
+  document.getElementById('crumbView').textContent = titles[s]||s;
+  renderActiveNav();
+  document.getElementById('content').scrollTop=0;
+}
+
+function toggleTheme(){
+  const h=document.documentElement;
+  const dark = h.getAttribute('data-theme')==='dark';
+  h.setAttribute('data-theme', dark?'light':'dark');
+  document.getElementById('themeBtn').textContent = dark?'🌙 Dark':'☀️ Light';
+}
+
+// ---------- VIEWS ----------
+document.getElementById('content').innerHTML = `
+<!-- OVERVIEW -->
+<section class="view active" data-screen="overview">
+  <div class="page-head">
+    <div>
+      <h1 class="page-title">AWS · sandbox</h1>
+      <p class="page-sub">Local-first read access to your sandbox account. No console, no context-switching.</p>
+    </div>
+    <div class="page-actions">
+      <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M3.5 9a9 9 0 0 1 14.85-3.36L23 10"/></svg>Refresh</button>
+      <button class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>New resource</button>
+    </div>
+  </div>
+  <div class="banner">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+    Read-only mode keeps you safe. Enable writes per-service when you need them.
+    <button class="btn btn-ghost" style="color:var(--brand-ink)">Manage permissions</button>
+  </div>
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-label">S3 Buckets</div><div class="stat-value">6</div><div class="stat-foot"><span class="dot on"></span> 1.2 TB stored</div></div>
+    <div class="stat"><div class="stat-label">EC2 Instances</div><div class="stat-value">4</div><div class="stat-foot"><span class="pill on" style="padding:1px 7px">2 running</span></div></div>
+    <div class="stat"><div class="stat-label">Functions</div><div class="stat-value">2</div><div class="stat-foot">eu-west-2</div></div>
+    <div class="stat"><div class="stat-label">Monthly est.</div><div class="stat-value">$184</div><div class="stat-foot" style="color:var(--green)">▼ 12% vs last</div></div>
+  </div>
+  <div class="section-title">Jump back in</div>
+  <div class="res-grid">
+    <div class="res-card" onclick="setScreen('s3')"><div class="res-card-top"><div class="res-ico"><img src="${AWS_S3}"></div><div><h4>app-assets-prod</h4><div class="res-sub">S3 · eu-west-2</div></div></div><div class="res-tags"><span class="tag">428 objects</span><span class="tag">Versioned</span></div></div>
+    <div class="res-card" onclick="setScreen('ec2')"><div class="res-card-top"><div class="res-ico"><img src="${AWS_EC2}"></div><div><h4>api-gateway-1</h4><div class="res-sub">EC2 · t3.medium</div></div></div><div class="res-tags"><span class="pill on"><span class="dot on"></span>running</span><span class="tag">10.0.1.42</span></div></div>
+    <div class="res-card" onclick="setScreen('ec2')"><div class="res-card-top"><div class="res-ico"><img src="${AWS_EC2}"></div><div><h4>worker-batch-2</h4><div class="res-sub">EC2 · c5.large</div></div></div><div class="res-tags"><span class="pill off"><span class="dot off"></span>stopped</span></div></div>
+  </div>
+</section>
+
+<!-- S3 / STORAGE -->
+<section class="view" data-screen="s3">
+  <div class="page-head">
+    <div><h1 class="page-title">Storage</h1><p class="page-sub">6 buckets · eu-west-2 · last synced 2m ago</p></div>
+    <div class="page-actions">
+      <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Upload</button>
+      <button class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>New bucket</button>
+    </div>
+  </div>
+  <div class="res-grid">
+    ${["app-assets-prod","data-lake-raw","backups-eu","terraform-state","logs-archive","cdn-static"].map((n,i)=>`
+      <div class="res-card">
+        <div class="res-card-top">
+          <div class="res-ico"><img src="${AWS_S3}"></div>
+          <div style="min-width:0"><h4>${n}</h4><div class="res-sub">eu-west-2 · ${["Standard","Standard-IA","Glacier"][i%3]}</div></div>
+          ${i===1?'<span class="pill amber" style="margin-left:auto">Public</span>':'<span class="pill on" style="margin-left:auto"><span class="dot on"></span>Private</span>'}
+        </div>
+        <div class="res-tags"><span class="tag">${[428,12903,87,3,99201,540][i]} objects</span><span class="tag">${["12 GB","842 GB","4 GB","8 MB","1.1 TB","60 GB"][i]}</span>${i%2===0?'<span class="tag">Versioned</span>':''}</div>
+      </div>`).join("")}
+  </div>
+</section>
+
+<!-- EC2 / COMPUTE -->
+<section class="view" data-screen="ec2">
+  <div class="page-head">
+    <div><h1 class="page-title">Compute</h1><p class="page-sub">4 instances · 2 running</p></div>
+    <div class="page-actions"><button class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Launch instance</button></div>
+  </div>
+  <div class="table-wrap">
+    <div class="table-toolbar">
+      <span class="region"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/></svg>eu-west-2 ▾</span>
+      <span class="pill off">4 total</span><span class="pill on"><span class="dot on"></span>2 running</span>
+      <span style="margin-left:auto;color:var(--text-3);font-size:12.5px">Lifecycle writes require a write-enabled profile</span>
+    </div>
+    <table>
+      <thead><tr><th>Name</th><th>Instance ID</th><th>Type</th><th>State</th><th>Public IP</th><th style="width:130px"></th></tr></thead>
+      <tbody>
+        ${[["api-gateway-1","i-0a8f2c91","t3.medium","on","52.18.x.x"],["web-frontend","i-0b3e7d44","t3.small","on","3.248.x.x"],["worker-batch-2","i-0c1a9f02","c5.large","off","—"],["jump-host","i-0d5b2e88","t2.micro","off","—"]].map(([n,id,t,s,ip])=>`
+        <tr>
+          <td class="cell-main">${n}</td>
+          <td class="cell-id">${id}</td>
+          <td>${t}</td>
+          <td>${s==='on'?'<span class="pill on"><span class="dot on"></span>running</span>':'<span class="pill off"><span class="dot off"></span>stopped</span>'}</td>
+          <td class="cell-id">${ip}</td>
+          <td><div class="row-actions">
+            <button class="mini-btn" title="${s==='on'?'Stop':'Start'}">${s==='on'?'<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>':'<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5v14l12-7z"/></svg>'}</button>
+            <button class="mini-btn" title="Reboot"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M3.5 9a9 9 0 0 1 14.85-3.36L23 10"/></svg></button>
+            <button class="mini-btn" title="Details"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></button>
+          </div></td>
+        </tr>`).join("")}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- LOCAL RUNTIME -->
+<section class="view" data-screen="local">
+  <div class="page-head">
+    <div><h1 class="page-title">Local Runtime</h1><p class="page-sub">Run cloud APIs on your machine. Docker engine running · 2 emulators</p></div>
+    <div class="page-actions"><button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M3.5 9a9 9 0 0 1 14.85-3.36L23 10"/></svg>Refresh Docker</button></div>
+  </div>
+  <div class="rt-grid">
+    <div class="rt-card">
+      <div class="rt-head">
+        <div class="rt-logo" style="background:#3b1d6e"><svg width="26" height="26" viewBox="0 0 24 24" fill="#c9a7ff"><path d="M12 2 2 7v10l10 5 10-5V7z"/></svg></div>
+        <div style="flex:1"><div class="rt-title">LocalStack</div><div class="rt-img">localstack/localstack:stable</div></div>
+        <span class="pill on"><span class="dot on"></span>Running</span>
+      </div>
+      <div class="rt-body">
+        <div class="rt-meta">
+          <div><span>Endpoint</span><b>http://localhost:4566</b></div>
+          <div><span>Uptime</span><b>2h 14m</b></div>
+          <div><span>Profile</span><b>localstack-sandbox</b></div>
+          <div><span>Persistence</span><b>Enabled</b></div>
+        </div>
+        <div class="rt-actions">
+          <button class="btn" style="flex:1;justify-content:center"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>Stop</button>
+          <button class="btn" style="flex:1;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M3.5 9a9 9 0 0 1 14.85-3.36L23 10"/></svg>Restart</button>
+          <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6M12 19h8"/></svg></button>
+        </div>
+        <div class="rt-log">
+<div class="ln"><span class="t">14:02:11</span> Ready. <span class="ok">s3, dynamodb, lambda</span> available</div>
+<div class="ln"><span class="t">14:02:09</span> Starting edge router on :4566</div>
+<div class="ln"><span class="t">14:02:04</span> LocalStack supervisor up</div>
+        </div>
+      </div>
+    </div>
+    <div class="rt-card">
+      <div class="rt-head">
+        <div class="rt-logo" style="background:#0a2a4a"><img src="${AZ}" style="width:26px;height:26px"></div>
+        <div style="flex:1"><div class="rt-title">floci-az</div><div class="rt-img">floci/floci-az:latest</div></div>
+        <span class="pill off"><span class="dot off"></span>Stopped</span>
+      </div>
+      <div class="rt-body">
+        <div class="rt-meta">
+          <div><span>Endpoint</span><b>http://localhost:4577</b></div>
+          <div><span>Uptime</span><b>—</b></div>
+          <div><span>Profile</span><b>floci-az-local</b></div>
+          <div><span>Functions</span><b>Disabled</b></div>
+        </div>
+        <div class="rt-actions">
+          <button class="btn btn-primary" style="flex:1;justify-content:center"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5v14l12-7z"/></svg>Start emulator</button>
+          <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6M12 17v6"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CONNECT (replaces wizard) -->
+<section class="view" data-screen="connect">
+  <div class="page-head">
+    <div><h1 class="page-title">Your clouds</h1><p class="page-sub">CloudSprocket found these on your machine. Pick one to start — no setup required.</p></div>
+  </div>
+  <div class="conn-grid">
+    <div class="conn-card" onclick="setConn('aws');setScreen('overview')">
+      <div class="conn-card-top"><div class="conn-logo"><img src="${AWS}"></div><div><h3>AWS</h3><div class="conn-card-sub">2 profiles detected</div></div><span class="pill on" style="margin-left:auto"><span class="dot on"></span>Ready</span></div>
+      <div class="conn-meta-row"><div class="conn-meta"><b>sandbox</b><span>CLI · eu-west-2</span></div><div class="conn-meta"><b>prod</b><span>SSO</span></div></div>
+    </div>
+    <div class="conn-card" onclick="setConn('azure');setScreen('overview')">
+      <div class="conn-card-top"><div class="conn-logo"><img src="${AZ}"></div><div><h3>Azure</h3><div class="conn-card-sub">1 subscription</div></div><span class="pill on" style="margin-left:auto"><span class="dot on"></span>Ready</span></div>
+      <div class="conn-meta-row"><div class="conn-meta"><b>Visual Studio Enterprise</b><span>az CLI login</span></div></div>
+    </div>
+    <div class="conn-card" onclick="setConn('gcp');setScreen('overview')">
+      <div class="conn-card-top"><div class="conn-logo"><img src="${GCP}"></div><div><h3>Google Cloud</h3><div class="conn-card-sub">Not configured</div></div><span class="pill off" style="margin-left:auto"><span class="dot off"></span>Setup</span></div>
+      <div class="conn-meta-row"><div class="conn-meta"><b>gcloud not found</b><span>Click to add a project</span></div></div>
+    </div>
+    <div class="conn-card" onclick="setConn('local');setScreen('local')">
+      <div class="conn-card-top"><div class="conn-logo" style="background:#0c1a2a">${ICONS.rt.replace('class="ico"','width="28" height="28" stroke="#7cc4ff"')}</div><div><h3>Local Runtime</h3><div class="conn-card-sub">LocalStack + floci-az</div></div><span class="pill brand" style="margin-left:auto">Docker</span></div>
+      <div class="conn-meta-row"><div class="conn-meta"><b>Emulate the cloud</b><span>No account needed</span></div></div>
+    </div>
+    <div class="conn-card add"><div><div class="plus">+</div>Connect another cloud</div></div>
+  </div>
+</section>
+`;
+
+setConn('aws');
+setScreen('overview');
+</script>
+</body>
+</html>

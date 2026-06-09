@@ -7,6 +7,24 @@
 - Latest exe: `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe`, rebuilt from `1179f4e`.
 - Status: Resolved the "cannot unlock / no emulators" regression (Docker probes hanging, then mutex contention), restored floci-az decoupled from LocalStack, made the unlocked Local Runtime view work, added creation of AWS/Azure local-emulator profiles into the real cloud config, fixed un-closable banners, and locked emulator settings while running. See the dated sections below for detail. Quick verify: `pnpm --dir apps/desktop test` (19), `pnpm run typecheck:desktop`, `go -C backend/daemon test ./...`, `pnpm run build:desktop:exe` all pass.
 
+## Active work stream: UI/UX Redesign (planning, 2026-06-09)
+
+- Separate from the daemon fixes above. User dislikes the current UI/UX; agreed to rebuild it.
+- **Decisions locked:** replace **AWS Cloudscape** entirely (it makes the app look like the AWS
+  console it's meant to escape) → **Tailwind CSS v4.1 + shadcn/ui** (new-york, OKLCH, copy-in) +
+  lucide-react + sonner. Theme **follows the OS** with a manual override. **No backend/RPC changes.**
+- New design toward Slack / Docker Hub / OpenHuman DNA: far-left connection rail, contextual nav,
+  topbar, card-based resources, status-first runtime, near-zero onboarding (kills the 4-step wizard).
+- **Artefacts (all under `design-prototypes/`):** `index.html` (click-through prototype, light/dark),
+  `REDESIGN-PLAN.md` (diagnosis + references), `IMPLEMENTATION-PLAN.md` (modular M0–M8 plan),
+  `CHECKPOINT-ui-redesign.md` (resume point for this stream). Preview via the `prototype` server in
+  `.claude/launch.json` (`python -m http.server 4321` → `/design-prototypes/index.html`).
+- **Cloudscape footprint to remove (M8):** 6 files / 10 refs (`main.tsx` global-styles, `App.tsx`,
+  `views/SessionSetupView.tsx`, `views/WorkspaceView.tsx`, `views/shared.tsx`, `vite.config.ts`
+  manualChunks) + `styles.css` + `package.json` deps.
+- **Next step:** awaiting go-ahead to start **M0** (add Tailwind v4 + shadcn + OS-aware ThemeProvider
+  alongside existing UI; leaves the app working). No redesign code written yet.
+
 ## Latest Fix (2026-06-08): Docker-hang regression (could not unlock, no emulators)
 
 - Symptom: after the floci/azure work, the workspace could not be unlocked and no emulators worked.
