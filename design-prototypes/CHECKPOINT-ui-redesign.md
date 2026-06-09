@@ -44,20 +44,25 @@ Branch: `feat/ui-rebuild-tailwind` (off `feat/azure-local-runtime`). Tasks track
 - `93b5fc8` feat(desktop): Tailwind v4 + shadcn foundation + primitive kit (M0 + M1)
 - `a6f9062` docs: UI redesign plan, prototype, and checkpoint
 - `5332495` docs: mark M0/M1 committed, set M2 as resume point
+- `5028c6c` feat(desktop): replace Cloudscape sidebar with Tailwind app shell (M2)
+- `24714da` docs: mark M2 (app shell) complete, set M3 as resume point
 
-**M2 — DONE + verified, NOT yet committed (sitting in the working tree).**
+**M3 — DONE + verified, NOT yet committed (sitting in the working tree).**
 
-### >>> RESUME HERE: M3 (Connect / kill the wizard) <<<
-Next session: build M3 - `src/views/ConnectView.tsx` replacing `SessionSetupView` (the 607 L,
-4-step stepper). Connection cards from discovered `providers`/`profiles` with detected-profile
-chips + status; picking one calls `session.selectProvider`/`selectProfile`/`selectAuthMethod`
-then `session.lock`. Reframe lock/unlock language to "Open / Close workspace" (same RPCs). The
-shell rail already lists connections; M3 only swaps the *content* shown while unlocked.
-Dev server: launch config `desktop-web` (vite :1425). Heads-up: the headless screenshotter hangs
-on looping CSS animations / Radix portals - inject `*{animation:none!important;transition:none!important}`
-via preview_eval first; and the preview viewport defaults narrow (<1180 px) so the context nav
-auto-collapses (responsive behaviour working as designed) - resize to >=1280 to see the nav.
-**Commit M2 before starting M3 if a clean history is wanted.**
+### >>> RESUME HERE: M4 (Overview) <<<
+Next session: build M4 - `src/views/OverviewView.tsx`. Stat cards (counts from `workspace.get`:
+s3Buckets, ec2Instances, azure RG/VMs, emulators), a read-only safety banner driven by
+`workspace.awsWritesEnabled`, and a "Jump back in" recents strip. This is the FIRST tab shown
+*after* a workspace is opened (locked). Currently the locked "overview" tab still renders the old
+Cloudscape `WorkspaceView` overview; M4 swaps that one tab to a Tailwind view (decompose pattern
+continues in M5). Reuse M1 `StatCard`/`Card`/`Badge` + the shell. Acceptance: live counts + safety
+state reflect the workspace snapshot.
+Dev server: launch config `desktop-web` (vite :1425). Heads-up: headless screenshotter hangs on
+looping animations / Radix portals - inject `*{animation:none!important;transition:none!important}`
+via preview_eval first; preview viewport defaults narrow (<1180 px) so the context nav
+auto-collapses (by design) - resize to >=1280 to see it. The branch is `feat/ui-rebuild-tailwind`
+(NOT the default branch - check `git branch` first; the repo also has `chore/add-termius-sponsor`).
+**Commit M3 before starting M4 if a clean history is wanted.**
 
 - **M0 — DONE, verified, committed (`93b5fc8`).** Tailwind v4.3.0 + `@tailwindcss/vite`, clsx,
   tailwind-merge, lucide-react 1.17, sonner installed in `apps/desktop`.
@@ -118,9 +123,34 @@ auto-collapses (responsive behaviour working as designed) - resize to >=1280 to 
     connections, breadcrumb, theme menu; nav auto-collapses < 1180 px and returns >= 1280 px;
     console error-free.
 
+- **M3 — DONE, verified, uncommitted.** Killed the 4-step wizard. New `src/views/ConnectView.tsx`
+  (Tailwind, card-based, single screen) replaces `SessionSetupView` as the unlocked content.
+  - Layout: "Your clouds" header + Refresh; a responsive grid of connection cards (one per
+    provider + a Local Runtime card) with `ProviderIcon` + `StatusPill` (Ready/Setup); selecting a
+    provider opens an inline detail panel listing that provider's profiles (radio-style) + auth
+    chips, and an "Open workspace" primary button. Prop-driven (backend session is source of
+    truth); reuses the existing `onSelectProvider/Profile/AuthMethod` + lock handlers. A small
+    effect auto-selects the auth path when a profile exposes exactly one usable method.
+  - `App.tsx`: swapped `<SessionSetupView>` for `<ConnectView>` (drops the PropertyFilter/
+    preferences/sensitive-values prop surface); added `onOpenLocalRuntime` (→ virtualisation tab).
+    Reframed lock/unlock language to **Open / Close workspace** ("Open workspace" in ConnectView;
+    `WorkspaceView` exit button "Unlock" → "Close workspace"). Unlocked breadcrumb + setup nav item
+    now read "Connect" (not "Overview"). The mock returns all profiles, so ConnectView filters by
+    the selected provider.
+  - Note: the sensitive-value masking (Hidden until revealed / Reveal) is intentionally dropped
+    from the connect screen; it still lives in the locked `WorkspaceView` profile panel and will be
+    rebuilt properly in a later view. `SessionSetupView.tsx` is now orphaned (no importer) - left in
+    place for the M8 Cloudscape sweep.
+  - Tests: `App.test.tsx` - rewrote "renders the connect view" + null-fields tests for the new DOM;
+    repurposed the masks-sensitive test to a locked session; updated unlock/reset flows to land on
+    "Your clouds" + "Open workspace"; button rename "Unlock" → "Close workspace". 19/19 green.
+  - Verified: `tsc` clean; 19/19 vitest pass; live preview shows the card-based Connect screen
+    (AWS/Azure/GCP/Local Runtime cards, sandbox/prod profiles, CLI/SSO chips, enabled Open
+    workspace), breadcrumb "AWS / Connect", console error-free.
+
 ## Next step
-**M3 — Connect / kill the wizard.** Replace `SessionSetupView` with `ConnectView` (connection
-cards). See the RESUME HERE block above for specifics.
+**M4 — Overview.** Build `OverviewView.tsx` (stat cards + safety banner + recents) for the locked
+workspace's first tab. See the RESUME HERE block above for specifics.
 
 ## To reopen prototype
 `preview_start` config `prototype`, then open `http://localhost:4321/design-prototypes/index.html`.

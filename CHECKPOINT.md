@@ -22,13 +22,16 @@
 - **Cloudscape footprint to remove (M8):** 6 files / 10 refs (`main.tsx` global-styles, `App.tsx`,
   `views/SessionSetupView.tsx`, `views/WorkspaceView.tsx`, `views/shared.tsx`, `vite.config.ts`
   manualChunks) + `styles.css` + `package.json` deps.
-- **Progress:** **M0, M1, M2 done.** M0+M1 (Tailwind/shadcn foundation + primitive kit) committed on
-  branch `feat/ui-rebuild-tailwind` (`93b5fc8`, `a6f9062`, `5332495`). **M2 (three-zone app shell:
-  ConnectionRail + ContextNav + TopBar + ActivityDrawer) done + verified (tsc clean, 19/19 tests),
-  uncommitted in the working tree** - it replaces the Cloudscape `AppSidebar`; existing Cloudscape
-  views still render inside the new shell and migrate per-view in M3-M7.
-- **Next step:** **M3 - Connect / kill the wizard** (`ConnectView` replacing `SessionSetupView`).
-  Full detail + resume notes in `design-prototypes/CHECKPOINT-ui-redesign.md` (RESUME HERE block).
+- **Progress:** **M0, M1, M2 done + committed; M3 done + verified, uncommitted.** On branch
+  `feat/ui-rebuild-tailwind`: M0+M1 (`93b5fc8`), M2 three-zone app shell (`5028c6c`/`24714da`).
+  **M3 (kill the wizard): new `ConnectView.tsx` - card-based single-screen connect that replaces
+  the 4-step `SessionSetupView`; lock/unlock reframed to Open / Close workspace.** tsc clean,
+  19/19 tests, visually verified. The Cloudscape views still render inside the shell and migrate
+  per-view in M4-M7.
+- **Next step:** **M4 - Overview** (`OverviewView.tsx`: stat cards + safety banner + recents for the
+  locked workspace's first tab). Full detail + resume notes in
+  `design-prototypes/CHECKPOINT-ui-redesign.md` (RESUME HERE block). NB: work lives on
+  `feat/ui-rebuild-tailwind`, not the default branch - check `git branch` before resuming.
 
 ## Latest Fix (2026-06-08): Docker-hang regression (could not unlock, no emulators)
 
