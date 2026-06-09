@@ -33,7 +33,7 @@ import type {
   RailConnection,
 } from "./components/shell/types";
 import type { Status } from "./components/status-dot";
-import SessionSetupView from "./views/SessionSetupView";
+import ConnectView from "./views/ConnectView";
 import WorkspaceView from "./views/WorkspaceView";
 import type {
   ActivityLogEntry,
@@ -1248,28 +1248,14 @@ export default function App() {
       }}
     />
   ) : (
-    <SessionSetupView
+    <ConnectView
       providers={providers}
       profiles={profiles}
       session={session}
       selectedProvider={selectedProvider}
       selectedProfile={selectedProfile}
-      appSettings={appSettings}
-      latestLog={latestLog}
       loading={loading}
-      isTablet={isTablet}
-      showSensitiveValues={showSensitiveValues}
-      providerQuery={providerQuery}
-      profileQuery={profileQuery}
-      providerPreferences={providerPreferences}
-      profilePreferences={profilePreferences}
-      onToggleSensitiveValues={() => {
-        setShowSensitiveValues((current) => !current);
-      }}
-      onProviderQueryChange={setProviderQuery}
-      onProfileQueryChange={setProfileQuery}
-      onProviderPreferencesChange={setProviderPreferences}
-      onProfilePreferencesChange={setProfilePreferences}
+      localRuntimeReady={workspace.dockerRuntime.reachable}
       onRefreshDiscovery={() => {
         void refreshDiscovery();
       }}
@@ -1282,8 +1268,11 @@ export default function App() {
       onSelectAuthMethod={(authMethod) => {
         void mutateSession("session.selectAuthMethod", { authMethod });
       }}
-      onLockSession={() => {
+      onOpenWorkspace={() => {
         void mutateSession("session.lock");
+      }}
+      onOpenLocalRuntime={() => {
+        setActiveWorkspaceTabId("virtualisation");
       }}
     />
   );
@@ -1407,7 +1396,7 @@ export default function App() {
     }
     if (!session.isLocked) {
       return [
-        { label: "Set up", items: [{ id: "overview", label: "Overview", icon: LayoutGrid }] },
+        { label: "Set up", items: [{ id: "overview", label: "Connect", icon: LayoutGrid }] },
         { label: "Tools", items: [{ id: "debug", label: "Debug console", icon: Bug }] },
       ];
     }
@@ -1435,7 +1424,10 @@ export default function App() {
   const navGroups = buildNavGroups();
   const activeNavItemId =
     activeWorkspaceTabId === "s3" ? `s3:${activeS3PageId}` : activeWorkspaceTabId;
-  const viewLabel = viewLabelFor(activeWorkspaceTabId, session.workspaceTabs);
+  const viewLabel =
+    !session.isLocked && activeWorkspaceTabId === "overview"
+      ? "Connect"
+      : viewLabelFor(activeWorkspaceTabId, session.workspaceTabs);
   const activityEntries = toActivityEntries(logs);
 
   function handleRailSelect(id: string): void {
