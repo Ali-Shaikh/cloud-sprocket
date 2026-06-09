@@ -49,3 +49,9 @@ before invoking the Tauri bundle step.
 
 The archived Python code remains available under `legacy/pyside-v1/` while the
 rewrite reaches parity. It is no longer the active implementation path.
+
+## Sponsors
+
+[![Termius](docs/sponsors/termius-logo.svg)](https://termius.com/)
+
+[Termius](https://termius.com/) provides a secure, reliable, and collaborative SSH client.
