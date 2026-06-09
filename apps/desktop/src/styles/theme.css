@@ -1,0 +1,155 @@
+/*
+ * CloudSprocket design tokens + Tailwind v4 entry.
+ *
+ * During the Cloudscape migration we intentionally DO NOT pull in Tailwind's
+ * Preflight (the global base reset), so the new component layer can coexist with
+ * Cloudscape without resetting its styles. We import the theme + utilities layers
+ * only, and provide a small base scoped to `.app-next`. Once Cloudscape is removed
+ * (Module M8) this can switch to the plain `@import "tailwindcss";`.
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* ---- Semantic tokens (shadcn-compatible), OKLCH ---- */
+:root {
+  --background: oklch(0.985 0.002 247);
+  --foreground: oklch(0.21 0.02 256);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.02 256);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.02 256);
+  --muted: oklch(0.96 0.004 247);
+  --muted-foreground: oklch(0.55 0.02 256);
+  --accent: oklch(0.96 0.004 247);
+  --accent-foreground: oklch(0.21 0.02 256);
+  --primary: oklch(0.59 0.2 277);
+  --primary-foreground: oklch(0.985 0.002 247);
+  --secondary: oklch(0.96 0.004 247);
+  --secondary-foreground: oklch(0.21 0.02 256);
+  --destructive: oklch(0.6 0.21 25);
+  --destructive-foreground: oklch(0.985 0.002 247);
+  --success: oklch(0.63 0.16 152);
+  --warning: oklch(0.72 0.15 75);
+  --border: oklch(0.92 0.005 247);
+  --border-strong: oklch(0.87 0.008 247);
+  --input: oklch(0.92 0.005 247);
+  --ring: oklch(0.59 0.2 277);
+  --rail: oklch(0.23 0.015 270);
+  --sidebar: oklch(1 0 0);
+  --radius: 0.75rem;
+}
+
+/* Dark when the OS prefers dark AND the user hasn't forced light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: oklch(0.17 0.012 264);
+    --foreground: oklch(0.92 0.01 256);
+    --card: oklch(0.21 0.015 264);
+    --card-foreground: oklch(0.92 0.01 256);
+    --popover: oklch(0.21 0.015 264);
+    --popover-foreground: oklch(0.92 0.01 256);
+    --muted: oklch(0.25 0.015 264);
+    --muted-foreground: oklch(0.66 0.02 256);
+    --accent: oklch(0.27 0.018 264);
+    --accent-foreground: oklch(0.92 0.01 256);
+    --primary: oklch(0.66 0.18 277);
+    --primary-foreground: oklch(0.17 0.012 264);
+    --secondary: oklch(0.27 0.018 264);
+    --secondary-foreground: oklch(0.92 0.01 256);
+    --destructive: oklch(0.62 0.2 25);
+    --destructive-foreground: oklch(0.97 0.01 256);
+    --success: oklch(0.7 0.16 152);
+    --warning: oklch(0.76 0.15 75);
+    --border: oklch(0.3 0.015 264);
+    --border-strong: oklch(0.37 0.018 264);
+    --input: oklch(0.3 0.015 264);
+    --ring: oklch(0.66 0.18 277);
+    --rail: oklch(0.13 0.012 264);
+    --sidebar: oklch(0.19 0.013 264);
+  }
+}
+
+/* Explicit user override beats the OS preference. */
+[data-theme="dark"] {
+  --background: oklch(0.17 0.012 264);
+  --foreground: oklch(0.92 0.01 256);
+  --card: oklch(0.21 0.015 264);
+  --card-foreground: oklch(0.92 0.01 256);
+  --popover: oklch(0.21 0.015 264);
+  --popover-foreground: oklch(0.92 0.01 256);
+  --muted: oklch(0.25 0.015 264);
+  --muted-foreground: oklch(0.66 0.02 256);
+  --accent: oklch(0.27 0.018 264);
+  --accent-foreground: oklch(0.92 0.01 256);
+  --primary: oklch(0.66 0.18 277);
+  --primary-foreground: oklch(0.17 0.012 264);
+  --secondary: oklch(0.27 0.018 264);
+  --secondary-foreground: oklch(0.92 0.01 256);
+  --destructive: oklch(0.62 0.2 25);
+  --destructive-foreground: oklch(0.97 0.01 256);
+  --success: oklch(0.7 0.16 152);
+  --warning: oklch(0.76 0.15 75);
+  --border: oklch(0.3 0.015 264);
+  --border-strong: oklch(0.37 0.018 264);
+  --input: oklch(0.3 0.015 264);
+  --ring: oklch(0.66 0.18 277);
+  --rail: oklch(0.13 0.012 264);
+  --sidebar: oklch(0.19 0.013 264);
+}
+
+/* ---- Expose tokens to Tailwind utilities (bg-background, text-foreground, …) ---- */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-rail: var(--rail);
+  --color-sidebar: var(--sidebar);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: "Inter", "Segoe UI Variable", -apple-system, system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+/*
+ * Scoped base for the new component layer. Stands in for Preflight while
+ * Cloudscape is still present. Everything under `.app-next` gets border-box and
+ * the semantic border colour shadcn components assume.
+ */
+@layer base {
+  .app-next,
+  .app-next *,
+  .app-next *::before,
+  .app-next *::after {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
+  .app-next {
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
