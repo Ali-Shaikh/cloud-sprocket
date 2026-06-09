@@ -1,41 +1,45 @@
 import {
   Box,
   Flashbar,
-  Icon,
   SpaceBetween,
   Button,
   Container,
   Header,
   Input,
   StatusIndicator,
-  Box as CloudscapeBox,
-  Checkbox,
   Modal,
-  Textarea,
 } from "@cloudscape-design/components";
-import type { FlashbarProps, IconProps, PropertyFilterProps } from "@cloudscape-design/components";
+import type { FlashbarProps, PropertyFilterProps } from "@cloudscape-design/components";
 import {
   Component,
   Suspense,
   startTransition,
   useEffect,
-  useEffectEvent,
   useRef,
   useState,
 } from "react";
 import type { ErrorInfo, ReactNode } from "react";
-import awsIconUrl from "./assets/cloud-icons/aws.svg";
+import { Boxes, Bug, LayoutGrid, Server, Trash2 } from "lucide-react";
 import awsEc2IconUrl from "./assets/cloud-icons/aws-ec2.svg";
 import awsS3IconUrl from "./assets/cloud-icons/aws-s3.svg";
 import azureIconUrl from "./assets/cloud-icons/azure.svg";
-import gcpIconUrl from "./assets/cloud-icons/gcp.svg";
 import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
+import { AppShell, ConnectionRail, ContextNav, TopBar, ActivityDrawer } from "./components/shell";
+import type {
+  ActivityEntry,
+  NavConnectionHeader,
+  NavGroup,
+  NavItem,
+  RailConnection,
+} from "./components/shell/types";
+import type { Status } from "./components/status-dot";
 import SessionSetupView from "./views/SessionSetupView";
 import WorkspaceView from "./views/WorkspaceView";
 import type {
   ActivityLogEntry,
   AppResetResult,
   AppSettingsSnapshot,
+  AuthMethod,
   AwsEc2Instance,
   AwsS3PresignResult,
   AwsS3UploadResult,
@@ -60,10 +64,9 @@ import type {
   UrlInspection,
   UrlValidationResult,
   WorkspaceSnapshot,
+  WorkspaceTab,
 } from "./types/backend";
-import { defaultQuery, renderLogEntries, type TablePreferences, DebugConsole } from "./views/shared";
-
-const appVersion = "0.1.19";
+import { defaultQuery, type TablePreferences, DebugConsole } from "./views/shared";
 
 type EC2LifecycleAction = "start" | "stop" | "reboot";
 
@@ -72,21 +75,6 @@ type EC2ActionHistoryItem = {
   status: JobLifecycle;
   message: string;
   completedAt?: string;
-};
-
-type SidebarItem = {
-  id: string;
-  label: string;
-  detail: string;
-  iconName?: IconProps.Name;
-  iconUrl?: string;
-  providerId?: string;
-  badge?: string;
-};
-
-type SidebarSubItem = {
-  id: string;
-  label: string;
 };
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, { error?: Error }> {
@@ -132,105 +120,6 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error?: Erro
 
     return this.props.children;
   }
-}
-
-const providerIconUrls: Record<string, string> = {
-  aws: awsIconUrl,
-  azure: azureIconUrl,
-  gcp: gcpIconUrl,
-  google: gcpIconUrl,
-  "google-cloud": gcpIconUrl,
-};
-
-function CloudProviderIcon({ providerId }: { providerId?: string }) {
-  const iconUrl = providerIconUrls[providerId?.toLowerCase() ?? ""];
-  if (iconUrl) {
-    return (
-      <img
-        className="cloud-provider-icon"
-        src={iconUrl}
-        alt=""
-        aria-hidden="true"
-      />
-    );
-  }
-  return (
-    <Icon
-      name="globe"
-      variant="inverted"
-    />
-  );
-}
-
-function SidebarGlyph({ item }: { item: SidebarItem }) {
-  if (item.iconUrl) {
-    return (
-      <img
-        className="cloud-provider-icon"
-        src={item.iconUrl}
-        alt=""
-        aria-hidden="true"
-      />
-    );
-  }
-  if (item.providerId) {
-    return <CloudProviderIcon providerId={item.providerId} />;
-  }
-  return (
-    <Icon
-      name={item.iconName ?? "settings"}
-      variant="inverted"
-    />
-  );
-}
-
-function sidebarItemIconClass(item: SidebarItem): string {
-  const base = "sidebar-item-icon";
-  if (item.iconUrl || item.providerId) {
-    return `${base} sidebar-item-icon-provider`;
-  }
-  return base;
-}
-
-function workspaceTabIcon(tabId: string): IconProps.Name {
-  if (tabId === "s3") {
-    return "folder";
-  }
-  if (tabId === "ec2") {
-    return "grid-view";
-  }
-  if (tabId === "virtualisation") {
-    return "settings";
-  }
-  if (tabId === "azure-overview" || tabId === "gcp-overview") {
-    return "settings";
-  }
-  if (tabId === "azure-resource-groups") {
-    return "folder";
-  }
-  if (tabId === "azure-vms") {
-    return "grid-view";
-  }
-  if (tabId === "actions") {
-    return "notification";
-  }
-  if (tabId === "debug") {
-    return "search";
-  }
-  return "view-full";
-}
-
-function workspaceTabIconUrl(tabId: string): string | undefined {
-  if (tabId === "s3") {
-    return awsS3IconUrl;
-  }
-  if (tabId === "ec2") {
-    return awsEc2IconUrl;
-  }
-  if (tabId === "azure-overview" || tabId === "azure-resource-groups" || tabId === "azure-vms") {
-    return azureIconUrl;
-  }
-  return undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -433,302 +322,6 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     ec2Regions: normaliseArray(source.ec2Regions),
     ec2Instances: normaliseArray(source.ec2Instances).map(normaliseEC2Instance),
   };
-}
-
-function AppSidebar({
-  session,
-  selectedProvider,
-  selectedProfile,
-  workspace,
-  activeWorkspaceTabId,
-  activeS3PageId,
-  activeAzurePageId,
-  collapsed,
-  activityOpen,
-  onToggleCollapsed,
-  onToggleActivity,
-  onLockSession,
-  onUnlockSession,
-  onResetApp,
-  onWorkspaceTabChange,
-  onS3PageChange,
-  onAzurePageChange,
-  onRefreshDiscovery,
-}: {
-  session: SessionSnapshot;
-  selectedProvider?: ProviderSummary;
-  selectedProfile?: ProfileSummary;
-  workspace: WorkspaceSnapshot;
-  activeWorkspaceTabId: string;
-  activeS3PageId: string;
-  activeAzurePageId: string;
-  collapsed: boolean;
-  activityOpen: boolean;
-  onToggleCollapsed: () => void;
-  onToggleActivity: () => void;
-  onLockSession: () => void;
-  onUnlockSession: () => void;
-  onResetApp: () => void;
-  onWorkspaceTabChange: (tabId: string) => void;
-  onS3PageChange: (pageId: string) => void;
-  onAzurePageChange: (pageId: string) => void;
-  onRefreshDiscovery: () => void;
-}) {
-  const setupItems: SidebarItem[] = [
-    {
-      id: "overview",
-      label: "Overview",
-      detail: "Select profile and auth method",
-      iconName: "settings",
-    },
-    {
-      id: "virtualisation",
-      label: "Local Runtime",
-      detail: "Docker and local cloud runtimes",
-      iconName: "settings",
-      badge: String(workspace.emulatorSummaries.length),
-    },
-    {
-      id: "debug",
-      label: "Debug Console",
-      detail: "Internal logs and RPC activity",
-      iconName: "search",
-    },
-  ];
-
-  const workspaceItems: SidebarItem[] = session.workspaceTabs.map((tab) => {
-    let detail = tab.summary;
-    let badge: string | undefined;
-
-    if (tab.tabId === "s3") {
-      detail = workspace.selectedS3BucketName
-        ? `s3://${workspace.selectedS3BucketName}`
-        : `${workspace.s3Buckets.length} buckets available`;
-      badge = String(workspace.s3Buckets.length);
-    } else if (tab.tabId === "ec2") {
-      detail = workspace.selectedEc2Region
-        ? `${workspace.selectedEc2Region}: ${workspace.ec2Instances.length} instances`
-        : "Select a region to view instances";
-      badge = String(workspace.ec2Instances.length);
-    } else if (tab.tabId === "azure-overview") {
-      detail = tab.summary;
-      badge = String(workspace.azureResourceGroups.length);
-    } else if (tab.tabId === "actions") {
-      detail = tab.summary;
-    }
-
-    return {
-      id: tab.tabId,
-      label: tab.label,
-      detail,
-      iconName: workspaceTabIcon(tab.tabId),
-      iconUrl: workspaceTabIconUrl(tab.tabId),
-      badge,
-    };
-  });
-  if (!workspaceItems.some((item) => item.id === "virtualisation")) {
-    workspaceItems.push({
-      id: "virtualisation",
-      label: "Local Runtime",
-      detail: "Docker and local cloud runtimes",
-      iconName: "settings",
-      badge: String(workspace.emulatorSummaries.length),
-    });
-  }
-  if (!workspaceItems.some((item) => item.id === "debug")) {
-    workspaceItems.push({
-      id: "debug",
-      label: "Debug Console",
-      detail: "Internal logs and RPC activity",
-      iconName: "search",
-    });
-  }
-
-  const workspaceSubItems: Record<string, SidebarSubItem[]> = {
-    s3: [
-      { id: "buckets", label: "Buckets" },
-      { id: "objects", label: "Objects" },
-      { id: "upload", label: "Upload" },
-      { id: "inspect", label: "Inspect URL" },
-    ],
-    "azure-overview": [
-      { id: "resource-groups", label: "Resource Groups" },
-      { id: "virtual-machines", label: "Virtual Machines" },
-    ],
-  };
-
-  return (
-    <aside
-      className={`app-sidebar${collapsed ? " app-sidebar-collapsed" : ""}`}
-      aria-label="Application Sidebar"
-    >
-      <div className="sidebar-brand">
-        <div className="brand-mark">CS</div>
-        <div className="brand-copy">
-          <div className="brand-title">CloudSprocket</div>
-          <div className="brand-subtitle">Cloud Native Desktop</div>
-        </div>
-        <button
-          type="button"
-          className="sidebar-collapse-button"
-          onClick={onToggleCollapsed}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? "»" : "«"}
-        </button>
-      </div>
-
-      <div className="sidebar-section">
-        <div className="sidebar-section-label">{session.isLocked ? "Workspace" : "Setup"}</div>
-        <div className="sidebar-menu">
-          {(session.isLocked ? workspaceItems : setupItems).map((item) => {
-            const active = activeWorkspaceTabId === item.id;
-            const subItems = workspaceSubItems[item.id];
-            const activeSubId = item.id === "s3" ? activeS3PageId : item.id === "azure-overview" ? activeAzurePageId : undefined;
-
-            return !collapsed ? (
-              <div
-                key={item.id}
-                className="sidebar-menu-group"
-              >
-                <button
-                  type="button"
-                  className={`sidebar-menu-item${active ? " sidebar-menu-item-active" : ""}`}
-                  onClick={() => {
-                    onWorkspaceTabChange(item.id);
-                    if (item.id === "azure-overview") {
-                      onAzurePageChange("overview");
-                    }
-                  }}
-                  title={`${item.label}: ${item.detail}`}
-                >
-                  <span className={sidebarItemIconClass(item)}>
-                    <SidebarGlyph item={item} />
-                  </span>
-                  <span className="sidebar-item-copy">
-                    <strong>{item.label}</strong>
-                    <small>{item.detail}</small>
-                  </span>
-                  {item.badge ? <em>{item.badge}</em> : null}
-                </button>
-                {active && subItems ? (
-                  <div className="sidebar-submenu">
-                    {subItems.map((sub) => (
-                      <button
-                        key={sub.id}
-                        type="button"
-                        className={`sidebar-submenu-item${activeSubId === sub.id ? " sidebar-submenu-item-active" : ""}`}
-                        onClick={() => {
-                          if (item.id === "s3") {
-                            onS3PageChange(sub.id);
-                          } else if (item.id === "azure-overview") {
-                            onAzurePageChange(sub.id);
-                          }
-                        }}
-                      >
-                        {sub.label}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <button
-                key={item.id}
-                type="button"
-                className={`sidebar-menu-item${active ? " sidebar-menu-item-active" : ""}`}
-                onClick={() => onWorkspaceTabChange(item.id)}
-                title={`${item.label}: ${item.detail}`}
-              >
-                <span className={sidebarItemIconClass(item)}>
-                  <SidebarGlyph item={item} />
-                </span>
-                {item.badge ? <em>{item.badge}</em> : null}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="sidebar-section sidebar-context">
-        <div className="sidebar-section-label">Context</div>
-        <dl>
-          <div>
-            <dt>Provider</dt>
-            <dd>{selectedProvider?.label ?? workspace.provider?.label ?? "None"}</dd>
-          </div>
-          <div>
-            <dt>Profile</dt>
-            <dd>{selectedProfile?.displayName ?? workspace.profile?.displayName ?? "None"}</dd>
-          </div>
-          <div>
-            <dt>Auth</dt>
-            <dd>{session.lockedAuthMethod ?? session.selectedAuthMethod ?? "None"}</dd>
-          </div>
-        </dl>
-      </div>
-
-      <div className="sidebar-footer">
-        <button
-          type="button"
-          className="sidebar-action sidebar-lock-action"
-          disabled={!session.isLocked && (!selectedProfile || !session.selectedAuthMethod)}
-          onClick={session.isLocked ? onUnlockSession : onLockSession}
-          title={session.isLocked ? "Unlock workspace" : "Lock workspace"}
-          aria-label={session.isLocked ? "Unlock workspace" : "Lock workspace"}
-        >
-          <span className="sidebar-action-icon">
-            <Icon name="lock-private" />
-          </span>
-          <span className="sidebar-action-copy">
-            {session.isLocked ? "Unlock Workspace" : "Lock Workspace"}
-          </span>
-        </button>
-        <button
-          type="button"
-          className={`sidebar-action sidebar-action-secondary${activityOpen ? " sidebar-action-active" : ""}`}
-          onClick={onToggleActivity}
-          title={activityOpen ? "Hide Activity" : "Show Activity"}
-          aria-label={activityOpen ? "Hide Activity" : "Show Activity"}
-        >
-          <span className="sidebar-action-icon">
-            <Icon
-              name="history"
-              variant="inverted"
-            />
-          </span>
-          <span className="sidebar-action-copy">
-            {activityOpen ? "Hide Activity" : "Activity"}
-          </span>
-        </button>
-        <button
-          type="button"
-          className="sidebar-action"
-          onClick={onRefreshDiscovery}
-          title="Refresh discovery"
-          aria-label="Refresh discovery"
-        >
-          <span className="sidebar-action-icon">
-            <Icon name="refresh" />
-          </span>
-          <span className="sidebar-action-copy">Refresh</span>
-        </button>
-        <button
-          type="button"
-          className="sidebar-action sidebar-action-danger"
-          onClick={onResetApp}
-          title="Reset app data"
-          aria-label="Reset app data"
-        >
-          <span className="sidebar-action-icon">
-            <Icon name="remove" />
-          </span>
-          <span className="sidebar-action-copy">Reset</span>
-        </button>
-      </div>
-    </aside>
-  );
 }
 
 const emptySession: SessionSnapshot = {
@@ -1483,32 +1076,6 @@ export default function App() {
     }
   }
 
-  const activityDrawer = splitPanelOpen ? (
-    <aside
-      className="activity-drawer"
-      aria-label="Recent Activity"
-    >
-      <div className="activity-drawer-header">
-        <div>
-          <CloudscapeBox variant="awsui-key-label">
-            {session.isLocked ? "Workspace" : "Discovery"}
-          </CloudscapeBox>
-          <h2>Recent Activity</h2>
-        </div>
-        <button
-          type="button"
-          className="activity-drawer-close"
-          onClick={() => {
-            setSplitPanelOpen(false);
-          }}
-        >
-          Close
-        </button>
-      </div>
-      <div className="log-stream">{renderLogEntries(logs)}</div>
-    </aside>
-  ) : null;
-
   const content = activeWorkspaceTabId === "debug" ? (
     <Container
       header={
@@ -1776,44 +1343,199 @@ export default function App() {
     </Modal>
   );
 
+  // ---- Shell view-model derived from live state ----
+  const lockedProfile = profiles.find((profile) => profile.profileId === session.lockedProfileId);
+  const activeProvider = selectedProvider ?? workspace.provider;
+  const emulatorCount = workspace.emulatorSummaries.length;
+  const dockerReachable = workspace.dockerRuntime.reachable;
+  const isLocalActive = activeWorkspaceTabId === "virtualisation";
+  const activeConnectionId = isLocalActive ? "local" : session.currentProviderId ?? null;
+
+  const railConnections: RailConnection[] = [
+    ...providers.map((provider) => ({
+      id: provider.providerId,
+      label: provider.profileCount
+        ? `${provider.label} · ${provider.profileCount} profile${provider.profileCount === 1 ? "" : "s"}`
+        : provider.label,
+      provider: provider.providerId,
+      status: providerStatus(provider),
+      kind: "provider" as const,
+    })),
+    {
+      id: "local",
+      label: "Local Runtime",
+      status: (dockerReachable ? "on" : "off") as Status,
+      kind: "local" as const,
+    },
+  ];
+
+  const navConnection: NavConnectionHeader = isLocalActive
+    ? {
+        name: "Local Runtime",
+        meta: `Docker · ${emulatorCount} emulator${emulatorCount === 1 ? "" : "s"}`,
+        status: dockerReachable ? "on" : "off",
+        statusText: dockerReachable ? "Docker engine running" : "Docker engine not detected",
+      }
+    : {
+        name: activeProvider?.label ?? "Getting started",
+        meta: session.isLocked
+          ? [
+              (lockedProfile ?? selectedProfile)?.displayName,
+              authLabel(session.lockedAuthMethod ?? session.selectedAuthMethod),
+            ]
+              .filter(Boolean)
+              .join(" · ") || "Workspace open"
+          : selectedProfile?.displayName ?? "Pick a profile to begin",
+        provider: activeProvider?.providerId,
+        status: activeProvider ? providerStatus(activeProvider) : "off",
+        statusText: session.isLocked
+          ? "Workspace open"
+          : activeProvider?.summary ?? "Choose a connection to start",
+      };
+
+  function buildNavGroups(): NavGroup[] {
+    if (isLocalActive) {
+      return [
+        {
+          label: "Runtime",
+          items: [
+            { id: "virtualisation", label: "Emulators", icon: Server, count: emulatorCount },
+            { id: "debug", label: "Debug console", icon: Bug },
+          ],
+        },
+      ];
+    }
+    if (!session.isLocked) {
+      return [
+        { label: "Set up", items: [{ id: "overview", label: "Overview", icon: LayoutGrid }] },
+        { label: "Tools", items: [{ id: "debug", label: "Debug console", icon: Bug }] },
+      ];
+    }
+    const groups: NavGroup[] = [
+      {
+        label: "Workspace",
+        items: session.workspaceTabs.map((tab) => navItemForTab(tab, workspace)),
+      },
+    ];
+    if (activeWorkspaceTabId === "s3") {
+      groups.push({
+        label: "Storage",
+        items: [
+          { id: "s3:buckets", label: "Buckets" },
+          { id: "s3:objects", label: "Objects" },
+          { id: "s3:upload", label: "Upload" },
+          { id: "s3:inspect", label: "Inspect URL" },
+        ],
+      });
+    }
+    groups.push({ label: "Tools", items: [{ id: "debug", label: "Debug console", icon: Bug }] });
+    return groups;
+  }
+
+  const navGroups = buildNavGroups();
+  const activeNavItemId =
+    activeWorkspaceTabId === "s3" ? `s3:${activeS3PageId}` : activeWorkspaceTabId;
+  const viewLabel = viewLabelFor(activeWorkspaceTabId, session.workspaceTabs);
+  const activityEntries = toActivityEntries(logs);
+
+  function handleRailSelect(id: string): void {
+    if (id === "local") {
+      setActiveWorkspaceTabId("virtualisation");
+      return;
+    }
+    if (id !== session.currentProviderId) {
+      void mutateSession("session.selectProvider", { providerId: id });
+    }
+    setActiveWorkspaceTabId("overview");
+  }
+
+  function handleNavSelect(id: string): void {
+    const separator = id.indexOf(":");
+    if (separator >= 0) {
+      const tabId = id.slice(0, separator);
+      const pageId = id.slice(separator + 1);
+      setActiveWorkspaceTabId(tabId);
+      if (tabId === "s3") {
+        setActiveS3PageId(pageId);
+      } else if (tabId === "azure-overview") {
+        setActiveAzurePageId(pageId);
+      }
+      return;
+    }
+    setActiveWorkspaceTabId(id);
+    if (id === "azure-overview") {
+      setActiveAzurePageId("overview");
+    }
+  }
+
   return (
-    <div className="app-shell">
+    <>
       {resetModal}
-      <div className={`app-frame${sidebarCollapsed ? " app-frame-sidebar-collapsed" : ""}`}>
-        <AppSidebar
-          session={session}
-          selectedProvider={providers.find((p) => p.providerId === session.currentProviderId)}
-          selectedProfile={profiles.find((p) => p.profileId === session.selectedProfileId)}
-          workspace={workspace}
-          activeWorkspaceTabId={activeWorkspaceTabId}
-          activeS3PageId={activeS3PageId}
-          activeAzurePageId={activeAzurePageId}
-          collapsed={sidebarCollapsed}
-          activityOpen={splitPanelOpen}
-          onToggleCollapsed={() => {
-            setSidebarCollapsed((current) => !current);
-          }}
-          onToggleActivity={() => {
-            setSplitPanelOpen((current) => !current);
-          }}
-          onLockSession={() => {
-            void mutateSession("session.lock");
-          }}
-          onUnlockSession={() => {
-            void mutateSession("session.unlock");
-          }}
-          onResetApp={() => {
-            setResetModalOpen(true);
-          }}
-          onWorkspaceTabChange={setActiveWorkspaceTabId}
-          onS3PageChange={setActiveS3PageId}
-          onAzurePageChange={setActiveAzurePageId}
-          onRefreshDiscovery={() => {
-            void refreshDiscovery();
-          }}
-        />
-        <main className="app-main">
-          <Flashbar items={notifications} />
+      <AppShell
+        navCollapsed={sidebarCollapsed || isTablet}
+        rail={
+          <ConnectionRail
+            connections={railConnections}
+            activeId={activeConnectionId}
+            onSelect={handleRailSelect}
+            userInitials="AS"
+          />
+        }
+        nav={
+          <ContextNav
+            connection={navConnection}
+            groups={navGroups}
+            activeItemId={activeNavItemId}
+            onSelectItem={handleNavSelect}
+            onShowActivity={() => {
+              setSplitPanelOpen(true);
+            }}
+            activityActive={splitPanelOpen}
+            footer={
+              <button
+                type="button"
+                onClick={() => {
+                  setResetModalOpen(true);
+                }}
+                className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="size-[18px]" />
+                <span className="truncate">Reset app data</span>
+              </button>
+            }
+          />
+        }
+        topBar={
+          <TopBar
+            breadcrumb={{ connection: navConnection.name, view: viewLabel }}
+            onToggleNav={() => {
+              setSidebarCollapsed((current) => !current);
+            }}
+            onRefresh={() => {
+              void refreshDiscovery();
+            }}
+            onToggleNotifications={() => {
+              setSplitPanelOpen((current) => !current);
+            }}
+            notificationCount={notifications.length}
+          />
+        }
+        drawer={
+          <ActivityDrawer
+            open={splitPanelOpen}
+            onOpenChange={setSplitPanelOpen}
+            title="Recent activity"
+            subtitle={session.isLocked ? "Workspace" : "Discovery"}
+            entries={activityEntries}
+          />
+        }
+      >
+        <div className="p-6">
+          {notifications.length > 0 ? (
+            <div className="mb-4">
+              <Flashbar items={notifications} />
+            </div>
+          ) : null}
           <AppErrorBoundary>
             <Suspense
               fallback={
@@ -1825,21 +1547,105 @@ export default function App() {
               {content}
             </Suspense>
           </AppErrorBoundary>
-          <footer className="app-footer">
-            <div>
-              <strong>CloudSprocket Desktop</strong>
-              <span>Version {appVersion}</span>
-            </div>
-            <div>
-              <span>Copyright © {new Date().getFullYear()} CloudSprocket.</span>
-              <span>Local-first cloud workspace.</span>
-            </div>
-          </footer>
-        </main>
-        {activityDrawer}
-      </div>
-    </div>
+        </div>
+      </AppShell>
+    </>
   );
+}
+
+function providerStatus(provider: ProviderSummary): Status {
+  switch (provider.state) {
+    case "configured":
+      return "on";
+    case "tooling-only":
+      return "warning";
+    default:
+      return "off";
+  }
+}
+
+function authLabel(method?: AuthMethod): string | undefined {
+  if (method === "cli") {
+    return "CLI";
+  }
+  if (method === "sso") {
+    return "SSO";
+  }
+  if (method === "local-files") {
+    return "Local files";
+  }
+  return undefined;
+}
+
+function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
+  const labels: Record<string, string> = {
+    overview: "Overview",
+    virtualisation: "Local Runtime",
+    debug: "Debug console",
+    s3: "Storage",
+    ec2: "Compute",
+    "azure-overview": "Azure",
+    "azure-resource-groups": "Resource groups",
+    "azure-vms": "Virtual machines",
+    actions: "Activity",
+  };
+  return labels[tabId] ?? tabs.find((tab) => tab.tabId === tabId)?.label ?? "Workspace";
+}
+
+function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem {
+  const base: NavItem = { id: tab.tabId, label: tab.label };
+  switch (tab.tabId) {
+    case "overview":
+      return { ...base, icon: LayoutGrid };
+    case "s3":
+      return { ...base, iconUrl: awsS3IconUrl, count: workspace.s3Buckets.length };
+    case "ec2":
+      return { ...base, iconUrl: awsEc2IconUrl, count: workspace.ec2Instances.length };
+    case "azure-overview":
+    case "azure-resource-groups":
+      return { ...base, iconUrl: azureIconUrl, count: workspace.azureResourceGroups.length };
+    case "azure-vms":
+      return { ...base, iconUrl: azureIconUrl, count: workspace.azureVirtualMachines.length };
+    case "actions":
+      return { ...base, icon: Boxes };
+    case "virtualisation":
+      return { ...base, icon: Server, count: workspace.emulatorSummaries.length };
+    case "debug":
+      return { ...base, icon: Bug };
+    default:
+      return { ...base, icon: Boxes };
+  }
+}
+
+const LOG_TONE: Record<string, Status> = {
+  error: "error",
+  warn: "warning",
+  warning: "warning",
+  success: "on",
+  info: "off",
+  debug: "off",
+};
+
+function logTone(level: string): Status {
+  return LOG_TONE[level?.toLowerCase?.() ?? ""] ?? "off";
+}
+
+function formatLogTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return timestamp;
+  }
+  return date.toLocaleTimeString("en-GB");
+}
+
+function toActivityEntries(logs: ActivityLogEntry[]): ActivityEntry[] {
+  return logs.map((entry) => ({
+    id: entry.id,
+    timestamp: formatLogTime(entry.timestamp),
+    message: entry.message,
+    detail: entry.details,
+    tone: logTone(entry.level),
+  }));
 }
 
 function dockerDiagnosticsFromRuntime(runtime: DockerRuntimeSnapshot): WorkspaceSnapshot["dockerDiagnostics"] {
