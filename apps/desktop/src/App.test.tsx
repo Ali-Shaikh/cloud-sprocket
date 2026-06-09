@@ -545,23 +545,18 @@ describe("App", () => {
     emulatorStartParams = undefined;
   });
 
-  it("renders the session setup view while unlocked", async () => {
+  it("renders the connect view while unlocked", async () => {
     render(
       <ThemeProvider>
         <App />
       </ThemeProvider>,
     );
 
-    expect(await screen.findByText("Session Setup")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Choose Provider" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Choose Authentication Path" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Profile Detail" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Runtime Settings" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Lock Workspace" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your clouds" })).toBeInTheDocument();
+    expect(await screen.findByText("Azure")).toBeInTheDocument();
+    // The default session has AWS selected, so its detail panel is open.
+    expect(await screen.findByRole("heading", { name: "Open AWS" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open workspace" })).toBeEnabled();
   });
 
   it("renders startup when backend list fields are null", async () => {
@@ -589,13 +584,26 @@ describe("App", () => {
       </ThemeProvider>,
     );
 
-    expect(await screen.findByText("Session Setup")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Choose Provider" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your clouds" })).toBeInTheDocument();
+    expect(await screen.findByText("Azure")).toBeInTheDocument();
     providerFixtures[0] = originalProvider;
     profileFixtures[0] = originalProfile;
   });
 
   it("masks sensitive profile values until they are revealed", async () => {
+    // The connect screen no longer shows the profile inspector; the sensitive
+    // masking now lives in the locked workspace profile panel.
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        { tabId: "overview", label: "Overview", summary: "Summary", detail: "Overview panel" },
+      ],
+    };
+
     render(
       <ThemeProvider>
         <App />
@@ -676,7 +684,7 @@ describe("App", () => {
     expect(
       await screen.findByText(/cloudsprocket-workspace\.db/i),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Unlock" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close workspace" })).toBeInTheDocument();
   });
 
   it("renders the locked workspace when backend runtime fields are sparse", async () => {
@@ -792,13 +800,13 @@ describe("App", () => {
     );
 
     expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Unlock" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Close workspace" })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Local Runtime" }));
     expect(await screen.findByRole("button", { name: "Start LocalStack" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Unlock" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close workspace" }));
 
-    expect(await screen.findByText("Session Setup")).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Lock Workspace" })).toBeEnabled();
+    expect(await screen.findByRole("heading", { name: "Your clouds" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Open workspace" })).toBeEnabled();
   });
 
   it("resets app-owned state back to setup without cloud config deletion", async () => {
@@ -833,9 +841,9 @@ describe("App", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Reset app" }));
 
-    expect(await screen.findByText("Session Setup")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your clouds" })).toBeInTheDocument();
     expect(await screen.findByText("App reset complete")).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Lock Workspace" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Open workspace" })).toBeEnabled();
   });
 
   it("starts and stops LocalStack from the local runtime workspace", async () => {

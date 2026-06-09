@@ -2450,7 +2450,7 @@ export default function WorkspaceView({
                 >
                   Refresh
                 </Button>
-                <Button onClick={onUnlockSession}>Unlock</Button>
+                <Button onClick={onUnlockSession}>Close workspace</Button>
               </SpaceBetween>
             }
           >
