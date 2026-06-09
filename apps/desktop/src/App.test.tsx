@@ -1,6 +1,7 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { ThemeProvider } from "./lib/theme";
 import type {
   ActivityLogEntry,
   AppSettingsSnapshot,
@@ -545,7 +546,11 @@ describe("App", () => {
   });
 
   it("renders the session setup view while unlocked", async () => {
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     expect(await screen.findByText("Session Setup")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Choose Provider" })).toBeInTheDocument();
@@ -556,7 +561,7 @@ describe("App", () => {
     expect(
       screen.getByRole("heading", { name: "Runtime Settings" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Lock workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Lock Workspace" })).toBeInTheDocument();
   });
 
   it("renders startup when backend list fields are null", async () => {
@@ -578,7 +583,11 @@ describe("App", () => {
       authMethods: null,
     } as unknown as ProfileSummary;
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     expect(await screen.findByText("Session Setup")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Choose Provider" })).toBeInTheDocument();
@@ -587,7 +596,11 @@ describe("App", () => {
   });
 
   it("masks sensitive profile values until they are revealed", async () => {
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     expect(await screen.findByText("Hidden until revealed")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reveal Sensitive Values" }));
@@ -634,16 +647,21 @@ describe("App", () => {
       awsWritesEnabled: true,
     };
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
     expect(await screen.findByText("Workspace Summary")).toBeInTheDocument();
-    expect(screen.getByText("Overview")).toBeInTheDocument();
-    expect(screen.getByText("Local Runtime")).toBeInTheDocument();
-    expect(screen.getByText("S3")).toBeInTheDocument();
-    expect(screen.getByText("EC2")).toBeInTheDocument();
-    expect(screen.getByTitle(/S3:/).querySelector("img.cloud-provider-icon")).not.toBeNull();
-    expect(screen.getByTitle(/EC2:/).querySelector("img.cloud-provider-icon")).not.toBeNull();
+    const nav = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
+    expect(nav.getByText("Overview")).toBeInTheDocument();
+    expect(nav.getByText("Local Runtime")).toBeInTheDocument();
+    expect(nav.getByText("S3")).toBeInTheDocument();
+    expect(nav.getByText("EC2")).toBeInTheDocument();
+    expect(nav.getByRole("button", { name: /S3/ }).querySelector("img")).not.toBeNull();
+    expect(nav.getByRole("button", { name: /EC2/ }).querySelector("img")).not.toBeNull();
     expect((await screen.findAllByText("workspace sandbox")).length).toBeGreaterThan(0);
     expect(await screen.findByText("2 buckets")).toBeInTheDocument();
     fireEvent.click(screen.getByText("Local Runtime"));
@@ -693,10 +711,14 @@ describe("App", () => {
       awsWritesEnabled: false,
     } as WorkspaceSnapshot;
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Local Runtime"));
+    fireEvent.click(screen.getByRole("button", { name: "Local Runtime" }));
     expect(await screen.findByText("Docker Runtime")).toBeInTheDocument();
     expect(await screen.findByText("Local Runtimes")).toBeInTheDocument();
     expect(await screen.findByText("Managed Docker Resources")).toBeInTheDocument();
@@ -735,7 +757,11 @@ describe("App", () => {
       })),
     };
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     fireEvent.click(await screen.findByText("Local Runtime"));
     expect(await screen.findByRole("button", { name: "Start LocalStack" })).toBeEnabled();
@@ -759,16 +785,20 @@ describe("App", () => {
       ],
     };
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Unlock workspace" })).toBeInTheDocument();
-    fireEvent.click(await screen.findByText("Local Runtime"));
+    expect(await screen.findByRole("button", { name: "Unlock" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Local Runtime" }));
     expect(await screen.findByRole("button", { name: "Start LocalStack" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Unlock workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Unlock" }));
 
     expect(await screen.findByText("Session Setup")).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Lock workspace" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Lock Workspace" })).toBeEnabled();
   });
 
   it("resets app-owned state back to setup without cloud config deletion", async () => {
@@ -788,7 +818,11 @@ describe("App", () => {
       ],
     };
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reset app data" }));
@@ -801,7 +835,7 @@ describe("App", () => {
 
     expect(await screen.findByText("Session Setup")).toBeInTheDocument();
     expect(await screen.findByText("App reset complete")).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Lock workspace" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Lock Workspace" })).toBeEnabled();
   });
 
   it("starts and stops LocalStack from the local runtime workspace", async () => {
@@ -827,7 +861,11 @@ describe("App", () => {
       ],
     };
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     fireEvent.click(await screen.findByText("Local Runtime"));
     fireEvent.change(await screen.findByLabelText("LocalStack auth token"), {
@@ -885,7 +923,11 @@ describe("App", () => {
       ],
     };
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     fireEvent.click(await screen.findByText("Local Runtime"));
     expect(await screen.findByRole("button", { name: "Start floci-az" })).toBeInTheDocument();
@@ -945,7 +987,11 @@ describe("App", () => {
       })),
     };
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     fireEvent.click(await screen.findByText("Local Runtime"));
     expect(await screen.findByLabelText("Enable LocalStack persistence")).toBeDisabled();
@@ -976,7 +1022,11 @@ describe("App", () => {
       ],
     };
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     fireEvent.click(await screen.findByText("S3"));
     const prefixInput = await screen.findByPlaceholderText(
@@ -1017,7 +1067,11 @@ describe("App", () => {
     };
     s3PrefixDelays.set("l", 650);
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     fireEvent.click(await screen.findByText("S3"));
     const prefixInput = await screen.findByPlaceholderText(
@@ -1074,7 +1128,11 @@ describe("App", () => {
       s3PrefixFilter: "previous/",
     };
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     fireEvent.click(await screen.findByText("S3"));
     const prefixInput = await screen.findByPlaceholderText(
@@ -1134,7 +1192,11 @@ describe("App", () => {
       awsWritesEnabled: true,
     };
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     fireEvent.click(await screen.findByText("EC2"));
 
@@ -1204,7 +1266,11 @@ describe("App", () => {
       ],
     };
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     fireEvent.click(await screen.findByText("EC2"));
 
@@ -1244,7 +1310,11 @@ describe("App", () => {
       ec2Instances: [],
     };
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     fireEvent.click(await screen.findByText("EC2"));
 
@@ -1279,9 +1349,13 @@ describe("App", () => {
       ],
     };
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
-    fireEvent.click(await screen.findByTitle("Activity: Activity summary"));
+    fireEvent.click(await screen.findByRole("button", { name: "Activity" }));
 
     expect(await screen.findByRole("heading", { name: "Activity" })).toBeInTheDocument();
     expect(await screen.findByText("Refresh Discovery")).toBeInTheDocument();
@@ -1390,25 +1464,30 @@ describe("App", () => {
       environmentDiagnostics: [{ label: "Azure Profile", value: "~/.azure/azureProfile.json" }],
     };
 
-    render(<App />);
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
 
     expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
-    expect(screen.getByTitle("Azure: Azure summary")).toBeInTheDocument();
+    const azureNav = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
+    expect(azureNav.getByRole("button", { name: /Azure/ })).toBeInTheDocument();
     expect(screen.queryByText("S3")).not.toBeInTheDocument();
     expect(screen.queryByText("EC2")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByTitle("Azure: Azure summary"));
+    fireEvent.click(azureNav.getByRole("button", { name: /Azure/ }));
 
     expect(await screen.findByRole("heading", { name: "Azure Workspace" })).toBeInTheDocument();
     expect((await screen.findAllByText("Marketing Subscription")).length).toBeGreaterThan(0);
     expect((await screen.findAllByText("tenant-marketing")).length).toBeGreaterThan(0);
     expect(screen.getByText("Resource Groups, VMs")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTitle("Resource Groups: Azure groups"));
+    fireEvent.click(azureNav.getByRole("button", { name: /Resource Groups/ }));
     expect(await screen.findByRole("heading", { name: "Azure Resource Groups" })).toBeInTheDocument();
     expect((await screen.findAllByText("rg-marketing-prod")).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByTitle("Virtual Machines: Azure virtual machines"));
+    fireEvent.click(azureNav.getByRole("button", { name: /Virtual Machines/ }));
     expect(await screen.findByRole("heading", { name: "Azure Virtual Machines" })).toBeInTheDocument();
     expect((await screen.findAllByText("mkt-api-01")).length).toBeGreaterThan(0);
     expect((await screen.findAllByText("Standard_D2s_v5")).length).toBeGreaterThan(0);

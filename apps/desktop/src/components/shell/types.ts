@@ -1,0 +1,112 @@
+import type { ComponentType, ReactNode } from "react";
+
+import type { Status } from "@/components/status-dot";
+
+/**
+ * Shared prop contract for the M2 application shell.
+ *
+ * The shell is split into presentational pieces (AppShell, ConnectionRail,
+ * ContextNav, TopBar, ActivityDrawer) that take plain data + callbacks. App.tsx
+ * owns all state and derives these shapes from the live session / providers /
+ * workspace snapshots, then composes the pieces together.
+ */
+
+/** A connection shown in the left rail (a cloud provider or the local runtime). */
+export interface RailConnection {
+  /** providerId (e.g. "aws") or the literal "local". */
+  id: string;
+  /** Accessible label / tooltip text, e.g. "AWS — sandbox". */
+  label: string;
+  /** Provider key for ProviderIcon ("aws" | "azure" | "gcp"). Omit for non-provider items. */
+  provider?: string;
+  /** Connection health, shown as a small status dot on the rail item. */
+  status: Status;
+  /** Distinguishes the local-runtime rail item (rendered with a server glyph). */
+  kind: "provider" | "local";
+}
+
+/** A single navigation entry in the contextual sidebar. */
+export interface NavItem {
+  id: string;
+  label: string;
+  /** Lucide icon component. Ignored when `iconUrl` is provided. */
+  icon?: ComponentType<{ className?: string }>;
+  /** Provider/service SVG URL (e.g. S3, EC2 glyphs). Takes precedence over `icon`. */
+  iconUrl?: string;
+  /** Optional count badge. A string keeps "—" placeholders flexible. */
+  count?: string | number;
+}
+
+export interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+/** The connection header shown at the top of the contextual sidebar. */
+export interface NavConnectionHeader {
+  name: string;
+  meta: string;
+  /** Provider key for ProviderIcon; omit for the local runtime (server glyph). */
+  provider?: string;
+  status: Status;
+  statusText: string;
+}
+
+/** One row in the activity drawer. */
+export interface ActivityEntry {
+  id: string | number;
+  timestamp: string;
+  message: string;
+  detail?: string;
+  tone?: Status;
+}
+
+export interface AppShellProps {
+  rail: ReactNode;
+  nav: ReactNode;
+  topBar: ReactNode;
+  children: ReactNode;
+  /** Overlay drawer (Sheet); rendered as a sibling so it can portal over content. */
+  drawer?: ReactNode;
+  /** When true, the 256px contextual nav column is hidden (rail + main only). */
+  navCollapsed?: boolean;
+}
+
+export interface ConnectionRailProps {
+  connections: RailConnection[];
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  onAddConnection?: () => void;
+  onOpenSettings?: () => void;
+  /** Two-letter initials for the user avatar at the foot of the rail. */
+  userInitials?: string;
+}
+
+export interface ContextNavProps {
+  connection: NavConnectionHeader;
+  groups: NavGroup[];
+  activeItemId: string;
+  onSelectItem: (id: string) => void;
+  onShowActivity: () => void;
+  activityActive?: boolean;
+  /** Extra footer buttons (e.g. Docs, Reset), rendered after the Activity button. */
+  footer?: ReactNode;
+}
+
+export interface TopBarProps {
+  breadcrumb: { connection: string; view: string };
+  /** Toggles the contextual nav column (hamburger). */
+  onToggleNav?: () => void;
+  onRefresh?: () => void;
+  onToggleNotifications?: () => void;
+  notificationCount?: number;
+  searchPlaceholder?: string;
+}
+
+export interface ActivityDrawerProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title?: string;
+  subtitle?: string;
+  entries: ActivityEntry[];
+}
