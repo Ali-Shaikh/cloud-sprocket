@@ -43,13 +43,21 @@ Branch: `feat/ui-rebuild-tailwind` (off `feat/azure-local-runtime`). Tasks track
 **Committed (not pushed):**
 - `93b5fc8` feat(desktop): Tailwind v4 + shadcn foundation + primitive kit (M0 + M1)
 - `a6f9062` docs: UI redesign plan, prototype, and checkpoint
+- `5332495` docs: mark M0/M1 committed, set M2 as resume point
 
-### >>> RESUME HERE: M2 (app shell) <<<
-Next session: build M2 (ConnectionRail + ContextNav + TopBar + AppShell), wrap the new app root
-in `.app-next`, replace `AppSidebar` + `styles.css` shell in `App.tsx`, wire existing handlers.
-Build on the M1 kit in `src/components/`. Dev server: launch config `desktop-web` (vite :1425);
-gallery at `/#gallery`. Heads-up: the headless screenshotter hangs on pages with looping CSS
-animations / Radix portals (inject `*{animation:none!important}` and reload to recover).
+**M2 — DONE + verified, NOT yet committed (sitting in the working tree).**
+
+### >>> RESUME HERE: M3 (Connect / kill the wizard) <<<
+Next session: build M3 - `src/views/ConnectView.tsx` replacing `SessionSetupView` (the 607 L,
+4-step stepper). Connection cards from discovered `providers`/`profiles` with detected-profile
+chips + status; picking one calls `session.selectProvider`/`selectProfile`/`selectAuthMethod`
+then `session.lock`. Reframe lock/unlock language to "Open / Close workspace" (same RPCs). The
+shell rail already lists connections; M3 only swaps the *content* shown while unlocked.
+Dev server: launch config `desktop-web` (vite :1425). Heads-up: the headless screenshotter hangs
+on looping CSS animations / Radix portals - inject `*{animation:none!important;transition:none!important}`
+via preview_eval first; and the preview viewport defaults narrow (<1180 px) so the context nav
+auto-collapses (responsive behaviour working as designed) - resize to >=1280 to see the nav.
+**Commit M2 before starting M3 if a clean history is wanted.**
 
 - **M0 — DONE, verified, committed (`93b5fc8`).** Tailwind v4.3.0 + `@tailwindcss/vite`, clsx,
   tailwind-merge, lucide-react 1.17, sonner installed in `apps/desktop`.
@@ -79,9 +87,40 @@ animations / Radix portals (inject `*{animation:none!important}` and reload to r
     screenshotter intermittently hangs on the gallery — a Radix-portal/animation quirk, not a code
     bug; console is error-free.)
 
+- **M2 — DONE, verified, uncommitted.** Three-zone shell now wraps the real app (the first module
+  that visibly replaces the Cloudscape sidebar). Existing Cloudscape views still render *inside* the
+  new shell (migrated per-view in M3-M7).
+  - New `src/components/shell/`: `types.ts` (shared prop contract), `app-shell.tsx` (3-zone grid,
+    carries `.app-next`, `68px / 256px / 1fr`, collapses to `68px / 1fr`), `connection-rail.tsx`
+    (68 px `bg-rail`; brand, one item per provider + Local Runtime, status dots, aria-labels,
+    tooltips, avatar), `context-nav.tsx` (256 px `bg-sidebar`; connection header + status, grouped
+    nav, footer Recent activity + caller footer), `top-bar.tsx` (breadcrumb, search placeholder,
+    refresh, notifications w/ count, theme `DropdownMenu` via `useTheme`), `activity-drawer.tsx`
+    (right Sheet from `logs`), `index.ts` barrel. (Presentational pieces built by a sub-agent
+    against `types.ts`, reviewed; integration done by hand.)
+  - `App.tsx`: deleted `AppSidebar` (~295 L) + old icon helpers + the Cloudscape `activityDrawer`
+    + footer; derives `railConnections` / `navConnection` / `navGroups` / `activeNavItemId` /
+    `activityEntries` from live `providers`/`session`/`workspace`; `handleRailSelect` (provider →
+    `selectProvider` + Overview; `local` → virtualisation) + `handleNavSelect` (plain tab ids, plus
+    `s3:<page>` composite ids routed to `activeS3PageId`). Removed dead Cloudscape imports
+    (`Icon`/`IconProps`/`Checkbox`/`Textarea`/`renderLogEntries`/`useEffectEvent`/`appVersion`).
+    Flashbar + reset Modal kept (Cloudscape) until M7. `.app-next` now lives on the shell root.
+  - Model note: Local Runtime is a **rail connection** (not in the provider nav). S3 sub-pages
+    surface as a contextual "Storage" nav group (`s3:buckets/objects/upload/inspect`); Azure
+    RG/VMs come from the backend's own top-level tabs (no synthetic sub-group). ContextNav active
+    match is prefix-aware so a parent tab stays lit while a sub-page is active.
+  - Tests: `App.test.tsx` updated for the new shell - wrap renders in `ThemeProvider`; navigate
+    Local Runtime via the rail when no `virtualisation` tab; scope nav assertions with `within(...)`;
+    button names corrected ("Lock Workspace", "Unlock"). Infra: `vitest.config.ts` gains the `@`
+    alias; `src/test/setup.ts` stubs `matchMedia` and sets `innerWidth = 1440` (else the nav
+    auto-collapses in jsdom). 19/19 green.
+  - Verified: `tsc` clean; 19/19 vitest pass; live preview shows the 3-zone shell, all 4 rail
+    connections, breadcrumb, theme menu; nav auto-collapses < 1180 px and returns >= 1280 px;
+    console error-free.
+
 ## Next step
-**M2 — app shell** (rail + contextual nav + topbar). First module that visibly replaces the
-Cloudscape shell in the real app. Wrap the new app root in `.app-next`. Build on the M1 kit.
+**M3 — Connect / kill the wizard.** Replace `SessionSetupView` with `ConnectView` (connection
+cards). See the RESUME HERE block above for specifics.
 
 ## To reopen prototype
 `preview_start` config `prototype`, then open `http://localhost:4321/design-prototypes/index.html`.

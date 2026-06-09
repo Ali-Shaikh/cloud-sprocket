@@ -22,8 +22,13 @@
 - **Cloudscape footprint to remove (M8):** 6 files / 10 refs (`main.tsx` global-styles, `App.tsx`,
   `views/SessionSetupView.tsx`, `views/WorkspaceView.tsx`, `views/shared.tsx`, `vite.config.ts`
   manualChunks) + `styles.css` + `package.json` deps.
-- **Next step:** awaiting go-ahead to start **M0** (add Tailwind v4 + shadcn + OS-aware ThemeProvider
-  alongside existing UI; leaves the app working). No redesign code written yet.
+- **Progress:** **M0, M1, M2 done.** M0+M1 (Tailwind/shadcn foundation + primitive kit) committed on
+  branch `feat/ui-rebuild-tailwind` (`93b5fc8`, `a6f9062`, `5332495`). **M2 (three-zone app shell:
+  ConnectionRail + ContextNav + TopBar + ActivityDrawer) done + verified (tsc clean, 19/19 tests),
+  uncommitted in the working tree** - it replaces the Cloudscape `AppSidebar`; existing Cloudscape
+  views still render inside the new shell and migrate per-view in M3-M7.
+- **Next step:** **M3 - Connect / kill the wizard** (`ConnectView` replacing `SessionSetupView`).
+  Full detail + resume notes in `design-prototypes/CHECKPOINT-ui-redesign.md` (RESUME HERE block).
 
 ## Latest Fix (2026-06-08): Docker-hang regression (could not unlock, no emulators)
 
