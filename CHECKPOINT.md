@@ -59,6 +59,15 @@ User reported the Local Runtime menu does nothing when the workspace is unlocked
 - Tests: added `TestPrepareProfileWritesDiscoverableLocalProfiles` (preserves existing AWS/Azure entries, handles BOM, and discovery surfaces both local profiles). `service_test.go` and `service.go` use the \ufeff string escape, never a literal BOM (Go rejects a mid-file BOM).
 - Verified in the browser mock end to end: from the unlocked Local Runtime, "Create AWS Profile" and "Create Azure Profile" make `cloudsprocket-localstack` and "CloudSprocket floci-az (local)" appear in setup for their providers.
 - Verification: `go -C backend/daemon test ./...` passes; `pnpm run typecheck:desktop` passes; `pnpm --dir apps/desktop test` passes (18 tests); `pnpm run build:desktop:exe` rebuilt the exe.
+- Committed as `b3b96bb`.
+
+### Lock emulator settings while running (2026-06-09)
+
+User asked whether floci-az persistence even works and noted it is not locked once the emulator is running. Confirmed persistence does work (the manager sets `FLOCI_AZ_STORAGE_MODE=persistent`, `FLOCI_AZ_STORAGE_PATH=/app/data`, and a bind mount from `EmulatorStateDir/floci-az` to `/app/data`; LocalStack persistence is equivalent), but it only takes effect when the container is created or recreated on start, which requires the container to be stopped. Changing persistence/env/auth-token on a running container did nothing yet the controls stayed editable.
+- Fix (`WorkspaceView.tsx`): per emulator card, `settingsLocked = status === "running" || status === "unhealthy"`. When locked, the auth token, persistence checkbox, and environment textarea are disabled and a hint says to stop the emulator to change them. Applies to both LocalStack and floci-az, per emulator.
+- Added test `locks persistence and environment controls while emulators are running` (19 desktop tests total).
+- Verified in the browser mock: after Start LocalStack, its auth token + persistence are disabled with the hint, while floci-az controls stay enabled (it is not running).
+- Verification: `pnpm run typecheck:desktop` passes; `pnpm --dir apps/desktop test` passes (19 tests); `go -C backend/daemon test ./...` passes; `pnpm run build:desktop:exe` rebuilt the exe.
 
 ## Current State
 
