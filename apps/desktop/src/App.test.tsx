@@ -652,7 +652,7 @@ describe("App", () => {
     expect(await screen.findByText("Managed Docker Resources")).toBeInTheDocument();
     expect(await screen.findByText("Local Config Artifacts")).toBeInTheDocument();
     expect(await screen.findByText("LocalStack")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Prepare Profile" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create AWS Profile" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start LocalStack" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start floci-az" })).toBeInTheDocument();
     expect(
