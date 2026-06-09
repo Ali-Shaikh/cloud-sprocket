@@ -40,7 +40,18 @@ SessionSetupView, WorkspaceView, shared.tsx, vite.config.ts manualChunks) + styl
 ## Implementation progress
 Branch: `feat/ui-rebuild-tailwind` (off `feat/azure-local-runtime`). Tasks tracked in session task list (#1-#9 = M0-M8).
 
-- **M0 — DONE & verified (not yet committed).** Tailwind v4.3.0 + `@tailwindcss/vite`, clsx,
+**Committed (not pushed):**
+- `93b5fc8` feat(desktop): Tailwind v4 + shadcn foundation + primitive kit (M0 + M1)
+- `a6f9062` docs: UI redesign plan, prototype, and checkpoint
+
+### >>> RESUME HERE: M2 (app shell) <<<
+Next session: build M2 (ConnectionRail + ContextNav + TopBar + AppShell), wrap the new app root
+in `.app-next`, replace `AppSidebar` + `styles.css` shell in `App.tsx`, wire existing handlers.
+Build on the M1 kit in `src/components/`. Dev server: launch config `desktop-web` (vite :1425);
+gallery at `/#gallery`. Heads-up: the headless screenshotter hangs on pages with looping CSS
+animations / Radix portals (inject `*{animation:none!important}` and reload to recover).
+
+- **M0 — DONE, verified, committed (`93b5fc8`).** Tailwind v4.3.0 + `@tailwindcss/vite`, clsx,
   tailwind-merge, lucide-react 1.17, sonner installed in `apps/desktop`.
   - `vite.config.ts`: `tailwindcss()` plugin + `@`→`./src` alias. `tsconfig.json`: `paths @/*`
     (no `baseUrl` — TS6 deprecation).
@@ -55,7 +66,7 @@ Branch: `feat/ui-rebuild-tailwind` (off `feat/azure-local-runtime`). Tasks track
   - Verified: `tsc` clean; 19/19 vitest pass; gallery renders light+dark; **existing Cloudscape app
     still renders unharmed** (coexistence confirmed via preview).
 
-- **M1 — DONE & verified (not yet committed).** Primitive kit built (delegated to a sub-agent,
+- **M1 — DONE, verified, committed (`93b5fc8`).** Primitive kit built (delegated to a sub-agent,
   reviewed). `src/components/ui/`: button, input, textarea, badge, card, table, dialog,
   alert-dialog, dropdown-menu, tooltip, tabs, scroll-area, sheet, skeleton, separator, avatar,
   switch, select (Radix-based, React-19 `data-slot` style, CVA variants). `src/components/`
