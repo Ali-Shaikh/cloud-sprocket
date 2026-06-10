@@ -38,6 +38,7 @@ import OverviewView from "./views/OverviewView";
 import StorageView from "./views/workspace/StorageView";
 import ComputeView from "./views/workspace/ComputeView";
 import AzureView from "./views/workspace/AzureView";
+import RuntimeView from "./views/workspace/RuntimeView";
 import PlaceholderView from "./views/workspace/PlaceholderView";
 import WorkspaceView from "./views/WorkspaceView";
 import type {
@@ -1241,7 +1242,50 @@ export default function App() {
         void mutateSession("azure.selectVirtualMachine", { vmId });
       }}
     />
-  ) : session.isLocked && !["virtualisation", "actions"].includes(activeWorkspaceTabId) ? (
+  ) : activeWorkspaceTabId === "virtualisation" ? (
+    <RuntimeView
+      workspace={workspace}
+      unlocked={!session.isLocked}
+      showSensitiveValues={showSensitiveValues}
+      onRefreshDockerRuntime={() => {
+        void refreshDockerRuntime();
+      }}
+      localStack={{
+        authToken: localStackAuthToken,
+        onAuthTokenChange: setLocalStackAuthToken,
+        persistence: localStackPersistence,
+        onPersistenceChange: setLocalStackPersistence,
+        environmentText: localStackEnvironmentText,
+        onEnvironmentTextChange: setLocalStackEnvironmentText,
+        logs: localStackLogs,
+        logsStatus: localStackLogsStatus,
+        actionStatus: localStackActionStatus,
+        actionInFlight: localStackActionInFlight,
+        onRefreshLogs: () => {
+          void refreshLocalStackLogs();
+        },
+        onInvokeAction: (action) => {
+          void invokeLocalStackAction(action);
+        },
+      }}
+      flociAz={{
+        persistence: flociAzPersistence,
+        onPersistenceChange: setFlociAzPersistence,
+        environmentText: flociAzEnvironmentText,
+        onEnvironmentTextChange: setFlociAzEnvironmentText,
+        logs: flociAzLogs,
+        logsStatus: flociAzLogsStatus,
+        actionStatus: flociAzActionStatus,
+        actionInFlight: flociAzActionInFlight,
+        onRefreshLogs: () => {
+          void refreshFlociAzLogs();
+        },
+        onInvokeAction: (action) => {
+          void invokeFlociAzAction(action);
+        },
+      }}
+    />
+  ) : session.isLocked && activeWorkspaceTabId !== "actions" ? (
     <PlaceholderView
       tab={session.workspaceTabs.find((tab) => tab.tabId === activeWorkspaceTabId)}
       workspace={workspace}
