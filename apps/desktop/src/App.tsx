@@ -19,7 +19,7 @@ import {
   useState,
 } from "react";
 import type { ErrorInfo, ReactNode } from "react";
-import { Boxes, Bug, LayoutGrid, Server, Trash2 } from "lucide-react";
+import { Boxes, Bug, LayoutGrid, LogOut, Server, Trash2 } from "lucide-react";
 import awsEc2IconUrl from "./assets/cloud-icons/aws-ec2.svg";
 import awsS3IconUrl from "./assets/cloud-icons/aws-s3.svg";
 import azureIconUrl from "./assets/cloud-icons/azure.svg";
@@ -34,6 +34,7 @@ import type {
 } from "./components/shell/types";
 import type { Status } from "./components/status-dot";
 import ConnectView from "./views/ConnectView";
+import OverviewView from "./views/OverviewView";
 import WorkspaceView from "./views/WorkspaceView";
 import type {
   ActivityLogEntry,
@@ -1089,6 +1090,19 @@ export default function App() {
     >
       <DebugConsole />
     </Container>
+  ) : session.isLocked && activeWorkspaceTabId === "overview" ? (
+    <OverviewView
+      workspace={workspace}
+      session={session}
+      providerLabel={workspace.provider?.label ?? selectedProvider?.label ?? "Workspace"}
+      profileLabel={workspace.profile?.displayName ?? selectedProfile?.displayName}
+      onRefresh={() => {
+        void refreshDiscovery();
+      }}
+      onNavigate={(tabId) => {
+        setActiveWorkspaceTabId(tabId);
+      }}
+    />
   ) : session.isLocked || activeWorkspaceTabId === "virtualisation" ? (
     <WorkspaceView
       session={session}
@@ -1484,16 +1498,30 @@ export default function App() {
             }}
             activityActive={splitPanelOpen}
             footer={
-              <button
-                type="button"
-                onClick={() => {
-                  setResetModalOpen(true);
-                }}
-                className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 className="size-[18px]" />
-                <span className="truncate">Reset app data</span>
-              </button>
+              <>
+                {session.isLocked ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void mutateSession("session.unlock");
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <LogOut className="size-[18px]" />
+                    <span className="truncate">Close workspace</span>
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResetModalOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="size-[18px]" />
+                  <span className="truncate">Reset app data</span>
+                </button>
+              </>
             }
           />
         }
