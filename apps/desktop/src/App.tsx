@@ -1,16 +1,4 @@
 import {
-  Box,
-  Flashbar,
-  SpaceBetween,
-  Button,
-  Container,
-  Header,
-  Input,
-  StatusIndicator,
-  Modal,
-} from "@cloudscape-design/components";
-import type { FlashbarProps, PropertyFilterProps } from "@cloudscape-design/components";
-import {
   Component,
   Suspense,
   startTransition,
@@ -19,11 +7,14 @@ import {
   useState,
 } from "react";
 import type { ErrorInfo, ReactNode } from "react";
-import { Boxes, Bug, LayoutGrid, LogOut, Server, Trash2 } from "lucide-react";
+import { Boxes, Bug, LayoutGrid, LogOut, Server, Trash2, TriangleAlert } from "lucide-react";
+import { Toaster } from "sonner";
 import awsEc2IconUrl from "./assets/cloud-icons/aws-ec2.svg";
 import awsS3IconUrl from "./assets/cloud-icons/aws-s3.svg";
 import azureIconUrl from "./assets/cloud-icons/azure.svg";
 import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
+import { notify, notifyJob, type NotificationTone } from "./lib/notify";
+import { useTheme } from "./lib/theme";
 import { AppShell, ConnectionRail, ContextNav, TopBar, ActivityDrawer } from "./components/shell";
 import type {
   ActivityEntry,
@@ -33,14 +24,25 @@ import type {
   RailConnection,
 } from "./components/shell/types";
 import type { Status } from "./components/status-dot";
+import { Button } from "./components/ui/button";
+import { Input } from "./components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./components/ui/alert-dialog";
 import ConnectView from "./views/ConnectView";
 import OverviewView from "./views/OverviewView";
+import DebugView from "./views/DebugView";
 import StorageView from "./views/workspace/StorageView";
 import ComputeView from "./views/workspace/ComputeView";
 import AzureView from "./views/workspace/AzureView";
 import RuntimeView from "./views/workspace/RuntimeView";
 import PlaceholderView from "./views/workspace/PlaceholderView";
-import WorkspaceView from "./views/WorkspaceView";
+import ActivityView from "./views/workspace/ActivityView";
 import type {
   ActivityLogEntry,
   AppResetResult,
@@ -72,7 +74,6 @@ import type {
   WorkspaceSnapshot,
   WorkspaceTab,
 } from "./types/backend";
-import { defaultQuery, type TablePreferences, DebugConsole } from "./views/shared";
 
 type EC2LifecycleAction = "start" | "stop" | "reboot";
 
@@ -106,21 +107,18 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error?: Erro
   render() {
     if (this.state.error) {
       return (
-        <Container
-          header={
-            <Header
-              variant="h1"
-              description="The app caught a render error instead of showing a blank screen."
-            >
-              Application Error
-            </Header>
-          }
-        >
-          <SpaceBetween size="s">
-            <StatusIndicator type="error">Render failed</StatusIndicator>
-            <Box variant="code">{this.state.error.message}</Box>
-          </SpaceBetween>
-        </Container>
+        <div className="mx-auto max-w-2xl space-y-3 rounded-xl border border-destructive/30 bg-card p-6 shadow-sm">
+          <div className="flex items-center gap-2">
+            <TriangleAlert className="size-5 text-destructive" />
+            <h1 className="text-lg font-bold">Application Error</h1>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            The app caught a render error instead of showing a blank screen.
+          </p>
+          <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-muted p-3 font-mono text-xs">
+            {this.state.error.message}
+          </pre>
+        </div>
       );
     }
 
@@ -389,7 +387,6 @@ export default function App() {
   const [appSettings, setAppSettings] = useState<AppSettingsSnapshot>(emptySettings);
   const [workspace, setWorkspace] = useState<WorkspaceSnapshot>(emptyWorkspace);
   const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
-  const [notifications, setNotifications] = useState<FlashbarProps.MessageDefinition[]>([]);
   const [s3UploadStatus, setS3UploadStatus] = useState("Select a bucket and provide a local file path to upload.");
   const [s3SignedUrlStatus, setS3SignedUrlStatus] = useState("Select an object to generate a signed URL.");
   const [s3SignedUrlResult, setS3SignedUrlResult] = useState<AwsS3PresignResult>();
@@ -429,37 +426,14 @@ export default function App() {
   const [resetConfirmation, setResetConfirmation] = useState("");
   const [resetInFlight, setResetInFlight] = useState(false);
   const [showSensitiveValues, setShowSensitiveValues] = useState(false);
-  const [providerQuery, setProviderQuery] = useState<PropertyFilterProps.Query>(defaultQuery);
-  const [profileQuery, setProfileQuery] = useState<PropertyFilterProps.Query>(defaultQuery);
-  const [providerPreferences, setProviderPreferences] = useState<TablePreferences>({
-    wrapLines: false,
-    stripedRows: true,
-    contentDensity: "comfortable",
-    contentDisplay: [
-      { id: "provider", visible: true },
-      { id: "state", visible: true },
-      { id: "profiles", visible: true },
-      { id: "summary", visible: true },
-    ],
-  });
-  const [profilePreferences, setProfilePreferences] = useState<TablePreferences>({
-    wrapLines: false,
-    stripedRows: true,
-    contentDensity: "comfortable",
-    contentDisplay: [
-      { id: "name", visible: true },
-      { id: "identifier", visible: true },
-      { id: "summary", visible: true },
-    ],
-  });
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  const { resolvedTheme } = useTheme();
 
   const isInitialLoad = useRef(true);
   const s3PrefixRequestIdRef = useRef(0);
   const isTablet = viewportWidth < 1180;
   const selectedProvider = providers.find((provider) => provider.providerId === session.currentProviderId);
   const selectedProfile = profiles.find((profile) => profile.profileId === session.selectedProfileId);
-  const latestLog = logs[0];
 
   useEffect(() => {
     // Intercept console
@@ -559,24 +533,7 @@ export default function App() {
               ...current.filter((entry) => entry.jobId !== job.jobId),
             ].slice(0, 10));
           }
-          setNotifications((current) => {
-            const existing = current.findIndex((n) => n.id === job.jobId);
-            const notification: FlashbarProps.MessageDefinition = {
-              id: job.jobId,
-              type: job.status === "failed" ? "error" : job.status === "completed" ? "success" : "in-progress",
-              header: job.label,
-              content: job.message,
-              dismissible: job.status === "completed" || job.status === "failed",
-              onDismiss: () => setNotifications((prev) => prev.filter((n) => n.id !== job.jobId)),
-              loading: job.status === "running" || job.status === "queued",
-            };
-            if (existing >= 0) {
-              const next = [...current];
-              next[existing] = notification;
-              return next;
-            }
-            return [notification, ...current];
-          });
+          notifyJob(job);
         }),
       );
     })();
@@ -753,8 +710,6 @@ export default function App() {
         setActiveAzurePageId("resource-groups");
         setSplitPanelOpen(false);
         setShowSensitiveValues(false);
-        setProviderQuery(defaultQuery);
-        setProfileQuery(defaultQuery);
       });
       setResetModalOpen(false);
       setResetConfirmation("");
@@ -922,49 +877,16 @@ export default function App() {
     return Promise.race([promise, timeout]);
   }
 
-  function pushNotification(type: FlashbarProps.Type, header: string, content: string): void {
-    const id = `notification-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    setNotifications((current) => [
-      {
-        id,
-        type,
-        header,
-        content,
-        dismissible: true,
-        onDismiss: () => setNotifications((prev) => prev.filter((n) => n.id !== id)),
-      },
-      ...current,
-    ]);
+  function pushNotification(tone: NotificationTone, header: string, content: string): void {
+    notify(tone, header, content);
   }
 
-  function addLocalStackNotification(type: FlashbarProps.Type, header: string, content: string): void {
-    const id = `ls-action-${Date.now()}`;
-    setNotifications((current) => [
-      {
-        id,
-        type,
-        header,
-        content,
-        dismissible: true,
-        onDismiss: () => setNotifications((prev) => prev.filter((n) => n.id !== id)),
-      },
-      ...current,
-    ]);
+  function addLocalStackNotification(tone: NotificationTone, header: string, content: string): void {
+    notify(tone, header, content);
   }
 
-  function addEmulatorNotification(emulatorId: string, type: FlashbarProps.Type, header: string, content: string): void {
-    const id = `${emulatorId}-action-${Date.now()}`;
-    setNotifications((current) => [
-      {
-        id,
-        type,
-        header,
-        content,
-        dismissible: true,
-        onDismiss: () => setNotifications((prev) => prev.filter((n) => n.id !== id)),
-      },
-      ...current,
-    ]);
+  function addEmulatorNotification(_emulatorId: string, tone: NotificationTone, header: string, content: string): void {
+    notify(tone, header, content);
   }
 
   function pollLocalStackState(label: string, expectedStatus?: "running" | "stopped"): void {
@@ -1150,18 +1072,7 @@ export default function App() {
   }
 
   const content = activeWorkspaceTabId === "debug" ? (
-    <Container
-      header={
-        <Header
-          variant="h1"
-          description="Real-time RPC and application diagnostics."
-        >
-          Debug Console
-        </Header>
-      }
-    >
-      <DebugConsole />
-    </Container>
+    <DebugView />
   ) : session.isLocked && activeWorkspaceTabId === "overview" ? (
     <OverviewView
       workspace={workspace}
@@ -1294,107 +1205,11 @@ export default function App() {
         setShowSensitiveValues((current) => !current);
       }}
     />
-  ) : session.isLocked || activeWorkspaceTabId === "virtualisation" ? (
-    <WorkspaceView
-      session={session}
-      workspace={workspace}
-      logs={logs}
-      latestLog={logs[0]}
-      activeTabId={activeWorkspaceTabId}
-      activeS3PageId={activeS3PageId}
-      activeAzurePageId={activeAzurePageId}
-      splitPanelOpen={splitPanelOpen}
-      showSensitiveValues={showSensitiveValues}
-      onToggleSplitPanel={() => {
-        setSplitPanelOpen((current) => !current);
-      }}
+  ) : session.isLocked ? (
+    <ActivityView
+      entries={toActivityEntries(logs).slice(0, 12)}
       onRefreshDiscovery={() => {
         void refreshDiscovery();
-      }}
-      onRefreshDockerRuntime={() => {
-        void refreshDockerRuntime();
-      }}
-      onInvokeLocalStackAction={(action) => {
-        void invokeLocalStackAction(action);
-      }}
-      localStackAuthToken={localStackAuthToken}
-      onLocalStackAuthTokenChange={setLocalStackAuthToken}
-      localStackPersistence={localStackPersistence}
-      onLocalStackPersistenceChange={setLocalStackPersistence}
-      localStackEnvironmentText={localStackEnvironmentText}
-      onLocalStackEnvironmentTextChange={setLocalStackEnvironmentText}
-      localStackLogs={localStackLogs}
-      localStackLogsStatus={localStackLogsStatus}
-      localStackActionStatus={localStackActionStatus}
-      localStackActionInFlight={localStackActionInFlight}
-      flociAzPersistence={flociAzPersistence}
-      flociAzEnvironmentText={flociAzEnvironmentText}
-      flociAzLogs={flociAzLogs}
-      flociAzLogsStatus={flociAzLogsStatus}
-      flociAzActionStatus={flociAzActionStatus}
-      flociAzActionInFlight={flociAzActionInFlight}
-      onFlociAzPersistenceChange={setFlociAzPersistence}
-      onFlociAzEnvironmentTextChange={setFlociAzEnvironmentText}
-      onRefreshLocalStackLogs={() => {
-        void refreshLocalStackLogs();
-      }}
-      onRefreshFlociAzLogs={() => {
-        void refreshFlociAzLogs();
-      }}
-      onInvokeFlociAzAction={(action) => {
-        void invokeFlociAzAction(action);
-      }}
-      onUnlockSession={() => {
-        void mutateSession("session.unlock");
-      }}
-      onToggleSensitiveValues={() => {
-        setShowSensitiveValues((current) => !current);
-      }}
-      onInvokeWorkspaceAction={(actionId) => {
-        void backendRequest("actions.invoke", { actionId });
-      }}
-      onSelectS3Bucket={(bucketName) => {
-        void mutateSession("aws.s3.selectBucket", { bucketName });
-      }}
-      onSelectS3Object={(objectKey) => {
-        void mutateSession("aws.s3.selectObject", { objectKey });
-      }}
-      onSetS3PrefixFilter={applyS3PrefixFilter}
-      s3UploadStatus={s3UploadStatus}
-      s3SignedUrlStatus={s3SignedUrlStatus}
-      s3SignedUrlResult={s3SignedUrlResult}
-      s3UrlInspection={s3UrlInspection}
-      s3UrlValidation={s3UrlValidation}
-      onUploadS3Object={(sourcePath, objectKey) => {
-        setS3UploadStatus(`Queueing upload for ${objectKey}.`);
-        void backendRequest("aws.s3.uploadObject", { objectKey, sourcePath });
-      }}
-      onPresignS3Object={(durationSeconds) => {
-        setS3SignedUrlStatus("Queueing signed URL generation.");
-        void backendRequest("aws.s3.presignObject", { durationSeconds });
-      }}
-      onAnalyseS3Url={(url) => {
-        void (async () => {
-          setS3UrlInspection(await backendRequest<UrlInspection>("aws.s3.analyseUrl", { url }));
-        })();
-      }}
-      onValidateS3Url={(url) => {
-        void (async () => {
-          await backendRequest("aws.s3.validateUrl", { url });
-        })();
-      }}
-      ec2ActionStatus={ec2ActionStatus}
-      ec2ActionInFlight={ec2ActionInFlight}
-      ec2ActionHistory={ec2ActionHistory}
-      onRefreshEC2Instances={refreshEC2Inventory}
-      onSelectEC2Region={selectEC2Region}
-      onSelectEC2Instance={selectEC2Instance}
-      onInvokeEC2Action={invokeEC2LifecycleAction}
-      onSelectAzureResourceGroup={(resourceGroup) => {
-        void mutateSession("azure.selectResourceGroup", { resourceGroup });
-      }}
-      onSelectAzureVirtualMachine={(vmId) => {
-        void mutateSession("azure.selectVirtualMachine", { vmId });
       }}
     />
   ) : (
@@ -1427,23 +1242,37 @@ export default function App() {
     />
   );
 
-  const resetModal = (
-    <Modal
-      visible={resetModalOpen}
-      header="Reset app data"
-      onDismiss={() => {
-        if (!resetInFlight) {
+  const resetDialog = (
+    <AlertDialog
+      open={resetModalOpen}
+      onOpenChange={(open) => {
+        if (!open && !resetInFlight) {
           setResetModalOpen(false);
           setResetConfirmation("");
         }
       }}
-      footer={
-        <SpaceBetween
-          direction="horizontal"
-          size="xs"
-        >
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Reset app data</AlertDialogTitle>
+          <AlertDialogDescription>
+            This clears CloudSprocket session state, activity logs, cached inventory, debug
+            logs, and app-managed local runtime files. It does not touch AWS, Azure, or GCP
+            config files outside the CloudSprocket app data folder.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <Input
+          value={resetConfirmation}
+          placeholder="RESET"
+          aria-label="Reset confirmation"
+          disabled={resetInFlight}
+          onChange={(event) => {
+            setResetConfirmation(event.target.value);
+          }}
+        />
+        <AlertDialogFooter>
           <Button
-            variant="link"
+            variant="ghost"
             disabled={resetInFlight}
             onClick={() => {
               setResetModalOpen(false);
@@ -1453,33 +1282,17 @@ export default function App() {
             Cancel
           </Button>
           <Button
-            variant="primary"
-            loading={resetInFlight}
-            disabled={resetConfirmation !== "RESET"}
+            variant="destructive"
+            disabled={resetConfirmation !== "RESET" || resetInFlight}
             onClick={() => {
               void resetAppData();
             }}
           >
-            Reset app
+            {resetInFlight ? "Resetting..." : "Reset app"}
           </Button>
-        </SpaceBetween>
-      }
-    >
-      <SpaceBetween size="m">
-        <Box>
-          This clears CloudSprocket session state, activity logs, cached inventory, debug logs, and app-managed local runtime files. It does not touch AWS, Azure, or GCP config files outside the CloudSprocket app data folder.
-        </Box>
-        <Input
-          value={resetConfirmation}
-          placeholder="RESET"
-          ariaLabel="Reset confirmation"
-          disabled={resetInFlight}
-          onChange={({ detail }) => {
-            setResetConfirmation(detail.value);
-          }}
-        />
-      </SpaceBetween>
-    </Modal>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 
   // ---- Shell view-model derived from live state ----
@@ -1612,7 +1425,8 @@ export default function App() {
 
   return (
     <>
-      {resetModal}
+      {resetDialog}
+      <Toaster theme={resolvedTheme} position="bottom-right" closeButton richColors />
       <AppShell
         navCollapsed={sidebarCollapsed || isTablet}
         rail={
@@ -1673,7 +1487,6 @@ export default function App() {
             onToggleNotifications={() => {
               setSplitPanelOpen((current) => !current);
             }}
-            notificationCount={notifications.length}
           />
         }
         drawer={
@@ -1687,17 +1500,10 @@ export default function App() {
         }
       >
         <div className="p-6">
-          {notifications.length > 0 ? (
-            <div className="mb-4">
-              <Flashbar items={notifications} />
-            </div>
-          ) : null}
           <AppErrorBoundary>
             <Suspense
               fallback={
-                <Box padding="l" color="text-body-secondary">
-                  Loading workspace shell...
-                </Box>
+                <p className="p-4 text-sm text-muted-foreground">Loading workspace shell...</p>
               }
             >
               {content}
