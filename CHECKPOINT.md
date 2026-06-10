@@ -22,15 +22,16 @@
 - **Cloudscape footprint to remove (M8):** 6 files / 10 refs (`main.tsx` global-styles, `App.tsx`,
   `views/SessionSetupView.tsx`, `views/WorkspaceView.tsx`, `views/shared.tsx`, `vite.config.ts`
   manualChunks) + `styles.css` + `package.json` deps.
-- **Progress:** **M0-M3 done + committed; M4 done + verified, uncommitted.** On branch
-  `feat/ui-rebuild-tailwind`: M0+M1 (`93b5fc8`), M2 three-zone app shell (`5028c6c`), M3
-  card-based Connect view (`fc968e7`). **M4: new `OverviewView.tsx` - the locked workspace's
-  landing tab with live stat cards, an awsWritesEnabled-driven safety banner, and "Jump back in"
-  recents; "Close workspace" moved into the shell nav footer (WorkspaceView's header button
-  removed).** tsc clean, 19/19 tests, visually verified. Remaining Cloudscape views (S3/EC2/Azure/
-  runtime tabs) migrate in M5-M7.
-- **Next step:** **M5 - resource screens** (decompose `WorkspaceView` into `src/views/workspace/`,
-  starting with M5a Storage/S3). Full detail + resume notes in
+- **Progress:** **M0-M4 done + committed; M5 done + verified, uncommitted.** On branch
+  `feat/ui-rebuild-tailwind`: M0+M1 (`93b5fc8`), M2 app shell (`5028c6c`), M3 Connect view
+  (`fc968e7`), M4 Overview (`0cd5fa8`). **M5: the resource screens left `WorkspaceView` -
+  new `src/views/workspace/` Tailwind views: StorageView (bucket cards, object browser + detail
+  drawer, upload, URL inspect), ComputeView (EC2 fleet, inventory, lifecycle actions with
+  AlertDialog confirm), AzureView (overview, resource groups, VMs), PlaceholderView (other tabs +
+  the sensitive-values profile inspector).** tsc clean, 19/19 tests, Storage + Compute visually
+  verified. WorkspaceView now only serves the virtualisation tab (M6) and "actions" tab (M7).
+- **Next step:** **M6 - Local Runtime** (`RuntimeView.tsx`: emulator cards + logs + Docker status
+  replacing the Cloudscape virtualisation tab). Full detail + resume notes in
   `design-prototypes/CHECKPOINT-ui-redesign.md` (RESUME HERE block). NB: work lives on
   `feat/ui-rebuild-tailwind`, not the default branch - check `git branch` before resuming.
 

@@ -49,25 +49,32 @@ Branch: `feat/ui-rebuild-tailwind` (off `feat/azure-local-runtime`). Tasks track
 - `fc968e7` feat(desktop): replace setup wizard with card-based Connect view (M3)
 - `ea0e18c` docs: mark M3 (Connect view) complete, set M4 as resume point
 
-**M4 — DONE + verified, NOT yet committed (sitting in the working tree).**
+- `0cd5fa8` feat(desktop): add Tailwind Overview as the workspace landing tab (M4)
+- `249ce83` docs: mark M4 (Overview) complete, set M5 as resume point
 
-### >>> RESUME HERE: M5 (resource screens) <<<
-Next session: start M5 - decompose `WorkspaceView.tsx` (~2480 L) into `src/views/workspace/`
-Tailwind views, one submodule at a time; the old Cloudscape tab keeps rendering until its
-replacement lands. Suggested order: **M5a Storage/S3** (bucket cards → object table → object
-drawer; upload, presign, URL inspect - replaces Cloudscape Table/PropertyFilter with shadcn Table
-+ simple filter), then M5b Compute/EC2 (region Select, instance table, lifecycle actions with
-AlertDialog confirm), M5c Azure RG+VMs, M5d Functions/Identity placeholders. All RPC handlers
-already exist as props in `App.tsx`; check `WorkspaceView`'s prop list for the exact contract.
-Acceptance per submodule: data + actions at parity; no `@cloudscape-design` import in migrated files.
+**M5 (all of a/b/c/d) — DONE + verified, NOT yet committed (sitting in the working tree).**
+
+### >>> RESUME HERE: M6 (Local Runtime) <<<
+Next session: build M6 - `src/views/workspace/RuntimeView.tsx` replacing the Cloudscape
+virtualisation tab (the largest remaining WorkspaceView surface). Emulator cards in the prototype
+style: LocalStack + floci-az with status pill, endpoint/uptime/profile/persistence meta grid,
+auth-token + env editors (locked while running), prepare-profile/start/stop actions, inline log
+panels, Docker engine status, managed Docker resources + local config artefacts. The full prop
+contract (about 25 emulator-related props) is already wired in App.tsx → WorkspaceView; lift the
+same props into RuntimeView. WorkspaceView's UNLOCKED virtualisation early-return must also be
+covered (Local Runtime is reachable before opening a workspace via the rail). Watch the test
+strings: "Docker Runtime", "Local Runtimes", "Managed Docker Resources", "Local Config Artifacts",
+"Start LocalStack", "Start floci-az", "Create AWS Profile", persistence/auth-token labels.
+After M6, WorkspaceView only serves the "actions" tab (small; could fold into M7's notifications
+work), then M8 removes Cloudscape.
 Dev server: launch config `desktop-web` (vite :1425). Heads-up: headless screenshotter hangs on
 looping animations / Radix portals - inject `*{animation:none!important;transition:none!important}`
 via preview_eval first; it can also capture a STALE frame (it may reload the page) - re-drive state
 via preview_eval and screenshot immediately. Preview viewport defaults narrow (<1180 px) so the
 context nav auto-collapses (by design) - resize to >=1280. To reach a locked workspace in the
 browser mock: click "Open workspace" on the Connect screen. The branch is `feat/ui-rebuild-tailwind`
-(NOT the default branch - check `git branch` first; the repo also has `chore/add-termius-sponsor`).
-**Commit M4 before starting M5 if a clean history is wanted.**
+(NOT the default branch - check `git branch` first).
+**Commit M5 before starting M6 if a clean history is wanted.**
 
 - **M0 — DONE, verified, committed (`93b5fc8`).** Tailwind v4.3.0 + `@tailwindcss/vite`, clsx,
   tailwind-merge, lucide-react 1.17, sonner installed in `apps/desktop`.
@@ -177,9 +184,46 @@ browser mock: click "Open workspace" on the Connect screen. The branch is `feat/
     status; stat click jumps to the S3 tab (breadcrumb "AWS / Storage"); "Close workspace" in the
     nav footer; console error-free.
 
+- **M5 — DONE, verified, uncommitted.** Decomposed the resource screens out of `WorkspaceView`
+  into `src/views/workspace/` (Tailwind, no Cloudscape imports). WorkspaceView now only serves the
+  virtualisation tab (M6) and the "actions" tab (M7).
+  - Shared: `src/lib/use-debounced-value.ts` (Cloudscape-free debounce) and
+    `src/views/workspace/detail-fields.tsx` (`DetailFieldList` label/value grid with sensitive
+    masking).
+  - **M5a `StorageView.tsx`**: four sub-pages from the nav (`s3:buckets|objects|upload|inspect`,
+    legacy "url-tester" normalised - this FIXES a pre-existing bug where the old sidebar sent
+    "inspect" but WorkspaceView only understood "url-tester", making the URL tools unreachable).
+    Bucket cards land first; entering a bucket opens the object browser (bucket Select, debounced
+    prefix filter at parity with the stale-response guard, shadcn Table) plus the Object Detail
+    drawer (metadata + Copy JSON/CSV, export snippets, signed URL generation). Upload keeps the
+    write-policy gating + acknowledgement checkbox + Tauri file dialogue. Inspect keeps
+    analyse/validate. `App.tsx`: extracted `applyS3PrefixFilter` (request-id race guard) shared
+    with WorkspaceView; S3 tab branch renders StorageView.
+  - **M5b `ComputeView.tsx`** (built by a sub-agent against a pinned contract, reviewed): EC2
+    Fleet status cards, Instance Inventory (region Select, Refresh EC2, plain text filter
+    replacing PropertyFilter, Start/Stop/Reboot with the same write-mode + state gating), confirm
+    via shadcn **AlertDialog** (role alertdialog - the EC2 test was updated from role "dialog"),
+    Instance Detail fields, six generated Copy Actions, and EC2 Action History. `App.tsx`:
+    extracted the four EC2 handlers (`refreshEC2Inventory`, `selectEC2Region`,
+    `selectEC2Instance`, `invokeEC2LifecycleAction`) shared with WorkspaceView.
+  - **M5c `AzureView.tsx`** (same sub-agent): overview (subscription/tenant/auth cards, metric
+    cards incl. "Resource Groups, VMs", Workspace Profile fields), resource-groups (table +
+    detail), virtual-machines (RG Select, table, detail, copy actions). Driven by
+    `activeAzurePageId` for the azure-overview tab; the azure-resource-groups / azure-vms tabs map
+    straight to their pages.
+  - **M5d `PlaceholderView.tsx`**: for tabs without a dedicated view (Functions/Identity);
+    EmptyState + the Workspace Profile inspector with "Reveal/Hide Sensitive Values" and the
+    "Hidden until revealed" masking (the masks-sensitive test now exercises this view).
+  - Tests: S3 tests follow the new buckets→objects flow; EC2 dialog role "alertdialog"; everything
+    else passed unchanged. 19/19 green; `tsc` clean.
+  - Verified in live preview: Storage (bucket cards, objects table, detail drawer, gated
+    upload/inspect) and Compute (fleet, inventory, enabled Stop → AlertDialog with full action
+    context, Cancel) render correctly with no console errors; Azure verified via the test suite
+    (the browser mock opens an AWS workspace).
+
 ## Next step
-**M5 — resource screens.** Decompose `WorkspaceView` into `src/views/workspace/` starting with
-M5a Storage/S3. See the RESUME HERE block above for specifics.
+**M6 — Local Runtime.** Build `RuntimeView.tsx` (emulator cards + logs + Docker status) replacing
+the Cloudscape virtualisation tab. See the RESUME HERE block above for specifics.
 
 ## To reopen prototype
 `preview_start` config `prototype`, then open `http://localhost:4321/design-prototypes/index.html`.
