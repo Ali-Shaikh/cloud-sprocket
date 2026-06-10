@@ -58,34 +58,39 @@ Branch: `feat/ui-rebuild-tailwind` (off `feat/azure-local-runtime`). Tasks track
 - `7ab554a` feat(desktop): migrate resource screens to Tailwind workspace views (M5)
 - `f609236` docs: mark M5 (resource screens) complete, set M6 as resume point
 
-**M6 — DONE + verified, NOT yet committed (sitting in the working tree).**
+- `74c1842` feat(desktop): replace virtualisation tab with Tailwind RuntimeView (M6)
+- `25ed563` docs: mark M6 complete, add M9 notification UX revamp to the plan
 
-### >>> RESUME HERE: M7 (notifications, settings, debug, activity) <<<
-Next session: M7 cross-cutting work, after which only M8 (remove Cloudscape) remains:
-1. **Flashbar → sonner toasts**: replace the `<Flashbar items={notifications}>` strip in App.tsx
-   with sonner's `<Toaster>` + `toast()` calls fed by the `job.updated` notifications and
-   `pushNotification` (sonner is already installed since M0). Mind the tests that assert
-   notification text ("App reset complete", job messages) - toasts render in a portal, so
-   findByText should still work. Keep defaults sane (auto-dismiss + close button); the FULL
-   notification UX revamp is the new M9 in IMPLEMENTATION-PLAN.md (user feedback: notifications
-   do not close and are not user-friendly).
-2. **Reset Modal → AlertDialog**: replace the Cloudscape `Modal` reset dialog in App.tsx with the
-   M1 `AlertDialog`; keep the "type RESET to confirm" input (aria-label "Reset confirmation"),
-   "Reset app data" title, and the does-not-touch-config copy (all test-critical).
-3. **Activity tab**: WorkspaceView now ONLY serves the locked "actions" tab (the
-   recentActivityPanel). Build a small Tailwind ActivityView (log list + "Refresh Discovery"
-   button - test-critical strings: heading "Activity", "Refresh Discovery") and retire
-   WorkspaceView from the content chain entirely.
-4. **Debug Console restyle** (DebugConsole in views/shared.tsx renders its own DOM; either lift it
-   into a Tailwind view or restyle in place) + remove the Cloudscape Container wrapper in App.tsx.
-5. Theme settings already exist in the TopBar menu (System/Light/Dark, persisted) - nothing to do.
+**M7 — DONE + verified, NOT yet committed (sitting in the working tree).**
+
+### >>> RESUME HERE: M8 (decommission Cloudscape + polish) <<<
+Next session: M8, the final Cloudscape removal. App.tsx is already Cloudscape-free after M7;
+exactly four files still reference `@cloudscape-design`:
+1. **Delete the dead files**: `views/WorkspaceView.tsx`, `views/SessionSetupView.tsx`,
+   `views/shared.tsx` (verify with grep that nothing imports them first - as of M7 nothing does).
+2. **main.tsx**: drop the `@cloudscape-design/global-styles/index.css` import and the legacy
+   `./styles.css` import.
+3. **Delete `src/styles.css`** (1064 L of hand-rolled shell CSS) - first sweep for any class names
+   still referenced (`grep -o 'className="[^"]*"' src` against its selectors); the new views use
+   only Tailwind utilities so it should be safe.
+4. **theme.css → full Preflight**: switch to plain `@import "tailwindcss";` and remove the scoped
+   `.app-next` stand-in base layer (keep the `.app-next` class on AppShell harmless or drop it).
+   Re-verify dark/light + the gallery after the switch - Preflight resets may shift paddings.
+5. **package.json**: remove `@cloudscape-design/components`, `@cloudscape-design/global-styles`
+   (+ any other cloudscape deps); `vite.config.ts`: remove the "cloudscape" `manualChunks` branch.
+6. Re-run everything: `tsc`, 19/19 vitest, gallery `#gallery`, full click-through in preview, and
+   check the bundle: the ~545 kB cloudscape chunk must be gone from the build output.
+7. Light a11y pass (focus rings, aria-labels) + optional polish. M9 (notification UX revamp)
+   follows as its own module.
 Dev server: launch config `desktop-web` (vite :1425). Heads-up: headless screenshotter hangs on
 looping animations / Radix portals - inject `*{animation:none!important;transition:none!important}`
-via preview_eval first; it can capture a STALE frame (it may reload the page) - re-drive state via
-preview_eval and screenshot immediately. Preview viewport defaults narrow (<1180 px) - resize to
->=1280. To reach an open workspace in the browser mock: click "Open workspace" on Connect. Branch:
-`feat/ui-rebuild-tailwind` (check `git branch` first).
-**Commit M6 before starting M7 if a clean history is wanted.**
+via preview_eval first (but NOT before sonner toast checks - they need their enter transition); it
+can capture a STALE frame (it may reload) - re-drive state via preview_eval and screenshot
+immediately. Preview viewport defaults narrow (<1180 px) - resize to >=1280. To reach an open
+workspace in the browser mock: click "Open workspace" on Connect. Branch:
+`feat/ui-rebuild-tailwind` (check `git branch` first). Build the exe after the module
+(`pnpm run build:desktop:exe`) so Ali can test.
+**Commit M7 before starting M8 if a clean history is wanted.**
 
 - **M0 — DONE, verified, committed (`93b5fc8`).** Tailwind v4.3.0 + `@tailwindcss/vite`, clsx,
   tailwind-merge, lucide-react 1.17, sonner installed in `apps/desktop`.
@@ -258,10 +263,36 @@ preview_eval and screenshot immediately. Preview viewport defaults narrow (<1180
     and clicking "Start LocalStack" flips the status pill to "running" with the correct action
     status; console error-free.
 
+- **M7 — DONE, verified, uncommitted.** Cross-cutting sweep; **App.tsx is now fully
+  Cloudscape-free** (only main.tsx + the three dead view files still reference it, M8 deletes them).
+  - **Flashbar → sonner**: new `src/lib/notify.ts` (`notify(tone, title, description)` +
+    `notifyJob(job)` - a job is ONE toast keyed by jobId that resolves loading → success/error in
+    place). App.tsx: `notifications` state + Flashbar strip deleted; pushNotification /
+    addLocalStackNotification / addEmulatorNotification became thin notify() adapters (call sites
+    unchanged); job.updated handler calls notifyJob. `<Toaster theme={resolvedTheme}
+    position="bottom-right" closeButton richColors />` rendered next to the reset dialog; errors
+    10 s, warnings 8 s, success/info default (~4 s). Verified live: refresh produces one success
+    toast WITH a close button that AUTO-DISMISSES in ~4 s (the core "never closes" complaint is
+    already fixed at M7 level; the deeper model - dedupe, history, banners - stays M9).
+  - **Reset Modal → AlertDialog** (M1 kit + Input/Button): same title/copy/"type RESET" gating,
+    stays open while in flight; Cancel clears. Test role updated "dialog" → "alertdialog".
+  - **ActivityView** (`views/workspace/ActivityView.tsx`): "Activity" h1, "Refresh Discovery",
+    log entries with status dots; fed by `toActivityEntries(logs).slice(0, 12)`. The 100-prop
+    `<WorkspaceView>` element was DELETED from App.tsx - WorkspaceView is now fully orphaned.
+  - **DebugView** (`views/DebugView.tsx`): Tailwind table (time / type badge / method / payload)
+    on getDebugLogs/subscribeToDebugLogs; replaces the Cloudscape Container + shared DebugConsole.
+  - Also: AppErrorBoundary + Suspense fallback restyled to Tailwind; leftover wizard state
+    (provider/profile query + preferences) deleted; TopBar bell badge prop dropped (returns with
+    real history in M9); theme menu already done in M2 - untouched.
+  - Tests: only the reset dialog role changed; 19/19 green (sonner renders fine in jsdom). `tsc`
+    clean.
+  - Verified live: one updating toast per job with auto-dismiss + close button; reset alertdialog
+    gates on RESET; Activity tab renders entries; Debug Console streams 40 live RPC rows with
+    typed badges; console error-free.
+
 ## Next step
-**M7 — notifications, settings, debug, activity.** Flashbar → sonner, reset Modal → AlertDialog,
-Tailwind ActivityView (retiring WorkspaceView), Debug Console restyle. See the RESUME HERE block
-above for specifics.
+**M8 — decommission Cloudscape + polish.** Delete the three dead view files + styles.css, drop
+the deps, switch to full Preflight, bundle check. See the RESUME HERE block above for specifics.
 
 ## To reopen prototype
 `preview_start` config `prototype`, then open `http://localhost:4321/design-prototypes/index.html`.

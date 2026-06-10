@@ -22,19 +22,20 @@
 - **Cloudscape footprint to remove (M8):** 6 files / 10 refs (`main.tsx` global-styles, `App.tsx`,
   `views/SessionSetupView.tsx`, `views/WorkspaceView.tsx`, `views/shared.tsx`, `vite.config.ts`
   manualChunks) + `styles.css` + `package.json` deps.
-- **Progress:** **M0-M5 done + committed; M6 done + verified, uncommitted.** On branch
+- **Progress:** **M0-M6 done + committed; M7 done + verified, uncommitted.** On branch
   `feat/ui-rebuild-tailwind`: M0+M1 (`93b5fc8`), M2 app shell (`5028c6c`), M3 Connect view
-  (`fc968e7`), M4 Overview (`0cd5fa8`), M5 resource screens (`7ab554a`). **M6: new
-  `RuntimeView.tsx` - prototype-style emulator cards (status pills, auth/persistence/env editors
-  with identical run-state gating, Create/Start/Stop actions, inline LogStream panels), Docker
-  engine status, managed resources, config artefacts, and runtime settings; serves both the
-  open-workspace tab and the standalone rail path.** tsc clean, 19/19 tests with no test edits,
-  verified live (Start LocalStack flips the pill to running). WorkspaceView now only serves the
-  locked "actions" tab.
-- **Next step:** **M7 - notifications, settings, debug, activity** (Flashbar → sonner, reset Modal
-  → AlertDialog, Tailwind ActivityView retiring WorkspaceView, Debug Console restyle). Full detail
-  + resume notes in `design-prototypes/CHECKPOINT-ui-redesign.md` (RESUME HERE block). NB: work
-  lives on `feat/ui-rebuild-tailwind`, not the default branch - check `git branch` before resuming.
+  (`fc968e7`), M4 Overview (`0cd5fa8`), M5 resource screens (`7ab554a`), M6 Local Runtime
+  (`74c1842`). **M7: Flashbar → sonner toasts (one updating toast per job, auto-dismiss + close
+  button - the "never closes" complaint fixed at base level), reset Modal → AlertDialog,
+  Tailwind ActivityView + DebugView, error boundary restyled. App.tsx is now fully
+  Cloudscape-free; WorkspaceView/SessionSetupView/shared.tsx are orphaned dead files.** tsc
+  clean, 19/19 tests, all four pieces verified live. Exe rebuilt after each module for testing
+  (`pnpm run build:desktop:exe`).
+- **Next step:** **M8 - decommission Cloudscape** (delete the three dead view files + styles.css,
+  drop deps, full Tailwind Preflight, bundle check - the ~545 kB cloudscape chunk disappears),
+  then **M9 - notification UX revamp**. Full detail + resume notes in
+  `design-prototypes/CHECKPOINT-ui-redesign.md` (RESUME HERE block). NB: work lives on
+  `feat/ui-rebuild-tailwind`, not the default branch - check `git branch` before resuming.
 
 ## Latest Fix (2026-06-08): Docker-hang regression (could not unlock, no emulators)
 
