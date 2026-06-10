@@ -591,8 +591,9 @@ describe("App", () => {
   });
 
   it("masks sensitive profile values until they are revealed", async () => {
-    // The connect screen no longer shows the profile inspector; the sensitive
-    // masking now lives in the locked workspace profile panel.
+    // The connect screen no longer shows the profile inspector, and the locked
+    // overview tab is now the Tailwind OverviewView. The masking still lives in
+    // the WorkspaceView profile panel, reachable via a provider tab.
     sessionFixture = {
       ...sessionFixture,
       isLocked: true,
@@ -601,6 +602,7 @@ describe("App", () => {
       lockedAuthMethod: "cli",
       workspaceTabs: [
         { tabId: "overview", label: "Overview", summary: "Summary", detail: "Overview panel" },
+        { tabId: "iam", label: "Identity", summary: "Identity summary", detail: "Identity panel" },
       ],
     };
 
@@ -610,6 +612,7 @@ describe("App", () => {
       </ThemeProvider>,
     );
 
+    fireEvent.click(await screen.findByRole("button", { name: "Identity" }));
     expect(await screen.findByText("Hidden until revealed")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reveal Sensitive Values" }));
     expect(await screen.findByText("super-secret-value")).toBeInTheDocument();
@@ -661,8 +664,14 @@ describe("App", () => {
       </ThemeProvider>,
     );
 
-    expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
-    expect(await screen.findByText("Workspace Summary")).toBeInTheDocument();
+    // Locked landing is now the Tailwind OverviewView: safety banner reflects
+    // awsWritesEnabled, stat cards and recents come from the workspace snapshot.
+    expect(await screen.findByText(/Local-endpoint writes are enabled/)).toBeInTheDocument();
+    expect(await screen.findByText("S3 buckets")).toBeInTheDocument();
+    expect(screen.getByText("EC2 instances")).toBeInTheDocument();
+    expect(screen.getByText(/workspace sandbox/)).toBeInTheDocument();
+    expect(screen.getByText("cloudsprocket-artifacts")).toBeInTheDocument();
+    expect(screen.getByText("sandbox-api-1")).toBeInTheDocument();
     const nav = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
     expect(nav.getByText("Overview")).toBeInTheDocument();
     expect(nav.getByText("Local Runtime")).toBeInTheDocument();
@@ -670,9 +679,7 @@ describe("App", () => {
     expect(nav.getByText("EC2")).toBeInTheDocument();
     expect(nav.getByRole("button", { name: /S3/ }).querySelector("img")).not.toBeNull();
     expect(nav.getByRole("button", { name: /EC2/ }).querySelector("img")).not.toBeNull();
-    expect((await screen.findAllByText("workspace sandbox")).length).toBeGreaterThan(0);
-    expect(await screen.findByText("2 buckets")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Local Runtime"));
+    fireEvent.click(nav.getByText("Local Runtime"));
     expect(await screen.findByText("Docker Runtime")).toBeInTheDocument();
     expect(await screen.findByText("Local Runtimes")).toBeInTheDocument();
     expect(await screen.findByText("Managed Docker Resources")).toBeInTheDocument();
@@ -725,7 +732,7 @@ describe("App", () => {
       </ThemeProvider>,
     );
 
-    expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
+    expect(await screen.findByText(/Read-only mode keeps you safe/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Local Runtime" }));
     expect(await screen.findByText("Docker Runtime")).toBeInTheDocument();
     expect(await screen.findByText("Local Runtimes")).toBeInTheDocument();
@@ -799,7 +806,7 @@ describe("App", () => {
       </ThemeProvider>,
     );
 
-    expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
+    expect(await screen.findByText(/Read-only mode keeps you safe/)).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Close workspace" })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Local Runtime" }));
     expect(await screen.findByRole("button", { name: "Start LocalStack" })).toBeInTheDocument();
@@ -832,7 +839,7 @@ describe("App", () => {
       </ThemeProvider>,
     );
 
-    expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
+    expect(await screen.findByText(/Read-only mode keeps you safe/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reset app data" }));
     expect(await screen.findByRole("dialog", { name: "Reset app data" })).toBeInTheDocument();
     expect(screen.getByText(/does not touch AWS, Azure, or GCP config files/i)).toBeInTheDocument();
@@ -1478,7 +1485,9 @@ describe("App", () => {
       </ThemeProvider>,
     );
 
-    expect(await screen.findByText("Locked Workspace")).toBeInTheDocument();
+    expect(await screen.findByText(/Read-only mode keeps you safe/)).toBeInTheDocument();
+    expect(await screen.findByText("Resource groups")).toBeInTheDocument();
+    expect(screen.getByText("Virtual machines")).toBeInTheDocument();
     const azureNav = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
     expect(azureNav.getByRole("button", { name: /Azure/ })).toBeInTheDocument();
     expect(screen.queryByText("S3")).not.toBeInTheDocument();
