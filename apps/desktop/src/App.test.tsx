@@ -841,7 +841,7 @@ describe("App", () => {
 
     expect(await screen.findByText(/Read-only mode keeps you safe/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reset app data" }));
-    expect(await screen.findByRole("dialog", { name: "Reset app data" })).toBeInTheDocument();
+    expect(await screen.findByRole("alertdialog", { name: "Reset app data" })).toBeInTheDocument();
     expect(screen.getByText(/does not touch AWS, Azure, or GCP config files/i)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Reset confirmation"), {
       target: { value: "RESET" },
