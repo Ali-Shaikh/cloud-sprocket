@@ -109,6 +109,25 @@ Replace the Cloudscape virtualisation panel with emulator cards (prototype style
 - Update `App.test.tsx` + view tests for the new structure; bundle-size check.
 - **Acceptance:** zero Cloudscape references; `tsc --noEmit` + `vitest` green; app fully on new kit.
 
+### M9 — Notification UX revamp  ·  Dep: M7  ·  Size: M
+_User feedback (2026-06-10): the current notifications do not close and are not user-friendly._
+Rethink the whole notification model, not just the rendering library:
+- **Lifecycle:** every notification must be dismissible AND auto-dismiss by default
+  (success ~4 s, info ~6 s; errors persist until dismissed). In-progress job toasts update
+  in place via a stable toast id (sonner `toast.loading` → `toast.success`/`toast.error` on the
+  same id), never stack duplicates per job.
+- **Volume control:** dedupe repeated messages, collapse bursts (e.g. poll loops emitting the
+  same status), cap concurrent toasts, and route the full history into the Activity drawer so
+  nothing is lost when a toast expires.
+- **Hierarchy:** transient outcomes → toast; long-running jobs → one updating toast + topbar
+  bell badge; persistent state (read-only mode, Docker down) → inline banners on the relevant
+  view, not toasts.
+- **Affordances:** clear close button, hover-to-pause timers, action buttons where useful
+  (e.g. "View logs" on an emulator failure), reduced-motion respected.
+- **Acceptance:** no permanently stuck toasts; success toasts self-clear; a job emits exactly one
+  toast that updates through queued → running → completed/failed; bell badge and Activity drawer
+  stay consistent with toast history.
+
 ---
 
 ## Sequencing
@@ -118,8 +137,10 @@ M0 → M1 → M2 ─┬→ M3 (onboarding)
               ├→ M5a/b/c/d (resources)   ← largest, parallelizable
               ├→ M6 (runtime)
               └→ M7 (notifications/settings)   →   M8 (remove Cloudscape + polish)
+                                                      └→ M9 (notification UX revamp)
 ```
-M0–M2 are the critical path. After M2, M3–M7 can proceed in parallel; M8 is the final gate.
+M0–M2 are the critical path. After M2, M3–M7 can proceed in parallel; M8 is the final gate for
+the Cloudscape removal; M9 closes out the notification experience on top of the M7 plumbing.
 
 ## Risks / notes
 - **Coexistence CSS:** Tailwind preflight vs Cloudscape global-styles can collide during M2–M7.

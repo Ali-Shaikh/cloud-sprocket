@@ -32,7 +32,10 @@ DNA: friendly, status-first, workspace-switcher driven, card-based, near-zero on
 Modules: M0 tooling/theme → M1 primitive kit → M2 shell (rail+nav+topbar) →
 M3 Connect onboarding (kill wizard) · M4 Overview · M5 resources (decompose WorkspaceView
 2491 L: S3/EC2/Azure) · M6 Local Runtime · M7 notifications/settings (Flashbar→sonner) →
-M8 remove Cloudscape + polish. App stays runnable after every module; Cloudscape deleted only in M8.
+M8 remove Cloudscape + polish → M9 notification UX revamp (added 2026-06-10 from user feedback:
+notifications do not close and are not user-friendly; auto-dismiss, per-job updating toasts,
+dedupe, history in the Activity drawer). App stays runnable after every module; Cloudscape
+deleted only in M8.
 
 Cloudscape footprint to remove: 6 files / 10 refs (main.tsx global-styles, App.tsx,
 SessionSetupView, WorkspaceView, shared.tsx, vite.config.ts manualChunks) + styles.css + package.json deps.
@@ -52,29 +55,37 @@ Branch: `feat/ui-rebuild-tailwind` (off `feat/azure-local-runtime`). Tasks track
 - `0cd5fa8` feat(desktop): add Tailwind Overview as the workspace landing tab (M4)
 - `249ce83` docs: mark M4 (Overview) complete, set M5 as resume point
 
-**M5 (all of a/b/c/d) — DONE + verified, NOT yet committed (sitting in the working tree).**
+- `7ab554a` feat(desktop): migrate resource screens to Tailwind workspace views (M5)
+- `f609236` docs: mark M5 (resource screens) complete, set M6 as resume point
 
-### >>> RESUME HERE: M6 (Local Runtime) <<<
-Next session: build M6 - `src/views/workspace/RuntimeView.tsx` replacing the Cloudscape
-virtualisation tab (the largest remaining WorkspaceView surface). Emulator cards in the prototype
-style: LocalStack + floci-az with status pill, endpoint/uptime/profile/persistence meta grid,
-auth-token + env editors (locked while running), prepare-profile/start/stop actions, inline log
-panels, Docker engine status, managed Docker resources + local config artefacts. The full prop
-contract (about 25 emulator-related props) is already wired in App.tsx → WorkspaceView; lift the
-same props into RuntimeView. WorkspaceView's UNLOCKED virtualisation early-return must also be
-covered (Local Runtime is reachable before opening a workspace via the rail). Watch the test
-strings: "Docker Runtime", "Local Runtimes", "Managed Docker Resources", "Local Config Artifacts",
-"Start LocalStack", "Start floci-az", "Create AWS Profile", persistence/auth-token labels.
-After M6, WorkspaceView only serves the "actions" tab (small; could fold into M7's notifications
-work), then M8 removes Cloudscape.
+**M6 — DONE + verified, NOT yet committed (sitting in the working tree).**
+
+### >>> RESUME HERE: M7 (notifications, settings, debug, activity) <<<
+Next session: M7 cross-cutting work, after which only M8 (remove Cloudscape) remains:
+1. **Flashbar → sonner toasts**: replace the `<Flashbar items={notifications}>` strip in App.tsx
+   with sonner's `<Toaster>` + `toast()` calls fed by the `job.updated` notifications and
+   `pushNotification` (sonner is already installed since M0). Mind the tests that assert
+   notification text ("App reset complete", job messages) - toasts render in a portal, so
+   findByText should still work. Keep defaults sane (auto-dismiss + close button); the FULL
+   notification UX revamp is the new M9 in IMPLEMENTATION-PLAN.md (user feedback: notifications
+   do not close and are not user-friendly).
+2. **Reset Modal → AlertDialog**: replace the Cloudscape `Modal` reset dialog in App.tsx with the
+   M1 `AlertDialog`; keep the "type RESET to confirm" input (aria-label "Reset confirmation"),
+   "Reset app data" title, and the does-not-touch-config copy (all test-critical).
+3. **Activity tab**: WorkspaceView now ONLY serves the locked "actions" tab (the
+   recentActivityPanel). Build a small Tailwind ActivityView (log list + "Refresh Discovery"
+   button - test-critical strings: heading "Activity", "Refresh Discovery") and retire
+   WorkspaceView from the content chain entirely.
+4. **Debug Console restyle** (DebugConsole in views/shared.tsx renders its own DOM; either lift it
+   into a Tailwind view or restyle in place) + remove the Cloudscape Container wrapper in App.tsx.
+5. Theme settings already exist in the TopBar menu (System/Light/Dark, persisted) - nothing to do.
 Dev server: launch config `desktop-web` (vite :1425). Heads-up: headless screenshotter hangs on
 looping animations / Radix portals - inject `*{animation:none!important;transition:none!important}`
-via preview_eval first; it can also capture a STALE frame (it may reload the page) - re-drive state
-via preview_eval and screenshot immediately. Preview viewport defaults narrow (<1180 px) so the
-context nav auto-collapses (by design) - resize to >=1280. To reach a locked workspace in the
-browser mock: click "Open workspace" on the Connect screen. The branch is `feat/ui-rebuild-tailwind`
-(NOT the default branch - check `git branch` first).
-**Commit M5 before starting M6 if a clean history is wanted.**
+via preview_eval first; it can capture a STALE frame (it may reload the page) - re-drive state via
+preview_eval and screenshot immediately. Preview viewport defaults narrow (<1180 px) - resize to
+>=1280. To reach an open workspace in the browser mock: click "Open workspace" on Connect. Branch:
+`feat/ui-rebuild-tailwind` (check `git branch` first).
+**Commit M6 before starting M7 if a clean history is wanted.**
 
 - **M0 — DONE, verified, committed (`93b5fc8`).** Tailwind v4.3.0 + `@tailwindcss/vite`, clsx,
   tailwind-merge, lucide-react 1.17, sonner installed in `apps/desktop`.
@@ -221,9 +232,36 @@ browser mock: click "Open workspace" on the Connect screen. The branch is `feat/
     context, Cancel) render correctly with no console errors; Azure verified via the test suite
     (the browser mock opens an AWS workspace).
 
+- **M6 — DONE, verified, uncommitted.** New `src/views/workspace/RuntimeView.tsx` (Tailwind, no
+  Cloudscape) replaces the virtualisation tab for BOTH paths: the open-workspace tab and the
+  standalone rail destination (`unlocked` prop swaps in the standalone intro copy reworded to the
+  Open/Close metaphor). WorkspaceView now only serves the locked "actions" tab.
+  - Layout: "Local Runtime" header (Docker engine state + emulator count) + Refresh Docker;
+    "Docker Runtime" section (engine state dot, endpoint, server version, ownership policy,
+    summary, detail fields); "Local Runtimes" as two-column emulator cards in the prototype style
+    (provider logo, image line, status pill with pulse while running, summary, detail fields,
+    runtime-action status + settings-locked hint, LocalStack auth token (password input,
+    aria-label preserved), persistence checkboxes ("Enable {label} persistence"), env textareas
+    (placeholders preserved), Create/Start/Stop buttons with IDENTICAL gating - start stays
+    enabled while "unhealthy", settings lock while running/unhealthy - and an inline `LogStream`
+    panel with Refresh Logs); "Managed Docker Resources" cards; "Local Config Artifacts" cards;
+    "Runtime Settings" field grid (platform, paths, images - the cloudsprocket-workspace.db
+    assertion renders from here).
+  - Props grouped as two `EmulatorControls` objects (localStack incl. authToken, flociAz) plus
+    workspace/unlocked/showSensitiveValues/onRefreshDockerRuntime; App.tsx wires them from the
+    existing state + handlers (no new RPCs). Content chain: `virtualisation` branch ahead of
+    WorkspaceView catches locked AND unlocked; WorkspaceView's unlocked early-return is now dead.
+  - Tests: 19/19 green WITHOUT any test edits (all emulator flow tests - start/stop both
+    emulators, locked controls while running, unhealthy keeps start enabled, sparse runtime
+    fields, unlock-from-runtime - pass against the new view as-is). `tsc` clean.
+  - Verified in live preview (unlocked rail path): all five sections render, both emulator cards,
+    and clicking "Start LocalStack" flips the status pill to "running" with the correct action
+    status; console error-free.
+
 ## Next step
-**M6 — Local Runtime.** Build `RuntimeView.tsx` (emulator cards + logs + Docker status) replacing
-the Cloudscape virtualisation tab. See the RESUME HERE block above for specifics.
+**M7 — notifications, settings, debug, activity.** Flashbar → sonner, reset Modal → AlertDialog,
+Tailwind ActivityView (retiring WorkspaceView), Debug Console restyle. See the RESUME HERE block
+above for specifics.
 
 ## To reopen prototype
 `preview_start` config `prototype`, then open `http://localhost:4321/design-prototypes/index.html`.

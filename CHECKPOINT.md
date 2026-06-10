@@ -22,18 +22,19 @@
 - **Cloudscape footprint to remove (M8):** 6 files / 10 refs (`main.tsx` global-styles, `App.tsx`,
   `views/SessionSetupView.tsx`, `views/WorkspaceView.tsx`, `views/shared.tsx`, `vite.config.ts`
   manualChunks) + `styles.css` + `package.json` deps.
-- **Progress:** **M0-M4 done + committed; M5 done + verified, uncommitted.** On branch
+- **Progress:** **M0-M5 done + committed; M6 done + verified, uncommitted.** On branch
   `feat/ui-rebuild-tailwind`: M0+M1 (`93b5fc8`), M2 app shell (`5028c6c`), M3 Connect view
-  (`fc968e7`), M4 Overview (`0cd5fa8`). **M5: the resource screens left `WorkspaceView` -
-  new `src/views/workspace/` Tailwind views: StorageView (bucket cards, object browser + detail
-  drawer, upload, URL inspect), ComputeView (EC2 fleet, inventory, lifecycle actions with
-  AlertDialog confirm), AzureView (overview, resource groups, VMs), PlaceholderView (other tabs +
-  the sensitive-values profile inspector).** tsc clean, 19/19 tests, Storage + Compute visually
-  verified. WorkspaceView now only serves the virtualisation tab (M6) and "actions" tab (M7).
-- **Next step:** **M6 - Local Runtime** (`RuntimeView.tsx`: emulator cards + logs + Docker status
-  replacing the Cloudscape virtualisation tab). Full detail + resume notes in
-  `design-prototypes/CHECKPOINT-ui-redesign.md` (RESUME HERE block). NB: work lives on
-  `feat/ui-rebuild-tailwind`, not the default branch - check `git branch` before resuming.
+  (`fc968e7`), M4 Overview (`0cd5fa8`), M5 resource screens (`7ab554a`). **M6: new
+  `RuntimeView.tsx` - prototype-style emulator cards (status pills, auth/persistence/env editors
+  with identical run-state gating, Create/Start/Stop actions, inline LogStream panels), Docker
+  engine status, managed resources, config artefacts, and runtime settings; serves both the
+  open-workspace tab and the standalone rail path.** tsc clean, 19/19 tests with no test edits,
+  verified live (Start LocalStack flips the pill to running). WorkspaceView now only serves the
+  locked "actions" tab.
+- **Next step:** **M7 - notifications, settings, debug, activity** (Flashbar → sonner, reset Modal
+  → AlertDialog, Tailwind ActivityView retiring WorkspaceView, Debug Console restyle). Full detail
+  + resume notes in `design-prototypes/CHECKPOINT-ui-redesign.md` (RESUME HERE block). NB: work
+  lives on `feat/ui-rebuild-tailwind`, not the default branch - check `git branch` before resuming.
 
 ## Latest Fix (2026-06-08): Docker-hang regression (could not unlock, no emulators)
 
