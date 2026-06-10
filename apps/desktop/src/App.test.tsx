@@ -1044,6 +1044,8 @@ describe("App", () => {
     );
 
     fireEvent.click(await screen.findByText("S3"));
+    // The S3 tab lands on bucket cards; entering a bucket opens the object browser.
+    fireEvent.click(await screen.findByRole("button", { name: /cloudsprocket-artifacts/ }));
     const prefixInput = await screen.findByPlaceholderText(
       "Filter by prefix, for example reports/",
     );
@@ -1089,6 +1091,8 @@ describe("App", () => {
     );
 
     fireEvent.click(await screen.findByText("S3"));
+    // The S3 tab lands on bucket cards; entering a bucket opens the object browser.
+    fireEvent.click(await screen.findByRole("button", { name: /cloudsprocket-artifacts/ }));
     const prefixInput = await screen.findByPlaceholderText(
       "Filter by prefix, for example reports/",
     );
@@ -1150,6 +1154,8 @@ describe("App", () => {
     );
 
     fireEvent.click(await screen.findByText("S3"));
+    // The S3 tab lands on bucket cards; entering a bucket opens the object browser.
+    fireEvent.click(await screen.findByRole("button", { name: /cloudsprocket-artifacts/ }));
     const prefixInput = await screen.findByPlaceholderText(
       "Filter by prefix, for example reports/",
     );
@@ -1228,7 +1234,7 @@ describe("App", () => {
     await act(async () => {
       fireEvent.click(stopButton);
     });
-    expect(await screen.findByRole("dialog", { name: "Stop EC2 instance" })).toBeInTheDocument();
+    expect(await screen.findByRole("alertdialog", { name: "Stop EC2 instance" })).toBeInTheDocument();
     expect(await screen.findByText(/send a live EC2 stop request/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Confirm Stop" }));
 

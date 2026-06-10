@@ -35,6 +35,10 @@ import type {
 import type { Status } from "./components/status-dot";
 import ConnectView from "./views/ConnectView";
 import OverviewView from "./views/OverviewView";
+import StorageView from "./views/workspace/StorageView";
+import ComputeView from "./views/workspace/ComputeView";
+import AzureView from "./views/workspace/AzureView";
+import PlaceholderView from "./views/workspace/PlaceholderView";
 import WorkspaceView from "./views/WorkspaceView";
 import type {
   ActivityLogEntry,
@@ -632,6 +636,73 @@ export default function App() {
     });
   }
 
+  function refreshEC2Inventory(): void {
+    const region = workspace.selectedEc2Region;
+    if (!region) {
+      setEC2ActionStatus("Select an EC2 region before refreshing inventory.");
+      return;
+    }
+    setEC2ActionStatus(`Refreshing EC2 inventory for ${region}.`);
+    void backendRequest<WorkspaceSnapshot>("aws.ec2.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setEC2ActionStatus(workspaceResult.ec2StatusMessage || `Loaded EC2 instances from ${region}.`);
+      })
+      .catch((error: unknown) => {
+        setEC2ActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function selectEC2Region(region: string): void {
+    setEC2ActionStatus("Select an instance to run lifecycle actions.");
+    setEC2ActionInFlight(false);
+    void backendRequest<WorkspaceSnapshot>("aws.ec2.selectRegion", { region }).then((workspaceResult) => {
+      startTransition(() => {
+        setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+      });
+    });
+  }
+
+  function selectEC2Instance(instanceId: string): void {
+    setEC2ActionStatus("Instance selected. EC2 lifecycle writes require a local endpoint profile with write opt-in.");
+    setEC2ActionInFlight(false);
+    void backendRequest<WorkspaceSnapshot>("aws.ec2.selectInstance", { instanceId }).then((workspaceResult) => {
+      startTransition(() => {
+        setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+      });
+    });
+  }
+
+  function invokeEC2LifecycleAction(action: EC2LifecycleAction, instanceId: string): void {
+    setEC2ActionStatus(`Queueing EC2 ${action} for ${instanceId}.`);
+    setEC2ActionInFlight(true);
+    void backendRequest<JobStatus>("aws.ec2.invokeAction", { action, instanceId })
+      .then((job) => {
+        setEC2ActionStatus(job.message);
+        setEC2ActionInFlight(job.status === "queued" || job.status === "running");
+      })
+      .catch((error: unknown) => {
+        setEC2ActionStatus(error instanceof Error ? error.message : String(error));
+        setEC2ActionInFlight(false);
+      });
+  }
+
+  // Applies an S3 prefix filter, ignoring stale responses that finish after a
+  // newer request has been issued (keeps fast typing from reverting the list).
+  function applyS3PrefixFilter(prefix: string): void {
+    const requestId = s3PrefixRequestIdRef.current + 1;
+    s3PrefixRequestIdRef.current = requestId;
+    void backendRequest<WorkspaceSnapshot>("aws.s3.setPrefixFilter", { prefix }).then((workspaceResult) => {
+      if (requestId === s3PrefixRequestIdRef.current) {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+      }
+    });
+  }
+
   async function resetAppData(): Promise<void> {
     if (resetConfirmation !== "RESET") {
       return;
@@ -1103,6 +1174,82 @@ export default function App() {
         setActiveWorkspaceTabId(tabId);
       }}
     />
+  ) : session.isLocked && activeWorkspaceTabId === "s3" ? (
+    <StorageView
+      workspace={workspace}
+      activePageId={activeS3PageId}
+      onNavigatePage={setActiveS3PageId}
+      showSensitiveValues={showSensitiveValues}
+      onSelectBucket={(bucketName) => {
+        void mutateSession("aws.s3.selectBucket", { bucketName });
+      }}
+      onSelectObject={(objectKey) => {
+        void mutateSession("aws.s3.selectObject", { objectKey });
+      }}
+      onSetPrefixFilter={applyS3PrefixFilter}
+      uploadStatus={s3UploadStatus}
+      signedUrlStatus={s3SignedUrlStatus}
+      signedUrlResult={s3SignedUrlResult}
+      urlInspection={s3UrlInspection}
+      urlValidation={s3UrlValidation}
+      onUploadObject={(sourcePath, objectKey) => {
+        setS3UploadStatus(`Queueing upload for ${objectKey}.`);
+        void backendRequest("aws.s3.uploadObject", { objectKey, sourcePath });
+      }}
+      onPresignObject={(durationSeconds) => {
+        setS3SignedUrlStatus("Queueing signed URL generation.");
+        void backendRequest("aws.s3.presignObject", { durationSeconds });
+      }}
+      onAnalyseUrl={(url) => {
+        void (async () => {
+          setS3UrlInspection(await backendRequest<UrlInspection>("aws.s3.analyseUrl", { url }));
+        })();
+      }}
+      onValidateUrl={(url) => {
+        void (async () => {
+          await backendRequest("aws.s3.validateUrl", { url });
+        })();
+      }}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "ec2" ? (
+    <ComputeView
+      workspace={workspace}
+      actionStatus={ec2ActionStatus}
+      actionInFlight={ec2ActionInFlight}
+      actionHistory={ec2ActionHistory}
+      onRefreshInstances={refreshEC2Inventory}
+      onSelectRegion={selectEC2Region}
+      onSelectInstance={selectEC2Instance}
+      onInvokeAction={invokeEC2LifecycleAction}
+    />
+  ) : session.isLocked &&
+    ["azure-overview", "azure-resource-groups", "azure-vms"].includes(activeWorkspaceTabId) ? (
+    <AzureView
+      workspace={workspace}
+      activePageId={
+        activeWorkspaceTabId === "azure-resource-groups"
+          ? "resource-groups"
+          : activeWorkspaceTabId === "azure-vms"
+            ? "virtual-machines"
+            : activeAzurePageId
+      }
+      showSensitiveValues={showSensitiveValues}
+      onSelectResourceGroup={(resourceGroup) => {
+        void mutateSession("azure.selectResourceGroup", { resourceGroup });
+      }}
+      onSelectVirtualMachine={(vmId) => {
+        void mutateSession("azure.selectVirtualMachine", { vmId });
+      }}
+    />
+  ) : session.isLocked && !["virtualisation", "actions"].includes(activeWorkspaceTabId) ? (
+    <PlaceholderView
+      tab={session.workspaceTabs.find((tab) => tab.tabId === activeWorkspaceTabId)}
+      workspace={workspace}
+      showSensitiveValues={showSensitiveValues}
+      onToggleSensitiveValues={() => {
+        setShowSensitiveValues((current) => !current);
+      }}
+    />
   ) : session.isLocked || activeWorkspaceTabId === "virtualisation" ? (
     <WorkspaceView
       session={session}
@@ -1168,17 +1315,7 @@ export default function App() {
       onSelectS3Object={(objectKey) => {
         void mutateSession("aws.s3.selectObject", { objectKey });
       }}
-      onSetS3PrefixFilter={(prefix) => {
-        const requestId = s3PrefixRequestIdRef.current + 1;
-        s3PrefixRequestIdRef.current = requestId;
-        void backendRequest<WorkspaceSnapshot>("aws.s3.setPrefixFilter", { prefix }).then((workspaceResult) => {
-          if (requestId === s3PrefixRequestIdRef.current) {
-            startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
-            });
-          }
-        });
-      }}
+      onSetS3PrefixFilter={applyS3PrefixFilter}
       s3UploadStatus={s3UploadStatus}
       s3SignedUrlStatus={s3SignedUrlStatus}
       s3SignedUrlResult={s3SignedUrlResult}
@@ -1205,55 +1342,10 @@ export default function App() {
       ec2ActionStatus={ec2ActionStatus}
       ec2ActionInFlight={ec2ActionInFlight}
       ec2ActionHistory={ec2ActionHistory}
-      onRefreshEC2Instances={() => {
-        const region = workspace.selectedEc2Region;
-        if (!region) {
-          setEC2ActionStatus("Select an EC2 region before refreshing inventory.");
-          return;
-        }
-        setEC2ActionStatus(`Refreshing EC2 inventory for ${region}.`);
-        void backendRequest<WorkspaceSnapshot>("aws.ec2.selectRegion", { region })
-          .then((workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
-            });
-            setEC2ActionStatus(workspaceResult.ec2StatusMessage || `Loaded EC2 instances from ${region}.`);
-          })
-          .catch((error: unknown) => {
-            setEC2ActionStatus(error instanceof Error ? error.message : String(error));
-          });
-      }}
-      onSelectEC2Region={(region) => {
-        setEC2ActionStatus("Select an instance to run lifecycle actions.");
-        setEC2ActionInFlight(false);
-        void backendRequest<WorkspaceSnapshot>("aws.ec2.selectRegion", { region }).then((workspaceResult) => {
-          startTransition(() => {
-            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
-          });
-        });
-      }}
-      onSelectEC2Instance={(instanceId) => {
-        setEC2ActionStatus("Instance selected. EC2 lifecycle writes require a local endpoint profile with write opt-in.");
-        setEC2ActionInFlight(false);
-        void backendRequest<WorkspaceSnapshot>("aws.ec2.selectInstance", { instanceId }).then((workspaceResult) => {
-          startTransition(() => {
-            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
-          });
-        });
-      }}
-      onInvokeEC2Action={(action, instanceId) => {
-        setEC2ActionStatus(`Queueing EC2 ${action} for ${instanceId}.`);
-        setEC2ActionInFlight(true);
-        void backendRequest<JobStatus>("aws.ec2.invokeAction", { action, instanceId })
-          .then((job) => {
-            setEC2ActionStatus(job.message);
-            setEC2ActionInFlight(job.status === "queued" || job.status === "running");
-          })
-          .catch((error: unknown) => {
-            setEC2ActionStatus(error instanceof Error ? error.message : String(error));
-            setEC2ActionInFlight(false);
-          });
-      }}
+      onRefreshEC2Instances={refreshEC2Inventory}
+      onSelectEC2Region={selectEC2Region}
+      onSelectEC2Instance={selectEC2Instance}
+      onInvokeEC2Action={invokeEC2LifecycleAction}
       onSelectAzureResourceGroup={(resourceGroup) => {
         void mutateSession("azure.selectResourceGroup", { resourceGroup });
       }}
