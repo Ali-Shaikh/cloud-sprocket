@@ -22,14 +22,15 @@
 - **Cloudscape footprint to remove (M8):** 6 files / 10 refs (`main.tsx` global-styles, `App.tsx`,
   `views/SessionSetupView.tsx`, `views/WorkspaceView.tsx`, `views/shared.tsx`, `vite.config.ts`
   manualChunks) + `styles.css` + `package.json` deps.
-- **Progress:** **M0, M1, M2 done + committed; M3 done + verified, uncommitted.** On branch
-  `feat/ui-rebuild-tailwind`: M0+M1 (`93b5fc8`), M2 three-zone app shell (`5028c6c`/`24714da`).
-  **M3 (kill the wizard): new `ConnectView.tsx` - card-based single-screen connect that replaces
-  the 4-step `SessionSetupView`; lock/unlock reframed to Open / Close workspace.** tsc clean,
-  19/19 tests, visually verified. The Cloudscape views still render inside the shell and migrate
-  per-view in M4-M7.
-- **Next step:** **M4 - Overview** (`OverviewView.tsx`: stat cards + safety banner + recents for the
-  locked workspace's first tab). Full detail + resume notes in
+- **Progress:** **M0-M3 done + committed; M4 done + verified, uncommitted.** On branch
+  `feat/ui-rebuild-tailwind`: M0+M1 (`93b5fc8`), M2 three-zone app shell (`5028c6c`), M3
+  card-based Connect view (`fc968e7`). **M4: new `OverviewView.tsx` - the locked workspace's
+  landing tab with live stat cards, an awsWritesEnabled-driven safety banner, and "Jump back in"
+  recents; "Close workspace" moved into the shell nav footer (WorkspaceView's header button
+  removed).** tsc clean, 19/19 tests, visually verified. Remaining Cloudscape views (S3/EC2/Azure/
+  runtime tabs) migrate in M5-M7.
+- **Next step:** **M5 - resource screens** (decompose `WorkspaceView` into `src/views/workspace/`,
+  starting with M5a Storage/S3). Full detail + resume notes in
   `design-prototypes/CHECKPOINT-ui-redesign.md` (RESUME HERE block). NB: work lives on
   `feat/ui-rebuild-tailwind`, not the default branch - check `git branch` before resuming.
 

@@ -46,23 +46,28 @@ Branch: `feat/ui-rebuild-tailwind` (off `feat/azure-local-runtime`). Tasks track
 - `5332495` docs: mark M0/M1 committed, set M2 as resume point
 - `5028c6c` feat(desktop): replace Cloudscape sidebar with Tailwind app shell (M2)
 - `24714da` docs: mark M2 (app shell) complete, set M3 as resume point
+- `fc968e7` feat(desktop): replace setup wizard with card-based Connect view (M3)
+- `ea0e18c` docs: mark M3 (Connect view) complete, set M4 as resume point
 
-**M3 — DONE + verified, NOT yet committed (sitting in the working tree).**
+**M4 — DONE + verified, NOT yet committed (sitting in the working tree).**
 
-### >>> RESUME HERE: M4 (Overview) <<<
-Next session: build M4 - `src/views/OverviewView.tsx`. Stat cards (counts from `workspace.get`:
-s3Buckets, ec2Instances, azure RG/VMs, emulators), a read-only safety banner driven by
-`workspace.awsWritesEnabled`, and a "Jump back in" recents strip. This is the FIRST tab shown
-*after* a workspace is opened (locked). Currently the locked "overview" tab still renders the old
-Cloudscape `WorkspaceView` overview; M4 swaps that one tab to a Tailwind view (decompose pattern
-continues in M5). Reuse M1 `StatCard`/`Card`/`Badge` + the shell. Acceptance: live counts + safety
-state reflect the workspace snapshot.
+### >>> RESUME HERE: M5 (resource screens) <<<
+Next session: start M5 - decompose `WorkspaceView.tsx` (~2480 L) into `src/views/workspace/`
+Tailwind views, one submodule at a time; the old Cloudscape tab keeps rendering until its
+replacement lands. Suggested order: **M5a Storage/S3** (bucket cards → object table → object
+drawer; upload, presign, URL inspect - replaces Cloudscape Table/PropertyFilter with shadcn Table
++ simple filter), then M5b Compute/EC2 (region Select, instance table, lifecycle actions with
+AlertDialog confirm), M5c Azure RG+VMs, M5d Functions/Identity placeholders. All RPC handlers
+already exist as props in `App.tsx`; check `WorkspaceView`'s prop list for the exact contract.
+Acceptance per submodule: data + actions at parity; no `@cloudscape-design` import in migrated files.
 Dev server: launch config `desktop-web` (vite :1425). Heads-up: headless screenshotter hangs on
 looping animations / Radix portals - inject `*{animation:none!important;transition:none!important}`
-via preview_eval first; preview viewport defaults narrow (<1180 px) so the context nav
-auto-collapses (by design) - resize to >=1280 to see it. The branch is `feat/ui-rebuild-tailwind`
+via preview_eval first; it can also capture a STALE frame (it may reload the page) - re-drive state
+via preview_eval and screenshot immediately. Preview viewport defaults narrow (<1180 px) so the
+context nav auto-collapses (by design) - resize to >=1280. To reach a locked workspace in the
+browser mock: click "Open workspace" on the Connect screen. The branch is `feat/ui-rebuild-tailwind`
 (NOT the default branch - check `git branch` first; the repo also has `chore/add-termius-sponsor`).
-**Commit M3 before starting M4 if a clean history is wanted.**
+**Commit M4 before starting M5 if a clean history is wanted.**
 
 - **M0 — DONE, verified, committed (`93b5fc8`).** Tailwind v4.3.0 + `@tailwindcss/vite`, clsx,
   tailwind-merge, lucide-react 1.17, sonner installed in `apps/desktop`.
@@ -123,7 +128,7 @@ auto-collapses (by design) - resize to >=1280 to see it. The branch is `feat/ui-
     connections, breadcrumb, theme menu; nav auto-collapses < 1180 px and returns >= 1280 px;
     console error-free.
 
-- **M3 — DONE, verified, uncommitted.** Killed the 4-step wizard. New `src/views/ConnectView.tsx`
+- **M3 — DONE, verified, committed (`fc968e7`).** Killed the 4-step wizard. New `src/views/ConnectView.tsx`
   (Tailwind, card-based, single screen) replaces `SessionSetupView` as the unlocked content.
   - Layout: "Your clouds" header + Refresh; a responsive grid of connection cards (one per
     provider + a Local Runtime card) with `ProviderIcon` + `StatusPill` (Ready/Setup); selecting a
@@ -148,9 +153,33 @@ auto-collapses (by design) - resize to >=1280 to see it. The branch is `feat/ui-
     (AWS/Azure/GCP/Local Runtime cards, sandbox/prod profiles, CLI/SSO chips, enabled Open
     workspace), breadcrumb "AWS / Connect", console error-free.
 
+- **M4 — DONE, verified, uncommitted.** New `src/views/OverviewView.tsx` (Tailwind) is now the
+  locked workspace's landing tab; the Cloudscape `WorkspaceView` overview tab is dead code for
+  locked sessions (still used by other tabs until M5-M7).
+  - Layout: `{provider} · {profile}` header + Refresh; a safety banner driven by
+    `workspace.awsWritesEnabled` (read-only = calm primary tint with ShieldCheck; writes-enabled =
+    warning tint with ShieldAlert); provider-aware stat cards built on the M1 `StatCard` (AWS: S3
+    buckets + EC2 instances; Azure: resource groups + VMs; always: local runtimes; running counts
+    as dot footers); a "Jump back in" recents grid (first 3 buckets/instances or RGs/VMs) with
+    status dots. Stat cards and recents are buttons that call `onNavigate(tabId)` to jump to the
+    matching workspace tab.
+  - `App.tsx`: new content branch - locked + overview tab renders `<OverviewView>` (before the
+    WorkspaceView branch). **"Close workspace" moved into the shell**: the ContextNav footer now
+    shows a LogOut "Close workspace" button whenever the session is locked (calls
+    `session.unlock`), and `WorkspaceView`'s header close button was REMOVED - one consistent
+    affordance, reachable from every tab.
+  - Tests: locked-landing assertions moved from "Locked Workspace" to OverviewView markers (banner
+    text variants, stat labels, recents); the locked-tabs test now asserts the writes-enabled
+    banner + stats + recents; masks-sensitive test reaches the WorkspaceView profile panel via a
+    placeholder "Identity" tab (the panel left the landing tab). 19/19 green.
+  - Verified: `tsc` clean; 19/19 vitest pass; live preview (browser mock): Open workspace →
+    Overview renders banner + 3 stat cards (S3 2, EC2 2 · 1 running, runtimes 2) + 4 recents with
+    status; stat click jumps to the S3 tab (breadcrumb "AWS / Storage"); "Close workspace" in the
+    nav footer; console error-free.
+
 ## Next step
-**M4 — Overview.** Build `OverviewView.tsx` (stat cards + safety banner + recents) for the locked
-workspace's first tab. See the RESUME HERE block above for specifics.
+**M5 — resource screens.** Decompose `WorkspaceView` into `src/views/workspace/` starting with
+M5a Storage/S3. See the RESUME HERE block above for specifics.
 
 ## To reopen prototype
 `preview_start` config `prototype`, then open `http://localhost:4321/design-prototypes/index.html`.
