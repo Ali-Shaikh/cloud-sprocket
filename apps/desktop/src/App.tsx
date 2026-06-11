@@ -588,6 +588,25 @@ export default function App() {
     }
   }
 
+  // S3 and Azure selection methods return a WorkspaceSnapshot, not a
+  // SessionSnapshot. Routing them through mutateSession misread the response,
+  // briefly marked the session unlocked, wiped the workspace, and reloaded all
+  // state, so the whole view flickered on every selection change.
+  async function mutateWorkspace(
+    method: string,
+    params: Record<string, unknown> = {},
+  ): Promise<void> {
+    try {
+      const workspaceResult = await backendRequest<WorkspaceSnapshot>(method, params);
+      startTransition(() => {
+        setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Workspace mutation failed";
+      pushNotification("error", `Failed to execute ${method}`, message);
+    }
+  }
+
   async function refreshDiscovery(): Promise<void> {
     await backendRequest<JobStatus>("actions.invoke", {
       actionId: "refresh",
@@ -1093,10 +1112,10 @@ export default function App() {
       onNavigatePage={setActiveS3PageId}
       showSensitiveValues={showSensitiveValues}
       onSelectBucket={(bucketName) => {
-        void mutateSession("aws.s3.selectBucket", { bucketName });
+        void mutateWorkspace("aws.s3.selectBucket", { bucketName });
       }}
       onSelectObject={(objectKey) => {
-        void mutateSession("aws.s3.selectObject", { objectKey });
+        void mutateWorkspace("aws.s3.selectObject", { objectKey });
       }}
       onSetPrefixFilter={applyS3PrefixFilter}
       uploadStatus={s3UploadStatus}
@@ -1147,10 +1166,10 @@ export default function App() {
       }
       showSensitiveValues={showSensitiveValues}
       onSelectResourceGroup={(resourceGroup) => {
-        void mutateSession("azure.selectResourceGroup", { resourceGroup });
+        void mutateWorkspace("azure.selectResourceGroup", { resourceGroup });
       }}
       onSelectVirtualMachine={(vmId) => {
-        void mutateSession("azure.selectVirtualMachine", { vmId });
+        void mutateWorkspace("azure.selectVirtualMachine", { vmId });
       }}
     />
   ) : activeWorkspaceTabId === "virtualisation" ? (

@@ -1,6 +1,6 @@
 # Checkpoint — UI/UX Redesign work stream
 
-_Last updated: 2026-06-09_
+_Last updated: 2026-06-12_
 
 ## Goal
 User dislikes the current CloudSprocket UI/UX. Redesign toward Slack / Docker Hub / OpenHuman
@@ -307,6 +307,26 @@ state in the browser, so it may open the previously selected provider). Branch:
     of the Azure path this time, the mock had Azure persisted), light AND dark themes, gallery
     renders all 11 sections; body resets (margin 0, Inter, token background) confirmed; console
     error-free. A11y held up: kit-wide focus-visible rings, aria-labels on rail/nav/dialogs.
+
+## Bug fix (2026-06-12, uncommitted): S3 bucket dropdown flicker
+
+- Symptom (user report): switching buckets from the Storage view dropdown made the whole
+  view flicker badly.
+- Root cause: `App.tsx` routed `aws.s3.selectBucket`, `aws.s3.selectObject`,
+  `azure.selectResourceGroup`, and `azure.selectVirtualMachine` through `mutateSession`,
+  but all four RPCs return a **WorkspaceSnapshot** (daemon `service.go` and the browser
+  mock agree). Normalising that as a SessionSnapshot yielded `isLocked: false`, so the app
+  briefly swapped to the Connect view, `loadWorkspace` wiped the workspace to empty, and
+  `loadState()` then re-fetched everything and remounted - a full unmount/remount cycle
+  plus three redundant round trips per selection.
+- Fix: new `mutateWorkspace` helper in `App.tsx` (mirrors the existing EC2 select
+  handlers): one request, response treated as a workspace snapshot, session untouched.
+  The four call sites switched over. `App.test.tsx`'s backend mock gained a faithful
+  `aws.s3.selectBucket` case (it previously fell through to `default: return
+  sessionFixture`, which masked the response-shape mismatch).
+- Verified: `tsc` clean; 19/19 vitest; live preview with a MutationObserver across bucket
+  switches in both directions showed zero DOM teardown and no Connect-view flash; console
+  error-free.
 
 ## Next step
 **M9 — notification UX revamp.** The last module: persistent errors, dedupe, bell-badge history,
