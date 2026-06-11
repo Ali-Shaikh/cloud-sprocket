@@ -1,15 +1,10 @@
 /*
  * CloudSprocket design tokens + Tailwind v4 entry.
  *
- * During the Cloudscape migration we intentionally DO NOT pull in Tailwind's
- * Preflight (the global base reset), so the new component layer can coexist with
- * Cloudscape without resetting its styles. We import the theme + utilities layers
- * only, and provide a small base scoped to `.app-next`. Once Cloudscape is removed
- * (Module M8) this can switch to the plain `@import "tailwindcss";`.
+ * Cloudscape is gone (M8), so the full Tailwind import, including Preflight,
+ * applies globally.
  */
-@layer theme, base, components, utilities;
-@import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/utilities.css" layer(utilities);
+@import "tailwindcss";
 
 /* ---- Semantic tokens (shadcn-compatible), OKLCH ---- */
 :root {
@@ -135,19 +130,17 @@
 }
 
 /*
- * Scoped base for the new component layer. Stands in for Preflight while
- * Cloudscape is still present. Everything under `.app-next` gets border-box and
- * the semantic border colour shadcn components assume.
+ * Global base on top of Preflight: the semantic border colour shadcn
+ * components assume, plus app-wide typography and surface colours.
  */
 @layer base {
-  .app-next,
-  .app-next *,
-  .app-next *::before,
-  .app-next *::after {
-    box-sizing: border-box;
+  *,
+  *::before,
+  *::after {
     border-color: var(--border);
   }
-  .app-next {
+  body {
+    background: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
