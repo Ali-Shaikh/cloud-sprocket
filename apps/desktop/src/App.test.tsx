@@ -279,6 +279,13 @@ vi.mock("./lib/backend", () => ({
           status: "queued",
           message: "Refreshing discovery.",
         };
+      case "aws.s3.selectBucket":
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedS3BucketName: String(params?.bucketName ?? ""),
+          selectedS3ObjectKey: undefined,
+        };
+        return workspaceFixture;
       case "aws.s3.setPrefixFilter": {
         const prefix = String(params?.prefix ?? "");
         const delayMs = s3PrefixDelays.get(prefix) ?? 0;
