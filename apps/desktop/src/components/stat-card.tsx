@@ -19,12 +19,12 @@ function StatCard({
     <Card data-slot="stat-card" className={cn("gap-0 py-5", className)} {...props}>
       <CardContent className="flex flex-col gap-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="text-xs font-semibold text-muted-foreground">
             {label}
           </span>
           {icon ? <span className="text-muted-foreground">{icon}</span> : null}
         </div>
-        <span className="text-2xl font-semibold tracking-tight tabular-nums">{value}</span>
+        <span className="text-[1.625rem] font-[750] tracking-[-0.02em] tabular-nums">{value}</span>
         {footer ? (
           <span className="text-xs text-muted-foreground">{footer}</span>
         ) : null}

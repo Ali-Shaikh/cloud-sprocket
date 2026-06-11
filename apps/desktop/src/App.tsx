@@ -1363,12 +1363,18 @@ export default function App() {
         { label: "Tools", items: [{ id: "debug", label: "Debug console", icon: Bug }] },
       ];
     }
-    const groups: NavGroup[] = [
-      {
-        label: "Workspace",
-        items: session.workspaceTabs.map((tab) => navItemForTab(tab, workspace)),
-      },
-    ];
+    // Mirror the prototype's split: Overview sits under "Workspace"; the
+    // provider resources sit under "Services".
+    const tabItems = session.workspaceTabs.map((tab) => navItemForTab(tab, workspace));
+    const overviewItems = tabItems.filter((item) => item.id === "overview");
+    const serviceItems = tabItems.filter((item) => item.id !== "overview");
+    const groups: NavGroup[] = [];
+    if (overviewItems.length > 0) {
+      groups.push({ label: "Workspace", items: overviewItems });
+    }
+    if (serviceItems.length > 0) {
+      groups.push({ label: "Services", items: serviceItems });
+    }
     if (activeWorkspaceTabId === "s3") {
       groups.push({
         label: "Storage",

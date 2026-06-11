@@ -31,7 +31,7 @@ export default function PlaceholderView({
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header>
-        <h1 className="text-2xl font-bold tracking-tight">{tab?.label ?? "Workspace"}</h1>
+        <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">{tab?.label ?? "Workspace"}</h1>
         {tab?.summary ? (
           <p className="mt-1 text-sm text-muted-foreground">{tab.summary}</p>
         ) : null}
@@ -43,7 +43,7 @@ export default function PlaceholderView({
         description="This provider surface is attached to the open workspace and ready for the next inventory slice."
       />
 
-      <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+      <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-bold">Workspace Profile</h2>

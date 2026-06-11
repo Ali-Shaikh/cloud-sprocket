@@ -121,7 +121,7 @@ function copyToClipboard(value: string): void {
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
 
-const sectionCard = "space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm";
+const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-5 shadow-sm";
 
 const snippetCard = "rounded-lg border border-border bg-muted/40 p-3";
 
@@ -240,7 +240,7 @@ export default function ComputeView({
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header>
-        <h1 className="text-2xl font-bold tracking-tight">Compute</h1>
+        <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">Compute</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {countLabel(workspace.ec2Instances.length, "instance", "instances")} ·{" "}
           {workspace.selectedEc2Region || "no region selected"}
@@ -248,7 +248,7 @@ export default function ComputeView({
       </header>
 
       {actionInFlight ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
           <Loader2 className="size-5 shrink-0 animate-spin text-primary" />
           <span className="font-medium">EC2 operation running</span>
           <span className="text-muted-foreground">{actionStatus}</span>

@@ -149,7 +149,7 @@ export default function OverviewView({
     <div className="mx-auto max-w-6xl space-y-6">
       <header className="flex items-start gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">
             {providerLabel}
             {profileLabel ? (
               <span className="font-semibold text-muted-foreground"> · {profileLabel}</span>
@@ -167,7 +167,7 @@ export default function OverviewView({
 
       <div
         className={cn(
-          "flex items-center gap-3 rounded-xl border px-4 py-3 text-sm",
+          "flex items-center gap-3 rounded-lg border px-4 py-3 text-sm",
           writesEnabled
             ? "border-[color:var(--warning)]/30 bg-[color:var(--warning)]/10"
             : "border-primary/20 bg-primary/5",
@@ -198,7 +198,7 @@ export default function OverviewView({
               key={stat.label}
               type="button"
               onClick={() => onNavigate(stat.tabId as string)}
-              className="rounded-xl text-left outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="rounded-lg text-left outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               {card}
             </button>
@@ -215,7 +215,7 @@ export default function OverviewView({
                 key={item.key}
                 type="button"
                 onClick={() => onNavigate(item.tabId)}
-                className="group flex items-center gap-3 rounded-xl border border-border bg-card p-3.5 text-left shadow-sm transition-all hover:border-border-strong hover:shadow-md"
+                className="group flex items-center gap-3 rounded-lg border border-border bg-card p-3.5 text-left shadow-sm transition-all hover:border-border-strong hover:shadow-md"
               >
                 <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted">
                   {item.iconUrl ? (

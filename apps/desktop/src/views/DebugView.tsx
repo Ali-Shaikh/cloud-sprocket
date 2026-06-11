@@ -41,13 +41,13 @@ export default function DebugView() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header>
-        <h1 className="text-2xl font-bold tracking-tight">Debug Console</h1>
+        <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">Debug Console</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Real-time RPC and application diagnostics.
         </p>
       </header>
 
-      <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <section className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
         {logs.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
             No debug activity captured yet.
