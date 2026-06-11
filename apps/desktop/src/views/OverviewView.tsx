@@ -193,17 +193,26 @@ export default function OverviewView({
       <section className="grid grid-cols-2 gap-[14px] sm:grid-cols-4">
         {stats.map((stat) => {
           const card = (
-            <StatCard label={stat.label} value={stat.value} footer={stat.footer} />
+            <StatCard
+              className="h-full w-full"
+              label={stat.label}
+              value={stat.value}
+              footer={stat.footer}
+            />
           );
           if (!stat.tabId) {
-            return <div key={stat.label}>{card}</div>;
+            return (
+              <div key={stat.label} className="flex">
+                {card}
+              </div>
+            );
           }
           return (
             <button
               key={stat.label}
               type="button"
               onClick={() => onNavigate(stat.tabId as string)}
-              className="rounded-lg text-left outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="flex rounded-lg text-left outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               {card}
             </button>
