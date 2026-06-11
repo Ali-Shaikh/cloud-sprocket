@@ -19,7 +19,7 @@ export default function ActivityView({ entries, onRefreshDiscovery }: ActivityVi
     <div className="mx-auto max-w-6xl space-y-6">
       <header className="flex items-start gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Activity</h1>
+          <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">Activity</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Backend log stream and recent job history for the open workspace.
           </p>
@@ -30,7 +30,7 @@ export default function ActivityView({ entries, onRefreshDiscovery }: ActivityVi
         </Button>
       </header>
 
-      <section className="rounded-xl border border-border bg-card p-2 shadow-sm">
+      <section className="rounded-lg border border-border bg-card p-2 shadow-sm">
         {entries.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
             No activity recorded yet.

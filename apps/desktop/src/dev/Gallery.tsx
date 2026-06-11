@@ -145,7 +145,7 @@ export default function Gallery() {
         <div className="mx-auto max-w-5xl space-y-12">
           <header className="flex flex-wrap items-end justify-between gap-4">
             <div className="space-y-1">
-              <h1 className="text-2xl font-bold tracking-tight">Design system gallery</h1>
+              <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">Design system gallery</h1>
               <p className="text-sm text-muted-foreground">
                 M1 primitive kit — resolved theme: {resolvedTheme}
               </p>

@@ -74,7 +74,7 @@ function emulatorImage(emulator: EmulatorSummary): string | undefined {
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
 
-const sectionCard = "space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm";
+const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-5 shadow-sm";
 
 /**
  * M6 Local Runtime: Tailwind replacement for the Cloudscape virtualisation
@@ -254,7 +254,7 @@ export default function RuntimeView({
     <div className="mx-auto max-w-6xl space-y-6">
       <header className="flex items-start gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Local Runtime</h1>
+          <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">Local Runtime</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Run cloud APIs on your machine. Docker engine{" "}
             {dockerReachable ? "running" : "not detected"} · {emulatorCount} emulator

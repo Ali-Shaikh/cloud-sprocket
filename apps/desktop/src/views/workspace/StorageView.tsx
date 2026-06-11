@@ -212,7 +212,7 @@ export default function StorageView({
                   onNavigatePage("objects");
                 }}
                 className={cn(
-                  "flex flex-col gap-3 rounded-xl border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md",
+                  "flex flex-col gap-3 rounded-lg border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md",
                   active ? "border-primary ring-1 ring-primary" : "border-border hover:border-border-strong",
                 )}
               >
@@ -242,7 +242,7 @@ export default function StorageView({
     selectedObject && drawerOpen ? (
       <aside
         aria-label="S3 object details"
-        className="w-[360px] shrink-0 space-y-5 self-start rounded-xl border border-border bg-card p-5 shadow-sm"
+        className="w-[360px] shrink-0 space-y-5 self-start rounded-lg border border-border bg-card p-5 shadow-sm"
       >
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -357,7 +357,7 @@ export default function StorageView({
 
   const objectsPage = (
     <section className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
         <div className="w-56">
           <div className={cn(fieldLabel, "mb-1")}>Bucket</div>
           <Select
@@ -403,7 +403,7 @@ export default function StorageView({
       </p>
 
       <div className="flex items-start gap-4">
-        <div className="min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
           {workspace.s3Objects.length === 0 ? (
             <EmptyState
               icon={<Database />}
@@ -451,7 +451,7 @@ export default function StorageView({
   );
 
   const uploadPage = (
-    <section className="max-w-3xl space-y-5 rounded-xl border border-border bg-card p-5 shadow-sm">
+    <section className="max-w-3xl space-y-5 rounded-lg border border-border bg-card p-5 shadow-sm">
       <p className="text-sm text-muted-foreground">
         Upload a local file into the selected bucket and prefix. Uploads use the Go daemon and
         the AWS SDK transfer manager.
@@ -555,7 +555,7 @@ export default function StorageView({
   );
 
   const inspectPage = (
-    <section className="max-w-3xl space-y-5 rounded-xl border border-border bg-card p-5 shadow-sm">
+    <section className="max-w-3xl space-y-5 rounded-lg border border-border bg-card p-5 shadow-sm">
       <p className="text-sm text-muted-foreground">
         Inspect a pasted S3 signed URL or public object URL, then optionally make a range
         request. URL tools do not require the current bucket selection.
@@ -640,7 +640,7 @@ export default function StorageView({
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header>
-        <h1 className="text-2xl font-bold tracking-tight">Storage</h1>
+        <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">Storage</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {workspace.s3Buckets.length} bucket{workspace.s3Buckets.length === 1 ? "" : "s"}
           {workspace.selectedS3BucketName ? ` · ${workspace.selectedS3BucketName}` : ""} ·{" "}

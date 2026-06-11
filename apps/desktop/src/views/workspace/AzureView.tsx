@@ -87,7 +87,7 @@ function copyToClipboard(value: string): void {
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
 
-const sectionCard = "space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm";
+const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-5 shadow-sm";
 
 const snippetCard = "rounded-lg border border-border bg-muted/40 p-3";
 
@@ -186,7 +186,7 @@ export default function AzureView({
           {metricCards.map((metric) => (
             <div
               key={metric.label}
-              className="rounded-xl border border-border bg-card p-4 shadow-sm"
+              className="rounded-lg border border-border bg-card p-4 shadow-sm"
             >
               <div className={fieldLabel}>{metric.label}</div>
               <div className="mt-1 text-sm font-bold">{metric.value}</div>
@@ -542,7 +542,7 @@ export default function AzureView({
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header>
-        <h1 className="text-2xl font-bold tracking-tight">Azure</h1>
+        <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">Azure</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {workspace.profile?.displayName || "Subscription"} · {pageTitles[page]}
         </p>
