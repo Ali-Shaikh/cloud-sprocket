@@ -74,7 +74,7 @@ function emulatorImage(emulator: EmulatorSummary): string | undefined {
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
 
-const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-5 shadow-sm";
+const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] shadow-sm";
 
 /**
  * M6 Local Runtime: Tailwind replacement for the Cloudscape virtualisation
