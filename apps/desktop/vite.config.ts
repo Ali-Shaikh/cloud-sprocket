@@ -17,9 +17,6 @@ export default defineConfig({
           if (!id.includes("node_modules")) {
             return undefined;
           }
-          if (id.includes("@cloudscape-design")) {
-            return "cloudscape";
-          }
           if (id.includes("@tauri-apps")) {
             return "tauri";
           }

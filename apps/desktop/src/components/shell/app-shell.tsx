@@ -9,7 +9,7 @@ function AppShell({ rail, nav, topBar, children, drawer, navCollapsed }: AppShel
   return (
     <div
       data-slot="app-shell"
-      className="app-next grid h-screen overflow-hidden bg-background text-foreground"
+      className="grid h-screen overflow-hidden bg-background text-foreground"
       style={{ gridTemplateColumns: navCollapsed ? "68px 1fr" : "68px 256px 1fr" }}
     >
       {rail}

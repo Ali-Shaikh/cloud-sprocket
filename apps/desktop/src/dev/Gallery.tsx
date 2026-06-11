@@ -141,7 +141,7 @@ export default function Gallery() {
 
   return (
     <TooltipProvider>
-      <div className="app-next min-h-screen bg-background p-10 text-foreground">
+      <div className="min-h-screen bg-background p-10 text-foreground">
         <div className="mx-auto max-w-5xl space-y-12">
           <header className="flex flex-wrap items-end justify-between gap-4">
             <div className="space-y-1">
