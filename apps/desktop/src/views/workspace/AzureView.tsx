@@ -87,7 +87,7 @@ function copyToClipboard(value: string): void {
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
 
-const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-5 shadow-sm";
+const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] shadow-sm";
 
 const snippetCard = "rounded-lg border border-border bg-muted/40 p-3";
 

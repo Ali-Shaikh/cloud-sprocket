@@ -112,7 +112,10 @@ export default function OverviewView({
       recents.push({
         key: `ec2-${instance.instanceId}`,
         name: instance.name || instance.instanceId,
-        sub: instance.instanceType || "EC2 instance",
+        sub:
+          [instance.instanceType, instance.privateIp || instance.availabilityZone]
+            .filter(Boolean)
+            .join(" · ") || "EC2 instance",
         iconUrl: awsEc2IconUrl,
         status: isRunning(instance.state) ? "on" : "off",
         statusLabel: instance.state || "unknown",
@@ -125,7 +128,9 @@ export default function OverviewView({
       recents.push({
         key: `rg-${group.name}`,
         name: group.name,
-        sub: group.location || "Resource group",
+        sub:
+          [group.location, group.provisioningState].filter(Boolean).join(" · ") ||
+          "Resource group",
         iconUrl: azureIconUrl,
         tabId: "azure-overview",
       }),
@@ -134,7 +139,7 @@ export default function OverviewView({
       recents.push({
         key: `vm-${vm.vmId}`,
         name: vm.name,
-        sub: vm.size || "Virtual machine",
+        sub: [vm.size, vm.location].filter(Boolean).join(" · ") || "Virtual machine",
         iconUrl: azureIconUrl,
         status: isRunning(vm.powerState) ? "on" : "off",
         statusLabel: vm.powerState || "unknown",
@@ -185,7 +190,7 @@ export default function OverviewView({
         </span>
       </div>
 
-      <section className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <section className="grid grid-cols-2 gap-[14px] sm:grid-cols-4">
         {stats.map((stat) => {
           const card = (
             <StatCard label={stat.label} value={stat.value} footer={stat.footer} />
@@ -215,7 +220,7 @@ export default function OverviewView({
                 key={item.key}
                 type="button"
                 onClick={() => onNavigate(item.tabId)}
-                className="group flex items-center gap-3 rounded-lg border border-border bg-card p-3.5 text-left shadow-sm transition-all hover:border-border-strong hover:shadow-md"
+                className="group flex items-center gap-3 rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-all hover:border-border-strong hover:shadow-md"
               >
                 <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted">
                   {item.iconUrl ? (

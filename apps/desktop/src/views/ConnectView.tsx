@@ -116,7 +116,7 @@ export default function ConnectView({
               aria-pressed={active}
               onClick={() => onSelectProvider(provider.providerId)}
               className={cn(
-                "flex flex-col gap-3 rounded-lg border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md",
+                "flex flex-col gap-3 rounded-lg border bg-card p-[18px] text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md",
                 active
                   ? "border-primary ring-1 ring-primary"
                   : "border-border hover:border-border-strong",
@@ -146,7 +146,7 @@ export default function ConnectView({
         <button
           type="button"
           onClick={onOpenLocalRuntime}
-          className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md"
+          className="flex flex-col gap-3 rounded-lg border border-border bg-card p-[18px] text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md"
         >
           <div className="flex items-center gap-3">
             <div className="grid size-11 shrink-0 place-items-center rounded-[11px] bg-muted">
@@ -169,7 +169,7 @@ export default function ConnectView({
       </section>
 
       {selectedProvider ? (
-        <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
+        <section className="rounded-lg border border-border bg-card p-[18px] shadow-sm">
           <div className="flex items-center gap-3">
             <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted">
               <ProviderIcon provider={selectedProvider.providerId} size={24} />

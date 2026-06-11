@@ -43,7 +43,7 @@ export default function PlaceholderView({
         description="This provider surface is attached to the open workspace and ready for the next inventory slice."
       />
 
-      <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
+      <section className="rounded-lg border border-border bg-card p-[18px] shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-bold">Workspace Profile</h2>

@@ -16,8 +16,8 @@ function StatCard({
   footer?: React.ReactNode;
 }) {
   return (
-    <Card data-slot="stat-card" className={cn("gap-0 py-5", className)} {...props}>
-      <CardContent className="flex flex-col gap-1">
+    <Card data-slot="stat-card" className={cn("gap-0 py-4", className)} {...props}>
+      <CardContent className="flex flex-col gap-1 px-[18px]">
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-semibold text-muted-foreground">
             {label}

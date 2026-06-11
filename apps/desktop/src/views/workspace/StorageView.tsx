@@ -242,7 +242,7 @@ export default function StorageView({
     selectedObject && drawerOpen ? (
       <aside
         aria-label="S3 object details"
-        className="w-[360px] shrink-0 space-y-5 self-start rounded-lg border border-border bg-card p-5 shadow-sm"
+        className="w-[360px] shrink-0 space-y-5 self-start rounded-lg border border-border bg-card p-[18px] shadow-sm"
       >
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -451,7 +451,7 @@ export default function StorageView({
   );
 
   const uploadPage = (
-    <section className="max-w-3xl space-y-5 rounded-lg border border-border bg-card p-5 shadow-sm">
+    <section className="max-w-3xl space-y-5 rounded-lg border border-border bg-card p-[18px] shadow-sm">
       <p className="text-sm text-muted-foreground">
         Upload a local file into the selected bucket and prefix. Uploads use the Go daemon and
         the AWS SDK transfer manager.
@@ -555,7 +555,7 @@ export default function StorageView({
   );
 
   const inspectPage = (
-    <section className="max-w-3xl space-y-5 rounded-lg border border-border bg-card p-5 shadow-sm">
+    <section className="max-w-3xl space-y-5 rounded-lg border border-border bg-card p-[18px] shadow-sm">
       <p className="text-sm text-muted-foreground">
         Inspect a pasted S3 signed URL or public object URL, then optionally make a range
         request. URL tools do not require the current bucket selection.
