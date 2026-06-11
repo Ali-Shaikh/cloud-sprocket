@@ -61,36 +61,35 @@ Branch: `feat/ui-rebuild-tailwind` (off `feat/azure-local-runtime`). Tasks track
 - `74c1842` feat(desktop): replace virtualisation tab with Tailwind RuntimeView (M6)
 - `25ed563` docs: mark M6 complete, add M9 notification UX revamp to the plan
 
-**M7 — DONE + verified, NOT yet committed (sitting in the working tree).**
+- `dad7f90` feat(desktop): migrate notifications, reset, activity, and debug (M7)
+- `f94239b` docs: mark M7 complete, set M8 (Cloudscape removal) as resume point
 
-### >>> RESUME HERE: M8 (decommission Cloudscape + polish) <<<
-Next session: M8, the final Cloudscape removal. App.tsx is already Cloudscape-free after M7;
-exactly four files still reference `@cloudscape-design`:
-1. **Delete the dead files**: `views/WorkspaceView.tsx`, `views/SessionSetupView.tsx`,
-   `views/shared.tsx` (verify with grep that nothing imports them first - as of M7 nothing does).
-2. **main.tsx**: drop the `@cloudscape-design/global-styles/index.css` import and the legacy
-   `./styles.css` import.
-3. **Delete `src/styles.css`** (1064 L of hand-rolled shell CSS) - first sweep for any class names
-   still referenced (`grep -o 'className="[^"]*"' src` against its selectors); the new views use
-   only Tailwind utilities so it should be safe.
-4. **theme.css → full Preflight**: switch to plain `@import "tailwindcss";` and remove the scoped
-   `.app-next` stand-in base layer (keep the `.app-next` class on AppShell harmless or drop it).
-   Re-verify dark/light + the gallery after the switch - Preflight resets may shift paddings.
-5. **package.json**: remove `@cloudscape-design/components`, `@cloudscape-design/global-styles`
-   (+ any other cloudscape deps); `vite.config.ts`: remove the "cloudscape" `manualChunks` branch.
-6. Re-run everything: `tsc`, 19/19 vitest, gallery `#gallery`, full click-through in preview, and
-   check the bundle: the ~545 kB cloudscape chunk must be gone from the build output.
-7. Light a11y pass (focus rings, aria-labels) + optional polish. M9 (notification UX revamp)
-   follows as its own module.
+**M8 — DONE + verified, NOT yet committed (sitting in the working tree).**
+
+### >>> RESUME HERE: M9 (notification UX revamp) <<<
+Next session: M9, the final module - the notification model on top of M7's sonner plumbing.
+Full spec in IMPLEMENTATION-PLAN.md (M9 section); summary:
+1. **Lifecycle**: everything dismissible AND auto-dismissing (success ~4 s, info ~6 s; ERRORS
+   PERSIST until dismissed - change from M7's 10 s); per-job updating toasts already exist
+   (`lib/notify.ts` notifyJob) - extend with dedupe and burst-collapse for poll loops.
+2. **History**: route every notification into the Activity drawer (and/or a bell-badge count on
+   the TopBar - the prop already exists, it was dropped in M7) so expired toasts are not lost.
+3. **Hierarchy**: persistent state (read-only mode, Docker down) as inline banners on the relevant
+   views, NOT toasts; long-running jobs get one updating toast + the bell badge.
+4. **Affordances**: hover-to-pause is sonner default; add action buttons where useful (e.g. "View
+   logs" on emulator failure → navigate to the runtime view); respect reduced motion.
+5. Acceptance: no stuck toasts; one toast per job through its lifecycle; bell badge + drawer
+   history consistent with what toasted.
 Dev server: launch config `desktop-web` (vite :1425). Heads-up: headless screenshotter hangs on
 looping animations / Radix portals - inject `*{animation:none!important;transition:none!important}`
 via preview_eval first (but NOT before sonner toast checks - they need their enter transition); it
 can capture a STALE frame (it may reload) - re-drive state via preview_eval and screenshot
 immediately. Preview viewport defaults narrow (<1180 px) - resize to >=1280. To reach an open
-workspace in the browser mock: click "Open workspace" on Connect. Branch:
+workspace in the browser mock: click "Open workspace" on Connect (note: the mock persists session
+state in the browser, so it may open the previously selected provider). Branch:
 `feat/ui-rebuild-tailwind` (check `git branch` first). Build the exe after the module
 (`pnpm run build:desktop:exe`) so Ali can test.
-**Commit M7 before starting M8 if a clean history is wanted.**
+**Commit M8 before starting M9 if a clean history is wanted.**
 
 - **M0 — DONE, verified, committed (`93b5fc8`).** Tailwind v4.3.0 + `@tailwindcss/vite`, clsx,
   tailwind-merge, lucide-react 1.17, sonner installed in `apps/desktop`.
@@ -290,9 +289,28 @@ workspace in the browser mock: click "Open workspace" on Connect. Branch:
     gates on RESET; Activity tab renders entries; Debug Console streams 40 live RPC rows with
     typed badges; console error-free.
 
+- **M8 — DONE, verified, uncommitted.** Cloudscape is fully decommissioned; **zero
+  `@cloudscape-design` references remain anywhere in src**.
+  - Deleted: `views/WorkspaceView.tsx` (2,491 L), `views/SessionSetupView.tsx` (607 L),
+    `views/shared.tsx`, and `src/styles.css` (1,064 L) - a class-name sweep against live code
+    found only data-slot/comment false positives first.
+  - `main.tsx`: dropped the global-styles + styles.css imports. `theme.css`: switched to the full
+    `@import "tailwindcss";` (Preflight global) and replaced the scoped `.app-next` base with a
+    global base (universal `border-color: var(--border)`; body gets background/foreground/font/
+    antialiasing). The `app-next` class was removed from AppShell + Gallery.
+  - `vite.config.ts`: cloudscape `manualChunks` branch removed. `package.json` + lockfile:
+    `@cloudscape-design/components` and `@cloudscape-design/global-styles` uninstalled.
+  - **Bundle**: the 545 kB (151 kB gzip) cloudscape chunk is GONE; production JS is now ~564 kB
+    total (was ~1.1 MB), CSS 45 kB.
+  - Verified: `tsc` clean; 19/19 vitest; production build green; live preview under full
+    Preflight - Connect, open workspace, Azure overview/resource groups/VMs (live click-through
+    of the Azure path this time, the mock had Azure persisted), light AND dark themes, gallery
+    renders all 11 sections; body resets (margin 0, Inter, token background) confirmed; console
+    error-free. A11y held up: kit-wide focus-visible rings, aria-labels on rail/nav/dialogs.
+
 ## Next step
-**M8 — decommission Cloudscape + polish.** Delete the three dead view files + styles.css, drop
-the deps, switch to full Preflight, bundle check. See the RESUME HERE block above for specifics.
+**M9 — notification UX revamp.** The last module: persistent errors, dedupe, bell-badge history,
+inline banners for persistent state. See the RESUME HERE block above and IMPLEMENTATION-PLAN.md.
 
 ## To reopen prototype
 `preview_start` config `prototype`, then open `http://localhost:4321/design-prototypes/index.html`.

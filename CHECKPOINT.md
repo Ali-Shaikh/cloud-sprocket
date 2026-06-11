@@ -22,20 +22,20 @@
 - **Cloudscape footprint to remove (M8):** 6 files / 10 refs (`main.tsx` global-styles, `App.tsx`,
   `views/SessionSetupView.tsx`, `views/WorkspaceView.tsx`, `views/shared.tsx`, `vite.config.ts`
   manualChunks) + `styles.css` + `package.json` deps.
-- **Progress:** **M0-M6 done + committed; M7 done + verified, uncommitted.** On branch
+- **Progress:** **M0-M7 done + committed; M8 done + verified, uncommitted.** On branch
   `feat/ui-rebuild-tailwind`: M0+M1 (`93b5fc8`), M2 app shell (`5028c6c`), M3 Connect view
   (`fc968e7`), M4 Overview (`0cd5fa8`), M5 resource screens (`7ab554a`), M6 Local Runtime
-  (`74c1842`). **M7: Flashbar → sonner toasts (one updating toast per job, auto-dismiss + close
-  button - the "never closes" complaint fixed at base level), reset Modal → AlertDialog,
-  Tailwind ActivityView + DebugView, error boundary restyled. App.tsx is now fully
-  Cloudscape-free; WorkspaceView/SessionSetupView/shared.tsx are orphaned dead files.** tsc
-  clean, 19/19 tests, all four pieces verified live. Exe rebuilt after each module for testing
+  (`74c1842`), M7 notifications/activity/debug (`dad7f90`). **M8: Cloudscape fully
+  decommissioned - dead views + styles.css deleted (~4,200 lines), deps uninstalled, full
+  Tailwind Preflight enabled, the 545 kB cloudscape bundle chunk is gone (JS ~1.1 MB → ~564 kB).
+  Zero `@cloudscape-design` references remain.** tsc clean, 19/19 tests, light+dark + gallery +
+  Azure click-through verified live. Exe rebuilt after each module for testing
   (`pnpm run build:desktop:exe`).
-- **Next step:** **M8 - decommission Cloudscape** (delete the three dead view files + styles.css,
-  drop deps, full Tailwind Preflight, bundle check - the ~545 kB cloudscape chunk disappears),
-  then **M9 - notification UX revamp**. Full detail + resume notes in
-  `design-prototypes/CHECKPOINT-ui-redesign.md` (RESUME HERE block). NB: work lives on
-  `feat/ui-rebuild-tailwind`, not the default branch - check `git branch` before resuming.
+- **Next step:** **M9 - notification UX revamp** (the final module: persistent errors, dedupe,
+  bell-badge history, inline banners for persistent state). Full detail + resume notes in
+  `design-prototypes/CHECKPOINT-ui-redesign.md` (RESUME HERE block) and IMPLEMENTATION-PLAN.md
+  (M9 section). NB: work lives on `feat/ui-rebuild-tailwind`, not the default branch - check
+  `git branch` before resuming.
 
 ## Latest Fix (2026-06-08): Docker-hang regression (could not unlock, no emulators)
 
