@@ -1,8 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Copy, Database, FolderOpen, Upload, X } from "lucide-react";
+import {
+  Copy,
+  Database,
+  File as FileIcon,
+  FileArchive,
+  FileCode,
+  FileImage,
+  FileText,
+  FolderOpen,
+  Upload,
+  X,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { notify } from "@/lib/notify";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +26,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+} from "@/components/ui/sheet";
 import {
   Table,
   TableBody,
@@ -75,11 +91,63 @@ function defaultUploadKey(sourcePath: string, prefix?: string): string {
   return `${cleanPrefix.replace(/\/?$/, "/")}${fileName}`;
 }
 
-function copyToClipboard(value: string): void {
+function copyToClipboard(value: string, label = "Copied to clipboard"): void {
   if (navigator.clipboard) {
     void navigator.clipboard.writeText(value);
+    notify("success", label);
   }
 }
+
+/** Last path segment of an S3 key, used as the drawer title. */
+function objectFileName(key: string): string {
+  const segments = key.split("/").filter(Boolean);
+  return segments.length > 0 ? segments[segments.length - 1] : key;
+}
+
+/** Picks a lucide file icon from the object key's extension. */
+function objectFileIcon(key: string) {
+  const extension = key.split(".").pop()?.toLowerCase() ?? "";
+  if (["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"].includes(extension)) {
+    return FileImage;
+  }
+  if (["zip", "gz", "tar", "tgz", "rar", "7z", "bz2"].includes(extension)) {
+    return FileArchive;
+  }
+  if (["txt", "md", "csv", "log", "pdf"].includes(extension)) {
+    return FileText;
+  }
+  if (["json", "yaml", "yml", "xml", "js", "ts", "tsx", "go", "rs", "sh", "html"].includes(extension)) {
+    return FileCode;
+  }
+  return FileIcon;
+}
+
+/**
+ * Tracks whether the viewport is wide enough (>= Tailwind's xl breakpoint) to
+ * dock the object details inline beside the table. Below it we float the same
+ * panel in a Sheet so the table is never crushed.
+ */
+function useIsWideViewport(): boolean {
+  const [isWide, setIsWide] = useState(() =>
+    typeof window === "undefined" ? true : window.innerWidth >= 1280,
+  );
+  useEffect(() => {
+    const onResize = () => {
+      setIsWide(window.innerWidth >= 1280);
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
+  return isWide;
+}
+
+const SIGNED_URL_PRESETS: { label: string; seconds: number }[] = [
+  { label: "15 min", seconds: 900 },
+  { label: "1 hour", seconds: 3600 },
+  { label: "12 hours", seconds: 43200 },
+];
 
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
@@ -108,11 +176,12 @@ export default function StorageView({
   onValidateUrl,
 }: StorageViewProps) {
   const page = normalisePageId(activePageId);
+  const isWideViewport = useIsWideViewport();
 
   const [uploadSourcePath, setUploadSourcePath] = useState("");
   const [uploadObjectKey, setUploadObjectKey] = useState("");
   const [uploadAcknowledged, setUploadAcknowledged] = useState(false);
-  const [signedUrlDuration, setSignedUrlDuration] = useState("900");
+  const [signedUrlSeconds, setSignedUrlSeconds] = useState(900);
   const [urlTesterValue, setUrlTesterValue] = useState("");
   const [prefixDraft, setPrefixDraft] = useState(workspace.s3PrefixFilter || "");
   const [drawerOpen, setDrawerOpen] = useState(Boolean(workspace.selectedS3ObjectKey));
@@ -197,7 +266,7 @@ export default function StorageView({
         <EmptyState
           icon={<Database />}
           title="No buckets discovered"
-          description={workspace.s3StatusMessage || "S3 inventory is waiting for a locked AWS workspace."}
+          description={workspace.s3StatusMessage || "S3 inventory is waiting for an open AWS workspace."}
         />
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
@@ -238,127 +307,238 @@ export default function StorageView({
     </section>
   );
 
-  const objectDrawer =
-    selectedObject && drawerOpen ? (
-      <aside
-        aria-label="S3 object details"
-        className="w-[360px] shrink-0 space-y-5 self-start rounded-lg border border-border bg-card p-[18px] shadow-sm"
-      >
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <div className={fieldLabel}>Selected object</div>
-            <h2 className="text-base font-bold">Object Detail</h2>
+  const objectKey = workspace.selectedS3ObjectKey ?? "";
+  const FileTypeIcon = objectFileIcon(objectKey);
+
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+  };
+
+  const drawerBody = selectedObject ? (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-[10px] bg-muted [&_svg]:size-5 [&_svg]:text-muted-foreground">
+            <FileTypeIcon />
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Close object detail"
-            onClick={() => {
-              setDrawerOpen(false);
-            }}
-          >
-            <X />
-          </Button>
-        </div>
-
-        <div>
-          <div className={fieldLabel}>Object key</div>
-          <p className="break-all text-sm">{workspace.selectedS3ObjectKey}</p>
-        </div>
-
-        <div className="space-y-2">
-          <div className={fieldLabel}>Metadata</div>
-          <DetailFieldList
-            fields={workspace.s3ObjectMetadata}
-            emptyText="No metadata loaded for the selected object."
-            showSensitiveValues={showSensitiveValues}
-          />
-          {workspace.s3ObjectMetadata.length > 0 ? (
-            <div className="flex gap-2">
-              <Button variant="ghost" size="sm" onClick={() => copyToClipboard(metadataJson)}>
-                Copy Metadata JSON
+          <div className="min-w-0">
+            <div className={fieldLabel}>Object Detail</div>
+            <h2 className="truncate text-base font-bold" title={objectFileName(objectKey)}>
+              {objectFileName(objectKey)}
+            </h2>
+            <div className="mt-1 flex items-center gap-1">
+              <p
+                className="truncate font-mono text-xs text-muted-foreground"
+                title={objectKey}
+              >
+                {objectKey}
+              </p>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 shrink-0"
+                aria-label="Copy object key"
+                onClick={() => copyToClipboard(objectKey, "Object key copied")}
+              >
+                <Copy className="size-3.5" />
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => copyToClipboard(metadataCsv)}>
-                Copy Metadata CSV
+            </div>
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Close object detail"
+          onClick={closeDrawer}
+        >
+          <X />
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+          <div className={fieldLabel}>Size</div>
+          <div className="truncate text-sm" title={selectedObject.size || "Unknown"}>
+            {selectedObject.size || "Unknown"}
+          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+          <div className={fieldLabel}>Modified</div>
+          <div className="truncate text-sm" title={selectedObject.modifiedAt || "Unknown"}>
+            {selectedObject.modifiedAt || "Unknown"}
+          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+          <div className={fieldLabel}>Storage class</div>
+          <div className="truncate text-sm" title={selectedObject.storageClass || "STANDARD"}>
+            {selectedObject.storageClass || "STANDARD"}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className={fieldLabel}>Metadata</div>
+          {workspace.s3ObjectMetadata.length > 0 ? (
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Copy metadata as JSON"
+                onClick={() => copyToClipboard(metadataJson, "Metadata JSON copied")}
+              >
+                <Copy />
+                JSON
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Copy metadata as CSV"
+                onClick={() => copyToClipboard(metadataCsv, "Metadata CSV copied")}
+              >
+                <Copy />
+                CSV
               </Button>
             </div>
           ) : null}
         </div>
+        <DetailFieldList
+          fields={workspace.s3ObjectMetadata}
+          emptyText="No metadata loaded for the selected object."
+          showSensitiveValues={showSensitiveValues}
+        />
+      </div>
 
-        <div className="space-y-2">
-          <div className={fieldLabel}>Copy snippets</div>
-          {workspace.s3ExportSnippets.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No copy snippets are available for this object.
-            </p>
-          ) : (
-            workspace.s3ExportSnippets.map((snippet) => (
-              <div key={snippet.label} className="rounded-lg border border-border bg-muted/40 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className={fieldLabel}>{snippet.label}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => copyToClipboard(snippet.value)}
-                  >
-                    <Copy />
-                    Copy
-                  </Button>
+      <div className="space-y-2">
+        <div className={fieldLabel}>Copy snippets</div>
+        {workspace.s3ExportSnippets.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No copy snippets are available for this object.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {workspace.s3ExportSnippets.map((snippet) => (
+              <div
+                key={snippet.label}
+                className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 py-1.5 pl-3 pr-1.5"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className={fieldLabel}>{snippet.label}</div>
+                  <pre className="overflow-x-auto whitespace-pre font-mono text-xs" title={snippet.value}>
+                    {snippet.value}
+                  </pre>
                 </div>
-                <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">{snippet.value}</pre>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 shrink-0"
+                  aria-label={`Copy ${snippet.label}`}
+                  onClick={() => copyToClipboard(snippet.value, `${snippet.label} copied`)}
+                >
+                  <Copy className="size-3.5" />
+                </Button>
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-        <div className="space-y-2">
-          <div className={fieldLabel}>Signed URL</div>
-          <Input
-            value={signedUrlDuration}
-            placeholder="Duration in seconds"
-            onChange={(event) => {
-              setSignedUrlDuration(event.target.value.replace(/\D/g, ""));
-            }}
-          />
+      <div className="space-y-2">
+        <div className={fieldLabel}>Signed URL</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1">
+            {SIGNED_URL_PRESETS.map((preset) => {
+              const active = preset.seconds === signedUrlSeconds;
+              return (
+                <Button
+                  key={preset.seconds}
+                  type="button"
+                  variant={active ? "secondary" : "outline"}
+                  size="sm"
+                  aria-pressed={active}
+                  onClick={() => {
+                    setSignedUrlSeconds(preset.seconds);
+                  }}
+                >
+                  {preset.label}
+                </Button>
+              );
+            })}
+          </div>
           <Button
-            variant="outline"
             size="sm"
             disabled={!workspace.selectedS3ObjectKey}
             onClick={() => {
-              onPresignObject(Number(signedUrlDuration || "3600"));
+              onPresignObject(signedUrlSeconds);
             }}
           >
-            Generate Signed URL
+            Generate
           </Button>
-          <p className="text-xs text-muted-foreground">{signedUrlStatus}</p>
-          {signedUrlResult ? (
-            <div className="rounded-lg border border-border bg-muted/40 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className={fieldLabel}>Expires {signedUrlResult.expiresAt}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => copyToClipboard(signedUrlResult.url)}
-                >
-                  Copy URL
-                </Button>
-              </div>
-              <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">{signedUrlResult.url}</pre>
-              {signedUrlResult.effectiveWarning ? (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {signedUrlResult.effectiveWarning}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
         </div>
+        {signedUrlStatus ? (
+          <p className="text-xs text-muted-foreground">{signedUrlStatus}</p>
+        ) : null}
+        {signedUrlResult ? (
+          <div className="rounded-lg border border-border bg-muted/40 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className={fieldLabel}>Expires {signedUrlResult.expiresAt}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 shrink-0"
+                aria-label="Copy signed URL"
+                onClick={() => copyToClipboard(signedUrlResult.url, "Signed URL copied")}
+              >
+                <Copy className="size-3.5" />
+              </Button>
+            </div>
+            <pre className="mt-1 overflow-x-auto whitespace-pre font-mono text-xs" title={signedUrlResult.url}>
+              {signedUrlResult.url}
+            </pre>
+            {signedUrlResult.effectiveWarning ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {signedUrlResult.effectiveWarning}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  ) : null;
+
+  // On wide viewports the panel docks beside the table; otherwise it floats in
+  // a Sheet so the objects table is never squeezed.
+  const inlineDrawer =
+    isWideViewport && selectedObject && drawerOpen ? (
+      <aside
+        aria-label="S3 object details"
+        className="sticky top-4 max-h-[calc(100vh-7rem)] w-80 shrink-0 self-start overflow-y-auto rounded-lg border border-border bg-card p-[18px] shadow-sm"
+      >
+        {drawerBody}
       </aside>
+    ) : null;
+
+  const sheetDrawer =
+    !isWideViewport && selectedObject ? (
+      <Sheet
+        open={drawerOpen}
+        onOpenChange={(open) => {
+          setDrawerOpen(open);
+        }}
+      >
+        <SheetContent
+          aria-label="S3 object details"
+          className="w-full gap-0 overflow-y-auto p-[18px] sm:max-w-md [&>button]:hidden"
+        >
+          {drawerBody}
+        </SheetContent>
+      </Sheet>
     ) : null;
 
   const objectsPage = (
     <section className="space-y-4">
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
-        <div className="w-56">
+        <div className="w-64 min-w-48 max-w-80">
           <div className={cn(fieldLabel, "mb-1")}>Bucket</div>
           <Select
             value={workspace.selectedS3BucketName ?? ""}
@@ -368,12 +548,12 @@ export default function StorageView({
               }
             }}
           >
-            <SelectTrigger aria-label="Select bucket">
+            <SelectTrigger aria-label="Select bucket" title={workspace.selectedS3BucketName ?? undefined}>
               <SelectValue placeholder="Select bucket" />
             </SelectTrigger>
             <SelectContent>
               {workspace.s3Buckets.map((bucket) => (
-                <SelectItem key={bucket.name} value={bucket.name}>
+                <SelectItem key={bucket.name} value={bucket.name} title={bucket.name}>
                   {bucket.name}
                 </SelectItem>
               ))}
@@ -399,7 +579,7 @@ export default function StorageView({
       </div>
 
       <p className="text-sm text-muted-foreground">
-        {workspace.s3StatusMessage || "S3 inventory is waiting for a locked AWS workspace."}
+        {workspace.s3StatusMessage || "S3 inventory is waiting for an open AWS workspace."}
       </p>
 
       <div className="flex items-start gap-4">
@@ -412,13 +592,13 @@ export default function StorageView({
               className="border-0"
             />
           ) : (
-            <Table>
+            <Table className="table-fixed">
               <TableHeader>
                 <TableRow>
                   <TableHead>Object Key</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Modified</TableHead>
-                  <TableHead>Storage Class</TableHead>
+                  <TableHead className="w-28">Size</TableHead>
+                  <TableHead className="w-44">Modified</TableHead>
+                  <TableHead className="w-36">Storage Class</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -434,10 +614,12 @@ export default function StorageView({
                         setDrawerOpen(true);
                       }}
                     >
-                      <TableCell className="font-medium">{object.key}</TableCell>
-                      <TableCell>{object.size || "Unknown"}</TableCell>
-                      <TableCell>{object.modifiedAt || "Unknown"}</TableCell>
-                      <TableCell>{object.storageClass || "STANDARD"}</TableCell>
+                      <TableCell className="max-w-0 truncate font-medium" title={object.key}>
+                        {object.key}
+                      </TableCell>
+                      <TableCell className="truncate">{object.size || "Unknown"}</TableCell>
+                      <TableCell className="truncate">{object.modifiedAt || "Unknown"}</TableCell>
+                      <TableCell className="truncate">{object.storageClass || "STANDARD"}</TableCell>
                     </TableRow>
                   );
                 })}
@@ -445,8 +627,9 @@ export default function StorageView({
             </Table>
           )}
         </div>
-        {objectDrawer}
+        {inlineDrawer}
       </div>
+      {sheetDrawer}
     </section>
   );
 
