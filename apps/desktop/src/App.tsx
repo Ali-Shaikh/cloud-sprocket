@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import type { ErrorInfo, ReactNode } from "react";
-import { Boxes, Bug, LayoutGrid, LogOut, Server, Trash2, TriangleAlert } from "lucide-react";
+import { ArrowLeftRight, Boxes, Bug, LayoutGrid, Server, Trash2, TriangleAlert } from "lucide-react";
 import { Toaster } from "sonner";
 import awsEc2IconUrl from "./assets/cloud-icons/aws-ec2.svg";
 import awsS3IconUrl from "./assets/cloud-icons/aws-s3.svg";
@@ -48,6 +48,7 @@ import type {
   AppResetResult,
   AppSettingsSnapshot,
   AuthMethod,
+  AuthMethodStatus,
   AwsEc2Instance,
   AwsS3PresignResult,
   AwsS3UploadResult,
@@ -396,6 +397,7 @@ export default function App() {
   const [ec2ActionInFlight, setEC2ActionInFlight] = useState(false);
   const [ec2ActionHistory, setEC2ActionHistory] = useState<EC2ActionHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [openingProfileId, setOpeningProfileId] = useState<string>();
   const [localStackAuthToken, setLocalStackAuthToken] = useState("");
   const [localStackPersistence, setLocalStackPersistence] = useState(false);
   const [localStackEnvironmentText, setLocalStackEnvironmentText] = useState("");
@@ -585,6 +587,71 @@ export default function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Session mutation failed";
       pushNotification("error", `Failed to execute ${method}`, message);
+    }
+  }
+
+  // Computes the auth methods a profile can actually open with from a session
+  // snapshot (those marked available). The orchestration uses this to decide
+  // between one-click open, a chip choice, or the disabled-methods state.
+  function usableAuthMethods(snapshot: SessionSnapshot): AuthMethodStatus[] {
+    return snapshot.availableAuthMethods.filter((method) => method.available);
+  }
+
+  // Selects an auth method and locks the session in one chain, applying state
+  // (session + workspace + discovery) exactly once at the end so the view does
+  // not flicker through intermediate snapshots. Used by both the one-click open
+  // path and the auth-chip choice. Throws on failure for the caller to report.
+  async function chooseAuthAndOpen(authMethod: string): Promise<void> {
+    await backendRequest<SessionSnapshot>("session.selectAuthMethod", { authMethod });
+    const lockedSnapshot = normaliseSessionSnapshot(
+      await backendRequest<SessionSnapshot>("session.lock"),
+    );
+    startTransition(() => {
+      setSession(lockedSnapshot);
+    });
+    await loadWorkspace(lockedSnapshot);
+    await loadState();
+  }
+
+  // One-click open: pick the profile, then decide based on the returned usable
+  // auth methods. Exactly one usable path opens the workspace straight away;
+  // more than one shows the auth chips on Connect; zero leaves the disabled
+  // methods visible. Any failure surfaces a toast and stays on Connect.
+  async function openWorkspace(providerId: string, profileId: string): Promise<void> {
+    setOpeningProfileId(profileId);
+    try {
+      const profileSnapshot = normaliseSessionSnapshot(
+        await backendRequest<SessionSnapshot>("session.selectProfile", { providerId, profileId }),
+      );
+      const usable = usableAuthMethods(profileSnapshot);
+      if (usable.length === 1) {
+        await chooseAuthAndOpen(usable[0].method);
+        return;
+      }
+      // More than one usable path, or none: surface the profile snapshot so the
+      // Connect view can show the chips (multi) or the disabled methods (zero).
+      startTransition(() => {
+        setSession(profileSnapshot);
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not open the workspace.";
+      pushNotification("error", "Could not open the workspace", message);
+    } finally {
+      setOpeningProfileId(undefined);
+    }
+  }
+
+  // Completes the open when the user picks an auth path from the Connect chips
+  // (the multi-usable case). Mirrors openWorkspace's single state apply.
+  async function chooseAuthMethod(authMethod: string): Promise<void> {
+    setOpeningProfileId(session.selectedProfileId);
+    try {
+      await chooseAuthAndOpen(authMethod);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not open the workspace.";
+      pushNotification("error", "Could not open the workspace", message);
+    } finally {
+      setOpeningProfileId(undefined);
     }
   }
 
@@ -1240,20 +1307,18 @@ export default function App() {
       selectedProfile={selectedProfile}
       loading={loading}
       localRuntimeReady={workspace.dockerRuntime.reachable}
+      openingProfileId={openingProfileId}
       onRefreshDiscovery={() => {
         void refreshDiscovery();
       }}
       onSelectProvider={(providerId) => {
         void mutateSession("session.selectProvider", { providerId });
       }}
-      onSelectProfile={(providerId, profileId) => {
-        void mutateSession("session.selectProfile", { providerId, profileId });
+      onOpenProfile={(providerId, profileId) => {
+        void openWorkspace(providerId, profileId);
       }}
-      onSelectAuthMethod={(authMethod) => {
-        void mutateSession("session.selectAuthMethod", { authMethod });
-      }}
-      onOpenWorkspace={() => {
-        void mutateSession("session.lock");
+      onChooseAuthMethod={(authMethod) => {
+        void chooseAuthMethod(authMethod);
       }}
       onOpenLocalRuntime={() => {
         setActiveWorkspaceTabId("virtualisation");
@@ -1482,8 +1547,8 @@ export default function App() {
                     }}
                     className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
-                    <LogOut className="size-[18px]" />
-                    <span className="truncate">Close workspace</span>
+                    <ArrowLeftRight className="size-[18px]" />
+                    <span className="truncate">Switch connection</span>
                   </button>
                 ) : null}
                 <button

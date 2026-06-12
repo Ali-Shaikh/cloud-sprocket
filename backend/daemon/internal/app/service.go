@@ -199,7 +199,7 @@ func (s *Service) Handle(
 			return nil, err
 		}
 		if !session.IsLocked || session.CurrentProviderID != "aws" {
-			return nil, errors.New("lock an AWS session before selecting an S3 bucket")
+			return nil, errors.New("open an AWS workspace before selecting an S3 bucket")
 		}
 		session.SelectedS3BucketName = request.BucketName
 		session.SelectedS3ObjectKey = ""
@@ -257,7 +257,7 @@ func (s *Service) Handle(
 			return nil, err
 		}
 		if !session.IsLocked || session.CurrentProviderID != "aws" {
-			return nil, errors.New("lock an AWS session before setting an S3 prefix filter")
+			return nil, errors.New("open an AWS workspace before setting an S3 prefix filter")
 		}
 		session.S3PrefixFilter = request.Prefix
 		session.SelectedS3ObjectKey = ""
@@ -402,7 +402,7 @@ func (s *Service) Handle(
 			return nil, err
 		}
 		if !session.IsLocked || session.CurrentProviderID != "aws" {
-			return nil, errors.New("lock an AWS session before selecting an EC2 region")
+			return nil, errors.New("open an AWS workspace before selecting an EC2 region")
 		}
 		session.SelectedEC2Region = request.Region
 		session.SelectedEC2InstanceID = ""
@@ -435,7 +435,7 @@ func (s *Service) Handle(
 			return nil, err
 		}
 		if !session.IsLocked || session.CurrentProviderID != "aws" {
-			return nil, errors.New("lock an AWS session before selecting an EC2 instance")
+			return nil, errors.New("open an AWS workspace before selecting an EC2 instance")
 		}
 		session.SelectedEC2InstanceID = request.InstanceID
 		if err := s.store.SaveSession(ctx, session); err != nil {
@@ -506,7 +506,7 @@ func (s *Service) Handle(
 			return nil, err
 		}
 		if !session.IsLocked || session.CurrentProviderID != "azure" {
-			return nil, errors.New("lock an Azure session before selecting a resource group")
+			return nil, errors.New("open an Azure workspace before selecting a resource group")
 		}
 		session.SelectedAzureResourceGroup = request.ResourceGroup
 		session.SelectedAzureVMID = ""
@@ -539,7 +539,7 @@ func (s *Service) Handle(
 			return nil, err
 		}
 		if !session.IsLocked || session.CurrentProviderID != "azure" {
-			return nil, errors.New("lock an Azure session before selecting a virtual machine")
+			return nil, errors.New("open an Azure workspace before selecting a virtual machine")
 		}
 		session.SelectedAzureVMID = request.VMID
 		if err := s.store.SaveSession(ctx, session); err != nil {
@@ -650,7 +650,7 @@ func (s *Service) Handle(
 			return nil, err
 		}
 		if session.CurrentProviderID == "" || session.SelectedProfileID == "" || session.SelectedAuthMethod == "" {
-			return nil, errors.New("select a provider, profile, and auth method before locking the session")
+			return nil, errors.New("select a provider, profile, and auth method before opening the workspace")
 		}
 		if !authMethodAvailable(session.AvailableAuthMethods, session.SelectedAuthMethod) {
 			return nil, errors.New("the selected auth method is not available for the active profile")
@@ -663,7 +663,7 @@ func (s *Service) Handle(
 		if err := s.store.SaveSession(ctx, session); err != nil {
 			return nil, err
 		}
-		return session, s.notifyStateAndLog(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Locked %s session for %s.", session.LockedProviderID, session.LockedProfileID))
+		return session, s.notifyStateAndLog(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Opened %s workspace for %s.", session.LockedProviderID, session.LockedProfileID))
 	case "session.unlock":
 		snapshot, err := s.discovery.Discover()
 		if err != nil {
@@ -684,7 +684,7 @@ func (s *Service) Handle(
 		if err := s.store.SaveSession(ctx, session); err != nil {
 			return nil, err
 		}
-		return session, s.notifyStateAndLog(ctx, snapshot, session, notifier, "info", "Unlocked the active cloud session.")
+		return session, s.notifyStateAndLog(ctx, snapshot, session, notifier, "info", "Closed the active workspace.")
 	case "logs.list":
 		var request struct {
 			Limit int `json:"limit"`
@@ -1615,7 +1615,7 @@ func (s *Service) buildWorkspaceSnapshot(
 		)
 		workspace.SelectedAzureVMID = s.selectedAzureVMID(session, workspace.AzureVirtualMachines)
 		if len(workspace.AzureResourceGroups) == 0 {
-			workspace.AzureStatusMessage = "No Azure resource groups are currently available for this locked session."
+			workspace.AzureStatusMessage = "No Azure resource groups are currently available for this workspace."
 		} else if workspace.SelectedAzureResourceGroup == "" {
 			workspace.AzureStatusMessage = "Select an Azure resource group to inspect its virtual machines."
 		} else if len(workspace.AzureVirtualMachines) == 0 {
@@ -1653,7 +1653,7 @@ func (s *Service) buildWorkspaceSnapshot(
 			workspace.SelectedS3ObjectKey,
 		)
 		if workspace.SelectedS3BucketName == "" {
-			workspace.S3StatusMessage = "No buckets are currently available for this locked AWS session."
+			workspace.S3StatusMessage = "No buckets are currently available for this AWS workspace."
 		} else if len(workspace.S3Objects) == 0 {
 			if session.S3PrefixFilter != "" {
 				workspace.S3StatusMessage = fmt.Sprintf(
@@ -1682,7 +1682,7 @@ func (s *Service) buildWorkspaceSnapshot(
 		workspace.EC2Instances = s.ec2Instances(context.Background(), *workspace.Profile, workspace.SelectedEC2Region)
 		workspace.SelectedEC2InstanceID = s.selectedEC2InstanceID(session, workspace.EC2Instances)
 		if workspace.SelectedEC2Region == "" {
-			workspace.EC2StatusMessage = "No EC2 region is available for this locked AWS session."
+			workspace.EC2StatusMessage = "No EC2 region is available for this AWS workspace."
 		} else if len(workspace.EC2Instances) == 0 {
 			workspace.EC2StatusMessage = fmt.Sprintf("No EC2 instances were returned for %s.", workspace.SelectedEC2Region)
 		} else {
@@ -1703,11 +1703,11 @@ func (s *Service) activeS3Selection(
 	requireBucket bool,
 ) (models.ProfileSummary, string, error) {
 	if !session.IsLocked || session.CurrentProviderID != "aws" {
-		return models.ProfileSummary{}, "", errors.New("lock an AWS session before using S3 actions")
+		return models.ProfileSummary{}, "", errors.New("open an AWS workspace before using S3 actions")
 	}
 	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
 	if !ok {
-		return models.ProfileSummary{}, "", errors.New("the locked AWS profile is not available")
+		return models.ProfileSummary{}, "", errors.New("the workspace's AWS profile is not available")
 	}
 	bucketName := session.SelectedS3BucketName
 	if bucketName == "" && requireBucket {
@@ -1949,11 +1949,11 @@ func (s *Service) activeEC2Selection(
 	instanceIDOverride string,
 ) (models.ProfileSummary, string, string, error) {
 	if !session.IsLocked || session.CurrentProviderID != "aws" {
-		return models.ProfileSummary{}, "", "", errors.New("lock an AWS session before using EC2 actions")
+		return models.ProfileSummary{}, "", "", errors.New("open an AWS workspace before using EC2 actions")
 	}
 	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
 	if !ok {
-		return models.ProfileSummary{}, "", "", errors.New("the locked AWS profile is not available")
+		return models.ProfileSummary{}, "", "", errors.New("the workspace's AWS profile is not available")
 	}
 	regions := s.ec2Regions(context.Background(), profile)
 	region := s.selectedEC2Region(session, regions, profile)
@@ -2244,7 +2244,7 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 		TabID:   "overview",
 		Label:   "Overview",
 		Summary: "Session-wide provider context and health.",
-		Detail:  "Shows the locked cloud context and recent operator activity.",
+		Detail:  "Shows the open workspace's cloud context and recent operator activity.",
 	}
 	activityTab := models.WorkspaceTab{
 		TabID:   "actions",
@@ -2267,13 +2267,13 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 				TabID:   "azure-overview",
 				Label:   "Azure",
 				Summary: "Subscription context and readiness.",
-				Detail:  "Surfaces the locked Azure subscription details and the next read-only inventory slices.",
+				Detail:  "Surfaces the open Azure subscription details and the next read-only inventory slices.",
 			},
 			{
 				TabID:   "azure-resource-groups",
 				Label:   "Resource Groups",
 				Summary: "Read-only Azure resource group inventory.",
-				Detail:  "Browse resource groups discovered for the locked Azure subscription.",
+				Detail:  "Browse resource groups discovered for the open Azure subscription.",
 			},
 			{
 				TabID:   "azure-vms",
@@ -2293,7 +2293,7 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 				TabID:   "gcp-overview",
 				Label:   "GCP",
 				Summary: "Project context and readiness.",
-				Detail:  "Surfaces the locked GCP configuration details while provider-specific inventory is ported.",
+				Detail:  "Surfaces the open GCP configuration details while provider-specific inventory is ported.",
 			},
 			activityTab,
 		}
@@ -2441,7 +2441,7 @@ func (s *Service) emulatorsPrepareProfile(emulatorID string) (models.EmulatorAct
 		status.ConfigPath = s.settings.AzureProfilePath()
 		status.Endpoint = "http://localhost:4577"
 		if strings.TrimSpace(status.Summary) == "" {
-			status.Summary = fmt.Sprintf("Local Azure profile %q is ready in your Azure config. Select and lock it from setup.", localAzureProfileName)
+			status.Summary = fmt.Sprintf("Local Azure profile %q is ready in your Azure config. Open it from the Connect screen.", localAzureProfileName)
 		}
 		return emulatorActionResult("prepareProfile", status), nil
 	}
@@ -2464,7 +2464,7 @@ func (s *Service) emulatorsPrepareProfile(emulatorID string) (models.EmulatorAct
 	status.CredsPath = s.settings.AWSCredentialsPath
 	status.Endpoint = "http://localhost:4566"
 	if strings.TrimSpace(status.Summary) == "" {
-		status.Summary = fmt.Sprintf("Local AWS profile %q is ready in your AWS config. Select and lock it from setup.", localAWSProfileName)
+		status.Summary = fmt.Sprintf("Local AWS profile %q is ready in your AWS config. Open it from the Connect screen.", localAWSProfileName)
 	}
 	return emulatorActionResult("prepareProfile", status), nil
 }
@@ -2475,7 +2475,7 @@ const (
 )
 
 // writeLocalAWSProfile upserts a LocalStack-targeted profile into the user's
-// real AWS config and credentials files so it is discovered and can be locked.
+// real AWS config and credentials files so it is discovered and can be opened.
 // Existing sections are preserved.
 func (s *Service) writeLocalAWSProfile() error {
 	if strings.TrimSpace(s.settings.AWSConfigPath) == "" || strings.TrimSpace(s.settings.AWSCredentialsPath) == "" {
@@ -2490,7 +2490,7 @@ func (s *Service) writeLocalAWSProfile() error {
 }
 
 // writeLocalAzureSubscription upserts a floci-az-targeted subscription into the
-// user's real Azure profile so it is discovered and can be locked. Existing
+// user's real Azure profile so it is discovered and can be opened. Existing
 // subscriptions are preserved.
 func (s *Service) writeLocalAzureSubscription() error {
 	path := s.settings.AzureProfilePath()
