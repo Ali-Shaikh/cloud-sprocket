@@ -761,7 +761,7 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     s3PrefixFilter: mockState.session.s3PrefixFilter,
     s3StatusMessage: isAWSWorkspace
       ? `Loaded ${filteredObjects.length} objects from ${selectedS3BucketName}.`
-      : "S3 inventory is only available for locked AWS workspaces.",
+      : "S3 inventory is only available for open AWS workspaces.",
     s3Buckets: isAWSWorkspace ? mockWorkspaceBuckets : [],
     s3Objects: filteredObjects,
     s3ObjectMetadata: selectedS3ObjectKey
@@ -774,7 +774,7 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       : undefined,
     ec2StatusMessage: isAWSWorkspace
       ? `Loaded ${mockWorkspaceInstances.length} EC2 instances from ${mockState.session.selectedEc2Region ?? mockWorkspaceRegions[0]}.`
-      : "EC2 inventory is only available for locked AWS workspaces.",
+      : "EC2 inventory is only available for open AWS workspaces.",
     ec2Regions: isAWSWorkspace ? mockWorkspaceRegions : [],
     ec2Instances: isAWSWorkspace ? mockWorkspaceInstances : [],
   };

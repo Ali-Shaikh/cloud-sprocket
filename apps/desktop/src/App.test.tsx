@@ -66,6 +66,22 @@ const profileFixtures: ProfileSummary[] = [
       { method: "local-files", label: "Local Files", summary: "Read-only data.", available: true },
     ],
   },
+  // Appended last so profileFixtures[0]/[1] keep their AWS/Azure meaning for the
+  // index-based assertions elsewhere. This profile exposes a single usable auth
+  // path (CLI only) to exercise the one-click open flow.
+  {
+    providerId: "aws",
+    profileId: "prod",
+    displayName: "prod",
+    summary: "AWS production profile with a single usable auth path.",
+    sourcePaths: ["~/.aws/config"],
+    attributes: [{ label: "Region", value: "eu-west-1" }],
+    authMethods: [
+      { method: "cli", label: "CLI", summary: "AWS CLI detected.", available: true },
+      { method: "sso", label: "SSO", summary: "No SSO metadata detected.", available: false },
+      { method: "local-files", label: "Local Files", summary: "Local files unavailable.", available: false },
+    ],
+  },
 ];
 
 let sessionFixture: SessionSnapshot;
@@ -99,6 +115,41 @@ vi.mock("./lib/backend", () => ({
         return profileFixtures;
       case "session.get":
         return sessionFixture;
+      case "session.selectProvider": {
+        const providerId = String(params?.providerId ?? "");
+        const firstProfile = profileFixtures.find((profile) => profile.providerId === providerId);
+        sessionFixture = {
+          ...sessionFixture,
+          isLocked: false,
+          currentProviderId: providerId,
+          selectedProfileId: firstProfile?.profileId,
+          selectedAuthMethod: undefined,
+          availableAuthMethods: firstProfile?.authMethods ?? [],
+        };
+        return sessionFixture;
+      }
+      case "session.selectProfile": {
+        const providerId = String(params?.providerId ?? "");
+        const profileId = String(params?.profileId ?? "");
+        const profile = profileFixtures.find(
+          (candidate) => candidate.providerId === providerId && candidate.profileId === profileId,
+        );
+        sessionFixture = {
+          ...sessionFixture,
+          isLocked: false,
+          currentProviderId: providerId,
+          selectedProfileId: profileId,
+          selectedAuthMethod: undefined,
+          availableAuthMethods: profile?.authMethods ?? [],
+        };
+        return sessionFixture;
+      }
+      case "session.selectAuthMethod":
+        sessionFixture = {
+          ...sessionFixture,
+          selectedAuthMethod: params?.authMethod as SessionSnapshot["selectedAuthMethod"],
+        };
+        return sessionFixture;
       case "session.lock":
         sessionFixture = {
           ...sessionFixture,
@@ -106,6 +157,10 @@ vi.mock("./lib/backend", () => ({
           lockedProviderId: sessionFixture.currentProviderId,
           lockedProfileId: sessionFixture.selectedProfileId,
           lockedAuthMethod: sessionFixture.selectedAuthMethod,
+          workspaceTabs:
+            sessionFixture.workspaceTabs && sessionFixture.workspaceTabs.length > 0
+              ? sessionFixture.workspaceTabs
+              : [{ tabId: "overview", label: "Overview", summary: "Summary", detail: "Overview panel" }],
         };
         return sessionFixture;
       case "session.unlock":
@@ -561,9 +616,44 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "Your clouds" })).toBeInTheDocument();
     expect(await screen.findByText("Azure")).toBeInTheDocument();
-    // The default session has AWS selected, so its detail panel is open.
+    // The default session has AWS selected, so its profile picker is shown.
     expect(await screen.findByRole("heading", { name: "Open AWS" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open workspace" })).toBeEnabled();
+    // Profile cards are now the open action; each exposes an "Open" affordance.
+    expect(screen.getByRole("button", { name: /sandbox/ })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Open workspace" })).not.toBeInTheDocument();
+  });
+
+  it("opens the workspace in one click when a profile has a single usable auth path", async () => {
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
+
+    // The prod profile has only CLI usable, so clicking it opens directly with
+    // no auth chip ceremony.
+    fireEvent.click(await screen.findByRole("button", { name: /prod/ }));
+
+    expect(await screen.findByText(/Read-only mode keeps you safe/)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Switch connection" })).toBeInTheDocument();
+  });
+
+  it("shows auth chips for a multi-path profile and opens after a chip click", async () => {
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
+
+    // The sandbox profile has CLI, SSO, and Local Files all usable, so clicking
+    // it must surface the auth choice rather than opening immediately.
+    fireEvent.click(await screen.findByRole("button", { name: /sandbox/ }));
+    expect(await screen.findByText(/Pick one to open the workspace/)).toBeInTheDocument();
+    expect(screen.queryByText(/Read-only mode keeps you safe/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "SSO" }));
+    expect(await screen.findByText(/Read-only mode keeps you safe/)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Switch connection" })).toBeInTheDocument();
   });
 
   it("renders startup when backend list fields are null", async () => {
@@ -698,7 +788,7 @@ describe("App", () => {
     expect(
       await screen.findByText(/cloudsprocket-workspace\.db/i),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Close workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Switch connection" })).toBeInTheDocument();
   });
 
   it("renders the locked workspace when backend runtime fields are sparse", async () => {
@@ -814,13 +904,13 @@ describe("App", () => {
     );
 
     expect(await screen.findByText(/Read-only mode keeps you safe/)).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Close workspace" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Switch connection" })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Local Runtime" }));
     expect(await screen.findByRole("button", { name: "Start LocalStack" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Close workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch connection" }));
 
     expect(await screen.findByRole("heading", { name: "Your clouds" })).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Open workspace" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: /sandbox/ })).toBeEnabled();
   });
 
   it("resets app-owned state back to setup without cloud config deletion", async () => {
@@ -857,7 +947,7 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "Your clouds" })).toBeInTheDocument();
     expect(await screen.findByText("App reset complete")).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Open workspace" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: /sandbox/ })).toBeEnabled();
   });
 
   it("starts and stops LocalStack from the local runtime workspace", async () => {
@@ -1333,7 +1423,7 @@ describe("App", () => {
       ...workspaceFixture,
       selectedEc2Region: undefined,
       selectedEc2InstanceId: undefined,
-      ec2StatusMessage: "No EC2 region is available for this locked AWS session.",
+      ec2StatusMessage: "No EC2 region is available for this AWS workspace.",
       ec2Regions: [],
       ec2Instances: [],
     };
@@ -1346,7 +1436,7 @@ describe("App", () => {
 
     fireEvent.click(await screen.findByText("EC2"));
 
-    expect(await screen.findByText("No EC2 region is available for this locked AWS session.")).toBeInTheDocument();
+    expect(await screen.findByText("No EC2 region is available for this AWS workspace.")).toBeInTheDocument();
     expect(await screen.findByText("No EC2 instances loaded for this region.")).toBeInTheDocument();
     expect(await screen.findByText("No EC2 instance selected.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();

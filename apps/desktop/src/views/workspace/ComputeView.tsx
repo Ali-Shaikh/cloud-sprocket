@@ -289,7 +289,7 @@ export default function ComputeView({
           </div>
         </div>
         <p className="text-sm text-muted-foreground">
-          {workspace.ec2StatusMessage || "EC2 inventory is waiting for a locked AWS workspace."}
+          {workspace.ec2StatusMessage || "EC2 inventory is waiting for an open AWS workspace."}
           {workspace.awsEndpointUrl ? ` Endpoint: ${workspace.awsEndpointUrl}.` : ""}
         </p>
       </section>

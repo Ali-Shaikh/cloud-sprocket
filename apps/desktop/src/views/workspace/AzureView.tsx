@@ -116,7 +116,7 @@ export default function AzureView({
   const authSummary =
     workspace.profile?.authMethods.find(
       (method) => method.method === workspace.authMethod,
-    )?.summary || "The locked Azure auth path is ready for read-only workspace views.";
+    )?.summary || "The Azure auth path is ready for read-only workspace views.";
 
   const selectedResourceGroup = workspace.azureResourceGroups.find(
     (group) => group.name === workspace.selectedAzureResourceGroup,
@@ -156,7 +156,7 @@ export default function AzureView({
         <div>
           <h2 className="text-base font-bold">Azure Workspace</h2>
           <p className="text-sm text-muted-foreground">
-            Read-only Azure workspace context for the locked subscription.
+            Read-only Azure workspace context for the open subscription.
           </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
@@ -202,12 +202,12 @@ export default function AzureView({
         <div>
           <h2 className="text-base font-bold">Workspace Profile</h2>
           <p className="text-sm text-muted-foreground">
-            The locked workspace snapshot populates this profile detail.
+            The open workspace snapshot populates this profile detail.
           </p>
         </div>
         <DetailFieldList
           fields={workspace.profile?.attributes}
-          emptyText="No locked workspace profile is available yet."
+          emptyText="No open workspace profile is available yet."
           showSensitiveValues={showSensitiveValues}
         />
       </section>
@@ -251,13 +251,13 @@ export default function AzureView({
         <div>
           <h2 className="text-base font-bold">Azure Resource Groups</h2>
           <p className="text-sm text-muted-foreground">
-            Browse resource groups discovered for the locked Azure subscription.
+            Browse resource groups discovered for the open Azure subscription.
           </p>
         </div>
         {inventoryStatusRow}
         <p className="text-sm text-muted-foreground">
           {workspace.azureStatusMessage ||
-            "Azure inventory is waiting for a locked Azure workspace."}
+            "Azure inventory is waiting for an open Azure workspace."}
         </p>
         <div className="overflow-hidden rounded-lg border border-border">
           {workspace.azureResourceGroups.length === 0 ? (

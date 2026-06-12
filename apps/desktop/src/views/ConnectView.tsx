@@ -1,12 +1,11 @@
-import { useEffect } from "react";
-import { Check, RefreshCw, Server } from "lucide-react";
+import { ChevronRight, Loader2, RefreshCw, Server } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ProviderIcon } from "@/components/provider-icon";
-import { StatusDot, type Status } from "@/components/status-dot";
+import { type Status } from "@/components/status-dot";
 import { StatusPill } from "@/components/status-pill";
-import type { ProfileSummary, ProviderSummary, SessionSnapshot } from "@/types/backend";
+import type { AuthMethodStatus, ProfileSummary, ProviderSummary, SessionSnapshot } from "@/types/backend";
 
 export type ConnectViewProps = {
   providers: ProviderSummary[];
@@ -16,11 +15,12 @@ export type ConnectViewProps = {
   selectedProfile?: ProfileSummary;
   loading: boolean;
   localRuntimeReady: boolean;
+  /** Profile id whose open chain is currently in flight, if any. */
+  openingProfileId?: string;
   onRefreshDiscovery: () => void;
   onSelectProvider: (providerId: string) => void;
-  onSelectProfile: (providerId: string, profileId: string) => void;
-  onSelectAuthMethod: (authMethod: string) => void;
-  onOpenWorkspace: () => void;
+  onOpenProfile: (providerId: string, profileId: string) => void;
+  onChooseAuthMethod: (authMethod: string) => void;
   onOpenLocalRuntime: () => void;
 };
 
@@ -49,7 +49,8 @@ function statusLabel(provider: ProviderSummary): string {
 /**
  * The Connect screen: card-based, single-screen onboarding that replaces the
  * old 4-step "Session Setup" wizard. It is prop-driven (the backend session is
- * the source of truth) and reuses the existing select/lock RPC handlers.
+ * the source of truth). Clicking a profile opens its workspace directly; the
+ * auth-path chips only appear when more than one usable path needs a choice.
  */
 export default function ConnectView({
   providers,
@@ -59,36 +60,30 @@ export default function ConnectView({
   selectedProfile,
   loading,
   localRuntimeReady,
+  openingProfileId,
   onRefreshDiscovery,
   onSelectProvider,
-  onSelectProfile,
-  onSelectAuthMethod,
-  onOpenWorkspace,
+  onOpenProfile,
+  onChooseAuthMethod,
   onOpenLocalRuntime,
 }: ConnectViewProps) {
   const providerProfiles = selectedProvider
     ? profiles.filter((profile) => profile.providerId === selectedProvider.providerId)
     : [];
-  const authMethods =
+  const authMethods: AuthMethodStatus[] =
     session.availableAuthMethods.length > 0
       ? session.availableAuthMethods
       : selectedProfile?.authMethods ?? [];
-  const singleAuthMethod = (() => {
-    const usable = authMethods.filter((method) => method.available);
-    return usable.length === 1 ? usable[0].method : undefined;
-  })();
-  const canOpen = Boolean(selectedProfile && session.selectedAuthMethod);
-
-  // Near-zero onboarding: when a profile exposes exactly one usable auth path,
-  // select it automatically so the user only has to press "Open workspace".
-  useEffect(() => {
-    if (selectedProfile && !session.selectedAuthMethod && singleAuthMethod) {
-      onSelectAuthMethod(singleAuthMethod);
-    }
-    // onSelectAuthMethod is re-created each render; the primitive deps below keep
-    // this to a single call per profile/auth-state change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProfile?.profileId, session.selectedAuthMethod, singleAuthMethod]);
+  const usableAuthMethods = authMethods.filter((method) => method.available);
+  // The auth chips are only a real decision when more than one path is usable.
+  // A single usable path is opened straight from the profile click, so we never
+  // ask the user to pick it here. With zero usable paths we still show the
+  // disabled methods so the profile click is not a silent dead-end.
+  const needsAuthChoice = Boolean(selectedProfile && usableAuthMethods.length > 1);
+  const noUsableAuth = Boolean(
+    selectedProfile && authMethods.length > 0 && usableAuthMethods.length === 0,
+  );
+  const opening = Boolean(openingProfileId);
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -96,7 +91,7 @@ export default function ConnectView({
         <div>
           <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">Your clouds</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            CloudSprocket found these on your machine. Pick one to open a local workspace,
+            CloudSprocket found these on your machine. Click a profile to open its workspace,
             no setup required.
           </p>
         </div>
@@ -177,7 +172,7 @@ export default function ConnectView({
             <div>
               <h2 className="text-base font-bold">Open {selectedProvider.label}</h2>
               <p className="text-xs text-muted-foreground">
-                Choose a profile and authentication path.
+                Click a profile to open its workspace. Workspaces open read-only by default.
               </p>
             </div>
           </div>
@@ -196,30 +191,23 @@ export default function ConnectView({
               <div className="grid gap-2 sm:grid-cols-2">
                 {providerProfiles.map((profile) => {
                   const active = profile.profileId === selectedProfile?.profileId;
+                  const busy = openingProfileId === profile.profileId;
                   return (
                     <button
                       key={profile.profileId}
                       type="button"
                       aria-pressed={active}
-                      onClick={() => onSelectProfile(profile.providerId, profile.profileId)}
+                      disabled={opening}
+                      onClick={() => onOpenProfile(profile.providerId, profile.profileId)}
                       className={cn(
-                        "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
+                        "group flex items-center gap-3 rounded-lg border p-3 text-left transition-colors disabled:cursor-not-allowed",
                         active
                           ? "border-primary bg-primary/5"
                           : "border-border hover:bg-muted",
+                        opening && !busy ? "opacity-50" : null,
                       )}
                     >
-                      <span
-                        className={cn(
-                          "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border",
-                          active
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border-strong",
-                        )}
-                      >
-                        {active ? <Check className="size-3" /> : null}
-                      </span>
-                      <span className="min-w-0">
+                      <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold">
                           {profile.displayName}
                         </span>
@@ -227,6 +215,17 @@ export default function ConnectView({
                           {profile.summary || profile.profileId}
                         </span>
                       </span>
+                      {busy ? (
+                        <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary">
+                          <Loader2 className="size-3.5 animate-spin" />
+                          Opening
+                        </span>
+                      ) : (
+                        <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-muted-foreground transition-colors group-hover:text-foreground">
+                          Open
+                          <ChevronRight className="size-3.5" />
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -234,52 +233,35 @@ export default function ConnectView({
             )}
           </div>
 
-          {selectedProfile ? (
+          {needsAuthChoice || noUsableAuth ? (
             <div className="mt-5">
               <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                 Authentication
               </div>
+              <p className="mb-2 text-xs text-muted-foreground">
+                {needsAuthChoice
+                  ? "This profile has more than one sign-in path. Pick one to open the workspace."
+                  : "No usable sign-in path was detected for this profile. Hover a method for details."}
+              </p>
               <div className="flex flex-wrap gap-2">
-                {authMethods.map((method) => {
-                  const active = method.method === session.selectedAuthMethod;
-                  return (
-                    <button
-                      key={method.method}
-                      type="button"
-                      disabled={!method.available}
-                      title={method.summary}
-                      onClick={() => onSelectAuthMethod(method.method)}
-                      className={cn(
-                        "rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                        active
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border-strong hover:bg-muted",
-                      )}
-                    >
-                      {method.label}
-                    </button>
-                  );
-                })}
+                {authMethods.map((method) => (
+                  <button
+                    key={method.method}
+                    type="button"
+                    disabled={!method.available || opening}
+                    title={method.summary}
+                    onClick={() => onChooseAuthMethod(method.method)}
+                    className={cn(
+                      "rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                      "border-border-strong hover:bg-muted",
+                    )}
+                  >
+                    {method.label}
+                  </button>
+                ))}
               </div>
             </div>
           ) : null}
-
-          <div className="mt-6 flex items-center gap-3 border-t border-border pt-5">
-            <div className="text-sm">
-              <div className="flex items-center gap-2 font-semibold">
-                <StatusDot status={canOpen ? "on" : "off"} />
-                {canOpen ? "Ready to open" : "Pick a profile and auth path"}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {canOpen
-                  ? "Opens a read-only local workspace for this connection."
-                  : "Your selections stay on this machine."}
-              </div>
-            </div>
-            <Button className="ml-auto" disabled={!canOpen} onClick={onOpenWorkspace}>
-              Open workspace
-            </Button>
-          </div>
         </section>
       ) : null}
     </div>
