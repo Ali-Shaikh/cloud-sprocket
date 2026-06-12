@@ -1,6 +1,6 @@
 # Checkpoint — UI/UX Redesign work stream
 
-_Last updated: 2026-06-12_
+_Last updated: 2026-06-13_
 
 ## Goal
 User dislikes the current CloudSprocket UI/UX. Redesign toward Slack / Docker Hub / OpenHuman
@@ -328,9 +328,53 @@ state in the browser, so it may open the previously selected provider). Branch:
   switches in both directions showed zero DOM teardown and no Connect-view flash; console
   error-free.
 
+## Post-M8 polish (2026-06-13, uncommitted): S3 viewer fixes + one-click workspace open
+
+User feedback after testing the redesign: (1) the Storage view bucket dropdown breaks with
+long bucket names, (2) the S3 object details pane is weak UI/UX, (3) the lock/unlock
+(Open/Close workspace) ceremony is too complicated. All three fixed, frontend only,
+implemented via two sub-agents and reviewed:
+
+1. **Select primitive** (`components/ui/select.tsx`, kit-wide so EC2 region + Azure RG
+   selects benefit): trigger clamps the value to one line (shadcn canonical
+   `*:data-[slot=select-value]:line-clamp-1` + `min-w-0`), popper capped at
+   `max-w-[min(26rem,var(--radix-select-content-available-width))]` (var verified present
+   in @radix-ui/react-select 2.3.0), items `break-all` so full names stay readable.
+   StorageView bucket picker `w-56` -> flexible `w-64 min-w-48 max-w-80` + title tooltips.
+2. **S3 object details pane** (`StorageView.tsx`): file-name title + extension icon, full
+   key in mono with copy button, 3-up facts grid (size/modified/storage class), compact
+   metadata JSON/CSV copy buttons, tight snippet rows, signed URL presets (15 min/1 h/12 h)
+   replacing the free-text seconds input, every copy fires a sonner toast. Layout: >=1280 px
+   docks as a sticky scrolling aside; below that it floats in a Sheet so the table is never
+   crushed (`useIsWideViewport` hook). Objects table is `table-fixed` with truncating key
+   cells + title tooltips.
+3. **One-click workspace open** (App.tsx + ConnectView.tsx): clicking a profile card runs
+   `openWorkspace` -> `session.selectProfile`, then if exactly ONE usable auth method,
+   chains `selectAuthMethod` + `session.lock` and applies state ONCE (no mutateSession
+   per step, no flicker). Multiple usable methods -> auth chips appear; a chip click
+   completes the chain. Zero usable -> disabled chips with hover summaries + explanatory
+   copy (gap caught in review: `needsAuthChoice` alone hid the section, added
+   `noUsableAuth`). The "Ready to open / Open workspace" footer ceremony is deleted;
+   profile cards show an Open chevron + per-card "Opening" spinner. Nav footer
+   "Close workspace" -> **"Switch connection"** (ArrowLeftRight). Lock metaphor swept from
+   user-facing copy (AzureView/ComputeView "locked workspace" -> "open workspace"; error
+   toast "Could not open the workspace"). Backend untouched (selectProvider/selectProfile
+   already self-unlock, so no unlock step is needed to switch).
+   Follow-up in the same session: the daemon's user-facing strings were swept too
+   (service.go: "Locked %s session" -> "Opened %s workspace", "Unlocked the active cloud
+   session" -> "Closed the active workspace", "lock an AWS/Azure session before ..." ->
+   "open an AWS/Azure workspace before ...", workspace tab Detail copy, local-profile
+   summaries "Select and lock it from setup" -> "Open it from the Connect screen"), plus
+   the matching browser-mock and StorageView fallback strings. No identifier/JSON contract
+   changes (IsLocked, lockedProviderId, session.lock RPC names untouched).
+- Tests: 21/21 desktop (added one-click open + multi-auth chip tests); `go test ./...`
+  clean; `tsc` clean; exe rebuilt.
+
 ## Next step
 **M9 — notification UX revamp.** The last module: persistent errors, dedupe, bell-badge history,
 inline banners for persistent state. See the RESUME HERE block above and IMPLEMENTATION-PLAN.md.
+(M8 and the earlier polish are committed up to `0559f74`; only the 2026-06-13 post-M8 polish
+above is uncommitted. Commit it before M9 if clean history is wanted.)
 
 ## To reopen prototype
 `preview_start` config `prototype`, then open `http://localhost:4321/design-prototypes/index.html`.

@@ -1,11 +1,11 @@
 # Checkpoint
 
-- Date: `2026-06-09`
-- Branch: `feat/azure-local-runtime`
-- Head: `1179f4e fix: lock emulator persistence and env controls while running`
-- Working tree: clean. All work below is committed (not pushed). Commits ahead of `b27da35`: `fad8e31`, `cf73efb`, `b3b96bb`, `1179f4e`.
-- Latest exe: `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe`, rebuilt from `1179f4e`.
-- Status: Resolved the "cannot unlock / no emulators" regression (Docker probes hanging, then mutex contention), restored floci-az decoupled from LocalStack, made the unlocked Local Runtime view work, added creation of AWS/Azure local-emulator profiles into the real cloud config, fixed un-closable banners, and locked emulator settings while running. See the dated sections below for detail. Quick verify: `pnpm --dir apps/desktop test` (19), `pnpm run typecheck:desktop`, `go -C backend/daemon test ./...`, `pnpm run build:desktop:exe` all pass.
+- Date: `2026-06-13`
+- Branch: `feat/ui-rebuild-tailwind` (UI redesign stream; the daemon work below lives on `feat/azure-local-runtime`)
+- Head: `0559f74` + uncommitted post-M8 polish (S3 viewer fixes + one-click workspace open). See `design-prototypes/CHECKPOINT-ui-redesign.md` for the redesign stream detail and the RESUME HERE block (next module: M9 notification UX revamp).
+- Latest exe: `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe`, rebuilt from the working tree on 2026-06-13.
+- 2026-06-13 session: fixed the Storage bucket dropdown overflowing with long bucket names (Select primitive now truncates the trigger and caps the popper, kit-wide), redesigned the S3 object details pane (file-name header, facts grid, signed URL presets, copy toasts, sticky/Sheet responsive layout), simplified the workspace flow to one-click open (profile click chains selectProfile -> selectAuthMethod -> lock with a single state apply; auth chips only when several usable methods; "Close workspace" -> "Switch connection"; lock metaphor removed from UI copy), and swept the lock/unlock wording out of the daemon's user-facing strings (service.go log/error/tab copy; no JSON contract or RPC name changes). Verified: `go -C backend/daemon test ./...`, `pnpm run typecheck:desktop`, `pnpm --dir apps/desktop test` (21), `pnpm run build:desktop:exe`.
+- Earlier status (2026-06-09, `feat/azure-local-runtime`): resolved the "cannot unlock / no emulators" regression (Docker probes hanging, then mutex contention), restored floci-az decoupled from LocalStack, made the unlocked Local Runtime view work, added creation of AWS/Azure local-emulator profiles into the real cloud config, fixed un-closable banners, and locked emulator settings while running. See the dated sections below for detail.
 
 ## Active work stream: UI/UX Redesign (planning, 2026-06-09)
 
