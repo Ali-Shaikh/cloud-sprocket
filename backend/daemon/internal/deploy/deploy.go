@@ -42,7 +42,9 @@ type Deployment struct {
 	Local      bool           `json:"local"`
 	Variables  map[string]any `json:"variables"`
 	Status     Status         `json:"status"`
+	Plan       *PlanSummary   `json:"plan,omitempty"`
 	Outputs    []Output       `json:"outputs,omitempty"`
+	Error      string         `json:"error,omitempty"`
 	CreatedAt  string         `json:"createdAt"`
 	UpdatedAt  string         `json:"updatedAt"`
 }
@@ -87,6 +89,7 @@ type Engine struct {
 }
 
 // NewEngine builds an engine bound to a runner, settings and recipe loader.
+// The runner may be unresolved; it is (re)resolved lazily and on install.
 func NewEngine(runner *tofu.Runner, settings config.Settings, loader *recipes.Loader) *Engine {
 	return &Engine{
 		runner:             runner,
@@ -94,6 +97,57 @@ func NewEngine(runner *tofu.Runner, settings config.Settings, loader *recipes.Lo
 		loader:             loader,
 		localStackEndpoint: localStackURL,
 	}
+}
+
+// ensureRunner resolves a tofu binary from settings if one is not yet usable.
+func (e *Engine) ensureRunner() {
+	if e.runner != nil && e.runner.Available() {
+		return
+	}
+	if path := tofu.Resolve(e.settings); path != "" {
+		e.runner = tofu.NewRunner(path)
+	}
+}
+
+// Available reports whether a tofu binary is resolvable.
+func (e *Engine) Available() bool {
+	e.ensureRunner()
+	return e.runner != nil && e.runner.Available()
+}
+
+// Version returns the resolved tofu version, or empty when unavailable.
+func (e *Engine) Version(ctx context.Context) (string, error) {
+	if !e.Available() {
+		return "", nil
+	}
+	return e.runner.Version(ctx)
+}
+
+// BinaryPath returns the resolved binary path (empty when unavailable).
+func (e *Engine) BinaryPath() string {
+	e.ensureRunner()
+	if e.runner == nil {
+		return ""
+	}
+	return e.runner.BinaryPath()
+}
+
+// Install downloads and verifies the pinned OpenTofu release, then points the
+// engine's runner at it and returns the installed version.
+func (e *Engine) Install(ctx context.Context) (string, error) {
+	path, err := tofu.NewInstaller(e.settings.ToolsDir).Ensure(ctx)
+	if err != nil {
+		return "", err
+	}
+	e.runner = tofu.NewRunner(path)
+	return e.runner.Version(ctx)
+}
+
+func (e *Engine) requireRunner() error {
+	if !e.Available() {
+		return fmt.Errorf("OpenTofu is not installed; install it before deploying")
+	}
+	return nil
 }
 
 // WorkspaceDir is the on-disk directory for a deployment.
@@ -125,6 +179,9 @@ func (e *Engine) Prepare(deployment *Deployment) error {
 
 // Plan runs init + plan and returns the parsed diff.
 func (e *Engine) Plan(ctx context.Context, deployment *Deployment, onLine tofu.LogFunc) (PlanSummary, error) {
+	if err := e.requireRunner(); err != nil {
+		return PlanSummary{}, err
+	}
 	dir := e.WorkspaceDir(deployment.ID)
 	env := e.env(deployment)
 	if _, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, OnLine: onLine, Args: []string{"init", "-input=false", "-no-color"}}); err != nil {
@@ -142,6 +199,9 @@ func (e *Engine) Plan(ctx context.Context, deployment *Deployment, onLine tofu.L
 
 // Apply applies the previously saved plan and returns the captured outputs.
 func (e *Engine) Apply(ctx context.Context, deployment *Deployment, onLine tofu.LogFunc) ([]Output, error) {
+	if err := e.requireRunner(); err != nil {
+		return nil, err
+	}
 	dir := e.WorkspaceDir(deployment.ID)
 	env := e.env(deployment)
 	if _, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, OnLine: onLine, Args: []string{"apply", "-input=false", "-no-color", planFile}}); err != nil {
@@ -156,6 +216,9 @@ func (e *Engine) Apply(ctx context.Context, deployment *Deployment, onLine tofu.
 
 // Destroy tears the deployment down.
 func (e *Engine) Destroy(ctx context.Context, deployment *Deployment, onLine tofu.LogFunc) error {
+	if err := e.requireRunner(); err != nil {
+		return err
+	}
 	dir := e.WorkspaceDir(deployment.ID)
 	env := e.env(deployment)
 	_, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, OnLine: onLine, Args: []string{"destroy", "-input=false", "-auto-approve", "-no-color"}})

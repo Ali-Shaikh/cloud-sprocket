@@ -203,12 +203,76 @@ func (s *Store) LoadResourceCache(
 	return fetchedAt, true, nil
 }
 
+// SaveDeployment upserts a deployment record stored as a JSON payload keyed by
+// id. createdAt is preserved on update; updatedAt always advances.
+func (s *Store) SaveDeployment(ctx context.Context, id string, value any, timestamp string) error {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(
+		ctx,
+		`INSERT INTO deployments (id, payload_json, created_at, updated_at)
+		 VALUES (?, ?, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET
+		   payload_json = excluded.payload_json,
+		   updated_at = excluded.updated_at`,
+		id,
+		string(payload),
+		timestamp,
+		timestamp,
+	)
+	return err
+}
+
+// LoadDeployment unmarshals a single deployment into target.
+func (s *Store) LoadDeployment(ctx context.Context, id string, target any) (bool, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT payload_json FROM deployments WHERE id = ?`, id)
+	var payload string
+	if err := row.Scan(&payload); err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, err
+	}
+	if err := json.Unmarshal([]byte(payload), target); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// ListDeploymentsJSON returns every deployment payload, newest first.
+func (s *Store) ListDeploymentsJSON(ctx context.Context) ([]json.RawMessage, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT payload_json FROM deployments ORDER BY created_at DESC, id DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	payloads := []json.RawMessage{}
+	for rows.Next() {
+		var payload string
+		if err := rows.Scan(&payload); err != nil {
+			return nil, err
+		}
+		payloads = append(payloads, json.RawMessage(payload))
+	}
+	return payloads, rows.Err()
+}
+
+// DeleteDeployment removes a deployment record.
+func (s *Store) DeleteDeployment(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM deployments WHERE id = ?`, id)
+	return err
+}
+
 func (s *Store) ResetAppData(ctx context.Context) error {
 	statements := []string{
 		`DELETE FROM session_state`,
 		`DELETE FROM app_settings`,
 		`DELETE FROM resource_cache`,
 		`DELETE FROM activity_log`,
+		`DELETE FROM deployments`,
 		`DELETE FROM sqlite_sequence WHERE name = 'activity_log'`,
 	}
 
@@ -274,6 +338,12 @@ func (s *Store) migrate(ctx context.Context) error {
 			message TEXT NOT NULL,
 			details TEXT NOT NULL DEFAULT '',
 			timestamp TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS deployments (
+			id TEXT PRIMARY KEY,
+			payload_json TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
 		)`,
 	}
 
