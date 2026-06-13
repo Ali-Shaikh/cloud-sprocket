@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en-GB" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>S3 Object Detail - 3 design directions</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --elevated: #ffffff;
+    --fg: #1a1d24;
+    --muted-fg: #69707d;
+    --muted: #f1f2f4;
+    --muted-2: #f7f8fa;
+    --border: #e6e8ec;
+    --primary: #5b6cff;
+    --primary-fg: #ffffff;
+    --primary-weak: rgba(91, 108, 255, 0.10);
+    --primary-border: rgba(91, 108, 255, 0.28);
+    --green: #18a957;
+    --amber: #d98c00;
+    --red: #e0413b;
+    --radius: 12px;
+    --radius-sm: 9px;
+    --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
+  }
+  [data-theme="dark"] {
+    --bg: #0e1014;
+    --card: #171a21;
+    --elevated: #1c2029;
+    --fg: #e7e9ee;
+    --muted-fg: #9aa3b2;
+    --muted: #20242d;
+    --muted-2: #1a1e26;
+    --border: #2a2f3a;
+    --primary: #7480ff;
+    --primary-fg: #0e1014;
+    --primary-weak: rgba(116, 128, 255, 0.14);
+    --primary-border: rgba(116, 128, 255, 0.4);
+    --green: #34c46e;
+    --amber: #e8a52a;
+    --red: #f06560;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.45;
+    padding: 32px 28px 80px;
+  }
+  .page { max-width: 1180px; margin: 0 auto; }
+
+  header.top { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 28px; }
+  header.top h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header.top p { margin: 0; font-size: 13.5px; color: var(--muted-fg); max-width: 720px; }
+  .theme-toggle {
+    display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--card); color: var(--fg);
+    border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 500;
+    white-space: nowrap;
+  }
+  .theme-toggle:hover { background: var(--muted); }
+
+  .grid { display: flex; flex-wrap: wrap; gap: 26px; align-items: flex-start; }
+  .col-narrow { flex: 1 1 360px; max-width: 400px; }
+  .col-wide { flex: 1 1 100%; }
+
+  .variant-label { display: flex; align-items: baseline; gap: 9px; margin: 0 0 12px; }
+  .variant-label .tag {
+    display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px;
+    background: var(--primary); color: var(--primary-fg); border-radius: 7px; font-size: 12px; font-weight: 700;
+  }
+  .variant-label h2 { font-size: 15px; font-weight: 650; margin: 0; }
+  .variant-label .note { font-size: 12.5px; color: var(--muted-fg); }
+  .variant-sub { font-size: 12.5px; color: var(--muted-fg); margin: 0 0 14px; }
+
+  /* ---- shared panel primitives ---- */
+  .panel {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); overflow: hidden;
+  }
+  .pad { padding: 18px; }
+
+  .obj-head { display: flex; align-items: flex-start; gap: 12px; }
+  .ficon {
+    flex: none; width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center;
+    background: var(--primary-weak); color: var(--primary);
+  }
+  .ficon svg { width: 21px; height: 21px; }
+  .obj-name { min-width: 0; flex: 1; }
+  .eyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted-fg); }
+  .obj-name h3 { margin: 1px 0 0; font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; word-break: break-word; }
+
+  .keyrow {
+    display: flex; align-items: center; gap: 6px; margin-top: 8px;
+    background: var(--muted-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 6px 6px 6px 10px;
+  }
+  .keyrow code {
+    flex: 1; min-width: 0; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11.5px; color: var(--muted-fg); word-break: break-all; line-height: 1.4;
+  }
+
+  .iconbtn {
+    flex: none; display: inline-grid; place-items: center; width: 28px; height: 28px;
+    border-radius: 7px; border: 0; background: transparent; color: var(--muted-fg); cursor: pointer;
+  }
+  .iconbtn:hover { background: var(--muted); color: var(--fg); }
+  .iconbtn svg { width: 15px; height: 15px; }
+  .closebtn { margin-left: auto; }
+
+  /* action buttons */
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px; cursor: pointer; white-space: nowrap;
+    font-size: 12.5px; font-weight: 550; border-radius: 8px; padding: 7px 12px;
+    border: 1px solid var(--border); background: var(--card); color: var(--fg);
+  }
+  .btn:hover { background: var(--muted); }
+  .btn svg { width: 14px; height: 14px; }
+  .btn.primary { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+  .btn.primary:hover { filter: brightness(1.05); }
+  .btn.sm { padding: 5px 10px; font-size: 12px; }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--muted-fg); }
+  .btn.ghost:hover { background: var(--muted); color: var(--fg); }
+
+  .rule { height: 1px; background: var(--border); border: 0; margin: 0; }
+
+  /* facts list */
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 9px 16px; align-items: baseline; }
+  .facts dt { font-size: 12.5px; color: var(--muted-fg); }
+  .facts dd { margin: 0; font-size: 13px; color: var(--fg); word-break: break-word; }
+  .facts dd.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+  .pill {
+    display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+    background: var(--muted); color: var(--muted-fg);
+  }
+
+  /* disclosure */
+  .disc { border-top: 1px solid var(--border); }
+  .disc > summary {
+    list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px;
+    padding: 12px 2px; font-size: 13px; font-weight: 600;
+  }
+  .disc > summary::-webkit-details-marker { display: none; }
+  .disc > summary .chev { transition: transform 0.15s ease; color: var(--muted-fg); display: inline-grid; }
+  .disc[open] > summary .chev { transform: rotate(90deg); }
+  .disc .disc-body { padding: 2px 2px 14px; }
+  .disc .count { color: var(--muted-fg); font-weight: 500; }
+
+  /* metadata + snippets */
+  .meta { display: grid; grid-template-columns: max-content 1fr; gap: 7px 14px; font-size: 12.5px; }
+  .meta .k { color: var(--muted-fg); font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .meta .v { word-break: break-word; }
+  .snippet {
+    display: flex; align-items: center; gap: 8px; background: var(--muted-2);
+    border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 6px 8px 11px; margin-bottom: 8px;
+  }
+  .snippet .s-body { min-width: 0; flex: 1; }
+  .snippet .s-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted-fg); margin-bottom: 3px; }
+  .snippet code { display: block; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; word-break: break-all; line-height: 1.4; }
+
+  /* tabs (variant B) */
+  .tabs { display: flex; gap: 2px; background: var(--muted); padding: 3px; border-radius: 9px; margin-bottom: 14px; }
+  .tabs button {
+    flex: 1; border: 0; background: transparent; cursor: pointer; font-size: 12px; font-weight: 600;
+    color: var(--muted-fg); padding: 6px 4px; border-radius: 7px;
+  }
+  .tabs button.active { background: var(--card); color: var(--fg); box-shadow: var(--shadow); }
+  .tabpane { display: none; }
+  .tabpane.active { display: block; }
+
+  /* dialog (variant C) */
+  .dialog-stage {
+    background:
+      repeating-linear-gradient(45deg, var(--muted-2) 0, var(--muted-2) 12px, transparent 12px, transparent 24px);
+    border: 1px dashed var(--border); border-radius: var(--radius);
+    padding: 26px; display: grid; place-items: center;
+  }
+  .dialog {
+    width: min(660px, 100%); background: var(--elevated); border: 1px solid var(--border);
+    border-radius: 14px; box-shadow: var(--shadow); overflow: hidden;
+  }
+  .dialog .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+  .dialog .two-col > div { padding: 16px 18px; }
+  .dialog .two-col > div:first-child { border-right: 1px solid var(--border); }
+  .section-title { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-fg); margin: 0 0 10px; }
+
+  @media (max-width: 560px) {
+    .dialog .two-col { grid-template-columns: 1fr; }
+    .dialog .two-col > div:first-child { border-right: 0; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/>
+  </symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+  </symbol>
+  <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
+  </symbol>
+  <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+  </symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+  </symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+  </symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m9 18 6-6-6-6"/>
+  </symbol>
+  <symbol id="i-chevdown" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m6 9 6 6 6-6"/>
+  </symbol>
+</svg>
+
+<div class="page">
+  <header class="top">
+    <div>
+      <h1>S3 object detail - 3 design directions</h1>
+      <p>
+        Same object, three layouts to compare. All three fix the current problems: wider room, no
+        horizontal scrollbars (mono values wrap), a clear facts list, and primary actions
+        (Copy S3 URI / Copy URL / Signed link / Download) up top. Pick one, or mix.
+      </p>
+    </div>
+    <button class="theme-toggle" id="themeBtn">Toggle dark</button>
+  </header>
+
+  <div class="grid">
+
+    <!-- ============ VARIANT A: actions-first side panel ============ -->
+    <section class="col-narrow">
+      <div class="variant-label">
+        <span class="tag">A</span><h2>Actions-first side panel</h2>
+      </div>
+      <p class="variant-sub">Docked beside the table (~380px). Actions + facts first; metadata and code tucked behind disclosures.</p>
+
+      <div class="panel pad">
+        <div class="obj-head">
+          <div class="ficon"><svg><use href="#i-file"/></svg></div>
+          <div class="obj-name">
+            <div class="eyebrow">Object</div>
+            <h3>invoice-2026.pdf</h3>
+          </div>
+          <button class="iconbtn closebtn" title="Close"><svg><use href="#i-x"/></svg></button>
+        </div>
+
+        <div class="keyrow">
+          <code>reports/2026/q2/invoice-2026.pdf</code>
+          <button class="iconbtn" title="Copy key"><svg><use href="#i-copy"/></svg></button>
+        </div>
+
+        <div class="actions" style="margin-top:14px">
+          <button class="btn primary"><svg><use href="#i-link"/></svg>Copy URL</button>
+          <button class="btn"><svg><use href="#i-copy"/></svg>Copy S3 URI</button>
+          <button class="btn"><svg><use href="#i-link"/></svg>Signed link <svg style="width:12px"><use href="#i-chevdown"/></svg></button>
+          <button class="btn"><svg><use href="#i-download"/></svg>Download</button>
+        </div>
+
+        <hr class="rule" style="margin:16px 0" />
+
+        <dl class="facts">
+          <dt>Size</dt><dd>248 KB</dd>
+          <dt>Last modified</dt><dd>13 Jun 2026, 14:02</dd>
+          <dt>Storage class</dt><dd><span class="pill">STANDARD</span></dd>
+          <dt>Content type</dt><dd class="mono">application/pdf</dd>
+          <dt>ETag</dt><dd class="mono">"a1b2c3d4e5f6g7h8"</dd>
+        </dl>
+
+        <details class="disc" style="margin-top:14px">
+          <summary><span class="chev"><svg style="width:16px;height:16px"><use href="#i-chev"/></svg></span>Metadata <span class="count">(3)</span></summary>
+          <div class="disc-body">
+            <div class="meta">
+              <span class="k">x-amz-meta-env</span><span class="v">prod</span>
+              <span class="k">x-amz-meta-team</span><span class="v">finance</span>
+              <span class="k">content-disposition</span><span class="v">inline</span>
+            </div>
+          </div>
+        </details>
+
+        <details class="disc">
+          <summary><span class="chev"><svg style="width:16px;height:16px"><use href="#i-chev"/></svg></span>Code snippets</summary>
+          <div class="disc-body">
+            <div class="snippet">
+              <div class="s-body"><div class="s-label">AWS CLI</div><code>aws s3 cp s3://bucket/reports/2026/q2/invoice-2026.pdf .</code></div>
+              <button class="iconbtn" title="Copy"><svg><use href="#i-copy"/></svg></button>
+            </div>
+            <div class="snippet">
+              <div class="s-body"><div class="s-label">Python (boto3)</div><code>s3.download_file("bucket", "reports/2026/q2/invoice-2026.pdf", "invoice.pdf")</code></div>
+              <button class="iconbtn" title="Copy"><svg><use href="#i-copy"/></svg></button>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <!-- ============ VARIANT B: tabbed info panel ============ -->
+    <section class="col-narrow">
+      <div class="variant-label">
+        <span class="tag">B</span><h2>Tabbed info panel</h2>
+      </div>
+      <p class="variant-sub">Cyberduck-style. Sections split into tabs so each stays uncluttered. Best if you switch sections a lot.</p>
+
+      <div class="panel pad">
+        <div class="obj-head" style="margin-bottom:14px">
+          <div class="ficon"><svg><use href="#i-file"/></svg></div>
+          <div class="obj-name">
+            <div class="eyebrow">Object</div>
+            <h3>invoice-2026.pdf</h3>
+          </div>
+          <button class="iconbtn closebtn" title="Close"><svg><use href="#i-x"/></svg></button>
+        </div>
+
+        <div class="tabs" data-tabs="B">
+          <button class="active" data-tab="b-overview">Overview</button>
+          <button data-tab="b-meta">Metadata</button>
+          <button data-tab="b-share">Share</button>
+          <button data-tab="b-code">Code</button>
+        </div>
+
+        <div class="tabpane active" id="b-overview" data-pane="B">
+          <dl class="facts" style="margin-bottom:14px">
+            <dt>Size</dt><dd>248 KB</dd>
+            <dt>Last modified</dt><dd>13 Jun 2026, 14:02</dd>
+            <dt>Storage class</dt><dd><span class="pill">STANDARD</span></dd>
+            <dt>Content type</dt><dd class="mono">application/pdf</dd>
+            <dt>ETag</dt><dd class="mono">"a1b2c3d4e5f6"</dd>
+          </dl>
+          <div class="keyrow">
+            <code>s3://bucket/reports/2026/q2/invoice-2026.pdf</code>
+            <button class="iconbtn" title="Copy URI"><svg><use href="#i-copy"/></svg></button>
+          </div>
+          <div class="actions" style="margin-top:12px">
+            <button class="btn primary"><svg><use href="#i-download"/></svg>Download</button>
+            <button class="btn"><svg><use href="#i-link"/></svg>Copy URL</button>
+          </div>
+        </div>
+
+        <div class="tabpane" id="b-meta" data-pane="B">
+          <div class="meta">
+            <span class="k">x-amz-meta-env</span><span class="v">prod</span>
+            <span class="k">x-amz-meta-team</span><span class="v">finance</span>
+            <span class="k">content-disposition</span><span class="v">inline</span>
+            <span class="k">cache-control</span><span class="v">max-age=3600</span>
+          </div>
+          <div class="actions" style="margin-top:14px">
+            <button class="btn sm ghost"><svg><use href="#i-copy"/></svg>Copy JSON</button>
+            <button class="btn sm ghost"><svg><use href="#i-copy"/></svg>Copy CSV</button>
+          </div>
+        </div>
+
+        <div class="tabpane" id="b-share" data-pane="B">
+          <div class="section-title" style="margin-bottom:8px">Signed link expiry</div>
+          <div class="actions" style="margin-bottom:12px">
+            <button class="btn sm">15 min</button>
+            <button class="btn sm primary">1 hour</button>
+            <button class="btn sm">12 hours</button>
+            <button class="btn sm"><svg><use href="#i-link"/></svg>Generate</button>
+          </div>
+          <div class="snippet">
+            <div class="s-body"><div class="s-label">Signed URL - expires 15:02</div><code>https://bucket.s3.amazonaws.com/reports/2026/q2/invoice-2026.pdf?X-Amz-Signature=...</code></div>
+            <button class="iconbtn" title="Copy"><svg><use href="#i-copy"/></svg></button>
+          </div>
+        </div>
+
+        <div class="tabpane" id="b-code" data-pane="B">
+          <div class="snippet">
+            <div class="s-body"><div class="s-label">AWS CLI</div><code>aws s3 cp s3://bucket/reports/2026/q2/invoice-2026.pdf .</code></div>
+            <button class="iconbtn" title="Copy"><svg><use href="#i-copy"/></svg></button>
+          </div>
+          <div class="snippet">
+            <div class="s-body"><div class="s-label">Python (boto3)</div><code>s3.download_file("bucket", "reports/2026/q2/invoice-2026.pdf", "invoice.pdf")</code></div>
+            <button class="iconbtn" title="Copy"><svg><use href="#i-copy"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ VARIANT C: full object dialog ============ -->
+    <section class="col-wide">
+      <div class="variant-label">
+        <span class="tag">C</span><h2>Full object overview dialog</h2>
+      </div>
+      <p class="variant-sub">AWS-console style. A roomy centred modal over the table. Most space; side-by-side sections. (Shown over a dimmed table.)</p>
+
+      <div class="dialog-stage">
+        <div class="dialog">
+          <div class="pad" style="padding-bottom:14px">
+            <div class="obj-head">
+              <div class="ficon"><svg><use href="#i-file"/></svg></div>
+              <div class="obj-name">
+                <div class="eyebrow">Object overview</div>
+                <h3>invoice-2026.pdf</h3>
+              </div>
+              <button class="iconbtn closebtn" title="Close"><svg><use href="#i-x"/></svg></button>
+            </div>
+            <div class="keyrow">
+              <code>s3://bucket/reports/2026/q2/invoice-2026.pdf</code>
+              <button class="iconbtn" title="Copy URI"><svg><use href="#i-copy"/></svg></button>
+            </div>
+            <div class="actions" style="margin-top:14px">
+              <button class="btn primary"><svg><use href="#i-download"/></svg>Download</button>
+              <button class="btn"><svg><use href="#i-ext"/></svg>Open</button>
+              <button class="btn"><svg><use href="#i-link"/></svg>Copy URL</button>
+              <button class="btn"><svg><use href="#i-link"/></svg>Signed link <svg style="width:12px"><use href="#i-chevdown"/></svg></button>
+            </div>
+          </div>
+
+          <hr class="rule" />
+
+          <div class="pad">
+            <dl class="facts" style="grid-template-columns:max-content 1fr max-content 1fr; gap:9px 24px">
+              <dt>Size</dt><dd>248 KB</dd>
+              <dt>Last modified</dt><dd>13 Jun 2026, 14:02</dd>
+              <dt>Storage class</dt><dd><span class="pill">STANDARD</span></dd>
+              <dt>Content type</dt><dd class="mono">application/pdf</dd>
+              <dt>ETag</dt><dd class="mono">"a1b2c3d4e5f6g7h8"</dd>
+              <dt>Encryption</dt><dd>SSE-S3</dd>
+            </dl>
+          </div>
+
+          <hr class="rule" />
+
+          <div class="two-col">
+            <div>
+              <div class="section-title">Metadata</div>
+              <div class="meta">
+                <span class="k">x-amz-meta-env</span><span class="v">prod</span>
+                <span class="k">x-amz-meta-team</span><span class="v">finance</span>
+                <span class="k">content-disposition</span><span class="v">inline</span>
+                <span class="k">cache-control</span><span class="v">max-age=3600</span>
+              </div>
+              <div class="actions" style="margin-top:12px">
+                <button class="btn sm ghost"><svg><use href="#i-copy"/></svg>JSON</button>
+                <button class="btn sm ghost"><svg><use href="#i-copy"/></svg>CSV</button>
+              </div>
+            </div>
+            <div>
+              <div class="section-title">Code snippets</div>
+              <div class="snippet">
+                <div class="s-body"><div class="s-label">AWS CLI</div><code>aws s3 cp s3://bucket/reports/2026/q2/invoice-2026.pdf .</code></div>
+                <button class="iconbtn" title="Copy"><svg><use href="#i-copy"/></svg></button>
+              </div>
+              <div class="snippet">
+                <div class="s-body"><div class="s-label">Python (boto3)</div><code>s3.download_file("bucket", "reports/.../invoice-2026.pdf", "x.pdf")</code></div>
+                <button class="iconbtn" title="Copy"><svg><use href="#i-copy"/></svg></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+  // Theme toggle
+  const root = document.documentElement;
+  const btn = document.getElementById("themeBtn");
+  btn.addEventListener("click", () => {
+    const dark = root.getAttribute("data-theme") === "dark";
+    root.setAttribute("data-theme", dark ? "light" : "dark");
+    btn.textContent = dark ? "Toggle dark" : "Toggle light";
+  });
+
+  // Tabs (variant B)
+  document.querySelectorAll('.tabs[data-tabs] button').forEach((b) => {
+    b.addEventListener("click", () => {
+      const group = b.closest(".tabs").getAttribute("data-tabs");
+      document.querySelectorAll('.tabs[data-tabs="' + group + '"] button').forEach((x) => x.classList.remove("active"));
+      b.classList.add("active");
+      document.querySelectorAll('.tabpane[data-pane="' + group + '"]').forEach((p) => p.classList.remove("active"));
+      document.getElementById(b.getAttribute("data-tab")).classList.add("active");
+    });
+  });
+</script>
+</body>
+</html>
