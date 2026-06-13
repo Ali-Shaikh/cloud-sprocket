@@ -2146,8 +2146,10 @@ func clampPresignDuration(durationSeconds int) int {
 	if durationSeconds <= 0 {
 		return 900
 	}
-	if durationSeconds > 3600 {
-		return 3600
+	// AWS SigV4 presigned URLs are valid for at most 7 days.
+	const maxPresignSeconds = 7 * 24 * 60 * 60
+	if durationSeconds > maxPresignSeconds {
+		return maxPresignSeconds
 	}
 	return durationSeconds
 }
