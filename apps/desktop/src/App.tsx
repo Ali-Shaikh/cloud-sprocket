@@ -544,6 +544,12 @@ export default function App() {
               ...current.filter((entry) => entry.jobId !== job.jobId),
             ].slice(0, 10));
           }
+          if (isS3PresignResult(job.result)) {
+            setS3SignedUrlResult(job.result);
+          }
+          if (job.label.toLowerCase().includes("signed url")) {
+            setS3SignedUrlStatus(job.message);
+          }
           notifyJob(job);
         }),
       );

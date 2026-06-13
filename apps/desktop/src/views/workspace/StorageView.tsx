@@ -144,10 +144,22 @@ function useIsWideViewport(): boolean {
   return isWide;
 }
 
-const SIGNED_URL_PRESETS: { label: string; seconds: number }[] = [
-  { label: "15 min", seconds: 900 },
-  { label: "1 hour", seconds: 3600 },
-  { label: "12 hours", seconds: 43200 },
+type DurationUnit = "minutes" | "hours" | "days";
+
+const UNIT_SECONDS: Record<DurationUnit, number> = {
+  minutes: 60,
+  hours: 3600,
+  days: 86400,
+};
+
+// AWS SigV4 presigned URLs are valid for at most 7 days.
+const MAX_PRESIGN_SECONDS = 7 * 86400;
+
+const SIGNED_URL_PRESETS: { label: string; amount: number; unit: DurationUnit }[] = [
+  { label: "15 min", amount: 15, unit: "minutes" },
+  { label: "1 hour", amount: 1, unit: "hours" },
+  { label: "12 hours", amount: 12, unit: "hours" },
+  { label: "7 days", amount: 7, unit: "days" },
 ];
 
 const fieldLabel =
@@ -182,7 +194,12 @@ export default function StorageView({
   const [uploadSourcePath, setUploadSourcePath] = useState("");
   const [uploadObjectKey, setUploadObjectKey] = useState("");
   const [uploadAcknowledged, setUploadAcknowledged] = useState(false);
-  const [signedUrlSeconds, setSignedUrlSeconds] = useState(900);
+  const [signedUrlAmount, setSignedUrlAmount] = useState(15);
+  const [signedUrlUnit, setSignedUrlUnit] = useState<DurationUnit>("minutes");
+  const signedUrlSeconds = Math.min(
+    Math.max(Math.round(signedUrlAmount * UNIT_SECONDS[signedUrlUnit]), 1),
+    MAX_PRESIGN_SECONDS,
+  );
   const [urlTesterValue, setUrlTesterValue] = useState("");
   const [prefixDraft, setPrefixDraft] = useState(workspace.s3PrefixFilter || "");
   const [drawerOpen, setDrawerOpen] = useState(Boolean(workspace.selectedS3ObjectKey));
@@ -450,29 +467,56 @@ export default function StorageView({
           />
         </TabsContent>
 
-        {/* Share: generate a time-limited signed link. */}
+        {/* Share: generate a time-limited signed link of any duration. */}
         <TabsContent value="share" className="space-y-3">
-          <div className={fieldLabel}>Signed link expiry</div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex gap-1">
-              {SIGNED_URL_PRESETS.map((preset) => {
-                const active = preset.seconds === signedUrlSeconds;
-                return (
-                  <Button
-                    key={preset.seconds}
-                    type="button"
-                    variant={active ? "secondary" : "outline"}
-                    size="sm"
-                    aria-pressed={active}
-                    onClick={() => {
-                      setSignedUrlSeconds(preset.seconds);
-                    }}
-                  >
-                    {preset.label}
-                  </Button>
-                );
-              })}
+          <div className={fieldLabel}>Signed link duration</div>
+          <div className="flex flex-wrap gap-1">
+            {SIGNED_URL_PRESETS.map((preset) => {
+              const active = preset.amount === signedUrlAmount && preset.unit === signedUrlUnit;
+              return (
+                <Button
+                  key={preset.label}
+                  type="button"
+                  variant={active ? "secondary" : "outline"}
+                  size="sm"
+                  aria-pressed={active}
+                  onClick={() => {
+                    setSignedUrlAmount(preset.amount);
+                    setSignedUrlUnit(preset.unit);
+                  }}
+                >
+                  {preset.label}
+                </Button>
+              );
+            })}
+          </div>
+          <div className="flex items-end gap-2">
+            <div className="w-20">
+              <Input
+                type="number"
+                min={1}
+                value={signedUrlAmount}
+                aria-label="Signed link duration amount"
+                onChange={(event) => {
+                  setSignedUrlAmount(Math.max(1, Math.floor(Number(event.target.value) || 1)));
+                }}
+              />
             </div>
+            <Select
+              value={signedUrlUnit}
+              onValueChange={(value) => {
+                setSignedUrlUnit(value as DurationUnit);
+              }}
+            >
+              <SelectTrigger className="w-32" aria-label="Signed link duration unit">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="minutes">Minutes</SelectItem>
+                <SelectItem value="hours">Hours</SelectItem>
+                <SelectItem value="days">Days</SelectItem>
+              </SelectContent>
+            </Select>
             <Button
               size="sm"
               disabled={!workspace.selectedS3ObjectKey}
@@ -483,26 +527,28 @@ export default function StorageView({
               Generate
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Up to 7 days. A link cannot outlive the credentials that signed it.
+          </p>
           {signedUrlStatus ? (
             <p className="text-xs text-muted-foreground">{signedUrlStatus}</p>
           ) : null}
           {signedUrlResult ? (
-            <div className="space-y-1.5 rounded-lg border border-border bg-muted/40 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className={fieldLabel}>Expires {signedUrlResult.expiresAt}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 shrink-0"
-                  aria-label="Copy signed URL"
-                  onClick={() => copyToClipboard(signedUrlResult.url, "Signed URL copied")}
-                >
-                  <Copy className="size-3.5" />
-                </Button>
-              </div>
-              <code className="block break-all font-mono text-xs leading-relaxed" title={signedUrlResult.url}>
+            <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+              <span className={fieldLabel}>Signed link · expires {signedUrlResult.expiresAt}</span>
+              <code
+                className="block break-all rounded bg-background/60 p-2 font-mono text-xs leading-relaxed"
+                title={signedUrlResult.url}
+              >
                 {signedUrlResult.url}
               </code>
+              <Button
+                size="sm"
+                onClick={() => copyToClipboard(signedUrlResult.url, "Signed URL copied")}
+              >
+                <Copy />
+                Copy link
+              </Button>
               {signedUrlResult.effectiveWarning ? (
                 <p className="text-xs text-muted-foreground">{signedUrlResult.effectiveWarning}</p>
               ) : null}
