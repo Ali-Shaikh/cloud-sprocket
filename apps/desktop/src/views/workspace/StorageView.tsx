@@ -576,8 +576,9 @@ export default function StorageView({
 
   const objectsPage = (
     <section className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
-        <div className="w-64 min-w-48 max-w-80">
+      <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm">
+        {/* Bucket gets its own full-width row so long names stay on one line. */}
+        <div>
           <div className={cn(fieldLabel, "mb-1")}>Bucket</div>
           <Select
             value={workspace.selectedS3BucketName ?? ""}
@@ -587,7 +588,11 @@ export default function StorageView({
               }
             }}
           >
-            <SelectTrigger aria-label="Select bucket" title={workspace.selectedS3BucketName ?? undefined}>
+            <SelectTrigger
+              className="w-full"
+              aria-label="Select bucket"
+              title={workspace.selectedS3BucketName ?? undefined}
+            >
               <SelectValue placeholder="Select bucket" />
             </SelectTrigger>
             <SelectContent>
@@ -599,21 +604,23 @@ export default function StorageView({
             </SelectContent>
           </Select>
         </div>
-        <div className="min-w-64 flex-1">
-          <div className={cn(fieldLabel, "mb-1")}>Prefix filter</div>
-          <Input
-            value={prefixDraft}
-            placeholder="Filter by prefix, for example reports/"
-            onChange={(event) => {
-              setPrefixDraft(event.target.value);
-            }}
-          />
-        </div>
-        <div className="pb-2 text-xs text-muted-foreground">
-          {workspace.s3Objects.length} object{workspace.s3Objects.length === 1 ? "" : "s"}
-          {prefixDraft !== (workspace.s3PrefixFilter || "")
-            ? " · updating after typing pauses"
-            : ""}
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-64 flex-1">
+            <div className={cn(fieldLabel, "mb-1")}>Prefix filter</div>
+            <Input
+              value={prefixDraft}
+              placeholder="Filter by prefix, for example reports/"
+              onChange={(event) => {
+                setPrefixDraft(event.target.value);
+              }}
+            />
+          </div>
+          <div className="pb-2 text-xs text-muted-foreground">
+            {workspace.s3Objects.length} object{workspace.s3Objects.length === 1 ? "" : "s"}
+            {prefixDraft !== (workspace.s3PrefixFilter || "")
+              ? " · updating after typing pauses"
+              : ""}
+          </div>
         </div>
       </div>
 
