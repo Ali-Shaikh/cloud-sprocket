@@ -303,3 +303,107 @@ export interface AppResetResult {
   resetPaths: string[];
   skippedPaths: string[];
 }
+
+// --- IaC recipes & deployments ----------------------------------------------
+
+export interface RecipeManifest {
+  apiVersion: string;
+  id: string;
+  version: string;
+  name: string;
+  summary?: string;
+  description?: string;
+  providers?: string[];
+  tags?: string[];
+  engine: { type: string; minVersion?: string };
+  local: { emulator?: string };
+}
+
+export interface RecipeVariable {
+  name: string;
+  type: string;
+  description?: string;
+  default?: unknown;
+  required: boolean;
+  sensitive?: boolean;
+  group: string;
+  widget: string;
+  options?: string[];
+  help?: string;
+}
+
+export interface RecipeOutputSpec {
+  name: string;
+  description?: string;
+  sensitive?: boolean;
+  primary?: boolean;
+}
+
+export interface Recipe {
+  manifest: RecipeManifest;
+  variables: RecipeVariable[];
+  outputs: RecipeOutputSpec[];
+}
+
+export interface ResourceChange {
+  address: string;
+  type: string;
+  name: string;
+  actions: string[];
+}
+
+export interface PlanSummary {
+  add: number;
+  change: number;
+  destroy: number;
+  changes: ResourceChange[];
+}
+
+export interface DeploymentOutput {
+  name: string;
+  value: unknown;
+  sensitive?: boolean;
+}
+
+export type DeploymentStatus =
+  | "pending"
+  | "planning"
+  | "planned"
+  | "applying"
+  | "applied"
+  | "destroying"
+  | "destroyed"
+  | "failed";
+
+export interface Deployment {
+  id: string;
+  recipeId: string;
+  name: string;
+  providerId: string;
+  profileId: string;
+  local: boolean;
+  variables: Record<string, unknown>;
+  status: DeploymentStatus;
+  plan?: PlanSummary;
+  outputs?: DeploymentOutput[];
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DeploymentJob {
+  deployment: Deployment;
+  job: JobStatus;
+}
+
+export interface TofuStatus {
+  available: boolean;
+  version: string;
+  path: string;
+}
+
+export interface DeploymentLogEvent {
+  deploymentId: string;
+  jobId: string;
+  line: string;
+}
