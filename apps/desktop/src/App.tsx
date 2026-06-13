@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import type { ErrorInfo, ReactNode } from "react";
-import { ArrowLeftRight, Boxes, Bug, LayoutGrid, Server, Trash2, TriangleAlert } from "lucide-react";
+import { ArrowLeftRight, Boxes, Bug, LayoutGrid, Rocket, Server, Trash2, TriangleAlert } from "lucide-react";
 import { Toaster } from "sonner";
 import awsEc2IconUrl from "./assets/cloud-icons/aws-ec2.svg";
 import awsS3IconUrl from "./assets/cloud-icons/aws-s3.svg";
@@ -43,6 +43,7 @@ import {
 } from "./components/ui/alert-dialog";
 import ConnectView from "./views/ConnectView";
 import OverviewView from "./views/OverviewView";
+import DeployView from "./views/DeployView";
 import DebugView from "./views/DebugView";
 import StorageView from "./views/workspace/StorageView";
 import ComputeView from "./views/workspace/ComputeView";
@@ -565,6 +566,7 @@ export default function App() {
       session.workspaceTabs.length > 0 &&
       activeWorkspaceTabId !== "virtualisation" &&
       activeWorkspaceTabId !== "debug" &&
+      activeWorkspaceTabId !== "deploy" &&
       !session.workspaceTabs.some((tab) => tab.tabId === activeWorkspaceTabId)
     ) {
       setActiveWorkspaceTabId(session.workspaceTabs[0].tabId);
@@ -1190,6 +1192,8 @@ export default function App() {
 
   const content = activeWorkspaceTabId === "debug" ? (
     <DebugView />
+  ) : activeWorkspaceTabId === "deploy" ? (
+    <DeployView profiles={profiles} />
   ) : session.isLocked && activeWorkspaceTabId === "overview" ? (
     <OverviewView
       workspace={workspace}
@@ -1416,7 +1420,12 @@ export default function App() {
   const emulatorCount = workspace.emulatorSummaries.length;
   const dockerReachable = workspace.dockerRuntime.reachable;
   const isLocalActive = activeWorkspaceTabId === "virtualisation";
-  const activeConnectionId = isLocalActive ? "local" : session.currentProviderId ?? null;
+  const isDeployActive = activeWorkspaceTabId === "deploy";
+  const activeConnectionId = isDeployActive
+    ? "deploy"
+    : isLocalActive
+      ? "local"
+      : session.currentProviderId ?? null;
 
   const railConnections: RailConnection[] = [
     ...providers.map((provider) => ({
@@ -1434,9 +1443,22 @@ export default function App() {
       status: (dockerReachable ? "on" : "off") as Status,
       kind: "local" as const,
     },
+    {
+      id: "deploy",
+      label: "Deploy",
+      status: "on" as Status,
+      kind: "deploy" as const,
+    },
   ];
 
-  const navConnection: NavConnectionHeader = isLocalActive
+  const navConnection: NavConnectionHeader = isDeployActive
+    ? {
+        name: "Deploy",
+        meta: "IaC recipes",
+        status: "on",
+        statusText: "Provision stacks with OpenTofu",
+      }
+    : isLocalActive
     ? {
         name: "Local Runtime",
         meta: `Docker · ${emulatorCount} emulator${emulatorCount === 1 ? "" : "s"}`,
@@ -1461,6 +1483,17 @@ export default function App() {
       };
 
   function buildNavGroups(): NavGroup[] {
+    if (isDeployActive) {
+      return [
+        {
+          label: "Deploy",
+          items: [
+            { id: "deploy", label: "Recipes", icon: Rocket },
+            { id: "debug", label: "Debug console", icon: Bug },
+          ],
+        },
+      ];
+    }
     if (isLocalActive) {
       return [
         {
@@ -1517,6 +1550,10 @@ export default function App() {
   function handleRailSelect(id: string): void {
     if (id === "local") {
       setActiveWorkspaceTabId("virtualisation");
+      return;
+    }
+    if (id === "deploy") {
+      setActiveWorkspaceTabId("deploy");
       return;
     }
     if (id !== session.currentProviderId) {
