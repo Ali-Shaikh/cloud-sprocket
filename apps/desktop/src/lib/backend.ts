@@ -5,17 +5,28 @@ import type {
   ActivityLogEntry,
   AppSettingsSnapshot,
   AuthMethod,
+  Deployment,
+  DeploymentJob,
+  DeploymentLogEvent,
   EmulatorStatus,
   JobStatus,
   ProfileSummary,
   ProviderSummary,
+  Recipe,
+  RecipeManifest,
   SessionSnapshot,
   StateChangedPayload,
+  TofuStatus,
   WorkspaceSnapshot,
   WorkspaceTab,
 } from "../types/backend";
 
-export type BackendEventName = "state.changed" | "job.updated" | "log.appended";
+export type BackendEventName =
+  | "state.changed"
+  | "job.updated"
+  | "log.appended"
+  | "deployment.log"
+  | "deployment.changed";
 
 export type DebugLogEntry = {
   timestamp: string;
@@ -56,6 +67,8 @@ type BackendEventMap = {
   "state.changed": StateChangedPayload;
   "job.updated": JobStatus;
   "log.appended": ActivityLogEntry;
+  "deployment.log": DeploymentLogEvent;
+  "deployment.changed": Deployment;
 };
 
 type MockState = {
@@ -1254,9 +1267,205 @@ function handleMockRequest<T>(
       }, 30);
       return Promise.resolve(job as T);
     }
+    case "recipes.list":
+      return Promise.resolve(mockRecipes.map((recipe) => recipe.manifest) as T);
+    case "recipes.get":
+      return mockGetRecipe(params.recipeId as string) as Promise<T>;
+    case "tofu.status":
+      return Promise.resolve({ available: true, version: "1.12.2", path: "(bundled)" } as T);
+    case "tofu.install": {
+      const job: JobStatus = { jobId: `job-${Date.now()}`, label: "Install OpenTofu", status: "queued", message: "Preparing." };
+      setTimeout(() => emitMockEvent("job.updated", { ...job, status: "completed", message: "OpenTofu 1.12.2 is ready.", completedAt: new Date().toISOString() }), 20);
+      return Promise.resolve(job as T);
+    }
+    case "deployments.list":
+      return Promise.resolve([...mockDeployments] as T);
+    case "deployments.get":
+      return mockGetDeployment(params.deploymentId as string) as Promise<T>;
+    case "deployments.plan":
+      return mockPlanDeployment(params) as Promise<T>;
+    case "deployments.apply":
+      return mockRunDeployment(params.deploymentId as string, "apply") as Promise<T>;
+    case "deployments.destroy":
+      return mockRunDeployment(params.deploymentId as string, "destroy") as Promise<T>;
     default:
       return Promise.reject(new Error(`Mock backend method not implemented: ${method}`));
   }
+}
+
+// --- IaC recipes & deployments: client wrappers + browser mock --------------
+
+export async function listRecipes(): Promise<RecipeManifest[]> {
+  return backendRequest<RecipeManifest[]>("recipes.list");
+}
+
+export async function getRecipe(recipeId: string): Promise<Recipe> {
+  return backendRequest<Recipe>("recipes.get", { recipeId });
+}
+
+export async function getTofuStatus(): Promise<TofuStatus> {
+  return backendRequest<TofuStatus>("tofu.status");
+}
+
+export async function installTofu(): Promise<JobStatus> {
+  return backendRequest<JobStatus>("tofu.install");
+}
+
+export async function listDeployments(): Promise<Deployment[]> {
+  return backendRequest<Deployment[]>("deployments.list");
+}
+
+export async function getDeployment(deploymentId: string): Promise<Deployment> {
+  return backendRequest<Deployment>("deployments.get", { deploymentId });
+}
+
+export interface PlanDeploymentRequest {
+  recipeId: string;
+  name: string;
+  providerId: string;
+  profileId: string;
+  local: boolean;
+  variables: Record<string, unknown>;
+}
+
+export async function planDeployment(request: PlanDeploymentRequest): Promise<DeploymentJob> {
+  return backendRequest<DeploymentJob>("deployments.plan", { ...request });
+}
+
+export async function applyDeployment(deploymentId: string): Promise<DeploymentJob> {
+  return backendRequest<DeploymentJob>("deployments.apply", { deploymentId });
+}
+
+export async function destroyDeployment(deploymentId: string): Promise<DeploymentJob> {
+  return backendRequest<DeploymentJob>("deployments.destroy", { deploymentId });
+}
+
+const mockRecipes: Recipe[] = [
+  {
+    manifest: {
+      apiVersion: "cloudsprocket.recipe/v1",
+      id: "serverless-fullstack-aws",
+      version: "0.1.0",
+      name: "Serverless full-stack (AWS)",
+      summary: "Static frontend on S3, a Node API on Lambda behind API Gateway, and a DynamoDB table.",
+      description: "A serverless full-stack starter that runs on LocalStack's free tier and ships unchanged to real AWS.",
+      providers: ["aws"],
+      tags: ["serverless", "fullstack", "aws", "starter"],
+      engine: { type: "opentofu", minVersion: "1.6.0" },
+      local: { emulator: "localstack" },
+    },
+    variables: [
+      { name: "app_name", type: "string", description: "Lowercase name prefix used for every resource.", default: "myapp", required: false, group: "Application", widget: "text", help: "Lowercase name prefix used for every resource." },
+      { name: "environment", type: "string", description: "Deployment environment.", default: "dev", required: false, group: "Application", widget: "select", options: ["dev", "staging", "prod"] },
+      { name: "aws_region", type: "string", description: "AWS region to deploy into.", default: "us-east-1", required: false, group: "Application", widget: "text" },
+      { name: "lambda_memory_mb", type: "number", description: "Memory for the API Lambda, in megabytes.", default: 256, required: false, group: "Backend", widget: "number", help: "Memory for the API Lambda, in megabytes." },
+      { name: "enable_point_in_time_recovery", type: "bool", description: "Enable DynamoDB point-in-time recovery.", default: false, required: false, group: "Database", widget: "switch" },
+      { name: "tags", type: "map(string)", description: "Extra tags applied to every resource.", default: {}, required: false, group: "Advanced", widget: "textarea", help: "Extra tags as a JSON object." },
+    ],
+    outputs: [
+      { name: "api_endpoint", description: "Base URL of the backend HTTP API.", primary: true },
+      { name: "frontend_website_endpoint", description: "Static website endpoint for the frontend.", primary: true },
+      { name: "frontend_bucket", description: "S3 bucket hosting the static frontend." },
+      { name: "dynamodb_table", description: "DynamoDB table backing the application." },
+    ],
+  },
+];
+
+const mockDeployments: Deployment[] = [];
+
+function mockGetRecipe(recipeId: string): Promise<Recipe> {
+  const recipe = mockRecipes.find((entry) => entry.manifest.id === recipeId);
+  return recipe ? Promise.resolve(recipe) : Promise.reject(new Error(`recipe ${recipeId} not found`));
+}
+
+function mockGetDeployment(deploymentId: string): Promise<Deployment> {
+  const deployment = mockDeployments.find((entry) => entry.id === deploymentId);
+  return deployment ? Promise.resolve(deployment) : Promise.reject(new Error(`deployment ${deploymentId} not found`));
+}
+
+function mockSetStatus(deployment: Deployment, status: Deployment["status"]): void {
+  deployment.status = status;
+  deployment.updatedAt = new Date().toISOString();
+  emitMockEvent("deployment.changed", { ...deployment });
+}
+
+function mockPlanDeployment(params: Record<string, unknown>): Promise<DeploymentJob> {
+  const now = new Date().toISOString();
+  const deployment: Deployment = {
+    id: `dep-${Date.now()}`,
+    recipeId: String(params.recipeId ?? ""),
+    name: String(params.name || params.recipeId || "deployment"),
+    providerId: String(params.providerId ?? ""),
+    profileId: String(params.profileId ?? ""),
+    local: Boolean(params.local),
+    variables: (params.variables as Record<string, unknown>) ?? {},
+    status: "pending",
+    createdAt: now,
+    updatedAt: now,
+  };
+  mockDeployments.unshift(deployment);
+  const job: JobStatus = { jobId: `job-${Date.now()}`, label: `Plan ${deployment.name}`, status: "queued", message: "Planning." };
+  const log = (line: string) => emitMockEvent("deployment.log", { deploymentId: deployment.id, jobId: job.jobId, line });
+
+  setTimeout(() => {
+    mockSetStatus(deployment, "planning");
+    emitMockEvent("job.updated", { ...job, status: "running", message: `Planning ${deployment.name}.` });
+    log("Initializing the backend...");
+    log("Initializing provider plugins...");
+    log("Terraform will perform the following actions:");
+    log("Plan: 10 to add, 0 to change, 0 to destroy.");
+    deployment.plan = {
+      add: 10,
+      change: 0,
+      destroy: 0,
+      changes: [
+        { address: "aws_s3_bucket.frontend", type: "aws_s3_bucket", name: "frontend", actions: ["create"] },
+        { address: "aws_dynamodb_table.data", type: "aws_dynamodb_table", name: "data", actions: ["create"] },
+        { address: "aws_lambda_function.api", type: "aws_lambda_function", name: "api", actions: ["create"] },
+        { address: "aws_apigatewayv2_api.http", type: "aws_apigatewayv2_api", name: "http", actions: ["create"] },
+      ],
+    };
+    mockSetStatus(deployment, "planned");
+    emitMockEvent("job.updated", { ...job, status: "completed", message: "Plan ready: +10 ~0 -0.", completedAt: new Date().toISOString() });
+  }, 60);
+  return Promise.resolve({ deployment, job });
+}
+
+function mockRunDeployment(deploymentId: string, action: "apply" | "destroy"): Promise<DeploymentJob> {
+  const deployment = mockDeployments.find((entry) => entry.id === deploymentId);
+  if (!deployment) {
+    return Promise.reject(new Error(`deployment ${deploymentId} not found`));
+  }
+  const label = action === "apply" ? `Apply ${deployment.name}` : `Destroy ${deployment.name}`;
+  const job: JobStatus = { jobId: `job-${Date.now()}`, label, status: "queued", message: `${label}.` };
+  const log = (line: string) => emitMockEvent("deployment.log", { deploymentId: deployment.id, jobId: job.jobId, line });
+
+  setTimeout(() => {
+    if (action === "destroy") {
+      mockSetStatus(deployment, "destroying");
+      emitMockEvent("job.updated", { ...job, status: "running", message: `Destroying ${deployment.name}.` });
+      log("Destroying... aws_s3_bucket.frontend");
+      deployment.outputs = undefined;
+      mockSetStatus(deployment, "destroyed");
+      emitMockEvent("job.updated", { ...job, status: "completed", message: `${deployment.name} destroyed.`, completedAt: new Date().toISOString() });
+      return;
+    }
+    mockSetStatus(deployment, "applying");
+    emitMockEvent("job.updated", { ...job, status: "running", message: `Applying ${deployment.name}.` });
+    log("Applying... aws_s3_bucket.frontend: Creating...");
+    log("Apply complete! Resources: 10 added, 0 changed, 0 destroyed.");
+    const appName = String(deployment.variables.app_name ?? "myapp");
+    const env = String(deployment.variables.environment ?? "dev");
+    deployment.outputs = [
+      { name: "api_endpoint", value: `http://localhost:4566/restapis/${appName}-${env}` },
+      { name: "frontend_website_endpoint", value: `http://${appName}-${env}-frontend.s3-website.localhost:4566` },
+      { name: "frontend_bucket", value: `${appName}-${env}-frontend` },
+      { name: "dynamodb_table", value: `${appName}-${env}-data` },
+    ];
+    mockSetStatus(deployment, "applied");
+    emitMockEvent("job.updated", { ...job, status: "completed", message: `${deployment.name} deployed.`, completedAt: new Date().toISOString() });
+  }, 80);
+  return Promise.resolve({ deployment, job });
 }
 
 export async function backendRequest<T>(
