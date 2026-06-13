@@ -1,6 +1,6 @@
 # Checkpoint — UI/UX Redesign work stream
 
-_Last updated: 2026-06-13_
+_Last updated: 2026-06-13 (M9 complete — the redesign is feature-complete)_
 
 ## Goal
 User dislikes the current CloudSprocket UI/UX. Redesign toward Slack / Docker Hub / OpenHuman
@@ -64,32 +64,50 @@ Branch: `feat/ui-rebuild-tailwind` (off `feat/azure-local-runtime`). Tasks track
 - `dad7f90` feat(desktop): migrate notifications, reset, activity, and debug (M7)
 - `f94239b` docs: mark M7 complete, set M8 (Cloudscape removal) as resume point
 
-**M8 — DONE + verified, NOT yet committed (sitting in the working tree).**
+**M8 — DONE + verified, committed (`e4d7cf2`); post-M8 polish committed up to `9f7758b`.**
 
-### >>> RESUME HERE: M9 (notification UX revamp) <<<
-Next session: M9, the final module - the notification model on top of M7's sonner plumbing.
-Full spec in IMPLEMENTATION-PLAN.md (M9 section); summary:
-1. **Lifecycle**: everything dismissible AND auto-dismissing (success ~4 s, info ~6 s; ERRORS
-   PERSIST until dismissed - change from M7's 10 s); per-job updating toasts already exist
-   (`lib/notify.ts` notifyJob) - extend with dedupe and burst-collapse for poll loops.
-2. **History**: route every notification into the Activity drawer (and/or a bell-badge count on
-   the TopBar - the prop already exists, it was dropped in M7) so expired toasts are not lost.
-3. **Hierarchy**: persistent state (read-only mode, Docker down) as inline banners on the relevant
-   views, NOT toasts; long-running jobs get one updating toast + the bell badge.
-4. **Affordances**: hover-to-pause is sonner default; add action buttons where useful (e.g. "View
-   logs" on emulator failure → navigate to the runtime view); respect reduced motion.
-5. Acceptance: no stuck toasts; one toast per job through its lifecycle; bell badge + drawer
-   history consistent with what toasted.
-Dev server: launch config `desktop-web` (vite :1425). Heads-up: headless screenshotter hangs on
-looping animations / Radix portals - inject `*{animation:none!important;transition:none!important}`
-via preview_eval first (but NOT before sonner toast checks - they need their enter transition); it
-can capture a STALE frame (it may reload) - re-drive state via preview_eval and screenshot
-immediately. Preview viewport defaults narrow (<1180 px) - resize to >=1280. To reach an open
-workspace in the browser mock: click "Open workspace" on Connect (note: the mock persists session
-state in the browser, so it may open the previously selected provider). Branch:
-`feat/ui-rebuild-tailwind` (check `git branch` first). Build the exe after the module
-(`pnpm run build:desktop:exe`) so Ali can test.
-**Commit M8 before starting M9 if a clean history is wanted.**
+### >>> M9 — DONE, verified, UNCOMMITTED (2026-06-13). This was the FINAL module. <<<
+The notification model now sits on top of M7's sonner plumbing. Built with two parallel
+sub-agents against a pinned contract (engine + UI), integration into App.tsx done by hand.
+
+- **Engine** (`lib/notify.ts`, rewritten - the public `notify`/`notifyJob`/`NotificationTone`
+  surface is unchanged so existing call sites kept working): a module-level store exposed to
+  React via `useSyncExternalStore` (callable outside React, as before). New: `NotificationRecord`
+  history (newest first, capped 100), `unreadCount`, `useNotifications()` hook returning
+  `{ records, unreadCount, markAllRead, dismiss, clearAll }`, plus `NotifyOptions`
+  (`id`/`dedupeKey`/`action`/`durationMs`). Test-only `__resetNotifications()`/`__getNotifications()`.
+  - **Lifecycle**: success 4s, info/warning 6s, in-progress + **error = Infinity (persist until
+    dismissed)** - the key change from M7's 10s.
+  - **Dedupe / burst-collapse**: identical `dedupeKey` (explicit, else `tone|title|description`)
+    within a 4s window reuses the same toast id, increments `count`, refreshes the timer, and shows
+    a ` (×N)` suffix on the toast + history row. Job toasts dedupe purely by `jobId` and are exempt.
+  - 11 unit tests in `lib/notify.test.ts` (sonner mocked): durations, error-persist, burst collapse
+    in/out of window, job lifecycle in place, history cap, markAllRead/dismiss/clearAll.
+- **UI**: `components/shell/notification-center.tsx` (`NotificationCenter`) - a right Sheet listing
+  records newest-first with tone icon, title (+`×N`), description, relative timestamp
+  (`formatRelativeTime`), optional action button, per-row dismiss X, "Clear all" header action,
+  unread accent, reduced-motion respected. `components/inline-banner.tsx` (`InlineBanner`, CVA
+  tones info/warning/success/destructive) for persistent state.
+- **Hierarchy (banners not toasts)**: OverviewView's read-only / writes-enabled banner re-built on
+  `InlineBanner` (same copy). RuntimeView gained a Docker-down `InlineBanner` (gated on
+  `!dockerReachable`, summary from `dockerDiagnostics`). No persistent-state toasts existed to
+  remove - banners are additive.
+- **App.tsx integration**: `useNotifications()` wired; **bell badge** = `unreadCount` (the dropped
+  M7 prop, restored); the bell opens the NotificationCenter and `markAllRead()` on open. The nav
+  "Recent activity" button still opens the old `ActivityDrawer` (backend discovery log) - two
+  distinct drawers now. `<Toaster visibleToasts={4}>`. Emulator error/warning notifications carry a
+  **"View logs"** action → jumps to the Local Runtime tab. Reset clears notification history.
+  Types reconciled: `components/shell/types.ts` re-exports the notification types from `@/lib/notify`
+  (single source of truth; the agent's local mirror removed).
+- Tests: `App.test.tsx` gains one integration test (bell badge → open centre → record listed →
+  badge clears → dismiss empties it) + `__resetNotifications()` in `beforeEach`. **33/33 green**;
+  `tsc` clean; production build green (CSS 47.4 kB, JS ~578 kB). Exe rebuilt.
+
+Dev server for any follow-up: launch config `desktop-web` (vite :1425). Heads-up: headless
+screenshotter hangs on looping animations / Radix portals - inject
+`*{animation:none!important;transition:none!important}` via preview_eval first (but NOT before
+sonner toast checks - they need the enter transition); resize viewport to >=1280. Branch:
+`feat/ui-rebuild-tailwind`.
 
 - **M0 — DONE, verified, committed (`93b5fc8`).** Tailwind v4.3.0 + `@tailwindcss/vite`, clsx,
   tailwind-merge, lucide-react 1.17, sonner installed in `apps/desktop`.
@@ -371,10 +389,10 @@ implemented via two sub-agents and reviewed:
   clean; `tsc` clean; exe rebuilt.
 
 ## Next step
-**M9 — notification UX revamp.** The last module: persistent errors, dedupe, bell-badge history,
-inline banners for persistent state. See the RESUME HERE block above and IMPLEMENTATION-PLAN.md.
-(M8 and the earlier polish are committed up to `0559f74`; only the 2026-06-13 post-M8 polish
-above is uncommitted. Commit it before M9 if clean history is wanted.)
+**The modular rebuild (M0-M9) is feature-complete.** M9 is verified and uncommitted in the working
+tree (commit it to finish the stream). Remaining ideas are polish, not plan modules: optional ⌘K
+command palette (deferred from M8), wider live a11y pass, and watching for user feedback after Ali
+tests the M9 exe. No outstanding plan work.
 
 ## To reopen prototype
 `preview_start` config `prototype`, then open `http://localhost:4321/design-prototypes/index.html`.

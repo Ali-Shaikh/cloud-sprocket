@@ -109,7 +109,7 @@ Replace the Cloudscape virtualisation panel with emulator cards (prototype style
 - Update `App.test.tsx` + view tests for the new structure; bundle-size check.
 - **Acceptance:** zero Cloudscape references; `tsc --noEmit` + `vitest` green; app fully on new kit.
 
-### M9 — Notification UX revamp  ·  Dep: M7  ·  Size: M
+### M9 — Notification UX revamp  ·  Dep: M7  ·  Size: M  ·  **DONE (2026-06-13)**
 _User feedback (2026-06-10): the current notifications do not close and are not user-friendly._
 Rethink the whole notification model, not just the rendering library:
 - **Lifecycle:** every notification must be dismissible AND auto-dismiss by default
