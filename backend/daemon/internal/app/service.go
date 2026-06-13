@@ -14,11 +14,14 @@ import (
 	"time"
 
 	"cloudsprocket/backend/daemon/internal/config"
+	"cloudsprocket/backend/daemon/internal/deploy"
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/flociaz"
 	"cloudsprocket/backend/daemon/internal/localstack"
 	"cloudsprocket/backend/daemon/internal/models"
+	"cloudsprocket/backend/daemon/internal/recipes"
 	"cloudsprocket/backend/daemon/internal/store"
+	"cloudsprocket/backend/daemon/internal/tofu"
 	"cloudsprocket/backend/daemon/internal/urlinspector"
 )
 
@@ -80,6 +83,19 @@ type Notifier interface {
 	Notify(method string, payload any) error
 }
 
+// Deployer runs recipe deployments through the IaC engine. Implemented by
+// *deploy.Engine; an interface so tests can inject a fake.
+type Deployer interface {
+	Available() bool
+	Version(ctx context.Context) (string, error)
+	BinaryPath() string
+	Install(ctx context.Context) (string, error)
+	Prepare(deployment *deploy.Deployment) error
+	Plan(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) (deploy.PlanSummary, error)
+	Apply(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) ([]deploy.Output, error)
+	Destroy(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) error
+}
+
 type Service struct {
 	settings      config.Settings
 	store         *store.Store
@@ -90,6 +106,8 @@ type Service struct {
 	docker        DockerRuntime
 	localstackMgr LocalStackManager
 	azureRuntime  AzureRuntimeManager
+	recipes       *recipes.Loader
+	deployer      Deployer
 	now           func() time.Time
 	mu            sync.Mutex
 }
@@ -119,6 +137,8 @@ func NewWithRuntimes(
 	localStackMgr LocalStackManager,
 	azureRuntime AzureRuntimeManager,
 ) *Service {
+	recipeLoader := recipes.Bundled()
+	deployEngine := deploy.NewEngine(tofu.NewRunner(tofu.Resolve(settings)), settings, recipeLoader)
 	return &Service{
 		settings:      settings,
 		store:         store,
@@ -129,6 +149,8 @@ func NewWithRuntimes(
 		docker:        dockerRuntime,
 		localstackMgr: localStackMgr,
 		azureRuntime:  azureRuntime,
+		recipes:       recipeLoader,
+		deployer:      deployEngine,
 		now:           func() time.Time { return time.Now().UTC() },
 	}
 }
@@ -756,6 +778,54 @@ func (s *Service) Handle(
 		}
 		go s.runRefresh(job, notifier)
 		return job, nil
+	case "recipes.list":
+		return s.recipes.List()
+	case "recipes.get":
+		var request struct {
+			RecipeID string `json:"recipeId"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		return s.recipes.Load(request.RecipeID)
+	case "tofu.status":
+		return s.tofuStatus(ctx), nil
+	case "tofu.install":
+		job := models.JobStatus{JobID: s.newJobID(), Label: "Install OpenTofu", Status: "queued", Message: "Preparing the OpenTofu engine."}
+		go s.runTofuInstall(job, notifier)
+		return job, nil
+	case "deployments.list":
+		return s.deploymentsList(ctx)
+	case "deployments.get":
+		var request struct {
+			DeploymentID string `json:"deploymentId"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		return s.deploymentGet(ctx, request.DeploymentID)
+	case "deployments.plan":
+		var request deploymentPlanRequest
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		return s.startDeploymentPlan(ctx, request, notifier)
+	case "deployments.apply":
+		var request struct {
+			DeploymentID string `json:"deploymentId"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		return s.startDeploymentAction(request.DeploymentID, actionApply, notifier)
+	case "deployments.destroy":
+		var request struct {
+			DeploymentID string `json:"deploymentId"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		return s.startDeploymentAction(request.DeploymentID, actionDestroy, notifier)
 	default:
 		return nil, fmt.Errorf("unknown backend method: %s", method)
 	}
