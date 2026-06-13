@@ -1152,11 +1152,14 @@ describe("App", () => {
 
     expect((await screen.findAllByText("logs/filtered-object.json")).length).toBeGreaterThan(0);
     expect(await screen.findByRole("complementary", { name: "S3 object details" })).toBeInTheDocument();
-    expect(await screen.findByText("Object Detail")).toBeInTheDocument();
+    // Header shows the file name; the Overview tab shows the constructed S3 URI.
+    expect(await screen.findByText("filtered-object.json")).toBeInTheDocument();
+    expect(await screen.findByText(/s3:\/\/cloudsprocket-artifacts\/logs\/filtered-object\.json/i)).toBeInTheDocument();
+    // The object's HEAD metadata lives on the Metadata tab. Radix tabs switch on
+    // mousedown (button 0), not click, so drive the tab with fireEvent.mouseDown.
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Metadata" }));
     expect(await screen.findByText("Metadata: owner")).toBeInTheDocument();
     expect(await screen.findByText("analytics")).toBeInTheDocument();
-    expect(await screen.findByText("Copy snippets")).toBeInTheDocument();
-    expect(await screen.findByText(/s3:\/\/cloudsprocket-artifacts\/logs\/filtered-object\.json/i)).toBeInTheDocument();
   });
 
   it("keeps the S3 prefix input stable when older filter responses finish late", async () => {

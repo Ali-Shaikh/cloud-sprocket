@@ -38,6 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import { DetailFieldList } from "./detail-fields";
@@ -308,6 +309,8 @@ export default function StorageView({
   );
 
   const objectKey = workspace.selectedS3ObjectKey ?? "";
+  const bucketName = workspace.selectedS3BucketName ?? "";
+  const s3Uri = bucketName ? `s3://${bucketName}/${objectKey}` : objectKey;
   const FileTypeIcon = objectFileIcon(objectKey);
 
   const closeDrawer = () => {
@@ -315,39 +318,22 @@ export default function StorageView({
   };
 
   const drawerBody = selectedObject ? (
-    <div className="space-y-5">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-[10px] bg-muted [&_svg]:size-5 [&_svg]:text-muted-foreground">
-            <FileTypeIcon />
-          </div>
-          <div className="min-w-0">
-            <div className={fieldLabel}>Object Detail</div>
-            <h2 className="truncate text-base font-bold" title={objectFileName(objectKey)}>
-              {objectFileName(objectKey)}
-            </h2>
-            <div className="mt-1 flex items-center gap-1">
-              <p
-                className="truncate font-mono text-xs text-muted-foreground"
-                title={objectKey}
-              >
-                {objectKey}
-              </p>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-6 shrink-0"
-                aria-label="Copy object key"
-                onClick={() => copyToClipboard(objectKey, "Object key copied")}
-              >
-                <Copy className="size-3.5" />
-              </Button>
-            </div>
-          </div>
+    <div className="space-y-4">
+      {/* Shared header: file icon, name (wraps), full key, close. */}
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-[10px] bg-muted [&_svg]:size-5 [&_svg]:text-muted-foreground">
+          <FileTypeIcon />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className={fieldLabel}>Object</div>
+          <h2 className="break-words text-[15px] font-bold leading-tight" title={objectFileName(objectKey)}>
+            {objectFileName(objectKey)}
+          </h2>
         </div>
         <Button
           variant="ghost"
           size="icon"
+          className="shrink-0"
           aria-label="Close object detail"
           onClick={closeDrawer}
         >
@@ -355,32 +341,88 @@ export default function StorageView({
         </Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
-          <div className={fieldLabel}>Size</div>
-          <div className="truncate text-sm" title={selectedObject.size || "Unknown"}>
-            {selectedObject.size || "Unknown"}
-          </div>
-        </div>
-        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
-          <div className={fieldLabel}>Modified</div>
-          <div className="truncate text-sm" title={selectedObject.modifiedAt || "Unknown"}>
-            {selectedObject.modifiedAt || "Unknown"}
-          </div>
-        </div>
-        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
-          <div className={fieldLabel}>Storage class</div>
-          <div className="truncate text-sm" title={selectedObject.storageClass || "STANDARD"}>
-            {selectedObject.storageClass || "STANDARD"}
-          </div>
-        </div>
+      <div className="flex items-start gap-1 rounded-lg border border-border bg-muted/40 py-1.5 pl-3 pr-1.5">
+        <code
+          className="min-w-0 flex-1 break-all font-mono text-xs leading-relaxed text-muted-foreground"
+          title={objectKey}
+        >
+          {objectKey}
+        </code>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0"
+          aria-label="Copy object key"
+          onClick={() => copyToClipboard(objectKey, "Object key copied")}
+        >
+          <Copy className="size-3.5" />
+        </Button>
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className={fieldLabel}>Metadata</div>
+      <Tabs defaultValue="overview" className="gap-3">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="overview" className="px-1.5 text-xs">Overview</TabsTrigger>
+          <TabsTrigger value="metadata" className="px-1.5 text-xs">Metadata</TabsTrigger>
+          <TabsTrigger value="share" className="px-1.5 text-xs">Share</TabsTrigger>
+          <TabsTrigger value="code" className="px-1.5 text-xs">Code</TabsTrigger>
+        </TabsList>
+
+        {/* Overview: the three real object facts, the S3 URI, and copy actions. */}
+        <TabsContent value="overview" className="space-y-4">
+          <dl className="grid grid-cols-[max-content_1fr] items-baseline gap-x-5 gap-y-2.5">
+            <dt className="text-xs text-muted-foreground">Size</dt>
+            <dd className="text-right text-[13px] font-medium">{selectedObject.size || "Unknown"}</dd>
+            <dt className="text-xs text-muted-foreground">Last modified</dt>
+            <dd className="text-right text-[13px] font-medium">{selectedObject.modifiedAt || "Unknown"}</dd>
+            <dt className="text-xs text-muted-foreground">Storage class</dt>
+            <dd className="text-right">
+              <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
+                {selectedObject.storageClass || "STANDARD"}
+              </span>
+            </dd>
+          </dl>
+
+          <div className="space-y-1.5">
+            <div className={fieldLabel}>S3 URI</div>
+            <div className="flex items-start gap-1 rounded-lg border border-border bg-muted/40 py-1.5 pl-3 pr-1.5">
+              <code
+                className="min-w-0 flex-1 break-all font-mono text-xs leading-relaxed text-muted-foreground"
+                title={s3Uri}
+              >
+                {s3Uri}
+              </code>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 shrink-0"
+                aria-label="Copy S3 URI"
+                onClick={() => copyToClipboard(s3Uri, "S3 URI copied")}
+              >
+                <Copy className="size-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => copyToClipboard(s3Uri, "S3 URI copied")}>
+              <Copy />
+              Copy S3 URI
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => copyToClipboard(objectKey, "Object key copied")}
+            >
+              <Copy />
+              Copy key
+            </Button>
+          </div>
+        </TabsContent>
+
+        {/* Metadata: the object's HEAD response (content type, ETag, custom keys). */}
+        <TabsContent value="metadata" className="space-y-3">
           {workspace.s3ObjectMetadata.length > 0 ? (
-            <div className="flex gap-1">
+            <div className="flex justify-end gap-1">
               <Button
                 variant="ghost"
                 size="sm"
@@ -401,32 +443,90 @@ export default function StorageView({
               </Button>
             </div>
           ) : null}
-        </div>
-        <DetailFieldList
-          fields={workspace.s3ObjectMetadata}
-          emptyText="No metadata loaded for the selected object."
-          showSensitiveValues={showSensitiveValues}
-        />
-      </div>
+          <DetailFieldList
+            fields={workspace.s3ObjectMetadata}
+            emptyText="No metadata loaded for the selected object."
+            showSensitiveValues={showSensitiveValues}
+          />
+        </TabsContent>
 
-      <div className="space-y-2">
-        <div className={fieldLabel}>Copy snippets</div>
-        {workspace.s3ExportSnippets.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No copy snippets are available for this object.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {workspace.s3ExportSnippets.map((snippet) => (
+        {/* Share: generate a time-limited signed link. */}
+        <TabsContent value="share" className="space-y-3">
+          <div className={fieldLabel}>Signed link expiry</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-1">
+              {SIGNED_URL_PRESETS.map((preset) => {
+                const active = preset.seconds === signedUrlSeconds;
+                return (
+                  <Button
+                    key={preset.seconds}
+                    type="button"
+                    variant={active ? "secondary" : "outline"}
+                    size="sm"
+                    aria-pressed={active}
+                    onClick={() => {
+                      setSignedUrlSeconds(preset.seconds);
+                    }}
+                  >
+                    {preset.label}
+                  </Button>
+                );
+              })}
+            </div>
+            <Button
+              size="sm"
+              disabled={!workspace.selectedS3ObjectKey}
+              onClick={() => {
+                onPresignObject(signedUrlSeconds);
+              }}
+            >
+              Generate
+            </Button>
+          </div>
+          {signedUrlStatus ? (
+            <p className="text-xs text-muted-foreground">{signedUrlStatus}</p>
+          ) : null}
+          {signedUrlResult ? (
+            <div className="space-y-1.5 rounded-lg border border-border bg-muted/40 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className={fieldLabel}>Expires {signedUrlResult.expiresAt}</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 shrink-0"
+                  aria-label="Copy signed URL"
+                  onClick={() => copyToClipboard(signedUrlResult.url, "Signed URL copied")}
+                >
+                  <Copy className="size-3.5" />
+                </Button>
+              </div>
+              <code className="block break-all font-mono text-xs leading-relaxed" title={signedUrlResult.url}>
+                {signedUrlResult.url}
+              </code>
+              {signedUrlResult.effectiveWarning ? (
+                <p className="text-xs text-muted-foreground">{signedUrlResult.effectiveWarning}</p>
+              ) : null}
+            </div>
+          ) : null}
+        </TabsContent>
+
+        {/* Code: ready-to-paste CLI / SDK snippets. */}
+        <TabsContent value="code" className="space-y-2">
+          {workspace.s3ExportSnippets.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No copy snippets are available for this object.
+            </p>
+          ) : (
+            workspace.s3ExportSnippets.map((snippet) => (
               <div
                 key={snippet.label}
-                className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 py-1.5 pl-3 pr-1.5"
+                className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 py-1.5 pl-3 pr-1.5"
               >
                 <div className="min-w-0 flex-1">
                   <div className={fieldLabel}>{snippet.label}</div>
-                  <pre className="overflow-x-auto whitespace-pre font-mono text-xs" title={snippet.value}>
+                  <code className="block break-all font-mono text-xs leading-relaxed" title={snippet.value}>
                     {snippet.value}
-                  </pre>
+                  </code>
                 </div>
                 <Button
                   variant="ghost"
@@ -438,71 +538,10 @@ export default function StorageView({
                   <Copy className="size-3.5" />
                 </Button>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <div className={fieldLabel}>Signed URL</div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex gap-1">
-            {SIGNED_URL_PRESETS.map((preset) => {
-              const active = preset.seconds === signedUrlSeconds;
-              return (
-                <Button
-                  key={preset.seconds}
-                  type="button"
-                  variant={active ? "secondary" : "outline"}
-                  size="sm"
-                  aria-pressed={active}
-                  onClick={() => {
-                    setSignedUrlSeconds(preset.seconds);
-                  }}
-                >
-                  {preset.label}
-                </Button>
-              );
-            })}
-          </div>
-          <Button
-            size="sm"
-            disabled={!workspace.selectedS3ObjectKey}
-            onClick={() => {
-              onPresignObject(signedUrlSeconds);
-            }}
-          >
-            Generate
-          </Button>
-        </div>
-        {signedUrlStatus ? (
-          <p className="text-xs text-muted-foreground">{signedUrlStatus}</p>
-        ) : null}
-        {signedUrlResult ? (
-          <div className="rounded-lg border border-border bg-muted/40 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className={fieldLabel}>Expires {signedUrlResult.expiresAt}</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 shrink-0"
-                aria-label="Copy signed URL"
-                onClick={() => copyToClipboard(signedUrlResult.url, "Signed URL copied")}
-              >
-                <Copy className="size-3.5" />
-              </Button>
-            </div>
-            <pre className="mt-1 overflow-x-auto whitespace-pre font-mono text-xs" title={signedUrlResult.url}>
-              {signedUrlResult.url}
-            </pre>
-            {signedUrlResult.effectiveWarning ? (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {signedUrlResult.effectiveWarning}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+            ))
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   ) : null;
 
@@ -512,7 +551,7 @@ export default function StorageView({
     isWideViewport && selectedObject && drawerOpen ? (
       <aside
         aria-label="S3 object details"
-        className="sticky top-4 max-h-[calc(100vh-7rem)] w-80 shrink-0 self-start overflow-y-auto rounded-lg border border-border bg-card p-[18px] shadow-sm"
+        className="sticky top-4 max-h-[calc(100vh-7rem)] w-[360px] shrink-0 self-start overflow-y-auto rounded-lg border border-border bg-card p-[18px] shadow-sm"
       >
         {drawerBody}
       </aside>
