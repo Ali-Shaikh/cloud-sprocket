@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from "react";
 
 import type { Status } from "@/components/status-dot";
+import type { NotificationTone, NotificationAction, NotificationRecord } from "@/lib/notify";
 
 /**
  * Shared prop contract for the M2 application shell.
@@ -109,4 +110,19 @@ export interface ActivityDrawerProps {
   title?: string;
   subtitle?: string;
   entries: ActivityEntry[];
+}
+
+// The notification types live in @/lib/notify (the store); they are re-exported
+// here (imported at the top of this file) so existing `./types` consumers and
+// shell components keep pulling them from one place.
+export type { NotificationTone, NotificationAction, NotificationRecord };
+
+/** The M9 notification history drawer (a right-side Sheet). */
+export interface NotificationCenterProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Notification history, newest first. */
+  records: NotificationRecord[];
+  onDismiss: (id: string) => void;
+  onClearAll: () => void;
 }

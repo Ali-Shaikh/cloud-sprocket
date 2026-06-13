@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Cloud,
   Copy,
@@ -9,6 +10,7 @@ import {
   RefreshCw,
   Server,
   Settings,
+  ShieldAlert,
   Trash2,
 } from "lucide-react";
 
@@ -93,6 +95,9 @@ import {
 
 import { StatusDot } from "@/components/status-dot";
 import { StatusPill } from "@/components/status-pill";
+import { InlineBanner } from "@/components/inline-banner";
+import { NotificationCenter } from "@/components/shell/notification-center";
+import type { NotificationRecord } from "@/components/shell/types";
 import { ProviderIcon } from "@/components/provider-icon";
 import { StatCard } from "@/components/stat-card";
 import { EmptyState } from "@/components/empty-state";
@@ -117,6 +122,46 @@ const LOG_LINES = [
   "[09:41:05] INFO  runtime healthy — 3 services online",
 ];
 
+const NOTIFICATIONS: NotificationRecord[] = [
+  {
+    id: "n1",
+    tone: "in-progress",
+    title: "Starting LocalStack",
+    description: "Pulling localstack/localstack:stable and creating the container.",
+    timestamp: Date.now() - 20_000,
+    read: false,
+    count: 1,
+  },
+  {
+    id: "n2",
+    tone: "success",
+    title: "Workspace opened",
+    description: "AWS sandbox is ready. 12 buckets, 3 instances.",
+    timestamp: Date.now() - 4 * 60_000,
+    read: false,
+    count: 1,
+    action: { label: "View", run: () => {} },
+  },
+  {
+    id: "n3",
+    tone: "warning",
+    title: "Docker engine slow to respond",
+    timestamp: Date.now() - 70 * 60_000,
+    read: true,
+    count: 3,
+  },
+  {
+    id: "n4",
+    tone: "error",
+    title: "Failed to list S3 objects",
+    description: "The local endpoint refused the connection.",
+    timestamp: Date.now() - 2 * 24 * 60 * 60_000,
+    read: true,
+    count: 1,
+    action: { label: "Retry", run: () => {} },
+  },
+];
+
 function Section({
   title,
   description,
@@ -138,6 +183,8 @@ function Section({
 
 export default function Gallery() {
   const { theme, resolvedTheme, setTheme } = useTheme();
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [records, setRecords] = useState<NotificationRecord[]>(NOTIFICATIONS);
 
   return (
     <TooltipProvider>
@@ -217,6 +264,51 @@ export default function Gallery() {
                 <StatusPill status="warning" label="Degraded" pulse />
               </div>
             </div>
+          </Section>
+
+          <Section
+            title="Inline banners"
+            description="Persistent state banners across all tones."
+          >
+            <div className="space-y-3">
+              <InlineBanner
+                tone="info"
+                title="Read-only mode keeps you safe. Writes are disabled until you opt in per service."
+              />
+              <InlineBanner
+                tone="warning"
+                icon={ShieldAlert}
+                title="Local-endpoint writes are enabled for this workspace. Mutating actions will run against the local runtime."
+              />
+              <InlineBanner
+                tone="success"
+                title="Workspace ready"
+                description="3 services online and reachable from this machine."
+              />
+              <InlineBanner
+                tone="destructive"
+                title="Docker engine is not reachable"
+                description="Start Docker Desktop, then refresh to retry."
+                action={{ label: "Refresh", onClick: () => {} }}
+                onDismiss={() => {}}
+              />
+            </div>
+          </Section>
+
+          <Section
+            title="Notification centre"
+            description="History drawer with tone icons, dedupe counts, and relative time."
+          >
+            <Button variant="outline" onClick={() => setNotificationsOpen(true)}>
+              Open notifications
+            </Button>
+            <NotificationCenter
+              open={notificationsOpen}
+              onOpenChange={setNotificationsOpen}
+              records={records}
+              onDismiss={(id) => setRecords((prev) => prev.filter((record) => record.id !== id))}
+              onClearAll={() => setRecords([])}
+            />
           </Section>
 
           <Section title="Provider icons" description="Cloud logos with a fallback.">

@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { InlineBanner } from "@/components/inline-banner";
 import { LogStream } from "@/components/log-stream";
 import { ProviderIcon } from "@/components/provider-icon";
 import { StatusPill } from "@/components/status-pill";
@@ -272,6 +273,17 @@ export default function RuntimeView({
           Refresh Docker
         </Button>
       </header>
+
+      {!dockerReachable ? (
+        <InlineBanner
+          tone="warning"
+          title="Docker engine is not reachable"
+          description={
+            workspace.dockerDiagnostics.summary ||
+            "Start Docker Desktop (or your engine) to run local emulators and inspect managed resources."
+          }
+        />
+      ) : null}
 
       <section className={sectionCard}>
         <div>

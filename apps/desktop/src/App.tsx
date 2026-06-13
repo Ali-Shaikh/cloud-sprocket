@@ -13,9 +13,16 @@ import awsEc2IconUrl from "./assets/cloud-icons/aws-ec2.svg";
 import awsS3IconUrl from "./assets/cloud-icons/aws-s3.svg";
 import azureIconUrl from "./assets/cloud-icons/azure.svg";
 import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
-import { notify, notifyJob, type NotificationTone } from "./lib/notify";
+import { notify, notifyJob, useNotifications, type NotificationTone } from "./lib/notify";
 import { useTheme } from "./lib/theme";
-import { AppShell, ConnectionRail, ContextNav, TopBar, ActivityDrawer } from "./components/shell";
+import {
+  AppShell,
+  ConnectionRail,
+  ContextNav,
+  TopBar,
+  ActivityDrawer,
+  NotificationCenter,
+} from "./components/shell";
 import type {
   ActivityEntry,
   NavConnectionHeader,
@@ -424,12 +431,14 @@ export default function App() {
   const [activeAzurePageId, setActiveAzurePageId] = useState("resource-groups");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [splitPanelOpen, setSplitPanelOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [resetConfirmation, setResetConfirmation] = useState("");
   const [resetInFlight, setResetInFlight] = useState(false);
   const [showSensitiveValues, setShowSensitiveValues] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const { resolvedTheme } = useTheme();
+  const notifications = useNotifications();
 
   const isInitialLoad = useRef(true);
   const s3PrefixRequestIdRef = useRef(0);
@@ -795,8 +804,10 @@ export default function App() {
         setActiveS3PageId("buckets");
         setActiveAzurePageId("resource-groups");
         setSplitPanelOpen(false);
+        setNotificationsOpen(false);
         setShowSensitiveValues(false);
       });
+      notifications.clearAll();
       setResetModalOpen(false);
       setResetConfirmation("");
       void loadState().catch((error: unknown) => {
@@ -967,12 +978,26 @@ export default function App() {
     notify(tone, header, content);
   }
 
+  // Errors and warnings from an emulator carry a "View logs" action that jumps
+  // to the Local Runtime view, where the LogStream is shown.
+  function emulatorNotifyOptions(tone: NotificationTone) {
+    if (tone === "error" || tone === "warning") {
+      return {
+        action: {
+          label: "View logs",
+          run: () => setActiveWorkspaceTabId("virtualisation"),
+        },
+      };
+    }
+    return undefined;
+  }
+
   function addLocalStackNotification(tone: NotificationTone, header: string, content: string): void {
-    notify(tone, header, content);
+    notify(tone, header, content, emulatorNotifyOptions(tone));
   }
 
   function addEmulatorNotification(_emulatorId: string, tone: NotificationTone, header: string, content: string): void {
-    notify(tone, header, content);
+    notify(tone, header, content, emulatorNotifyOptions(tone));
   }
 
   function pollLocalStackState(label: string, expectedStatus?: "running" | "stopped"): void {
@@ -1516,7 +1541,13 @@ export default function App() {
   return (
     <>
       {resetDialog}
-      <Toaster theme={resolvedTheme} position="bottom-right" closeButton richColors />
+      <Toaster
+        theme={resolvedTheme}
+        position="bottom-right"
+        closeButton
+        richColors
+        visibleToasts={4}
+      />
       <AppShell
         navCollapsed={sidebarCollapsed || isTablet}
         rail={
@@ -1575,18 +1606,37 @@ export default function App() {
               void refreshDiscovery();
             }}
             onToggleNotifications={() => {
-              setSplitPanelOpen((current) => !current);
+              const next = !notificationsOpen;
+              setNotificationsOpen(next);
+              if (next) {
+                notifications.markAllRead();
+              }
             }}
+            notificationCount={notifications.unreadCount}
           />
         }
         drawer={
-          <ActivityDrawer
-            open={splitPanelOpen}
-            onOpenChange={setSplitPanelOpen}
-            title="Recent activity"
-            subtitle={session.isLocked ? "Workspace" : "Discovery"}
-            entries={activityEntries}
-          />
+          <>
+            <ActivityDrawer
+              open={splitPanelOpen}
+              onOpenChange={setSplitPanelOpen}
+              title="Recent activity"
+              subtitle={session.isLocked ? "Workspace" : "Discovery"}
+              entries={activityEntries}
+            />
+            <NotificationCenter
+              open={notificationsOpen}
+              onOpenChange={(open) => {
+                setNotificationsOpen(open);
+                if (open) {
+                  notifications.markAllRead();
+                }
+              }}
+              records={notifications.records}
+              onDismiss={notifications.dismiss}
+              onClearAll={notifications.clearAll}
+            />
+          </>
         }
       >
         <div className="p-6">

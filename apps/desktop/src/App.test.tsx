@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { ThemeProvider } from "./lib/theme";
+import { __resetNotifications } from "./lib/notify";
 import type {
   ActivityLogEntry,
   AppSettingsSnapshot,
@@ -450,6 +451,7 @@ vi.mock("./lib/backend", () => ({
 
 describe("App", () => {
   beforeEach(() => {
+    __resetNotifications();
     sessionFixture = {
       currentProviderId: "aws",
       selectedProfileId: "sandbox",
@@ -1359,6 +1361,44 @@ describe("App", () => {
     expect((await screen.findAllByText(/Desired state reached: stopped/i)).length).toBeGreaterThan(0);
     expect(await screen.findByText("EC2 Action History")).toBeInTheDocument();
     expect((await screen.findAllByText("stopped")).length).toBeGreaterThan(0);
+  });
+
+  it("badges the bell and lists job notifications in the notification centre", async () => {
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
+
+    const bell = await screen.findByRole("button", { name: "Notifications" });
+    expect(within(bell).queryByText("1")).not.toBeInTheDocument();
+
+    await act(async () => {
+      backendEventHandlers["job.updated"]?.({
+        jobId: "job-notify",
+        label: "Discovery refresh",
+        status: "completed",
+        message: "All clouds refreshed.",
+      });
+    });
+
+    // The unread badge reflects the new notification.
+    await waitFor(() => {
+      expect(within(bell).getByText("1")).toBeInTheDocument();
+    });
+
+    // Opening the centre lists the record and clears the unread badge.
+    fireEvent.click(bell);
+    const panel = await screen.findByRole("dialog", { name: "Notifications" });
+    expect(within(panel).getByText("Discovery refresh")).toBeInTheDocument();
+    expect(within(panel).getByText("All clouds refreshed.")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(within(bell).queryByText("1")).not.toBeInTheDocument();
+    });
+
+    // Dismissing the row empties the centre.
+    fireEvent.click(within(panel).getByRole("button", { name: "Dismiss notification" }));
+    expect(await within(panel).findByText("No notifications yet.")).toBeInTheDocument();
   });
 
   it("keeps EC2 lifecycle actions disabled for normal AWS profiles", async () => {
