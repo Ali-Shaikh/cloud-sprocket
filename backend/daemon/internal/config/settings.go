@@ -28,6 +28,9 @@ type Settings struct {
 	GCloudDir          string
 	DatabasePath       string
 	LogPath            string
+	ToolsDir           string
+	TofuPath           string
+	DeploymentsDir     string
 }
 
 func Default() Settings {
@@ -66,6 +69,9 @@ func FromEnv(env map[string]string, goos string, home string) Settings {
 	awsCredentials := firstNonEmpty(env["AWS_SHARED_CREDENTIALS_FILE"], filepath.Join(home, ".aws", "credentials"))
 	azureDir := firstNonEmpty(env["AZURE_CONFIG_DIR"], filepath.Join(home, ".azure"))
 	gcloudDir = firstNonEmpty(env["CLOUDSDK_CONFIG"], gcloudDir)
+	toolsDir := firstNonEmpty(env["CLOUDSPROCKET_TOOLS_DIR"], filepath.Join(configDir, "tools"))
+	tofuPath := env["CLOUDSPROCKET_TOFU_PATH"]
+	deploymentsDir := firstNonEmpty(env["CLOUDSPROCKET_DEPLOYMENTS_DIR"], filepath.Join(configDir, "deployments"))
 
 	return Settings{
 		PlatformName:       platform,
@@ -85,11 +91,14 @@ func FromEnv(env map[string]string, goos string, home string) Settings {
 		GCloudDir:          gcloudDir,
 		DatabasePath:       filepath.Join(configDir, "cloudsprocket.db"),
 		LogPath:            filepath.Join(configDir, "logs", "cloudsprocket.log"),
+		ToolsDir:           toolsDir,
+		TofuPath:           tofuPath,
+		DeploymentsDir:     deploymentsDir,
 	}
 }
 
 func (s Settings) EnsureRuntimeDirs() error {
-	for _, directory := range []string{filepath.Dir(s.LogPath), s.LocalConfigDir, s.EmulatorStateDir} {
+	for _, directory := range []string{filepath.Dir(s.LogPath), s.LocalConfigDir, s.EmulatorStateDir, s.ToolsDir, s.DeploymentsDir} {
 		if err := os.MkdirAll(directory, 0o755); err != nil {
 			return err
 		}
