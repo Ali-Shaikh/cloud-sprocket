@@ -1,7 +1,7 @@
 import { ChevronRight, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
 
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { InlineBanner } from "@/components/inline-banner";
 import { StatCard } from "@/components/stat-card";
 import { StatusDot, type Status } from "@/components/status-dot";
 import awsS3IconUrl from "@/assets/cloud-icons/aws-s3.svg";
@@ -170,25 +170,19 @@ export default function OverviewView({
         </Button>
       </header>
 
-      <div
-        className={cn(
-          "flex items-center gap-3 rounded-lg border px-4 py-3 text-sm",
-          writesEnabled
-            ? "border-[color:var(--warning)]/30 bg-[color:var(--warning)]/10"
-            : "border-primary/20 bg-primary/5",
-        )}
-      >
-        {writesEnabled ? (
-          <ShieldAlert className="size-5 shrink-0 text-[color:var(--warning)]" />
-        ) : (
-          <ShieldCheck className="size-5 shrink-0 text-primary" />
-        )}
-        <span className="text-foreground">
-          {writesEnabled
-            ? "Local-endpoint writes are enabled for this workspace. Mutating actions will run against the local runtime."
-            : "Read-only mode keeps you safe. Writes are disabled until you opt in per service."}
-        </span>
-      </div>
+      {writesEnabled ? (
+        <InlineBanner
+          tone="warning"
+          icon={ShieldAlert}
+          title="Local-endpoint writes are enabled for this workspace. Mutating actions will run against the local runtime."
+        />
+      ) : (
+        <InlineBanner
+          tone="info"
+          icon={ShieldCheck}
+          title="Read-only mode keeps you safe. Writes are disabled until you opt in per service."
+        />
+      )}
 
       <section className="grid grid-cols-2 gap-[14px] sm:grid-cols-4">
         {stats.map((stat) => {
