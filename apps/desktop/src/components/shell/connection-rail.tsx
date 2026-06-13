@@ -1,4 +1,4 @@
-import { Plus, Server, Settings } from "lucide-react";
+import { Plus, Rocket, Server, Settings } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { ProviderIcon } from "@/components/provider-icon";
@@ -64,6 +64,10 @@ function ConnectionRail({
                   {c.kind === "local" ? (
                     <Server
                       className={cn("size-[26px]", active ? "text-rail" : "text-sky-400")}
+                    />
+                  ) : c.kind === "deploy" ? (
+                    <Rocket
+                      className={cn("size-[26px]", active ? "text-rail" : "text-violet-400")}
                     />
                   ) : (
                     <ProviderIcon provider={c.provider ?? c.id} size={26} />

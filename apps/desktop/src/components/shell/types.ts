@@ -22,8 +22,8 @@ export interface RailConnection {
   provider?: string;
   /** Connection health, shown as a small status dot on the rail item. */
   status: Status;
-  /** Distinguishes the local-runtime rail item (rendered with a server glyph). */
-  kind: "provider" | "local";
+  /** Distinguishes the local-runtime and deploy rail items from providers. */
+  kind: "provider" | "local" | "deploy";
 }
 
 /** A single navigation entry in the contextual sidebar. */
