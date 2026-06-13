@@ -21,6 +21,7 @@ type Settings struct {
 	EmulatorStateDir   string
 	LocalStackImage    string
 	FlociAZImage       string
+	FlociAZEndpoint    string
 	AWSConfigPath      string
 	AWSCredentialsPath string
 	AzureDir           string
@@ -60,6 +61,7 @@ func FromEnv(env map[string]string, goos string, home string) Settings {
 	emulatorStateDir := firstNonEmpty(env["CLOUDSPROCKET_EMULATOR_STATE_DIR"], filepath.Join(configDir, "emulators"))
 	localStackImage := firstNonEmpty(env["CLOUDSPROCKET_LOCALSTACK_IMAGE"], "localstack/localstack:stable")
 	flociAZImage := firstNonEmpty(env["CLOUDSPROCKET_FLOCI_AZ_IMAGE"], "floci/floci-az:latest")
+	flociAZEndpoint := firstNonEmpty(env["CLOUDSPROCKET_FLOCI_AZ_ENDPOINT"], "http://localhost:4577")
 	awsConfig := firstNonEmpty(env["AWS_CONFIG_FILE"], filepath.Join(home, ".aws", "config"))
 	awsCredentials := firstNonEmpty(env["AWS_SHARED_CREDENTIALS_FILE"], filepath.Join(home, ".aws", "credentials"))
 	azureDir := firstNonEmpty(env["AZURE_CONFIG_DIR"], filepath.Join(home, ".azure"))
@@ -76,6 +78,7 @@ func FromEnv(env map[string]string, goos string, home string) Settings {
 		EmulatorStateDir:   emulatorStateDir,
 		LocalStackImage:    localStackImage,
 		FlociAZImage:       flociAZImage,
+		FlociAZEndpoint:    flociAZEndpoint,
 		AWSConfigPath:      awsConfig,
 		AWSCredentialsPath: awsCredentials,
 		AzureDir:           azureDir,

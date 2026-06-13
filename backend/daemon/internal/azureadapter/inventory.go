@@ -8,6 +8,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
+
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/models"
 )
@@ -25,13 +28,30 @@ func (execRunner) CommandContext(ctx context.Context, name string, args ...strin
 type Inventory struct {
 	settings config.Settings
 	runner   CLIExecutor
+
+	// Local floci-az ARM path. localEndpoint/localSubscriptionID default from
+	// settings; newLocalCredential is overridable so tests can inject a static
+	// token credential instead of hitting a real login endpoint.
+	localEndpoint       string
+	localSubscriptionID string
+	newLocalCredential  func(cloud.Configuration) (azcore.TokenCredential, error)
 }
 
 func NewInventory(settings config.Settings) *Inventory {
-	return &Inventory{settings: settings, runner: execRunner{}}
+	inv := &Inventory{
+		settings:            settings,
+		runner:              execRunner{},
+		localEndpoint:       settings.FlociAZEndpoint,
+		localSubscriptionID: localFlociSubscriptionID,
+	}
+	inv.newLocalCredential = inv.defaultLocalCredential
+	return inv
 }
 
 func (i *Inventory) ListResourceGroups(ctx context.Context, profile models.ProfileSummary) ([]models.AzureResourceGroup, error) {
+	if isLocalFlociProfile(profile) {
+		return i.listLocalResourceGroups(ctx)
+	}
 	args := []string{"group", "list", "--subscription", profile.ProfileID, "--output", "json", "--only-show-errors"}
 	payload, err := i.run(ctx, args...)
 	if err != nil {
@@ -66,6 +86,9 @@ func (i *Inventory) ListResourceGroups(ctx context.Context, profile models.Profi
 }
 
 func (i *Inventory) ListVirtualMachines(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureVirtualMachine, error) {
+	if isLocalFlociProfile(profile) {
+		return i.listLocalVirtualMachines(ctx, resourceGroup)
+	}
 	args := []string{"vm", "list", "--subscription", profile.ProfileID, "--resource-group", resourceGroup, "--show-details", "--output", "json", "--only-show-errors"}
 	payload, err := i.run(ctx, args...)
 	if err != nil {
