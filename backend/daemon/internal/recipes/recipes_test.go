@@ -97,13 +97,93 @@ func TestLoadContainerRecipe(t *testing.T) {
 	}
 }
 
+func TestLoadStaticSiteRecipe(t *testing.T) {
+	recipe, err := Bundled().Load("static-site-aws")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if recipe.Manifest.Local.RequiresPro {
+		t.Fatal("static-site recipe should not be flagged requiresPro")
+	}
+	byName := map[string]Variable{}
+	for _, v := range recipe.Variables {
+		byName[v.Name] = v
+	}
+	if got := byName["app_name"]; got.Type != "string" {
+		t.Fatalf("app_name = %+v", got)
+	}
+	if _, ok := byName["frontend_dist_dir"]; !ok {
+		t.Fatal("frontend_dist_dir variable missing")
+	}
+	if _, ok := byName["aws_region"]; !ok {
+		t.Fatal("aws_region variable missing")
+	}
+
+	primary := map[string]bool{}
+	present := map[string]bool{}
+	for _, o := range recipe.Outputs {
+		primary[o.Name] = o.Primary
+		present[o.Name] = true
+	}
+	if !primary["website_endpoint"] {
+		t.Fatal("website_endpoint should be a primary output")
+	}
+	if !present["bucket_name"] {
+		t.Fatal("bucket_name output missing")
+	}
+}
+
+func TestLoadScheduledJobRecipe(t *testing.T) {
+	recipe, err := Bundled().Load("scheduled-job-aws")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if recipe.Manifest.Local.RequiresPro {
+		t.Fatal("scheduled-job recipe should not be flagged requiresPro")
+	}
+	byName := map[string]Variable{}
+	for _, v := range recipe.Variables {
+		byName[v.Name] = v
+	}
+	if got := byName["schedule_expression"]; got.Type != "string" || got.Default != "rate(5 minutes)" {
+		t.Fatalf("schedule_expression = %+v", got)
+	}
+	if got := byName["lambda_memory_mb"]; got.Type != "number" || got.Widget != "number" {
+		t.Fatalf("lambda_memory_mb = %+v", got)
+	}
+	if _, ok := byName["backend_source_dir"]; !ok {
+		t.Fatal("backend_source_dir variable missing")
+	}
+
+	// Build step installing backend dependencies, mirroring the serverless recipe.
+	if len(recipe.Manifest.Build) == 0 {
+		t.Fatal("expected a build step")
+	}
+	if got := recipe.Manifest.Build[0]; got.DirVar != "backend_source_dir" || got.Requires != "package.json" {
+		t.Fatalf("build step = %+v", got)
+	}
+
+	primary := map[string]bool{}
+	present := map[string]bool{}
+	for _, o := range recipe.Outputs {
+		primary[o.Name] = o.Primary
+		present[o.Name] = true
+	}
+	if !primary["lambda_function_name"] {
+		t.Fatal("lambda_function_name should be a primary output")
+	}
+	if !present["schedule_rule_name"] {
+		t.Fatal("schedule_rule_name output missing")
+	}
+}
+
 func TestBundledListHasBothRecipes(t *testing.T) {
 	manifests, err := Bundled().List()
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(manifests) < 2 {
-		t.Fatalf("expected at least 2 bundled recipes, got %d", len(manifests))
+	if len(manifests) < 4 {
+		t.Fatalf("expected at least 4 bundled recipes, got %d", len(manifests))
 	}
 }
 
