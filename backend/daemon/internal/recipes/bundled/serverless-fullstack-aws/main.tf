@@ -43,6 +43,36 @@ resource "aws_s3_bucket_website_configuration" "frontend" {
   }
 }
 
+locals {
+  # MIME types for the common static-site file extensions.
+  content_types = {
+    html = "text/html"
+    css  = "text/css"
+    js   = "application/javascript"
+    json = "application/json"
+    svg  = "image/svg+xml"
+    png  = "image/png"
+    jpg  = "image/jpeg"
+    ico  = "image/x-icon"
+    txt  = "text/plain"
+    map  = "application/json"
+    woff = "font/woff"
+    woff2 = "font/woff2"
+  }
+  frontend_files = var.frontend_dist_dir == "" ? toset([]) : fileset(var.frontend_dist_dir, "**/*.*")
+}
+
+# Upload the built static frontend (when a dist dir is provided).
+resource "aws_s3_object" "frontend" {
+  for_each = local.frontend_files
+
+  bucket       = aws_s3_bucket.frontend.id
+  key          = each.value
+  source       = "${var.frontend_dist_dir}/${each.value}"
+  etag         = filemd5("${var.frontend_dist_dir}/${each.value}")
+  content_type = lookup(local.content_types, lower(reverse(split(".", each.value))[0]), "application/octet-stream")
+}
+
 # --- Database: DynamoDB table -------------------------------------------------
 resource "aws_dynamodb_table" "data" {
   name         = "${local.name}-data"
@@ -65,11 +95,7 @@ resource "aws_dynamodb_table" "data" {
 data "archive_file" "api" {
   type        = "zip"
   output_path = "${path.module}/.build/api.zip"
-
-  source {
-    content  = file("${path.module}/src/handler.js")
-    filename = "handler.js"
-  }
+  source_dir  = var.backend_source_dir
 }
 
 resource "aws_iam_role" "lambda" {

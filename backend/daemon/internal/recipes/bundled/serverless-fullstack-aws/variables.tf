@@ -38,3 +38,15 @@ variable "tags" {
   description = "Extra tags applied to every resource."
   default     = {}
 }
+
+variable "backend_source_dir" {
+  type        = string
+  description = "Directory containing your Node backend (a package.json with a handler.handler export). Leave as the default to deploy the sample handler."
+  default     = "./src"
+}
+
+variable "frontend_dist_dir" {
+  type        = string
+  description = "Directory of your built static frontend (e.g. a Next.js `out/` export). Leave blank to create an empty bucket."
+  default     = ""
+}
