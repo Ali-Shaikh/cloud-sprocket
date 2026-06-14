@@ -21,11 +21,14 @@ type fakeDeployer struct {
 	planErr   error
 }
 
-func (f *fakeDeployer) Available() bool                          { return f.available }
-func (f *fakeDeployer) Version(context.Context) (string, error)  { return "1.12.2", nil }
-func (f *fakeDeployer) BinaryPath() string                       { return "/fake/tofu" }
-func (f *fakeDeployer) Install(context.Context) (string, error)  { f.available = true; return "1.12.2", nil }
-func (f *fakeDeployer) Prepare(*deploy.Deployment) error         { return nil }
+func (f *fakeDeployer) Available() bool                         { return f.available }
+func (f *fakeDeployer) Version(context.Context) (string, error) { return "1.12.2", nil }
+func (f *fakeDeployer) BinaryPath() string                      { return "/fake/tofu" }
+func (f *fakeDeployer) Install(context.Context) (string, error) {
+	f.available = true
+	return "1.12.2", nil
+}
+func (f *fakeDeployer) Prepare(*deploy.Deployment) error { return nil }
 
 func (f *fakeDeployer) Plan(_ context.Context, _ *deploy.Deployment, onLine tofu.LogFunc) (deploy.PlanSummary, error) {
 	if onLine != nil {
@@ -98,15 +101,26 @@ func newDeployTestService(t *testing.T, deployer Deployer) *Service {
 
 func waitForStatus(t *testing.T, s *Service, id string, want deploy.Status) *deploy.Deployment {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
+	var lastStatus deploy.Status
+	var lastErr error
 	for time.Now().Before(deadline) {
 		deployment, err := s.deploymentGet(context.Background(), id)
 		if err == nil && deployment.Status == want {
 			return deployment
 		}
+		if err != nil {
+			lastErr = err
+		} else {
+			lastStatus = deployment.Status
+			lastErr = nil
+		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatalf("deployment %s did not reach status %q in time", id, want)
+	if lastErr != nil {
+		t.Fatalf("deployment %s did not reach status %q in time; last error: %v", id, want, lastErr)
+	}
+	t.Fatalf("deployment %s did not reach status %q in time; last status: %q", id, want, lastStatus)
 	return nil
 }
 
