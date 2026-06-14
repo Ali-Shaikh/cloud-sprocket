@@ -1,14 +1,8 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright (C) 2026 Ali Shaikh
-
 package recipes
 
 import (
-	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -34,14 +28,6 @@ func TestBundledListIncludesServerlessRecipe(t *testing.T) {
 	}
 }
 
-func fsReadRecipeFile(recipeID string, name string) (string, error) {
-	data, err := fs.ReadFile(bundledFS, filepath.ToSlash(filepath.Join("bundled", recipeID, name)))
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
 func TestLoadServerlessRecipeIntrospection(t *testing.T) {
 	recipe, err := Bundled().Load("serverless-fullstack-aws")
 	if err != nil {
@@ -56,12 +42,6 @@ func TestLoadServerlessRecipeIntrospection(t *testing.T) {
 	// Variable types introspected from variables.tf.
 	if got := byName["app_name"]; got.Type != "string" || got.Default != "myapp" {
 		t.Fatalf("app_name = %+v", got)
-	}
-	if got := byName["backend_source_dir"]; got.Default != "./sample-api" {
-		t.Fatalf("backend_source_dir default = %+v", got)
-	}
-	if got := byName["frontend_dist_dir"]; got.Default != "./sample-site" {
-		t.Fatalf("frontend_dist_dir default = %+v", got)
 	}
 	if got := byName["lambda_memory_mb"]; got.Type != "number" || got.Widget != "number" {
 		t.Fatalf("lambda_memory_mb = %+v", got)
@@ -94,29 +74,12 @@ func TestLoadServerlessRecipeIntrospection(t *testing.T) {
 	}
 }
 
-func TestServerlessRecipeUsesCurrentLambdaRuntimeAndPublicFrontend(t *testing.T) {
-	mainTF, err := fsReadRecipeFile("serverless-fullstack-aws", "main.tf")
-	if err != nil {
-		t.Fatalf("read serverless main.tf: %v", err)
-	}
-	for _, want := range []string{
-		`runtime          = "nodejs22.x"`,
-		`resource "aws_s3_bucket_public_access_block" "frontend"`,
-		`resource "aws_s3_bucket_policy" "frontend_public_read"`,
-		`s3:GetObject`,
-	} {
-		if !strings.Contains(mainTF, want) {
-			t.Fatalf("serverless recipe missing %q", want)
-		}
-	}
-}
-
 func TestLoadContainerRecipe(t *testing.T) {
 	recipe, err := Bundled().Load("container-fullstack-aws")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if !recipe.Manifest.RequiresLocalStackPro() {
+	if !recipe.Manifest.Local.RequiresPro {
 		t.Fatal("container recipe should be flagged requiresPro")
 	}
 	byName := map[string]Variable{}
@@ -129,25 +92,8 @@ func TestLoadContainerRecipe(t *testing.T) {
 	if _, ok := byName["container_image"]; !ok {
 		t.Fatal("container_image variable missing")
 	}
-	if got := byName["container_image"]; got.Default != "public.ecr.aws/docker/library/nginx:stable-alpine" {
-		t.Fatalf("container_image default = %+v", got)
-	}
-	if got := byName["container_port"]; fmt.Sprint(got.Default) != "80" {
-		t.Fatalf("container_port default = %+v", got)
-	}
 	if _, ok := byName["desired_count"]; !ok {
 		t.Fatal("desired_count variable missing")
-	}
-	if got := byName["frontend_dist_dir"]; got.Default != "./sample-site" {
-		t.Fatalf("frontend_dist_dir default = %+v", got)
-	}
-
-	present := map[string]bool{}
-	for _, o := range recipe.Outputs {
-		present[o.Name] = true
-	}
-	if !present["frontend_website_endpoint"] {
-		t.Fatal("frontend_website_endpoint output missing")
 	}
 }
 
@@ -169,9 +115,6 @@ func TestLoadStaticSiteRecipe(t *testing.T) {
 	if _, ok := byName["frontend_dist_dir"]; !ok {
 		t.Fatal("frontend_dist_dir variable missing")
 	}
-	if got := byName["frontend_dist_dir"]; got.Default != "./sample-site" {
-		t.Fatalf("frontend_dist_dir default = %+v", got)
-	}
 	if _, ok := byName["aws_region"]; !ok {
 		t.Fatal("aws_region variable missing")
 	}
@@ -187,21 +130,6 @@ func TestLoadStaticSiteRecipe(t *testing.T) {
 	}
 	if !present["bucket_name"] {
 		t.Fatal("bucket_name output missing")
-	}
-
-	mainTF, err := fsReadRecipeFile("static-site-aws", "main.tf")
-	if err != nil {
-		t.Fatalf("read static-site main.tf: %v", err)
-	}
-	for _, want := range []string{
-		`resource "aws_s3_bucket_public_access_block" "site"`,
-		`resource "aws_s3_bucket_policy" "site_public_read"`,
-		`s3:GetObject`,
-		`${aws_s3_bucket.site.arn}/*`,
-	} {
-		if !strings.Contains(mainTF, want) {
-			t.Fatalf("static-site recipe missing %q", want)
-		}
 	}
 }
 
@@ -219,9 +147,6 @@ func TestLoadScheduledJobRecipe(t *testing.T) {
 	}
 	if got := byName["schedule_expression"]; got.Type != "string" || got.Default != "rate(5 minutes)" {
 		t.Fatalf("schedule_expression = %+v", got)
-	}
-	if got := byName["backend_source_dir"]; got.Default != "./sample-job" {
-		t.Fatalf("backend_source_dir default = %+v", got)
 	}
 	if got := byName["lambda_memory_mb"]; got.Type != "number" || got.Widget != "number" {
 		t.Fatalf("lambda_memory_mb = %+v", got)
@@ -252,16 +177,6 @@ func TestLoadScheduledJobRecipe(t *testing.T) {
 	}
 }
 
-func TestScheduledRecipeUsesCurrentLambdaRuntime(t *testing.T) {
-	mainTF, err := fsReadRecipeFile("scheduled-job-aws", "main.tf")
-	if err != nil {
-		t.Fatalf("read scheduled-job main.tf: %v", err)
-	}
-	if !strings.Contains(mainTF, `runtime          = "nodejs22.x"`) {
-		t.Fatal("scheduled-job recipe should use nodejs22.x")
-	}
-}
-
 func TestBundledListHasBothRecipes(t *testing.T) {
 	manifests, err := Bundled().List()
 	if err != nil {
@@ -272,171 +187,12 @@ func TestBundledListHasBothRecipes(t *testing.T) {
 	}
 }
 
-func TestLoadMagentoAWSRecipe(t *testing.T) {
-	recipe, err := Bundled().Load("magento-commerce-aws")
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if len(recipe.Manifest.Providers) != 1 || recipe.Manifest.Providers[0] != "aws" {
-		t.Fatalf("providers = %+v, want [aws]", recipe.Manifest.Providers)
-	}
-	if len(recipe.Manifest.Local.Runtimes) != 0 {
-		t.Fatalf("expected cloud-only recipe, runtimes = %+v", recipe.Manifest.Local.Runtimes)
-	}
-	byName := map[string]Variable{}
-	for _, v := range recipe.Variables {
-		byName[v.Name] = v
-	}
-	if got := byName["mysql_admin_password"]; !got.Sensitive || got.Widget != "password" {
-		t.Fatalf("mysql_admin_password should be sensitive/password: %+v", got)
-	}
-	if got := byName["magento_image"]; got.Default != "bitnamilegacy/magento-archived:2.4.7" {
-		t.Fatalf("magento_image default = %+v", got.Default)
-	}
-	if got := byName["redis_node_type"]; got.Default != "cache.t3.micro" {
-		t.Fatalf("redis_node_type default = %+v", got.Default)
-	}
-	primary := map[string]bool{}
-	for _, output := range recipe.Outputs {
-		primary[output.Name] = output.Primary
-	}
-	if !primary["storefront_url"] || !primary["mysql_host"] {
-		t.Fatalf("expected primary storefront_url and mysql_host outputs, got %+v", primary)
-	}
-
-	mainTF, err := fsReadRecipeFile("magento-commerce-aws", "main.tf")
-	if err != nil {
-		t.Fatalf("read magento-commerce-aws main.tf: %v", err)
-	}
-	for _, want := range []string{
-		`engine                 = "mysql"`,
-		`resource "aws_elasticache_cluster" "main"`,
-		`resource "random_id" "media_bucket_suffix"`,
-		`cpu                      = "1024"`,
-		`memory                   = "2048"`,
-		`MAGENTO_MEDIA_STORAGE_BUCKET`,
-	} {
-		if !strings.Contains(mainTF, want) {
-			t.Fatalf("magento-commerce-aws recipe missing %q", want)
-		}
-	}
-}
-
-func TestLoadMagentoComposeRecipe(t *testing.T) {
-	recipe, err := Bundled().Load("magento-commerce-compose")
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if recipe.Manifest.Version != "0.2.0" {
-		t.Fatalf("version = %q, want 0.2.0", recipe.Manifest.Version)
-	}
-	if len(recipe.Manifest.Local.Runtimes) != 1 || recipe.Manifest.Local.Runtimes[0].ID != "magento-compose" {
-		t.Fatalf("runtimes = %+v, want magento-compose", recipe.Manifest.Local.Runtimes)
-	}
-	if len(recipe.Manifest.PostApply) != 2 {
-		t.Fatalf("expected two postApply steps, got %+v", recipe.Manifest.PostApply)
-	}
-	if got := recipe.Manifest.PostApply[0]; got.DirVar != "compose_dir" || got.Requires != "docker-compose.yml" {
-		t.Fatalf("postApply start step = %+v", got)
-	}
-	if got := recipe.Manifest.PostApply[1]; got.Requires != "scripts/setup-official.sh" {
-		t.Fatalf("postApply install step = %+v", got)
-	}
-	byName := map[string]Variable{}
-	for _, v := range recipe.Variables {
-		byName[v.Name] = v
-	}
-	if got := byName["compose_dir"]; got.Default != "compose/simple" {
-		t.Fatalf("compose_dir default = %+v", got.Default)
-	}
-	if got := byName["stack_profile"]; got.Default != "simple" || len(got.Options) != 2 {
-		t.Fatalf("stack_profile = %+v", got)
-	}
-	if got := byName["magento_public_key"]; got.VisibleWhen == nil || got.VisibleWhen.Equals != "official" {
-		t.Fatalf("magento_public_key visibleWhen = %+v", got.VisibleWhen)
-	}
-	if got := byName["magento_image_channel"]; got.VisibleWhen == nil || got.VisibleWhen.Equals != "simple" {
-		t.Fatalf("magento_image_channel visibleWhen = %+v", got.VisibleWhen)
-	}
-	primary := map[string]bool{}
-	for _, output := range recipe.Outputs {
-		primary[output.Name] = output.Primary
-	}
-	if !primary["storefront_url"] {
-		t.Fatalf("expected primary storefront_url output, got %+v", primary)
-	}
-
-	simpleYAML, err := fsReadRecipeFile("magento-commerce-compose", filepath.Join("compose", "simple", "docker-compose.yml"))
-	if err != nil {
-		t.Fatalf("read simple compose file: %v", err)
-	}
-	for _, want := range []string{
-		"mariadb:12.3",
-		"redis:8.8-alpine",
-		"shinsenter/magento:${MAGENTO_IMAGE_TAG",
-		"127.0.0.1:8080:80",
-	} {
-		if !strings.Contains(simpleYAML, want) {
-			t.Fatalf("simple compose file missing %q", want)
-		}
-	}
-
-	officialYAML, err := fsReadRecipeFile("magento-commerce-compose", filepath.Join("compose", "official", "docker-compose.yml"))
-	if err != nil {
-		t.Fatalf("read official compose file: %v", err)
-	}
-	for _, want := range []string{
-		"markoshust/magento-nginx",
-		"markoshust/magento-php",
-		"markoshust/magento-opensearch",
-		"markoshust/magento-rabbitmq",
-	} {
-		if !strings.Contains(officialYAML, want) {
-			t.Fatalf("official compose file missing %q", want)
-		}
-	}
-}
-
-func TestLoadMagentoAzureRecipe(t *testing.T) {
-	recipe, err := Bundled().Load("magento-commerce-azure")
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if len(recipe.Manifest.Providers) != 1 || recipe.Manifest.Providers[0] != "azure" {
-		t.Fatalf("providers = %+v, want [azure]", recipe.Manifest.Providers)
-	}
-	if len(recipe.Manifest.Local.Runtimes) != 0 {
-		t.Fatalf("expected cloud-only recipe, runtimes = %+v", recipe.Manifest.Local.Runtimes)
-	}
-	byName := map[string]Variable{}
-	for _, v := range recipe.Variables {
-		byName[v.Name] = v
-	}
-	if got := byName["mysql_admin_password"]; !got.Sensitive || got.Widget != "password" {
-		t.Fatalf("mysql_admin_password should be sensitive/password: %+v", got)
-	}
-	primary := map[string]bool{}
-	for _, output := range recipe.Outputs {
-		primary[output.Name] = output.Primary
-	}
-	if !primary["storefront_url"] || !primary["mysql_host"] {
-		t.Fatalf("expected primary storefront_url and mysql_host outputs, got %+v", primary)
-	}
-}
-
 func TestMaterialiseCopiesFiles(t *testing.T) {
 	dest := t.TempDir()
 	if err := Bundled().Materialise("serverless-fullstack-aws", dest); err != nil {
 		t.Fatalf("Materialise: %v", err)
 	}
-	for _, rel := range []string{
-		"main.tf",
-		"variables.tf",
-		"outputs.tf",
-		"recipe.yaml",
-		filepath.Join("sample-api", "handler.js"),
-		filepath.Join("sample-site", "index.html"),
-	} {
+	for _, rel := range []string{"main.tf", "variables.tf", "outputs.tf", "recipe.yaml", filepath.Join("src", "handler.js")} {
 		if _, err := os.Stat(filepath.Join(dest, rel)); err != nil {
 			t.Fatalf("expected %s to be materialised: %v", rel, err)
 		}

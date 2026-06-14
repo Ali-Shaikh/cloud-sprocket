@@ -1,13 +1,12 @@
 apiVersion: cloudsprocket.recipe/v1
 id: static-site-aws
-kind: app-deploy
-version: 0.2.0
+version: 0.1.0
 name: Static website (AWS S3)
 summary: A static website served from an S3 bucket, with your built site uploaded automatically.
 description: |
   The simplest possible site: an S3 bucket configured for static website hosting,
-  with a bundled sample site uploaded automatically when you do not supply your
-  own built static site folder.
+  with your built static site (e.g. a Vite, Next.js export or plain HTML folder)
+  uploaded automatically.
 
   Uses only S3, which emulates on LocalStack's free tier, so it dry-runs locally
   and ships unchanged to real AWS by switching the connection profile. No
@@ -24,10 +23,7 @@ engine:
   type: opentofu
   minVersion: "1.6.0"
 local:
-  runtimes:
-    - id: localstack
-superpowers:
-  iamPolicyStream: true
+  emulator: localstack
   requiresPro: false
 variableGroups:
   - title: Application
@@ -44,7 +40,7 @@ variableGroups:
     variables:
       - name: frontend_dist_dir
         widget: directory
-        help: Folder of your built static site (e.g. a Vite `dist/` or Next.js `out/`). Leave default for the sample site.
+        help: Folder of your built static site (e.g. a Vite `dist/` or Next.js `out/`). Leave blank to create an empty bucket.
   - title: Advanced
     variables:
       - name: tags
