@@ -316,7 +316,7 @@ export interface RecipeManifest {
   providers?: string[];
   tags?: string[];
   engine: { type: string; minVersion?: string };
-  local: { emulator?: string };
+  local: { emulator?: string; requiresPro?: boolean };
 }
 
 export interface RecipeVariable {
