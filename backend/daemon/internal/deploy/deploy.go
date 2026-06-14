@@ -9,8 +9,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"cloudsprocket/backend/daemon/internal/config"
@@ -182,6 +184,11 @@ func (e *Engine) Plan(ctx context.Context, deployment *Deployment, onLine tofu.L
 	if err := e.requireRunner(); err != nil {
 		return PlanSummary{}, err
 	}
+	if recipe, err := e.loader.Load(deployment.RecipeID); err == nil {
+		if err := e.runBuildSteps(ctx, deployment, recipe.Manifest.Build, onLine); err != nil {
+			return PlanSummary{}, err
+		}
+	}
 	dir := e.WorkspaceDir(deployment.ID)
 	env := e.env(deployment)
 	if _, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, OnLine: onLine, Args: []string{"init", "-input=false", "-no-color"}}); err != nil {
@@ -223,6 +230,52 @@ func (e *Engine) Destroy(ctx context.Context, deployment *Deployment, onLine tof
 	env := e.env(deployment)
 	_, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, OnLine: onLine, Args: []string{"destroy", "-input=false", "-auto-approve", "-no-color"}})
 	return err
+}
+
+// runBuildSteps runs a recipe's build commands (e.g. `npm ci`) to package
+// application code before planning. A step is skipped when its DirVar is empty
+// or its Requires file is absent (so the bundled stub directory is left alone).
+func (e *Engine) runBuildSteps(ctx context.Context, deployment *Deployment, steps []recipes.BuildStep, onLine tofu.LogFunc) error {
+	for _, step := range steps {
+		dir := ""
+		if step.DirVar != "" {
+			if value, ok := deployment.Variables[step.DirVar]; ok {
+				dir = strings.TrimSpace(fmt.Sprint(value))
+			}
+		}
+		if dir == "" {
+			continue
+		}
+		if !filepath.IsAbs(dir) {
+			dir = filepath.Join(e.WorkspaceDir(deployment.ID), dir)
+		}
+		if step.Requires != "" {
+			if _, err := os.Stat(filepath.Join(dir, step.Requires)); err != nil {
+				if onLine != nil {
+					onLine(fmt.Sprintf("Skipping build step %q: %s not found in %s", step.Name, step.Requires, dir))
+				}
+				continue
+			}
+		}
+		if len(step.Command) == 0 {
+			continue
+		}
+		if onLine != nil {
+			onLine(fmt.Sprintf("> %s: %s (in %s)", step.Name, strings.Join(step.Command, " "), dir))
+		}
+		cmd := exec.CommandContext(ctx, step.Command[0], step.Command[1:]...)
+		cmd.Dir = dir
+		output, err := cmd.CombinedOutput()
+		for _, line := range strings.Split(strings.TrimRight(string(output), "\n"), "\n") {
+			if onLine != nil && strings.TrimSpace(line) != "" {
+				onLine(line)
+			}
+		}
+		if err != nil {
+			return fmt.Errorf("build step %q failed: %w", step.Name, err)
+		}
+	}
+	return nil
 }
 
 // env builds the provider environment: dummy credentials for a local emulator,

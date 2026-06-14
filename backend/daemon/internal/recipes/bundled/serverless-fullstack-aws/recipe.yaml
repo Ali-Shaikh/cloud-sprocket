@@ -23,6 +23,11 @@ engine:
   minVersion: "1.6.0"
 local:
   emulator: localstack
+build:
+  - name: Install backend dependencies
+    dirVar: backend_source_dir
+    requires: package.json
+    command: ["npm", "ci", "--omit=dev"]
 variableGroups:
   - title: Application
     variables:
@@ -34,6 +39,14 @@ variableGroups:
         options: [dev, staging, prod]
       - name: aws_region
         widget: text
+  - title: Application code
+    variables:
+      - name: backend_source_dir
+        widget: directory
+        help: Folder with your Node backend (package.json + handler.handler). Leave default for the sample handler.
+      - name: frontend_dist_dir
+        widget: directory
+        help: Folder of your built static frontend (e.g. Next.js `out/`). Leave blank to skip.
   - title: Backend
     variables:
       - name: lambda_memory_mb

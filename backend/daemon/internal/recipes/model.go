@@ -18,6 +18,23 @@ type EngineSpec struct {
 // LocalSpec records which local emulator (if any) a recipe can dry-run against.
 type LocalSpec struct {
 	Emulator string `yaml:"emulator" json:"emulator,omitempty"`
+	// RequiresPro marks recipes whose services only emulate on LocalStack Pro
+	// (e.g. ECS, RDS, CloudFront). Surfaced as a hint in the UI.
+	RequiresPro bool `yaml:"requiresPro" json:"requiresPro,omitempty"`
+}
+
+// BuildStep is a command run in the deployment workspace before plan/apply, used
+// to package application code (e.g. `npm ci` in a backend source dir). The step
+// is skipped when DirVar resolves to an empty path or Requires is absent.
+type BuildStep struct {
+	Name string `yaml:"name" json:"name"`
+	// DirVar is the deployment variable holding the working directory. Relative
+	// paths resolve against the workspace; absolute paths are used as-is.
+	DirVar string `yaml:"dirVar" json:"dirVar"`
+	// Requires, when set, skips the step unless this file exists in the dir
+	// (e.g. "package.json" so the bundled stub directory is skipped).
+	Requires string   `yaml:"requires" json:"requires,omitempty"`
+	Command  []string `yaml:"command" json:"command"`
 }
 
 // VariableHint layers UI metadata over a Terraform variable block.
@@ -52,6 +69,7 @@ type Manifest struct {
 	Tags           []string        `yaml:"tags" json:"tags,omitempty"`
 	Engine         EngineSpec      `yaml:"engine" json:"engine"`
 	Local          LocalSpec       `yaml:"local" json:"local"`
+	Build          []BuildStep     `yaml:"build" json:"build,omitempty"`
 	VariableGroups []VariableGroup `yaml:"variableGroups" json:"variableGroups,omitempty"`
 	Outputs        []OutputHint    `yaml:"outputs" json:"outputs,omitempty"`
 }
