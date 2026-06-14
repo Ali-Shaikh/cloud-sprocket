@@ -32,6 +32,10 @@ const (
 	// configured but unreachable when the engine is stopped, in which case the
 	// underlying dial would otherwise wait indefinitely.
 	dockerProbeTimeout = 3 * time.Second
+	// defaultAzureInventoryTimeout bounds Azure inventory calls (floci-az ARM
+	// pager / `az` CLI) so a stalled response cannot hang a workspace snapshot.
+	// Generous enough for real Azure, but never unbounded.
+	defaultAzureInventoryTimeout = 30 * time.Second
 	// dockerLogsTimeout bounds container log retrieval, which can take slightly
 	// longer than a status probe but must still never hang a request.
 	dockerLogsTimeout = 8 * time.Second
@@ -108,8 +112,12 @@ type Service struct {
 	azureRuntime  AzureRuntimeManager
 	recipes       *recipes.Loader
 	deployer      Deployer
-	now           func() time.Time
-	mu            sync.Mutex
+	// azureInventoryTimeout bounds Azure inventory calls (the floci-az ARM
+	// pager and the `az` CLI) so a stalled response cannot hang a workspace
+	// snapshot. Configurable so tests can use a short deadline.
+	azureInventoryTimeout time.Duration
+	now                   func() time.Time
+	mu                    sync.Mutex
 }
 
 func New(
@@ -149,9 +157,10 @@ func NewWithRuntimes(
 		docker:        dockerRuntime,
 		localstackMgr: localStackMgr,
 		azureRuntime:  azureRuntime,
-		recipes:       recipeLoader,
-		deployer:      deployEngine,
-		now:           func() time.Time { return time.Now().UTC() },
+		recipes:               recipeLoader,
+		deployer:              deployEngine,
+		azureInventoryTimeout: defaultAzureInventoryTimeout,
+		now:                   func() time.Time { return time.Now().UTC() },
 	}
 }
 
@@ -1806,12 +1815,23 @@ func (s *Service) selectedS3BucketName(
 	return buckets[0].Name
 }
 
+// withAzureTimeout bounds an Azure inventory call. A non-positive configured
+// timeout (e.g. a directly-constructed test Service) leaves the context as-is.
+func (s *Service) withAzureTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if s.azureInventoryTimeout <= 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, s.azureInventoryTimeout)
+}
+
 func (s *Service) azureResourceGroups(
 	ctx context.Context,
 	profile models.ProfileSummary,
 ) []models.AzureResourceGroup {
 	const scope = "azure.resource-groups"
 	queryHash := profile.ProfileID
+	ctx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
 	groups, err := s.azure.ListResourceGroups(ctx, profile)
 	if err == nil {
 		_ = s.store.SaveResourceCache(ctx, scope, queryHash, groups, s.timestamp())
@@ -1855,6 +1875,8 @@ func (s *Service) azureVirtualMachines(
 
 	const scope = "azure.virtual-machines"
 	queryHash := profile.ProfileID + "|" + resourceGroup
+	ctx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
 	vms, err := s.azure.ListVirtualMachines(ctx, profile, resourceGroup)
 	if err == nil {
 		_ = s.store.SaveResourceCache(ctx, scope, queryHash, vms, s.timestamp())
