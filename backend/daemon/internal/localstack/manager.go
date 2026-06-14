@@ -34,6 +34,7 @@ const (
 	managedLabelValue = "true"
 	projectLabelKey   = "com.cloudsprocket.project"
 	projectLabelValue = "cloud-sprocket"
+	dockerSocketPath  = "/var/run/docker.sock"
 )
 
 type dockerClient interface {
@@ -97,9 +98,11 @@ func (m *Manager) Start(ctx context.Context, options models.LocalStackStartOptio
 	if err != nil {
 		return m.errorStatus("Failed to query Docker containers: " + err.Error()), err
 	}
-	if len(containers.Items) > 0 &&
-		containers.Items[0].State != "running" &&
-		(containers.Items[0].Image != m.image || strings.TrimSpace(options.AuthToken) != "" || options.Persistence) {
+	// Recreate a stopped managed container so the latest configuration always
+	// applies, in particular the Docker socket mount required for Lambda. A
+	// pre-fix container (or one created with different image/token/persistence)
+	// is otherwise reused as-is and Lambda creation keeps failing.
+	if len(containers.Items) > 0 && containers.Items[0].State != "running" {
 		if _, err := api.ContainerRemove(ctx, containers.Items[0].ID, client.ContainerRemoveOptions{}); err != nil {
 			return m.errorStatus("Failed to replace LocalStack container with configured image: " + err.Error()), err
 		}
@@ -399,18 +402,27 @@ func localStackEnv(options models.LocalStackStartOptions) []string {
 }
 
 func (m *Manager) containerMounts(options models.LocalStackStartOptions) ([]mountapi.Mount, error) {
-	if !options.Persistence {
-		return nil, nil
-	}
-	stateDir := filepath.Join(m.settings.EmulatorStateDir, "localstack")
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		return nil, err
-	}
-	return []mountapi.Mount{{
+	// LocalStack runs Lambda (and other compute) by spawning sibling Docker
+	// containers, which requires the host Docker socket mounted into the
+	// container. Without this, Lambda creation fails with "Docker not available".
+	// On Docker Desktop (Windows/macOS) the named pipe is exposed at this path.
+	mounts := []mountapi.Mount{{
 		Type:   mountapi.TypeBind,
-		Source: stateDir,
-		Target: "/var/lib/localstack",
-	}}, nil
+		Source: dockerSocketPath,
+		Target: dockerSocketPath,
+	}}
+	if options.Persistence {
+		stateDir := filepath.Join(m.settings.EmulatorStateDir, "localstack")
+		if err := os.MkdirAll(stateDir, 0o755); err != nil {
+			return nil, err
+		}
+		mounts = append(mounts, mountapi.Mount{
+			Type:   mountapi.TypeBind,
+			Source: stateDir,
+			Target: "/var/lib/localstack",
+		})
+	}
+	return mounts, nil
 }
 
 func validEnvName(value string) bool {

@@ -195,7 +195,9 @@ func TestStartCreatesAndStartsManagedContainer(t *testing.T) {
 	}
 }
 
-func TestStartReusesExistingStoppedContainer(t *testing.T) {
+func TestStartRecreatesExistingStoppedContainer(t *testing.T) {
+	// A stopped managed container is always recreated so the latest config
+	// (notably the Docker socket mount required for Lambda) applies.
 	dockerClient := &stubDockerClient{containers: []containerapi.Summary{{
 		ID:     "ctr-123",
 		Names:  []string{"/" + containerName},
@@ -212,12 +214,24 @@ func TestStartReusesExistingStoppedContainer(t *testing.T) {
 	if status.Status != models.EmulatorStatusRunning {
 		t.Fatalf("expected running status, got %+v", status)
 	}
-	if dockerClient.createCalls != 0 || len(dockerClient.pullCalls) != 0 {
-		t.Fatalf("expected existing container to be reused, create=%d pulls=%+v", dockerClient.createCalls, dockerClient.pullCalls)
+	if len(dockerClient.removeCalls) != 1 || dockerClient.removeCalls[0] != "ctr-123" {
+		t.Fatalf("expected stopped container to be removed, got %+v", dockerClient.removeCalls)
 	}
-	if len(dockerClient.startCalls) != 1 || dockerClient.startCalls[0] != "ctr-123" {
-		t.Fatalf("expected start by existing container id, got %+v", dockerClient.startCalls)
+	if dockerClient.createCalls != 1 {
+		t.Fatalf("expected the container to be recreated, create=%d", dockerClient.createCalls)
 	}
+	if !hasDockerSocketMount(dockerClient.lastCreateMounts) {
+		t.Fatalf("expected the Docker socket mount, got %+v", dockerClient.lastCreateMounts)
+	}
+}
+
+func hasDockerSocketMount(mounts []mountapi.Mount) bool {
+	for _, mount := range mounts {
+		if mount.Source == dockerSocketPath && mount.Target == dockerSocketPath {
+			return true
+		}
+	}
+	return false
 }
 
 func TestStopStopsRunningManagedContainer(t *testing.T) {
@@ -353,11 +367,21 @@ func TestStartConfiguresPersistenceAndExtraEnvironment(t *testing.T) {
 	if !reflect.DeepEqual(dockerClient.lastCreateEnv, expectedEnv) {
 		t.Fatalf("expected persistence env, got %+v", dockerClient.lastCreateEnv)
 	}
-	if len(dockerClient.lastCreateMounts) != 1 {
-		t.Fatalf("expected persistence mount, got %+v", dockerClient.lastCreateMounts)
+	// The Docker socket mount is always present; persistence adds the state mount.
+	if len(dockerClient.lastCreateMounts) != 2 {
+		t.Fatalf("expected socket + persistence mounts, got %+v", dockerClient.lastCreateMounts)
 	}
-	if dockerClient.lastCreateMounts[0].Target != "/var/lib/localstack" {
-		t.Fatalf("expected LocalStack state mount, got %+v", dockerClient.lastCreateMounts[0])
+	if !hasDockerSocketMount(dockerClient.lastCreateMounts) {
+		t.Fatalf("expected the Docker socket mount, got %+v", dockerClient.lastCreateMounts)
+	}
+	hasState := false
+	for _, mount := range dockerClient.lastCreateMounts {
+		if mount.Target == "/var/lib/localstack" {
+			hasState = true
+		}
+	}
+	if !hasState {
+		t.Fatalf("expected LocalStack state mount, got %+v", dockerClient.lastCreateMounts)
 	}
 }
 
