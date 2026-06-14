@@ -1369,6 +1369,37 @@ const mockRecipes: Recipe[] = [
       { name: "dynamodb_table", description: "DynamoDB table backing the application." },
     ],
   },
+  {
+    manifest: {
+      apiVersion: "cloudsprocket.recipe/v1",
+      id: "container-fullstack-aws",
+      version: "0.1.0",
+      name: "Container full-stack (AWS)",
+      summary: "A Node container on ECS Fargate behind an ALB, a Postgres RDS database, and a CloudFront frontend.",
+      description: "The traditional shape. Uses ECS, RDS, ELBv2 and CloudFront, which only emulate on LocalStack Pro.",
+      providers: ["aws"],
+      tags: ["container", "fullstack", "aws", "ecs", "rds"],
+      engine: { type: "opentofu", minVersion: "1.6.0" },
+      local: { emulator: "localstack", requiresPro: true },
+    },
+    variables: [
+      { name: "app_name", type: "string", default: "myapp", required: false, group: "Application", widget: "text" },
+      { name: "environment", type: "string", default: "dev", required: false, group: "Application", widget: "select", options: ["dev", "staging", "prod"] },
+      { name: "aws_region", type: "string", default: "us-east-1", required: false, group: "Application", widget: "text" },
+      { name: "container_image", type: "string", default: "public.ecr.aws/docker/library/node:20-alpine", required: false, group: "Backend container", widget: "text", help: "Container image for the backend service." },
+      { name: "container_port", type: "number", default: 3000, required: false, group: "Backend container", widget: "number" },
+      { name: "desired_count", type: "number", default: 2, required: false, group: "Backend container", widget: "number" },
+      { name: "db_username", type: "string", default: "appuser", required: false, group: "Database", widget: "text" },
+      { name: "db_password", type: "string", default: "changeme-please", required: false, sensitive: true, group: "Database", widget: "password" },
+      { name: "frontend_dist_dir", type: "string", default: "", required: false, group: "Frontend", widget: "directory", help: "Folder of your built static frontend." },
+    ],
+    outputs: [
+      { name: "alb_dns_name", description: "Public DNS of the load balancer.", primary: true },
+      { name: "frontend_url", description: "CloudFront URL.", primary: true },
+      { name: "database_endpoint", description: "Postgres endpoint." },
+      { name: "ecs_cluster", description: "ECS cluster name." },
+    ],
+  },
 ];
 
 const mockDeployments: Deployment[] = [];

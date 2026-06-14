@@ -2,12 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Boxes,
+  Crown,
   Download,
+  FolderOpen,
   Loader2,
   Play,
   Rocket,
   Trash2,
 } from "lucide-react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -275,7 +278,14 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
                   <div className="grid size-10 place-items-center rounded-lg bg-violet-500/10 text-violet-500">
                     <Rocket className="size-5" />
                   </div>
-                  <span className="text-xs text-muted-foreground">v{manifest.version}</span>
+                  <div className="flex items-center gap-2">
+                    {manifest.local?.requiresPro && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                        <Crown className="size-3" /> Pro
+                      </span>
+                    )}
+                    <span className="text-xs text-muted-foreground">v{manifest.version}</span>
+                  </div>
                 </div>
                 <div>
                   <p className="font-semibold text-foreground">{manifest.name}</p>
@@ -359,6 +369,14 @@ function ConfigureRecipe({
       </button>
       <SectionHeader title={recipe.manifest.name} description={recipe.manifest.summary} />
 
+      {recipe.manifest.local?.requiresPro && (
+        <Card className="flex items-center gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-400">
+          <Crown className="size-4 shrink-0" />
+          Uses services that only emulate on LocalStack Pro. Use a LocalStack Pro/Team token for a local
+          dry-run, or pick a real AWS profile to deploy to the cloud.
+        </Card>
+      )}
+
       <Card className="flex flex-col gap-2 p-4">
         <label className="text-sm font-medium text-foreground">Deploy target</label>
         <Select value={target} onValueChange={onTargetChange}>
@@ -441,6 +459,28 @@ function VariableField({
         </Select>
       ) : variable.widget === "textarea" ? (
         <Textarea value={String(value ?? "")} onChange={(event) => onChange(event.target.value)} rows={3} />
+      ) : variable.widget === "directory" ? (
+        <div className="flex gap-2">
+          <Input
+            value={String(value ?? "")}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="Path to a folder…"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={async () => {
+              try {
+                const picked = await openDialog({ directory: true, multiple: false });
+                if (typeof picked === "string") onChange(picked);
+              } catch {
+                /* browser/dev: fall back to typing the path */
+              }
+            }}
+          >
+            <FolderOpen className="size-4" /> Browse
+          </Button>
+        </div>
       ) : variable.widget === "number" ? (
         <Input
           type="number"
