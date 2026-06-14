@@ -577,14 +577,27 @@ function DeploymentDetail({
         <Card className="p-4">
           <p className="mb-3 text-sm font-medium text-foreground">Outputs</p>
           <div className="flex flex-col gap-2">
-            {deployment.outputs.map((output) => (
-              <div key={output.name} className="flex flex-col gap-0.5">
-                <span className="text-xs text-muted-foreground">{output.name}</span>
-                <code className="break-all rounded bg-muted px-2 py-1 text-xs text-foreground">
-                  {output.sensitive ? "••••••" : String(output.value)}
-                </code>
-              </div>
-            ))}
+            {deployment.outputs.map((output) => {
+              const raw = output.sensitive ? "••••••" : String(output.value);
+              const localUrl = deployment.local && !output.sensitive ? toLocalStackUrl(String(output.value)) : null;
+              return (
+                <div key={output.name} className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground">{output.name}</span>
+                  <code className="break-all rounded bg-muted px-2 py-1 text-xs text-foreground">{raw}</code>
+                  {localUrl && (
+                    <a
+                      href={localUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-violet-500 hover:underline"
+                      title="The AWS-format value above is what Terraform reports; this is the URL reachable on LocalStack."
+                    >
+                      Open on LocalStack: {localUrl}
+                    </a>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </Card>
       )}
@@ -647,6 +660,27 @@ function coerceValues(variables: RecipeVariable[], values: Record<string, unknow
     }
   }
   return result;
+}
+
+// toLocalStackUrl rewrites an AWS-format endpoint (which Terraform's aws provider
+// always computes, even against LocalStack) into the URL actually reachable on
+// the local emulator via *.localhost.localstack.cloud:4566. Returns null when no
+// known pattern matches, so real-cloud values are left untouched.
+function toLocalStackUrl(value: string): string | null {
+  if (!value) return null;
+  let rewritten = value
+    .replace(/\.s3-website[.-][a-z0-9-]+\.amazonaws\.com/i, ".s3-website.localhost.localstack.cloud:4566")
+    .replace(/\.s3[.-][a-z0-9-]+\.amazonaws\.com/i, ".s3.localhost.localstack.cloud:4566")
+    .replace(/\.execute-api\.[a-z0-9-]+\.amazonaws\.com/i, ".execute-api.localhost.localstack.cloud:4566")
+    .replace(/\.cloudfront\.net/i, ".cloudfront.localhost.localstack.cloud:4566")
+    .replace(/\.[a-z0-9-]+\.elb\.amazonaws\.com/i, ".elb.localhost.localstack.cloud:4566");
+  if (rewritten === value) return null;
+  if (!/^https?:\/\//i.test(rewritten)) {
+    rewritten = "http://" + rewritten;
+  } else {
+    rewritten = rewritten.replace(/^https:\/\//i, "http://");
+  }
+  return rewritten;
 }
 
 function groupVariables(variables: RecipeVariable[]): { title: string; variables: RecipeVariable[] }[] {
