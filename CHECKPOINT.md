@@ -1,6 +1,7 @@
 # Checkpoint
 
 - Date: `2026-06-13`
+- 2026-06-14 dev release chore: PR #28 was fast-forward merged into `dev` at `6cf9a07`; version bump `0.2.0` to `0.2.1` completed. Verification passed with Go daemon tests, desktop type-check, 33 desktop tests, and `pnpm run build:desktop:exe`. P2 documented for later: bound local floci-az Azure inventory calls so stalled ARM pager calls cannot hang `workspace.get`.
 - Branch: `feat/ui-rebuild-tailwind` (UI redesign stream; the daemon work below lives on `feat/azure-local-runtime`)
 - Head: `0559f74` + uncommitted post-M8 polish (S3 viewer fixes + one-click workspace open). See `design-prototypes/CHECKPOINT-ui-redesign.md` for the redesign stream detail and the RESUME HERE block (next module: M9 notification UX revamp).
 - Latest exe: `apps/desktop/src-tauri/target/release/cloudsprocket-desktop.exe`, rebuilt from the working tree on 2026-06-13.
