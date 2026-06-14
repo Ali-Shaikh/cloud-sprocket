@@ -5,6 +5,7 @@
 package deploy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -265,17 +266,54 @@ func (e *Engine) runBuildSteps(ctx context.Context, deployment *Deployment, step
 		}
 		cmd := exec.CommandContext(ctx, step.Command[0], step.Command[1:]...)
 		cmd.Dir = dir
-		output, err := cmd.CombinedOutput()
-		for _, line := range strings.Split(strings.TrimRight(string(output), "\n"), "\n") {
-			if onLine != nil && strings.TrimSpace(line) != "" {
-				onLine(line)
-			}
-		}
+		writer := &buildLineWriter{onLine: onLine}
+		cmd.Stdout = writer
+		cmd.Stderr = writer
+		err := cmd.Run()
+		writer.flush()
 		if err != nil {
 			return fmt.Errorf("build step %q failed: %w", step.Name, err)
 		}
 	}
 	return nil
+}
+
+// buildLineWriter emits complete lines to onLine as bytes arrive, buffering any
+// trailing partial line until the next write or a final flush. It mirrors the
+// streaming writer used by the tofu runner so build output (e.g. `npm ci`)
+// surfaces live rather than only after the command exits.
+type buildLineWriter struct {
+	partial bytes.Buffer
+	onLine  tofu.LogFunc
+}
+
+func (w *buildLineWriter) Write(p []byte) (int, error) {
+	if w.onLine != nil {
+		w.partial.Write(p)
+		for {
+			data := w.partial.Bytes()
+			index := bytes.IndexByte(data, '\n')
+			if index < 0 {
+				break
+			}
+			line := strings.TrimRight(string(data[:index]), "\r")
+			if strings.TrimSpace(line) != "" {
+				w.onLine(line)
+			}
+			w.partial.Next(index + 1)
+		}
+	}
+	return len(p), nil
+}
+
+func (w *buildLineWriter) flush() {
+	if w.onLine != nil && w.partial.Len() > 0 {
+		line := strings.TrimRight(w.partial.String(), "\r")
+		if strings.TrimSpace(line) != "" {
+			w.onLine(line)
+		}
+		w.partial.Reset()
+	}
 }
 
 // env builds the provider environment: dummy credentials for a local emulator,
