@@ -349,6 +349,10 @@ func TestStartRecreatesStoppedContainerWhenAuthTokenProvided(t *testing.T) {
 }
 
 func TestStartConfiguresPersistenceAndExtraEnvironment(t *testing.T) {
+	// Keep the test hermetic: localStackEnv falls back to the ambient
+	// LOCALSTACK_AUTH_TOKEN when no token is supplied via options, which would
+	// otherwise leak into the asserted container env on machines/CI where it is set.
+	t.Setenv("LOCALSTACK_AUTH_TOKEN", "")
 	dockerClient := &stubDockerClient{}
 	manager := newTestManager(t, dockerClient)
 
