@@ -78,6 +78,41 @@ func (c *captureNotifier) count(method string) int {
 	return n
 }
 
+func (c *captureNotifier) waitForDeploymentStatus(t *testing.T, id string, want deploy.Status) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	var lastStatus deploy.Status
+	for time.Now().Before(deadline) {
+		if status, ok := c.deploymentStatus(id, want); ok {
+			return
+		} else if status != "" {
+			lastStatus = status
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("deployment %s did not emit status %q in time; last status: %q", id, want, lastStatus)
+}
+
+func (c *captureNotifier) deploymentStatus(id string, want deploy.Status) (deploy.Status, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var lastStatus deploy.Status
+	for _, event := range c.events {
+		if event.method != "deployment.changed" {
+			continue
+		}
+		deployment, ok := event.payload.(*deploy.Deployment)
+		if !ok || deployment.ID != id {
+			continue
+		}
+		lastStatus = deployment.Status
+		if deployment.Status == want {
+			return deployment.Status, true
+		}
+	}
+	return lastStatus, false
+}
+
 func newDeployTestService(t *testing.T, deployer Deployer) *Service {
 	t.Helper()
 	dir := t.TempDir()
@@ -99,9 +134,12 @@ func newDeployTestService(t *testing.T, deployer Deployer) *Service {
 	}
 }
 
-func waitForStatus(t *testing.T, s *Service, id string, want deploy.Status) *deploy.Deployment {
+func waitForStatus(t *testing.T, s *Service, notifier *captureNotifier, id string, want deploy.Status) *deploy.Deployment {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
+	if notifier != nil {
+		notifier.waitForDeploymentStatus(t, id, want)
+	}
+	deadline := time.Now().Add(2 * time.Second)
 	var lastStatus deploy.Status
 	var lastErr error
 	for time.Now().Before(deadline) {
@@ -115,7 +153,7 @@ func waitForStatus(t *testing.T, s *Service, id string, want deploy.Status) *dep
 			lastStatus = deployment.Status
 			lastErr = nil
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
 	if lastErr != nil {
 		t.Fatalf("deployment %s did not reach status %q in time; last error: %v", id, want, lastErr)
@@ -163,7 +201,7 @@ func TestDeploymentPlanLifecycle(t *testing.T) {
 		t.Fatalf("missing deployment in response: %#v", started)
 	}
 
-	planned := waitForStatus(t, s, started.Deployment.ID, deploy.StatusPlanned)
+	planned := waitForStatus(t, s, notifier, started.Deployment.ID, deploy.StatusPlanned)
 	if planned.Plan == nil || planned.Plan.Add != 10 {
 		t.Fatalf("plan summary not persisted: %+v", planned.Plan)
 	}
@@ -190,14 +228,15 @@ func TestDeploymentPlanLifecycle(t *testing.T) {
 func TestDeploymentPlanFailureMarksFailed(t *testing.T) {
 	deployer := &fakeDeployer{available: true, planErr: context.DeadlineExceeded}
 	s := newDeployTestService(t, deployer)
+	notifier := &captureNotifier{}
 
 	params := json.RawMessage(`{"recipeId":"serverless-fullstack-aws","providerId":"aws","local":true}`)
-	result, err := s.Handle(context.Background(), "deployments.plan", params, &captureNotifier{})
+	result, err := s.Handle(context.Background(), "deployments.plan", params, notifier)
 	if err != nil {
 		t.Fatalf("deployments.plan: %v", err)
 	}
 	started := result.(deploymentJob)
-	failed := waitForStatus(t, s, started.Deployment.ID, deploy.StatusFailed)
+	failed := waitForStatus(t, s, notifier, started.Deployment.ID, deploy.StatusFailed)
 	if failed.Error == "" {
 		t.Fatal("expected an error message on the failed deployment")
 	}
