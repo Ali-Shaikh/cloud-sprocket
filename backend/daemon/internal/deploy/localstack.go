@@ -10,9 +10,10 @@ import (
 // emulator. The set covers the bundled recipe plus common free-tier services so
 // other recipes work without editing this list.
 var localStackServices = []string{
-	"apigateway", "apigatewayv2", "cloudformation", "cloudwatch", "dynamodb",
-	"ec2", "events", "iam", "kinesis", "kms", "lambda", "logs", "route53",
-	"s3", "secretsmanager", "sns", "sqs", "ssm", "sts",
+	"apigateway", "apigatewayv2", "cloudformation", "cloudfront", "cloudwatch",
+	"dynamodb", "ec2", "ecr", "ecs", "elbv2", "events", "iam", "kinesis", "kms",
+	"lambda", "logs", "rds", "route53", "s3", "secretsmanager", "sns", "sqs",
+	"ssm", "sts",
 }
 
 // localStackOverride returns a Terraform override file that points the aws
