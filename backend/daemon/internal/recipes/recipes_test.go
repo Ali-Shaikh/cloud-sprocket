@@ -74,6 +74,39 @@ func TestLoadServerlessRecipeIntrospection(t *testing.T) {
 	}
 }
 
+func TestLoadContainerRecipe(t *testing.T) {
+	recipe, err := Bundled().Load("container-fullstack-aws")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !recipe.Manifest.Local.RequiresPro {
+		t.Fatal("container recipe should be flagged requiresPro")
+	}
+	byName := map[string]Variable{}
+	for _, v := range recipe.Variables {
+		byName[v.Name] = v
+	}
+	if got := byName["db_password"]; !got.Sensitive && got.Widget != "password" {
+		t.Fatalf("db_password should be sensitive/password: %+v", got)
+	}
+	if _, ok := byName["container_image"]; !ok {
+		t.Fatal("container_image variable missing")
+	}
+	if _, ok := byName["desired_count"]; !ok {
+		t.Fatal("desired_count variable missing")
+	}
+}
+
+func TestBundledListHasBothRecipes(t *testing.T) {
+	manifests, err := Bundled().List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(manifests) < 2 {
+		t.Fatalf("expected at least 2 bundled recipes, got %d", len(manifests))
+	}
+}
+
 func TestMaterialiseCopiesFiles(t *testing.T) {
 	dest := t.TempDir()
 	if err := Bundled().Materialise("serverless-fullstack-aws", dest); err != nil {

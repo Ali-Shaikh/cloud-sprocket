@@ -48,3 +48,37 @@ func TestLivePlanBundledRecipe(t *testing.T) {
 		t.Fatal("expected the plan to add resources")
 	}
 }
+
+// TestLivePlanContainerRecipe validates the traditional ECS/RDS/CloudFront recipe
+// plans cleanly. Gated behind TOFU_LIVE. Plans offline (no AWS data sources).
+func TestLivePlanContainerRecipe(t *testing.T) {
+	if os.Getenv("TOFU_LIVE") == "" {
+		t.Skip("set TOFU_LIVE=1 to run a real tofu init+plan")
+	}
+	ctx := context.Background()
+
+	path, err := tofu.NewInstaller(t.TempDir()).Ensure(ctx)
+	if err != nil {
+		t.Fatalf("install tofu: %v", err)
+	}
+	engine := NewEngine(tofu.NewRunner(path), config.Settings{DeploymentsDir: t.TempDir()}, recipes.Bundled())
+
+	deployment := &Deployment{
+		ID:         "live-container",
+		RecipeID:   "container-fullstack-aws",
+		ProviderID: "aws",
+		Local:      true,
+		Variables:  map[string]any{"app_name": "livedemo", "environment": "dev", "db_password": "supersecret123"},
+	}
+	if err := engine.Prepare(deployment); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	summary, err := engine.Plan(ctx, deployment, func(line string) { t.Log(line) })
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	t.Logf("container plan summary: +%d ~%d -%d", summary.Add, summary.Change, summary.Destroy)
+	if summary.Add == 0 {
+		t.Fatal("expected the container plan to add resources")
+	}
+}
