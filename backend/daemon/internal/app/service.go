@@ -20,6 +20,7 @@ import (
 	"cloudsprocket/backend/daemon/internal/localstack"
 	"cloudsprocket/backend/daemon/internal/models"
 	"cloudsprocket/backend/daemon/internal/recipes"
+	"cloudsprocket/backend/daemon/internal/secrets"
 	"cloudsprocket/backend/daemon/internal/store"
 	"cloudsprocket/backend/daemon/internal/tofu"
 	"cloudsprocket/backend/daemon/internal/urlinspector"
@@ -112,6 +113,9 @@ type Service struct {
 	azureRuntime  AzureRuntimeManager
 	recipes       *recipes.Loader
 	deployer      Deployer
+	// cipher seals sensitive deployment values at rest. Nil when no key could
+	// be loaded, in which case values are persisted unsealed.
+	cipher *secrets.Cipher
 	// azureInventoryTimeout bounds Azure inventory calls (the floci-az ARM
 	// pager and the `az` CLI) so a stalled response cannot hang a workspace
 	// snapshot. Configurable so tests can use a short deadline.
@@ -159,6 +163,7 @@ func NewWithRuntimes(
 		azureRuntime:  azureRuntime,
 		recipes:               recipeLoader,
 		deployer:              deployEngine,
+		cipher:                loadCipher(settings.SecretKeyPath),
 		azureInventoryTimeout: defaultAzureInventoryTimeout,
 		now:                   func() time.Time { return time.Now().UTC() },
 	}

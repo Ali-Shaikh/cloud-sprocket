@@ -47,7 +47,10 @@ type Deployment struct {
 	Status     Status         `json:"status"`
 	Plan       *PlanSummary   `json:"plan,omitempty"`
 	Outputs    []Output       `json:"outputs,omitempty"`
-	Error      string         `json:"error,omitempty"`
+	// SensitiveVars names the variables whose values are secret (from the
+	// recipe), so they can be sealed at rest in the persisted record.
+	SensitiveVars []string `json:"sensitiveVars,omitempty"`
+	Error         string   `json:"error,omitempty"`
 	CreatedAt  string         `json:"createdAt"`
 	UpdatedAt  string         `json:"updatedAt"`
 }
