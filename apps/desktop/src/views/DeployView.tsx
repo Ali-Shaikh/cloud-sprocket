@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import {
   applyDeployment,
   cancelDeployment,
+  deleteDeployment,
   destroyDeployment,
   getRecipe,
   getTofuStatus,
@@ -229,6 +230,19 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
     }
   }
 
+  async function handleDelete(id: string) {
+    try {
+      await deleteDeployment(id);
+      setDeployments((current) => current.filter((entry) => entry.id !== id));
+      if (active?.id === id) {
+        setActive(null);
+        setMode("list");
+      }
+    } catch {
+      /* surfaced by the debug log */
+    }
+  }
+
   if (mode === "deployment" && active) {
     return (
       <DeploymentDetail
@@ -243,6 +257,7 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
         onApply={handleApply}
         onDestroy={handleDestroy}
         onCancel={handleCancel}
+        onDelete={() => void handleDelete(active.id)}
       />
     );
   }
@@ -330,25 +345,46 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
           <p className="text-sm text-muted-foreground">No deployments yet.</p>
         ) : (
           <div className="flex flex-col gap-2">
-            {deployments.map((deployment) => (
-              <button
-                key={deployment.id}
-                type="button"
-                onClick={() => {
-                  setActive(deployment);
-                  setMode("deployment");
-                }}
-                className="flex items-center justify-between rounded-lg border bg-card px-4 py-3 text-left transition-colors hover:bg-accent"
-              >
-                <div>
-                  <p className="text-sm font-medium text-foreground">{deployment.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {deployment.local ? "Local emulator" : `${deployment.providerId} · ${deployment.profileId}`} · {deployment.recipeId}
-                  </p>
+            {deployments.map((deployment) => {
+              const removable =
+                deployment.status !== "applied" &&
+                deployment.status !== "planning" &&
+                deployment.status !== "applying" &&
+                deployment.status !== "destroying";
+              return (
+                <div
+                  key={deployment.id}
+                  className="flex items-center gap-2 rounded-lg border bg-card pr-2 transition-colors hover:bg-accent"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActive(deployment);
+                      setMode("deployment");
+                    }}
+                    className="flex flex-1 items-center justify-between px-4 py-3 text-left"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{deployment.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {deployment.local ? "Local emulator" : `${deployment.providerId} · ${deployment.profileId}`} · {deployment.recipeId}
+                      </p>
+                    </div>
+                    <StatusBadge status={deployment.status} />
+                  </button>
+                  {removable && (
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete(deployment.id)}
+                      title="Remove this deployment record"
+                      className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  )}
                 </div>
-                <StatusBadge status={deployment.status} />
-              </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -525,6 +561,7 @@ function DeploymentDetail({
   onApply,
   onDestroy,
   onCancel,
+  onDelete,
 }: {
   deployment: Deployment;
   logs: string[];
@@ -534,6 +571,7 @@ function DeploymentDetail({
   onApply: () => void;
   onDestroy: () => void;
   onCancel: () => void;
+  onDelete: () => void;
 }) {
   const canApply = deployment.status === "planned";
   const canDestroy = deployment.status === "applied";
@@ -541,6 +579,7 @@ function DeploymentDetail({
     deployment.status === "planning" ||
     deployment.status === "applying" ||
     deployment.status === "destroying";
+  const canRemove = !isRunning && !canDestroy;
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-5 p-6">
@@ -573,6 +612,11 @@ function DeploymentDetail({
           {canDestroy && (
             <Button variant="destructive" onClick={onDestroy} disabled={busy}>
               <Trash2 className="size-4" /> Destroy
+            </Button>
+          )}
+          {canRemove && (
+            <Button variant="outline" onClick={onDelete}>
+              <Trash2 className="size-4" /> Remove
             </Button>
           )}
         </div>
