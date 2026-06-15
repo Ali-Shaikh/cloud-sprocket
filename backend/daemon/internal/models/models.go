@@ -203,6 +203,7 @@ type SessionSnapshot struct {
 	SelectedLambdaFunctionName string             `json:"selectedLambdaFunctionName,omitempty"`
 	SelectedDynamoDBRegion     string             `json:"selectedDynamodbRegion,omitempty"`
 	SelectedDynamoDBTableName  string             `json:"selectedDynamodbTableName,omitempty"`
+	AWSWriteModeEnabled        bool               `json:"awsWriteModeEnabled,omitempty"`
 	LockedProviderID           string             `json:"lockedProviderId,omitempty"`
 	LockedProfileID            string             `json:"lockedProfileId,omitempty"`
 	LockedAuthMethod           AuthMethod         `json:"lockedAuthMethod,omitempty"`
@@ -369,6 +370,8 @@ type WorkspaceSnapshot struct {
 	EmulatorSummaries          []EmulatorSummary       `json:"emulatorSummaries"`
 	LocalConfigArtifacts       []LocalConfigArtifact   `json:"localConfigArtifacts"`
 	AWSEndpointURL             string                  `json:"awsEndpointUrl,omitempty"`
+	AWSWriteCapable            bool                    `json:"awsWriteCapable"`
+	AWSWriteModeEnabled        bool                    `json:"awsWriteModeEnabled"`
 	AWSWritesEnabled           bool                    `json:"awsWritesEnabled"`
 	SelectedS3BucketName       string                  `json:"selectedS3BucketName,omitempty"`
 	SelectedS3ObjectKey        string                  `json:"selectedS3ObjectKey,omitempty"`
