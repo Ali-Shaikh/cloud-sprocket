@@ -51,6 +51,18 @@ func (s *Service) newJobID() string {
 	return fmt.Sprintf("job-%d", s.now().UnixNano())
 }
 
+// targetLabel names a deployment's target for log lines, e.g. "LocalStack" for
+// a local emulator or "AWS profile prod" for a cloud profile.
+func targetLabel(deployment *deploy.Deployment) string {
+	if deployment.Local {
+		return "LocalStack"
+	}
+	if profile := strings.TrimSpace(deployment.ProfileID); profile != "" {
+		return strings.ToUpper(deployment.ProviderID) + " profile " + profile
+	}
+	return strings.ToUpper(deployment.ProviderID)
+}
+
 func (s *Service) tofuStatus(ctx context.Context) tofuStatus {
 	available := s.deployer.Available()
 	version := ""
@@ -156,6 +168,11 @@ func (s *Service) runDeploymentPlan(deployment *deploy.Deployment, job models.Jo
 	s.emitJobStatus(notifier, job, "running", "Planning "+deployment.Name+".")
 
 	onLine := s.deploymentLogger(deployment.ID, job.JobID, notifier)
+	onLine("Checking " + targetLabel(deployment) + " connectivity...")
+	if err := s.deployer.Preflight(ctx, deployment); err != nil {
+		s.failDeployment(ctx, deployment, job, notifier, err)
+		return
+	}
 	if err := s.deployer.Prepare(deployment); err != nil {
 		s.failDeployment(ctx, deployment, job, notifier, err)
 		return
@@ -174,6 +191,12 @@ func (s *Service) runDeploymentPlan(deployment *deploy.Deployment, job models.Jo
 func (s *Service) runDeploymentAction(deployment *deploy.Deployment, action deploymentAction, job models.JobStatus, notifier Notifier) {
 	ctx := context.Background()
 	onLine := s.deploymentLogger(deployment.ID, job.JobID, notifier)
+
+	onLine("Checking " + targetLabel(deployment) + " connectivity...")
+	if err := s.deployer.Preflight(ctx, deployment); err != nil {
+		s.failDeployment(ctx, deployment, job, notifier, err)
+		return
+	}
 
 	if action == actionDestroy {
 		s.setDeploymentStatus(ctx, deployment, deploy.StatusDestroying, notifier)
