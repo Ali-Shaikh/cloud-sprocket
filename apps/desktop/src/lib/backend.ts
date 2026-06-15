@@ -1230,8 +1230,16 @@ function handleMockRequest<T>(
       const timeout = Number(params.timeout ?? 30);
       const handler = String(params.handler ?? "index.handler");
       const description = String(params.description ?? "");
+      const handlerSource = String(params.handlerSource ?? "").trim();
+      const zipSourcePath = String(params.zipSourcePath ?? "").trim();
       if (!functionName) {
         return Promise.reject(new Error("function name is required"));
+      }
+      if (handlerSource && zipSourcePath) {
+        return Promise.reject(new Error("provide either inline handler source or a zip file, not both"));
+      }
+      if (zipSourcePath && !handler) {
+        return Promise.reject(new Error("handler is required when using a zip file"));
       }
       if (mockWorkspaceLambdaFunctions.some((fn) => fn.functionName === functionName)) {
         return Promise.reject(new Error(`function ${functionName} already exists`));

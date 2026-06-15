@@ -1,4 +1,4 @@
-import { ChevronRight, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ChevronRight, Plus, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { InlineBanner } from "@/components/inline-banner";
@@ -14,6 +14,7 @@ export type OverviewNavigateContext = {
   lambdaFunctionName?: string;
   ec2InstanceId?: string;
   s3BucketName?: string;
+  openLambdaCreate?: boolean;
 };
 
 export type OverviewViewProps = {
@@ -187,6 +188,8 @@ export default function OverviewView({
   }
 
   const writesEnabled = workspace.awsWritesEnabled;
+  const showLambdaCreateCta =
+    isAws && workspace.lambdaFunctions.length === 0 && writesEnabled && Boolean(workspace.selectedLambdaRegion);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -251,6 +254,27 @@ export default function OverviewView({
           );
         })}
       </section>
+
+      {showLambdaCreateCta ? (
+        <section className="rounded-lg border border-dashed border-border bg-card p-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold tracking-tight">No Lambda functions yet</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Deploy a starter function to your local endpoint and start testing invokes in-app.
+              </p>
+            </div>
+            <Button
+              onClick={() => {
+                onNavigate("lambda", { openLambdaCreate: true });
+              }}
+            >
+              <Plus />
+              Create your first function
+            </Button>
+          </div>
+        </section>
+      ) : null}
 
       {recents.length > 0 ? (
         <section className="space-y-3">

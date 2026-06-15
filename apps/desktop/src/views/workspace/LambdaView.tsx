@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
-import { Copy, Loader2, Play, Plus, RefreshCw, Server } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { Copy, Loader2, Play, Plus, RefreshCw, Server, Upload } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
@@ -39,6 +40,7 @@ import type {
   AwsLambdaCreateInput,
   AwsLambdaFunction,
   AwsLambdaInvokeResult,
+  LambdaCreateCodeSource,
   WorkspaceSnapshot,
 } from "@/types/backend";
 
@@ -53,7 +55,15 @@ export type LambdaViewProps = {
   onSelectFunction: (functionName: string) => void;
   onInvoke: (functionName: string, payload: unknown) => void;
   onCreate?: (input: AwsLambdaCreateInput) => void;
+  openCreateForm?: boolean;
+  onCreateFormOpenChange?: (open: boolean) => void;
 };
+
+const CODE_SOURCE_OPTIONS: Array<{ value: LambdaCreateCodeSource; label: string }> = [
+  { value: "starter", label: "Starter template" },
+  { value: "inline", label: "Inline handler" },
+  { value: "zip", label: "Zip file" },
+];
 
 const RUNTIME_OPTIONS = [
   { value: "nodejs22.x", label: "Node.js 22" },
@@ -123,11 +133,33 @@ function formatPayload(payload: string | undefined): string {
   }
 }
 
+function isTauriDesktop(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
 function defaultHandlerForRuntime(runtime: string): string {
   if (runtime.startsWith("python")) {
     return "lambda_function.handler";
   }
   return "index.handler";
+}
+
+function defaultStarterSource(runtime: string): string {
+  if (runtime.startsWith("python")) {
+    return `def handler(event, context):
+    return {
+        "statusCode": 200,
+        "body": "Hello from CloudSprocket",
+    }
+`;
+  }
+  return `exports.handler = async (event) => {
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ ok: true, message: "Hello from CloudSprocket" }),
+  };
+};
+`;
 }
 
 function validateFunctionName(name: string): string | undefined {
@@ -168,6 +200,8 @@ export default function LambdaView({
   onSelectFunction,
   onInvoke,
   onCreate,
+  openCreateForm = false,
+  onCreateFormOpenChange,
 }: LambdaViewProps) {
   const [filterText, setFilterText] = useState("");
   const [pending, setPending] = useState<PendingLambdaInvoke | undefined>(undefined);
@@ -179,6 +213,10 @@ export default function LambdaView({
   const [createMemory, setCreateMemory] = useState("128");
   const [createTimeout, setCreateTimeout] = useState("30");
   const [createDescription, setCreateDescription] = useState("");
+  const [createCodeSource, setCreateCodeSource] = useState<LambdaCreateCodeSource>("starter");
+  const [createHandlerSource, setCreateHandlerSource] = useState(defaultStarterSource(DEFAULT_CREATE_RUNTIME));
+  const [createZipSourcePath, setCreateZipSourcePath] = useState("");
+  const [createZipLabel, setCreateZipLabel] = useState("");
   const [createError, setCreateError] = useState<string | undefined>(undefined);
   const [payloadText, setPayloadText] = useState(defaultPayload);
   const [payloadError, setPayloadError] = useState<string | undefined>(undefined);
@@ -210,6 +248,13 @@ export default function LambdaView({
   const canWrite = workspace.awsWritesEnabled && !invokeInFlight && !createInFlight;
   const canInvoke = canWrite && Boolean(selectedFunction?.functionName);
   const canCreate = canWrite && Boolean(onCreate) && Boolean(workspace.selectedLambdaRegion);
+
+  useEffect(() => {
+    if (openCreateForm) {
+      setCreateFormOpen(true);
+      onCreateFormOpenChange?.(false);
+    }
+  }, [openCreateForm, onCreateFormOpenChange]);
 
   const copySnippets = selectedFunction
     ? [
@@ -268,6 +313,28 @@ export default function LambdaView({
     setCreateMemory("128");
     setCreateTimeout("30");
     setCreateDescription("");
+    setCreateCodeSource("starter");
+    setCreateHandlerSource(defaultStarterSource(DEFAULT_CREATE_RUNTIME));
+    setCreateZipSourcePath("");
+    setCreateZipLabel("");
+    setCreateError(undefined);
+  }
+
+  async function chooseCreateZip(): Promise<void> {
+    if (!isTauriDesktop()) {
+      setCreateError("Zip upload is available in the desktop app.");
+      return;
+    }
+    const selectedPath = await openDialog({
+      multiple: false,
+      directory: false,
+      filters: [{ name: "Zip archive", extensions: ["zip"] }],
+    });
+    if (typeof selectedPath !== "string") {
+      return;
+    }
+    setCreateZipSourcePath(selectedPath);
+    setCreateZipLabel(selectedPath.split(/[\\/]/).pop() || selectedPath);
     setCreateError(undefined);
   }
 
@@ -291,16 +358,30 @@ export default function LambdaView({
       return;
     }
     const handler = createHandler.trim() || defaultHandlerForRuntime(createRuntime);
-    setCreateError(undefined);
-    setCreateFormOpen(false);
-    setPendingCreate({
+    const payload: AwsLambdaCreateInput = {
       functionName: createName.trim(),
       runtime: createRuntime,
       handler,
       memorySize: memory,
       timeout,
       description: createDescription.trim() || undefined,
-    });
+    };
+    if (createCodeSource === "inline") {
+      if (!createHandlerSource.trim()) {
+        setCreateError("Inline handler source is required.");
+        return;
+      }
+      payload.handlerSource = createHandlerSource;
+    } else if (createCodeSource === "zip") {
+      if (!createZipSourcePath.trim()) {
+        setCreateError("Choose a zip file before creating.");
+        return;
+      }
+      payload.zipSourcePath = createZipSourcePath;
+    }
+    setCreateError(undefined);
+    setCreateFormOpen(false);
+    setPendingCreate(payload);
   }
 
   function confirmCreate(): void {
@@ -714,8 +795,8 @@ export default function LambdaView({
           <AlertDialogHeader>
             <AlertDialogTitle>Create Lambda function</AlertDialogTitle>
             <AlertDialogDescription>
-              Deploy a starter function to the selected local endpoint. A minimal handler zip is
-              generated automatically.
+              Deploy a function to the selected local endpoint using a starter template, inline
+              handler code, or a zip archive.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-3">
@@ -738,6 +819,9 @@ export default function LambdaView({
                   onValueChange={(value) => {
                     setCreateRuntime(value);
                     setCreateHandler(defaultHandlerForRuntime(value));
+                    if (createCodeSource === "inline") {
+                      setCreateHandlerSource(defaultStarterSource(value));
+                    }
                   }}
                 >
                   <SelectTrigger aria-label="Select runtime">
@@ -793,6 +877,66 @@ export default function LambdaView({
                 }}
               />
             </div>
+            <div>
+              <div className={fieldLabel}>Code source</div>
+              <Select
+                value={createCodeSource}
+                onValueChange={(value) => {
+                  const source = value as LambdaCreateCodeSource;
+                  setCreateCodeSource(source);
+                  if (source === "inline") {
+                    setCreateHandlerSource(defaultStarterSource(createRuntime));
+                  }
+                  if (source !== "zip") {
+                    setCreateZipSourcePath("");
+                    setCreateZipLabel("");
+                  }
+                  setCreateError(undefined);
+                }}
+              >
+                <SelectTrigger aria-label="Select code source">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CODE_SOURCE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {createCodeSource === "inline" ? (
+              <div>
+                <div className={fieldLabel}>Handler source</div>
+                <Textarea
+                  className="h-36 font-mono text-xs"
+                  value={createHandlerSource}
+                  onChange={(event) => {
+                    setCreateHandlerSource(event.target.value);
+                  }}
+                />
+              </div>
+            ) : null}
+            {createCodeSource === "zip" ? (
+              <div className="space-y-2">
+                <div className={fieldLabel}>Deployment package</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => void chooseCreateZip()}>
+                    <Upload />
+                    Choose zip
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {createZipLabel || "No zip selected"}
+                  </span>
+                </div>
+                {!isTauriDesktop() ? (
+                  <p className="text-xs text-muted-foreground">
+                    Zip upload requires the desktop app. Use inline handler code in the browser mock.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             {createError ? <p className="text-xs text-destructive">{createError}</p> : null}
           </div>
           <AlertDialogFooter>
@@ -829,6 +973,14 @@ export default function LambdaView({
                       value: String(pendingCreate.memorySize ?? 128),
                     },
                     { label: "Timeout (s)", value: String(pendingCreate.timeout ?? 30) },
+                    {
+                      label: "Code source",
+                      value: pendingCreate.zipSourcePath
+                        ? "Zip file"
+                        : pendingCreate.handlerSource
+                          ? "Inline handler"
+                          : "Starter template",
+                    },
                     { label: "Region", value: workspace.selectedLambdaRegion || "Unknown" },
                     {
                       label: "Endpoint",
