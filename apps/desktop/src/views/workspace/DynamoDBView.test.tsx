@@ -55,6 +55,8 @@ const workspaceFixture: WorkspaceSnapshot = {
   dockerResources: [],
   emulatorSummaries: [],
   localConfigArtifacts: [],
+  awsWriteCapable: false,
+  awsWriteModeEnabled: false,
   awsWritesEnabled: false,
   awsEndpointUrl: "http://localhost:4566",
   azureResourceGroups: [],
@@ -151,6 +153,7 @@ describe("DynamoDBView", () => {
               state: "configured",
               summary: "Azure profile cache detected.",
               profileCount: 1,
+              locations: [],
             },
           }}
           actionStatus=""

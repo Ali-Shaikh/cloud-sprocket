@@ -55,6 +55,8 @@ const workspaceFixture: WorkspaceSnapshot = {
   dockerResources: [],
   emulatorSummaries: [],
   localConfigArtifacts: [],
+  awsWriteCapable: true,
+  awsWriteModeEnabled: true,
   awsWritesEnabled: true,
   awsEndpointUrl: "http://localhost:4566",
   azureResourceGroups: [],

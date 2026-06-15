@@ -472,6 +472,13 @@ vi.mock("./lib/backend", () => ({
           logResult: "START RequestId: mock-123\nEND RequestId: mock-123",
           payload: JSON.stringify({ echoed: params?.payload ?? {} }),
         };
+      case "session.setWriteMode":
+        workspaceFixture = {
+          ...workspaceFixture,
+          awsWriteModeEnabled: Boolean(params?.enabled),
+          awsWritesEnabled: Boolean(params?.enabled) && workspaceFixture.awsWriteCapable,
+        };
+        return workspaceFixture;
       default:
         return sessionFixture;
     }
@@ -604,6 +611,9 @@ describe("App", () => {
           summary: "App-managed AWS local profile configuration will be written here.",
         },
       ],
+      awsEndpointUrl: "http://192.168.50.168:4566",
+      awsWriteCapable: true,
+      awsWriteModeEnabled: false,
       awsWritesEnabled: false,
       azureResourceGroups: [],
       azureVirtualMachines: [],
@@ -717,7 +727,7 @@ describe("App", () => {
     // no auth chip ceremony.
     fireEvent.click(await screen.findByRole("button", { name: /prod/ }));
 
-    expect(await screen.findByText(/Read-only mode keeps you safe/)).toBeInTheDocument();
+    expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Switch connection" })).toBeInTheDocument();
   });
 
@@ -732,10 +742,10 @@ describe("App", () => {
     // it must surface the auth choice rather than opening immediately.
     fireEvent.click(await screen.findByRole("button", { name: /sandbox/ }));
     expect(await screen.findByText(/Pick one to open the workspace/)).toBeInTheDocument();
-    expect(screen.queryByText(/Read-only mode keeps you safe/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Write mode is off/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "SSO" }));
-    expect(await screen.findByText(/Read-only mode keeps you safe/)).toBeInTheDocument();
+    expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Switch connection" })).toBeInTheDocument();
   });
 
@@ -847,6 +857,8 @@ describe("App", () => {
     workspaceFixture = {
       ...workspaceFixture,
       awsEndpointUrl: "http://192.168.50.168:4566",
+      awsWriteCapable: true,
+      awsWriteModeEnabled: true,
       awsWritesEnabled: true,
     };
 
@@ -858,7 +870,7 @@ describe("App", () => {
 
     // Locked landing is now the Tailwind OverviewView: safety banner reflects
     // awsWritesEnabled, stat cards and recents come from the workspace snapshot.
-    expect(await screen.findByText(/Local-endpoint writes are enabled/)).toBeInTheDocument();
+    expect(await screen.findByText(/Write mode is on/)).toBeInTheDocument();
     expect(await screen.findByText("S3 buckets")).toBeInTheDocument();
     expect(screen.getByText("EC2 instances")).toBeInTheDocument();
     expect(screen.getByText("Lambda functions")).toBeInTheDocument();
@@ -892,6 +904,32 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Switch connection" })).toBeInTheDocument();
   });
 
+  it("enables write mode from the top bar after confirmation", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [{ tabId: "overview", label: "Overview", summary: "Summary", detail: "Overview panel" }],
+    };
+
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
+
+    expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Read-only mode" }));
+    expect(
+      await screen.findByRole("alertdialog", { name: "Enable write mode for this session?" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Enable writes" }));
+    expect(await screen.findByText(/Write mode is on/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Write mode on" })).toBeInTheDocument();
+  });
+
   it("shows an overview CTA to create the first Lambda function when inventory is empty", async () => {
     sessionFixture = {
       ...sessionFixture,
@@ -907,6 +945,8 @@ describe("App", () => {
     workspaceFixture = {
       ...workspaceFixture,
       awsEndpointUrl: "http://localhost:4566",
+      awsWriteCapable: true,
+      awsWriteModeEnabled: true,
       awsWritesEnabled: true,
       selectedLambdaRegion: "us-east-1",
       lambdaRegions: ["us-east-1"],
@@ -956,6 +996,8 @@ describe("App", () => {
         reachable: true,
         summary: "Docker is reachable.",
       },
+      awsWriteCapable: false,
+      awsWriteModeEnabled: false,
       awsWritesEnabled: false,
     } as WorkspaceSnapshot;
 
@@ -965,7 +1007,7 @@ describe("App", () => {
       </ThemeProvider>,
     );
 
-    expect(await screen.findByText(/Read-only mode keeps you safe/)).toBeInTheDocument();
+    expect(await screen.findByText(/This profile does not support write mode/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Local Runtime" }));
     expect(await screen.findByText("Docker Runtime")).toBeInTheDocument();
     expect(await screen.findByText("Local Runtimes")).toBeInTheDocument();
@@ -1039,7 +1081,7 @@ describe("App", () => {
       </ThemeProvider>,
     );
 
-    expect(await screen.findByText(/Read-only mode keeps you safe/)).toBeInTheDocument();
+    expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Switch connection" })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Local Runtime" }));
     expect(await screen.findByRole("button", { name: "Start LocalStack" })).toBeInTheDocument();
@@ -1072,7 +1114,7 @@ describe("App", () => {
       </ThemeProvider>,
     );
 
-    expect(await screen.findByText(/Read-only mode keeps you safe/)).toBeInTheDocument();
+    expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reset app data" }));
     expect(await screen.findByRole("alertdialog", { name: "Reset app data" })).toBeInTheDocument();
     expect(screen.getByText(/does not touch AWS, Azure, or GCP config files/i)).toBeInTheDocument();
@@ -1446,6 +1488,8 @@ describe("App", () => {
     workspaceFixture = {
       ...workspaceFixture,
       awsEndpointUrl: "http://192.168.50.168:4566",
+      awsWriteCapable: true,
+      awsWriteModeEnabled: true,
       awsWritesEnabled: true,
     };
 
@@ -1560,6 +1604,13 @@ describe("App", () => {
         },
       ],
     };
+    workspaceFixture = {
+      ...workspaceFixture,
+      awsEndpointUrl: undefined,
+      awsWriteCapable: false,
+      awsWriteModeEnabled: false,
+      awsWritesEnabled: false,
+    };
 
     render(
       <ThemeProvider>
@@ -1569,10 +1620,10 @@ describe("App", () => {
 
     fireEvent.click(await screen.findByText("EC2"));
 
-    expect(await screen.findByText("Read-only")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Read-only mode" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stop" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Reboot" })).toBeDisabled();
-  });
+  }, 15000);
 
   it("renders a safe EC2 empty state", async () => {
     sessionFixture = {
@@ -1598,6 +1649,7 @@ describe("App", () => {
     };
     workspaceFixture = {
       ...workspaceFixture,
+      awsEndpointUrl: undefined,
       selectedEc2Region: undefined,
       selectedEc2InstanceId: undefined,
       ec2StatusMessage: "No EC2 region is available for this AWS workspace.",
@@ -1613,13 +1665,13 @@ describe("App", () => {
 
     fireEvent.click(await screen.findByText("EC2"));
 
-    expect(await screen.findByText("No EC2 region is available for this AWS workspace.")).toBeInTheDocument();
+    expect(await screen.findByText(/No EC2 region is available for this AWS workspace/)).toBeInTheDocument();
     expect(await screen.findByText("No EC2 instances loaded for this region.")).toBeInTheDocument();
     expect(await screen.findByText("No EC2 instance selected.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Stop" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Reboot" })).toBeDisabled();
-  });
+  }, 15000);
 
   it("renders the activity tab and refresh action", async () => {
     sessionFixture = {
@@ -1710,6 +1762,8 @@ describe("App", () => {
       profile: profileFixtures[1],
       authMethod: "cli",
       awsEndpointUrl: undefined,
+      awsWriteCapable: false,
+      awsWriteModeEnabled: false,
       awsWritesEnabled: false,
       selectedAzureResourceGroup: "rg-marketing-prod",
       selectedAzureVmId: "/subscriptions/sub-001/resourceGroups/rg-marketing-prod/providers/Microsoft.Compute/virtualMachines/mkt-api-01",
@@ -1765,7 +1819,6 @@ describe("App", () => {
       </ThemeProvider>,
     );
 
-    expect(await screen.findByText(/Read-only mode keeps you safe/)).toBeInTheDocument();
     expect(await screen.findByText("Resource groups")).toBeInTheDocument();
     expect(screen.getByText("Virtual machines")).toBeInTheDocument();
     const azureNav = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);

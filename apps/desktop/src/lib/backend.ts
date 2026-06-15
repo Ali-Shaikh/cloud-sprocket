@@ -827,8 +827,14 @@ function buildMockWorkspace(): WorkspaceSnapshot {
           : "App-managed Azure local connection strings and env values will be written here.",
       },
     ],
-    awsEndpointUrl: "http://192.168.50.168:4566",
-    awsWritesEnabled: true,
+    awsEndpointUrl: isAWSWorkspace ? "http://192.168.50.168:4566" : undefined,
+    awsWriteCapable: isAWSWorkspace && mockState.session.isLocked,
+    awsWriteModeEnabled:
+      isAWSWorkspace && mockState.session.isLocked && Boolean(mockState.session.awsWriteModeEnabled),
+    awsWritesEnabled:
+      isAWSWorkspace &&
+      mockState.session.isLocked &&
+      Boolean(mockState.session.awsWriteModeEnabled),
     selectedAzureResourceGroup,
     selectedAzureVmId,
     azureStatusMessage: isAzureWorkspace
@@ -1347,8 +1353,26 @@ function handleMockRequest<T>(
       emitStateChanged();
       appendLog("info", `Selected auth method ${params.authMethod}.`);
       return Promise.resolve(mockState.session as T);
+    case "session.setWriteMode":
+      if (!mockState.session.isLocked || mockState.session.lockedProviderId !== "aws") {
+        return Promise.reject(new Error("open a locked AWS workspace before changing write mode"));
+      }
+      if (params.enabled && !buildMockWorkspace().awsWriteCapable) {
+        return Promise.reject(
+          new Error(
+            "this profile cannot enable write mode: configure a local endpoint_url and cloudsprocket_allow_writes = true",
+          ),
+        );
+      }
+      mockState.session.awsWriteModeEnabled = Boolean(params.enabled);
+      appendLog(
+        params.enabled ? "warning" : "info",
+        params.enabled ? "Write mode enabled for this workspace session." : "Write mode disabled for this workspace session.",
+      );
+      return Promise.resolve(buildMockWorkspace() as T);
     case "session.lock":
       mockState.session.isLocked = true;
+      mockState.session.awsWriteModeEnabled = false;
       mockState.session.lockedProviderId = mockState.session.currentProviderId;
       mockState.session.lockedProfileId = mockState.session.selectedProfileId;
       mockState.session.lockedAuthMethod = mockState.session.selectedAuthMethod;
@@ -1361,6 +1385,7 @@ function handleMockRequest<T>(
       return Promise.resolve(mockState.session as T);
     case "session.unlock":
       mockState.session.isLocked = false;
+      mockState.session.awsWriteModeEnabled = false;
       mockState.session.lockedProviderId = undefined;
       mockState.session.lockedProfileId = undefined;
       mockState.session.lockedAuthMethod = undefined;
