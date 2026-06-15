@@ -927,15 +927,35 @@ function coerceValues(variables: RecipeVariable[], values: Record<string, unknow
 // always computes, even against LocalStack) into the URL actually reachable on
 // the local emulator via *.localhost.localstack.cloud:4566. Returns null when no
 // known pattern matches, so real-cloud values are left untouched.
-function toLocalStackUrl(value: string): string | null {
-  if (!value) return null;
-  let rewritten = value
+export function toLocalStackUrl(value: string): string | null {
+  const original = value.trim();
+  if (!original) return null;
+
+  let rewritten = original
     .replace(/\.s3-website[.-][a-z0-9-]+\.amazonaws\.com/i, ".s3-website.localhost.localstack.cloud:4566")
     .replace(/\.s3[.-][a-z0-9-]+\.amazonaws\.com/i, ".s3.localhost.localstack.cloud:4566")
     .replace(/\.execute-api\.[a-z0-9-]+\.amazonaws\.com/i, ".execute-api.localhost.localstack.cloud:4566")
     .replace(/\.cloudfront\.net/i, ".cloudfront.localhost.localstack.cloud:4566")
     .replace(/\.[a-z0-9-]+\.elb\.amazonaws\.com/i, ".elb.localhost.localstack.cloud:4566");
-  if (rewritten === value) return null;
+
+  if (rewritten.includes(".localhost.localstack.cloud")) {
+    const withProtocol = /^https?:\/\//i.test(rewritten) ? rewritten : `http://${rewritten}`;
+    try {
+      const url = new URL(withProtocol);
+      if (url.hostname.endsWith(".localhost.localstack.cloud")) {
+        url.protocol = "http:";
+        url.port = "4566";
+        const normalised = url.toString();
+        return url.pathname === "/" && url.search === "" && url.hash === ""
+          ? normalised.replace(/\/$/, "")
+          : normalised;
+      }
+    } catch {
+      // Fall through to the generic AWS-format rewrite below.
+    }
+  }
+
+  if (rewritten === original) return null;
   if (!/^https?:\/\//i.test(rewritten)) {
     rewritten = "http://" + rewritten;
   } else {
