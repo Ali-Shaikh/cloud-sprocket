@@ -755,6 +755,9 @@ function OutputRow({ output, deployment }: { output: DeploymentOutput; deploymen
       <code className="block select-text break-all rounded bg-muted px-2.5 py-1.5 text-xs text-foreground">
         {display}
       </code>
+      {localLink?.note && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">{localLink.note}</p>
+      )}
       {openUrl && (
         <button
           type="button"
@@ -974,7 +977,7 @@ export function toLocalStackUrl(value: string): string | null {
 export function localDeploymentOutputLink(
   deployment: Pick<Deployment, "local" | "recipeId" | "variables">,
   output: Pick<DeploymentOutput, "name" | "value" | "sensitive">,
-): { url: string; label: string; title: string } | null {
+): { url: string; label: string; title: string; note?: string } | null {
   if (!deployment.local || output.sensitive) return null;
 
   if (deployment.recipeId === "container-fullstack-aws" && output.name === "frontend_url") {
@@ -985,6 +988,7 @@ export function localDeploymentOutputLink(
       url: `http://${bucket}.s3-website.localhost.localstack.cloud:4566`,
       label: "Open S3 website on LocalStack",
       title: "LocalStack CloudFront can fail to route S3 website origins; this opens the direct S3 website endpoint.",
+      note: "This CloudFront URL is for real AWS. CloudFront isn't reliably reachable on LocalStack, so locally use the S3 website endpoint below.",
     };
   }
 
