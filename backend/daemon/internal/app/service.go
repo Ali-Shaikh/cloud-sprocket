@@ -2011,6 +2011,21 @@ func (s *Service) buildWorkspaceSnapshot(
 				workspace.SelectedLambdaRegion,
 			)
 		}
+
+		// Enrich the selected function with full describe data (config + recent CloudWatch logs)
+		// so the UI gets the rich detail without extra RPC on every render.
+		if workspace.SelectedLambdaFunctionName != "" && workspace.Profile != nil {
+			timeoutCtx, cancel := s.withAWSTimeout(context.Background())
+			if full, err := s.lambda.DescribeFunction(timeoutCtx, *workspace.Profile, workspace.SelectedLambdaRegion, workspace.SelectedLambdaFunctionName); err == nil {
+				for i := range workspace.LambdaFunctions {
+					if workspace.LambdaFunctions[i].FunctionName == full.FunctionName {
+						workspace.LambdaFunctions[i] = full
+						break
+					}
+				}
+			}
+			cancel()
+		}
 	}
 
 	return workspace
@@ -2690,6 +2705,8 @@ func clearLockState(session models.SessionSnapshot) models.SessionSnapshot {
 	session.S3PrefixFilter = ""
 	session.SelectedEC2Region = ""
 	session.SelectedEC2InstanceID = ""
+	session.SelectedLambdaRegion = ""
+	session.SelectedLambdaFunctionName = ""
 	session.AvailableAuthMethods = append([]models.AuthMethodStatus(nil), session.AvailableAuthMethods...)
 	if session.SelectedProfileID == "" {
 		session.SelectedAuthMethod = ""
@@ -2773,6 +2790,12 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 			Label:   "EC2",
 			Summary: "Fleet and instance operations.",
 			Detail:  "Instance inventory and lifecycle actions are being ported.",
+		},
+		{
+			TabID:   "lambda",
+			Label:   "Lambda",
+			Summary: "Function inventory, configuration, logs and safe test invoke.",
+			Detail:  "List functions by region, view config and recent CloudWatch logs, perform test invokes.",
 		},
 		activityTab,
 	}
