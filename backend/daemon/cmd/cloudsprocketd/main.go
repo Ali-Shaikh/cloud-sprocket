@@ -33,9 +33,10 @@ func main() {
 	ec2Inventory := awsadapter.NewEC2Inventory(settings)
 	lambdaInventory := awsadapter.NewLambdaInventory(settings)
 	dynamodbInventory := awsadapter.NewDynamoDBInventory(settings)
+	sqsInventory := awsadapter.NewSQSInventory(settings)
 	azureInventory := azureadapter.NewInventory(settings)
 	dockerRuntime := dockerruntime.New(settings)
-	service := app.New(settings, dataStore, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, azureInventory, dockerRuntime)
+	service := app.New(settings, dataStore, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, azureInventory, dockerRuntime)
 	server := rpc.New(service)
 
 	if err := server.Serve(context.Background(), os.Stdin, os.Stdout); err != nil {
