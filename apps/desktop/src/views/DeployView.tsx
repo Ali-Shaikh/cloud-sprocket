@@ -15,7 +15,6 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -604,19 +603,20 @@ function DeploymentDetail({
 
       <div>
         <p className="mb-2 text-sm font-medium text-foreground">Logs</p>
-        <ScrollArea className="h-72 rounded-lg border bg-[#0d1117]">
-          <div ref={logRef} className="max-h-72 overflow-auto p-3 font-mono text-xs leading-relaxed text-[#c9d1d9]">
-            {logs.length === 0 ? (
-              <span className="text-muted-foreground">Waiting for output…</span>
-            ) : (
-              logs.map((line, index) => (
-                <div key={index} className="whitespace-pre-wrap">
-                  {line}
-                </div>
-              ))
-            )}
-          </div>
-        </ScrollArea>
+        <div
+          ref={logRef}
+          className="h-72 overflow-auto rounded-lg border bg-[#0d1117] p-3 font-mono text-xs leading-relaxed text-[#c9d1d9]"
+        >
+          {logs.length === 0 ? (
+            <span className="text-muted-foreground">Waiting for output…</span>
+          ) : (
+            logs.map((line, index) => (
+              <div key={index} className="whitespace-pre-wrap">
+                {line}
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
