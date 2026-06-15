@@ -431,6 +431,13 @@ func normaliseAWSProfileField(label string) string {
 	return strings.ToLower(replacer.Replace(label))
 }
 
+func boolValue(value *bool) bool {
+	if value == nil {
+		return false
+	}
+	return *value
+}
+
 func awsString(value *string) string {
 	if value == nil {
 		return ""
