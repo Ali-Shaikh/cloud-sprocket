@@ -172,7 +172,8 @@ export default function ConnectView({
             <div>
               <h2 className="text-base font-bold">Open {selectedProvider.label}</h2>
               <p className="text-xs text-muted-foreground">
-                Click a profile to open its workspace. Workspaces open read-only by default.
+                Click a profile to open its workspace. Workspaces open read-only; enable write mode
+                from the top bar when you need mutating actions.
               </p>
             </div>
           </div>
