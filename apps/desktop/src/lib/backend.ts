@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type {
   AppResetResult,
   ActivityLogEntry,
@@ -1288,6 +1289,8 @@ function handleMockRequest<T>(
       return mockRunDeployment(params.deploymentId as string, "apply") as Promise<T>;
     case "deployments.destroy":
       return mockRunDeployment(params.deploymentId as string, "destroy") as Promise<T>;
+    case "deployments.cancel":
+      return mockCancelDeployment(params.deploymentId as string) as Promise<T>;
     default:
       return Promise.reject(new Error(`Mock backend method not implemented: ${method}`));
   }
@@ -1338,6 +1341,21 @@ export async function applyDeployment(deploymentId: string): Promise<DeploymentJ
 
 export async function destroyDeployment(deploymentId: string): Promise<DeploymentJob> {
   return backendRequest<DeploymentJob>("deployments.destroy", { deploymentId });
+}
+
+export async function cancelDeployment(deploymentId: string): Promise<void> {
+  await backendRequest("deployments.cancel", { deploymentId });
+}
+
+// openExternalUrl opens a URL in the user's default browser. The Tauri webview
+// blocks plain <a target="_blank"> navigation, so deployment output links must
+// go through the opener plugin; in browser/dev we fall back to window.open.
+export async function openExternalUrl(url: string): Promise<void> {
+  if (isTauriRuntime()) {
+    await openUrl(url);
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 const mockRecipes: Recipe[] = [
@@ -1568,6 +1586,20 @@ function mockRunDeployment(deploymentId: string, action: "apply" | "destroy"): P
     emitMockEvent("job.updated", { ...job, status: "completed", message: `${deployment.name} deployed.`, completedAt: new Date().toISOString() });
   }, 80);
   return Promise.resolve({ deployment, job });
+}
+
+const inFlightStatuses: Deployment["status"][] = ["pending", "planning", "applying", "destroying"];
+
+function mockCancelDeployment(deploymentId: string): Promise<{ cancelled: boolean }> {
+  const deployment = mockDeployments.find((entry) => entry.id === deploymentId);
+  if (!deployment) {
+    return Promise.reject(new Error(`deployment ${deploymentId} not found`));
+  }
+  if (!inFlightStatuses.includes(deployment.status)) {
+    return Promise.reject(new Error("no operation is currently running for this deployment"));
+  }
+  mockSetStatus(deployment, "cancelled");
+  return Promise.resolve({ cancelled: true });
 }
 
 export async function backendRequest<T>(
