@@ -659,7 +659,7 @@ function DeploymentDetail({
           <p className="mb-3 text-sm font-medium text-foreground">Outputs</p>
           <div className="flex flex-col divide-y divide-border">
             {deployment.outputs.map((output) => (
-              <OutputRow key={output.name} output={output} local={deployment.local} />
+              <OutputRow key={output.name} output={output} deployment={deployment} />
             ))}
           </div>
         </Card>
@@ -724,14 +724,14 @@ function LogCommandsCard({ deployment }: { deployment: Deployment }) {
   );
 }
 
-function OutputRow({ output, local }: { output: DeploymentOutput; local: boolean }) {
+function OutputRow({ output, deployment }: { output: DeploymentOutput; deployment: Deployment }) {
   const [revealed, setRevealed] = useState(false);
   const value = String(output.value ?? "");
   const masked = Boolean(output.sensitive) && !revealed;
   const display = masked ? "••••••••" : value;
-  const localUrl = local && !output.sensitive ? toLocalStackUrl(value) : null;
-  const directUrl = !output.sensitive && /^https?:\/\//i.test(value) ? value : null;
-  const openUrl = localUrl ?? directUrl;
+  const localLink = !output.sensitive ? localDeploymentOutputLink(deployment, output) : null;
+  const directUrl = !deployment.local && !output.sensitive && /^https?:\/\//i.test(value) ? value : null;
+  const openUrl = localLink?.url ?? directUrl;
 
   return (
     <div className="flex flex-col gap-1.5 py-3 first:pt-0 last:pb-0">
@@ -761,13 +761,13 @@ function OutputRow({ output, local }: { output: DeploymentOutput; local: boolean
           onClick={() => void openExternalUrl(openUrl)}
           className="inline-flex w-fit items-center gap-1 text-xs text-violet-500 hover:underline"
           title={
-            localUrl
-              ? "The value above is the AWS-format endpoint Terraform reports; this opens the URL actually reachable on LocalStack."
+            localLink
+              ? localLink.title
               : "Open in your browser"
           }
         >
           <ExternalLink className="size-3" />
-          {localUrl ? `Open on LocalStack: ${localUrl}` : "Open"}
+          {localLink ? `${localLink.label}: ${localLink.url}` : "Open"}
         </button>
       )}
     </div>
@@ -962,6 +962,32 @@ export function toLocalStackUrl(value: string): string | null {
     rewritten = rewritten.replace(/^https:\/\//i, "http://");
   }
   return rewritten;
+}
+
+export function localDeploymentOutputLink(
+  deployment: Pick<Deployment, "local" | "recipeId" | "variables">,
+  output: Pick<DeploymentOutput, "name" | "value" | "sensitive">,
+): { url: string; label: string; title: string } | null {
+  if (!deployment.local || output.sensitive) return null;
+
+  if (deployment.recipeId === "container-fullstack-aws" && output.name === "frontend_url") {
+    const appName = stringVariable(deployment.variables.app_name, recipeDefaultAppName(deployment.recipeId));
+    const environment = stringVariable(deployment.variables.environment, "dev");
+    const bucket = `${appName}-${environment}-frontend`;
+    return {
+      url: `http://${bucket}.s3-website.localhost.localstack.cloud:4566`,
+      label: "Open S3 website on LocalStack",
+      title: "LocalStack CloudFront can fail to route S3 website origins; this opens the direct S3 website endpoint.",
+    };
+  }
+
+  const url = toLocalStackUrl(String(output.value ?? ""));
+  if (!url) return null;
+  return {
+    url,
+    label: "Open on LocalStack",
+    title: "The value above is the AWS-format endpoint Terraform reports; this opens the URL actually reachable on LocalStack.",
+  };
 }
 
 function groupVariables(variables: RecipeVariable[]): { title: string; variables: RecipeVariable[] }[] {
