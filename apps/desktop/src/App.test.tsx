@@ -603,6 +603,11 @@ describe("App", () => {
           privateIp: "10.0.14.22",
         },
       ],
+      selectedLambdaRegion: "us-east-1",
+      selectedLambdaFunctionName: undefined,
+      lambdaStatusMessage: "Loaded 0 Lambda functions from us-east-1.",
+      lambdaRegions: ["us-east-1"],
+      lambdaFunctions: [],
     };
     s3PrefixDelays = new Map();
     backendEventHandlers = {};

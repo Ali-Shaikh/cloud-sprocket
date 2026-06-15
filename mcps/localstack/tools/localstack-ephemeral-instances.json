@@ -1,0 +1,49 @@
+{
+  "name": "localstack-ephemeral-instances",
+  "description": "Manage cloud-hosted LocalStack Ephemeral Instances: create, list, fetch logs, and delete.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "action": {
+        "description": "The Ephemeral Instances action to perform.",
+        "type": "string",
+        "enum": [
+          "create",
+          "list",
+          "logs",
+          "delete"
+        ]
+      },
+      "name": {
+        "description": "Instance name. Required for create, logs, and delete actions.",
+        "type": "string"
+      },
+      "lifetime": {
+        "description": "Lifetime in minutes for create action. Defaults to CLI default when omitted.",
+        "type": "number"
+      },
+      "extension": {
+        "description": "Optional extension package to preload for create action. This is passed as EXTENSION_AUTO_INSTALL.",
+        "type": "string"
+      },
+      "cloudPod": {
+        "description": "Optional Cloud Pod name to initialize state for create action. This is passed as CLOUD_POD_NAME.",
+        "type": "string"
+      },
+      "envVars": {
+        "description": "Additional environment variables to pass to the ephemeral instance (create action only), translated to repeated --env KEY=VALUE flags.",
+        "type": "object",
+        "propertyNames": {
+          "type": "string"
+        },
+        "additionalProperties": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "action"
+    ]
+  }
+}

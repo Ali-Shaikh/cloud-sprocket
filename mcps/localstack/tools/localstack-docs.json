@@ -1,0 +1,22 @@
+{
+  "name": "localstack-docs",
+  "description": "Search the LocalStack documentation to find guides, API references, and configuration details",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "query": {
+        "description": "The search query.",
+        "type": "string"
+      },
+      "limit": {
+        "description": "Maximum number of results to return.",
+        "default": 5,
+        "type": "number"
+      }
+    },
+    "required": [
+      "query"
+    ]
+  }
+}

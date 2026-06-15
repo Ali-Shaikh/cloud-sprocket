@@ -1,0 +1,71 @@
+{
+  "name": "localstack-chaos-injector",
+  "description": "Injects, manages, and clears chaos faults and network effects in LocalStack to test system resilience.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "action": {
+        "description": "The specific chaos engineering action to perform.",
+        "type": "string",
+        "enum": [
+          "inject-faults",
+          "add-fault-rule",
+          "remove-fault-rule",
+          "get-faults",
+          "clear-all-faults",
+          "inject-latency",
+          "get-latency",
+          "clear-latency"
+        ]
+      },
+      "rules": {
+        "description": "An array of fault rules. Required for 'inject-faults', 'add-fault-rule', and 'remove-fault-rule' actions.",
+        "type": "array",
+        "items": {
+          "description": "A single rule defining a chaos fault.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "description": "Name of the AWS service to affect (e.g., 's3', 'lambda').",
+              "type": "string"
+            },
+            "region": {
+              "description": "Name of the AWS region to affect (e.g., 'us-east-1').",
+              "type": "string"
+            },
+            "operation": {
+              "description": "Name of the specific service operation to affect (e.g., 'CreateBucket').",
+              "type": "string"
+            },
+            "probability": {
+              "description": "The probability (0.0 to 1.0) of the fault occurring.",
+              "type": "number"
+            },
+            "error": {
+              "description": "The custom error to return.",
+              "type": "object",
+              "properties": {
+                "statusCode": {
+                  "description": "The HTTP status code to return (e.g., 503).",
+                  "type": "number"
+                },
+                "code": {
+                  "description": "The AWS error code to return (e.g., 'ServiceUnavailable').",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "latency_ms": {
+        "description": "Network latency in milliseconds. Required for the 'inject-latency' action.",
+        "type": "number"
+      }
+    },
+    "required": [
+      "action"
+    ]
+  }
+}

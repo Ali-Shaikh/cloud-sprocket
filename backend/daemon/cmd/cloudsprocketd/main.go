@@ -31,9 +31,10 @@ func main() {
 	discoveryService := discovery.New(settings, exec.LookPath)
 	s3Inventory := awsadapter.NewS3Inventory(settings)
 	ec2Inventory := awsadapter.NewEC2Inventory(settings)
+	lambdaInventory := awsadapter.NewLambdaInventory(settings)
 	azureInventory := azureadapter.NewInventory(settings)
 	dockerRuntime := dockerruntime.New(settings)
-	service := app.New(settings, dataStore, discoveryService, s3Inventory, ec2Inventory, azureInventory, dockerRuntime)
+	service := app.New(settings, dataStore, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, azureInventory, dockerRuntime)
 	server := rpc.New(service)
 
 	if err := server.Serve(context.Background(), os.Stdin, os.Stdout); err != nil {

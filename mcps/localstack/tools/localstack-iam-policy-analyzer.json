@@ -1,0 +1,31 @@
+{
+  "name": "localstack-iam-policy-analyzer",
+  "description": "Configures LocalStack's IAM enforcement and analyzes logs to automatically generate missing IAM policies.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "action": {
+        "description": "The action to perform: 'set-mode' to configure enforcement, 'analyze-policies' to generate a policy from logs, or 'get-status' to check the current mode.",
+        "type": "string",
+        "enum": [
+          "set-mode",
+          "analyze-policies",
+          "get-status"
+        ]
+      },
+      "mode": {
+        "description": "The enforcement mode to set. This is required only when the action is 'set-mode'.",
+        "type": "string",
+        "enum": [
+          "ENFORCED",
+          "SOFT_MODE",
+          "DISABLED"
+        ]
+      }
+    },
+    "required": [
+      "action"
+    ]
+  }
+}

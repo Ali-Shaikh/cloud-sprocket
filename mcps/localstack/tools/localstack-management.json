@@ -1,0 +1,42 @@
+{
+  "name": "localstack-management",
+  "description": "Manage LocalStack lifecycle: start, stop, restart, or check status",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "action": {
+        "description": "The LocalStack management action to perform",
+        "type": "string",
+        "enum": [
+          "start",
+          "stop",
+          "restart",
+          "status"
+        ]
+      },
+      "service": {
+        "description": "The LocalStack stack/service to manage. Use 'aws' for the default AWS emulator, or 'snowflake' for the Snowflake emulator.",
+        "default": "aws",
+        "type": "string",
+        "enum": [
+          "aws",
+          "snowflake"
+        ]
+      },
+      "envVars": {
+        "description": "Additional environment variables as key-value pairs (only for start action)",
+        "type": "object",
+        "propertyNames": {
+          "type": "string"
+        },
+        "additionalProperties": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "action"
+    ]
+  }
+}

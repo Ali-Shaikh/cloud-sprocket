@@ -63,6 +63,12 @@ type EC2Inventory interface {
 	RebootInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
 }
 
+type LambdaInventory interface {
+	ListFunctions(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsLambdaFunction, error)
+	DescribeFunction(ctx context.Context, profile models.ProfileSummary, region string, functionName string) (models.AwsLambdaFunction, error)
+	InvokeFunction(ctx context.Context, profile models.ProfileSummary, region string, functionName string, payload []byte) (models.AwsLambdaInvokeResult, error)
+}
+
 type AzureInventory interface {
 	ListResourceGroups(ctx context.Context, profile models.ProfileSummary) ([]models.AzureResourceGroup, error)
 	ListVirtualMachines(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureVirtualMachine, error)
@@ -114,6 +120,7 @@ type Service struct {
 	discovery     *discovery.Service
 	s3            S3Inventory
 	ec2           EC2Inventory
+	lambda        LambdaInventory
 	azure         AzureInventory
 	docker        DockerRuntime
 	localstackMgr LocalStackManager
@@ -147,12 +154,13 @@ func New(
 	discoveryService *discovery.Service,
 	s3Inventory S3Inventory,
 	ec2Inventory EC2Inventory,
+	lambdaInventory LambdaInventory,
 	azureInventory AzureInventory,
 	dockerRuntime DockerRuntime,
 ) *Service {
 	localStackMgr := localstack.NewManager(settings)
 	azureRuntime := flociaz.NewManager(settings)
-	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
+	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
 }
 
 func NewWithRuntimes(
@@ -161,6 +169,7 @@ func NewWithRuntimes(
 	discoveryService *discovery.Service,
 	s3Inventory S3Inventory,
 	ec2Inventory EC2Inventory,
+	lambdaInventory LambdaInventory,
 	azureInventory AzureInventory,
 	dockerRuntime DockerRuntime,
 	localStackMgr LocalStackManager,
@@ -174,6 +183,7 @@ func NewWithRuntimes(
 		discovery:     discoveryService,
 		s3:            s3Inventory,
 		ec2:           ec2Inventory,
+		lambda:        lambdaInventory,
 		azure:         azureInventory,
 		docker:        dockerRuntime,
 		localstackMgr: localStackMgr,
@@ -541,6 +551,124 @@ func (s *Service) Handle(
 		}
 		go s.runEC2Action(job, notifier, snapshot, session, profile, region, instanceID, request.Action)
 		return job, nil
+	case "aws.lambda.selectRegion":
+		var request struct {
+			Region string `json:"region"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		session, err := s.currentState(ctx, snapshot)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			return nil, errors.New("open an AWS workspace before selecting a Lambda region")
+		}
+		session.SelectedLambdaRegion = request.Region
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		if notifier != nil {
+			_ = notifier.Notify("log.appended", models.ActivityLogEntry{
+				Level:     "info",
+				Message:   fmt.Sprintf("Selected Lambda region %s.", request.Region),
+				Timestamp: s.timestamp(),
+			})
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), nil
+	case "aws.lambda.selectFunction":
+		var request struct {
+			FunctionName string `json:"functionName"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		session, err := s.currentState(ctx, snapshot)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			return nil, errors.New("open an AWS workspace before selecting a Lambda function")
+		}
+		session.SelectedLambdaFunctionName = request.FunctionName
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), nil
+	case "aws.lambda.describe":
+		var request struct {
+			FunctionName string `json:"functionName"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		session, err := s.currentState(ctx, snapshot)
+		if err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
+		profile, region, functionName, err := s.activeLambdaSelection(snapshot, session, request.FunctionName)
+		if err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
+		s.mu.Unlock()
+		fn, err := s.lambda.DescribeFunction(ctx, profile, region, functionName)
+		if err != nil {
+			return nil, err
+		}
+		return fn, nil
+	case "aws.lambda.invoke":
+		var request struct {
+			FunctionName string `json:"functionName"`
+			Payload      json.RawMessage `json:"payload"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		session, err := s.currentState(ctx, snapshot)
+		if err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
+		profile, region, functionName, err := s.activeLambdaSelection(snapshot, session, request.FunctionName)
+		if err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
+		s.mu.Unlock()
+		payload := []byte(request.Payload)
+		if len(payload) == 0 {
+			payload = []byte("{}")
+		}
+		result, err := s.lambda.InvokeFunction(ctx, profile, region, functionName, payload)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
 	case "azure.selectResourceGroup":
 		var request struct {
 			ResourceGroup string `json:"resourceGroup"`
@@ -1740,6 +1868,8 @@ func (s *Service) buildWorkspaceSnapshot(
 		S3ObjectMetadata:       []models.DetailField{},
 		EC2Regions:             []string{},
 		EC2Instances:           []models.AwsEc2Instance{},
+		LambdaRegions:          []string{},
+		LambdaFunctions:        []models.AwsLambdaFunction{},
 	}
 
 	if provider, ok := findProvider(snapshot.Providers, session.CurrentProviderID); ok {
@@ -1784,21 +1914,27 @@ func (s *Service) buildWorkspaceSnapshot(
 		workspace.Provider.ProviderID == "aws" &&
 		workspace.Profile != nil &&
 		s.s3 != nil {
-		workspace.S3Buckets = s.s3Buckets(context.Background(), *workspace.Profile)
+		timeoutCtx, cancel := s.withAWSTimeout(context.Background())
+		workspace.S3Buckets = s.s3Buckets(timeoutCtx, *workspace.Profile)
+		cancel()
 		workspace.SelectedS3BucketName = s.selectedS3BucketName(session, workspace.S3Buckets)
+		timeoutCtx, cancel = s.withAWSTimeout(context.Background())
 		workspace.S3Objects = s.s3Objects(
-			context.Background(),
+			timeoutCtx,
 			*workspace.Profile,
 			workspace.SelectedS3BucketName,
 			session.S3PrefixFilter,
 		)
+		cancel()
 		workspace.SelectedS3ObjectKey = s.selectedS3ObjectKey(session, workspace.S3Objects)
+		timeoutCtx, cancel = s.withAWSTimeout(context.Background())
 		workspace.S3ObjectMetadata = s.s3ObjectMetadata(
-			context.Background(),
+			timeoutCtx,
 			*workspace.Profile,
 			workspace.SelectedS3BucketName,
 			workspace.SelectedS3ObjectKey,
 		)
+		cancel()
 		workspace.S3ExportSnippets = s.s3ExportSnippets(
 			workspace.SelectedS3BucketName,
 			workspace.SelectedS3ObjectKey,
@@ -1828,9 +1964,13 @@ func (s *Service) buildWorkspaceSnapshot(
 		workspace.Provider.ProviderID == "aws" &&
 		workspace.Profile != nil &&
 		s.ec2 != nil {
-		workspace.EC2Regions = s.ec2Regions(context.Background(), *workspace.Profile)
+		timeoutCtx, cancel := s.withAWSTimeout(context.Background())
+		workspace.EC2Regions = s.ec2Regions(timeoutCtx, *workspace.Profile)
+		cancel()
 		workspace.SelectedEC2Region = s.selectedEC2Region(session, workspace.EC2Regions, *workspace.Profile)
-		workspace.EC2Instances = s.ec2Instances(context.Background(), *workspace.Profile, workspace.SelectedEC2Region)
+		timeoutCtx, cancel = s.withAWSTimeout(context.Background())
+		workspace.EC2Instances = s.ec2Instances(timeoutCtx, *workspace.Profile, workspace.SelectedEC2Region)
+		cancel()
 		workspace.SelectedEC2InstanceID = s.selectedEC2InstanceID(session, workspace.EC2Instances)
 		if workspace.SelectedEC2Region == "" {
 			workspace.EC2StatusMessage = "No EC2 region is available for this AWS workspace."
@@ -1841,6 +1981,34 @@ func (s *Service) buildWorkspaceSnapshot(
 				"Loaded %d EC2 instances from %s.",
 				len(workspace.EC2Instances),
 				workspace.SelectedEC2Region,
+			)
+		}
+	}
+
+	// Lambda inventory (v0.6 breadth). Uses the same AWS profile/region model as EC2.
+	// Protected by withAWSTimeout (added for production parity with Azure + to protect
+	// all AWS calls from stalls on real cloud or LocalStack).
+	if workspace.Provider != nil &&
+		workspace.Provider.ProviderID == "aws" &&
+		workspace.Profile != nil &&
+		s.lambda != nil {
+		timeoutCtx, cancel := s.withAWSTimeout(context.Background())
+		workspace.LambdaRegions = s.lambdaRegions(timeoutCtx, *workspace.Profile)
+		cancel()
+		workspace.SelectedLambdaRegion = s.selectedLambdaRegion(session, workspace.LambdaRegions, *workspace.Profile)
+		timeoutCtx, cancel = s.withAWSTimeout(context.Background())
+		workspace.LambdaFunctions = s.lambdaFunctions(timeoutCtx, *workspace.Profile, workspace.SelectedLambdaRegion)
+		cancel()
+		workspace.SelectedLambdaFunctionName = s.selectedLambdaFunctionName(session, workspace.LambdaFunctions)
+		if workspace.SelectedLambdaRegion == "" {
+			workspace.LambdaStatusMessage = "No region is available for Lambda functions in this AWS workspace."
+		} else if len(workspace.LambdaFunctions) == 0 {
+			workspace.LambdaStatusMessage = fmt.Sprintf("No Lambda functions were returned for %s.", workspace.SelectedLambdaRegion)
+		} else {
+			workspace.LambdaStatusMessage = fmt.Sprintf(
+				"Loaded %d Lambda functions from %s.",
+				len(workspace.LambdaFunctions),
+				workspace.SelectedLambdaRegion,
 			)
 		}
 	}
@@ -1890,6 +2058,19 @@ func (s *Service) selectedS3BucketName(
 // withAzureTimeout bounds an Azure inventory call. A non-positive configured
 // timeout (e.g. a directly-constructed test Service) leaves the context as-is.
 func (s *Service) withAzureTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if s.azureInventoryTimeout <= 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, s.azureInventoryTimeout)
+}
+
+// withAWSTimeout bounds AWS (S3, EC2, Lambda, ...) inventory and action calls.
+// Mirrors the Azure pattern for production resilience: a stalled real-AWS or
+// LocalStack response cannot hang workspace snapshots or user actions.
+// Non-positive (test constructs) is a no-op.
+func (s *Service) withAWSTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	// Reuse the same 30s default as Azure for consistency across cloud providers.
+	// If a dedicated awsInventoryTimeout is added later it can be split.
 	if s.azureInventoryTimeout <= 0 {
 		return ctx, func() {}
 	}
@@ -2137,6 +2318,36 @@ func (s *Service) activeEC2Selection(
 	return profile, region, instanceID, nil
 }
 
+func (s *Service) activeLambdaSelection(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	functionNameOverride string,
+) (models.ProfileSummary, string, string, error) {
+	if !session.IsLocked || session.CurrentProviderID != "aws" {
+		return models.ProfileSummary{}, "", "", errors.New("open an AWS workspace before using Lambda actions")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		return models.ProfileSummary{}, "", "", errors.New("the workspace's AWS profile is not available")
+	}
+	regions := s.lambdaRegions(context.Background(), profile)
+	region := s.selectedLambdaRegion(session, regions, profile)
+	if region == "" {
+		return models.ProfileSummary{}, "", "", errors.New("select a Lambda region before using this action")
+	}
+	functionName := strings.TrimSpace(functionNameOverride)
+	if functionName == "" {
+		functionName = session.SelectedLambdaFunctionName
+	}
+	if functionName == "" {
+		functionName = s.selectedLambdaFunctionName(session, s.lambdaFunctions(context.Background(), profile, region))
+	}
+	if functionName == "" {
+		return models.ProfileSummary{}, "", "", errors.New("select a Lambda function before using this action")
+	}
+	return profile, region, functionName, nil
+}
+
 func (s *Service) ec2Regions(ctx context.Context, profile models.ProfileSummary) []string {
 	const scope = "aws.ec2.regions"
 	queryHash := profile.ProfileID
@@ -2223,6 +2434,89 @@ func (s *Service) selectedEC2InstanceID(
 		return ""
 	}
 	return instances[0].InstanceID
+}
+
+// lambdaRegions reuses the EC2 region list for an AWS profile (single source of
+// truth for account regions, cheap, avoids duplicating the DescribeRegions call).
+func (s *Service) lambdaRegions(ctx context.Context, profile models.ProfileSummary) []string {
+	if s.ec2 == nil {
+		if hint := profileRegionHint(profile); hint != "" {
+			return []string{hint}
+		}
+		return []string{}
+	}
+	regs, err := s.ec2.ListRegions(ctx, profile)
+	if err != nil || len(regs) == 0 {
+		if hint := profileRegionHint(profile); hint != "" {
+			return []string{hint}
+		}
+		return []string{}
+	}
+	return regs
+}
+
+func (s *Service) selectedLambdaRegion(
+	session models.SessionSnapshot,
+	regions []string,
+	profile models.ProfileSummary,
+) string {
+	if session.SelectedLambdaRegion != "" {
+		for _, region := range regions {
+			if region == session.SelectedLambdaRegion {
+				return session.SelectedLambdaRegion
+			}
+		}
+	}
+	hint := profileRegionHint(profile)
+	for _, region := range regions {
+		if region == hint {
+			return hint
+		}
+	}
+	if len(regions) == 0 {
+		return ""
+	}
+	return regions[0]
+}
+
+func (s *Service) lambdaFunctions(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+) []models.AwsLambdaFunction {
+	if region == "" {
+		return []models.AwsLambdaFunction{}
+	}
+	const scope = "aws.lambda.functions"
+	queryHash := profile.ProfileID + "|" + region
+	functions, err := s.lambda.ListFunctions(ctx, profile, region)
+	if err == nil {
+		_ = s.store.SaveResourceCache(ctx, scope, queryHash, functions, s.timestamp())
+		return functions
+	}
+	var cached []models.AwsLambdaFunction
+	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
+	if cacheErr == nil && ok {
+		return cached
+	}
+	return []models.AwsLambdaFunction{}
+}
+
+func (s *Service) selectedLambdaFunctionName(
+	session models.SessionSnapshot,
+	functions []models.AwsLambdaFunction,
+) string {
+	if session.SelectedLambdaFunctionName != "" {
+		for _, fn := range functions {
+			if fn.FunctionName == session.SelectedLambdaFunctionName {
+				return session.SelectedLambdaFunctionName
+			}
+		}
+	}
+	if len(functions) == 0 {
+		return ""
+	}
+	return functions[0].FunctionName
 }
 
 func selectedEC2State(instances []models.AwsEc2Instance, instanceID string) string {

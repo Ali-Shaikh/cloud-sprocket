@@ -48,6 +48,7 @@ import { CommandPalette, type Command } from "./components/command-palette";
 import DebugView from "./views/DebugView";
 import StorageView from "./views/workspace/StorageView";
 import ComputeView from "./views/workspace/ComputeView";
+import LambdaView from "./views/workspace/LambdaView";
 import AzureView from "./views/workspace/AzureView";
 import RuntimeView from "./views/workspace/RuntimeView";
 import PlaceholderView from "./views/workspace/PlaceholderView";
@@ -335,6 +336,8 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     s3ExportSnippets: normaliseArray(source.s3ExportSnippets).map(normaliseS3ExportSnippet),
     ec2Regions: normaliseArray(source.ec2Regions),
     ec2Instances: normaliseArray(source.ec2Instances).map(normaliseEC2Instance),
+    lambdaRegions: normaliseArray(source.lambdaRegions),
+    lambdaFunctions: normaliseArray(source.lambdaFunctions),
   };
 }
 
@@ -387,6 +390,8 @@ const emptyWorkspace: WorkspaceSnapshot = {
   s3ExportSnippets: [],
   ec2Regions: [],
   ec2Instances: [],
+  lambdaRegions: [],
+  lambdaFunctions: [],
   runtimeSettings: emptySettings,
 };
 
@@ -405,6 +410,10 @@ export default function App() {
   const [ec2ActionStatus, setEC2ActionStatus] = useState("Select an EC2 region before refreshing inventory.");
   const [ec2ActionInFlight, setEC2ActionInFlight] = useState(false);
   const [ec2ActionHistory, setEC2ActionHistory] = useState<EC2ActionHistoryItem[]>([]);
+
+  const [lambdaActionStatus, setLambdaActionStatus] = useState("Select a region before refreshing Lambda functions.");
+  const [lambdaInvokeResult, setLambdaInvokeResult] = useState<any>(null);
+  const [lambdaInvokeInFlight, setLambdaInvokeInFlight] = useState(false);
   const [loading, setLoading] = useState(true);
   const [openingProfileId, setOpeningProfileId] = useState<string>();
   const [localStackAuthToken, setLocalStackAuthToken] = useState("");
@@ -761,6 +770,64 @@ export default function App() {
         setEC2ActionStatus(error instanceof Error ? error.message : String(error));
         setEC2ActionInFlight(false);
       });
+  }
+
+  // Lambda handlers (v0.6 cloud breadth). Mirror EC2 style for region/function select + safe invoke.
+  function refreshLambdaInventory(): void {
+    const region = workspace.selectedLambdaRegion;
+    if (!region) {
+      setLambdaActionStatus("Select a region before refreshing Lambda inventory.");
+      return;
+    }
+    setLambdaActionStatus(`Refreshing Lambda functions for ${region}.`);
+    void backendRequest<WorkspaceSnapshot>("aws.lambda.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setLambdaActionStatus(workspaceResult.lambdaStatusMessage || `Loaded Lambda functions from ${region}.`);
+        setLambdaInvokeResult(null);
+      })
+      .catch((error: unknown) => {
+        setLambdaActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function selectLambdaRegion(region: string): void {
+    setLambdaActionStatus("Select a function to view config/logs or invoke.");
+    setLambdaInvokeInFlight(false);
+    setLambdaInvokeResult(null);
+    void backendRequest<WorkspaceSnapshot>("aws.lambda.selectRegion", { region }).then((workspaceResult) => {
+      startTransition(() => {
+        setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+      });
+    });
+  }
+
+  function selectLambdaFunction(functionName: string): void {
+    setLambdaInvokeResult(null);
+    void backendRequest<WorkspaceSnapshot>("aws.lambda.selectFunction", { functionName }).then((workspaceResult) => {
+      startTransition(() => {
+        setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+      });
+    });
+  }
+
+  function invokeLambda(functionName: string, payload: unknown): void {
+    if (lambdaInvokeInFlight) return;
+    setLambdaInvokeInFlight(true);
+    const region = workspace.selectedLambdaRegion || "us-east-1";
+    setLambdaActionStatus(`Invoking ${functionName} in ${region}...`);
+    void backendRequest<any>("aws.lambda.invoke", { functionName, payload: payload || {} })
+      .then((result) => {
+        setLambdaInvokeResult(result);
+        setLambdaActionStatus(`Invoke completed (status ${result?.statusCode ?? "?"})`);
+      })
+      .catch((error: unknown) => {
+        setLambdaActionStatus(error instanceof Error ? error.message : String(error));
+        setLambdaInvokeResult({ error: String(error) });
+      })
+      .finally(() => setLambdaInvokeInFlight(false));
   }
 
   // Applies an S3 prefix filter, ignoring stale responses that finish after a
@@ -1268,6 +1335,17 @@ export default function App() {
       onSelectInstance={selectEC2Instance}
       onInvokeAction={invokeEC2LifecycleAction}
     />
+  ) : session.isLocked && activeWorkspaceTabId === "lambda" ? (
+    <LambdaView
+      workspace={workspace}
+      actionStatus={lambdaActionStatus}
+      invokeResult={lambdaInvokeResult}
+      invokeInFlight={lambdaInvokeInFlight}
+      onRefresh={refreshLambdaInventory}
+      onSelectRegion={selectLambdaRegion}
+      onSelectFunction={selectLambdaFunction}
+      onInvoke={invokeLambda}
+    />
   ) : session.isLocked &&
     ["azure-overview", "azure-resource-groups", "azure-vms"].includes(activeWorkspaceTabId) ? (
     <AzureView
@@ -1547,6 +1625,14 @@ export default function App() {
         ],
       });
     }
+    if (activeWorkspaceTabId === "lambda" || workspace.lambdaFunctions?.length) {
+      groups.push({
+        label: "Compute",
+        items: [
+          { id: "lambda", label: "Functions" },
+        ],
+      });
+    }
     groups.push({ label: "Tools", items: [{ id: "debug", label: "Debug console", icon: Bug }] });
     return groups;
   }
@@ -1796,6 +1882,7 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     debug: "Debug console",
     s3: "Storage",
     ec2: "Compute",
+    lambda: "Lambda",
     "azure-overview": "Azure",
     "azure-resource-groups": "Resource groups",
     "azure-vms": "Virtual machines",

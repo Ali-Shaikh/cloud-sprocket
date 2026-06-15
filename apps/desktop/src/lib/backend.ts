@@ -20,6 +20,7 @@ import type {
   TofuStatus,
   WorkspaceSnapshot,
   WorkspaceTab,
+  AwsLambdaInvokeResult,
 } from "../types/backend";
 
 export type BackendEventName =
@@ -261,6 +262,28 @@ const mockWorkspaceInstances = [
 ];
 
 const mockWorkspaceRegions = ["us-east-1", "eu-west-2"];
+
+const mockWorkspaceLambdaFunctions = [
+  {
+    functionName: "process-order",
+    runtime: "nodejs20.x",
+    memorySize: 512,
+    lastModified: "2026-06-10T12:00:00Z",
+    description: "Handles order processing from SQS",
+    state: "Active",
+    handler: "index.handler",
+    timeout: 30,
+    logGroup: "/aws/lambda/process-order",
+    recentLogs: ["2026-06-15 10:05:12 START RequestId: abc123", "2026-06-15 10:05:12 END RequestId: abc123"],
+  },
+  {
+    functionName: "resize-image",
+    runtime: "python3.12",
+    memorySize: 1024,
+    lastModified: "2026-06-12T08:30:00Z",
+    state: "Active",
+  },
+];
 
 const mockAzureResourceGroups = [
   {
@@ -791,6 +814,13 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       : "EC2 inventory is only available for open AWS workspaces.",
     ec2Regions: isAWSWorkspace ? mockWorkspaceRegions : [],
     ec2Instances: isAWSWorkspace ? mockWorkspaceInstances : [],
+    selectedLambdaRegion: isAWSWorkspace ? mockState.session.selectedLambdaRegion ?? mockWorkspaceRegions[0] : undefined,
+    selectedLambdaFunctionName: isAWSWorkspace ? mockState.session.selectedLambdaFunctionName ?? mockWorkspaceLambdaFunctions[0]?.functionName : undefined,
+    lambdaStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceLambdaFunctions.length} Lambda functions from ${mockState.session.selectedLambdaRegion ?? mockWorkspaceRegions[0]}.`
+      : "Lambda inventory is only available for open AWS workspaces.",
+    lambdaRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
+    lambdaFunctions: isAWSWorkspace ? mockWorkspaceLambdaFunctions : [],
   };
 }
 
@@ -1160,6 +1190,32 @@ function handleMockRequest<T>(
         });
       }, 30);
       return Promise.resolve(job as T);
+    }
+    case "aws.lambda.selectRegion":
+      mockState.session.selectedLambdaRegion = String(params.region ?? "");
+      mockState.session.selectedLambdaFunctionName = undefined;
+      appendLog("info", `Selected Lambda region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.lambda.selectFunction":
+      mockState.session.selectedLambdaFunctionName = String(params.functionName ?? "");
+      appendLog("info", `Selected Lambda function ${params.functionName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.lambda.describe": {
+      const name = String(params.functionName ?? mockState.session.selectedLambdaFunctionName ?? "");
+      const fn = mockWorkspaceLambdaFunctions.find((f) => f.functionName === name) || mockWorkspaceLambdaFunctions[0];
+      return Promise.resolve((fn || {}) as T);
+    }
+    case "aws.lambda.invoke": {
+      const name = String(params.functionName ?? "");
+      const payload = params.payload ? JSON.stringify(params.payload) : "{}";
+      const result: AwsLambdaInvokeResult = {
+        statusCode: 200,
+        executedVersion: "$LATEST",
+        logResult: "START RequestId: mock-123\nEND RequestId: mock-123\nREPORT ...",
+        payload: `{"echoed": ${payload}}`,
+      };
+      appendLog("success", `Invoked Lambda ${name} (mock).`);
+      return Promise.resolve(result as T);
     }
     case "azure.selectResourceGroup":
       mockState.session.selectedAzureResourceGroup = String(params.resourceGroup ?? "");
