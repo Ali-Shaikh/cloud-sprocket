@@ -1,0 +1,31 @@
+{
+  "name": "localstack-extensions",
+  "description": "Install, uninstall, list, and discover LocalStack Extensions from the marketplace",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "action": {
+        "description": "list = installed extensions; install = install an extension; uninstall = remove an extension; available = browse the marketplace/extensions library",
+        "type": "string",
+        "enum": [
+          "list",
+          "install",
+          "uninstall",
+          "available"
+        ]
+      },
+      "name": {
+        "description": "Extension package name (e.g. 'localstack-extension-typedb' or 'localstack-extension-typedb==1.0.0'). Required for install and uninstall actions.",
+        "type": "string"
+      },
+      "source": {
+        "description": "Git URL to install from (e.g. 'git+https://github.com/org/repo.git'). Use this instead of name when installing from a repository.",
+        "type": "string"
+      }
+    },
+    "required": [
+      "action"
+    ]
+  }
+}

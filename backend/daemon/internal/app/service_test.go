@@ -41,6 +41,20 @@ type stubDockerRuntime struct {
 	resources []models.ManagedDockerResource
 }
 
+type stubLambdaInventory struct{}
+
+func (stubLambdaInventory) ListFunctions(context.Context, models.ProfileSummary, string) ([]models.AwsLambdaFunction, error) {
+	return nil, nil
+}
+
+func (stubLambdaInventory) DescribeFunction(context.Context, models.ProfileSummary, string, string) (models.AwsLambdaFunction, error) {
+	return models.AwsLambdaFunction{}, nil
+}
+
+func (stubLambdaInventory) InvokeFunction(context.Context, models.ProfileSummary, string, string, []byte) (models.AwsLambdaInvokeResult, error) {
+	return models.AwsLambdaInvokeResult{StatusCode: 200, Payload: "{}"}, nil
+}
+
 func (s stubS3Inventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.AwsS3Bucket, error) {
 	return append([]models.AwsS3Bucket(nil), s.buckets...), nil
 }
@@ -243,6 +257,7 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 		}),
 		s3Inventory,
 		ec2Inventory,
+		stubLambdaInventory{},
 		stubAzureInventory{},
 		dockerRuntime,
 	)
@@ -504,6 +519,7 @@ func TestServiceReportsFailedEC2ActionJob(t *testing.T) {
 		}),
 		&stubS3Inventory{},
 		ec2Inventory,
+		stubLambdaInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -571,6 +587,7 @@ func TestServiceRejectsEC2ActionWithoutLocalEndpoint(t *testing.T) {
 		}),
 		&stubS3Inventory{},
 		ec2Inventory,
+		stubLambdaInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -626,6 +643,7 @@ func TestServiceRejectsEC2ActionWithoutWriteOptIn(t *testing.T) {
 		}),
 		&stubS3Inventory{},
 		ec2Inventory,
+		stubLambdaInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -690,7 +708,7 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 		}
 		return "", nil
 	})
-	firstService := New(settings, firstStore, discoveryService, s3Inventory, ec2Inventory, stubAzureInventory{}, stubDockerRuntime{})
+	firstService := New(settings, firstStore, discoveryService, s3Inventory, ec2Inventory, stubLambdaInventory{}, stubAzureInventory{}, stubDockerRuntime{})
 	ctx := context.Background()
 
 	if _, err := firstService.Handle(ctx, "session.lock", nil, nil); err != nil {
@@ -714,7 +732,7 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 		t.Fatalf("expected sqlite store to reopen, got %v", err)
 	}
 	defer secondStore.Close()
-	secondService := New(settings, secondStore, discoveryService, s3Inventory, ec2Inventory, stubAzureInventory{}, stubDockerRuntime{})
+	secondService := New(settings, secondStore, discoveryService, s3Inventory, ec2Inventory, stubLambdaInventory{}, stubAzureInventory{}, stubDockerRuntime{})
 
 	sessionResult, err := secondService.Handle(ctx, "session.get", nil, nil)
 	if err != nil {
@@ -780,6 +798,7 @@ func TestServiceResetClearsOnlyAppOwnedState(t *testing.T) {
 		}),
 		&stubS3Inventory{},
 		&stubEC2Inventory{},
+		stubLambdaInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -889,6 +908,7 @@ func TestPrepareProfileWritesDiscoverableLocalProfiles(t *testing.T) {
 		discovery.New(settings, func(string) (string, error) { return "", nil }),
 		&stubS3Inventory{},
 		&stubEC2Inventory{},
+		stubLambdaInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -986,6 +1006,7 @@ func TestDockerRuntimeProbeIsBoundedWhenEngineBlocks(t *testing.T) {
 		discovery.New(settings, func(string) (string, error) { return "", nil }),
 		&stubS3Inventory{},
 		&stubEC2Inventory{},
+		stubLambdaInventory{},
 		stubAzureInventory{},
 		blockingDockerRuntime{},
 	)
@@ -1043,6 +1064,7 @@ func TestUnlockNotBlockedBySlowWorkspaceFetch(t *testing.T) {
 		}),
 		&stubS3Inventory{},
 		&stubEC2Inventory{},
+		stubLambdaInventory{},
 		stubAzureInventory{},
 		blockingDockerRuntime{},
 	)

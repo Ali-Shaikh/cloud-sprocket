@@ -1,0 +1,68 @@
+{
+  "name": "localstack-deployer",
+  "description": "Deploys or destroys AWS infrastructure on LocalStack using CDK, Terraform, or SAM.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "action": {
+        "description": "The action to perform: 'deploy'/'destroy' for CDK/Terraform, or 'create-stack'/'delete-stack' for CloudFormation.",
+        "type": "string",
+        "enum": [
+          "deploy",
+          "destroy",
+          "create-stack",
+          "delete-stack"
+        ]
+      },
+      "projectType": {
+        "description": "The type of project. 'auto' (default) infers from files. Specify 'cdk', 'terraform', 'cloudformation', or 'sam' to override.",
+        "default": "auto",
+        "type": "string",
+        "enum": [
+          "cdk",
+          "terraform",
+          "sam",
+          "auto"
+        ]
+      },
+      "directory": {
+        "description": "The required path to the project directory containing your infrastructure-as-code files.",
+        "type": "string"
+      },
+      "variables": {
+        "description": "Key-value pairs for parameterization. Used for Terraform variables (-var) or CDK context (-c).",
+        "type": "object",
+        "propertyNames": {
+          "type": "string"
+        },
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
+      "stackName": {
+        "description": "The stack name used by CloudFormation and SAM. Required for 'create-stack'/'delete-stack' actions, and optional for SAM deploy/destroy (defaults can be inferred).",
+        "type": "string"
+      },
+      "templatePath": {
+        "description": "The local template file path used by CloudFormation and SAM. Required for 'create-stack' if not discoverable from 'directory', and optional for SAM as a template override.",
+        "type": "string"
+      },
+      "s3Bucket": {
+        "description": "S3 bucket name used by SAM deployments. If omitted, SAM can use --resolve-s3.",
+        "type": "string"
+      },
+      "resolveS3": {
+        "description": "For SAM deployments, whether to use --resolve-s3 when no s3Bucket is provided.",
+        "type": "boolean"
+      },
+      "saveParams": {
+        "description": "For SAM deployments, whether to persist resolved parameters to samconfig.toml using --save-params.",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "action"
+    ]
+  }
+}

@@ -199,6 +199,8 @@ type SessionSnapshot struct {
 	S3PrefixFilter             string             `json:"s3PrefixFilter,omitempty"`
 	SelectedEC2Region          string             `json:"selectedEc2Region,omitempty"`
 	SelectedEC2InstanceID      string             `json:"selectedEc2InstanceId,omitempty"`
+	SelectedLambdaRegion       string             `json:"selectedLambdaRegion,omitempty"`
+	SelectedLambdaFunctionName string             `json:"selectedLambdaFunctionName,omitempty"`
 	LockedProviderID           string             `json:"lockedProviderId,omitempty"`
 	LockedProfileID            string             `json:"lockedProfileId,omitempty"`
 	LockedAuthMethod           AuthMethod         `json:"lockedAuthMethod,omitempty"`
@@ -270,6 +272,31 @@ type AwsEc2Instance struct {
 	Tags             []DetailField `json:"tags,omitempty"`
 }
 
+// AwsLambdaFunction models a Lambda function for inventory (list + describe).
+// RecentLogs populated on describe for the function's CloudWatch log group.
+type AwsLambdaFunction struct {
+	FunctionName string   `json:"functionName"`
+	Runtime      string   `json:"runtime,omitempty"`
+	MemorySize   int32    `json:"memorySize,omitempty"`
+	LastModified string   `json:"lastModified,omitempty"`
+	Description  string   `json:"description,omitempty"`
+	State        string   `json:"state,omitempty"`
+	CodeSize     int64    `json:"codeSize,omitempty"`
+	Handler      string   `json:"handler,omitempty"`
+	Timeout      int32    `json:"timeout,omitempty"`
+	LogGroup     string   `json:"logGroup,omitempty"`
+	RecentLogs   []string `json:"recentLogs,omitempty"`
+}
+
+// AwsLambdaInvokeResult is the (safe) write action result for testing a function.
+type AwsLambdaInvokeResult struct {
+	StatusCode      int32  `json:"statusCode"`
+	ExecutedVersion string `json:"executedVersion,omitempty"`
+	FunctionError   string `json:"functionError,omitempty"`
+	LogResult       string `json:"logResult,omitempty"`
+	Payload         string `json:"payload,omitempty"`
+}
+
 type AzureResourceGroup struct {
 	Name              string        `json:"name"`
 	Location          string        `json:"location,omitempty"`
@@ -318,6 +345,11 @@ type WorkspaceSnapshot struct {
 	EC2StatusMessage           string                  `json:"ec2StatusMessage,omitempty"`
 	EC2Regions                 []string                `json:"ec2Regions"`
 	EC2Instances               []AwsEc2Instance        `json:"ec2Instances"`
+	SelectedLambdaRegion       string                  `json:"selectedLambdaRegion,omitempty"`
+	SelectedLambdaFunctionName string                  `json:"selectedLambdaFunctionName,omitempty"`
+	LambdaStatusMessage        string                  `json:"lambdaStatusMessage,omitempty"`
+	LambdaRegions              []string                `json:"lambdaRegions"`
+	LambdaFunctions            []AwsLambdaFunction     `json:"lambdaFunctions"`
 	SelectedAzureResourceGroup string                  `json:"selectedAzureResourceGroup,omitempty"`
 	SelectedAzureVMID          string                  `json:"selectedAzureVmId,omitempty"`
 	AzureStatusMessage         string                  `json:"azureStatusMessage,omitempty"`

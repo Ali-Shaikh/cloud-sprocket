@@ -1,0 +1,41 @@
+{
+  "name": "localstack-state-management",
+  "description": "Export, import, reset, and inspect LocalStack state using local file-based workflows on disk.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "action": {
+        "description": "The local LocalStack state action to perform through the LocalStack State REST API. Use this tool for file-based state export/import workflows on disk. Use Cloud Pods instead when the user wants remote cloud-backed state snapshots.",
+        "type": "string",
+        "enum": [
+          "export",
+          "import",
+          "reset",
+          "inspect"
+        ]
+      },
+      "file_path": {
+        "description": "Local file path for state export or import. Required for import. For export, defaults to ls-state-export in the MCP server working directory if omitted.",
+        "type": "string"
+      },
+      "services": {
+        "description": "Optional AWS service names for service-level granularity, such as ['s3', 'lambda'] or 's3,lambda'. Supported for export, reset, and inspect. Import restores the services contained in the state file.",
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          {
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "required": [
+      "action"
+    ]
+  }
+}
