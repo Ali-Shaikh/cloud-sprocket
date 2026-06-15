@@ -800,7 +800,7 @@ function CopyButton({ value }: { value: string }) {
   );
 }
 
-function logCommandsForDeployment(deployment: Deployment): LogCommand[] {
+export function logCommandsForDeployment(deployment: Deployment): LogCommand[] {
   const appName = stringVariable(deployment.variables.app_name, recipeDefaultAppName(deployment.recipeId));
   const environment = stringVariable(deployment.variables.environment, "dev");
   const region = stringVariable(deployment.variables.aws_region, "us-east-1");
@@ -845,10 +845,17 @@ function cloudWatchTailCommand(
 ): LogCommand {
   const command = deployment.local
     ? [
-        `$env:AWS_ACCESS_KEY_ID="test"`,
-        `$env:AWS_SECRET_ACCESS_KEY="test"`,
-        `aws --endpoint-url="http://localhost:4566" logs tail "${logGroup}" --follow --region "${region}"`,
-      ].join("; ")
+        "aws",
+        "--endpoint-url",
+        quoteArg("http://localhost:4566"),
+        "--no-sign-request",
+        "logs",
+        "tail",
+        quoteArg(logGroup),
+        "--follow",
+        "--region",
+        quoteArg(region),
+      ].join(" ")
     : [
         "aws",
         "logs",
