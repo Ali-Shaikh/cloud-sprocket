@@ -69,6 +69,8 @@ const workspaceFixture: WorkspaceSnapshot = {
   selectedLambdaFunctionName: "process-order",
   lambdaStatusMessage: "Loaded 2 Lambda functions from us-east-1.",
   lambdaRegions: ["us-east-1"],
+  dynamodbRegions: [],
+  dynamodbTables: [],
   lambdaFunctions: [
     {
       functionName: "process-order",

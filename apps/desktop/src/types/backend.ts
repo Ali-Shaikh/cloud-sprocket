@@ -125,6 +125,8 @@ export interface SessionSnapshot {
   selectedEc2InstanceId?: string;
   selectedLambdaRegion?: string;
   selectedLambdaFunctionName?: string;
+  selectedDynamodbRegion?: string;
+  selectedDynamodbTableName?: string;
   lockedProviderId?: string;
   lockedProfileId?: string;
   lockedAuthMethod?: AuthMethod;
@@ -232,6 +234,25 @@ export interface AwsLambdaCreateInput {
 
 export type LambdaCreateCodeSource = "starter" | "inline" | "zip";
 
+export interface AwsDynamoDBGlobalSecondaryIndex {
+  indexName: string;
+  hashKey?: string;
+  rangeKey?: string;
+  status?: string;
+}
+
+export interface AwsDynamoDBTable {
+  tableName: string;
+  status?: string;
+  itemCount?: number;
+  tableSizeBytes?: number;
+  billingMode?: string;
+  hashKey?: string;
+  rangeKey?: string;
+  globalSecondaryIndexes?: AwsDynamoDBGlobalSecondaryIndex[];
+  sampleItems?: string[];
+}
+
 export interface AzureResourceGroup {
   name: string;
   location?: string;
@@ -290,6 +311,11 @@ export interface WorkspaceSnapshot {
   lambdaStatusMessage?: string;
   lambdaRegions: string[];
   lambdaFunctions: AwsLambdaFunction[];
+  selectedDynamodbRegion?: string;
+  selectedDynamodbTableName?: string;
+  dynamodbStatusMessage?: string;
+  dynamodbRegions: string[];
+  dynamodbTables: AwsDynamoDBTable[];
 }
 
 export interface JobStatus {

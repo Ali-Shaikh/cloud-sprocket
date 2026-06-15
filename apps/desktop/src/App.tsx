@@ -10,6 +10,7 @@ import type { ErrorInfo, ReactNode } from "react";
 import { ArrowLeftRight, Boxes, Bug, LayoutGrid, Rocket, Server, Trash2, TriangleAlert } from "lucide-react";
 import { Toaster } from "sonner";
 import awsEc2IconUrl from "./assets/cloud-icons/aws-ec2.svg";
+import awsDynamodbIconUrl from "./assets/cloud-icons/aws-dynamodb.svg";
 import awsLambdaIconUrl from "./assets/cloud-icons/aws-lambda.svg";
 import awsS3IconUrl from "./assets/cloud-icons/aws-s3.svg";
 import azureIconUrl from "./assets/cloud-icons/azure.svg";
@@ -49,6 +50,7 @@ import { CommandPalette, type Command } from "./components/command-palette";
 import DebugView from "./views/DebugView";
 import StorageView from "./views/workspace/StorageView";
 import ComputeView from "./views/workspace/ComputeView";
+import DynamoDBView from "./views/workspace/DynamoDBView";
 import LambdaView from "./views/workspace/LambdaView";
 import AzureView from "./views/workspace/AzureView";
 import RuntimeView from "./views/workspace/RuntimeView";
@@ -60,6 +62,7 @@ import type {
   AppSettingsSnapshot,
   AuthMethod,
   AuthMethodStatus,
+  AwsDynamoDBTable,
   AwsEc2Instance,
   AwsLambdaCreateInput,
   AwsLambdaFunction,
@@ -283,6 +286,14 @@ function normaliseLambdaFunction(fn: AwsLambdaFunction): AwsLambdaFunction {
   };
 }
 
+function normaliseDynamoDBTable(table: AwsDynamoDBTable): AwsDynamoDBTable {
+  return {
+    ...table,
+    globalSecondaryIndexes: normaliseArray(table.globalSecondaryIndexes),
+    sampleItems: normaliseArray(table.sampleItems),
+  };
+}
+
 function normaliseSessionSnapshot(session: Partial<SessionSnapshot> | null | undefined): SessionSnapshot {
   return {
     ...emptySession,
@@ -349,6 +360,8 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     ec2Instances: normaliseArray(source.ec2Instances).map(normaliseEC2Instance),
     lambdaRegions: normaliseArray(source.lambdaRegions),
     lambdaFunctions: normaliseArray(source.lambdaFunctions).map(normaliseLambdaFunction),
+    dynamodbRegions: normaliseArray(source.dynamodbRegions),
+    dynamodbTables: normaliseArray(source.dynamodbTables).map(normaliseDynamoDBTable),
   };
 }
 
@@ -403,6 +416,8 @@ const emptyWorkspace: WorkspaceSnapshot = {
   ec2Instances: [],
   lambdaRegions: [],
   lambdaFunctions: [],
+  dynamodbRegions: [],
+  dynamodbTables: [],
   runtimeSettings: emptySettings,
 };
 
@@ -427,6 +442,9 @@ export default function App() {
   const [lambdaInvokeInFlight, setLambdaInvokeInFlight] = useState(false);
   const [lambdaCreateInFlight, setLambdaCreateInFlight] = useState(false);
   const [lambdaCreateFormOpen, setLambdaCreateFormOpen] = useState(false);
+  const [dynamodbActionStatus, setDynamodbActionStatus] = useState(
+    "Select a region before refreshing DynamoDB tables.",
+  );
   const [loading, setLoading] = useState(true);
   const [openingProfileId, setOpeningProfileId] = useState<string>();
   const [localStackAuthToken, setLocalStackAuthToken] = useState("");
@@ -887,6 +905,58 @@ export default function App() {
       .finally(() => setLambdaCreateInFlight(false));
   }
 
+  function refreshDynamoDBInventory(): void {
+    const region = workspace.selectedDynamodbRegion;
+    if (!region) {
+      setDynamodbActionStatus("Select a region before refreshing DynamoDB inventory.");
+      return;
+    }
+    setDynamodbActionStatus(`Refreshing DynamoDB tables for ${region}.`);
+    void backendRequest<WorkspaceSnapshot>("aws.dynamodb.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setDynamodbActionStatus(
+          workspaceResult.dynamodbStatusMessage || `Loaded DynamoDB tables from ${region}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setDynamodbActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function selectDynamoDBRegion(region: string): void {
+    setDynamodbActionStatus(`Loading DynamoDB tables for ${region}.`);
+    void backendRequest<WorkspaceSnapshot>("aws.dynamodb.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setDynamodbActionStatus(
+          workspaceResult.dynamodbStatusMessage || `Loaded DynamoDB tables from ${region}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setDynamodbActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function selectDynamoDBTable(tableName: string): void {
+    void backendRequest<WorkspaceSnapshot>("aws.dynamodb.selectTable", { tableName })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setDynamodbActionStatus(
+          workspaceResult.dynamodbStatusMessage || `Selected DynamoDB table ${tableName}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setDynamodbActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
   // Applies an S3 prefix filter, ignoring stale responses that finish after a
   // newer request has been issued (keeps fast typing from reverting the list).
   function applyS3PrefixFilter(prefix: string): void {
@@ -1067,6 +1137,9 @@ export default function App() {
       setWorkspace(normalised);
       if (!lambdaInvokeInFlight && normalised.lambdaStatusMessage) {
         setLambdaActionStatus(normalised.lambdaStatusMessage);
+      }
+      if (normalised.dynamodbStatusMessage) {
+        setDynamodbActionStatus(normalised.dynamodbStatusMessage);
       }
     });
   }
@@ -1349,6 +1422,9 @@ export default function App() {
         if (context?.lambdaFunctionName) {
           selectLambdaFunction(context.lambdaFunctionName);
         }
+        if (context?.dynamodbTableName) {
+          selectDynamoDBTable(context.dynamodbTableName);
+        }
         if (context?.ec2InstanceId) {
           selectEC2Instance(context.ec2InstanceId);
         }
@@ -1422,6 +1498,14 @@ export default function App() {
       onCreate={createLambda}
       openCreateForm={lambdaCreateFormOpen}
       onCreateFormOpenChange={setLambdaCreateFormOpen}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "dynamodb" ? (
+    <DynamoDBView
+      workspace={workspace}
+      actionStatus={dynamodbActionStatus}
+      onRefresh={refreshDynamoDBInventory}
+      onSelectRegion={selectDynamoDBRegion}
+      onSelectTable={selectDynamoDBTable}
     />
   ) : session.isLocked &&
     ["azure-overview", "azure-resource-groups", "azure-vms"].includes(activeWorkspaceTabId) ? (
@@ -1952,6 +2036,7 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     s3: "Storage",
     ec2: "Compute",
     lambda: "Lambda",
+    dynamodb: "DynamoDB",
     "azure-overview": "Azure",
     "azure-resource-groups": "Resource groups",
     "azure-vms": "Virtual machines",
@@ -1971,6 +2056,8 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
       return { ...base, iconUrl: awsEc2IconUrl, count: workspace.ec2Instances.length };
     case "lambda":
       return { ...base, iconUrl: awsLambdaIconUrl, count: workspace.lambdaFunctions.length };
+    case "dynamodb":
+      return { ...base, iconUrl: awsDynamodbIconUrl, count: workspace.dynamodbTables.length };
     case "azure-overview":
     case "azure-resource-groups":
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureResourceGroups.length };
