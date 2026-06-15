@@ -131,6 +131,12 @@ const mockWorkspaceTabs: WorkspaceTab[] = [
     detail: "List tables by region, inspect keys and GSIs, and scan the first items read-only.",
   },
   {
+    tabId: "sqs",
+    label: "SQS",
+    summary: "Queue inventory, depth metrics, and safe message peek.",
+    detail: "List queues by region, inspect depth and in-flight counts, and peek messages without deleting them.",
+  },
+  {
     tabId: "actions",
     label: "Activity",
     summary: "Recent job, log, and refresh history.",
@@ -274,6 +280,29 @@ const mockWorkspaceInstances = [
 ];
 
 const mockWorkspaceRegions = ["us-east-1", "eu-west-2"];
+
+const mockWorkspaceSQSQueues = [
+  {
+    queueName: "process-order",
+    queueUrl: "http://localhost:4566/000000000000/process-order",
+    approximateNumberOfMessages: 4,
+    approximateNumberOfMessagesNotVisible: 1,
+    approximateNumberOfMessagesDelayed: 0,
+    visibilityTimeout: 30,
+    createdTimestamp: 1718452800,
+    queueArn: "arn:aws:sqs:us-east-1:000000000000:process-order",
+    receiveMessageWaitTimeSeconds: 0,
+  },
+  {
+    queueName: "cloudsprocket-events",
+    queueUrl: "http://localhost:4566/000000000000/cloudsprocket-events",
+    approximateNumberOfMessages: 0,
+    approximateNumberOfMessagesNotVisible: 0,
+    visibilityTimeout: 30,
+    createdTimestamp: 1718366400,
+    queueArn: "arn:aws:sqs:us-east-1:000000000000:cloudsprocket-events",
+  },
+];
 
 const mockWorkspaceDynamoDBTables = [
   {
@@ -883,6 +912,17 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       : "DynamoDB inventory is only available for open AWS workspaces.",
     dynamodbRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
     dynamodbTables: isAWSWorkspace ? mockWorkspaceDynamoDBTables : [],
+    selectedSqsRegion: isAWSWorkspace
+      ? mockState.session.selectedSqsRegion ?? mockWorkspaceRegions[0]
+      : undefined,
+    selectedSqsQueueUrl: isAWSWorkspace
+      ? mockState.session.selectedSqsQueueUrl ?? mockWorkspaceSQSQueues[0]?.queueUrl
+      : undefined,
+    sqsStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceSQSQueues.length} SQS queues from ${mockState.session.selectedSqsRegion ?? mockWorkspaceRegions[0]}.`
+      : "SQS inventory is only available for open AWS workspaces.",
+    sqsRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
+    sqsQueues: isAWSWorkspace ? mockWorkspaceSQSQueues : [],
   };
 }
 
@@ -1262,6 +1302,33 @@ function handleMockRequest<T>(
       mockState.session.selectedDynamodbTableName = String(params.tableName ?? "");
       appendLog("info", `Selected DynamoDB table ${params.tableName}.`);
       return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.sqs.selectRegion":
+      mockState.session.selectedSqsRegion = String(params.region ?? "");
+      mockState.session.selectedSqsQueueUrl = undefined;
+      appendLog("info", `Selected SQS region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.sqs.selectQueue":
+      mockState.session.selectedSqsQueueUrl = String(params.queueUrl ?? "");
+      appendLog("info", `Selected SQS queue ${params.queueUrl}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.sqs.peek": {
+      const queueUrl = String(params.queueUrl ?? mockState.session.selectedSqsQueueUrl ?? "");
+      const queue =
+        mockWorkspaceSQSQueues.find((candidate) => candidate.queueUrl === queueUrl) ??
+        mockWorkspaceSQSQueues[0];
+      return Promise.resolve({
+        queueUrl: queue.queueUrl,
+        summary: "Peeked 1 messages without deleting them.",
+        messages: [
+          {
+            messageId: "mock-msg-001",
+            body: JSON.stringify({ orderId: "ord-001", status: "pending" }),
+            sentTimestamp: 1718452800,
+            approximateReceiveCount: 1,
+          },
+        ],
+      } as T);
+    }
     case "aws.lambda.selectRegion":
       mockState.session.selectedLambdaRegion = String(params.region ?? "");
       mockState.session.selectedLambdaFunctionName = undefined;

@@ -13,6 +13,7 @@ import awsEc2IconUrl from "./assets/cloud-icons/aws-ec2.svg";
 import awsDynamodbIconUrl from "./assets/cloud-icons/aws-dynamodb.svg";
 import awsLambdaIconUrl from "./assets/cloud-icons/aws-lambda.svg";
 import awsS3IconUrl from "./assets/cloud-icons/aws-s3.svg";
+import awsSqsIconUrl from "./assets/cloud-icons/aws-sqs.svg";
 import azureIconUrl from "./assets/cloud-icons/azure.svg";
 import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
 import { notify, notifyJob, useNotifications, type NotificationTone } from "./lib/notify";
@@ -51,6 +52,7 @@ import DebugView from "./views/DebugView";
 import StorageView from "./views/workspace/StorageView";
 import ComputeView from "./views/workspace/ComputeView";
 import DynamoDBView from "./views/workspace/DynamoDBView";
+import SQSView from "./views/workspace/SQSView";
 import LambdaView from "./views/workspace/LambdaView";
 import AzureView from "./views/workspace/AzureView";
 import RuntimeView from "./views/workspace/RuntimeView";
@@ -67,6 +69,8 @@ import type {
   AwsLambdaCreateInput,
   AwsLambdaFunction,
   AwsLambdaInvokeResult,
+  AwsSqsPeekResult,
+  AwsSqsQueue,
   AwsS3PresignResult,
   AwsS3UploadResult,
   AwsS3Bucket,
@@ -294,6 +298,10 @@ function normaliseDynamoDBTable(table: AwsDynamoDBTable): AwsDynamoDBTable {
   };
 }
 
+function normaliseSqsQueue(queue: AwsSqsQueue): AwsSqsQueue {
+  return { ...queue };
+}
+
 function normaliseSessionSnapshot(session: Partial<SessionSnapshot> | null | undefined): SessionSnapshot {
   return {
     ...emptySession,
@@ -364,6 +372,8 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     lambdaFunctions: normaliseArray(source.lambdaFunctions).map(normaliseLambdaFunction),
     dynamodbRegions: normaliseArray(source.dynamodbRegions),
     dynamodbTables: normaliseArray(source.dynamodbTables).map(normaliseDynamoDBTable),
+    sqsRegions: normaliseArray(source.sqsRegions),
+    sqsQueues: normaliseArray(source.sqsQueues).map(normaliseSqsQueue),
   };
 }
 
@@ -422,6 +432,8 @@ const emptyWorkspace: WorkspaceSnapshot = {
   lambdaFunctions: [],
   dynamodbRegions: [],
   dynamodbTables: [],
+  sqsRegions: [],
+  sqsQueues: [],
   runtimeSettings: emptySettings,
 };
 
@@ -449,6 +461,11 @@ export default function App() {
   const [dynamodbActionStatus, setDynamodbActionStatus] = useState(
     "Select a region before refreshing DynamoDB tables.",
   );
+  const [sqsActionStatus, setSqsActionStatus] = useState(
+    "Select a region before refreshing SQS queues.",
+  );
+  const [sqsPeekResult, setSqsPeekResult] = useState<AwsSqsPeekResult | null>(null);
+  const [sqsPeekInFlight, setSqsPeekInFlight] = useState(false);
   const [writeModeDialogOpen, setWriteModeDialogOpen] = useState(false);
   const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<"enable" | "incapable">("enable");
   const [loading, setLoading] = useState(true);
@@ -989,6 +1006,72 @@ export default function App() {
       });
   }
 
+  function refreshSQSInventory(): void {
+    const region = workspace.selectedSqsRegion;
+    if (!region) {
+      setSqsActionStatus("Select a region before refreshing SQS inventory.");
+      return;
+    }
+    setSqsActionStatus(`Refreshing SQS queues for ${region}.`);
+    void backendRequest<WorkspaceSnapshot>("aws.sqs.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setSqsActionStatus(
+          workspaceResult.sqsStatusMessage || `Loaded SQS queues from ${region}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setSqsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function selectSQSRegion(region: string): void {
+    setSqsActionStatus(`Loading SQS queues for ${region}.`);
+    void backendRequest<WorkspaceSnapshot>("aws.sqs.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setSqsActionStatus(
+          workspaceResult.sqsStatusMessage || `Loaded SQS queues from ${region}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setSqsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function selectSQSQueue(queueUrl: string): void {
+    void backendRequest<WorkspaceSnapshot>("aws.sqs.selectQueue", { queueUrl })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setSqsActionStatus(
+          workspaceResult.sqsStatusMessage || "Selected SQS queue.",
+        );
+      })
+      .catch((error: unknown) => {
+        setSqsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function peekSQSQueue(queueUrl: string): void {
+    setSqsPeekInFlight(true);
+    setSqsActionStatus("Peeking SQS messages without deleting them.");
+    void backendRequest<AwsSqsPeekResult>("aws.sqs.peek", { queueUrl })
+      .then((result) => {
+        setSqsPeekResult(result);
+        setSqsActionStatus(result.summary || "SQS peek completed.");
+      })
+      .catch((error: unknown) => {
+        setSqsActionStatus(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => setSqsPeekInFlight(false));
+  }
+
   // Applies an S3 prefix filter, ignoring stale responses that finish after a
   // newer request has been issued (keeps fast typing from reverting the list).
   function applyS3PrefixFilter(prefix: string): void {
@@ -1172,6 +1255,9 @@ export default function App() {
       }
       if (normalised.dynamodbStatusMessage) {
         setDynamodbActionStatus(normalised.dynamodbStatusMessage);
+      }
+      if (!sqsPeekInFlight && normalised.sqsStatusMessage) {
+        setSqsActionStatus(normalised.sqsStatusMessage);
       }
     });
   }
@@ -1457,6 +1543,9 @@ export default function App() {
         if (context?.dynamodbTableName) {
           selectDynamoDBTable(context.dynamodbTableName);
         }
+        if (context?.sqsQueueUrl) {
+          selectSQSQueue(context.sqsQueueUrl);
+        }
         if (context?.ec2InstanceId) {
           selectEC2Instance(context.ec2InstanceId);
         }
@@ -1538,6 +1627,17 @@ export default function App() {
       onRefresh={refreshDynamoDBInventory}
       onSelectRegion={selectDynamoDBRegion}
       onSelectTable={selectDynamoDBTable}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "sqs" ? (
+    <SQSView
+      workspace={workspace}
+      actionStatus={sqsActionStatus}
+      peekResult={sqsPeekResult}
+      peekInFlight={sqsPeekInFlight}
+      onRefresh={refreshSQSInventory}
+      onSelectRegion={selectSQSRegion}
+      onSelectQueue={selectSQSQueue}
+      onPeek={peekSQSQueue}
     />
   ) : session.isLocked &&
     ["azure-overview", "azure-resource-groups", "azure-vms"].includes(activeWorkspaceTabId) ? (
@@ -2133,6 +2233,7 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     ec2: "Compute",
     lambda: "Lambda",
     dynamodb: "DynamoDB",
+    sqs: "SQS",
     "azure-overview": "Azure",
     "azure-resource-groups": "Resource groups",
     "azure-vms": "Virtual machines",
@@ -2154,6 +2255,8 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
       return { ...base, iconUrl: awsLambdaIconUrl, count: workspace.lambdaFunctions.length };
     case "dynamodb":
       return { ...base, iconUrl: awsDynamodbIconUrl, count: workspace.dynamodbTables.length };
+    case "sqs":
+      return { ...base, iconUrl: awsSqsIconUrl, count: workspace.sqsQueues.length };
     case "azure-overview":
     case "azure-resource-groups":
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureResourceGroups.length };
