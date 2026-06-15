@@ -131,8 +131,13 @@ type Service struct {
 	dockerSnapshotMu    sync.Mutex
 	dockerSnapshotValue *models.DockerRuntimeSnapshot
 	dockerSnapshotAt    time.Time
-	now                 func() time.Time
-	mu                  sync.Mutex
+	// deployCancels holds the cancel func for each in-flight deployment run
+	// (plan/apply/destroy), so deployments.cancel can abort the underlying tofu
+	// process via its context.
+	deployCancelsMu sync.Mutex
+	deployCancels   map[string]context.CancelFunc
+	now             func() time.Time
+	mu              sync.Mutex
 }
 
 func New(
@@ -852,6 +857,14 @@ func (s *Service) Handle(
 			return nil, err
 		}
 		return s.startDeploymentAction(request.DeploymentID, actionDestroy, notifier)
+	case "deployments.cancel":
+		var request struct {
+			DeploymentID string `json:"deploymentId"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"cancelled": true}, s.cancelDeployment(request.DeploymentID)
 	default:
 		return nil, fmt.Errorf("unknown backend method: %s", method)
 	}

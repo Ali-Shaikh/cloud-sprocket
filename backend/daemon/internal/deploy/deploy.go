@@ -34,6 +34,7 @@ const (
 	StatusDestroying Status = "destroying"
 	StatusDestroyed  Status = "destroyed"
 	StatusFailed     Status = "failed"
+	StatusCancelled  Status = "cancelled"
 )
 
 // Deployment is one instantiation of a recipe against a connection profile.

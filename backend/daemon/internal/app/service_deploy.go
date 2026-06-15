@@ -162,24 +162,72 @@ func (s *Service) startDeploymentAction(id string, action deploymentAction, noti
 	return deploymentJob{Deployment: deployment, Job: job}, nil
 }
 
+// registerDeployCancel records the cancel func for an in-flight deployment run.
+func (s *Service) registerDeployCancel(id string, cancel context.CancelFunc) {
+	s.deployCancelsMu.Lock()
+	defer s.deployCancelsMu.Unlock()
+	if s.deployCancels == nil {
+		s.deployCancels = map[string]context.CancelFunc{}
+	}
+	s.deployCancels[id] = cancel
+}
+
+// clearDeployCancel drops a deployment's cancel func once its run has finished.
+func (s *Service) clearDeployCancel(id string) {
+	s.deployCancelsMu.Lock()
+	defer s.deployCancelsMu.Unlock()
+	delete(s.deployCancels, id)
+}
+
+// cancelDeployment aborts the in-flight plan/apply/destroy for a deployment by
+// cancelling its run context, which kills the underlying tofu process.
+func (s *Service) cancelDeployment(id string) error {
+	s.deployCancelsMu.Lock()
+	cancel := s.deployCancels[id]
+	s.deployCancelsMu.Unlock()
+	if cancel == nil {
+		return fmt.Errorf("no operation is currently running for this deployment")
+	}
+	cancel()
+	return nil
+}
+
+// finishWithError ends a run that returned an error, reporting a user-initiated
+// cancellation distinctly from a genuine failure. Status persistence uses the
+// background ctx (not the cancelled runCtx) so the final state is still saved.
+func (s *Service) finishWithError(ctx, runCtx context.Context, deployment *deploy.Deployment, job models.JobStatus, notifier Notifier, cause error) {
+	if runCtx.Err() == context.Canceled {
+		deployment.Error = ""
+		s.setDeploymentStatus(ctx, deployment, deploy.StatusCancelled, notifier)
+		s.emitJobStatus(notifier, job, "failed", deployment.Name+" cancelled.")
+		return
+	}
+	s.failDeployment(ctx, deployment, job, notifier, cause)
+}
+
 func (s *Service) runDeploymentPlan(deployment *deploy.Deployment, job models.JobStatus, notifier Notifier) {
 	ctx := context.Background()
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	s.registerDeployCancel(deployment.ID, cancel)
+	defer s.clearDeployCancel(deployment.ID)
+
 	s.setDeploymentStatus(ctx, deployment, deploy.StatusPlanning, notifier)
 	s.emitJobStatus(notifier, job, "running", "Planning "+deployment.Name+".")
 
 	onLine := s.deploymentLogger(deployment.ID, job.JobID, notifier)
 	onLine("Checking " + targetLabel(deployment) + " connectivity...")
-	if err := s.deployer.Preflight(ctx, deployment); err != nil {
-		s.failDeployment(ctx, deployment, job, notifier, err)
+	if err := s.deployer.Preflight(runCtx, deployment); err != nil {
+		s.finishWithError(ctx, runCtx, deployment, job, notifier, err)
 		return
 	}
 	if err := s.deployer.Prepare(deployment); err != nil {
-		s.failDeployment(ctx, deployment, job, notifier, err)
+		s.finishWithError(ctx, runCtx, deployment, job, notifier, err)
 		return
 	}
-	summary, err := s.deployer.Plan(ctx, deployment, onLine)
+	summary, err := s.deployer.Plan(runCtx, deployment, onLine)
 	if err != nil {
-		s.failDeployment(ctx, deployment, job, notifier, err)
+		s.finishWithError(ctx, runCtx, deployment, job, notifier, err)
 		return
 	}
 	deployment.Plan = &summary
@@ -190,19 +238,24 @@ func (s *Service) runDeploymentPlan(deployment *deploy.Deployment, job models.Jo
 
 func (s *Service) runDeploymentAction(deployment *deploy.Deployment, action deploymentAction, job models.JobStatus, notifier Notifier) {
 	ctx := context.Background()
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	s.registerDeployCancel(deployment.ID, cancel)
+	defer s.clearDeployCancel(deployment.ID)
+
 	onLine := s.deploymentLogger(deployment.ID, job.JobID, notifier)
 
 	onLine("Checking " + targetLabel(deployment) + " connectivity...")
-	if err := s.deployer.Preflight(ctx, deployment); err != nil {
-		s.failDeployment(ctx, deployment, job, notifier, err)
+	if err := s.deployer.Preflight(runCtx, deployment); err != nil {
+		s.finishWithError(ctx, runCtx, deployment, job, notifier, err)
 		return
 	}
 
 	if action == actionDestroy {
 		s.setDeploymentStatus(ctx, deployment, deploy.StatusDestroying, notifier)
 		s.emitJobStatus(notifier, job, "running", "Destroying "+deployment.Name+".")
-		if err := s.deployer.Destroy(ctx, deployment, onLine); err != nil {
-			s.failDeployment(ctx, deployment, job, notifier, err)
+		if err := s.deployer.Destroy(runCtx, deployment, onLine); err != nil {
+			s.finishWithError(ctx, runCtx, deployment, job, notifier, err)
 			return
 		}
 		deployment.Outputs = nil
@@ -214,9 +267,9 @@ func (s *Service) runDeploymentAction(deployment *deploy.Deployment, action depl
 
 	s.setDeploymentStatus(ctx, deployment, deploy.StatusApplying, notifier)
 	s.emitJobStatus(notifier, job, "running", "Applying "+deployment.Name+".")
-	outputs, err := s.deployer.Apply(ctx, deployment, onLine)
+	outputs, err := s.deployer.Apply(runCtx, deployment, onLine)
 	if err != nil {
-		s.failDeployment(ctx, deployment, job, notifier, err)
+		s.finishWithError(ctx, runCtx, deployment, job, notifier, err)
 		return
 	}
 	deployment.Outputs = outputs

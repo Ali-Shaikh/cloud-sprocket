@@ -22,6 +22,10 @@ type fakeDeployer struct {
 	outputs      []deploy.Output
 	planErr      error
 	preflightErr error
+	// planBlocks makes Plan wait for context cancellation, modelling a
+	// long-running tofu invocation so cancellation can be exercised.
+	planBlocks bool
+	planStarted chan struct{}
 }
 
 func (f *fakeDeployer) Available() bool                         { return f.available }
@@ -34,9 +38,18 @@ func (f *fakeDeployer) Install(context.Context) (string, error) {
 func (f *fakeDeployer) Preflight(context.Context, *deploy.Deployment) error { return f.preflightErr }
 func (f *fakeDeployer) Prepare(*deploy.Deployment) error                    { return nil }
 
-func (f *fakeDeployer) Plan(_ context.Context, _ *deploy.Deployment, onLine tofu.LogFunc) (deploy.PlanSummary, error) {
+func (f *fakeDeployer) Plan(ctx context.Context, _ *deploy.Deployment, onLine tofu.LogFunc) (deploy.PlanSummary, error) {
 	if onLine != nil {
 		onLine("Initialising the backend...")
+	}
+	if f.planBlocks {
+		if f.planStarted != nil {
+			close(f.planStarted)
+		}
+		<-ctx.Done()
+		return deploy.PlanSummary{}, ctx.Err()
+	}
+	if onLine != nil {
 		onLine("Plan: 10 to add, 0 to change, 0 to destroy.")
 	}
 	return f.plan, f.planErr
@@ -260,6 +273,44 @@ func TestDeploymentPlanFailsFastWhenTargetUnreachable(t *testing.T) {
 	failed := waitForStatus(t, s, notifier, started.Deployment.ID, deploy.StatusFailed)
 	if !strings.Contains(failed.Error, "not reachable") {
 		t.Fatalf("expected an unreachable-target error, got %q", failed.Error)
+	}
+}
+
+func TestDeploymentCancelStopsRunningPlan(t *testing.T) {
+	deployer := &fakeDeployer{available: true, planBlocks: true, planStarted: make(chan struct{})}
+	s := newDeployTestService(t, deployer)
+	notifier := &captureNotifier{}
+
+	params := json.RawMessage(`{"recipeId":"serverless-fullstack-aws","providerId":"aws","local":true}`)
+	result, err := s.Handle(context.Background(), "deployments.plan", params, notifier)
+	if err != nil {
+		t.Fatalf("deployments.plan: %v", err)
+	}
+	started := result.(deploymentJob)
+
+	// Wait until the plan is actually running before cancelling.
+	select {
+	case <-deployer.planStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("plan did not start in time")
+	}
+
+	cancelParams := json.RawMessage(`{"deploymentId":"` + started.Deployment.ID + `"}`)
+	if _, err := s.Handle(context.Background(), "deployments.cancel", cancelParams, notifier); err != nil {
+		t.Fatalf("deployments.cancel: %v", err)
+	}
+
+	cancelled := waitForStatus(t, s, notifier, started.Deployment.ID, deploy.StatusCancelled)
+	if cancelled.Error != "" {
+		t.Fatalf("a cancelled deployment should not carry an error, got %q", cancelled.Error)
+	}
+}
+
+func TestDeploymentCancelWithoutRunningOperationErrors(t *testing.T) {
+	s := newDeployTestService(t, &fakeDeployer{available: true})
+	params := json.RawMessage(`{"deploymentId":"dep-does-not-exist"}`)
+	if _, err := s.Handle(context.Background(), "deployments.cancel", params, nil); err == nil {
+		t.Fatal("expected an error cancelling a deployment with no in-flight operation")
 	}
 }
 
