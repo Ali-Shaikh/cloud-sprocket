@@ -1223,6 +1223,36 @@ function handleMockRequest<T>(
       appendLog("success", `Invoked Lambda ${name} (mock).`);
       return Promise.resolve(result as T);
     }
+    case "aws.lambda.create": {
+      const functionName = String(params.functionName ?? "").trim();
+      const runtime = String(params.runtime ?? "nodejs20.x");
+      const memorySize = Number(params.memorySize ?? 128);
+      const timeout = Number(params.timeout ?? 30);
+      const handler = String(params.handler ?? "index.handler");
+      const description = String(params.description ?? "");
+      if (!functionName) {
+        return Promise.reject(new Error("function name is required"));
+      }
+      if (mockWorkspaceLambdaFunctions.some((fn) => fn.functionName === functionName)) {
+        return Promise.reject(new Error(`function ${functionName} already exists`));
+      }
+      mockWorkspaceLambdaFunctions.push({
+        functionName,
+        runtime,
+        memorySize,
+        timeout,
+        handler,
+        description: description || "",
+        state: "Active",
+        lastModified: new Date().toISOString(),
+        logGroup: `/aws/lambda/${functionName}`,
+        recentLogs: [],
+      });
+      mockWorkspaceLambdaFunctions.sort((a, b) => a.functionName.localeCompare(b.functionName));
+      mockState.session.selectedLambdaFunctionName = functionName;
+      appendLog("success", `Created Lambda function ${functionName} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "azure.selectResourceGroup":
       mockState.session.selectedAzureResourceGroup = String(params.resourceGroup ?? "");
       mockState.session.selectedAzureVmId = undefined;

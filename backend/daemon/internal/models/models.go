@@ -295,6 +295,17 @@ type AwsLambdaInvokeResult struct {
 	FunctionError   string `json:"functionError,omitempty"`
 	LogResult       string `json:"logResult,omitempty"`
 	Payload         string `json:"payload,omitempty"`
+	Error           string `json:"error,omitempty"`
+}
+
+// AwsLambdaCreateInput deploys a starter function to a local endpoint profile.
+type AwsLambdaCreateInput struct {
+	FunctionName string `json:"functionName"`
+	Runtime      string `json:"runtime"`
+	Handler      string `json:"handler,omitempty"`
+	MemorySize   int32  `json:"memorySize,omitempty"`
+	Timeout      int32  `json:"timeout,omitempty"`
+	Description  string `json:"description,omitempty"`
 }
 
 type AzureResourceGroup struct {

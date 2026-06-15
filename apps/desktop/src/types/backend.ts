@@ -216,6 +216,16 @@ export interface AwsLambdaInvokeResult {
   functionError?: string;
   logResult?: string;
   payload?: string;
+  error?: string;
+}
+
+export interface AwsLambdaCreateInput {
+  functionName: string;
+  runtime: string;
+  handler?: string;
+  memorySize?: number;
+  timeout?: number;
+  description?: string;
 }
 
 export interface AzureResourceGroup {
