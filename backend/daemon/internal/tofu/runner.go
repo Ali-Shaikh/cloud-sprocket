@@ -12,6 +12,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"cloudsprocket/backend/daemon/internal/sysproc"
 )
 
 // Runner executes the OpenTofu CLI from a resolved binary path.
@@ -58,6 +60,7 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, r.binaryPath, opts.Args...)
 	cmd.Dir = opts.Dir
 	cmd.Env = append(os.Environ(), opts.Env...)
+	sysproc.Hide(cmd)
 
 	writer := &lineWriter{onLine: opts.OnLine}
 	cmd.Stdout = writer

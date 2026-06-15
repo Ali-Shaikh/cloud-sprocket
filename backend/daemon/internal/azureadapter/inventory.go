@@ -13,6 +13,7 @@ import (
 
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/models"
+	"cloudsprocket/backend/daemon/internal/sysproc"
 )
 
 type CLIExecutor interface {
@@ -22,7 +23,9 @@ type CLIExecutor interface {
 type execRunner struct{}
 
 func (execRunner) CommandContext(ctx context.Context, name string, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, name, args...).Output()
+	cmd := exec.CommandContext(ctx, name, args...)
+	sysproc.Hide(cmd)
+	return cmd.Output()
 }
 
 type Inventory struct {

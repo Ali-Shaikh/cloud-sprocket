@@ -18,6 +18,7 @@ import (
 
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/recipes"
+	"cloudsprocket/backend/daemon/internal/sysproc"
 	"cloudsprocket/backend/daemon/internal/tofu"
 )
 
@@ -269,6 +270,7 @@ func (e *Engine) runBuildSteps(ctx context.Context, deployment *Deployment, step
 		}
 		cmd := exec.CommandContext(ctx, step.Command[0], step.Command[1:]...)
 		cmd.Dir = dir
+		sysproc.Hide(cmd)
 		writer := &buildLineWriter{onLine: onLine}
 		cmd.Stdout = writer
 		cmd.Stderr = writer
