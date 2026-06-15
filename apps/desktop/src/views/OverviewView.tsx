@@ -10,13 +10,19 @@ import awsLambdaIconUrl from "@/assets/cloud-icons/aws-lambda.svg";
 import azureIconUrl from "@/assets/cloud-icons/azure.svg";
 import type { SessionSnapshot, WorkspaceSnapshot } from "@/types/backend";
 
+export type OverviewNavigateContext = {
+  lambdaFunctionName?: string;
+  ec2InstanceId?: string;
+  s3BucketName?: string;
+};
+
 export type OverviewViewProps = {
   workspace: WorkspaceSnapshot;
   session: SessionSnapshot;
   providerLabel: string;
   profileLabel?: string;
   onRefresh: () => void;
-  onNavigate: (tabId: string) => void;
+  onNavigate: (tabId: string, context?: OverviewNavigateContext) => void;
 };
 
 type StatItem = {
@@ -34,6 +40,7 @@ type RecentItem = {
   status?: Status;
   statusLabel?: string;
   tabId: string;
+  navigateContext?: OverviewNavigateContext;
 };
 
 function isRunning(state?: string): boolean {
@@ -121,6 +128,7 @@ export default function OverviewView({
         sub: bucket.summary || "S3 bucket",
         iconUrl: awsS3IconUrl,
         tabId: "s3",
+        navigateContext: { s3BucketName: bucket.name },
       }),
     );
     workspace.ec2Instances.slice(0, 3).forEach((instance) =>
@@ -135,6 +143,7 @@ export default function OverviewView({
         status: isRunning(instance.state) ? "on" : "off",
         statusLabel: instance.state || "unknown",
         tabId: "ec2",
+        navigateContext: { ec2InstanceId: instance.instanceId },
       }),
     );
     workspace.lambdaFunctions.slice(0, 3).forEach((fn) =>
@@ -148,6 +157,7 @@ export default function OverviewView({
         status: isLambdaActive(fn.state) ? "on" : "off",
         statusLabel: fn.state || "unknown",
         tabId: "lambda",
+        navigateContext: { lambdaFunctionName: fn.functionName },
       }),
     );
   }
@@ -250,7 +260,7 @@ export default function OverviewView({
               <button
                 key={item.key}
                 type="button"
-                onClick={() => onNavigate(item.tabId)}
+                onClick={() => onNavigate(item.tabId, item.navigateContext)}
                 className="group flex items-center gap-3 rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-all hover:border-border-strong hover:shadow-md"
               >
                 <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted">
