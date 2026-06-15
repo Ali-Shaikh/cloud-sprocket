@@ -94,10 +94,20 @@ export interface ContextNavProps {
   footer?: ReactNode;
 }
 
+export type TopBarWriteMode = {
+  enabled: boolean;
+  capable: boolean;
+  endpointUrl?: string;
+  profileLabel?: string;
+  onClick: () => void;
+};
+
 export interface TopBarProps {
   breadcrumb: { connection: string; view: string };
   /** Toggles the contextual nav column (hamburger). */
   onToggleNav?: () => void;
+  /** AWS locked-workspace write mode control. */
+  writeMode?: TopBarWriteMode;
   onRefresh?: () => void;
   onToggleNotifications?: () => void;
   notificationCount?: number;

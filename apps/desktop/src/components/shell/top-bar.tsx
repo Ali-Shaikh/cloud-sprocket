@@ -1,4 +1,6 @@
-import { Bell, Check, Monitor, Moon, PanelLeft, RefreshCw, Search, Sun } from "lucide-react";
+import { Bell, Check, Monitor, Moon, PanelLeft, RefreshCw, Search, ShieldAlert, ShieldCheck, Sun } from "lucide-react";
+
+import { cn } from "@/lib/utils";
 
 import { useTheme } from "@/lib/theme";
 import {
@@ -22,6 +24,7 @@ const iconBtn =
 function TopBar({
   breadcrumb,
   onToggleNav,
+  writeMode,
   onRefresh,
   onToggleNotifications,
   notificationCount,
@@ -58,10 +61,30 @@ function TopBar({
         <span className="text-muted-foreground">{breadcrumb.view}</span>
       </div>
 
+      {writeMode ? (
+        <button
+          type="button"
+          onClick={writeMode.onClick}
+          aria-label={writeMode.enabled ? "Write mode on" : "Read-only mode"}
+          className={cn(
+            "ml-auto flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-colors",
+            writeMode.enabled
+              ? "border-warning/40 bg-warning/10 text-warning-foreground hover:bg-warning/15"
+              : "border-border bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground",
+          )}
+        >
+          {writeMode.enabled ? <ShieldAlert className="size-3.5" /> : <ShieldCheck className="size-3.5" />}
+          {writeMode.enabled ? "Writes on" : "Read-only"}
+        </button>
+      ) : null}
+
       <button
         type="button"
         onClick={onOpenCommandPalette}
-        className="ml-auto flex w-60 items-center gap-2 rounded-full border border-border bg-muted px-3.5 py-1.5 text-left text-muted-foreground transition-colors hover:text-foreground"
+        className={cn(
+          "flex w-60 items-center gap-2 rounded-full border border-border bg-muted px-3.5 py-1.5 text-left text-muted-foreground transition-colors hover:text-foreground",
+          writeMode ? null : "ml-auto",
+        )}
       >
         <Search className="size-[15px]" />
         <span className="flex-1 text-[13px]">{searchPlaceholder ?? "Search commands"}</span>

@@ -215,6 +215,7 @@ export default function OverviewView({
   }
 
   const writesEnabled = workspace.awsWritesEnabled;
+  const writeCapable = workspace.awsWriteCapable;
   const showLambdaCreateCta =
     isAws && workspace.lambdaFunctions.length === 0 && writesEnabled && Boolean(workspace.selectedLambdaRegion);
 
@@ -242,13 +243,17 @@ export default function OverviewView({
         <InlineBanner
           tone="warning"
           icon={ShieldAlert}
-          title="Local-endpoint writes are enabled for this workspace. Mutating actions will run against the local runtime."
+          title={`Write mode is on. Mutating actions target ${workspace.awsEndpointUrl || "the configured endpoint"}.`}
         />
       ) : (
         <InlineBanner
           tone="info"
           icon={ShieldCheck}
-          title="Read-only mode keeps you safe. Writes are disabled until you opt in per service."
+          title={
+            writeCapable
+              ? "Write mode is off. Enable it from the top bar when you need mutating actions."
+              : "Read-only mode keeps you safe. This profile does not support write mode."
+          }
         />
       )}
 

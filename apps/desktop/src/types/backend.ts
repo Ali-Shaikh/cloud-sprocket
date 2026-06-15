@@ -127,6 +127,7 @@ export interface SessionSnapshot {
   selectedLambdaFunctionName?: string;
   selectedDynamodbRegion?: string;
   selectedDynamodbTableName?: string;
+  awsWriteModeEnabled?: boolean;
   lockedProviderId?: string;
   lockedProfileId?: string;
   lockedAuthMethod?: AuthMethod;
@@ -287,6 +288,8 @@ export interface WorkspaceSnapshot {
   emulatorSummaries: EmulatorSummary[];
   localConfigArtifacts: LocalConfigArtifact[];
   awsEndpointUrl?: string;
+  awsWriteCapable: boolean;
+  awsWriteModeEnabled: boolean;
   awsWritesEnabled: boolean;
   selectedAzureResourceGroup?: string;
   selectedAzureVmId?: string;

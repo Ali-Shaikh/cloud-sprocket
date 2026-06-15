@@ -349,6 +349,8 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     dockerResources: normaliseArray(source.dockerResources).map(normaliseDockerResource),
     emulatorSummaries: ensureEmulatorSummaries(normaliseArray(source.emulatorSummaries).map(normaliseEmulatorSummary)),
     localConfigArtifacts: normaliseArray(source.localConfigArtifacts).map(normaliseLocalConfigArtifact),
+    awsWriteCapable: source.awsWriteCapable ?? false,
+    awsWriteModeEnabled: source.awsWriteModeEnabled ?? false,
     awsWritesEnabled: source.awsWritesEnabled ?? false,
     azureResourceGroups: normaliseArray(source.azureResourceGroups).map(normaliseAzureResourceGroup),
     azureVirtualMachines: normaliseArray(source.azureVirtualMachines).map(normaliseAzureVirtualMachine),
@@ -405,6 +407,8 @@ const emptyWorkspace: WorkspaceSnapshot = {
   dockerResources: [],
   emulatorSummaries: [],
   localConfigArtifacts: [],
+  awsWriteCapable: false,
+  awsWriteModeEnabled: false,
   awsWritesEnabled: false,
   azureResourceGroups: [],
   azureVirtualMachines: [],
@@ -445,6 +449,8 @@ export default function App() {
   const [dynamodbActionStatus, setDynamodbActionStatus] = useState(
     "Select a region before refreshing DynamoDB tables.",
   );
+  const [writeModeDialogOpen, setWriteModeDialogOpen] = useState(false);
+  const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<"enable" | "incapable">("enable");
   const [loading, setLoading] = useState(true);
   const [openingProfileId, setOpeningProfileId] = useState<string>();
   const [localStackAuthToken, setLocalStackAuthToken] = useState("");
@@ -939,6 +945,32 @@ export default function App() {
       })
       .catch((error: unknown) => {
         setDynamodbActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function requestWriteModeChange(): void {
+    if (workspace.awsWriteModeEnabled) {
+      void setWriteMode(false);
+      return;
+    }
+    setWriteModeDialogIntent(workspace.awsWriteCapable ? "enable" : "incapable");
+    setWriteModeDialogOpen(true);
+  }
+
+  function setWriteMode(enabled: boolean): void {
+    void backendRequest<WorkspaceSnapshot>("session.setWriteMode", { enabled })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setWriteModeDialogOpen(false);
+      })
+      .catch((error: unknown) => {
+        notify(
+          "error",
+          "Write mode",
+          error instanceof Error ? error.message : String(error),
+        );
       });
   }
 
@@ -1945,6 +1977,17 @@ export default function App() {
             onToggleNav={() => {
               setSidebarCollapsed((current) => !current);
             }}
+            writeMode={
+              session.isLocked && session.lockedProviderId === "aws"
+                ? {
+                    enabled: workspace.awsWriteModeEnabled,
+                    capable: workspace.awsWriteCapable,
+                    endpointUrl: workspace.awsEndpointUrl,
+                    profileLabel: workspace.profile?.displayName ?? lockedProfile?.displayName,
+                    onClick: requestWriteModeChange,
+                  }
+                : undefined
+            }
             onRefresh={() => {
               void refreshDiscovery();
             }}
@@ -1995,6 +2038,59 @@ export default function App() {
           </AppErrorBoundary>
         </div>
       </AppShell>
+      <AlertDialog open={writeModeDialogOpen} onOpenChange={setWriteModeDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {writeModeDialogIntent === "incapable"
+                ? "This profile cannot enable write mode"
+                : "Enable write mode for this session?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm text-muted-foreground">
+                {writeModeDialogIntent === "incapable" ? (
+                  <p>
+                    Write mode needs a profile with a local <code>endpoint_url</code> and{" "}
+                    <code>cloudsprocket_allow_writes = true</code> in your AWS config. Real AWS
+                    endpoints stay read-only in this release.
+                  </p>
+                ) : (
+                  <>
+                    <p>
+                      Mutating actions (S3 uploads, EC2 start/stop/reboot, Lambda invoke/create)
+                      will be sent to the endpoint below for the rest of this locked session.
+                    </p>
+                    <p>
+                      <span className="font-semibold text-foreground">Profile:</span>{" "}
+                      {workspace.profile?.displayName || lockedProfile?.displayName || "AWS workspace"}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-foreground">Endpoint:</span>{" "}
+                      {workspace.awsEndpointUrl || "Default AWS endpoint"}
+                    </p>
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button variant="outline" onClick={() => setWriteModeDialogOpen(false)}>
+              Cancel
+            </Button>
+            {writeModeDialogIntent === "enable" ? (
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setWriteMode(true);
+                }}
+              >
+                Enable writes
+              </Button>
+            ) : null}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <CommandPalette
         open={commandPaletteOpen}
         commands={paletteCommands}
