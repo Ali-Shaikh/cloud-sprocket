@@ -29,6 +29,10 @@ function TopBar({
   onOpenCommandPalette,
 }: TopBarProps) {
   const { theme, setTheme } = useTheme();
+  const commandShortcut =
+    typeof navigator !== "undefined" && /mac|iphone|ipad|ipod/i.test(navigator.platform)
+      ? "⌘K"
+      : "Ctrl K";
 
   const ThemeIcon = theme === "system" ? Monitor : theme === "light" ? Sun : Moon;
 
@@ -61,7 +65,7 @@ function TopBar({
       >
         <Search className="size-[15px]" />
         <span className="flex-1 text-[13px]">{searchPlaceholder ?? "Search commands"}</span>
-        <kbd className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px] font-medium">⌘K</kbd>
+        <kbd className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px] font-medium">{commandShortcut}</kbd>
       </button>
 
       {onRefresh && (
