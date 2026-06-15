@@ -26,6 +26,7 @@ function TopBar({
   onToggleNotifications,
   notificationCount,
   searchPlaceholder,
+  onOpenCommandPalette,
 }: TopBarProps) {
   const { theme, setTheme } = useTheme();
 
@@ -53,13 +54,15 @@ function TopBar({
         <span className="text-muted-foreground">{breadcrumb.view}</span>
       </div>
 
-      <div className="ml-auto flex w-60 items-center gap-2 rounded-full border border-border bg-muted px-3.5 py-1.5 text-muted-foreground">
+      <button
+        type="button"
+        onClick={onOpenCommandPalette}
+        className="ml-auto flex w-60 items-center gap-2 rounded-full border border-border bg-muted px-3.5 py-1.5 text-left text-muted-foreground transition-colors hover:text-foreground"
+      >
         <Search className="size-[15px]" />
-        <input
-          className="w-full border-0 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
-          placeholder={searchPlaceholder ?? "Search resources"}
-        />
-      </div>
+        <span className="flex-1 text-[13px]">{searchPlaceholder ?? "Search commands"}</span>
+        <kbd className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px] font-medium">⌘K</kbd>
+      </button>
 
       {onRefresh && (
         <button type="button" onClick={onRefresh} aria-label="Refresh" className={iconBtn}>

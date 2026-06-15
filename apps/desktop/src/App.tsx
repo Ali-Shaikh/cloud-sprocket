@@ -44,6 +44,7 @@ import {
 import ConnectView from "./views/ConnectView";
 import OverviewView from "./views/OverviewView";
 import DeployView from "./views/DeployView";
+import { CommandPalette, type Command } from "./components/command-palette";
 import DebugView from "./views/DebugView";
 import StorageView from "./views/workspace/StorageView";
 import ComputeView from "./views/workspace/ComputeView";
@@ -432,6 +433,7 @@ export default function App() {
   const [activeAzurePageId, setActiveAzurePageId] = useState("resource-groups");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [splitPanelOpen, setSplitPanelOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [resetConfirmation, setResetConfirmation] = useState("");
@@ -572,6 +574,17 @@ export default function App() {
       setActiveWorkspaceTabId(session.workspaceTabs[0].tabId);
     }
   }, [activeWorkspaceTabId, session.isLocked, session.workspaceTabs]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandPaletteOpen((open) => !open);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   useEffect(() => {
     if (activeWorkspaceTabId !== "virtualisation") {
@@ -1547,6 +1560,54 @@ export default function App() {
       : viewLabelFor(activeWorkspaceTabId, session.workspaceTabs);
   const activityEntries = toActivityEntries(logs);
 
+  const paletteCommands: Command[] = [
+    ...railConnections.map((connection) => ({
+      id: `conn:${connection.id}`,
+      group: "Go to",
+      label: connection.label,
+      keywords: "connection provider",
+      run: () => handleRailSelect(connection.id),
+    })),
+    ...navGroups.flatMap((group) =>
+      group.items.map((item) => ({
+        id: `nav:${group.label}:${item.id}`,
+        group: group.label,
+        label: item.label,
+        run: () => handleNavSelect(item.id),
+      })),
+    ),
+    {
+      id: "act:refresh",
+      group: "Actions",
+      label: "Refresh discovery",
+      keywords: "reload",
+      run: () => {
+        void refreshDiscovery();
+      },
+    },
+    {
+      id: "act:deploy",
+      group: "Actions",
+      label: "Deploy a recipe",
+      keywords: "iac opentofu recipe",
+      run: () => handleRailSelect("deploy"),
+    },
+    {
+      id: "act:debug",
+      group: "Actions",
+      label: "Open debug console",
+      keywords: "logs",
+      run: () => setActiveWorkspaceTabId("debug"),
+    },
+    {
+      id: "act:reset",
+      group: "Actions",
+      label: "Reset app data",
+      keywords: "clear wipe",
+      run: () => setResetModalOpen(true),
+    },
+  ];
+
   function handleRailSelect(id: string): void {
     if (id === "local") {
       setActiveWorkspaceTabId("virtualisation");
@@ -1656,6 +1717,7 @@ export default function App() {
               }
             }}
             notificationCount={notifications.unreadCount}
+            onOpenCommandPalette={() => setCommandPaletteOpen(true)}
           />
         }
         drawer={
@@ -1694,6 +1756,11 @@ export default function App() {
           </AppErrorBoundary>
         </div>
       </AppShell>
+      <CommandPalette
+        open={commandPaletteOpen}
+        commands={paletteCommands}
+        onClose={() => setCommandPaletteOpen(false)}
+      />
     </>
   );
 }

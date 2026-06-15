@@ -102,6 +102,8 @@ export interface TopBarProps {
   onToggleNotifications?: () => void;
   notificationCount?: number;
   searchPlaceholder?: string;
+  /** Opens the command palette (also bound to ⌘K / Ctrl+K globally). */
+  onOpenCommandPalette?: () => void;
 }
 
 export interface ActivityDrawerProps {
