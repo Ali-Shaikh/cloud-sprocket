@@ -14,6 +14,10 @@ import awsDynamodbIconUrl from "./assets/cloud-icons/aws-dynamodb.svg";
 import awsLambdaIconUrl from "./assets/cloud-icons/aws-lambda.svg";
 import awsS3IconUrl from "./assets/cloud-icons/aws-s3.svg";
 import awsSqsIconUrl from "./assets/cloud-icons/aws-sqs.svg";
+import awsSnsIconUrl from "./assets/cloud-icons/aws-sns.svg";
+import awsRdsIconUrl from "./assets/cloud-icons/aws-rds.svg";
+import awsCloudwatchIconUrl from "./assets/cloud-icons/aws-cloudwatch.svg";
+import awsIamIconUrl from "./assets/cloud-icons/aws-iam.svg";
 import azureIconUrl from "./assets/cloud-icons/azure.svg";
 import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
 import { notify, notifyJob, useNotifications, type NotificationTone } from "./lib/notify";
@@ -53,6 +57,10 @@ import StorageView from "./views/workspace/StorageView";
 import ComputeView from "./views/workspace/ComputeView";
 import DynamoDBView from "./views/workspace/DynamoDBView";
 import SQSView from "./views/workspace/SQSView";
+import SNSView from "./views/workspace/SNSView";
+import RDSView from "./views/workspace/RDSView";
+import LogsView from "./views/workspace/LogsView";
+import IAMView from "./views/workspace/IAMView";
 import LambdaView from "./views/workspace/LambdaView";
 import AzureView from "./views/workspace/AzureView";
 import RuntimeView from "./views/workspace/RuntimeView";
@@ -71,6 +79,11 @@ import type {
   AwsLambdaInvokeResult,
   AwsSqsPeekResult,
   AwsSqsQueue,
+  AwsSnsTopic,
+  AwsRdsInstance,
+  AwsLogGroup,
+  AwsIamRole,
+  AwsIamPolicy,
   AwsS3PresignResult,
   AwsS3UploadResult,
   AwsS3Bucket,
@@ -302,6 +315,35 @@ function normaliseSqsQueue(queue: AwsSqsQueue): AwsSqsQueue {
   return { ...queue };
 }
 
+function normaliseSnsTopic(topic: AwsSnsTopic): AwsSnsTopic {
+  return {
+    ...topic,
+    subscriptions: normaliseArray(topic.subscriptions),
+  };
+}
+
+function normaliseRdsInstance(instance: AwsRdsInstance): AwsRdsInstance {
+  return { ...instance };
+}
+
+function normaliseLogGroup(group: AwsLogGroup): AwsLogGroup {
+  return {
+    ...group,
+    recentEvents: normaliseArray(group.recentEvents),
+  };
+}
+
+function normaliseIamRole(role: AwsIamRole): AwsIamRole {
+  return {
+    ...role,
+    attachedPolicies: normaliseArray(role.attachedPolicies),
+  };
+}
+
+function normaliseIamPolicy(policy: AwsIamPolicy): AwsIamPolicy {
+  return { ...policy };
+}
+
 function normaliseSessionSnapshot(session: Partial<SessionSnapshot> | null | undefined): SessionSnapshot {
   return {
     ...emptySession,
@@ -374,6 +416,14 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     dynamodbTables: normaliseArray(source.dynamodbTables).map(normaliseDynamoDBTable),
     sqsRegions: normaliseArray(source.sqsRegions),
     sqsQueues: normaliseArray(source.sqsQueues).map(normaliseSqsQueue),
+    snsRegions: normaliseArray(source.snsRegions),
+    snsTopics: normaliseArray(source.snsTopics).map(normaliseSnsTopic),
+    rdsRegions: normaliseArray(source.rdsRegions),
+    rdsInstances: normaliseArray(source.rdsInstances).map(normaliseRdsInstance),
+    logsRegions: normaliseArray(source.logsRegions),
+    logGroups: normaliseArray(source.logGroups).map(normaliseLogGroup),
+    iamRoles: normaliseArray(source.iamRoles).map(normaliseIamRole),
+    iamPolicies: normaliseArray(source.iamPolicies).map(normaliseIamPolicy),
   };
 }
 
@@ -434,6 +484,14 @@ const emptyWorkspace: WorkspaceSnapshot = {
   dynamodbTables: [],
   sqsRegions: [],
   sqsQueues: [],
+  snsRegions: [],
+  snsTopics: [],
+  rdsRegions: [],
+  rdsInstances: [],
+  logsRegions: [],
+  logGroups: [],
+  iamRoles: [],
+  iamPolicies: [],
   runtimeSettings: emptySettings,
 };
 
@@ -466,6 +524,18 @@ export default function App() {
   );
   const [sqsPeekResult, setSqsPeekResult] = useState<AwsSqsPeekResult | null>(null);
   const [sqsPeekInFlight, setSqsPeekInFlight] = useState(false);
+  const [snsActionStatus, setSnsActionStatus] = useState(
+    "Select a region before refreshing SNS topics.",
+  );
+  const [rdsActionStatus, setRdsActionStatus] = useState(
+    "Select a region before refreshing RDS instances.",
+  );
+  const [logsActionStatus, setLogsActionStatus] = useState(
+    "Select a region before refreshing log groups.",
+  );
+  const [iamActionStatus, setIamActionStatus] = useState(
+    "IAM inventory loads account-wide roles and policies.",
+  );
   const [writeModeDialogOpen, setWriteModeDialogOpen] = useState(false);
   const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<"enable" | "incapable">("enable");
   const [loading, setLoading] = useState(true);
@@ -1072,6 +1142,147 @@ export default function App() {
       .finally(() => setSqsPeekInFlight(false));
   }
 
+  function refreshSNSInventory(): void {
+    const region = workspace.selectedSnsRegion;
+    if (!region) {
+      setSnsActionStatus("Select a region before refreshing SNS inventory.");
+      return;
+    }
+    selectSNSRegion(region);
+  }
+
+  function selectSNSRegion(region: string): void {
+    setSnsActionStatus(`Loading SNS topics for ${region}.`);
+    void backendRequest<WorkspaceSnapshot>("aws.sns.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setSnsActionStatus(
+          workspaceResult.snsStatusMessage || `Loaded SNS topics from ${region}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setSnsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function selectSNSTopic(topicArn: string): void {
+    void backendRequest<WorkspaceSnapshot>("aws.sns.selectTopic", { topicArn })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setSnsActionStatus(workspaceResult.snsStatusMessage || "Selected SNS topic.");
+      })
+      .catch((error: unknown) => {
+        setSnsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function refreshRDSInventory(): void {
+    const region = workspace.selectedRdsRegion;
+    if (!region) {
+      setRdsActionStatus("Select a region before refreshing RDS inventory.");
+      return;
+    }
+    selectRDSRegion(region);
+  }
+
+  function selectRDSRegion(region: string): void {
+    setRdsActionStatus(`Loading RDS instances for ${region}.`);
+    void backendRequest<WorkspaceSnapshot>("aws.rds.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setRdsActionStatus(
+          workspaceResult.rdsStatusMessage || `Loaded RDS instances from ${region}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setRdsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function selectRDSInstance(instanceId: string): void {
+    void backendRequest<WorkspaceSnapshot>("aws.rds.selectInstance", { instanceId })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setRdsActionStatus(workspaceResult.rdsStatusMessage || "Selected RDS instance.");
+      })
+      .catch((error: unknown) => {
+        setRdsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function refreshLogsInventory(): void {
+    const region = workspace.selectedLogsRegion;
+    if (!region) {
+      setLogsActionStatus("Select a region before refreshing log groups.");
+      return;
+    }
+    selectLogsRegion(region);
+  }
+
+  function selectLogsRegion(region: string): void {
+    setLogsActionStatus(`Loading log groups for ${region}.`);
+    void backendRequest<WorkspaceSnapshot>("aws.logs.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setLogsActionStatus(
+          workspaceResult.logsStatusMessage || `Loaded log groups from ${region}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setLogsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function selectLogGroup(logGroupName: string): void {
+    void backendRequest<WorkspaceSnapshot>("aws.logs.selectLogGroup", { logGroupName })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setLogsActionStatus(workspaceResult.logsStatusMessage || "Selected log group.");
+      })
+      .catch((error: unknown) => {
+        setLogsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function refreshIAMInventory(): void {
+    setIamActionStatus("Refreshing IAM roles and policies.");
+    void backendRequest<WorkspaceSnapshot>("workspace.get")
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setIamActionStatus(workspaceResult.iamStatusMessage || "IAM inventory refreshed.");
+      })
+      .catch((error: unknown) => {
+        setIamActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function selectIAMRole(roleName: string): void {
+    void backendRequest<WorkspaceSnapshot>("aws.iam.selectRole", { roleName })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setIamActionStatus(workspaceResult.iamStatusMessage || "Selected IAM role.");
+      })
+      .catch((error: unknown) => {
+        setIamActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
   // Applies an S3 prefix filter, ignoring stale responses that finish after a
   // newer request has been issued (keeps fast typing from reverting the list).
   function applyS3PrefixFilter(prefix: string): void {
@@ -1258,6 +1469,18 @@ export default function App() {
       }
       if (!sqsPeekInFlight && normalised.sqsStatusMessage) {
         setSqsActionStatus(normalised.sqsStatusMessage);
+      }
+      if (normalised.snsStatusMessage) {
+        setSnsActionStatus(normalised.snsStatusMessage);
+      }
+      if (normalised.rdsStatusMessage) {
+        setRdsActionStatus(normalised.rdsStatusMessage);
+      }
+      if (normalised.logsStatusMessage) {
+        setLogsActionStatus(normalised.logsStatusMessage);
+      }
+      if (normalised.iamStatusMessage) {
+        setIamActionStatus(normalised.iamStatusMessage);
       }
     });
   }
@@ -1546,6 +1769,18 @@ export default function App() {
         if (context?.sqsQueueUrl) {
           selectSQSQueue(context.sqsQueueUrl);
         }
+        if (context?.snsTopicArn) {
+          selectSNSTopic(context.snsTopicArn);
+        }
+        if (context?.rdsInstanceId) {
+          selectRDSInstance(context.rdsInstanceId);
+        }
+        if (context?.logGroupName) {
+          selectLogGroup(context.logGroupName);
+        }
+        if (context?.iamRoleName) {
+          selectIAMRole(context.iamRoleName);
+        }
         if (context?.ec2InstanceId) {
           selectEC2Instance(context.ec2InstanceId);
         }
@@ -1638,6 +1873,38 @@ export default function App() {
       onSelectRegion={selectSQSRegion}
       onSelectQueue={selectSQSQueue}
       onPeek={peekSQSQueue}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "sns" ? (
+    <SNSView
+      workspace={workspace}
+      actionStatus={snsActionStatus}
+      onRefresh={refreshSNSInventory}
+      onSelectRegion={selectSNSRegion}
+      onSelectEntity={selectSNSTopic}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "rds" ? (
+    <RDSView
+      workspace={workspace}
+      actionStatus={rdsActionStatus}
+      onRefresh={refreshRDSInventory}
+      onSelectRegion={selectRDSRegion}
+      onSelectEntity={selectRDSInstance}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "logs" ? (
+    <LogsView
+      workspace={workspace}
+      actionStatus={logsActionStatus}
+      onRefresh={refreshLogsInventory}
+      onSelectRegion={selectLogsRegion}
+      onSelectEntity={selectLogGroup}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "iam" ? (
+    <IAMView
+      workspace={workspace}
+      actionStatus={iamActionStatus}
+      onRefresh={refreshIAMInventory}
+      onSelectRegion={selectSQSRegion}
+      onSelectEntity={selectIAMRole}
     />
   ) : session.isLocked &&
     ["azure-overview", "azure-resource-groups", "azure-vms"].includes(activeWorkspaceTabId) ? (
@@ -2234,6 +2501,10 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     lambda: "Lambda",
     dynamodb: "DynamoDB",
     sqs: "SQS",
+    sns: "SNS",
+    rds: "RDS",
+    logs: "Logs",
+    iam: "IAM",
     "azure-overview": "Azure",
     "azure-resource-groups": "Resource groups",
     "azure-vms": "Virtual machines",
@@ -2257,6 +2528,14 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
       return { ...base, iconUrl: awsDynamodbIconUrl, count: workspace.dynamodbTables.length };
     case "sqs":
       return { ...base, iconUrl: awsSqsIconUrl, count: workspace.sqsQueues.length };
+    case "sns":
+      return { ...base, iconUrl: awsSnsIconUrl, count: workspace.snsTopics.length };
+    case "rds":
+      return { ...base, iconUrl: awsRdsIconUrl, count: workspace.rdsInstances.length };
+    case "logs":
+      return { ...base, iconUrl: awsCloudwatchIconUrl, count: workspace.logGroups.length };
+    case "iam":
+      return { ...base, iconUrl: awsIamIconUrl, count: workspace.iamRoles.length };
     case "azure-overview":
     case "azure-resource-groups":
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureResourceGroups.length };
