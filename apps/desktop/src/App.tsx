@@ -426,6 +426,7 @@ export default function App() {
   const [lambdaInvokeResult, setLambdaInvokeResult] = useState<AwsLambdaInvokeResult | null>(null);
   const [lambdaInvokeInFlight, setLambdaInvokeInFlight] = useState(false);
   const [lambdaCreateInFlight, setLambdaCreateInFlight] = useState(false);
+  const [lambdaCreateFormOpen, setLambdaCreateFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [openingProfileId, setOpeningProfileId] = useState<string>();
   const [localStackAuthToken, setLocalStackAuthToken] = useState("");
@@ -634,6 +635,7 @@ export default function App() {
           setLambdaInvokeResult(null);
           setLambdaInvokeInFlight(false);
           setLambdaCreateInFlight(false);
+          setLambdaCreateFormOpen(false);
           setLambdaActionStatus("Select a region before refreshing Lambda functions.");
         }
       });
@@ -1353,6 +1355,9 @@ export default function App() {
         if (context?.s3BucketName) {
           void mutateWorkspace("aws.s3.selectBucket", { bucketName: context.s3BucketName });
         }
+        if (context?.openLambdaCreate) {
+          setLambdaCreateFormOpen(true);
+        }
       }}
     />
   ) : session.isLocked && activeWorkspaceTabId === "s3" ? (
@@ -1415,6 +1420,8 @@ export default function App() {
       onSelectFunction={selectLambdaFunction}
       onInvoke={invokeLambda}
       onCreate={createLambda}
+      openCreateForm={lambdaCreateFormOpen}
+      onCreateFormOpenChange={setLambdaCreateFormOpen}
     />
   ) : session.isLocked &&
     ["azure-overview", "azure-resource-groups", "azure-vms"].includes(activeWorkspaceTabId) ? (

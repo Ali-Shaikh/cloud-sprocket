@@ -849,6 +849,41 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Switch connection" })).toBeInTheDocument();
   });
 
+  it("shows an overview CTA to create the first Lambda function when inventory is empty", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        { tabId: "overview", label: "Overview", summary: "Summary", detail: "Overview panel" },
+        { tabId: "lambda", label: "Lambda", summary: "Lambda summary", detail: "Lambda panel" },
+      ],
+    };
+    workspaceFixture = {
+      ...workspaceFixture,
+      awsEndpointUrl: "http://localhost:4566",
+      awsWritesEnabled: true,
+      selectedLambdaRegion: "us-east-1",
+      lambdaRegions: ["us-east-1"],
+      lambdaFunctions: [],
+      lambdaStatusMessage: "No Lambda functions were returned for us-east-1.",
+      selectedLambdaFunctionName: undefined,
+    };
+
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
+
+    const createCta = await screen.findByRole("button", { name: "Create your first function" });
+    expect(screen.getByText("No Lambda functions yet")).toBeInTheDocument();
+    fireEvent.click(createCta);
+    expect(await screen.findByRole("alertdialog", { name: "Create Lambda function" })).toBeInTheDocument();
+  });
+
   it("renders the locked workspace when backend runtime fields are sparse", async () => {
     sessionFixture = {
       ...sessionFixture,

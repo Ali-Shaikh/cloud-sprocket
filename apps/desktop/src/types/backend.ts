@@ -226,7 +226,11 @@ export interface AwsLambdaCreateInput {
   memorySize?: number;
   timeout?: number;
   description?: string;
+  handlerSource?: string;
+  zipSourcePath?: string;
 }
+
+export type LambdaCreateCodeSource = "starter" | "inline" | "zip";
 
 export interface AzureResourceGroup {
   name: string;

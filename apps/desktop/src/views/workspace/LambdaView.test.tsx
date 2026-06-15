@@ -147,7 +147,50 @@ describe("LambdaView", () => {
     expect(screen.getByText(/Lambda invoke requires a local endpoint profile/)).toBeInTheDocument();
   });
 
-  it("confirms create function flow", async () => {
+  it("opens the create form when requested from overview navigation", () => {
+    render(
+      <ThemeProvider>
+        <LambdaView
+          workspace={workspaceFixture}
+          actionStatus="Ready to invoke."
+          invokeResult={null}
+          invokeInFlight={false}
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectFunction={vi.fn()}
+          onInvoke={vi.fn()}
+          onCreate={vi.fn()}
+          openCreateForm
+          onCreateFormOpenChange={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByRole("alertdialog", { name: "Create Lambda function" })).toBeInTheDocument();
+  });
+
+  it("confirms inline create function flow", async () => {
+    const onCreate = vi.fn();
+    renderLambdaView({ onCreate });
+
+    fireEvent.click(screen.getByRole("button", { name: "Create function" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Select code source" }));
+    fireEvent.click(screen.getByRole("option", { name: "Inline handler" }));
+    fireEvent.change(screen.getByPlaceholderText("my-function"), {
+      target: { value: "inline-handler" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Review create" }));
+    const confirmDialog = screen.getByRole("alertdialog", { name: "Confirm Lambda create" });
+    fireEvent.click(within(confirmDialog).getByRole("button", { name: "Create function" }));
+    expect(onCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "inline-handler",
+        handlerSource: expect.stringContaining("exports.handler"),
+      }),
+    );
+  });
+
+  it("confirms starter create function flow", async () => {
     const onCreate = vi.fn();
     renderLambdaView({ onCreate });
 
