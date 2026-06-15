@@ -163,6 +163,16 @@ func (e *Engine) WorkspaceDir(id string) string {
 	return filepath.Join(e.settings.DeploymentsDir, id)
 }
 
+// RemoveWorkspace deletes a deployment's on-disk workspace (materialised recipe,
+// tfvars, tfstate, plan). Used when a deployment record is removed so stale
+// workspaces do not accumulate. A missing directory is not an error.
+func (e *Engine) RemoveWorkspace(id string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("deployment id is required")
+	}
+	return os.RemoveAll(e.WorkspaceDir(id))
+}
+
 // Prepare materialises the recipe into the deployment workspace, writes the
 // variables as tfvars, and, for a local AWS deployment, drops a LocalStack
 // endpoint override so the unchanged recipe targets the emulator.

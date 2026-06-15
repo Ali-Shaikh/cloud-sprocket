@@ -66,6 +66,8 @@ func (f *fakeDeployer) Destroy(_ context.Context, _ *deploy.Deployment, _ tofu.L
 	return nil
 }
 
+func (f *fakeDeployer) RemoveWorkspace(string) error { return nil }
+
 type captureNotifier struct {
 	mu     sync.Mutex
 	events []capturedEvent
@@ -311,6 +313,46 @@ func TestDeploymentCancelWithoutRunningOperationErrors(t *testing.T) {
 	params := json.RawMessage(`{"deploymentId":"dep-does-not-exist"}`)
 	if _, err := s.Handle(context.Background(), "deployments.cancel", params, nil); err == nil {
 		t.Fatal("expected an error cancelling a deployment with no in-flight operation")
+	}
+}
+
+func TestDeploymentDeleteRemovesPlannedRecord(t *testing.T) {
+	deployer := &fakeDeployer{available: true, plan: deploy.PlanSummary{Add: 1}}
+	s := newDeployTestService(t, deployer)
+	notifier := &captureNotifier{}
+
+	params := json.RawMessage(`{"recipeId":"serverless-fullstack-aws","providerId":"aws","local":true}`)
+	result, err := s.Handle(context.Background(), "deployments.plan", params, notifier)
+	if err != nil {
+		t.Fatalf("deployments.plan: %v", err)
+	}
+	started := result.(deploymentJob)
+	waitForStatus(t, s, notifier, started.Deployment.ID, deploy.StatusPlanned)
+
+	delParams := json.RawMessage(`{"deploymentId":"` + started.Deployment.ID + `"}`)
+	if _, err := s.Handle(context.Background(), "deployments.delete", delParams, nil); err != nil {
+		t.Fatalf("deployments.delete: %v", err)
+	}
+	listResult, err := s.Handle(context.Background(), "deployments.list", nil, nil)
+	if err != nil {
+		t.Fatalf("deployments.list: %v", err)
+	}
+	if list := listResult.([]deploy.Deployment); len(list) != 0 {
+		t.Fatalf("expected the deployment to be removed, got %d", len(list))
+	}
+}
+
+func TestDeploymentDeleteRefusesAppliedRecord(t *testing.T) {
+	deployer := &fakeDeployer{available: true}
+	s := newDeployTestService(t, deployer)
+	now := s.timestamp()
+	applied := &deploy.Deployment{ID: deploy.NewID(), RecipeID: "serverless-fullstack-aws", Status: deploy.StatusApplied, CreatedAt: now, UpdatedAt: now}
+	if err := s.store.SaveDeployment(context.Background(), applied.ID, applied, now); err != nil {
+		t.Fatalf("SaveDeployment: %v", err)
+	}
+	delParams := json.RawMessage(`{"deploymentId":"` + applied.ID + `"}`)
+	if _, err := s.Handle(context.Background(), "deployments.delete", delParams, nil); err == nil {
+		t.Fatal("expected delete of an applied deployment to be refused")
 	}
 }
 

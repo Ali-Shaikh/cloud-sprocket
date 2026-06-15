@@ -112,6 +112,30 @@ func (s *Service) deploymentGet(ctx context.Context, id string) (*deploy.Deploym
 	return &deployment, nil
 }
 
+// deleteDeployment removes a deployment record and its on-disk workspace. It
+// refuses to delete a deployment that is mid-operation (stop it first) or one
+// with live infrastructure (destroy it first), so a record is never orphaned
+// from resources it still owns.
+func (s *Service) deleteDeployment(ctx context.Context, id string) error {
+	deployment, err := s.deploymentGet(ctx, id)
+	if err != nil {
+		return err
+	}
+	switch deployment.Status {
+	case deploy.StatusPlanning, deploy.StatusApplying, deploy.StatusDestroying:
+		return fmt.Errorf("this deployment is still running; stop it before removing it")
+	case deploy.StatusApplied:
+		return fmt.Errorf("this deployment still has live resources; destroy it before removing it")
+	}
+	if err := s.store.DeleteDeployment(ctx, id); err != nil {
+		return err
+	}
+	if err := s.deployer.RemoveWorkspace(id); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *Service) startDeploymentPlan(ctx context.Context, request deploymentPlanRequest, notifier Notifier) (deploymentJob, error) {
 	if strings.TrimSpace(request.RecipeID) == "" {
 		return deploymentJob{}, fmt.Errorf("recipeId is required")
