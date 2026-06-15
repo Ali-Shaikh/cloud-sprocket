@@ -72,6 +72,8 @@ const workspaceFixture: WorkspaceSnapshot = {
   lambdaStatusMessage: "Loaded 2 Lambda functions from us-east-1.",
   lambdaRegions: ["us-east-1"],
   dynamodbRegions: [],
+  sqsRegions: [],
+  sqsQueues: [],
   dynamodbTables: [],
   lambdaFunctions: [
     {
