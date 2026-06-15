@@ -81,6 +81,27 @@ type SQSInventory interface {
 	PeekMessages(ctx context.Context, profile models.ProfileSummary, region string, queueURL string) (models.AwsSqsPeekResult, error)
 }
 
+type SNSInventory interface {
+	ListTopics(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsSnsTopic, error)
+	DescribeTopic(ctx context.Context, profile models.ProfileSummary, region string, topicArn string) (models.AwsSnsTopic, error)
+}
+
+type RDSInventory interface {
+	ListInstances(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsRdsInstance, error)
+	DescribeInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) (models.AwsRdsInstance, error)
+}
+
+type LogsInventory interface {
+	ListLogGroups(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsLogGroup, error)
+	DescribeLogGroup(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string) (models.AwsLogGroup, error)
+}
+
+type IAMInventory interface {
+	ListRoles(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsIamRole, error)
+	DescribeRole(ctx context.Context, profile models.ProfileSummary, region string, roleName string) (models.AwsIamRole, error)
+	ListPolicies(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsIamPolicy, error)
+}
+
 type AzureInventory interface {
 	ListResourceGroups(ctx context.Context, profile models.ProfileSummary) ([]models.AzureResourceGroup, error)
 	ListVirtualMachines(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureVirtualMachine, error)
@@ -135,6 +156,10 @@ type Service struct {
 	lambda        LambdaInventory
 	dynamodb      DynamoDBInventory
 	sqs           SQSInventory
+	sns           SNSInventory
+	rds           RDSInventory
+	logs          LogsInventory
+	iam           IAMInventory
 	azure         AzureInventory
 	docker        DockerRuntime
 	localstackMgr LocalStackManager
@@ -171,12 +196,16 @@ func New(
 	lambdaInventory LambdaInventory,
 	dynamodbInventory DynamoDBInventory,
 	sqsInventory SQSInventory,
+	snsInventory SNSInventory,
+	rdsInventory RDSInventory,
+	logsInventory LogsInventory,
+	iamInventory IAMInventory,
 	azureInventory AzureInventory,
 	dockerRuntime DockerRuntime,
 ) *Service {
 	localStackMgr := localstack.NewManager(settings)
 	azureRuntime := flociaz.NewManager(settings)
-	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
+	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, logsInventory, iamInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
 }
 
 func NewWithRuntimes(
@@ -188,6 +217,10 @@ func NewWithRuntimes(
 	lambdaInventory LambdaInventory,
 	dynamodbInventory DynamoDBInventory,
 	sqsInventory SQSInventory,
+	snsInventory SNSInventory,
+	rdsInventory RDSInventory,
+	logsInventory LogsInventory,
+	iamInventory IAMInventory,
 	azureInventory AzureInventory,
 	dockerRuntime DockerRuntime,
 	localStackMgr LocalStackManager,
@@ -204,6 +237,10 @@ func NewWithRuntimes(
 		lambda:        lambdaInventory,
 		dynamodb:      dynamodbInventory,
 		sqs:           sqsInventory,
+		sns:           snsInventory,
+		rds:           rdsInventory,
+		logs:          logsInventory,
+		iam:           iamInventory,
 		azure:         azureInventory,
 		docker:        dockerRuntime,
 		localstackMgr: localStackMgr,
@@ -772,6 +809,184 @@ func (s *Service) Handle(
 		}
 		s.mu.Unlock()
 		return s.sqs.PeekMessages(ctx, profile, region, queueURL)
+	case "aws.sns.selectRegion":
+		var request struct {
+			Region string `json:"region"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		session, err := s.currentState(ctx, snapshot)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			return nil, errors.New("open an AWS workspace before selecting an SNS region")
+		}
+		session.SelectedSNSRegion = request.Region
+		session.SelectedSNSTopicArn = ""
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), nil
+	case "aws.sns.selectTopic":
+		var request struct {
+			TopicArn string `json:"topicArn"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		session, err := s.currentState(ctx, snapshot)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			return nil, errors.New("open an AWS workspace before selecting an SNS topic")
+		}
+		session.SelectedSNSTopicArn = request.TopicArn
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), nil
+	case "aws.rds.selectRegion":
+		var request struct {
+			Region string `json:"region"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		session, err := s.currentState(ctx, snapshot)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			return nil, errors.New("open an AWS workspace before selecting an RDS region")
+		}
+		session.SelectedRDSRegion = request.Region
+		session.SelectedRDSInstanceID = ""
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), nil
+	case "aws.rds.selectInstance":
+		var request struct {
+			InstanceID string `json:"instanceId"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		session, err := s.currentState(ctx, snapshot)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			return nil, errors.New("open an AWS workspace before selecting an RDS instance")
+		}
+		session.SelectedRDSInstanceID = request.InstanceID
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), nil
+	case "aws.logs.selectRegion":
+		var request struct {
+			Region string `json:"region"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		session, err := s.currentState(ctx, snapshot)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			return nil, errors.New("open an AWS workspace before selecting a CloudWatch Logs region")
+		}
+		session.SelectedLogsRegion = request.Region
+		session.SelectedLogGroupName = ""
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), nil
+	case "aws.logs.selectLogGroup":
+		var request struct {
+			LogGroupName string `json:"logGroupName"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		session, err := s.currentState(ctx, snapshot)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			return nil, errors.New("open an AWS workspace before selecting a log group")
+		}
+		session.SelectedLogGroupName = request.LogGroupName
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), nil
+	case "aws.iam.selectRole":
+		var request struct {
+			RoleName string `json:"roleName"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		session, err := s.currentState(ctx, snapshot)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			return nil, errors.New("open an AWS workspace before selecting an IAM role")
+		}
+		session.SelectedIAMRoleName = request.RoleName
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), nil
 	case "aws.lambda.describe":
 		var request struct {
 			FunctionName string `json:"functionName"`
@@ -2385,6 +2600,11 @@ func (s *Service) buildWorkspaceSnapshot(
 		}
 	}
 
+	s.enrichSNSInventory(&workspace, session)
+	s.enrichRDSInventory(&workspace, session)
+	s.enrichLogsInventory(&workspace, session)
+	s.enrichIAMInventory(&workspace, session)
+
 	return workspace
 }
 
@@ -3288,6 +3508,13 @@ func clearLockState(session models.SessionSnapshot) models.SessionSnapshot {
 	session.SelectedDynamoDBTableName = ""
 	session.SelectedSQSRegion = ""
 	session.SelectedSQSQueueURL = ""
+	session.SelectedSNSRegion = ""
+	session.SelectedSNSTopicArn = ""
+	session.SelectedRDSRegion = ""
+	session.SelectedRDSInstanceID = ""
+	session.SelectedLogsRegion = ""
+	session.SelectedLogGroupName = ""
+	session.SelectedIAMRoleName = ""
 	session.AWSWriteModeEnabled = false
 	session.AvailableAuthMethods = append([]models.AuthMethodStatus(nil), session.AvailableAuthMethods...)
 	if session.SelectedProfileID == "" {
@@ -3390,6 +3617,30 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 			Label:   "SQS",
 			Summary: "Queue inventory, depth metrics, and safe message peek.",
 			Detail:  "List queues by region, inspect depth and in-flight counts, and peek messages without deleting them.",
+		},
+		{
+			TabID:   "sns",
+			Label:   "SNS",
+			Summary: "Topic inventory and subscription preview.",
+			Detail:  "List topics by region and inspect subscriptions read-only.",
+		},
+		{
+			TabID:   "rds",
+			Label:   "RDS",
+			Summary: "Database instance inventory.",
+			Detail:  "List RDS instances by region with engine, status, and endpoint details.",
+		},
+		{
+			TabID:   "logs",
+			Label:   "Logs",
+			Summary: "CloudWatch Logs group inventory and recent events.",
+			Detail:  "Browse log groups by region and tail recent events read-only.",
+		},
+		{
+			TabID:   "iam",
+			Label:   "IAM",
+			Summary: "Role and policy inventory.",
+			Detail:  "Inspect IAM roles and customer-managed policies created in this account.",
 		},
 		activityTab,
 	}
