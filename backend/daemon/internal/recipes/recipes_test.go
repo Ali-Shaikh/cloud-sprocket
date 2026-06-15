@@ -1,6 +1,7 @@
 package recipes
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -53,6 +54,12 @@ func TestLoadServerlessRecipeIntrospection(t *testing.T) {
 	if got := byName["app_name"]; got.Type != "string" || got.Default != "myapp" {
 		t.Fatalf("app_name = %+v", got)
 	}
+	if got := byName["backend_source_dir"]; got.Default != "./sample-api" {
+		t.Fatalf("backend_source_dir default = %+v", got)
+	}
+	if got := byName["frontend_dist_dir"]; got.Default != "./sample-site" {
+		t.Fatalf("frontend_dist_dir default = %+v", got)
+	}
 	if got := byName["lambda_memory_mb"]; got.Type != "number" || got.Widget != "number" {
 		t.Fatalf("lambda_memory_mb = %+v", got)
 	}
@@ -84,6 +91,23 @@ func TestLoadServerlessRecipeIntrospection(t *testing.T) {
 	}
 }
 
+func TestServerlessRecipeUsesCurrentLambdaRuntimeAndPublicFrontend(t *testing.T) {
+	mainTF, err := fsReadRecipeFile("serverless-fullstack-aws", "main.tf")
+	if err != nil {
+		t.Fatalf("read serverless main.tf: %v", err)
+	}
+	for _, want := range []string{
+		`runtime          = "nodejs22.x"`,
+		`resource "aws_s3_bucket_public_access_block" "frontend"`,
+		`resource "aws_s3_bucket_policy" "frontend_public_read"`,
+		`s3:GetObject`,
+	} {
+		if !strings.Contains(mainTF, want) {
+			t.Fatalf("serverless recipe missing %q", want)
+		}
+	}
+}
+
 func TestLoadContainerRecipe(t *testing.T) {
 	recipe, err := Bundled().Load("container-fullstack-aws")
 	if err != nil {
@@ -102,8 +126,17 @@ func TestLoadContainerRecipe(t *testing.T) {
 	if _, ok := byName["container_image"]; !ok {
 		t.Fatal("container_image variable missing")
 	}
+	if got := byName["container_image"]; got.Default != "public.ecr.aws/docker/library/nginx:stable-alpine" {
+		t.Fatalf("container_image default = %+v", got)
+	}
+	if got := byName["container_port"]; fmt.Sprint(got.Default) != "80" {
+		t.Fatalf("container_port default = %+v", got)
+	}
 	if _, ok := byName["desired_count"]; !ok {
 		t.Fatal("desired_count variable missing")
+	}
+	if got := byName["frontend_dist_dir"]; got.Default != "./sample-site" {
+		t.Fatalf("frontend_dist_dir default = %+v", got)
 	}
 }
 
@@ -124,6 +157,9 @@ func TestLoadStaticSiteRecipe(t *testing.T) {
 	}
 	if _, ok := byName["frontend_dist_dir"]; !ok {
 		t.Fatal("frontend_dist_dir variable missing")
+	}
+	if got := byName["frontend_dist_dir"]; got.Default != "./sample-site" {
+		t.Fatalf("frontend_dist_dir default = %+v", got)
 	}
 	if _, ok := byName["aws_region"]; !ok {
 		t.Fatal("aws_region variable missing")
@@ -173,6 +209,9 @@ func TestLoadScheduledJobRecipe(t *testing.T) {
 	if got := byName["schedule_expression"]; got.Type != "string" || got.Default != "rate(5 minutes)" {
 		t.Fatalf("schedule_expression = %+v", got)
 	}
+	if got := byName["backend_source_dir"]; got.Default != "./sample-job" {
+		t.Fatalf("backend_source_dir default = %+v", got)
+	}
 	if got := byName["lambda_memory_mb"]; got.Type != "number" || got.Widget != "number" {
 		t.Fatalf("lambda_memory_mb = %+v", got)
 	}
@@ -202,6 +241,16 @@ func TestLoadScheduledJobRecipe(t *testing.T) {
 	}
 }
 
+func TestScheduledRecipeUsesCurrentLambdaRuntime(t *testing.T) {
+	mainTF, err := fsReadRecipeFile("scheduled-job-aws", "main.tf")
+	if err != nil {
+		t.Fatalf("read scheduled-job main.tf: %v", err)
+	}
+	if !strings.Contains(mainTF, `runtime          = "nodejs22.x"`) {
+		t.Fatal("scheduled-job recipe should use nodejs22.x")
+	}
+}
+
 func TestBundledListHasBothRecipes(t *testing.T) {
 	manifests, err := Bundled().List()
 	if err != nil {
@@ -217,7 +266,14 @@ func TestMaterialiseCopiesFiles(t *testing.T) {
 	if err := Bundled().Materialise("serverless-fullstack-aws", dest); err != nil {
 		t.Fatalf("Materialise: %v", err)
 	}
-	for _, rel := range []string{"main.tf", "variables.tf", "outputs.tf", "recipe.yaml", filepath.Join("src", "handler.js")} {
+	for _, rel := range []string{
+		"main.tf",
+		"variables.tf",
+		"outputs.tf",
+		"recipe.yaml",
+		filepath.Join("sample-api", "handler.js"),
+		filepath.Join("sample-site", "index.html"),
+	} {
 		if _, err := os.Stat(filepath.Join(dest, rel)); err != nil {
 			t.Fatalf("expected %s to be materialised: %v", rel, err)
 		}

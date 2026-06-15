@@ -51,7 +51,7 @@ resource "aws_lambda_function" "job" {
   function_name    = "${local.name}-job"
   role             = aws_iam_role.lambda.arn
   handler          = "handler.handler"
-  runtime          = "nodejs20.x"
+  runtime          = "nodejs22.x"
   filename         = data.archive_file.job.output_path
   source_code_hash = data.archive_file.job.output_base64sha256
   memory_size      = var.lambda_memory_mb

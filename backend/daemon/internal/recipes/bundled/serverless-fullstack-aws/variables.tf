@@ -41,12 +41,12 @@ variable "tags" {
 
 variable "backend_source_dir" {
   type        = string
-  description = "Directory containing your Node backend (a package.json with a handler.handler export). Leave as the default to deploy the sample handler."
-  default     = "./src"
+  description = "Directory containing your Node backend with a handler.handler export. Leave as the default to deploy the sample API."
+  default     = "./sample-api"
 }
 
 variable "frontend_dist_dir" {
   type        = string
-  description = "Directory of your built static frontend (e.g. a Next.js `out/` export). Leave blank to create an empty bucket."
-  default     = ""
+  description = "Directory of your built static frontend (e.g. a Next.js `out/` export). Leave as the default to deploy the sample frontend."
+  default     = "./sample-site"
 }

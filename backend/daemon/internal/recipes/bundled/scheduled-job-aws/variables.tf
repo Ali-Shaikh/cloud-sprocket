@@ -29,8 +29,8 @@ variable "schedule_expression" {
 
 variable "backend_source_dir" {
   type        = string
-  description = "Directory containing your Node job (a package.json with a handler.handler export). Leave as the default to deploy the sample handler."
-  default     = "./src"
+  description = "Directory containing your Node job with a handler.handler export. Leave as the default to deploy the sample job."
+  default     = "./sample-job"
 }
 
 variable "lambda_memory_mb" {

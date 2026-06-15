@@ -7,10 +7,11 @@ description: |
   A serverless full-stack starter that runs entirely on LocalStack's free tier
   and ships unchanged to real AWS by switching the connection profile.
 
-  Provisions an S3 website bucket for a static frontend (e.g. a Next.js static
-  export), a Node.js Lambda exposed through an HTTP API Gateway as the backend,
-  and a DynamoDB table for data. No RDS/ECS/CloudFront, so it stays within the
-  free local emulator services.
+  Provisions an S3 website bucket for a static frontend, a Node.js Lambda
+  exposed through an HTTP API Gateway as the backend, and a DynamoDB table for
+  data. Bundled sample frontend and API code deploy when you do not supply your
+  own code. No RDS/ECS/CloudFront, so it stays within the free local emulator
+  services.
 providers:
   - aws
 tags:
@@ -43,10 +44,10 @@ variableGroups:
     variables:
       - name: backend_source_dir
         widget: directory
-        help: Folder with your Node backend (package.json + handler.handler). Leave default for the sample handler.
+        help: Folder with your Node backend handler.handler export. Leave default for the sample API.
       - name: frontend_dist_dir
         widget: directory
-        help: Folder of your built static frontend (e.g. Next.js `out/`). Leave blank to skip.
+        help: Folder of your built static frontend (e.g. Next.js `out/`). Leave default for the sample site.
   - title: Backend
     variables:
       - name: lambda_memory_mb
