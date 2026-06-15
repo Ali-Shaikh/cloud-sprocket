@@ -269,6 +269,7 @@ fn main() {
     tauri::Builder::default()
         .manage(BackendState::default())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             let manager = app.state::<BackendState>().0.clone();

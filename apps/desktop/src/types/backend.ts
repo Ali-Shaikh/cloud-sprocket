@@ -373,7 +373,8 @@ export type DeploymentStatus =
   | "applied"
   | "destroying"
   | "destroyed"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 export interface Deployment {
   id: string;

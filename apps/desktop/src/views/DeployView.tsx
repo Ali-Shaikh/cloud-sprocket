@@ -2,12 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Boxes,
+  Check,
+  Copy,
   Crown,
   Download,
+  ExternalLink,
   FolderOpen,
   Loader2,
   Play,
   Rocket,
+  Square,
   Trash2,
 } from "lucide-react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -29,17 +33,20 @@ import { SectionHeader } from "@/components/section-header";
 import { cn } from "@/lib/utils";
 import {
   applyDeployment,
+  cancelDeployment,
   destroyDeployment,
   getRecipe,
   getTofuStatus,
   installTofu,
   listDeployments,
   listRecipes,
+  openExternalUrl,
   planDeployment,
   subscribeToBackendEvent,
 } from "@/lib/backend";
 import type {
   Deployment,
+  DeploymentOutput,
   ProfileSummary,
   Recipe,
   RecipeManifest,
@@ -66,6 +73,7 @@ const STATUS_VARIANT: Record<Deployment["status"], string> = {
   destroying: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
   destroyed: "bg-muted text-muted-foreground",
   failed: "bg-destructive/15 text-destructive",
+  cancelled: "bg-muted text-muted-foreground",
 };
 
 function StatusBadge({ status }: { status: Deployment["status"] }) {
@@ -212,6 +220,15 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
     }
   }
 
+  async function handleCancel() {
+    if (!active) return;
+    try {
+      await cancelDeployment(active.id);
+    } catch {
+      /* surfaced by the debug log */
+    }
+  }
+
   if (mode === "deployment" && active) {
     return (
       <DeploymentDetail
@@ -225,6 +242,7 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
         }}
         onApply={handleApply}
         onDestroy={handleDestroy}
+        onCancel={handleCancel}
       />
     );
   }
@@ -506,6 +524,7 @@ function DeploymentDetail({
   onBack,
   onApply,
   onDestroy,
+  onCancel,
 }: {
   deployment: Deployment;
   logs: string[];
@@ -514,9 +533,14 @@ function DeploymentDetail({
   onBack: () => void;
   onApply: () => void;
   onDestroy: () => void;
+  onCancel: () => void;
 }) {
   const canApply = deployment.status === "planned";
   const canDestroy = deployment.status === "applied";
+  const isRunning =
+    deployment.status === "planning" ||
+    deployment.status === "applying" ||
+    deployment.status === "destroying";
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-5 p-6">
@@ -535,6 +559,11 @@ function DeploymentDetail({
           </p>
         </div>
         <div className="flex gap-2">
+          {isRunning && (
+            <Button variant="destructive" onClick={onCancel}>
+              <Square className="size-4" /> Stop
+            </Button>
+          )}
           {canApply && (
             <Button onClick={onApply} disabled={busy}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : <Rocket className="size-4" />}
@@ -575,28 +604,10 @@ function DeploymentDetail({
       {deployment.outputs && deployment.outputs.length > 0 && (
         <Card className="p-4">
           <p className="mb-3 text-sm font-medium text-foreground">Outputs</p>
-          <div className="flex flex-col gap-2">
-            {deployment.outputs.map((output) => {
-              const raw = output.sensitive ? "••••••" : String(output.value);
-              const localUrl = deployment.local && !output.sensitive ? toLocalStackUrl(String(output.value)) : null;
-              return (
-                <div key={output.name} className="flex flex-col gap-0.5">
-                  <span className="text-xs text-muted-foreground">{output.name}</span>
-                  <code className="break-all rounded bg-muted px-2 py-1 text-xs text-foreground">{raw}</code>
-                  {localUrl && (
-                    <a
-                      href={localUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-violet-500 hover:underline"
-                      title="The AWS-format value above is what Terraform reports; this is the URL reachable on LocalStack."
-                    >
-                      Open on LocalStack: {localUrl}
-                    </a>
-                  )}
-                </div>
-              );
-            })}
+          <div className="flex flex-col divide-y divide-border">
+            {deployment.outputs.map((output) => (
+              <OutputRow key={output.name} output={output} local={deployment.local} />
+            ))}
           </div>
         </Card>
       )}
@@ -619,6 +630,67 @@ function DeploymentDetail({
         </div>
       </div>
     </div>
+  );
+}
+
+function OutputRow({ output, local }: { output: DeploymentOutput; local: boolean }) {
+  const value = String(output.value ?? "");
+  const display = output.sensitive ? "••••••••" : value;
+  const localUrl = local && !output.sensitive ? toLocalStackUrl(value) : null;
+  const directUrl = !output.sensitive && /^https?:\/\//i.test(value) ? value : null;
+  const openUrl = localUrl ?? directUrl;
+
+  return (
+    <div className="flex flex-col gap-1.5 py-3 first:pt-0 last:pb-0">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-mono text-xs font-medium text-foreground">{output.name}</span>
+        {!output.sensitive && <CopyButton value={value} />}
+      </div>
+      <code className="block select-text break-all rounded bg-muted px-2.5 py-1.5 text-xs text-foreground">
+        {display}
+      </code>
+      {openUrl && (
+        <button
+          type="button"
+          onClick={() => void openExternalUrl(openUrl)}
+          className="inline-flex w-fit items-center gap-1 text-xs text-violet-500 hover:underline"
+          title={
+            localUrl
+              ? "The value above is the AWS-format endpoint Terraform reports; this opens the URL actually reachable on LocalStack."
+              : "Open in your browser"
+          }
+        >
+          <ExternalLink className="size-3" />
+          {localUrl ? `Open on LocalStack: ${localUrl}` : "Open"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable; the value is still selectable above */
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void copy()}
+      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      title="Copy to clipboard"
+    >
+      {copied ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3" />}
+      {copied ? "Copied" : "Copy"}
+    </button>
   );
 }
 
