@@ -371,9 +371,9 @@ func (s *Service) Handle(
 			s.mu.Unlock()
 			return nil, err
 		}
-		if !profileAllowsAWSWrites(profile) {
+		if !effectiveAWSWritesEnabled(session, profile) {
 			s.mu.Unlock()
-			return nil, errors.New("S3 uploads require a selected AWS profile with local endpoint_url and cloudsprocket_allow_writes = true")
+			return nil, errors.New("S3 uploads require write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true")
 		}
 		if err := validateS3UploadRequest(request.SourcePath, request.ObjectKey); err != nil {
 			s.mu.Unlock()
@@ -538,9 +538,9 @@ func (s *Service) Handle(
 			s.mu.Unlock()
 			return nil, err
 		}
-		if !profileAllowsAWSWrites(profile) {
+		if !effectiveAWSWritesEnabled(session, profile) {
 			s.mu.Unlock()
-			return nil, errors.New("EC2 write actions require a selected AWS profile with local endpoint_url and cloudsprocket_allow_writes = true")
+			return nil, errors.New("EC2 write actions require write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true")
 		}
 		s.mu.Unlock()
 
@@ -727,9 +727,9 @@ func (s *Service) Handle(
 			s.mu.Unlock()
 			return nil, err
 		}
-		if !profileAllowsAWSWrites(profile) {
+		if !effectiveAWSWritesEnabled(session, profile) {
 			s.mu.Unlock()
-			return nil, errors.New("Lambda invoke requires a selected AWS profile with local endpoint_url and cloudsprocket_allow_writes = true")
+			return nil, errors.New("Lambda invoke requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true")
 		}
 		s.mu.Unlock()
 		payload := []byte(request.Payload)
@@ -768,9 +768,9 @@ func (s *Service) Handle(
 			s.mu.Unlock()
 			return nil, err
 		}
-		if !profileAllowsAWSWrites(profile) {
+		if !effectiveAWSWritesEnabled(session, profile) {
 			s.mu.Unlock()
-			return nil, errors.New("Lambda create requires a selected AWS profile with local endpoint_url and cloudsprocket_allow_writes = true")
+			return nil, errors.New("Lambda create requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true")
 		}
 		s.mu.Unlock()
 
@@ -965,6 +965,7 @@ func (s *Service) Handle(
 			return nil, errors.New("the selected auth method is not available for the active profile")
 		}
 		session.IsLocked = true
+		session.AWSWriteModeEnabled = false
 		session.LockedProviderID = session.CurrentProviderID
 		session.LockedProfileID = session.SelectedProfileID
 		session.LockedAuthMethod = session.SelectedAuthMethod
@@ -973,6 +974,56 @@ func (s *Service) Handle(
 			return nil, err
 		}
 		return session, s.notifyStateAndLog(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Opened %s workspace for %s.", session.LockedProviderID, session.LockedProfileID))
+	case "session.setWriteMode":
+		var request struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		session, err := s.currentState(ctx, snapshot)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			return nil, errors.New("open a locked AWS workspace before changing write mode")
+		}
+		profiles := filterProfiles(snapshot.Profiles, session.CurrentProviderID)
+		profile, ok := findProfile(profiles, session.SelectedProfileID)
+		if !ok {
+			return nil, errors.New("the locked AWS profile is no longer available")
+		}
+		if request.Enabled && !profileAllowsAWSWrites(profile) {
+			return nil, errors.New("this profile cannot enable write mode: configure a local endpoint_url and cloudsprocket_allow_writes = true")
+		}
+		session.AWSWriteModeEnabled = request.Enabled
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		if notifier != nil {
+			level := "info"
+			message := "Write mode disabled for this workspace session."
+			if request.Enabled {
+				level = "warning"
+				message = fmt.Sprintf(
+					"Write mode enabled for %s (target: %s).",
+					profile.DisplayName,
+					writeTargetSummary(profile),
+				)
+			}
+			_ = notifier.Notify("log.appended", models.ActivityLogEntry{
+				Level:     level,
+				Message:   message,
+				Timestamp: s.timestamp(),
+			})
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), nil
 	case "session.unlock":
 		snapshot, err := s.discovery.Discover()
 		if err != nil {
@@ -2010,7 +2061,9 @@ func (s *Service) buildWorkspaceSnapshot(
 	if profile, ok := findProfile(profiles, session.SelectedProfileID); ok {
 		workspace.Profile = &profile
 		workspace.AWSEndpointURL = profileEndpointURL(profile)
-		workspace.AWSWritesEnabled = profileAllowsAWSWrites(profile)
+		workspace.AWSWriteCapable = profileAllowsAWSWrites(profile)
+		workspace.AWSWriteModeEnabled = session.AWSWriteModeEnabled && session.IsLocked && session.CurrentProviderID == "aws"
+		workspace.AWSWritesEnabled = effectiveAWSWritesEnabled(session, profile)
 	}
 
 	if workspace.Provider != nil &&
@@ -2854,6 +2907,17 @@ func validateLambdaCreateInput(input models.AwsLambdaCreateInput) error {
 	return nil
 }
 
+func effectiveAWSWritesEnabled(session models.SessionSnapshot, profile models.ProfileSummary) bool {
+	return session.AWSWriteModeEnabled && profileAllowsAWSWrites(profile)
+}
+
+func writeTargetSummary(profile models.ProfileSummary) string {
+	if endpoint := profileEndpointURL(profile); endpoint != "" {
+		return endpoint
+	}
+	return "default AWS endpoint"
+}
+
 func profileAllowsAWSWrites(profile models.ProfileSummary) bool {
 	if !profileAllowsWriteOptIn(profile) {
 		return false
@@ -3002,6 +3066,7 @@ func clearLockState(session models.SessionSnapshot) models.SessionSnapshot {
 	session.SelectedLambdaFunctionName = ""
 	session.SelectedDynamoDBRegion = ""
 	session.SelectedDynamoDBTableName = ""
+	session.AWSWriteModeEnabled = false
 	session.AvailableAuthMethods = append([]models.AuthMethodStatus(nil), session.AvailableAuthMethods...)
 	if session.SelectedProfileID == "" {
 		session.SelectedAuthMethod = ""
