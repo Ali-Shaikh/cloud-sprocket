@@ -201,6 +201,8 @@ type SessionSnapshot struct {
 	SelectedEC2InstanceID      string             `json:"selectedEc2InstanceId,omitempty"`
 	SelectedLambdaRegion       string             `json:"selectedLambdaRegion,omitempty"`
 	SelectedLambdaFunctionName string             `json:"selectedLambdaFunctionName,omitempty"`
+	SelectedDynamoDBRegion     string             `json:"selectedDynamodbRegion,omitempty"`
+	SelectedDynamoDBTableName  string             `json:"selectedDynamodbTableName,omitempty"`
 	LockedProviderID           string             `json:"lockedProviderId,omitempty"`
 	LockedProfileID            string             `json:"lockedProfileId,omitempty"`
 	LockedAuthMethod           AuthMethod         `json:"lockedAuthMethod,omitempty"`
@@ -298,6 +300,27 @@ type AwsLambdaInvokeResult struct {
 	Error           string `json:"error,omitempty"`
 }
 
+// AwsDynamoDBGlobalSecondaryIndex summarises a GSI on a DynamoDB table.
+type AwsDynamoDBGlobalSecondaryIndex struct {
+	IndexName string `json:"indexName"`
+	HashKey   string `json:"hashKey,omitempty"`
+	RangeKey  string `json:"rangeKey,omitempty"`
+	Status    string `json:"status,omitempty"`
+}
+
+// AwsDynamoDBTable models a DynamoDB table for inventory (list + describe).
+type AwsDynamoDBTable struct {
+	TableName              string                            `json:"tableName"`
+	Status                 string                            `json:"status,omitempty"`
+	ItemCount              int64                             `json:"itemCount,omitempty"`
+	TableSizeBytes         int64                             `json:"tableSizeBytes,omitempty"`
+	BillingMode            string                            `json:"billingMode,omitempty"`
+	HashKey                string                            `json:"hashKey,omitempty"`
+	RangeKey               string                            `json:"rangeKey,omitempty"`
+	GlobalSecondaryIndexes []AwsDynamoDBGlobalSecondaryIndex `json:"globalSecondaryIndexes,omitempty"`
+	SampleItems            []string                          `json:"sampleItems,omitempty"`
+}
+
 // AwsLambdaCreateInput deploys a function to a local endpoint profile.
 // Provide HandlerSource for inline code, ZipSourcePath for a local zip file,
 // or omit both to use the built-in starter template.
@@ -365,6 +388,11 @@ type WorkspaceSnapshot struct {
 	LambdaStatusMessage        string                  `json:"lambdaStatusMessage,omitempty"`
 	LambdaRegions              []string                `json:"lambdaRegions"`
 	LambdaFunctions            []AwsLambdaFunction     `json:"lambdaFunctions"`
+	SelectedDynamoDBRegion     string                  `json:"selectedDynamodbRegion,omitempty"`
+	SelectedDynamoDBTableName  string                  `json:"selectedDynamodbTableName,omitempty"`
+	DynamoDBStatusMessage      string                  `json:"dynamodbStatusMessage,omitempty"`
+	DynamoDBRegions            []string                `json:"dynamodbRegions"`
+	DynamoDBTables             []AwsDynamoDBTable      `json:"dynamodbTables"`
 	SelectedAzureResourceGroup string                  `json:"selectedAzureResourceGroup,omitempty"`
 	SelectedAzureVMID          string                  `json:"selectedAzureVmId,omitempty"`
 	AzureStatusMessage         string                  `json:"azureStatusMessage,omitempty"`
