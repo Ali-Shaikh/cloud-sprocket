@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { localDeploymentOutputLink, toLocalStackUrl } from "./DeployView";
+import { localDeploymentOutputLink, logCommandsForDeployment, toLocalStackUrl } from "./DeployView";
 
 describe("toLocalStackUrl", () => {
   it("rewrites AWS-format load balancer URLs to LocalStack", () => {
@@ -58,5 +58,27 @@ describe("toLocalStackUrl", () => {
         },
       ),
     ).toBeNull();
+  });
+
+  it("uses unsigned LocalStack log commands without credential environment variables", () => {
+    const commands = logCommandsForDeployment({
+      id: "dep-1",
+      recipeId: "container-fullstack-aws",
+      name: "Container full-stack",
+      providerId: "aws",
+      profileId: "",
+      local: true,
+      variables: { app_name: "myappaaa", environment: "dev", aws_region: "us-east-1" },
+      status: "applied",
+      createdAt: "2026-06-15T00:00:00Z",
+      updatedAt: "2026-06-15T00:00:00Z",
+    });
+
+    expect(commands).toHaveLength(1);
+    expect(commands[0].command).toBe(
+      'aws --endpoint-url "http://localhost:4566" --no-sign-request logs tail "/ecs/myappaaa-dev" --follow --region "us-east-1"',
+    );
+    expect(commands[0].command).not.toContain("AWS_ACCESS_KEY_ID");
+    expect(commands[0].command).not.toContain("AWS_SECRET_ACCESS_KEY");
   });
 });
