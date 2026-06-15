@@ -123,6 +123,8 @@ export interface SessionSnapshot {
   s3PrefixFilter?: string;
   selectedEc2Region?: string;
   selectedEc2InstanceId?: string;
+  selectedLambdaRegion?: string;
+  selectedLambdaFunctionName?: string;
   lockedProviderId?: string;
   lockedProfileId?: string;
   lockedAuthMethod?: AuthMethod;
@@ -194,6 +196,28 @@ export interface AwsEc2Instance {
   tags?: DetailField[];
 }
 
+export interface AwsLambdaFunction {
+  functionName: string;
+  runtime?: string;
+  memorySize?: number;
+  lastModified?: string;
+  description?: string;
+  state?: string;
+  codeSize?: number;
+  handler?: string;
+  timeout?: number;
+  logGroup?: string;
+  recentLogs?: string[];
+}
+
+export interface AwsLambdaInvokeResult {
+  statusCode: number;
+  executedVersion?: string;
+  functionError?: string;
+  logResult?: string;
+  payload?: string;
+}
+
 export interface AzureResourceGroup {
   name: string;
   location?: string;
@@ -247,6 +271,11 @@ export interface WorkspaceSnapshot {
   ec2StatusMessage?: string;
   ec2Regions: string[];
   ec2Instances: AwsEc2Instance[];
+  selectedLambdaRegion?: string;
+  selectedLambdaFunctionName?: string;
+  lambdaStatusMessage?: string;
+  lambdaRegions: string[];
+  lambdaFunctions: AwsLambdaFunction[];
 }
 
 export interface JobStatus {
