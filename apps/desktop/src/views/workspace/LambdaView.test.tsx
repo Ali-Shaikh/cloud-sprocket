@@ -1,0 +1,135 @@
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+
+import { ThemeProvider } from "@/lib/theme";
+import LambdaView from "./LambdaView";
+import type { AwsLambdaInvokeResult, WorkspaceSnapshot } from "@/types/backend";
+
+const workspaceFixture: WorkspaceSnapshot = {
+  provider: {
+    providerId: "aws",
+    label: "AWS",
+    state: "configured",
+    summary: "AWS config detected.",
+    profileCount: 1,
+    commandPath: "aws",
+    locations: ["~/.aws/config"],
+  },
+  profile: {
+    providerId: "aws",
+    profileId: "sandbox",
+    displayName: "sandbox",
+    summary: "AWS sandbox profile.",
+    sourcePaths: ["~/.aws/config"],
+    attributes: [],
+    authMethods: [],
+  },
+  authMethod: "cli",
+  runtimeSettings: {
+    platformName: "windows",
+    configDir: "",
+    databasePath: "",
+    logPath: "",
+    runtimeMode: "cloud",
+    localConfigDir: "",
+    emulatorStateDir: "",
+    localStackImage: "",
+    flociAzImage: "",
+  },
+  environmentDiagnostics: [],
+  dockerDiagnostics: { engineState: "available", summary: "", details: [] },
+  dockerRuntime: {
+    reachable: true,
+    host: "",
+    hostSource: "",
+    resourceOwnership: {
+      labelKey: "",
+      labelValue: "",
+      projectLabelKey: "",
+      projectName: "",
+      summary: "",
+    },
+    summary: "",
+    details: [],
+  },
+  dockerResources: [],
+  emulatorSummaries: [],
+  localConfigArtifacts: [],
+  awsWritesEnabled: true,
+  awsEndpointUrl: "http://localhost:4566",
+  azureResourceGroups: [],
+  azureVirtualMachines: [],
+  s3Buckets: [],
+  s3Objects: [],
+  s3ObjectMetadata: [],
+  s3ExportSnippets: [],
+  ec2Regions: [],
+  ec2Instances: [],
+  selectedLambdaRegion: "us-east-1",
+  selectedLambdaFunctionName: "process-order",
+  lambdaStatusMessage: "Loaded 2 Lambda functions from us-east-1.",
+  lambdaRegions: ["us-east-1"],
+  lambdaFunctions: [
+    {
+      functionName: "process-order",
+      runtime: "nodejs20.x",
+      memorySize: 512,
+      state: "Active",
+      handler: "index.handler",
+      recentLogs: ["2026-06-15 10:05:12 START RequestId: abc123"],
+    },
+  ],
+};
+
+function renderLambdaView(overrides?: {
+  invokeResult?: AwsLambdaInvokeResult | null;
+  invokeInFlight?: boolean;
+}) {
+  const onInvoke = vi.fn();
+  render(
+    <ThemeProvider>
+      <LambdaView
+        workspace={workspaceFixture}
+        actionStatus="Ready to invoke."
+        invokeResult={overrides?.invokeResult ?? null}
+        invokeInFlight={overrides?.invokeInFlight ?? false}
+        onRefresh={vi.fn()}
+        onSelectRegion={vi.fn()}
+        onSelectFunction={vi.fn()}
+        onInvoke={onInvoke}
+      />
+    </ThemeProvider>,
+  );
+  return { onInvoke };
+}
+
+describe("LambdaView", () => {
+  it("renders inventory, logs, and confirms invoke", async () => {
+    const { onInvoke } = renderLambdaView();
+
+    expect(screen.getByText("Lambda Fleet")).toBeInTheDocument();
+    expect(screen.getByText("Function Inventory")).toBeInTheDocument();
+    expect(screen.getAllByText("process-order").length).toBeGreaterThan(0);
+    expect(screen.getByText("Recent CloudWatch Logs")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Invoke" }));
+    });
+    expect(screen.getByRole("alertdialog", { name: "Confirm Lambda invoke" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Invoke function" }));
+    expect(onInvoke).toHaveBeenCalledWith("process-order", { test: true });
+  });
+
+  it("shows the last invoke result", () => {
+    renderLambdaView({
+      invokeResult: {
+        statusCode: 200,
+        executedVersion: "$LATEST",
+        payload: '{"ok":true}',
+      },
+    });
+
+    expect(screen.getByText("Last invoke result")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy response" })).toBeInTheDocument();
+  });
+});

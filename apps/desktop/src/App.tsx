@@ -10,6 +10,7 @@ import type { ErrorInfo, ReactNode } from "react";
 import { ArrowLeftRight, Boxes, Bug, LayoutGrid, Rocket, Server, Trash2, TriangleAlert } from "lucide-react";
 import { Toaster } from "sonner";
 import awsEc2IconUrl from "./assets/cloud-icons/aws-ec2.svg";
+import awsLambdaIconUrl from "./assets/cloud-icons/aws-lambda.svg";
 import awsS3IconUrl from "./assets/cloud-icons/aws-s3.svg";
 import azureIconUrl from "./assets/cloud-icons/azure.svg";
 import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
@@ -60,6 +61,8 @@ import type {
   AuthMethod,
   AuthMethodStatus,
   AwsEc2Instance,
+  AwsLambdaFunction,
+  AwsLambdaInvokeResult,
   AwsS3PresignResult,
   AwsS3UploadResult,
   AwsS3Bucket,
@@ -272,6 +275,13 @@ function normaliseEC2Instance(instance: AwsEc2Instance): AwsEc2Instance {
   };
 }
 
+function normaliseLambdaFunction(fn: AwsLambdaFunction): AwsLambdaFunction {
+  return {
+    ...fn,
+    recentLogs: normaliseArray(fn.recentLogs),
+  };
+}
+
 function normaliseSessionSnapshot(session: Partial<SessionSnapshot> | null | undefined): SessionSnapshot {
   return {
     ...emptySession,
@@ -337,7 +347,7 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     ec2Regions: normaliseArray(source.ec2Regions),
     ec2Instances: normaliseArray(source.ec2Instances).map(normaliseEC2Instance),
     lambdaRegions: normaliseArray(source.lambdaRegions),
-    lambdaFunctions: normaliseArray(source.lambdaFunctions),
+    lambdaFunctions: normaliseArray(source.lambdaFunctions).map(normaliseLambdaFunction),
   };
 }
 
@@ -412,7 +422,7 @@ export default function App() {
   const [ec2ActionHistory, setEC2ActionHistory] = useState<EC2ActionHistoryItem[]>([]);
 
   const [lambdaActionStatus, setLambdaActionStatus] = useState("Select a region before refreshing Lambda functions.");
-  const [lambdaInvokeResult, setLambdaInvokeResult] = useState<any>(null);
+  const [lambdaInvokeResult, setLambdaInvokeResult] = useState<AwsLambdaInvokeResult | null>(null);
   const [lambdaInvokeInFlight, setLambdaInvokeInFlight] = useState(false);
   const [loading, setLoading] = useState(true);
   const [openingProfileId, setOpeningProfileId] = useState<string>();
@@ -619,6 +629,9 @@ export default function App() {
         setSession(normalisedSession);
         if (method === "session.unlock") {
           setActiveWorkspaceTabId("overview");
+          setLambdaInvokeResult(null);
+          setLambdaInvokeInFlight(false);
+          setLambdaActionStatus("Select a region before refreshing Lambda functions.");
         }
       });
       await loadWorkspace(normalisedSession);
@@ -794,23 +807,37 @@ export default function App() {
   }
 
   function selectLambdaRegion(region: string): void {
-    setLambdaActionStatus("Select a function to view config/logs or invoke.");
+    setLambdaActionStatus(`Loading Lambda functions for ${region}.`);
     setLambdaInvokeInFlight(false);
     setLambdaInvokeResult(null);
-    void backendRequest<WorkspaceSnapshot>("aws.lambda.selectRegion", { region }).then((workspaceResult) => {
-      startTransition(() => {
-        setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+    void backendRequest<WorkspaceSnapshot>("aws.lambda.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setLambdaActionStatus(
+          workspaceResult.lambdaStatusMessage || `Loaded Lambda functions from ${region}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setLambdaActionStatus(error instanceof Error ? error.message : String(error));
       });
-    });
   }
 
   function selectLambdaFunction(functionName: string): void {
     setLambdaInvokeResult(null);
-    void backendRequest<WorkspaceSnapshot>("aws.lambda.selectFunction", { functionName }).then((workspaceResult) => {
-      startTransition(() => {
-        setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+    void backendRequest<WorkspaceSnapshot>("aws.lambda.selectFunction", { functionName })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setLambdaActionStatus(
+          workspaceResult.lambdaStatusMessage || `Selected Lambda function ${functionName}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setLambdaActionStatus(error instanceof Error ? error.message : String(error));
       });
-    });
   }
 
   function invokeLambda(functionName: string, payload: unknown): void {
@@ -818,14 +845,14 @@ export default function App() {
     setLambdaInvokeInFlight(true);
     const region = workspace.selectedLambdaRegion || "us-east-1";
     setLambdaActionStatus(`Invoking ${functionName} in ${region}...`);
-    void backendRequest<any>("aws.lambda.invoke", { functionName, payload: payload || {} })
+    void backendRequest<AwsLambdaInvokeResult>("aws.lambda.invoke", { functionName, payload: payload || {} })
       .then((result) => {
         setLambdaInvokeResult(result);
         setLambdaActionStatus(`Invoke completed (status ${result?.statusCode ?? "?"})`);
       })
       .catch((error: unknown) => {
         setLambdaActionStatus(error instanceof Error ? error.message : String(error));
-        setLambdaInvokeResult({ error: String(error) });
+        setLambdaInvokeResult(null);
       })
       .finally(() => setLambdaInvokeInFlight(false));
   }
@@ -1006,7 +1033,11 @@ export default function App() {
     }
     const workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
     startTransition(() => {
-      setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+      const normalised = normaliseWorkspaceSnapshot(workspaceResult);
+      setWorkspace(normalised);
+      if (!lambdaInvokeInFlight && normalised.lambdaStatusMessage) {
+        setLambdaActionStatus(normalised.lambdaStatusMessage);
+      }
     });
   }
 
@@ -1625,14 +1656,6 @@ export default function App() {
         ],
       });
     }
-    if (activeWorkspaceTabId === "lambda" || workspace.lambdaFunctions?.length) {
-      groups.push({
-        label: "Compute",
-        items: [
-          { id: "lambda", label: "Functions" },
-        ],
-      });
-    }
     groups.push({ label: "Tools", items: [{ id: "debug", label: "Debug console", icon: Bug }] });
     return groups;
   }
@@ -1900,6 +1923,8 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
       return { ...base, iconUrl: awsS3IconUrl, count: workspace.s3Buckets.length };
     case "ec2":
       return { ...base, iconUrl: awsEc2IconUrl, count: workspace.ec2Instances.length };
+    case "lambda":
+      return { ...base, iconUrl: awsLambdaIconUrl, count: workspace.lambdaFunctions.length };
     case "azure-overview":
     case "azure-resource-groups":
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureResourceGroups.length };
