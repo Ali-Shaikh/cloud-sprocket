@@ -119,6 +119,12 @@ const mockWorkspaceTabs: WorkspaceTab[] = [
     detail: "Instance inventory and lifecycle actions are being ported.",
   },
   {
+    tabId: "lambda",
+    label: "Lambda",
+    summary: "Function inventory, configuration, logs and safe test invoke.",
+    detail: "List functions by region, view config and recent CloudWatch logs, perform test invokes.",
+  },
+  {
     tabId: "actions",
     label: "Activity",
     summary: "Recent job, log, and refresh history.",

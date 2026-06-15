@@ -6,6 +6,7 @@ import { StatCard } from "@/components/stat-card";
 import { StatusDot, type Status } from "@/components/status-dot";
 import awsS3IconUrl from "@/assets/cloud-icons/aws-s3.svg";
 import awsEc2IconUrl from "@/assets/cloud-icons/aws-ec2.svg";
+import awsLambdaIconUrl from "@/assets/cloud-icons/aws-lambda.svg";
 import azureIconUrl from "@/assets/cloud-icons/azure.svg";
 import type { SessionSnapshot, WorkspaceSnapshot } from "@/types/backend";
 
@@ -39,6 +40,10 @@ function isRunning(state?: string): boolean {
   return (state ?? "").toLowerCase().includes("running");
 }
 
+function isLambdaActive(state?: string): boolean {
+  return (state ?? "").toLowerCase() === "active";
+}
+
 export default function OverviewView({
   workspace,
   session,
@@ -52,20 +57,24 @@ export default function OverviewView({
   const isAzure = providerId === "azure";
 
   const ec2Running = workspace.ec2Instances.filter((instance) => isRunning(instance.state)).length;
+  const lambdaActive = workspace.lambdaFunctions.filter((fn) => isLambdaActive(fn.state)).length;
   const vmsRunning = workspace.azureVirtualMachines.filter((vm) => isRunning(vm.powerState)).length;
   const emulatorsRunning = workspace.emulatorSummaries.filter(
     (emulator) => emulator.status === "running",
   ).length;
 
-  const runningFooter = (count: number, total: number): React.ReactNode =>
+  const statusFooter = (count: number, total: number, label: string): React.ReactNode =>
     total === 0 ? (
       "None yet"
     ) : (
       <span className="flex items-center gap-1.5">
         <StatusDot status={count > 0 ? "on" : "off"} />
-        {count} running
+        {count} {label}
       </span>
     );
+
+  const runningFooter = (count: number, total: number): React.ReactNode =>
+    statusFooter(count, total, "running");
 
   const stats: StatItem[] = [];
   if (isAws) {
@@ -75,6 +84,12 @@ export default function OverviewView({
       value: workspace.ec2Instances.length,
       footer: runningFooter(ec2Running, workspace.ec2Instances.length),
       tabId: "ec2",
+    });
+    stats.push({
+      label: "Lambda functions",
+      value: workspace.lambdaFunctions.length,
+      footer: statusFooter(lambdaActive, workspace.lambdaFunctions.length, "active"),
+      tabId: "lambda",
     });
   }
   if (isAzure) {
@@ -120,6 +135,19 @@ export default function OverviewView({
         status: isRunning(instance.state) ? "on" : "off",
         statusLabel: instance.state || "unknown",
         tabId: "ec2",
+      }),
+    );
+    workspace.lambdaFunctions.slice(0, 3).forEach((fn) =>
+      recents.push({
+        key: `lambda-${fn.functionName}`,
+        name: fn.functionName,
+        sub: [fn.runtime, fn.memorySize ? `${fn.memorySize} MB` : undefined]
+          .filter(Boolean)
+          .join(" · ") || "Lambda function",
+        iconUrl: awsLambdaIconUrl,
+        status: isLambdaActive(fn.state) ? "on" : "off",
+        statusLabel: fn.state || "unknown",
+        tabId: "lambda",
       }),
     );
   }

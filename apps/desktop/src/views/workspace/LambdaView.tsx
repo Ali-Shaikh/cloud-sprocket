@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Copy, Loader2, Play, RefreshCw, Server } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -33,12 +35,12 @@ import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
 import { DetailFieldList } from "./detail-fields";
-import type { WorkspaceSnapshot } from "@/types/backend";
+import type { AwsLambdaFunction, AwsLambdaInvokeResult, WorkspaceSnapshot } from "@/types/backend";
 
 export type LambdaViewProps = {
   workspace: WorkspaceSnapshot;
   actionStatus: string;
-  invokeResult: any;
+  invokeResult: AwsLambdaInvokeResult | null;
   invokeInFlight: boolean;
   onRefresh: () => void;
   onSelectRegion: (region: string) => void;
@@ -51,26 +53,74 @@ type PendingLambdaInvoke = {
   payload: string;
 };
 
+const fieldLabel =
+  "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
+
 const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] shadow-sm";
-const fieldLabel = "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
+
 const snippetCard = "rounded-lg border border-border bg-muted/40 p-3";
 
-function lambdaStatus(state?: string): Status {
-  if (state === "Active" || state === "active") return "on";
-  if (state === "Pending" || state === "pending") return "warning";
-  if (state === "Inactive" || state === "Failed" || state === "inactive" || state === "failed") return "error";
+const defaultPayload = '{\n  "test": true\n}';
+
+/** Maps a Lambda function state onto the StatusPill palette. */
+function lambdaStateStatus(state?: string): Status {
+  const normalised = state?.toLowerCase();
+  if (normalised === "active") {
+    return "on";
+  }
+  if (normalised === "pending") {
+    return "warning";
+  }
+  if (normalised === "inactive" || normalised === "failed") {
+    return "error";
+  }
   return "off";
 }
 
-function copyToClipboard(value: string): void {
-  if (navigator.clipboard) void navigator.clipboard.writeText(value);
+function lambdaConsoleUrl(region: string | undefined, functionName: string): string {
+  const consoleRegion = region || "us-east-1";
+  return `https://${consoleRegion}.console.aws.amazon.com/lambda/home?region=${consoleRegion}#/functions/${functionName}?tab=code`;
 }
 
-function formatPayload(p: unknown): string {
-  if (typeof p === "string") return p;
-  try { return JSON.stringify(p, null, 2); } catch { return String(p); }
+function countLabel(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
+function copyToClipboard(value: string, label = "Copied to clipboard"): void {
+  if (navigator.clipboard) {
+    void navigator.clipboard.writeText(value).then(() => {
+      notify("success", label);
+    });
+  }
+}
+
+function formatPayload(payload: string | undefined): string {
+  if (!payload) {
+    return "";
+  }
+  try {
+    return JSON.stringify(JSON.parse(payload), null, 2);
+  } catch {
+    return payload;
+  }
+}
+
+function parsePayloadText(payloadText: string): { parsed?: unknown; error?: string } {
+  const trimmed = payloadText.trim();
+  if (!trimmed) {
+    return { parsed: {} };
+  }
+  try {
+    return { parsed: JSON.parse(trimmed) };
+  } catch {
+    return { error: "Payload must be valid JSON before invoking." };
+  }
+}
+
+/**
+ * v0.6 Lambda panel: regional inventory, describe + recent logs, and the one
+ * safe write action (test invoke). Mirrors the Compute view layout patterns.
+ */
 export default function LambdaView({
   workspace,
   actionStatus,
@@ -83,205 +133,485 @@ export default function LambdaView({
 }: LambdaViewProps) {
   const [filterText, setFilterText] = useState("");
   const [pending, setPending] = useState<PendingLambdaInvoke | undefined>(undefined);
-  const [payloadText, setPayloadText] = useState('{\n  "test": true\n}');
+  const [payloadText, setPayloadText] = useState(defaultPayload);
+  const [payloadError, setPayloadError] = useState<string | undefined>(undefined);
 
-  const selectedFnName = workspace.selectedLambdaFunctionName;
-  const selected = workspace.lambdaFunctions?.find((f) => f.functionName === selectedFnName) ??
-    workspace.lambdaFunctions?.[0];
+  const regions =
+    workspace.lambdaRegions.length > 0 ? workspace.lambdaRegions : workspace.ec2Regions;
 
-  const filtered = (workspace.lambdaFunctions || []).filter((f) =>
-    !filterText || f.functionName.toLowerCase().includes(filterText.toLowerCase()) || (f.runtime || "").toLowerCase().includes(filterText.toLowerCase())
-  );
+  const selectedFunction =
+    workspace.lambdaFunctions.find(
+      (fn) => fn.functionName === workspace.selectedLambdaFunctionName,
+    ) ?? workspace.lambdaFunctions[0];
 
-  const region = workspace.selectedLambdaRegion || (workspace.lambdaRegions?.[0] ?? workspace.ec2Regions?.[0] ?? "");
+  const filteredFunctions = useMemo(() => {
+    const query = filterText.trim().toLowerCase();
+    if (!query) {
+      return workspace.lambdaFunctions;
+    }
+    return workspace.lambdaFunctions.filter((fn) =>
+      [fn.functionName, fn.runtime, fn.description, fn.state]
+        .some((value) => value?.toLowerCase().includes(query)),
+    );
+  }, [filterText, workspace.lambdaFunctions]);
 
-  function handleInvokeClick() {
-    if (!selected?.functionName) return;
-    let parsed: unknown = {};
-    try { parsed = JSON.parse(payloadText || "{}"); } catch { parsed = { raw: payloadText }; }
-    setPending({ functionName: selected.functionName, payload: JSON.stringify(parsed, null, 2) });
+  const statusMessage =
+    actionStatus || workspace.lambdaStatusMessage || "Lambda inventory is waiting for an open AWS workspace.";
+
+  const isLocalEndpoint = Boolean(workspace.awsEndpointUrl);
+  const showConsoleActions = !isLocalEndpoint && Boolean(selectedFunction);
+
+  const copySnippets = selectedFunction
+    ? [
+        {
+          label: "Function name",
+          value: selectedFunction.functionName,
+        },
+        {
+          label: "AWS CLI invoke command",
+          value: `aws lambda invoke --function-name ${selectedFunction.functionName}${
+            workspace.selectedLambdaRegion ? ` --region ${workspace.selectedLambdaRegion}` : ""
+          } --payload '${JSON.stringify({ test: true })}' response.json`,
+        },
+        ...(showConsoleActions
+          ? [
+              {
+                label: "AWS Console URL",
+                value: lambdaConsoleUrl(workspace.selectedLambdaRegion, selectedFunction.functionName),
+              },
+            ]
+          : []),
+        {
+          label: "Function detail JSON",
+          value: JSON.stringify(
+            {
+              region: workspace.selectedLambdaRegion,
+              function: selectedFunction,
+            },
+            null,
+            2,
+          ),
+        },
+      ]
+    : [];
+
+  function handleInvokeClick(): void {
+    if (!selectedFunction?.functionName || invokeInFlight) {
+      return;
+    }
+    const { parsed, error } = parsePayloadText(payloadText);
+    if (error || parsed === undefined) {
+      setPayloadError(error);
+      return;
+    }
+    setPayloadError(undefined);
+    setPending({
+      functionName: selectedFunction.functionName,
+      payload: JSON.stringify(parsed, null, 2),
+    });
   }
 
-  function confirmInvoke() {
-    if (!pending) return;
-    let p: unknown = {};
-    try { p = JSON.parse(pending.payload); } catch { p = pending.payload; }
-    onInvoke(pending.functionName, p);
+  function confirmInvoke(): void {
+    if (!pending) {
+      return;
+    }
+    const { parsed, error } = parsePayloadText(pending.payload);
+    if (error || parsed === undefined) {
+      setPayloadError(error);
+      setPending(undefined);
+      return;
+    }
+    onInvoke(pending.functionName, parsed);
     setPending(undefined);
   }
 
-  const isAWS = !!workspace.profile && (workspace.provider?.providerId === "aws" || !workspace.provider);
-
-  if (!isAWS) {
+  if (workspace.provider?.providerId && workspace.provider.providerId !== "aws") {
     return (
       <div className="p-6">
-        <EmptyState icon={<Server />} title="Lambda requires an AWS workspace" description="Open an AWS profile from Connect to list and invoke functions (works on LocalStack and real AWS)." />
+        <EmptyState
+          icon={<Server />}
+          title="Lambda requires an AWS workspace"
+          description="Open an AWS profile from Connect to list and invoke functions (works on LocalStack and real AWS)."
+        />
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col gap-4 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Lambda Functions</h2>
-          <p className="text-sm text-muted-foreground">Regional list, config + recent logs, safe test invoke (read-mostly; one write action).</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Select value={region || undefined} onValueChange={(r) => onSelectRegion(r)}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Region" /></SelectTrigger>
-            <SelectContent>
-              {(workspace.lambdaRegions?.length ? workspace.lambdaRegions : workspace.ec2Regions || []).map((r) => (
-                <SelectItem key={r} value={r}>{r}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button variant="outline" size="sm" onClick={onRefresh} disabled={!region}>
-            <RefreshCw className="mr-2 h-4 w-4" /> Refresh
-          </Button>
-        </div>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <header>
+        <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">Lambda</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {countLabel(workspace.lambdaFunctions.length, "function", "functions")} ·{" "}
+          {workspace.selectedLambdaRegion || "no region selected"}
+        </p>
+      </header>
 
-      {!region ? (
-        <EmptyState icon={<Server />} title="Select a region" description="Choose an AWS region to list Lambda functions (LocalStack or real)." />
-      ) : (
-        <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-5">
-          {/* List */}
-          <div className={cn(sectionCard, "lg:col-span-3")}>
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium">Functions in {region}</div>
-              <input
-                className="h-8 w-48 rounded border bg-background px-2 text-sm"
-                placeholder="Filter name or runtime..."
-                value={filterText}
-                onChange={(e) => setFilterText(e.target.value)}
-              />
-            </div>
-            <div className="max-h-[420px] overflow-auto rounded border">
-              <Table>
-                <TableHeader><TableRow>
+      {invokeInFlight ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+          <Loader2 className="size-5 shrink-0 animate-spin text-primary" />
+          <span className="font-medium">Lambda invoke running</span>
+          <span className="text-muted-foreground">{actionStatus}</span>
+        </div>
+      ) : null}
+
+      <section className={sectionCard}>
+        <div>
+          <h2 className="text-base font-bold">Lambda Fleet</h2>
+          <p className="text-sm text-muted-foreground">
+            Regional function inventory with configuration, recent logs, and a safe test invoke.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <div className={fieldLabel}>Selected Region</div>
+            <p className="truncate text-sm">
+              {workspace.selectedLambdaRegion || "No region selected"}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <div className={fieldLabel}>Selected Function</div>
+            <p className="truncate text-sm font-mono">
+              {selectedFunction?.functionName || "No function selected"}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <div className={fieldLabel}>Functions</div>
+            <p className="truncate text-sm">
+              {countLabel(workspace.lambdaFunctions.length, "function", "functions")}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <div className={fieldLabel}>Endpoint</div>
+            <p className="truncate text-sm">
+              {workspace.awsEndpointUrl || "Default AWS endpoint"}
+            </p>
+          </div>
+        </div>
+        <p className="text-sm text-muted-foreground">{statusMessage}</p>
+      </section>
+
+      <section className={sectionCard}>
+        <div>
+          <h2 className="text-base font-bold">Function Inventory</h2>
+          <p className="text-sm text-muted-foreground">
+            Select a region, filter functions, then choose one for details, logs, and invoke.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-56">
+            <div className={cn(fieldLabel, "mb-1")}>Region</div>
+            <Select
+              value={workspace.selectedLambdaRegion ?? ""}
+              onValueChange={(value) => {
+                if (value) {
+                  onSelectRegion(value);
+                }
+              }}
+            >
+              <SelectTrigger aria-label="Select region">
+                <SelectValue placeholder="Select region" />
+              </SelectTrigger>
+              <SelectContent>
+                {regions.map((region) => (
+                  <SelectItem key={region} value={region}>
+                    {region}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            variant="outline"
+            disabled={!workspace.selectedLambdaRegion || invokeInFlight}
+            onClick={onRefresh}
+          >
+            <RefreshCw />
+            Refresh Lambda
+          </Button>
+          <div className="min-w-56 flex-1">
+            <div className={cn(fieldLabel, "mb-1")}>Filter</div>
+            <Input
+              value={filterText}
+              placeholder="Filter functions"
+              onChange={(event) => {
+                setFilterText(event.target.value);
+              }}
+            />
+          </div>
+          <div className="pb-2 text-xs text-muted-foreground">
+            {filteredFunctions.length}/{workspace.lambdaFunctions.length} shown
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-lg border border-border">
+          {workspace.lambdaFunctions.length === 0 ? (
+            <EmptyState
+              icon={<Server />}
+              title="No functions"
+              description={
+                workspace.selectedLambdaRegion
+                  ? `No Lambda functions were returned for ${workspace.selectedLambdaRegion}.`
+                  : "Select a region to list Lambda functions."
+              }
+              className="border-0"
+            />
+          ) : filteredFunctions.length === 0 ? (
+            <EmptyState
+              icon={<Server />}
+              title="No matches"
+              description="No Lambda functions match the current filter."
+              className="border-0"
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Runtime</TableHead>
                   <TableHead>Memory</TableHead>
                   <TableHead>Last Modified</TableHead>
                   <TableHead>State</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {filtered.length === 0 && (
-                    <TableRow><TableCell colSpan={5} className="text-muted-foreground">No functions{filterText ? " match filter" : ""}.</TableCell></TableRow>
-                  )}
-                  {filtered.map((fn) => (
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredFunctions.map((fn) => {
+                  const active = fn.functionName === selectedFunction?.functionName;
+                  return (
                     <TableRow
                       key={fn.functionName}
-                      className={cn("cursor-pointer", selected?.functionName === fn.functionName && "bg-muted/50")}
-                      onClick={() => onSelectFunction(fn.functionName)}
+                      data-state={active ? "selected" : undefined}
+                      className="cursor-pointer"
+                      onClick={() => {
+                        onSelectFunction(fn.functionName);
+                      }}
                     >
                       <TableCell className="font-mono text-sm">{fn.functionName}</TableCell>
-                      <TableCell>{fn.runtime || "—"}</TableCell>
-                      <TableCell>{fn.memorySize ? `${fn.memorySize} MB` : "—"}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{fn.lastModified || "—"}</TableCell>
-                      <TableCell><StatusPill status={lambdaStatus(fn.state)} label={fn.state || "Unknown"} /></TableCell>
+                      <TableCell>{fn.runtime || "Unknown"}</TableCell>
+                      <TableCell>{fn.memorySize ? `${fn.memorySize} MB` : "Unknown"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {fn.lastModified || "Unknown"}
+                      </TableCell>
+                      <TableCell>
+                        <StatusPill
+                          status={lambdaStateStatus(fn.state)}
+                          label={fn.state || "Unknown"}
+                        />
+                      </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            <div className="text-[11px] text-muted-foreground">{actionStatus}</div>
-          </div>
-
-          {/* Detail + Invoke */}
-          <div className={cn(sectionCard, "lg:col-span-2 space-y-4")}>
-            <div>
-              <div className="flex items-center justify-between">
-                <div className={fieldLabel}>Selected function</div>
-                {selected && (
-                  <Button size="sm" variant="outline" onClick={() => copyToClipboard(selected.functionName)}>
-                    <Copy className="mr-1 h-3 w-3" /> Copy name
-                  </Button>
-                )}
-              </div>
-              <div className="mt-1 font-mono text-sm">{selected?.functionName || "—"}</div>
-            </div>
-
-            {selected && (
-              <>
-                <div>
-                  <div className={fieldLabel}>Configuration</div>
-                  <DetailFieldList fields={[
-                    { label: "Runtime", value: selected.runtime || "—" },
-                    { label: "Memory (MB)", value: selected.memorySize ? String(selected.memorySize) : "—" },
-                    { label: "Timeout (s)", value: selected.timeout ? String(selected.timeout) : "—" },
-                    { label: "Handler", value: selected.handler || "—" },
-                    { label: "State", value: selected.state || "—" },
-                    { label: "Last Modified", value: selected.lastModified || "—" },
-                    { label: "Log Group", value: selected.logGroup || "—" },
-                  ]} emptyText="No configuration details." />
-                </div>
-
-                {selected.recentLogs && selected.recentLogs.length > 0 && (
-                  <div>
-                    <div className={fieldLabel}>Recent CloudWatch Logs (tail)</div>
-                    <div className={cn(snippetCard, "max-h-40 overflow-auto text-[11px] font-mono whitespace-pre-wrap")}>
-                      {selected.recentLogs.join("\n")}
-                    </div>
-                  </div>
-                )}
-
-                {/* Invoke (the single safe write) */}
-                <div>
-                  <div className={fieldLabel}>Test invoke (safe write action)</div>
-                  <Textarea
-                    className="mt-1 h-24 font-mono text-xs"
-                    value={payloadText}
-                    onChange={(e) => setPayloadText(e.target.value)}
-                    placeholder='{"key": "value"}'
-                  />
-                  <div className="mt-2 flex gap-2">
-                    <Button size="sm" onClick={handleInvokeClick} disabled={invokeInFlight || !selected.functionName}>
-                      <Play className="mr-1 h-3 w-3" /> Invoke
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setPayloadText('{\n  "test": true\n}')}>Reset payload</Button>
-                  </div>
-                  <div className="mt-1 text-[11px] text-muted-foreground">{actionStatus}</div>
-                </div>
-
-                {invokeResult && (
-                  <div>
-                    <div className={fieldLabel}>Last invoke result</div>
-                    <div className={snippetCard}>
-                      <div className="text-xs">Status: {invokeResult.statusCode} {invokeResult.executedVersion ? `(v${invokeResult.executedVersion})` : ""}</div>
-                      {invokeResult.functionError && <div className="text-xs text-destructive">Error: {invokeResult.functionError}</div>}
-                      {invokeResult.logResult && (
-                        <div className="mt-1 text-[10px] font-mono whitespace-pre-wrap border-t pt-1">{invokeResult.logResult}</div>
-                      )}
-                      {invokeResult.payload && (
-                        <div className="mt-1">
-                          <Button size="sm" variant="ghost" className="h-6 px-1 text-[10px]" onClick={() => copyToClipboard(formatPayload(invokeResult.payload))}>
-                            <Copy className="mr-1 h-3 w-3" /> Copy response
-                          </Button>
-                          <pre className="mt-1 max-h-32 overflow-auto rounded bg-background p-2 text-[10px]">{formatPayload(invokeResult.payload)}</pre>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-
-            {!selected && <div className="text-sm text-muted-foreground">Select a function from the list to view details and invoke.</div>}
-          </div>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
         </div>
-      )}
 
-      <AlertDialog open={!!pending} onOpenChange={() => setPending(undefined)}>
+        {!invokeInFlight ? (
+          <p className="text-sm text-muted-foreground">{statusMessage}</p>
+        ) : null}
+      </section>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className={sectionCard}>
+          <div>
+            <h2 className="text-base font-bold">Function Detail</h2>
+            <p className="text-sm text-muted-foreground">
+              {selectedFunction?.functionName || "Select a function for configuration and logs."}
+            </p>
+          </div>
+          {selectedFunction ? (
+            <>
+              <DetailFieldList
+                fields={[
+                  { label: "Runtime", value: selectedFunction.runtime || "Unknown" },
+                  {
+                    label: "Memory (MB)",
+                    value: selectedFunction.memorySize ? String(selectedFunction.memorySize) : "Unknown",
+                  },
+                  {
+                    label: "Timeout (s)",
+                    value: selectedFunction.timeout ? String(selectedFunction.timeout) : "Unknown",
+                  },
+                  { label: "Handler", value: selectedFunction.handler || "Unknown" },
+                  { label: "State", value: selectedFunction.state || "Unknown" },
+                  { label: "Last Modified", value: selectedFunction.lastModified || "Unknown" },
+                  { label: "Log Group", value: selectedFunction.logGroup || "Unknown" },
+                  { label: "Description", value: selectedFunction.description || "No description" },
+                ]}
+                emptyText="No function details are available."
+              />
+
+              {selectedFunction.recentLogs && selectedFunction.recentLogs.length > 0 ? (
+                <div>
+                  <div className={fieldLabel}>Recent CloudWatch Logs</div>
+                  <div
+                    className={cn(
+                      snippetCard,
+                      "max-h-48 overflow-auto whitespace-pre-wrap font-mono text-[11px]",
+                    )}
+                  >
+                    {selectedFunction.recentLogs.join("\n")}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No recent CloudWatch log events were returned for this function.
+                </p>
+              )}
+
+              <div>
+                <div className={fieldLabel}>Test invoke (safe write action)</div>
+                <Textarea
+                  className="mt-1 h-28 font-mono text-xs"
+                  value={payloadText}
+                  onChange={(event) => {
+                    setPayloadText(event.target.value);
+                    setPayloadError(undefined);
+                  }}
+                  placeholder='{"key": "value"}'
+                />
+                {payloadError ? (
+                  <p className="mt-1 text-xs text-destructive">{payloadError}</p>
+                ) : null}
+                <div className="mt-2 flex gap-2">
+                  <Button
+                    size="sm"
+                    disabled={invokeInFlight || !selectedFunction.functionName}
+                    onClick={handleInvokeClick}
+                  >
+                    <Play className="mr-1 h-3 w-3" />
+                    Invoke
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setPayloadText(defaultPayload);
+                      setPayloadError(undefined);
+                    }}
+                  >
+                    Reset payload
+                  </Button>
+                </div>
+              </div>
+
+              {invokeResult ? (
+                <div>
+                  <div className={fieldLabel}>Last invoke result</div>
+                  <div className={snippetCard}>
+                    <div className="text-xs">
+                      Status: {invokeResult.statusCode}
+                      {invokeResult.executedVersion ? ` (v${invokeResult.executedVersion})` : ""}
+                    </div>
+                    {invokeResult.functionError ? (
+                      <div className="text-xs text-destructive">
+                        Error: {invokeResult.functionError}
+                      </div>
+                    ) : null}
+                    {invokeResult.logResult ? (
+                      <div className="mt-1 border-t pt-1 font-mono text-[10px] whitespace-pre-wrap">
+                        {invokeResult.logResult}
+                      </div>
+                    ) : null}
+                    {invokeResult.payload ? (
+                      <div className="mt-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-1 text-[10px]"
+                          onClick={() => {
+                            copyToClipboard(formatPayload(invokeResult.payload), "Response copied");
+                          }}
+                        >
+                          <Copy className="mr-1 h-3 w-3" />
+                          Copy response
+                        </Button>
+                        <pre className="mt-1 max-h-32 overflow-auto rounded bg-background p-2 text-[10px]">
+                          {formatPayload(invokeResult.payload)}
+                        </pre>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">No Lambda function selected.</p>
+          )}
+        </section>
+
+        <section className={sectionCard}>
+          <div>
+            <h2 className="text-base font-bold">Copy Actions</h2>
+            <p className="text-sm text-muted-foreground">
+              Generated locally from the selected region and function. No snippet is stored.
+            </p>
+          </div>
+          {copySnippets.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Select a function to generate copy actions.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {copySnippets.map((snippet) => (
+                <div key={snippet.label} className={snippetCard}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={fieldLabel}>{snippet.label}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        copyToClipboard(snippet.value, `${snippet.label} copied`);
+                      }}
+                    >
+                      <Copy />
+                      Copy
+                    </Button>
+                  </div>
+                  <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                    {snippet.value}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <AlertDialog
+        open={Boolean(pending)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPending(undefined);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Lambda invoke</AlertDialogTitle>
             <AlertDialogDescription>
-              This will execute <span className="font-mono">{pending?.functionName}</span> with the payload below. This is a test invocation only.
+              This will execute a test invocation against the selected profile endpoint.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="rounded border bg-muted/40 p-3 text-xs font-mono whitespace-pre-wrap max-h-48 overflow-auto">{pending?.payload}</div>
+          <DetailFieldList
+            fields={
+              pending
+                ? [
+                    { label: "Function", value: pending.functionName },
+                    { label: "Region", value: workspace.selectedLambdaRegion || "Unknown" },
+                    {
+                      label: "Endpoint",
+                      value: workspace.awsEndpointUrl || "Default AWS endpoint",
+                    },
+                  ]
+                : []
+            }
+            emptyText="No invoke details are available."
+          />
+          <div className="max-h-48 overflow-auto rounded border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap">
+            {pending?.payload}
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmInvoke}>Invoke function</AlertDialogAction>

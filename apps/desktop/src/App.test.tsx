@@ -435,6 +435,28 @@ vi.mock("./lib/backend", () => ({
           status: "queued",
           message: `Queueing EC2 ${params?.action} for ${params?.instanceId}.`,
         };
+      case "aws.lambda.selectRegion":
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedLambdaRegion: String(params?.region ?? ""),
+          selectedLambdaFunctionName: workspaceFixture.lambdaFunctions[0]?.functionName,
+          lambdaStatusMessage: `Loaded ${workspaceFixture.lambdaFunctions.length} Lambda functions from ${String(params?.region ?? "")}.`,
+        };
+        return workspaceFixture;
+      case "aws.lambda.selectFunction":
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedLambdaFunctionName: String(params?.functionName ?? ""),
+          lambdaStatusMessage: `Selected Lambda function ${String(params?.functionName ?? "")}.`,
+        };
+        return workspaceFixture;
+      case "aws.lambda.invoke":
+        return {
+          statusCode: 200,
+          executedVersion: "$LATEST",
+          logResult: "START RequestId: mock-123\nEND RequestId: mock-123",
+          payload: JSON.stringify({ echoed: params?.payload ?? {} }),
+        };
       default:
         return sessionFixture;
     }
@@ -604,10 +626,30 @@ describe("App", () => {
         },
       ],
       selectedLambdaRegion: "us-east-1",
-      selectedLambdaFunctionName: undefined,
-      lambdaStatusMessage: "Loaded 0 Lambda functions from us-east-1.",
-      lambdaRegions: ["us-east-1"],
-      lambdaFunctions: [],
+      selectedLambdaFunctionName: "process-order",
+      lambdaStatusMessage: "Loaded 2 Lambda functions from us-east-1.",
+      lambdaRegions: ["us-east-1", "eu-west-2"],
+      lambdaFunctions: [
+        {
+          functionName: "process-order",
+          runtime: "nodejs20.x",
+          memorySize: 512,
+          lastModified: "2026-06-10T12:00:00Z",
+          description: "Handles order processing from SQS",
+          state: "Active",
+          handler: "index.handler",
+          timeout: 30,
+          logGroup: "/aws/lambda/process-order",
+          recentLogs: ["2026-06-15 10:05:12 START RequestId: abc123"],
+        },
+        {
+          functionName: "resize-image",
+          runtime: "python3.12",
+          memorySize: 1024,
+          lastModified: "2026-06-08T09:15:00Z",
+          state: "Active",
+        },
+      ],
     };
     s3PrefixDelays = new Map();
     backendEventHandlers = {};
@@ -754,6 +796,12 @@ describe("App", () => {
           summary: "EC2 summary",
           detail: "EC2 panel",
         },
+        {
+          tabId: "lambda",
+          label: "Lambda",
+          summary: "Lambda summary",
+          detail: "Lambda panel",
+        },
       ],
     };
     workspaceFixture = {
@@ -773,14 +821,17 @@ describe("App", () => {
     expect(await screen.findByText(/Local-endpoint writes are enabled/)).toBeInTheDocument();
     expect(await screen.findByText("S3 buckets")).toBeInTheDocument();
     expect(screen.getByText("EC2 instances")).toBeInTheDocument();
+    expect(screen.getByText("Lambda functions")).toBeInTheDocument();
     expect(screen.getByText(/workspace sandbox/)).toBeInTheDocument();
     expect(screen.getByText("cloudsprocket-artifacts")).toBeInTheDocument();
     expect(screen.getByText("sandbox-api-1")).toBeInTheDocument();
+    expect(screen.getByText("process-order")).toBeInTheDocument();
     const nav = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
     expect(nav.getByText("Overview")).toBeInTheDocument();
     expect(nav.getByText("Local Runtime")).toBeInTheDocument();
     expect(nav.getByText("S3")).toBeInTheDocument();
     expect(nav.getByText("EC2")).toBeInTheDocument();
+    expect(nav.getByText("Lambda")).toBeInTheDocument();
     expect(nav.getByRole("button", { name: /S3/ }).querySelector("img")).not.toBeNull();
     expect(nav.getByRole("button", { name: /EC2/ }).querySelector("img")).not.toBeNull();
     fireEvent.click(nav.getByText("Local Runtime"));
