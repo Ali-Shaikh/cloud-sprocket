@@ -491,6 +491,58 @@ vi.mock("./lib/backend", () => ({
             },
           ],
         };
+      case "aws.sns.selectRegion":
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedSnsRegion: String(params?.region ?? ""),
+          selectedSnsTopicArn: workspaceFixture.snsTopics[0]?.topicArn,
+          snsStatusMessage: `Loaded ${workspaceFixture.snsTopics.length} SNS topics from ${String(params?.region ?? "")}.`,
+        };
+        return workspaceFixture;
+      case "aws.sns.selectTopic":
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedSnsTopicArn: String(params?.topicArn ?? ""),
+          snsStatusMessage: `Selected SNS topic ${String(params?.topicArn ?? "")}.`,
+        };
+        return workspaceFixture;
+      case "aws.rds.selectRegion":
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedRdsRegion: String(params?.region ?? ""),
+          selectedRdsInstanceId: workspaceFixture.rdsInstances[0]?.dbInstanceIdentifier,
+          rdsStatusMessage: `Loaded ${workspaceFixture.rdsInstances.length} RDS instances from ${String(params?.region ?? "")}.`,
+        };
+        return workspaceFixture;
+      case "aws.rds.selectInstance":
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedRdsInstanceId: String(params?.instanceId ?? ""),
+          rdsStatusMessage: `Selected RDS instance ${String(params?.instanceId ?? "")}.`,
+        };
+        return workspaceFixture;
+      case "aws.logs.selectRegion":
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedLogsRegion: String(params?.region ?? ""),
+          selectedLogGroupName: workspaceFixture.logGroups[0]?.logGroupName,
+          logsStatusMessage: `Loaded ${workspaceFixture.logGroups.length} log groups from ${String(params?.region ?? "")}.`,
+        };
+        return workspaceFixture;
+      case "aws.logs.selectLogGroup":
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedLogGroupName: String(params?.logGroupName ?? ""),
+          logsStatusMessage: `Selected log group ${String(params?.logGroupName ?? "")}.`,
+        };
+        return workspaceFixture;
+      case "aws.iam.selectRole":
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedIamRoleName: String(params?.roleName ?? ""),
+          iamStatusMessage: `Selected IAM role ${String(params?.roleName ?? "")}.`,
+        };
+        return workspaceFixture;
       case "aws.lambda.invoke":
         return {
           statusCode: 200,
@@ -737,6 +789,75 @@ describe("App", () => {
           approximateNumberOfMessages: 0,
         },
       ],
+      selectedSnsRegion: "us-east-1",
+      selectedSnsTopicArn: "arn:aws:sns:us-east-1:000000000000:order-events",
+      snsStatusMessage: "Loaded 2 SNS topics from us-east-1.",
+      snsRegions: ["us-east-1", "eu-west-2"],
+      snsTopics: [
+        {
+          topicArn: "arn:aws:sns:us-east-1:000000000000:order-events",
+          topicName: "order-events",
+          displayName: "Order events",
+          subscriptionsConfirmed: "2",
+        },
+        {
+          topicArn: "arn:aws:sns:us-east-1:000000000000:cloudsprocket-alerts",
+          topicName: "cloudsprocket-alerts",
+          subscriptionsConfirmed: "1",
+        },
+      ],
+      selectedRdsRegion: "us-east-1",
+      selectedRdsInstanceId: "cloudsprocket-app-db",
+      rdsStatusMessage: "Loaded 2 RDS instances from us-east-1.",
+      rdsRegions: ["us-east-1", "eu-west-2"],
+      rdsInstances: [
+        {
+          dbInstanceIdentifier: "cloudsprocket-app-db",
+          engine: "postgres",
+          engineVersion: "15.4",
+          status: "available",
+          instanceClass: "db.t3.micro",
+        },
+        {
+          dbInstanceIdentifier: "cloudsprocket-analytics-db",
+          engine: "mysql",
+          status: "available",
+        },
+      ],
+      selectedLogsRegion: "us-east-1",
+      selectedLogGroupName: "/aws/lambda/process-order",
+      logsStatusMessage: "Loaded 2 log groups from us-east-1.",
+      logsRegions: ["us-east-1", "eu-west-2"],
+      logGroups: [
+        {
+          logGroupName: "/aws/lambda/process-order",
+          retentionInDays: 7,
+        },
+        {
+          logGroupName: "/ecs/cloudsprocket-app",
+          retentionInDays: 30,
+        },
+      ],
+      selectedIamRoleName: "cloudsprocket-lambda-role",
+      iamStatusMessage: "Loaded 2 IAM roles and 1 customer-managed policies.",
+      iamRoles: [
+        {
+          roleName: "cloudsprocket-lambda-role",
+          roleArn: "arn:aws:iam::000000000000:role/cloudsprocket-lambda-role",
+          attachedPolicies: ["AWSLambdaBasicExecutionRole"],
+        },
+        {
+          roleName: "cloudsprocket-ecs-task-role",
+          roleArn: "arn:aws:iam::000000000000:role/cloudsprocket-ecs-task-role",
+        },
+      ],
+      iamPolicies: [
+        {
+          policyName: "cloudsprocket-data-access",
+          policyArn: "arn:aws:iam::000000000000:policy/cloudsprocket-data-access",
+          attachmentCount: 2,
+        },
+      ],
     };
     s3PrefixDelays = new Map();
     backendEventHandlers = {};
@@ -826,7 +947,7 @@ describe("App", () => {
   it("masks sensitive profile values until they are revealed", async () => {
     // The connect screen no longer shows the profile inspector, and the locked
     // overview tab is now the Tailwind OverviewView. The masking still lives in
-    // the WorkspaceView profile panel, reachable via a provider tab.
+    // PlaceholderView, reachable via a workspace tab without a dedicated panel.
     sessionFixture = {
       ...sessionFixture,
       isLocked: true,
@@ -835,7 +956,12 @@ describe("App", () => {
       lockedAuthMethod: "cli",
       workspaceTabs: [
         { tabId: "overview", label: "Overview", summary: "Summary", detail: "Overview panel" },
-        { tabId: "iam", label: "Identity", summary: "Identity summary", detail: "Identity panel" },
+        {
+          tabId: "profile-inspector",
+          label: "Profile",
+          summary: "Profile summary",
+          detail: "Profile panel",
+        },
       ],
     };
 
@@ -845,7 +971,7 @@ describe("App", () => {
       </ThemeProvider>,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Identity" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Profile" }));
     expect(await screen.findByText("Hidden until revealed")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reveal Sensitive Values" }));
     expect(await screen.findByText("super-secret-value")).toBeInTheDocument();
@@ -901,6 +1027,30 @@ describe("App", () => {
           summary: "SQS summary",
           detail: "SQS panel",
         },
+        {
+          tabId: "sns",
+          label: "SNS",
+          summary: "SNS summary",
+          detail: "SNS panel",
+        },
+        {
+          tabId: "rds",
+          label: "RDS",
+          summary: "RDS summary",
+          detail: "RDS panel",
+        },
+        {
+          tabId: "logs",
+          label: "Logs",
+          summary: "Logs summary",
+          detail: "Logs panel",
+        },
+        {
+          tabId: "iam",
+          label: "IAM",
+          summary: "IAM summary",
+          detail: "IAM panel",
+        },
       ],
     };
     workspaceFixture = {
@@ -925,11 +1075,19 @@ describe("App", () => {
     expect(screen.getByText("Lambda functions")).toBeInTheDocument();
     expect(screen.getByText("DynamoDB tables")).toBeInTheDocument();
     expect(screen.getByText("SQS queues")).toBeInTheDocument();
+    expect(screen.getByText("SNS topics")).toBeInTheDocument();
+    expect(screen.getByText("RDS instances")).toBeInTheDocument();
+    expect(screen.getByText("Log groups")).toBeInTheDocument();
+    expect(screen.getByText("IAM roles")).toBeInTheDocument();
     expect(screen.getByText(/workspace sandbox/)).toBeInTheDocument();
     expect(screen.getByText("cloudsprocket-artifacts")).toBeInTheDocument();
     expect(screen.getByText("sandbox-api-1")).toBeInTheDocument();
     expect((await screen.findAllByText("process-order")).length).toBeGreaterThan(0);
     expect(screen.getByText("cloudsprocket-orders")).toBeInTheDocument();
+    expect(screen.getByText("order-events")).toBeInTheDocument();
+    expect(screen.getByText("cloudsprocket-app-db")).toBeInTheDocument();
+    expect(screen.getByText("/aws/lambda/process-order")).toBeInTheDocument();
+    expect(screen.getByText("cloudsprocket-lambda-role")).toBeInTheDocument();
     const nav = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
     expect(nav.getByText("Overview")).toBeInTheDocument();
     expect(nav.getByText("Local Runtime")).toBeInTheDocument();
@@ -938,6 +1096,10 @@ describe("App", () => {
     expect(nav.getByText("Lambda")).toBeInTheDocument();
     expect(nav.getByText("DynamoDB")).toBeInTheDocument();
     expect(nav.getByText("SQS")).toBeInTheDocument();
+    expect(nav.getByText("SNS")).toBeInTheDocument();
+    expect(nav.getByText("RDS")).toBeInTheDocument();
+    expect(nav.getByText("Logs")).toBeInTheDocument();
+    expect(nav.getByText("IAM")).toBeInTheDocument();
     expect(nav.getByRole("button", { name: /S3/ }).querySelector("img")).not.toBeNull();
     expect(nav.getByRole("button", { name: /EC2/ }).querySelector("img")).not.toBeNull();
     fireEvent.click(nav.getByText("Local Runtime"));

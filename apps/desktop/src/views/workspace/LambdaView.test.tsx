@@ -74,6 +74,14 @@ const workspaceFixture: WorkspaceSnapshot = {
   dynamodbRegions: [],
   sqsRegions: [],
   sqsQueues: [],
+  snsRegions: [],
+  snsTopics: [],
+  rdsRegions: [],
+  rdsInstances: [],
+  logsRegions: [],
+  logGroups: [],
+  iamRoles: [],
+  iamPolicies: [],
   dynamodbTables: [],
   lambdaFunctions: [
     {

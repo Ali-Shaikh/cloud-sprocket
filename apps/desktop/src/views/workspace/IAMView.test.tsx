@@ -2,10 +2,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
-import DynamoDBView from "./DynamoDBView";
-import type { WorkspaceSnapshot } from "@/types/backend";
+import IAMView from "./IAMView";
+import type { IamWorkspaceSnapshot } from "./IAMView";
 
-const workspaceFixture: WorkspaceSnapshot = {
+const workspaceFixture: IamWorkspaceSnapshot = {
   provider: {
     providerId: "aws",
     label: "AWS",
@@ -69,10 +69,8 @@ const workspaceFixture: WorkspaceSnapshot = {
   ec2Instances: [],
   lambdaRegions: [],
   lambdaFunctions: [],
-  selectedDynamodbRegion: "us-east-1",
-  selectedDynamodbTableName: "cloudsprocket-orders",
-  dynamodbStatusMessage: "Loaded 2 DynamoDB tables from us-east-1.",
-  dynamodbRegions: ["us-east-1", "eu-west-2"],
+  dynamodbRegions: [],
+  dynamodbTables: [],
   sqsRegions: [],
   sqsQueues: [],
   snsRegions: [],
@@ -81,80 +79,76 @@ const workspaceFixture: WorkspaceSnapshot = {
   rdsInstances: [],
   logsRegions: [],
   logGroups: [],
-  iamRoles: [],
-  iamPolicies: [],
-  dynamodbTables: [
+  selectedIamRoleName: "cloudsprocket-lambda-role",
+  iamStatusMessage: "Loaded 2 IAM roles and 1 customer-managed policies.",
+  iamRoles: [
     {
-      tableName: "cloudsprocket-orders",
-      status: "ACTIVE",
-      itemCount: 1284,
-      tableSizeBytes: 524288,
-      billingMode: "PAY_PER_REQUEST",
-      hashKey: "orderId",
-      rangeKey: "createdAt",
-      globalSecondaryIndexes: [
-        {
-          indexName: "customer-index",
-          hashKey: "customerId",
-          rangeKey: "createdAt",
-          status: "ACTIVE",
-        },
-      ],
-      sampleItems: [
-        '{"orderId":"ord-001","customerId":"cust-42","createdAt":"2026-06-14T10:00:00Z","total":49.99}',
-      ],
+      roleName: "cloudsprocket-lambda-role",
+      roleArn: "arn:aws:iam::000000000000:role/cloudsprocket-lambda-role",
+      path: "/",
+      description: "Lambda execution role for CloudSprocket demos.",
+      createDate: "2026-06-01T09:00:00Z",
+      attachedPolicies: ["AWSLambdaBasicExecutionRole", "cloudsprocket-data-access"],
     },
     {
-      tableName: "cloudsprocket-sessions",
-      status: "ACTIVE",
-      itemCount: 42,
-      hashKey: "sessionId",
+      roleName: "cloudsprocket-ecs-task-role",
+      roleArn: "arn:aws:iam::000000000000:role/cloudsprocket-ecs-task-role",
+      path: "/service/",
+      attachedPolicies: ["AmazonECSTaskExecutionRolePolicy"],
+    },
+  ],
+  iamPolicies: [
+    {
+      policyName: "cloudsprocket-data-access",
+      policyArn: "arn:aws:iam::000000000000:policy/cloudsprocket-data-access",
+      attachmentCount: 2,
+      updateDate: "2026-06-10T14:30:00Z",
     },
   ],
 };
 
-function renderDynamoDBView() {
+function renderIAMView() {
   const onSelectRegion = vi.fn();
-  const onSelectTable = vi.fn();
+  const onSelectEntity = vi.fn();
   const onRefresh = vi.fn();
   render(
     <ThemeProvider>
-      <DynamoDBView
+      <IAMView
         workspace={workspaceFixture}
-        actionStatus="Ready to browse tables."
+        actionStatus="Ready to browse roles."
         onRefresh={onRefresh}
         onSelectRegion={onSelectRegion}
-        onSelectTable={onSelectTable}
+        onSelectEntity={onSelectEntity}
       />
     </ThemeProvider>,
   );
-  return { onSelectRegion, onSelectTable, onRefresh };
+  return { onSelectRegion, onSelectEntity, onRefresh };
 }
 
-describe("DynamoDBView", () => {
-  it("renders inventory, schema detail, and sample items", () => {
-    renderDynamoDBView();
+describe("IAMView", () => {
+  it("renders inventory, role detail, and customer-managed policies", () => {
+    renderIAMView();
 
-    expect(screen.getByText("Table Fleet")).toBeInTheDocument();
-    expect(screen.getByText("Table Inventory")).toBeInTheDocument();
-    expect(screen.getAllByText("cloudsprocket-orders").length).toBeGreaterThan(0);
-    expect(screen.getByText("customer-index")).toBeInTheDocument();
-    expect(screen.getByText(/Sample items \(read-only scan\)/)).toBeInTheDocument();
-    expect(screen.getByText(/"orderId":"ord-001"/)).toBeInTheDocument();
+    expect(screen.getByText("Role Fleet")).toBeInTheDocument();
+    expect(screen.getByText("Role Inventory")).toBeInTheDocument();
+    expect(screen.getAllByText("cloudsprocket-lambda-role").length).toBeGreaterThan(0);
+    expect(screen.getByText("Customer-managed policies")).toBeInTheDocument();
+    expect(screen.getByText("cloudsprocket-data-access")).toBeInTheDocument();
+    expect(screen.getAllByText(/Lambda execution role for CloudSprocket demos/).length).toBeGreaterThan(0);
   });
 
-  it("selects a table when a row is clicked", () => {
-    const { onSelectTable } = renderDynamoDBView();
+  it("selects a role when a row is clicked", () => {
+    const { onSelectEntity } = renderIAMView();
 
-    fireEvent.click(screen.getByText("cloudsprocket-sessions"));
+    fireEvent.click(screen.getByText("cloudsprocket-ecs-task-role"));
 
-    expect(onSelectTable).toHaveBeenCalledWith("cloudsprocket-sessions");
+    expect(onSelectEntity).toHaveBeenCalledWith("cloudsprocket-ecs-task-role");
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {
     render(
       <ThemeProvider>
-        <DynamoDBView
+        <IAMView
           workspace={{
             ...workspaceFixture,
             provider: {
@@ -169,11 +163,11 @@ describe("DynamoDBView", () => {
           actionStatus=""
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
-          onSelectTable={vi.fn()}
+          onSelectEntity={vi.fn()}
         />
       </ThemeProvider>,
     );
 
-    expect(screen.getByText("DynamoDB requires an AWS workspace")).toBeInTheDocument();
+    expect(screen.getByText("IAM requires an AWS workspace")).toBeInTheDocument();
   });
 });

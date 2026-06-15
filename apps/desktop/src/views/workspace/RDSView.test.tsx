@@ -2,10 +2,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
-import DynamoDBView from "./DynamoDBView";
-import type { WorkspaceSnapshot } from "@/types/backend";
+import RDSView from "./RDSView";
+import type { RdsWorkspaceSnapshot } from "./RDSView";
 
-const workspaceFixture: WorkspaceSnapshot = {
+const workspaceFixture: RdsWorkspaceSnapshot = {
   provider: {
     providerId: "aws",
     label: "AWS",
@@ -69,92 +69,85 @@ const workspaceFixture: WorkspaceSnapshot = {
   ec2Instances: [],
   lambdaRegions: [],
   lambdaFunctions: [],
-  selectedDynamodbRegion: "us-east-1",
-  selectedDynamodbTableName: "cloudsprocket-orders",
-  dynamodbStatusMessage: "Loaded 2 DynamoDB tables from us-east-1.",
-  dynamodbRegions: ["us-east-1", "eu-west-2"],
+  dynamodbRegions: [],
+  dynamodbTables: [],
   sqsRegions: [],
   sqsQueues: [],
   snsRegions: [],
   snsTopics: [],
-  rdsRegions: [],
-  rdsInstances: [],
   logsRegions: [],
   logGroups: [],
   iamRoles: [],
   iamPolicies: [],
-  dynamodbTables: [
+  selectedRdsRegion: "us-east-1",
+  selectedRdsInstanceId: "cloudsprocket-app-db",
+  rdsStatusMessage: "Loaded 2 RDS instances from us-east-1.",
+  rdsRegions: ["us-east-1", "eu-west-2"],
+  rdsInstances: [
     {
-      tableName: "cloudsprocket-orders",
-      status: "ACTIVE",
-      itemCount: 1284,
-      tableSizeBytes: 524288,
-      billingMode: "PAY_PER_REQUEST",
-      hashKey: "orderId",
-      rangeKey: "createdAt",
-      globalSecondaryIndexes: [
-        {
-          indexName: "customer-index",
-          hashKey: "customerId",
-          rangeKey: "createdAt",
-          status: "ACTIVE",
-        },
-      ],
-      sampleItems: [
-        '{"orderId":"ord-001","customerId":"cust-42","createdAt":"2026-06-14T10:00:00Z","total":49.99}',
-      ],
+      dbInstanceIdentifier: "cloudsprocket-app-db",
+      engine: "postgres",
+      engineVersion: "15.4",
+      status: "available",
+      instanceClass: "db.t3.micro",
+      endpointAddress: "cloudsprocket-app-db.rds.localhost",
+      endpointPort: 5432,
+      availabilityZone: "us-east-1a",
+      allocatedStorage: 20,
+      multiAz: false,
+      storageEncrypted: true,
     },
     {
-      tableName: "cloudsprocket-sessions",
-      status: "ACTIVE",
-      itemCount: 42,
-      hashKey: "sessionId",
+      dbInstanceIdentifier: "cloudsprocket-analytics-db",
+      engine: "mysql",
+      engineVersion: "8.0",
+      status: "available",
+      instanceClass: "db.t3.small",
     },
   ],
 };
 
-function renderDynamoDBView() {
+function renderRDSView() {
   const onSelectRegion = vi.fn();
-  const onSelectTable = vi.fn();
+  const onSelectEntity = vi.fn();
   const onRefresh = vi.fn();
   render(
     <ThemeProvider>
-      <DynamoDBView
+      <RDSView
         workspace={workspaceFixture}
-        actionStatus="Ready to browse tables."
+        actionStatus="Ready to browse instances."
         onRefresh={onRefresh}
         onSelectRegion={onSelectRegion}
-        onSelectTable={onSelectTable}
+        onSelectEntity={onSelectEntity}
       />
     </ThemeProvider>,
   );
-  return { onSelectRegion, onSelectTable, onRefresh };
+  return { onSelectRegion, onSelectEntity, onRefresh };
 }
 
-describe("DynamoDBView", () => {
-  it("renders inventory, schema detail, and sample items", () => {
-    renderDynamoDBView();
+describe("RDSView", () => {
+  it("renders inventory and endpoint detail", () => {
+    renderRDSView();
 
-    expect(screen.getByText("Table Fleet")).toBeInTheDocument();
-    expect(screen.getByText("Table Inventory")).toBeInTheDocument();
-    expect(screen.getAllByText("cloudsprocket-orders").length).toBeGreaterThan(0);
-    expect(screen.getByText("customer-index")).toBeInTheDocument();
-    expect(screen.getByText(/Sample items \(read-only scan\)/)).toBeInTheDocument();
-    expect(screen.getByText(/"orderId":"ord-001"/)).toBeInTheDocument();
+    expect(screen.getByText("Instance Fleet")).toBeInTheDocument();
+    expect(screen.getByText("Instance Inventory")).toBeInTheDocument();
+    expect(screen.getAllByText("cloudsprocket-app-db").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("cloudsprocket-app-db.rds.localhost:5432").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/postgres 15\.4/).length).toBeGreaterThan(0);
   });
 
-  it("selects a table when a row is clicked", () => {
-    const { onSelectTable } = renderDynamoDBView();
+  it("selects an instance when a row is clicked", () => {
+    const { onSelectEntity } = renderRDSView();
 
-    fireEvent.click(screen.getByText("cloudsprocket-sessions"));
+    fireEvent.click(screen.getByText("cloudsprocket-analytics-db"));
 
-    expect(onSelectTable).toHaveBeenCalledWith("cloudsprocket-sessions");
+    expect(onSelectEntity).toHaveBeenCalledWith("cloudsprocket-analytics-db");
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {
     render(
       <ThemeProvider>
-        <DynamoDBView
+        <RDSView
           workspace={{
             ...workspaceFixture,
             provider: {
@@ -169,11 +162,11 @@ describe("DynamoDBView", () => {
           actionStatus=""
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
-          onSelectTable={vi.fn()}
+          onSelectEntity={vi.fn()}
         />
       </ThemeProvider>,
     );
 
-    expect(screen.getByText("DynamoDB requires an AWS workspace")).toBeInTheDocument();
+    expect(screen.getByText("RDS requires an AWS workspace")).toBeInTheDocument();
   });
 });

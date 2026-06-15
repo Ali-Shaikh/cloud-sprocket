@@ -129,6 +129,13 @@ export interface SessionSnapshot {
   selectedDynamodbTableName?: string;
   selectedSqsRegion?: string;
   selectedSqsQueueUrl?: string;
+  selectedSnsRegion?: string;
+  selectedSnsTopicArn?: string;
+  selectedRdsRegion?: string;
+  selectedRdsInstanceId?: string;
+  selectedLogsRegion?: string;
+  selectedLogGroupName?: string;
+  selectedIamRoleName?: string;
   awsWriteModeEnabled?: boolean;
   lockedProviderId?: string;
   lockedProfileId?: string;
@@ -283,6 +290,63 @@ export interface AwsSqsPeekResult {
   summary: string;
 }
 
+export interface AwsSnsSubscription {
+  subscriptionArn: string;
+  protocol?: string;
+  endpoint?: string;
+  owner?: string;
+}
+
+export interface AwsSnsTopic {
+  topicArn: string;
+  topicName: string;
+  displayName?: string;
+  owner?: string;
+  subscriptionsConfirmed?: string;
+  subscriptionsPending?: string;
+  subscriptions?: AwsSnsSubscription[];
+}
+
+export interface AwsRdsInstance {
+  dbInstanceIdentifier: string;
+  engine?: string;
+  engineVersion?: string;
+  status?: string;
+  instanceClass?: string;
+  endpoint?: string;
+  endpointAddress?: string;
+  endpointPort?: number;
+  availabilityZone?: string;
+  allocatedStorage?: number;
+  multiAz?: boolean;
+  storageEncrypted?: boolean;
+}
+
+export interface AwsLogGroup {
+  logGroupName: string;
+  arn?: string;
+  storedBytes?: number;
+  retentionInDays?: number;
+  creationTime?: number;
+  recentEvents?: string[];
+}
+
+export interface AwsIamRole {
+  roleName: string;
+  roleArn?: string;
+  path?: string;
+  description?: string;
+  createDate?: string;
+  attachedPolicies?: string[];
+}
+
+export interface AwsIamPolicy {
+  policyName: string;
+  policyArn?: string;
+  attachmentCount?: number;
+  updateDate?: string;
+}
+
 export interface AzureResourceGroup {
   name: string;
   location?: string;
@@ -347,12 +411,31 @@ export interface WorkspaceSnapshot {
   selectedDynamodbTableName?: string;
   selectedSqsRegion?: string;
   selectedSqsQueueUrl?: string;
+  selectedSnsRegion?: string;
+  selectedSnsTopicArn?: string;
+  selectedRdsRegion?: string;
+  selectedRdsInstanceId?: string;
+  selectedLogsRegion?: string;
+  selectedLogGroupName?: string;
+  selectedIamRoleName?: string;
   dynamodbStatusMessage?: string;
   dynamodbRegions: string[];
   dynamodbTables: AwsDynamoDBTable[];
   sqsStatusMessage?: string;
   sqsRegions: string[];
   sqsQueues: AwsSqsQueue[];
+  snsStatusMessage?: string;
+  snsRegions: string[];
+  snsTopics: AwsSnsTopic[];
+  rdsStatusMessage?: string;
+  rdsRegions: string[];
+  rdsInstances: AwsRdsInstance[];
+  logsStatusMessage?: string;
+  logsRegions: string[];
+  logGroups: AwsLogGroup[];
+  iamStatusMessage?: string;
+  iamRoles: AwsIamRole[];
+  iamPolicies: AwsIamPolicy[];
 }
 
 export interface JobStatus {

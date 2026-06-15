@@ -2,10 +2,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
-import DynamoDBView from "./DynamoDBView";
-import type { WorkspaceSnapshot } from "@/types/backend";
+import LogsView from "./LogsView";
+import type { LogsWorkspaceSnapshot } from "./LogsView";
 
-const workspaceFixture: WorkspaceSnapshot = {
+const workspaceFixture: LogsWorkspaceSnapshot = {
   provider: {
     providerId: "aws",
     label: "AWS",
@@ -69,92 +69,81 @@ const workspaceFixture: WorkspaceSnapshot = {
   ec2Instances: [],
   lambdaRegions: [],
   lambdaFunctions: [],
-  selectedDynamodbRegion: "us-east-1",
-  selectedDynamodbTableName: "cloudsprocket-orders",
-  dynamodbStatusMessage: "Loaded 2 DynamoDB tables from us-east-1.",
-  dynamodbRegions: ["us-east-1", "eu-west-2"],
+  dynamodbRegions: [],
+  dynamodbTables: [],
   sqsRegions: [],
   sqsQueues: [],
   snsRegions: [],
   snsTopics: [],
   rdsRegions: [],
   rdsInstances: [],
-  logsRegions: [],
-  logGroups: [],
   iamRoles: [],
   iamPolicies: [],
-  dynamodbTables: [
+  selectedLogsRegion: "us-east-1",
+  selectedLogGroupName: "/aws/lambda/process-order",
+  logsStatusMessage: "Loaded 2 log groups from us-east-1.",
+  logsRegions: ["us-east-1", "eu-west-2"],
+  logGroups: [
     {
-      tableName: "cloudsprocket-orders",
-      status: "ACTIVE",
-      itemCount: 1284,
-      tableSizeBytes: 524288,
-      billingMode: "PAY_PER_REQUEST",
-      hashKey: "orderId",
-      rangeKey: "createdAt",
-      globalSecondaryIndexes: [
-        {
-          indexName: "customer-index",
-          hashKey: "customerId",
-          rangeKey: "createdAt",
-          status: "ACTIVE",
-        },
-      ],
-      sampleItems: [
-        '{"orderId":"ord-001","customerId":"cust-42","createdAt":"2026-06-14T10:00:00Z","total":49.99}',
+      logGroupName: "/aws/lambda/process-order",
+      arn: "arn:aws:logs:us-east-1:000000000000:log-group:/aws/lambda/process-order",
+      storedBytes: 1048576,
+      retentionInDays: 7,
+      creationTime: 1718448000000,
+      recentEvents: [
+        "2026-06-15 10:05:12 START RequestId: abc123",
+        "2026-06-15 10:05:12 END RequestId: abc123",
       ],
     },
     {
-      tableName: "cloudsprocket-sessions",
-      status: "ACTIVE",
-      itemCount: 42,
-      hashKey: "sessionId",
+      logGroupName: "/ecs/cloudsprocket-app",
+      storedBytes: 524288,
+      retentionInDays: 30,
     },
   ],
 };
 
-function renderDynamoDBView() {
+function renderLogsView() {
   const onSelectRegion = vi.fn();
-  const onSelectTable = vi.fn();
+  const onSelectEntity = vi.fn();
   const onRefresh = vi.fn();
   render(
     <ThemeProvider>
-      <DynamoDBView
+      <LogsView
         workspace={workspaceFixture}
-        actionStatus="Ready to browse tables."
+        actionStatus="Ready to browse log groups."
         onRefresh={onRefresh}
         onSelectRegion={onSelectRegion}
-        onSelectTable={onSelectTable}
+        onSelectEntity={onSelectEntity}
       />
     </ThemeProvider>,
   );
-  return { onSelectRegion, onSelectTable, onRefresh };
+  return { onSelectRegion, onSelectEntity, onRefresh };
 }
 
-describe("DynamoDBView", () => {
-  it("renders inventory, schema detail, and sample items", () => {
-    renderDynamoDBView();
+describe("LogsView", () => {
+  it("renders inventory and recent event tail", () => {
+    renderLogsView();
 
-    expect(screen.getByText("Table Fleet")).toBeInTheDocument();
-    expect(screen.getByText("Table Inventory")).toBeInTheDocument();
-    expect(screen.getAllByText("cloudsprocket-orders").length).toBeGreaterThan(0);
-    expect(screen.getByText("customer-index")).toBeInTheDocument();
-    expect(screen.getByText(/Sample items \(read-only scan\)/)).toBeInTheDocument();
-    expect(screen.getByText(/"orderId":"ord-001"/)).toBeInTheDocument();
+    expect(screen.getByText("Log Group Fleet")).toBeInTheDocument();
+    expect(screen.getByText("Log Group Inventory")).toBeInTheDocument();
+    expect(screen.getAllByText("/aws/lambda/process-order").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Recent events \(read-only tail\)/)).toBeInTheDocument();
+    expect(screen.getAllByText(/START RequestId: abc123/).length).toBeGreaterThan(0);
   });
 
-  it("selects a table when a row is clicked", () => {
-    const { onSelectTable } = renderDynamoDBView();
+  it("selects a log group when a row is clicked", () => {
+    const { onSelectEntity } = renderLogsView();
 
-    fireEvent.click(screen.getByText("cloudsprocket-sessions"));
+    fireEvent.click(screen.getByText("/ecs/cloudsprocket-app"));
 
-    expect(onSelectTable).toHaveBeenCalledWith("cloudsprocket-sessions");
+    expect(onSelectEntity).toHaveBeenCalledWith("/ecs/cloudsprocket-app");
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {
     render(
       <ThemeProvider>
-        <DynamoDBView
+        <LogsView
           workspace={{
             ...workspaceFixture,
             provider: {
@@ -169,11 +158,11 @@ describe("DynamoDBView", () => {
           actionStatus=""
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
-          onSelectTable={vi.fn()}
+          onSelectEntity={vi.fn()}
         />
       </ThemeProvider>,
     );
 
-    expect(screen.getByText("DynamoDB requires an AWS workspace")).toBeInTheDocument();
+    expect(screen.getByText("CloudWatch Logs requires an AWS workspace")).toBeInTheDocument();
   });
 });

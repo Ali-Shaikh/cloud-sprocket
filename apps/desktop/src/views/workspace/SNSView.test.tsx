@@ -2,10 +2,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
-import DynamoDBView from "./DynamoDBView";
-import type { WorkspaceSnapshot } from "@/types/backend";
+import SNSView from "./SNSView";
+import type { SnsWorkspaceSnapshot } from "./SNSView";
 
-const workspaceFixture: WorkspaceSnapshot = {
+const workspaceFixture: SnsWorkspaceSnapshot = {
   provider: {
     providerId: "aws",
     label: "AWS",
@@ -69,92 +69,86 @@ const workspaceFixture: WorkspaceSnapshot = {
   ec2Instances: [],
   lambdaRegions: [],
   lambdaFunctions: [],
-  selectedDynamodbRegion: "us-east-1",
-  selectedDynamodbTableName: "cloudsprocket-orders",
-  dynamodbStatusMessage: "Loaded 2 DynamoDB tables from us-east-1.",
-  dynamodbRegions: ["us-east-1", "eu-west-2"],
+  dynamodbRegions: [],
+  dynamodbTables: [],
   sqsRegions: [],
   sqsQueues: [],
-  snsRegions: [],
-  snsTopics: [],
   rdsRegions: [],
   rdsInstances: [],
   logsRegions: [],
   logGroups: [],
   iamRoles: [],
   iamPolicies: [],
-  dynamodbTables: [
+  selectedSnsRegion: "us-east-1",
+  selectedSnsTopicArn: "arn:aws:sns:us-east-1:000000000000:order-events",
+  snsStatusMessage: "Loaded 2 SNS topics from us-east-1.",
+  snsRegions: ["us-east-1", "eu-west-2"],
+  snsTopics: [
     {
-      tableName: "cloudsprocket-orders",
-      status: "ACTIVE",
-      itemCount: 1284,
-      tableSizeBytes: 524288,
-      billingMode: "PAY_PER_REQUEST",
-      hashKey: "orderId",
-      rangeKey: "createdAt",
-      globalSecondaryIndexes: [
+      topicArn: "arn:aws:sns:us-east-1:000000000000:order-events",
+      topicName: "order-events",
+      displayName: "Order events",
+      subscriptionsConfirmed: "2",
+      subscriptionsPending: "0",
+      subscriptions: [
         {
-          indexName: "customer-index",
-          hashKey: "customerId",
-          rangeKey: "createdAt",
-          status: "ACTIVE",
+          subscriptionArn: "arn:aws:sns:us-east-1:000000000000:order-events:sub-1",
+          protocol: "sqs",
+          endpoint: "arn:aws:sqs:us-east-1:000000000000:process-order",
         },
-      ],
-      sampleItems: [
-        '{"orderId":"ord-001","customerId":"cust-42","createdAt":"2026-06-14T10:00:00Z","total":49.99}',
       ],
     },
     {
-      tableName: "cloudsprocket-sessions",
-      status: "ACTIVE",
-      itemCount: 42,
-      hashKey: "sessionId",
+      topicArn: "arn:aws:sns:us-east-1:000000000000:cloudsprocket-alerts",
+      topicName: "cloudsprocket-alerts",
+      subscriptionsConfirmed: "1",
     },
   ],
 };
 
-function renderDynamoDBView() {
+function renderSNSView() {
   const onSelectRegion = vi.fn();
-  const onSelectTable = vi.fn();
+  const onSelectEntity = vi.fn();
   const onRefresh = vi.fn();
   render(
     <ThemeProvider>
-      <DynamoDBView
+      <SNSView
         workspace={workspaceFixture}
-        actionStatus="Ready to browse tables."
+        actionStatus="Ready to browse topics."
         onRefresh={onRefresh}
         onSelectRegion={onSelectRegion}
-        onSelectTable={onSelectTable}
+        onSelectEntity={onSelectEntity}
       />
     </ThemeProvider>,
   );
-  return { onSelectRegion, onSelectTable, onRefresh };
+  return { onSelectRegion, onSelectEntity, onRefresh };
 }
 
-describe("DynamoDBView", () => {
-  it("renders inventory, schema detail, and sample items", () => {
-    renderDynamoDBView();
+describe("SNSView", () => {
+  it("renders inventory and subscription detail", () => {
+    renderSNSView();
 
-    expect(screen.getByText("Table Fleet")).toBeInTheDocument();
-    expect(screen.getByText("Table Inventory")).toBeInTheDocument();
-    expect(screen.getAllByText("cloudsprocket-orders").length).toBeGreaterThan(0);
-    expect(screen.getByText("customer-index")).toBeInTheDocument();
-    expect(screen.getByText(/Sample items \(read-only scan\)/)).toBeInTheDocument();
-    expect(screen.getByText(/"orderId":"ord-001"/)).toBeInTheDocument();
+    expect(screen.getByText("Topic Fleet")).toBeInTheDocument();
+    expect(screen.getByText("Topic Inventory")).toBeInTheDocument();
+    expect(screen.getAllByText("order-events").length).toBeGreaterThan(0);
+    expect(screen.getByText("Subscriptions")).toBeInTheDocument();
+    expect(screen.getByText("sqs")).toBeInTheDocument();
   });
 
-  it("selects a table when a row is clicked", () => {
-    const { onSelectTable } = renderDynamoDBView();
+  it("selects a topic when a row is clicked", () => {
+    const { onSelectEntity } = renderSNSView();
 
-    fireEvent.click(screen.getByText("cloudsprocket-sessions"));
+    fireEvent.click(screen.getByText("cloudsprocket-alerts"));
 
-    expect(onSelectTable).toHaveBeenCalledWith("cloudsprocket-sessions");
+    expect(onSelectEntity).toHaveBeenCalledWith(
+      "arn:aws:sns:us-east-1:000000000000:cloudsprocket-alerts",
+    );
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {
     render(
       <ThemeProvider>
-        <DynamoDBView
+        <SNSView
           workspace={{
             ...workspaceFixture,
             provider: {
@@ -169,11 +163,11 @@ describe("DynamoDBView", () => {
           actionStatus=""
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
-          onSelectTable={vi.fn()}
+          onSelectEntity={vi.fn()}
         />
       </ThemeProvider>,
     );
 
-    expect(screen.getByText("DynamoDB requires an AWS workspace")).toBeInTheDocument();
+    expect(screen.getByText("SNS requires an AWS workspace")).toBeInTheDocument();
   });
 });

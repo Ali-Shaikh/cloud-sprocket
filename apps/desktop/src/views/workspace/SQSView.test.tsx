@@ -75,6 +75,14 @@ const workspaceFixture: WorkspaceSnapshot = {
   selectedSqsQueueUrl: "http://localhost:4566/000000000000/process-order",
   sqsStatusMessage: "Loaded 2 SQS queues from us-east-1.",
   sqsRegions: ["us-east-1", "eu-west-2"],
+  snsRegions: [],
+  snsTopics: [],
+  rdsRegions: [],
+  rdsInstances: [],
+  logsRegions: [],
+  logGroups: [],
+  iamRoles: [],
+  iamPolicies: [],
   sqsQueues: [
     {
       queueName: "process-order",

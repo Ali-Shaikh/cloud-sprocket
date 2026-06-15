@@ -137,6 +137,30 @@ const mockWorkspaceTabs: WorkspaceTab[] = [
     detail: "List queues by region, inspect depth and in-flight counts, and peek messages without deleting them.",
   },
   {
+    tabId: "sns",
+    label: "SNS",
+    summary: "Topic inventory and subscription preview.",
+    detail: "List topics by region and inspect subscriptions read-only.",
+  },
+  {
+    tabId: "rds",
+    label: "RDS",
+    summary: "Database instance inventory.",
+    detail: "List RDS instances by region with engine, status, and endpoint details.",
+  },
+  {
+    tabId: "logs",
+    label: "Logs",
+    summary: "CloudWatch Logs group inventory and recent events.",
+    detail: "Browse log groups by region and tail recent events read-only.",
+  },
+  {
+    tabId: "iam",
+    label: "IAM",
+    summary: "Role and policy inventory.",
+    detail: "Inspect IAM roles and customer-managed policies created in this account.",
+  },
+  {
     tabId: "actions",
     label: "Activity",
     summary: "Recent job, log, and refresh history.",
@@ -334,6 +358,96 @@ const mockWorkspaceDynamoDBTables = [
     billingMode: "PAY_PER_REQUEST",
     hashKey: "sessionId",
     sampleItems: ['{"sessionId":"sess-abc","userId":"user-1","ttl":1718452800}'],
+  },
+];
+
+const mockWorkspaceSNSTopics = [
+  {
+    topicArn: "arn:aws:sns:us-east-1:000000000000:order-events",
+    topicName: "order-events",
+    displayName: "Order events",
+    subscriptionsConfirmed: "2",
+    subscriptionsPending: "0",
+    subscriptions: [
+      {
+        subscriptionArn: "arn:aws:sns:us-east-1:000000000000:order-events:sub-1",
+        protocol: "sqs",
+        endpoint: "arn:aws:sqs:us-east-1:000000000000:process-order",
+      },
+    ],
+  },
+  {
+    topicArn: "arn:aws:sns:us-east-1:000000000000:cloudsprocket-alerts",
+    topicName: "cloudsprocket-alerts",
+    subscriptionsConfirmed: "1",
+  },
+];
+
+const mockWorkspaceRDSInstances = [
+  {
+    dbInstanceIdentifier: "cloudsprocket-app-db",
+    engine: "postgres",
+    engineVersion: "15.4",
+    status: "available",
+    instanceClass: "db.t3.micro",
+    endpointAddress: "cloudsprocket-app-db.rds.localhost",
+    endpointPort: 5432,
+    availabilityZone: "us-east-1a",
+    allocatedStorage: 20,
+    multiAz: false,
+    storageEncrypted: true,
+  },
+  {
+    dbInstanceIdentifier: "cloudsprocket-analytics-db",
+    engine: "mysql",
+    engineVersion: "8.0",
+    status: "available",
+    instanceClass: "db.t3.small",
+  },
+];
+
+const mockWorkspaceLogGroups = [
+  {
+    logGroupName: "/aws/lambda/process-order",
+    arn: "arn:aws:logs:us-east-1:000000000000:log-group:/aws/lambda/process-order",
+    storedBytes: 1048576,
+    retentionInDays: 7,
+    creationTime: 1718448000000,
+    recentEvents: [
+      "2026-06-15 10:05:12 START RequestId: abc123",
+      "2026-06-15 10:05:12 END RequestId: abc123",
+    ],
+  },
+  {
+    logGroupName: "/ecs/cloudsprocket-app",
+    storedBytes: 524288,
+    retentionInDays: 30,
+  },
+];
+
+const mockWorkspaceIAMRoles = [
+  {
+    roleName: "cloudsprocket-lambda-role",
+    roleArn: "arn:aws:iam::000000000000:role/cloudsprocket-lambda-role",
+    path: "/",
+    description: "Lambda execution role for CloudSprocket demos.",
+    createDate: "2026-06-01T09:00:00Z",
+    attachedPolicies: ["AWSLambdaBasicExecutionRole", "cloudsprocket-data-access"],
+  },
+  {
+    roleName: "cloudsprocket-ecs-task-role",
+    roleArn: "arn:aws:iam::000000000000:role/cloudsprocket-ecs-task-role",
+    path: "/service/",
+    attachedPolicies: ["AmazonECSTaskExecutionRolePolicy"],
+  },
+];
+
+const mockWorkspaceIAMPolicies = [
+  {
+    policyName: "cloudsprocket-data-access",
+    policyArn: "arn:aws:iam::000000000000:policy/cloudsprocket-data-access",
+    attachmentCount: 2,
+    updateDate: "2026-06-10T14:30:00Z",
   },
 ];
 
@@ -923,6 +1037,47 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       : "SQS inventory is only available for open AWS workspaces.",
     sqsRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
     sqsQueues: isAWSWorkspace ? mockWorkspaceSQSQueues : [],
+    selectedSnsRegion: isAWSWorkspace
+      ? mockState.session.selectedSnsRegion ?? mockWorkspaceRegions[0]
+      : undefined,
+    selectedSnsTopicArn: isAWSWorkspace
+      ? mockState.session.selectedSnsTopicArn ?? mockWorkspaceSNSTopics[0]?.topicArn
+      : undefined,
+    snsStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceSNSTopics.length} SNS topics from ${mockState.session.selectedSnsRegion ?? mockWorkspaceRegions[0]}.`
+      : "SNS inventory is only available for open AWS workspaces.",
+    snsRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
+    snsTopics: isAWSWorkspace ? mockWorkspaceSNSTopics : [],
+    selectedRdsRegion: isAWSWorkspace
+      ? mockState.session.selectedRdsRegion ?? mockWorkspaceRegions[0]
+      : undefined,
+    selectedRdsInstanceId: isAWSWorkspace
+      ? mockState.session.selectedRdsInstanceId ?? mockWorkspaceRDSInstances[0]?.dbInstanceIdentifier
+      : undefined,
+    rdsStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceRDSInstances.length} RDS instances from ${mockState.session.selectedRdsRegion ?? mockWorkspaceRegions[0]}.`
+      : "RDS inventory is only available for open AWS workspaces.",
+    rdsRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
+    rdsInstances: isAWSWorkspace ? mockWorkspaceRDSInstances : [],
+    selectedLogsRegion: isAWSWorkspace
+      ? mockState.session.selectedLogsRegion ?? mockWorkspaceRegions[0]
+      : undefined,
+    selectedLogGroupName: isAWSWorkspace
+      ? mockState.session.selectedLogGroupName ?? mockWorkspaceLogGroups[0]?.logGroupName
+      : undefined,
+    logsStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceLogGroups.length} log groups from ${mockState.session.selectedLogsRegion ?? mockWorkspaceRegions[0]}.`
+      : "CloudWatch Logs inventory is only available for open AWS workspaces.",
+    logsRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
+    logGroups: isAWSWorkspace ? mockWorkspaceLogGroups : [],
+    selectedIamRoleName: isAWSWorkspace
+      ? mockState.session.selectedIamRoleName ?? mockWorkspaceIAMRoles[0]?.roleName
+      : undefined,
+    iamStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceIAMRoles.length} IAM roles and ${mockWorkspaceIAMPolicies.length} customer-managed policies.`
+      : "IAM inventory is only available for open AWS workspaces.",
+    iamRoles: isAWSWorkspace ? mockWorkspaceIAMRoles : [],
+    iamPolicies: isAWSWorkspace ? mockWorkspaceIAMPolicies : [],
   };
 }
 
@@ -1329,6 +1484,37 @@ function handleMockRequest<T>(
         ],
       } as T);
     }
+    case "aws.sns.selectRegion":
+      mockState.session.selectedSnsRegion = String(params.region ?? "");
+      mockState.session.selectedSnsTopicArn = undefined;
+      appendLog("info", `Selected SNS region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.sns.selectTopic":
+      mockState.session.selectedSnsTopicArn = String(params.topicArn ?? "");
+      appendLog("info", `Selected SNS topic ${params.topicArn}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.rds.selectRegion":
+      mockState.session.selectedRdsRegion = String(params.region ?? "");
+      mockState.session.selectedRdsInstanceId = undefined;
+      appendLog("info", `Selected RDS region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.rds.selectInstance":
+      mockState.session.selectedRdsInstanceId = String(params.instanceId ?? "");
+      appendLog("info", `Selected RDS instance ${params.instanceId}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.logs.selectRegion":
+      mockState.session.selectedLogsRegion = String(params.region ?? "");
+      mockState.session.selectedLogGroupName = undefined;
+      appendLog("info", `Selected CloudWatch Logs region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.logs.selectLogGroup":
+      mockState.session.selectedLogGroupName = String(params.logGroupName ?? "");
+      appendLog("info", `Selected log group ${params.logGroupName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.iam.selectRole":
+      mockState.session.selectedIamRoleName = String(params.roleName ?? "");
+      appendLog("info", `Selected IAM role ${params.roleName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
     case "aws.lambda.selectRegion":
       mockState.session.selectedLambdaRegion = String(params.region ?? "");
       mockState.session.selectedLambdaFunctionName = undefined;
