@@ -70,6 +70,11 @@ type LambdaInventory interface {
 	CreateFunction(ctx context.Context, profile models.ProfileSummary, region string, input models.AwsLambdaCreateInput) (models.AwsLambdaFunction, error)
 }
 
+type DynamoDBInventory interface {
+	ListTables(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsDynamoDBTable, error)
+	DescribeTable(ctx context.Context, profile models.ProfileSummary, region string, tableName string) (models.AwsDynamoDBTable, error)
+}
+
 type AzureInventory interface {
 	ListResourceGroups(ctx context.Context, profile models.ProfileSummary) ([]models.AzureResourceGroup, error)
 	ListVirtualMachines(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureVirtualMachine, error)
@@ -122,6 +127,7 @@ type Service struct {
 	s3            S3Inventory
 	ec2           EC2Inventory
 	lambda        LambdaInventory
+	dynamodb      DynamoDBInventory
 	azure         AzureInventory
 	docker        DockerRuntime
 	localstackMgr LocalStackManager
@@ -156,12 +162,13 @@ func New(
 	s3Inventory S3Inventory,
 	ec2Inventory EC2Inventory,
 	lambdaInventory LambdaInventory,
+	dynamodbInventory DynamoDBInventory,
 	azureInventory AzureInventory,
 	dockerRuntime DockerRuntime,
 ) *Service {
 	localStackMgr := localstack.NewManager(settings)
 	azureRuntime := flociaz.NewManager(settings)
-	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
+	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
 }
 
 func NewWithRuntimes(
@@ -171,6 +178,7 @@ func NewWithRuntimes(
 	s3Inventory S3Inventory,
 	ec2Inventory EC2Inventory,
 	lambdaInventory LambdaInventory,
+	dynamodbInventory DynamoDBInventory,
 	azureInventory AzureInventory,
 	dockerRuntime DockerRuntime,
 	localStackMgr LocalStackManager,
@@ -185,6 +193,7 @@ func NewWithRuntimes(
 		s3:            s3Inventory,
 		ec2:           ec2Inventory,
 		lambda:        lambdaInventory,
+		dynamodb:      dynamodbInventory,
 		azure:         azureInventory,
 		docker:        dockerRuntime,
 		localstackMgr: localStackMgr,
@@ -605,6 +614,64 @@ func (s *Service) Handle(
 			return nil, errors.New("open an AWS workspace before selecting a Lambda function")
 		}
 		session.SelectedLambdaFunctionName = request.FunctionName
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), nil
+	case "aws.dynamodb.selectRegion":
+		var request struct {
+			Region string `json:"region"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		session, err := s.currentState(ctx, snapshot)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			return nil, errors.New("open an AWS workspace before selecting a DynamoDB region")
+		}
+		session.SelectedDynamoDBRegion = request.Region
+		session.SelectedDynamoDBTableName = ""
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		if notifier != nil {
+			_ = notifier.Notify("log.appended", models.ActivityLogEntry{
+				Level:     "info",
+				Message:   fmt.Sprintf("Selected DynamoDB region %s.", request.Region),
+				Timestamp: s.timestamp(),
+			})
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), nil
+	case "aws.dynamodb.selectTable":
+		var request struct {
+			TableName string `json:"tableName"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		session, err := s.currentState(ctx, snapshot)
+		if err != nil {
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			return nil, errors.New("open an AWS workspace before selecting a DynamoDB table")
+		}
+		session.SelectedDynamoDBTableName = request.TableName
 		if err := s.store.SaveSession(ctx, session); err != nil {
 			return nil, err
 		}
@@ -1931,6 +1998,8 @@ func (s *Service) buildWorkspaceSnapshot(
 		EC2Instances:           []models.AwsEc2Instance{},
 		LambdaRegions:          []string{},
 		LambdaFunctions:        []models.AwsLambdaFunction{},
+		DynamoDBRegions:        []string{},
+		DynamoDBTables:         []models.AwsDynamoDBTable{},
 	}
 
 	if provider, ok := findProvider(snapshot.Providers, session.CurrentProviderID); ok {
@@ -2081,6 +2150,45 @@ func (s *Service) buildWorkspaceSnapshot(
 				for i := range workspace.LambdaFunctions {
 					if workspace.LambdaFunctions[i].FunctionName == full.FunctionName {
 						workspace.LambdaFunctions[i] = full
+						break
+					}
+				}
+			}
+			cancel()
+		}
+	}
+
+	// DynamoDB inventory (v0.6 breadth). Read-only table list, describe, and sample scan.
+	if workspace.Provider != nil &&
+		workspace.Provider.ProviderID == "aws" &&
+		workspace.Profile != nil &&
+		s.dynamodb != nil {
+		timeoutCtx, cancel := s.withAWSTimeout(context.Background())
+		workspace.DynamoDBRegions = s.dynamodbRegions(timeoutCtx, *workspace.Profile)
+		cancel()
+		workspace.SelectedDynamoDBRegion = s.selectedDynamoDBRegion(session, workspace.DynamoDBRegions, *workspace.Profile)
+		timeoutCtx, cancel = s.withAWSTimeout(context.Background())
+		workspace.DynamoDBTables = s.dynamodbTables(timeoutCtx, *workspace.Profile, workspace.SelectedDynamoDBRegion)
+		cancel()
+		workspace.SelectedDynamoDBTableName = s.selectedDynamoDBTableName(session, workspace.DynamoDBTables)
+		if workspace.SelectedDynamoDBRegion == "" {
+			workspace.DynamoDBStatusMessage = "No region is available for DynamoDB tables in this AWS workspace."
+		} else if len(workspace.DynamoDBTables) == 0 {
+			workspace.DynamoDBStatusMessage = fmt.Sprintf("No DynamoDB tables were returned for %s.", workspace.SelectedDynamoDBRegion)
+		} else {
+			workspace.DynamoDBStatusMessage = fmt.Sprintf(
+				"Loaded %d DynamoDB tables from %s.",
+				len(workspace.DynamoDBTables),
+				workspace.SelectedDynamoDBRegion,
+			)
+		}
+
+		if workspace.SelectedDynamoDBTableName != "" && workspace.Profile != nil {
+			timeoutCtx, cancel := s.withAWSTimeout(context.Background())
+			if full, err := s.dynamodb.DescribeTable(timeoutCtx, *workspace.Profile, workspace.SelectedDynamoDBRegion, workspace.SelectedDynamoDBTableName); err == nil {
+				for i := range workspace.DynamoDBTables {
+					if workspace.DynamoDBTables[i].TableName == full.TableName {
+						workspace.DynamoDBTables[i] = full
 						break
 					}
 				}
@@ -2606,6 +2714,72 @@ func (s *Service) selectedLambdaFunctionName(
 	return functions[0].FunctionName
 }
 
+func (s *Service) dynamodbRegions(ctx context.Context, profile models.ProfileSummary) []string {
+	return s.lambdaRegions(ctx, profile)
+}
+
+func (s *Service) selectedDynamoDBRegion(
+	session models.SessionSnapshot,
+	regions []string,
+	profile models.ProfileSummary,
+) string {
+	if session.SelectedDynamoDBRegion != "" {
+		for _, region := range regions {
+			if region == session.SelectedDynamoDBRegion {
+				return session.SelectedDynamoDBRegion
+			}
+		}
+	}
+	if session.SelectedLambdaRegion != "" {
+		for _, region := range regions {
+			if region == session.SelectedLambdaRegion {
+				return session.SelectedLambdaRegion
+			}
+		}
+	}
+	return s.selectedEC2Region(session, regions, profile)
+}
+
+func (s *Service) dynamodbTables(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+) []models.AwsDynamoDBTable {
+	if region == "" {
+		return []models.AwsDynamoDBTable{}
+	}
+	const scope = "aws.dynamodb.tables"
+	queryHash := profile.ProfileID + "|" + region
+	tables, err := s.dynamodb.ListTables(ctx, profile, region)
+	if err == nil {
+		_ = s.store.SaveResourceCache(ctx, scope, queryHash, tables, s.timestamp())
+		return tables
+	}
+	var cached []models.AwsDynamoDBTable
+	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
+	if cacheErr == nil && ok {
+		return cached
+	}
+	return []models.AwsDynamoDBTable{}
+}
+
+func (s *Service) selectedDynamoDBTableName(
+	session models.SessionSnapshot,
+	tables []models.AwsDynamoDBTable,
+) string {
+	if session.SelectedDynamoDBTableName != "" {
+		for _, table := range tables {
+			if table.TableName == session.SelectedDynamoDBTableName {
+				return session.SelectedDynamoDBTableName
+			}
+		}
+	}
+	if len(tables) == 0 {
+		return ""
+	}
+	return tables[0].TableName
+}
+
 func selectedEC2State(instances []models.AwsEc2Instance, instanceID string) string {
 	for _, instance := range instances {
 		if instance.InstanceID == instanceID {
@@ -2826,6 +3000,8 @@ func clearLockState(session models.SessionSnapshot) models.SessionSnapshot {
 	session.SelectedEC2InstanceID = ""
 	session.SelectedLambdaRegion = ""
 	session.SelectedLambdaFunctionName = ""
+	session.SelectedDynamoDBRegion = ""
+	session.SelectedDynamoDBTableName = ""
 	session.AvailableAuthMethods = append([]models.AuthMethodStatus(nil), session.AvailableAuthMethods...)
 	if session.SelectedProfileID == "" {
 		session.SelectedAuthMethod = ""
@@ -2915,6 +3091,12 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 			Label:   "Lambda",
 			Summary: "Function inventory, configuration, logs and safe test invoke.",
 			Detail:  "List functions by region, view config and recent CloudWatch logs, perform test invokes.",
+		},
+		{
+			TabID:   "dynamodb",
+			Label:   "DynamoDB",
+			Summary: "Table inventory and read-only item preview.",
+			Detail:  "List tables by region, inspect keys and GSIs, and scan the first items read-only.",
 		},
 		activityTab,
 	}
