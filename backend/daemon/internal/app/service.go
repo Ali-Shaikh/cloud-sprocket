@@ -105,6 +105,7 @@ type Deployer interface {
 	Plan(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) (deploy.PlanSummary, error)
 	Apply(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) ([]deploy.Output, error)
 	Destroy(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) error
+	RemoveWorkspace(id string) error
 }
 
 type Service struct {
@@ -865,6 +866,14 @@ func (s *Service) Handle(
 			return nil, err
 		}
 		return map[string]bool{"cancelled": true}, s.cancelDeployment(request.DeploymentID)
+	case "deployments.delete":
+		var request struct {
+			DeploymentID string `json:"deploymentId"`
+		}
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"deleted": true}, s.deleteDeployment(ctx, request.DeploymentID)
 	default:
 		return nil, fmt.Errorf("unknown backend method: %s", method)
 	}
