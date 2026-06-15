@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -15,10 +17,11 @@ import (
 )
 
 type fakeDeployer struct {
-	available bool
-	plan      deploy.PlanSummary
-	outputs   []deploy.Output
-	planErr   error
+	available    bool
+	plan         deploy.PlanSummary
+	outputs      []deploy.Output
+	planErr      error
+	preflightErr error
 }
 
 func (f *fakeDeployer) Available() bool                         { return f.available }
@@ -28,7 +31,8 @@ func (f *fakeDeployer) Install(context.Context) (string, error) {
 	f.available = true
 	return "1.12.2", nil
 }
-func (f *fakeDeployer) Prepare(*deploy.Deployment) error { return nil }
+func (f *fakeDeployer) Preflight(context.Context, *deploy.Deployment) error { return f.preflightErr }
+func (f *fakeDeployer) Prepare(*deploy.Deployment) error                    { return nil }
 
 func (f *fakeDeployer) Plan(_ context.Context, _ *deploy.Deployment, onLine tofu.LogFunc) (deploy.PlanSummary, error) {
 	if onLine != nil {
@@ -239,6 +243,23 @@ func TestDeploymentPlanFailureMarksFailed(t *testing.T) {
 	failed := waitForStatus(t, s, notifier, started.Deployment.ID, deploy.StatusFailed)
 	if failed.Error == "" {
 		t.Fatal("expected an error message on the failed deployment")
+	}
+}
+
+func TestDeploymentPlanFailsFastWhenTargetUnreachable(t *testing.T) {
+	deployer := &fakeDeployer{available: true, preflightErr: errors.New("LocalStack is not reachable at http://localhost:4566")}
+	s := newDeployTestService(t, deployer)
+	notifier := &captureNotifier{}
+
+	params := json.RawMessage(`{"recipeId":"serverless-fullstack-aws","providerId":"aws","local":true}`)
+	result, err := s.Handle(context.Background(), "deployments.plan", params, notifier)
+	if err != nil {
+		t.Fatalf("deployments.plan: %v", err)
+	}
+	started := result.(deploymentJob)
+	failed := waitForStatus(t, s, notifier, started.Deployment.ID, deploy.StatusFailed)
+	if !strings.Contains(failed.Error, "not reachable") {
+		t.Fatalf("expected an unreachable-target error, got %q", failed.Error)
 	}
 }
 
