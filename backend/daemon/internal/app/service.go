@@ -40,6 +40,11 @@ const (
 	// dockerLogsTimeout bounds container log retrieval, which can take slightly
 	// longer than a status probe but must still never hang a request.
 	dockerLogsTimeout = 8 * time.Second
+	// dockerUnreachableCacheTTL caches an "engine unreachable" verdict so the
+	// Local Runtime poll (every few seconds) does not pay the full probe timeout
+	// on every fetch when Docker is stopped. A manual "Refresh Docker" forces a
+	// fresh probe, so the staleness is bounded and user-overridable.
+	dockerUnreachableCacheTTL = 15 * time.Second
 )
 
 type S3Inventory interface {
@@ -120,8 +125,13 @@ type Service struct {
 	// pager and the `az` CLI) so a stalled response cannot hang a workspace
 	// snapshot. Configurable so tests can use a short deadline.
 	azureInventoryTimeout time.Duration
-	now                   func() time.Time
-	mu                    sync.Mutex
+	// dockerSnapshot caches the last Docker runtime probe so a stopped engine
+	// does not cost a full probe timeout on every Local Runtime poll.
+	dockerSnapshotMu    sync.Mutex
+	dockerSnapshotValue *models.DockerRuntimeSnapshot
+	dockerSnapshotAt    time.Time
+	now                 func() time.Time
+	mu                  sync.Mutex
 }
 
 func New(
@@ -739,7 +749,8 @@ func (s *Service) Handle(
 		}
 		return s.resetAppData(ctx, notifier)
 	case "docker.runtime.get":
-		return s.dockerRuntimeSnapshot(), nil
+		// Manual refresh forces a fresh probe (bypassing the unreachable cache).
+		return s.probeDockerRuntimeSnapshot(), nil
 	case "docker.resources.list":
 		return s.dockerResources(), nil
 	case "emulators.list":
@@ -1379,7 +1390,40 @@ func runtimeModeFromSettings(value string) models.RuntimeMode {
 	}
 }
 
+// dockerRuntimeSnapshot returns the Docker runtime state, serving a recent
+// "unreachable" verdict from cache so polling does not repeatedly pay the probe
+// timeout while the engine is stopped.
 func (s *Service) dockerRuntimeSnapshot() models.DockerRuntimeSnapshot {
+	if cached, ok := s.cachedUnreachableDocker(); ok {
+		return cached
+	}
+	return s.probeDockerRuntimeSnapshot()
+}
+
+func (s *Service) cachedUnreachableDocker() (models.DockerRuntimeSnapshot, bool) {
+	s.dockerSnapshotMu.Lock()
+	defer s.dockerSnapshotMu.Unlock()
+	if s.dockerSnapshotValue != nil &&
+		!s.dockerSnapshotValue.Reachable &&
+		s.now().Sub(s.dockerSnapshotAt) < dockerUnreachableCacheTTL {
+		return *s.dockerSnapshotValue, true
+	}
+	return models.DockerRuntimeSnapshot{}, false
+}
+
+// probeDockerRuntimeSnapshot always probes the engine (bypassing the cache) and
+// records the result. It backs the manual "Refresh Docker" action.
+func (s *Service) probeDockerRuntimeSnapshot() models.DockerRuntimeSnapshot {
+	snapshot := s.buildDockerRuntimeSnapshot()
+	s.dockerSnapshotMu.Lock()
+	cached := snapshot
+	s.dockerSnapshotValue = &cached
+	s.dockerSnapshotAt = s.now()
+	s.dockerSnapshotMu.Unlock()
+	return snapshot
+}
+
+func (s *Service) buildDockerRuntimeSnapshot() models.DockerRuntimeSnapshot {
 	if s.docker != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
 		defer cancel()
