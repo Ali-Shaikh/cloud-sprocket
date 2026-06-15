@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
-import DynamoDBView from "./DynamoDBView";
+import SQSView from "./SQSView";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
 const workspaceFixture: WorkspaceSnapshot = {
@@ -55,9 +55,9 @@ const workspaceFixture: WorkspaceSnapshot = {
   dockerResources: [],
   emulatorSummaries: [],
   localConfigArtifacts: [],
-  awsWriteCapable: false,
-  awsWriteModeEnabled: false,
-  awsWritesEnabled: false,
+  awsWriteCapable: true,
+  awsWriteModeEnabled: true,
+  awsWritesEnabled: true,
   awsEndpointUrl: "http://localhost:4566",
   azureResourceGroups: [],
   azureVirtualMachines: [],
@@ -69,84 +69,75 @@ const workspaceFixture: WorkspaceSnapshot = {
   ec2Instances: [],
   lambdaRegions: [],
   lambdaFunctions: [],
-  selectedDynamodbRegion: "us-east-1",
-  selectedDynamodbTableName: "cloudsprocket-orders",
-  dynamodbStatusMessage: "Loaded 2 DynamoDB tables from us-east-1.",
-  dynamodbRegions: ["us-east-1", "eu-west-2"],
-  sqsRegions: [],
-  sqsQueues: [],
-  dynamodbTables: [
+  dynamodbRegions: [],
+  dynamodbTables: [],
+  selectedSqsRegion: "us-east-1",
+  selectedSqsQueueUrl: "http://localhost:4566/000000000000/process-order",
+  sqsStatusMessage: "Loaded 2 SQS queues from us-east-1.",
+  sqsRegions: ["us-east-1", "eu-west-2"],
+  sqsQueues: [
     {
-      tableName: "cloudsprocket-orders",
-      status: "ACTIVE",
-      itemCount: 1284,
-      tableSizeBytes: 524288,
-      billingMode: "PAY_PER_REQUEST",
-      hashKey: "orderId",
-      rangeKey: "createdAt",
-      globalSecondaryIndexes: [
-        {
-          indexName: "customer-index",
-          hashKey: "customerId",
-          rangeKey: "createdAt",
-          status: "ACTIVE",
-        },
-      ],
-      sampleItems: [
-        '{"orderId":"ord-001","customerId":"cust-42","createdAt":"2026-06-14T10:00:00Z","total":49.99}',
-      ],
+      queueName: "process-order",
+      queueUrl: "http://localhost:4566/000000000000/process-order",
+      approximateNumberOfMessages: 4,
+      approximateNumberOfMessagesNotVisible: 1,
+      visibilityTimeout: 30,
+      queueArn: "arn:aws:sqs:us-east-1:000000000000:process-order",
     },
     {
-      tableName: "cloudsprocket-sessions",
-      status: "ACTIVE",
-      itemCount: 42,
-      hashKey: "sessionId",
+      queueName: "cloudsprocket-events",
+      queueUrl: "http://localhost:4566/000000000000/cloudsprocket-events",
+      approximateNumberOfMessages: 0,
     },
   ],
 };
 
-function renderDynamoDBView() {
+function renderSQSView() {
   const onSelectRegion = vi.fn();
-  const onSelectTable = vi.fn();
+  const onSelectQueue = vi.fn();
   const onRefresh = vi.fn();
+  const onPeek = vi.fn();
   render(
     <ThemeProvider>
-      <DynamoDBView
+      <SQSView
         workspace={workspaceFixture}
-        actionStatus="Ready to browse tables."
+        actionStatus="Ready to browse queues."
+        peekResult={null}
+        peekInFlight={false}
         onRefresh={onRefresh}
         onSelectRegion={onSelectRegion}
-        onSelectTable={onSelectTable}
+        onSelectQueue={onSelectQueue}
+        onPeek={onPeek}
       />
     </ThemeProvider>,
   );
-  return { onSelectRegion, onSelectTable, onRefresh };
+  return { onSelectRegion, onSelectQueue, onRefresh, onPeek };
 }
 
-describe("DynamoDBView", () => {
-  it("renders inventory, schema detail, and sample items", () => {
-    renderDynamoDBView();
+describe("SQSView", () => {
+  it("renders inventory and queue depth detail", () => {
+    renderSQSView();
 
-    expect(screen.getByText("Table Fleet")).toBeInTheDocument();
-    expect(screen.getByText("Table Inventory")).toBeInTheDocument();
-    expect(screen.getAllByText("cloudsprocket-orders").length).toBeGreaterThan(0);
-    expect(screen.getByText("customer-index")).toBeInTheDocument();
-    expect(screen.getByText(/Sample items \(read-only scan\)/)).toBeInTheDocument();
-    expect(screen.getByText(/"orderId":"ord-001"/)).toBeInTheDocument();
+    expect(screen.getByText("Queue Fleet")).toBeInTheDocument();
+    expect(screen.getByText("Queue Inventory")).toBeInTheDocument();
+    expect(screen.getAllByText("process-order").length).toBeGreaterThan(0);
+    expect(screen.getByText("Peek messages")).toBeInTheDocument();
   });
 
-  it("selects a table when a row is clicked", () => {
-    const { onSelectTable } = renderDynamoDBView();
+  it("selects a queue when a row is clicked", () => {
+    const { onSelectQueue } = renderSQSView();
 
-    fireEvent.click(screen.getByText("cloudsprocket-sessions"));
+    fireEvent.click(screen.getByText("cloudsprocket-events"));
 
-    expect(onSelectTable).toHaveBeenCalledWith("cloudsprocket-sessions");
+    expect(onSelectQueue).toHaveBeenCalledWith(
+      "http://localhost:4566/000000000000/cloudsprocket-events",
+    );
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {
     render(
       <ThemeProvider>
-        <DynamoDBView
+        <SQSView
           workspace={{
             ...workspaceFixture,
             provider: {
@@ -159,13 +150,16 @@ describe("DynamoDBView", () => {
             },
           }}
           actionStatus=""
+          peekResult={null}
+          peekInFlight={false}
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
-          onSelectTable={vi.fn()}
+          onSelectQueue={vi.fn()}
+          onPeek={vi.fn()}
         />
       </ThemeProvider>,
     );
 
-    expect(screen.getByText("DynamoDB requires an AWS workspace")).toBeInTheDocument();
+    expect(screen.getByText("SQS requires an AWS workspace")).toBeInTheDocument();
   });
 });

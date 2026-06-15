@@ -8,12 +8,14 @@ import awsS3IconUrl from "@/assets/cloud-icons/aws-s3.svg";
 import awsEc2IconUrl from "@/assets/cloud-icons/aws-ec2.svg";
 import awsDynamodbIconUrl from "@/assets/cloud-icons/aws-dynamodb.svg";
 import awsLambdaIconUrl from "@/assets/cloud-icons/aws-lambda.svg";
+import awsSqsIconUrl from "@/assets/cloud-icons/aws-sqs.svg";
 import azureIconUrl from "@/assets/cloud-icons/azure.svg";
 import type { SessionSnapshot, WorkspaceSnapshot } from "@/types/backend";
 
 export type OverviewNavigateContext = {
   lambdaFunctionName?: string;
   dynamodbTableName?: string;
+  sqsQueueUrl?: string;
   ec2InstanceId?: string;
   s3BucketName?: string;
   openLambdaCreate?: boolean;
@@ -114,6 +116,11 @@ export default function OverviewView({
       footer: statusFooter(dynamodbActive, workspace.dynamodbTables.length, "active"),
       tabId: "dynamodb",
     });
+    stats.push({
+      label: "SQS queues",
+      value: workspace.sqsQueues.length,
+      tabId: "sqs",
+    });
   }
   if (isAzure) {
     stats.push({
@@ -186,6 +193,26 @@ export default function OverviewView({
         statusLabel: table.status || "unknown",
         tabId: "dynamodb",
         navigateContext: { dynamodbTableName: table.tableName },
+      }),
+    );
+    workspace.sqsQueues.slice(0, 3).forEach((queue) =>
+      recents.push({
+        key: `sqs-${queue.queueUrl}`,
+        name: queue.queueName,
+        sub:
+          [
+            queue.approximateNumberOfMessages != null
+              ? `${queue.approximateNumberOfMessages} visible`
+              : undefined,
+            queue.approximateNumberOfMessagesNotVisible != null
+              ? `${queue.approximateNumberOfMessagesNotVisible} in flight`
+              : undefined,
+          ]
+            .filter(Boolean)
+            .join(" · ") || "SQS queue",
+        iconUrl: awsSqsIconUrl,
+        tabId: "sqs",
+        navigateContext: { sqsQueueUrl: queue.queueUrl },
       }),
     );
   }

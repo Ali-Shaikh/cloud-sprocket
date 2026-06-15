@@ -127,6 +127,8 @@ export interface SessionSnapshot {
   selectedLambdaFunctionName?: string;
   selectedDynamodbRegion?: string;
   selectedDynamodbTableName?: string;
+  selectedSqsRegion?: string;
+  selectedSqsQueueUrl?: string;
   awsWriteModeEnabled?: boolean;
   lockedProviderId?: string;
   lockedProfileId?: string;
@@ -254,6 +256,33 @@ export interface AwsDynamoDBTable {
   sampleItems?: string[];
 }
 
+export interface AwsSqsQueue {
+  queueName: string;
+  queueUrl: string;
+  approximateNumberOfMessages?: number;
+  approximateNumberOfMessagesNotVisible?: number;
+  approximateNumberOfMessagesDelayed?: number;
+  visibilityTimeout?: number;
+  createdTimestamp?: number;
+  queueArn?: string;
+  delaySeconds?: number;
+  receiveMessageWaitTimeSeconds?: number;
+}
+
+export interface AwsSqsMessage {
+  messageId: string;
+  body: string;
+  receiptHandle?: string;
+  sentTimestamp?: number;
+  approximateReceiveCount?: number;
+}
+
+export interface AwsSqsPeekResult {
+  queueUrl: string;
+  messages: AwsSqsMessage[];
+  summary: string;
+}
+
 export interface AzureResourceGroup {
   name: string;
   location?: string;
@@ -316,9 +345,14 @@ export interface WorkspaceSnapshot {
   lambdaFunctions: AwsLambdaFunction[];
   selectedDynamodbRegion?: string;
   selectedDynamodbTableName?: string;
+  selectedSqsRegion?: string;
+  selectedSqsQueueUrl?: string;
   dynamodbStatusMessage?: string;
   dynamodbRegions: string[];
   dynamodbTables: AwsDynamoDBTable[];
+  sqsStatusMessage?: string;
+  sqsRegions: string[];
+  sqsQueues: AwsSqsQueue[];
 }
 
 export interface JobStatus {

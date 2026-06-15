@@ -465,6 +465,32 @@ vi.mock("./lib/backend", () => ({
           dynamodbStatusMessage: `Selected DynamoDB table ${String(params?.tableName ?? "")}.`,
         };
         return workspaceFixture;
+      case "aws.sqs.selectRegion":
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedSqsRegion: String(params?.region ?? ""),
+          selectedSqsQueueUrl: workspaceFixture.sqsQueues[0]?.queueUrl,
+          sqsStatusMessage: `Loaded ${workspaceFixture.sqsQueues.length} SQS queues from ${String(params?.region ?? "")}.`,
+        };
+        return workspaceFixture;
+      case "aws.sqs.selectQueue":
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedSqsQueueUrl: String(params?.queueUrl ?? ""),
+          sqsStatusMessage: "Selected SQS queue.",
+        };
+        return workspaceFixture;
+      case "aws.sqs.peek":
+        return {
+          queueUrl: String(params?.queueUrl ?? workspaceFixture.selectedSqsQueueUrl ?? ""),
+          summary: "Peeked 1 messages without deleting them.",
+          messages: [
+            {
+              messageId: "mock-msg-001",
+              body: '{"orderId":"ord-001"}',
+            },
+          ],
+        };
       case "aws.lambda.invoke":
         return {
           statusCode: 200,
@@ -694,6 +720,23 @@ describe("App", () => {
           hashKey: "sessionId",
         },
       ],
+      selectedSqsRegion: "us-east-1",
+      selectedSqsQueueUrl: "http://localhost:4566/000000000000/process-order",
+      sqsStatusMessage: "Loaded 2 SQS queues from us-east-1.",
+      sqsRegions: ["us-east-1", "eu-west-2"],
+      sqsQueues: [
+        {
+          queueName: "process-order",
+          queueUrl: "http://localhost:4566/000000000000/process-order",
+          approximateNumberOfMessages: 4,
+          approximateNumberOfMessagesNotVisible: 1,
+        },
+        {
+          queueName: "cloudsprocket-events",
+          queueUrl: "http://localhost:4566/000000000000/cloudsprocket-events",
+          approximateNumberOfMessages: 0,
+        },
+      ],
     };
     s3PrefixDelays = new Map();
     backendEventHandlers = {};
@@ -852,6 +895,12 @@ describe("App", () => {
           summary: "DynamoDB summary",
           detail: "DynamoDB panel",
         },
+        {
+          tabId: "sqs",
+          label: "SQS",
+          summary: "SQS summary",
+          detail: "SQS panel",
+        },
       ],
     };
     workspaceFixture = {
@@ -875,10 +924,11 @@ describe("App", () => {
     expect(screen.getByText("EC2 instances")).toBeInTheDocument();
     expect(screen.getByText("Lambda functions")).toBeInTheDocument();
     expect(screen.getByText("DynamoDB tables")).toBeInTheDocument();
+    expect(screen.getByText("SQS queues")).toBeInTheDocument();
     expect(screen.getByText(/workspace sandbox/)).toBeInTheDocument();
     expect(screen.getByText("cloudsprocket-artifacts")).toBeInTheDocument();
     expect(screen.getByText("sandbox-api-1")).toBeInTheDocument();
-    expect(screen.getByText("process-order")).toBeInTheDocument();
+    expect((await screen.findAllByText("process-order")).length).toBeGreaterThan(0);
     expect(screen.getByText("cloudsprocket-orders")).toBeInTheDocument();
     const nav = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
     expect(nav.getByText("Overview")).toBeInTheDocument();
@@ -887,6 +937,7 @@ describe("App", () => {
     expect(nav.getByText("EC2")).toBeInTheDocument();
     expect(nav.getByText("Lambda")).toBeInTheDocument();
     expect(nav.getByText("DynamoDB")).toBeInTheDocument();
+    expect(nav.getByText("SQS")).toBeInTheDocument();
     expect(nav.getByRole("button", { name: /S3/ }).querySelector("img")).not.toBeNull();
     expect(nav.getByRole("button", { name: /EC2/ }).querySelector("img")).not.toBeNull();
     fireEvent.click(nav.getByText("Local Runtime"));
