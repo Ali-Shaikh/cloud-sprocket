@@ -2666,6 +2666,17 @@ func validateLambdaCreateInput(input models.AwsLambdaCreateInput) error {
 	if input.Timeout != 0 && (input.Timeout < 1 || input.Timeout > 900) {
 		return errors.New("timeout must be between 1 and 900 seconds")
 	}
+	zipPath := strings.TrimSpace(input.ZipSourcePath)
+	handlerSource := strings.TrimSpace(input.HandlerSource)
+	if zipPath != "" && handlerSource != "" {
+		return errors.New("provide either inline handler source or a zip file, not both")
+	}
+	if zipPath != "" && strings.TrimSpace(input.Handler) == "" {
+		return errors.New("handler is required when using a zip file")
+	}
+	if handlerSource != "" && len(handlerSource) > 256*1024 {
+		return errors.New("inline handler source must be 256 KB or smaller")
+	}
 	return nil
 }
 
