@@ -122,7 +122,12 @@ func (l *LambdaInventory) CreateFunction(
 		return models.AwsLambdaFunction{}, err
 	}
 
-	zipBytes, handler, err := starterFunctionZip(input.Runtime, input.Handler)
+	zipBytes, handler, err := functionZipFromCreateInput(input)
+	if err != nil {
+		return models.AwsLambdaFunction{}, err
+	}
+
+	roleARN, err := l.ensureLambdaExecutionRole(ctx, cfg, profile)
 	if err != nil {
 		return models.AwsLambdaFunction{}, err
 	}
@@ -140,7 +145,7 @@ func (l *LambdaInventory) CreateFunction(
 	res, err := client.CreateFunction(ctx, &lambda.CreateFunctionInput{
 		FunctionName: aws.String(strings.TrimSpace(input.FunctionName)),
 		Runtime:      types.Runtime(input.Runtime),
-		Role:         aws.String(defaultLocalLambdaRoleARN),
+		Role:         aws.String(roleARN),
 		Handler:      aws.String(handler),
 		Code: &types.FunctionCode{
 			ZipFile: zipBytes,
