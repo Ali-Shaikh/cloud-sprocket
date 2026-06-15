@@ -125,7 +125,13 @@ func TestPrepareMaterialisesWorkspace(t *testing.T) {
 		t.Fatalf("Prepare: %v", err)
 	}
 	dir := e.WorkspaceDir("dep-test")
-	for _, rel := range []string{"main.tf", tfvarsFile, overrideFile, filepath.Join("src", "handler.js")} {
+	for _, rel := range []string{
+		"main.tf",
+		tfvarsFile,
+		overrideFile,
+		filepath.Join("sample-api", "handler.js"),
+		filepath.Join("sample-site", "index.html"),
+	} {
 		if _, err := os.Stat(filepath.Join(dir, rel)); err != nil {
 			t.Fatalf("expected %s in workspace: %v", rel, err)
 		}

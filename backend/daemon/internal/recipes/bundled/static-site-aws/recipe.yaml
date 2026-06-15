@@ -5,8 +5,8 @@ name: Static website (AWS S3)
 summary: A static website served from an S3 bucket, with your built site uploaded automatically.
 description: |
   The simplest possible site: an S3 bucket configured for static website hosting,
-  with your built static site (e.g. a Vite, Next.js export or plain HTML folder)
-  uploaded automatically.
+  with a bundled sample site uploaded automatically when you do not supply your
+  own built static site folder.
 
   Uses only S3, which emulates on LocalStack's free tier, so it dry-runs locally
   and ships unchanged to real AWS by switching the connection profile. No
@@ -40,7 +40,7 @@ variableGroups:
     variables:
       - name: frontend_dist_dir
         widget: directory
-        help: Folder of your built static site (e.g. a Vite `dist/` or Next.js `out/`). Leave blank to create an empty bucket.
+        help: Folder of your built static site (e.g. a Vite `dist/` or Next.js `out/`). Leave default for the sample site.
   - title: Advanced
     variables:
       - name: tags

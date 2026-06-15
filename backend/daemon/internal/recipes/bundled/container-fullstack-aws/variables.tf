@@ -18,14 +18,14 @@ variable "aws_region" {
 
 variable "container_image" {
   type        = string
-  description = "Container image for the backend service."
-  default     = "public.ecr.aws/docker/library/node:20-alpine"
+  description = "Container image for the backend service. The default nginx image serves HTTP successfully for a first deployment."
+  default     = "public.ecr.aws/docker/library/nginx:stable-alpine"
 }
 
 variable "container_port" {
   type        = number
   description = "Port the backend container listens on."
-  default     = 3000
+  default     = 80
 }
 
 variable "desired_count" {
@@ -55,8 +55,8 @@ variable "db_instance_class" {
 
 variable "frontend_dist_dir" {
   type        = string
-  description = "Directory of your built static frontend. Leave blank to create an empty bucket."
-  default     = ""
+  description = "Directory of your built static frontend. Leave as the default to deploy the sample frontend."
+  default     = "./sample-site"
 }
 
 variable "tags" {

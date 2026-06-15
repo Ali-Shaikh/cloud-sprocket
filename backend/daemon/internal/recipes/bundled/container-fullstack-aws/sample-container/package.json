@@ -1,0 +1,10 @@
+{
+  "name": "cloudsprocket-sample-container",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sample Node HTTP service for the CloudSprocket container recipe.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {}
+}

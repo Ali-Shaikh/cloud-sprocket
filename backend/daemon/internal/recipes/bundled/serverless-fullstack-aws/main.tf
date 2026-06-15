@@ -43,6 +43,32 @@ resource "aws_s3_bucket_website_configuration" "frontend" {
   }
 }
 
+resource "aws_s3_bucket_public_access_block" "frontend" {
+  bucket = aws_s3_bucket.frontend.id
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_policy" "frontend_public_read" {
+  bucket = aws_s3_bucket.frontend.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "PublicReadGetObject"
+      Effect    = "Allow"
+      Principal = "*"
+      Action    = "s3:GetObject"
+      Resource  = "${aws_s3_bucket.frontend.arn}/*"
+    }]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.frontend]
+}
+
 locals {
   # MIME types for the common static-site file extensions.
   content_types = {
@@ -117,7 +143,7 @@ resource "aws_lambda_function" "api" {
   function_name    = "${local.name}-api"
   role             = aws_iam_role.lambda.arn
   handler          = "handler.handler"
-  runtime          = "nodejs20.x"
+  runtime          = "nodejs22.x"
   filename         = data.archive_file.api.output_path
   source_code_hash = data.archive_file.api.output_base64sha256
   memory_size      = var.lambda_memory_mb

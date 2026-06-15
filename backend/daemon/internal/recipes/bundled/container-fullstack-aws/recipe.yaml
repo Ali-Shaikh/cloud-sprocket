@@ -4,9 +4,11 @@ version: 0.1.0
 name: Container full-stack (AWS)
 summary: A long-running Node container on ECS Fargate behind an ALB, a Postgres RDS database, and a CloudFront-fronted frontend.
 description: |
-  The traditional shape: your Node backend runs as a persistent container on ECS
-  Fargate behind an Application Load Balancer, with a managed Postgres database on
-  RDS and a static frontend served from S3 through CloudFront.
+  The traditional shape: a backend container runs on ECS Fargate behind an
+  Application Load Balancer, with a managed Postgres database on RDS and a
+  static frontend served from S3 through CloudFront. Defaults use a public nginx
+  image and bundled sample frontend so a first deployment works without custom
+  application code.
 
   Uses ECS, RDS, ELBv2 and CloudFront, which only emulate on LocalStack Pro. Use a
   LocalStack Pro/Team auth token for the local dry-run, or deploy to real AWS by
@@ -39,7 +41,7 @@ variableGroups:
     variables:
       - name: container_image
         widget: text
-        help: Container image for the backend (e.g. your ECR image or a public image).
+        help: Container image for the backend (e.g. your ECR image or a public image). Default serves HTTP on port 80.
       - name: container_port
         widget: number
       - name: desired_count
@@ -57,7 +59,7 @@ variableGroups:
     variables:
       - name: frontend_dist_dir
         widget: directory
-        help: Folder of your built static frontend. Leave blank to skip.
+        help: Folder of your built static frontend. Leave default for the sample frontend.
   - title: Advanced
     variables:
       - name: tags
