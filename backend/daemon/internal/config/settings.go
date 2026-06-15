@@ -31,6 +31,7 @@ type Settings struct {
 	ToolsDir           string
 	TofuPath           string
 	DeploymentsDir     string
+	SecretKeyPath      string
 }
 
 func Default() Settings {
@@ -72,6 +73,7 @@ func FromEnv(env map[string]string, goos string, home string) Settings {
 	toolsDir := firstNonEmpty(env["CLOUDSPROCKET_TOOLS_DIR"], filepath.Join(configDir, "tools"))
 	tofuPath := env["CLOUDSPROCKET_TOFU_PATH"]
 	deploymentsDir := firstNonEmpty(env["CLOUDSPROCKET_DEPLOYMENTS_DIR"], filepath.Join(configDir, "deployments"))
+	secretKeyPath := firstNonEmpty(env["CLOUDSPROCKET_SECRET_KEY_PATH"], filepath.Join(configDir, "secret.key"))
 
 	return Settings{
 		PlatformName:       platform,
@@ -94,6 +96,7 @@ func FromEnv(env map[string]string, goos string, home string) Settings {
 		ToolsDir:           toolsDir,
 		TofuPath:           tofuPath,
 		DeploymentsDir:     deploymentsDir,
+		SecretKeyPath:      secretKeyPath,
 	}
 }
 

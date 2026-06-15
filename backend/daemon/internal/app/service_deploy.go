@@ -81,6 +81,7 @@ func (s *Service) deploymentsList(ctx context.Context) ([]deploy.Deployment, err
 		if err := json.Unmarshal(payload, &deployment); err != nil {
 			continue
 		}
+		s.openFromStore(&deployment)
 		deployments = append(deployments, deployment)
 	}
 	return deployments, nil
@@ -95,6 +96,7 @@ func (s *Service) deploymentGet(ctx context.Context, id string) (*deploy.Deploym
 	if !found {
 		return nil, fmt.Errorf("deployment %s not found", id)
 	}
+	s.openFromStore(&deployment)
 	return &deployment, nil
 }
 
@@ -102,7 +104,8 @@ func (s *Service) startDeploymentPlan(ctx context.Context, request deploymentPla
 	if strings.TrimSpace(request.RecipeID) == "" {
 		return deploymentJob{}, fmt.Errorf("recipeId is required")
 	}
-	if _, err := s.recipes.Load(request.RecipeID); err != nil {
+	recipe, err := s.recipes.Load(request.RecipeID)
+	if err != nil {
 		return deploymentJob{}, err
 	}
 
@@ -112,18 +115,19 @@ func (s *Service) startDeploymentPlan(ctx context.Context, request deploymentPla
 	}
 	now := s.timestamp()
 	deployment := &deploy.Deployment{
-		ID:         deploy.NewID(),
-		RecipeID:   request.RecipeID,
-		Name:       name,
-		ProviderID: request.ProviderID,
-		ProfileID:  request.ProfileID,
-		Local:      request.Local,
-		Variables:  request.Variables,
-		Status:     deploy.StatusPending,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		ID:            deploy.NewID(),
+		RecipeID:      request.RecipeID,
+		Name:          name,
+		ProviderID:    request.ProviderID,
+		ProfileID:     request.ProfileID,
+		Local:         request.Local,
+		Variables:     request.Variables,
+		SensitiveVars: sensitiveVariableNames(recipe),
+		Status:        deploy.StatusPending,
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
-	if err := s.store.SaveDeployment(ctx, deployment.ID, deployment, now); err != nil {
+	if err := s.store.SaveDeployment(ctx, deployment.ID, s.sealForStore(deployment), now); err != nil {
 		return deploymentJob{}, err
 	}
 
@@ -210,7 +214,7 @@ func (s *Service) deploymentLogger(deploymentID, jobID string, notifier Notifier
 func (s *Service) setDeploymentStatus(ctx context.Context, deployment *deploy.Deployment, status deploy.Status, notifier Notifier) {
 	deployment.Status = status
 	deployment.UpdatedAt = s.timestamp()
-	_ = s.store.SaveDeployment(ctx, deployment.ID, deployment, deployment.UpdatedAt)
+	_ = s.store.SaveDeployment(ctx, deployment.ID, s.sealForStore(deployment), deployment.UpdatedAt)
 	if notifier != nil {
 		_ = notifier.Notify("deployment.changed", deployment)
 	}
