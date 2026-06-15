@@ -9,6 +9,10 @@ import awsEc2IconUrl from "@/assets/cloud-icons/aws-ec2.svg";
 import awsDynamodbIconUrl from "@/assets/cloud-icons/aws-dynamodb.svg";
 import awsLambdaIconUrl from "@/assets/cloud-icons/aws-lambda.svg";
 import awsSqsIconUrl from "@/assets/cloud-icons/aws-sqs.svg";
+import awsSnsIconUrl from "@/assets/cloud-icons/aws-sns.svg";
+import awsRdsIconUrl from "@/assets/cloud-icons/aws-rds.svg";
+import awsCloudwatchIconUrl from "@/assets/cloud-icons/aws-cloudwatch.svg";
+import awsIamIconUrl from "@/assets/cloud-icons/aws-iam.svg";
 import azureIconUrl from "@/assets/cloud-icons/azure.svg";
 import type { SessionSnapshot, WorkspaceSnapshot } from "@/types/backend";
 
@@ -16,6 +20,10 @@ export type OverviewNavigateContext = {
   lambdaFunctionName?: string;
   dynamodbTableName?: string;
   sqsQueueUrl?: string;
+  snsTopicArn?: string;
+  rdsInstanceId?: string;
+  logGroupName?: string;
+  iamRoleName?: string;
   ec2InstanceId?: string;
   s3BucketName?: string;
   openLambdaCreate?: boolean;
@@ -60,6 +68,10 @@ function isDynamoDBActive(status?: string): boolean {
   return (status ?? "").toLowerCase() === "active";
 }
 
+function isRdsAvailable(status?: string): boolean {
+  return (status ?? "").toLowerCase() === "available";
+}
+
 export default function OverviewView({
   workspace,
   session,
@@ -76,6 +88,9 @@ export default function OverviewView({
   const lambdaActive = workspace.lambdaFunctions.filter((fn) => isLambdaActive(fn.state)).length;
   const dynamodbActive = workspace.dynamodbTables.filter((table) =>
     isDynamoDBActive(table.status),
+  ).length;
+  const rdsAvailable = workspace.rdsInstances.filter((instance) =>
+    isRdsAvailable(instance.status),
   ).length;
   const vmsRunning = workspace.azureVirtualMachines.filter((vm) => isRunning(vm.powerState)).length;
   const emulatorsRunning = workspace.emulatorSummaries.filter(
@@ -120,6 +135,27 @@ export default function OverviewView({
       label: "SQS queues",
       value: workspace.sqsQueues.length,
       tabId: "sqs",
+    });
+    stats.push({
+      label: "SNS topics",
+      value: workspace.snsTopics.length,
+      tabId: "sns",
+    });
+    stats.push({
+      label: "RDS instances",
+      value: workspace.rdsInstances.length,
+      footer: statusFooter(rdsAvailable, workspace.rdsInstances.length, "available"),
+      tabId: "rds",
+    });
+    stats.push({
+      label: "Log groups",
+      value: workspace.logGroups.length,
+      tabId: "logs",
+    });
+    stats.push({
+      label: "IAM roles",
+      value: workspace.iamRoles.length,
+      tabId: "iam",
     });
   }
   if (isAzure) {
@@ -213,6 +249,69 @@ export default function OverviewView({
         iconUrl: awsSqsIconUrl,
         tabId: "sqs",
         navigateContext: { sqsQueueUrl: queue.queueUrl },
+      }),
+    );
+    workspace.snsTopics.slice(0, 3).forEach((topic) =>
+      recents.push({
+        key: `sns-${topic.topicArn}`,
+        name: topic.topicName,
+        sub:
+          [
+            topic.subscriptionsConfirmed != null
+              ? `${topic.subscriptionsConfirmed} subscriptions`
+              : undefined,
+            topic.displayName,
+          ]
+            .filter(Boolean)
+            .join(" · ") || "SNS topic",
+        iconUrl: awsSnsIconUrl,
+        tabId: "sns",
+        navigateContext: { snsTopicArn: topic.topicArn },
+      }),
+    );
+    workspace.rdsInstances.slice(0, 3).forEach((instance) =>
+      recents.push({
+        key: `rds-${instance.dbInstanceIdentifier}`,
+        name: instance.dbInstanceIdentifier,
+        sub:
+          [instance.engine, instance.instanceClass].filter(Boolean).join(" · ") ||
+          "RDS instance",
+        iconUrl: awsRdsIconUrl,
+        status: isRdsAvailable(instance.status) ? "on" : "off",
+        statusLabel: instance.status || "unknown",
+        tabId: "rds",
+        navigateContext: { rdsInstanceId: instance.dbInstanceIdentifier },
+      }),
+    );
+    workspace.logGroups.slice(0, 3).forEach((group) =>
+      recents.push({
+        key: `logs-${group.logGroupName}`,
+        name: group.logGroupName,
+        sub:
+          group.retentionInDays != null
+            ? `${group.retentionInDays} day retention`
+            : "CloudWatch log group",
+        iconUrl: awsCloudwatchIconUrl,
+        tabId: "logs",
+        navigateContext: { logGroupName: group.logGroupName },
+      }),
+    );
+    workspace.iamRoles.slice(0, 3).forEach((role) =>
+      recents.push({
+        key: `iam-${role.roleName}`,
+        name: role.roleName,
+        sub:
+          [
+            role.attachedPolicies?.length
+              ? `${role.attachedPolicies.length} policies`
+              : undefined,
+            role.description,
+          ]
+            .filter(Boolean)
+            .join(" · ") || "IAM role",
+        iconUrl: awsIamIconUrl,
+        tabId: "iam",
+        navigateContext: { iamRoleName: role.roleName },
       }),
     );
   }
