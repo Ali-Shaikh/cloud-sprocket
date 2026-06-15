@@ -1400,6 +1400,58 @@ const mockRecipes: Recipe[] = [
       { name: "ecs_cluster", description: "ECS cluster name." },
     ],
   },
+  {
+    manifest: {
+      apiVersion: "cloudsprocket.recipe/v1",
+      id: "static-site-aws",
+      version: "0.1.0",
+      name: "Static website (AWS S3)",
+      summary: "A static website served from an S3 bucket, with your built site uploaded automatically.",
+      description: "An S3 static website recipe that runs on LocalStack's free tier and can deploy to real AWS.",
+      providers: ["aws"],
+      tags: ["static", "website", "s3", "aws", "starter"],
+      engine: { type: "opentofu", minVersion: "1.6.0" },
+      local: { emulator: "localstack" },
+    },
+    variables: [
+      { name: "app_name", type: "string", description: "Lowercase name prefix used for every resource.", default: "mysite", required: false, group: "Application", widget: "text", help: "Lowercase name prefix used for every resource." },
+      { name: "environment", type: "string", description: "Deployment environment.", default: "dev", required: false, group: "Application", widget: "select", options: ["dev", "staging", "prod"] },
+      { name: "aws_region", type: "string", description: "AWS region to deploy into.", default: "us-east-1", required: false, group: "Application", widget: "text" },
+      { name: "frontend_dist_dir", type: "string", description: "Directory of your built static site.", default: "", required: false, group: "Website content", widget: "directory", help: "Folder of your built static site." },
+      { name: "tags", type: "map(string)", description: "Extra tags applied to every resource.", default: {}, required: false, group: "Advanced", widget: "textarea", help: "Extra tags as a JSON object." },
+    ],
+    outputs: [
+      { name: "website_endpoint", description: "Static website endpoint for the site.", primary: true },
+      { name: "bucket_name", description: "S3 bucket hosting the static website." },
+    ],
+  },
+  {
+    manifest: {
+      apiVersion: "cloudsprocket.recipe/v1",
+      id: "scheduled-job-aws",
+      version: "0.1.0",
+      name: "Scheduled job (AWS EventBridge + Lambda)",
+      summary: "A Node Lambda invoked on a schedule by an EventBridge rule.",
+      description: "A recurring background job recipe that runs on LocalStack's free tier and can deploy to real AWS.",
+      providers: ["aws"],
+      tags: ["scheduled", "cron", "lambda", "eventbridge", "aws"],
+      engine: { type: "opentofu", minVersion: "1.6.0" },
+      local: { emulator: "localstack" },
+    },
+    variables: [
+      { name: "app_name", type: "string", description: "Lowercase name prefix used for every resource.", default: "myjob", required: false, group: "Application", widget: "text", help: "Lowercase name prefix used for every resource." },
+      { name: "environment", type: "string", description: "Deployment environment.", default: "dev", required: false, group: "Application", widget: "select", options: ["dev", "staging", "prod"] },
+      { name: "aws_region", type: "string", description: "AWS region to deploy into.", default: "us-east-1", required: false, group: "Application", widget: "text" },
+      { name: "schedule_expression", type: "string", description: "EventBridge schedule expression.", default: "rate(5 minutes)", required: false, group: "Schedule", widget: "text", help: "EventBridge schedule, for example rate(5 minutes)." },
+      { name: "backend_source_dir", type: "string", description: "Directory containing your Node job.", default: "./src", required: false, group: "Job code", widget: "directory", help: "Folder with your Node job." },
+      { name: "lambda_memory_mb", type: "number", description: "Memory for the job Lambda, in megabytes.", default: 128, required: false, group: "Job code", widget: "number", help: "Memory for the job Lambda, in megabytes." },
+      { name: "tags", type: "map(string)", description: "Extra tags applied to every resource.", default: {}, required: false, group: "Advanced", widget: "textarea", help: "Extra tags as a JSON object." },
+    ],
+    outputs: [
+      { name: "lambda_function_name", description: "Name of the scheduled job Lambda.", primary: true },
+      { name: "schedule_rule_name", description: "Name of the EventBridge rule driving the schedule." },
+    ],
+  },
 ];
 
 const mockDeployments: Deployment[] = [];
@@ -1487,12 +1539,31 @@ function mockRunDeployment(deploymentId: string, action: "apply" | "destroy"): P
     log("Apply complete! Resources: 10 added, 0 changed, 0 destroyed.");
     const appName = String(deployment.variables.app_name ?? "myapp");
     const env = String(deployment.variables.environment ?? "dev");
-    deployment.outputs = [
-      { name: "api_endpoint", value: `http://localhost:4566/restapis/${appName}-${env}` },
-      { name: "frontend_website_endpoint", value: `http://${appName}-${env}-frontend.s3-website.localhost:4566` },
-      { name: "frontend_bucket", value: `${appName}-${env}-frontend` },
-      { name: "dynamodb_table", value: `${appName}-${env}-data` },
-    ];
+    if (deployment.recipeId === "static-site-aws") {
+      deployment.outputs = [
+        { name: "website_endpoint", value: `http://${appName}-${env}-site.s3-website.localhost:4566` },
+        { name: "bucket_name", value: `${appName}-${env}-site` },
+      ];
+    } else if (deployment.recipeId === "scheduled-job-aws") {
+      deployment.outputs = [
+        { name: "lambda_function_name", value: `${appName}-${env}-job` },
+        { name: "schedule_rule_name", value: `${appName}-${env}-schedule` },
+      ];
+    } else if (deployment.recipeId === "container-fullstack-aws") {
+      deployment.outputs = [
+        { name: "alb_dns_name", value: `${appName}-${env}.elb.localhost:4566` },
+        { name: "frontend_url", value: `http://${appName}-${env}.cloudfront.localhost:4566` },
+        { name: "database_endpoint", value: `${appName}-${env}.rds.localhost:4566` },
+        { name: "ecs_cluster", value: `${appName}-${env}-cluster` },
+      ];
+    } else {
+      deployment.outputs = [
+        { name: "api_endpoint", value: `http://localhost:4566/restapis/${appName}-${env}` },
+        { name: "frontend_website_endpoint", value: `http://${appName}-${env}-frontend.s3-website.localhost:4566` },
+        { name: "frontend_bucket", value: `${appName}-${env}-frontend` },
+        { name: "dynamodb_table", value: `${appName}-${env}-data` },
+      ];
+    }
     mockSetStatus(deployment, "applied");
     emitMockEvent("job.updated", { ...job, status: "completed", message: `${deployment.name} deployed.`, completedAt: new Date().toISOString() });
   }, 80);

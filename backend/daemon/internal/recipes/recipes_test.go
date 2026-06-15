@@ -1,8 +1,10 @@
 package recipes
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -26,6 +28,14 @@ func TestBundledListIncludesServerlessRecipe(t *testing.T) {
 	if !found {
 		t.Fatal("serverless-fullstack-aws not listed")
 	}
+}
+
+func fsReadRecipeFile(recipeID string, name string) (string, error) {
+	data, err := fs.ReadFile(bundledFS, filepath.ToSlash(filepath.Join("bundled", recipeID, name)))
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 func TestLoadServerlessRecipeIntrospection(t *testing.T) {
@@ -130,6 +140,21 @@ func TestLoadStaticSiteRecipe(t *testing.T) {
 	}
 	if !present["bucket_name"] {
 		t.Fatal("bucket_name output missing")
+	}
+
+	mainTF, err := fsReadRecipeFile("static-site-aws", "main.tf")
+	if err != nil {
+		t.Fatalf("read static-site main.tf: %v", err)
+	}
+	for _, want := range []string{
+		`resource "aws_s3_bucket_public_access_block" "site"`,
+		`resource "aws_s3_bucket_policy" "site_public_read"`,
+		`s3:GetObject`,
+		`${aws_s3_bucket.site.arn}/*`,
+	} {
+		if !strings.Contains(mainTF, want) {
+			t.Fatalf("static-site recipe missing %q", want)
+		}
 	}
 }
 
