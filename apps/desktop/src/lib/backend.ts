@@ -1291,6 +1291,8 @@ function handleMockRequest<T>(
       return mockRunDeployment(params.deploymentId as string, "destroy") as Promise<T>;
     case "deployments.cancel":
       return mockCancelDeployment(params.deploymentId as string) as Promise<T>;
+    case "deployments.delete":
+      return mockDeleteDeployment(params.deploymentId as string) as Promise<T>;
     default:
       return Promise.reject(new Error(`Mock backend method not implemented: ${method}`));
   }
@@ -1345,6 +1347,10 @@ export async function destroyDeployment(deploymentId: string): Promise<Deploymen
 
 export async function cancelDeployment(deploymentId: string): Promise<void> {
   await backendRequest("deployments.cancel", { deploymentId });
+}
+
+export async function deleteDeployment(deploymentId: string): Promise<void> {
+  await backendRequest("deployments.delete", { deploymentId });
 }
 
 // openExternalUrl opens a URL in the user's default browser. The Tauri webview
@@ -1600,6 +1606,22 @@ function mockCancelDeployment(deploymentId: string): Promise<{ cancelled: boolea
   }
   mockSetStatus(deployment, "cancelled");
   return Promise.resolve({ cancelled: true });
+}
+
+function mockDeleteDeployment(deploymentId: string): Promise<{ deleted: boolean }> {
+  const index = mockDeployments.findIndex((entry) => entry.id === deploymentId);
+  if (index < 0) {
+    return Promise.reject(new Error(`deployment ${deploymentId} not found`));
+  }
+  const status = mockDeployments[index].status;
+  if (status === "planning" || status === "applying" || status === "destroying") {
+    return Promise.reject(new Error("this deployment is still running; stop it before removing it"));
+  }
+  if (status === "applied") {
+    return Promise.reject(new Error("this deployment still has live resources; destroy it before removing it"));
+  }
+  mockDeployments.splice(index, 1);
+  return Promise.resolve({ deleted: true });
 }
 
 export async function backendRequest<T>(
