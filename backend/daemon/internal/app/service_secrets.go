@@ -1,12 +1,22 @@
 package app
 
 import (
+	"encoding/json"
 	"log"
+	"strings"
 
 	"cloudsprocket/backend/daemon/internal/deploy"
 	"cloudsprocket/backend/daemon/internal/recipes"
 	"cloudsprocket/backend/daemon/internal/secrets"
 )
+
+// structuredSecretMarker prefixes the sealed plaintext of a non-string secret
+// value (number, bool, object, list). Its presence after Open signals that the
+// remainder is the JSON-encoded original value rather than a plain string, so
+// structured secrets round-trip without being silently left in plaintext. The
+// NUL prefix never appears in a real string value and is only ever seen inside
+// the decrypted payload.
+const structuredSecretMarker = "\x00cs-json:"
 
 // sensitiveVariableNames returns the names of a recipe's secret variables, so
 // their values can be sealed at rest in the deployment record.
@@ -92,11 +102,26 @@ func (s *Service) openFromStore(deployment *deploy.Deployment) {
 }
 
 func (s *Service) sealValue(value any) any {
-	text, ok := value.(string)
-	if !ok || text == "" || secrets.IsSealed(text) {
+	if value == nil {
 		return value
 	}
-	sealed, err := s.cipher.Seal(text)
+	// Strings seal directly. Structured values (number, bool, object, list) are
+	// JSON-encoded behind a marker first, so they are never left in plaintext.
+	if text, ok := value.(string); ok {
+		if text == "" || secrets.IsSealed(text) {
+			return value
+		}
+		sealed, err := s.cipher.Seal(text)
+		if err != nil {
+			return value
+		}
+		return sealed
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return value
+	}
+	sealed, err := s.cipher.Seal(structuredSecretMarker + string(data))
 	if err != nil {
 		return value
 	}
@@ -111,6 +136,13 @@ func (s *Service) openValue(value any) any {
 	plain, err := s.cipher.Open(text)
 	if err != nil {
 		return value
+	}
+	if encoded, found := strings.CutPrefix(plain, structuredSecretMarker); found {
+		var decoded any
+		if err := json.Unmarshal([]byte(encoded), &decoded); err != nil {
+			return plain
+		}
+		return decoded
 	}
 	return plain
 }
