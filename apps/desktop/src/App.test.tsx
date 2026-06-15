@@ -450,6 +450,21 @@ vi.mock("./lib/backend", () => ({
           lambdaStatusMessage: `Selected Lambda function ${String(params?.functionName ?? "")}.`,
         };
         return workspaceFixture;
+      case "aws.dynamodb.selectRegion":
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedDynamodbRegion: String(params?.region ?? ""),
+          selectedDynamodbTableName: workspaceFixture.dynamodbTables[0]?.tableName,
+          dynamodbStatusMessage: `Loaded ${workspaceFixture.dynamodbTables.length} DynamoDB tables from ${String(params?.region ?? "")}.`,
+        };
+        return workspaceFixture;
+      case "aws.dynamodb.selectTable":
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedDynamodbTableName: String(params?.tableName ?? ""),
+          dynamodbStatusMessage: `Selected DynamoDB table ${String(params?.tableName ?? "")}.`,
+        };
+        return workspaceFixture;
       case "aws.lambda.invoke":
         return {
           statusCode: 200,
@@ -650,6 +665,25 @@ describe("App", () => {
           state: "Active",
         },
       ],
+      selectedDynamodbRegion: "us-east-1",
+      selectedDynamodbTableName: "cloudsprocket-orders",
+      dynamodbStatusMessage: "Loaded 2 DynamoDB tables from us-east-1.",
+      dynamodbRegions: ["us-east-1", "eu-west-2"],
+      dynamodbTables: [
+        {
+          tableName: "cloudsprocket-orders",
+          status: "ACTIVE",
+          itemCount: 1284,
+          hashKey: "orderId",
+          rangeKey: "createdAt",
+        },
+        {
+          tableName: "cloudsprocket-sessions",
+          status: "ACTIVE",
+          itemCount: 42,
+          hashKey: "sessionId",
+        },
+      ],
     };
     s3PrefixDelays = new Map();
     backendEventHandlers = {};
@@ -802,6 +836,12 @@ describe("App", () => {
           summary: "Lambda summary",
           detail: "Lambda panel",
         },
+        {
+          tabId: "dynamodb",
+          label: "DynamoDB",
+          summary: "DynamoDB summary",
+          detail: "DynamoDB panel",
+        },
       ],
     };
     workspaceFixture = {
@@ -822,16 +862,19 @@ describe("App", () => {
     expect(await screen.findByText("S3 buckets")).toBeInTheDocument();
     expect(screen.getByText("EC2 instances")).toBeInTheDocument();
     expect(screen.getByText("Lambda functions")).toBeInTheDocument();
+    expect(screen.getByText("DynamoDB tables")).toBeInTheDocument();
     expect(screen.getByText(/workspace sandbox/)).toBeInTheDocument();
     expect(screen.getByText("cloudsprocket-artifacts")).toBeInTheDocument();
     expect(screen.getByText("sandbox-api-1")).toBeInTheDocument();
     expect(screen.getByText("process-order")).toBeInTheDocument();
+    expect(screen.getByText("cloudsprocket-orders")).toBeInTheDocument();
     const nav = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
     expect(nav.getByText("Overview")).toBeInTheDocument();
     expect(nav.getByText("Local Runtime")).toBeInTheDocument();
     expect(nav.getByText("S3")).toBeInTheDocument();
     expect(nav.getByText("EC2")).toBeInTheDocument();
     expect(nav.getByText("Lambda")).toBeInTheDocument();
+    expect(nav.getByText("DynamoDB")).toBeInTheDocument();
     expect(nav.getByRole("button", { name: /S3/ }).querySelector("img")).not.toBeNull();
     expect(nav.getByRole("button", { name: /EC2/ }).querySelector("img")).not.toBeNull();
     fireEvent.click(nav.getByText("Local Runtime"));

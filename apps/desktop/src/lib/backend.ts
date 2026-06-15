@@ -125,6 +125,12 @@ const mockWorkspaceTabs: WorkspaceTab[] = [
     detail: "List functions by region, view config and recent CloudWatch logs, perform test invokes.",
   },
   {
+    tabId: "dynamodb",
+    label: "DynamoDB",
+    summary: "Table inventory and read-only item preview.",
+    detail: "List tables by region, inspect keys and GSIs, and scan the first items read-only.",
+  },
+  {
     tabId: "actions",
     label: "Activity",
     summary: "Recent job, log, and refresh history.",
@@ -268,6 +274,39 @@ const mockWorkspaceInstances = [
 ];
 
 const mockWorkspaceRegions = ["us-east-1", "eu-west-2"];
+
+const mockWorkspaceDynamoDBTables = [
+  {
+    tableName: "cloudsprocket-orders",
+    status: "ACTIVE",
+    itemCount: 1284,
+    tableSizeBytes: 524288,
+    billingMode: "PAY_PER_REQUEST",
+    hashKey: "orderId",
+    rangeKey: "createdAt",
+    globalSecondaryIndexes: [
+      {
+        indexName: "customer-index",
+        hashKey: "customerId",
+        rangeKey: "createdAt",
+        status: "ACTIVE",
+      },
+    ],
+    sampleItems: [
+      '{"orderId":"ord-001","customerId":"cust-42","createdAt":"2026-06-14T10:00:00Z","total":49.99}',
+      '{"orderId":"ord-002","customerId":"cust-17","createdAt":"2026-06-14T11:30:00Z","total":12.50}',
+    ],
+  },
+  {
+    tableName: "cloudsprocket-sessions",
+    status: "ACTIVE",
+    itemCount: 42,
+    tableSizeBytes: 16384,
+    billingMode: "PAY_PER_REQUEST",
+    hashKey: "sessionId",
+    sampleItems: ['{"sessionId":"sess-abc","userId":"user-1","ttl":1718452800}'],
+  },
+];
 
 const mockWorkspaceLambdaFunctions = [
   {
@@ -827,6 +866,17 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       : "Lambda inventory is only available for open AWS workspaces.",
     lambdaRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
     lambdaFunctions: isAWSWorkspace ? mockWorkspaceLambdaFunctions : [],
+    selectedDynamodbRegion: isAWSWorkspace
+      ? mockState.session.selectedDynamodbRegion ?? mockWorkspaceRegions[0]
+      : undefined,
+    selectedDynamodbTableName: isAWSWorkspace
+      ? mockState.session.selectedDynamodbTableName ?? mockWorkspaceDynamoDBTables[0]?.tableName
+      : undefined,
+    dynamodbStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceDynamoDBTables.length} DynamoDB tables from ${mockState.session.selectedDynamodbRegion ?? mockWorkspaceRegions[0]}.`
+      : "DynamoDB inventory is only available for open AWS workspaces.",
+    dynamodbRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
+    dynamodbTables: isAWSWorkspace ? mockWorkspaceDynamoDBTables : [],
   };
 }
 
@@ -1197,6 +1247,15 @@ function handleMockRequest<T>(
       }, 30);
       return Promise.resolve(job as T);
     }
+    case "aws.dynamodb.selectRegion":
+      mockState.session.selectedDynamodbRegion = String(params.region ?? "");
+      mockState.session.selectedDynamodbTableName = undefined;
+      appendLog("info", `Selected DynamoDB region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.dynamodb.selectTable":
+      mockState.session.selectedDynamodbTableName = String(params.tableName ?? "");
+      appendLog("info", `Selected DynamoDB table ${params.tableName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
     case "aws.lambda.selectRegion":
       mockState.session.selectedLambdaRegion = String(params.region ?? "");
       mockState.session.selectedLambdaFunctionName = undefined;
