@@ -6,12 +6,14 @@ import { StatCard } from "@/components/stat-card";
 import { StatusDot, type Status } from "@/components/status-dot";
 import awsS3IconUrl from "@/assets/cloud-icons/aws-s3.svg";
 import awsEc2IconUrl from "@/assets/cloud-icons/aws-ec2.svg";
+import awsDynamodbIconUrl from "@/assets/cloud-icons/aws-dynamodb.svg";
 import awsLambdaIconUrl from "@/assets/cloud-icons/aws-lambda.svg";
 import azureIconUrl from "@/assets/cloud-icons/azure.svg";
 import type { SessionSnapshot, WorkspaceSnapshot } from "@/types/backend";
 
 export type OverviewNavigateContext = {
   lambdaFunctionName?: string;
+  dynamodbTableName?: string;
   ec2InstanceId?: string;
   s3BucketName?: string;
   openLambdaCreate?: boolean;
@@ -52,6 +54,10 @@ function isLambdaActive(state?: string): boolean {
   return (state ?? "").toLowerCase() === "active";
 }
 
+function isDynamoDBActive(status?: string): boolean {
+  return (status ?? "").toLowerCase() === "active";
+}
+
 export default function OverviewView({
   workspace,
   session,
@@ -66,6 +72,9 @@ export default function OverviewView({
 
   const ec2Running = workspace.ec2Instances.filter((instance) => isRunning(instance.state)).length;
   const lambdaActive = workspace.lambdaFunctions.filter((fn) => isLambdaActive(fn.state)).length;
+  const dynamodbActive = workspace.dynamodbTables.filter((table) =>
+    isDynamoDBActive(table.status),
+  ).length;
   const vmsRunning = workspace.azureVirtualMachines.filter((vm) => isRunning(vm.powerState)).length;
   const emulatorsRunning = workspace.emulatorSummaries.filter(
     (emulator) => emulator.status === "running",
@@ -98,6 +107,12 @@ export default function OverviewView({
       value: workspace.lambdaFunctions.length,
       footer: statusFooter(lambdaActive, workspace.lambdaFunctions.length, "active"),
       tabId: "lambda",
+    });
+    stats.push({
+      label: "DynamoDB tables",
+      value: workspace.dynamodbTables.length,
+      footer: statusFooter(dynamodbActive, workspace.dynamodbTables.length, "active"),
+      tabId: "dynamodb",
     });
   }
   if (isAzure) {
@@ -159,6 +174,18 @@ export default function OverviewView({
         statusLabel: fn.state || "unknown",
         tabId: "lambda",
         navigateContext: { lambdaFunctionName: fn.functionName },
+      }),
+    );
+    workspace.dynamodbTables.slice(0, 3).forEach((table) =>
+      recents.push({
+        key: `dynamodb-${table.tableName}`,
+        name: table.tableName,
+        sub: [table.hashKey, table.rangeKey].filter(Boolean).join(" · ") || "DynamoDB table",
+        iconUrl: awsDynamodbIconUrl,
+        status: isDynamoDBActive(table.status) ? "on" : "off",
+        statusLabel: table.status || "unknown",
+        tabId: "dynamodb",
+        navigateContext: { dynamodbTableName: table.tableName },
       }),
     );
   }
