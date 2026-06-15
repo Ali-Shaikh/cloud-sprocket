@@ -1578,6 +1578,7 @@ function mockRunDeployment(deploymentId: string, action: "apply" | "destroy"): P
         { name: "alb_dns_name", value: `${appName}-${env}.elb.localhost:4566` },
         { name: "frontend_url", value: `http://${appName}-${env}.cloudfront.localhost:4566` },
         { name: "database_endpoint", value: `${appName}-${env}.rds.localhost:4566` },
+        { name: "database_password", value: String(deployment.variables.db_password ?? "changeme-please"), sensitive: true },
         { name: "ecs_cluster", value: `${appName}-${env}-cluster` },
       ];
     } else {

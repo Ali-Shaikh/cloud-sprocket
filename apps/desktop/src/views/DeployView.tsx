@@ -7,6 +7,8 @@ import {
   Crown,
   Download,
   ExternalLink,
+  Eye,
+  EyeOff,
   FolderOpen,
   Loader2,
   Play,
@@ -678,8 +680,10 @@ function DeploymentDetail({
 }
 
 function OutputRow({ output, local }: { output: DeploymentOutput; local: boolean }) {
+  const [revealed, setRevealed] = useState(false);
   const value = String(output.value ?? "");
-  const display = output.sensitive ? "••••••••" : value;
+  const masked = Boolean(output.sensitive) && !revealed;
+  const display = masked ? "••••••••" : value;
   const localUrl = local && !output.sensitive ? toLocalStackUrl(value) : null;
   const directUrl = !output.sensitive && /^https?:\/\//i.test(value) ? value : null;
   const openUrl = localUrl ?? directUrl;
@@ -688,7 +692,20 @@ function OutputRow({ output, local }: { output: DeploymentOutput; local: boolean
     <div className="flex flex-col gap-1.5 py-3 first:pt-0 last:pb-0">
       <div className="flex items-center justify-between gap-2">
         <span className="font-mono text-xs font-medium text-foreground">{output.name}</span>
-        {!output.sensitive && <CopyButton value={value} />}
+        <div className="flex items-center gap-1">
+          {output.sensitive && (
+            <button
+              type="button"
+              onClick={() => setRevealed((current) => !current)}
+              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              title={revealed ? "Hide value" : "Reveal value"}
+            >
+              {revealed ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+              {revealed ? "Hide" : "Reveal"}
+            </button>
+          )}
+          {!masked && <CopyButton value={value} />}
+        </div>
       </div>
       <code className="block select-text break-all rounded bg-muted px-2.5 py-1.5 text-xs text-foreground">
         {display}
