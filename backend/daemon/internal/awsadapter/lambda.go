@@ -50,8 +50,8 @@ func (l *LambdaInventory) ListFunctions(
 		if err != nil {
 			return nil, err
 		}
-		for _, fn := range page.Functions {
-			functions = append(functions, lambdaFunctionSummary(fn))
+		for i := range page.Functions {
+			functions = append(functions, lambdaFunctionSummary(&page.Functions[i]))
 		}
 	}
 	sort.SliceStable(functions, func(i, j int) bool {
@@ -87,12 +87,7 @@ func (l *LambdaInventory) DescribeFunction(
 
 	fn := lambdaFunctionSummary(res.Configuration)
 	if res.Configuration != nil {
-		if res.Configuration.State != nil {
-			fn.State = string(res.Configuration.State.State)
-		}
-		if res.Configuration.CodeSize != nil {
-			fn.CodeSize = *res.Configuration.CodeSize
-		}
+		fn.CodeSize = res.Configuration.CodeSize
 		fn.Handler = awsString(res.Configuration.Handler)
 		if res.Configuration.Timeout != nil {
 			fn.Timeout = *res.Configuration.Timeout
@@ -141,11 +136,11 @@ func (l *LambdaInventory) InvokeFunction(
 		ExecutedVersion: awsString(res.ExecutedVersion),
 		FunctionError:   awsString(res.FunctionError),
 	}
-	if len(res.LogResult) > 0 {
-		if decoded, derr := base64.StdEncoding.DecodeString(awsString(&res.LogResult)); derr == nil {
+	if res.LogResult != nil && len(*res.LogResult) > 0 {
+		if decoded, derr := base64.StdEncoding.DecodeString(*res.LogResult); derr == nil {
 			result.LogResult = string(decoded)
 		} else {
-			result.LogResult = awsString(&res.LogResult)
+			result.LogResult = *res.LogResult
 		}
 	}
 	if len(res.Payload) > 0 {
@@ -192,6 +187,7 @@ func lambdaFunctionSummary(cfg *types.FunctionConfiguration) models.AwsLambdaFun
 		FunctionName: awsString(cfg.FunctionName),
 		Runtime:      string(cfg.Runtime),
 		Description:  awsString(cfg.Description),
+		State:        string(cfg.State),
 	}
 	if cfg.MemorySize != nil {
 		fn.MemorySize = *cfg.MemorySize
