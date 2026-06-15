@@ -55,6 +55,10 @@ func (stubLambdaInventory) InvokeFunction(context.Context, models.ProfileSummary
 	return models.AwsLambdaInvokeResult{StatusCode: 200, Payload: "{}"}, nil
 }
 
+func (stubLambdaInventory) CreateFunction(context.Context, models.ProfileSummary, string, models.AwsLambdaCreateInput) (models.AwsLambdaFunction, error) {
+	return models.AwsLambdaFunction{FunctionName: "created-fn", Runtime: "nodejs20.x", State: "Active"}, nil
+}
+
 func (s stubS3Inventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.AwsS3Bucket, error) {
 	return append([]models.AwsS3Bucket(nil), s.buckets...), nil
 }

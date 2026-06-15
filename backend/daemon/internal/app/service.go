@@ -67,6 +67,7 @@ type LambdaInventory interface {
 	ListFunctions(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsLambdaFunction, error)
 	DescribeFunction(ctx context.Context, profile models.ProfileSummary, region string, functionName string) (models.AwsLambdaFunction, error)
 	InvokeFunction(ctx context.Context, profile models.ProfileSummary, region string, functionName string, payload []byte) (models.AwsLambdaInvokeResult, error)
+	CreateFunction(ctx context.Context, profile models.ProfileSummary, region string, input models.AwsLambdaCreateInput) (models.AwsLambdaFunction, error)
 }
 
 type AzureInventory interface {
@@ -638,7 +639,7 @@ func (s *Service) Handle(
 		return fn, nil
 	case "aws.lambda.invoke":
 		var request struct {
-			FunctionName string `json:"functionName"`
+			FunctionName string          `json:"functionName"`
 			Payload      json.RawMessage `json:"payload"`
 		}
 		if err := json.Unmarshal(params, &request); err != nil {
@@ -659,6 +660,10 @@ func (s *Service) Handle(
 			s.mu.Unlock()
 			return nil, err
 		}
+		if !profileAllowsAWSWrites(profile) {
+			s.mu.Unlock()
+			return nil, errors.New("Lambda invoke requires a selected AWS profile with local endpoint_url and cloudsprocket_allow_writes = true")
+		}
 		s.mu.Unlock()
 		payload := []byte(request.Payload)
 		if len(payload) == 0 {
@@ -669,6 +674,62 @@ func (s *Service) Handle(
 			return nil, err
 		}
 		return result, nil
+	case "aws.lambda.create":
+		var request models.AwsLambdaCreateInput
+		if err := json.Unmarshal(params, &request); err != nil {
+			return nil, err
+		}
+		if err := validateLambdaCreateInput(request); err != nil {
+			return nil, err
+		}
+		snapshot, err := s.discovery.Discover()
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		session, err := s.currentState(ctx, snapshot)
+		if err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
+		if !session.IsLocked || session.CurrentProviderID != "aws" {
+			s.mu.Unlock()
+			return nil, errors.New("open an AWS workspace before creating a Lambda function")
+		}
+		profile, region, err := s.activeLambdaRegion(snapshot, session)
+		if err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
+		if !profileAllowsAWSWrites(profile) {
+			s.mu.Unlock()
+			return nil, errors.New("Lambda create requires a selected AWS profile with local endpoint_url and cloudsprocket_allow_writes = true")
+		}
+		s.mu.Unlock()
+
+		created, err := s.lambda.CreateFunction(ctx, profile, region, request)
+		if err != nil {
+			return nil, err
+		}
+
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		session, err = s.currentState(ctx, snapshot)
+		if err != nil {
+			return nil, err
+		}
+		session.SelectedLambdaFunctionName = created.FunctionName
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+		return s.buildWorkspaceSnapshot(snapshot, session), s.notifyStateAndLog(
+			ctx,
+			snapshot,
+			session,
+			notifier,
+			"success",
+			fmt.Sprintf("Created Lambda function %s in %s.", created.FunctionName, region),
+		)
 	case "azure.selectResourceGroup":
 		var request struct {
 			ResourceGroup string `json:"resourceGroup"`
@@ -2333,22 +2394,33 @@ func (s *Service) activeEC2Selection(
 	return profile, region, instanceID, nil
 }
 
+func (s *Service) activeLambdaRegion(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+) (models.ProfileSummary, string, error) {
+	if !session.IsLocked || session.CurrentProviderID != "aws" {
+		return models.ProfileSummary{}, "", errors.New("open an AWS workspace before using Lambda actions")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		return models.ProfileSummary{}, "", errors.New("the workspace's AWS profile is not available")
+	}
+	regions := s.lambdaRegions(context.Background(), profile)
+	region := s.selectedLambdaRegion(session, regions, profile)
+	if region == "" {
+		return models.ProfileSummary{}, "", errors.New("select a Lambda region before using this action")
+	}
+	return profile, region, nil
+}
+
 func (s *Service) activeLambdaSelection(
 	snapshot discovery.Snapshot,
 	session models.SessionSnapshot,
 	functionNameOverride string,
 ) (models.ProfileSummary, string, string, error) {
-	if !session.IsLocked || session.CurrentProviderID != "aws" {
-		return models.ProfileSummary{}, "", "", errors.New("open an AWS workspace before using Lambda actions")
-	}
-	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
-	if !ok {
-		return models.ProfileSummary{}, "", "", errors.New("the workspace's AWS profile is not available")
-	}
-	regions := s.lambdaRegions(context.Background(), profile)
-	region := s.selectedLambdaRegion(session, regions, profile)
-	if region == "" {
-		return models.ProfileSummary{}, "", "", errors.New("select a Lambda region before using this action")
+	profile, region, err := s.activeLambdaRegion(snapshot, session)
+	if err != nil {
+		return models.ProfileSummary{}, "", "", err
 	}
 	functionName := strings.TrimSpace(functionNameOverride)
 	if functionName == "" {
@@ -2559,6 +2631,42 @@ func profileEndpointURL(profile models.ProfileSummary) string {
 		}
 	}
 	return ""
+}
+
+func validateLambdaCreateInput(input models.AwsLambdaCreateInput) error {
+	name := strings.TrimSpace(input.FunctionName)
+	if name == "" {
+		return errors.New("function name is required")
+	}
+	if len(name) > 64 {
+		return errors.New("function name must be 64 characters or fewer")
+	}
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			continue
+		}
+		return errors.New("function name may only contain letters, numbers, hyphens, and underscores")
+	}
+	runtime := strings.TrimSpace(input.Runtime)
+	if runtime == "" {
+		return errors.New("runtime is required")
+	}
+	allowedRuntimes := map[string]struct{}{
+		"nodejs22.x": {},
+		"nodejs20.x": {},
+		"python3.12": {},
+		"python3.11": {},
+	}
+	if _, ok := allowedRuntimes[runtime]; !ok {
+		return errors.New("runtime is not supported for starter function create")
+	}
+	if input.MemorySize != 0 && (input.MemorySize < 128 || input.MemorySize > 10240) {
+		return errors.New("memory must be between 128 and 10240 MB")
+	}
+	if input.Timeout != 0 && (input.Timeout < 1 || input.Timeout > 900) {
+		return errors.New("timeout must be between 1 and 900 seconds")
+	}
+	return nil
 }
 
 func profileAllowsAWSWrites(profile models.ProfileSummary) bool {

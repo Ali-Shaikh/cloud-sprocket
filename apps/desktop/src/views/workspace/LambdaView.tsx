@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Copy, Loader2, Play, RefreshCw, Server } from "lucide-react";
+import { Copy, Loader2, Play, Plus, RefreshCw, Server } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
@@ -35,23 +35,41 @@ import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
 import { DetailFieldList } from "./detail-fields";
-import type { AwsLambdaFunction, AwsLambdaInvokeResult, WorkspaceSnapshot } from "@/types/backend";
+import type {
+  AwsLambdaCreateInput,
+  AwsLambdaFunction,
+  AwsLambdaInvokeResult,
+  WorkspaceSnapshot,
+} from "@/types/backend";
 
 export type LambdaViewProps = {
   workspace: WorkspaceSnapshot;
   actionStatus: string;
   invokeResult: AwsLambdaInvokeResult | null;
   invokeInFlight: boolean;
+  createInFlight?: boolean;
   onRefresh: () => void;
   onSelectRegion: (region: string) => void;
   onSelectFunction: (functionName: string) => void;
   onInvoke: (functionName: string, payload: unknown) => void;
+  onCreate?: (input: AwsLambdaCreateInput) => void;
 };
+
+const RUNTIME_OPTIONS = [
+  { value: "nodejs22.x", label: "Node.js 22" },
+  { value: "nodejs20.x", label: "Node.js 20" },
+  { value: "python3.12", label: "Python 3.12" },
+  { value: "python3.11", label: "Python 3.11" },
+] as const;
+
+const DEFAULT_CREATE_RUNTIME = RUNTIME_OPTIONS[1].value;
 
 type PendingLambdaInvoke = {
   functionName: string;
   payload: string;
 };
+
+type PendingLambdaCreate = AwsLambdaCreateInput;
 
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
@@ -105,6 +123,24 @@ function formatPayload(payload: string | undefined): string {
   }
 }
 
+function defaultHandlerForRuntime(runtime: string): string {
+  if (runtime.startsWith("python")) {
+    return "lambda_function.handler";
+  }
+  return "index.handler";
+}
+
+function validateFunctionName(name: string): string | undefined {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return "Function name is required.";
+  }
+  if (!/^[a-zA-Z0-9-_]{1,64}$/.test(trimmed)) {
+    return "Use 1-64 letters, numbers, hyphens, or underscores.";
+  }
+  return undefined;
+}
+
 function parsePayloadText(payloadText: string): { parsed?: unknown; error?: string } {
   const trimmed = payloadText.trim();
   if (!trimmed) {
@@ -126,13 +162,24 @@ export default function LambdaView({
   actionStatus,
   invokeResult,
   invokeInFlight,
+  createInFlight = false,
   onRefresh,
   onSelectRegion,
   onSelectFunction,
   onInvoke,
+  onCreate,
 }: LambdaViewProps) {
   const [filterText, setFilterText] = useState("");
   const [pending, setPending] = useState<PendingLambdaInvoke | undefined>(undefined);
+  const [pendingCreate, setPendingCreate] = useState<PendingLambdaCreate | undefined>(undefined);
+  const [createFormOpen, setCreateFormOpen] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [createRuntime, setCreateRuntime] = useState<string>(DEFAULT_CREATE_RUNTIME);
+  const [createHandler, setCreateHandler] = useState(defaultHandlerForRuntime(DEFAULT_CREATE_RUNTIME));
+  const [createMemory, setCreateMemory] = useState("128");
+  const [createTimeout, setCreateTimeout] = useState("30");
+  const [createDescription, setCreateDescription] = useState("");
+  const [createError, setCreateError] = useState<string | undefined>(undefined);
   const [payloadText, setPayloadText] = useState(defaultPayload);
   const [payloadError, setPayloadError] = useState<string | undefined>(undefined);
 
@@ -160,6 +207,9 @@ export default function LambdaView({
 
   const isLocalEndpoint = Boolean(workspace.awsEndpointUrl);
   const showConsoleActions = !isLocalEndpoint && Boolean(selectedFunction);
+  const canWrite = workspace.awsWritesEnabled && !invokeInFlight && !createInFlight;
+  const canInvoke = canWrite && Boolean(selectedFunction?.functionName);
+  const canCreate = canWrite && Boolean(onCreate) && Boolean(workspace.selectedLambdaRegion);
 
   const copySnippets = selectedFunction
     ? [
@@ -209,6 +259,58 @@ export default function LambdaView({
       functionName: selectedFunction.functionName,
       payload: JSON.stringify(parsed, null, 2),
     });
+  }
+
+  function resetCreateForm(): void {
+    setCreateName("");
+    setCreateRuntime(DEFAULT_CREATE_RUNTIME);
+    setCreateHandler(defaultHandlerForRuntime(DEFAULT_CREATE_RUNTIME));
+    setCreateMemory("128");
+    setCreateTimeout("30");
+    setCreateDescription("");
+    setCreateError(undefined);
+  }
+
+  function handleCreateClick(): void {
+    if (!canCreate) {
+      return;
+    }
+    const nameError = validateFunctionName(createName);
+    const memory = Number.parseInt(createMemory, 10);
+    const timeout = Number.parseInt(createTimeout, 10);
+    if (nameError) {
+      setCreateError(nameError);
+      return;
+    }
+    if (!Number.isFinite(memory) || memory < 128 || memory > 10240) {
+      setCreateError("Memory must be between 128 and 10240 MB.");
+      return;
+    }
+    if (!Number.isFinite(timeout) || timeout < 1 || timeout > 900) {
+      setCreateError("Timeout must be between 1 and 900 seconds.");
+      return;
+    }
+    const handler = createHandler.trim() || defaultHandlerForRuntime(createRuntime);
+    setCreateError(undefined);
+    setCreateFormOpen(false);
+    setPendingCreate({
+      functionName: createName.trim(),
+      runtime: createRuntime,
+      handler,
+      memorySize: memory,
+      timeout,
+      description: createDescription.trim() || undefined,
+    });
+  }
+
+  function confirmCreate(): void {
+    if (!pendingCreate || !onCreate) {
+      return;
+    }
+    onCreate(pendingCreate);
+    setPendingCreate(undefined);
+    setCreateFormOpen(false);
+    resetCreateForm();
   }
 
   function confirmInvoke(): void {
@@ -324,12 +426,23 @@ export default function LambdaView({
           </div>
           <Button
             variant="outline"
-            disabled={!workspace.selectedLambdaRegion || invokeInFlight}
+            disabled={!workspace.selectedLambdaRegion || invokeInFlight || createInFlight}
             onClick={onRefresh}
           >
             <RefreshCw />
             Refresh Lambda
           </Button>
+          {onCreate ? (
+            <Button
+              disabled={!canCreate}
+              onClick={() => {
+                setCreateFormOpen(true);
+              }}
+            >
+              <Plus />
+              Create function
+            </Button>
+          ) : null}
           <div className="min-w-56 flex-1">
             <div className={cn(fieldLabel, "mb-1")}>Filter</div>
             <Input
@@ -474,10 +587,15 @@ export default function LambdaView({
                 {payloadError ? (
                   <p className="mt-1 text-xs text-destructive">{payloadError}</p>
                 ) : null}
+                {!workspace.awsWritesEnabled ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Invoke and create require a local endpoint profile with writes enabled.
+                  </p>
+                ) : null}
                 <div className="mt-2 flex gap-2">
                   <Button
                     size="sm"
-                    disabled={invokeInFlight || !selectedFunction.functionName}
+                    disabled={!canInvoke}
                     onClick={handleInvokeClick}
                   >
                     <Play className="mr-1 h-3 w-3" />
@@ -500,10 +618,14 @@ export default function LambdaView({
                 <div>
                   <div className={fieldLabel}>Last invoke result</div>
                   <div className={snippetCard}>
-                    <div className="text-xs">
-                      Status: {invokeResult.statusCode}
-                      {invokeResult.executedVersion ? ` (v${invokeResult.executedVersion})` : ""}
-                    </div>
+                    {invokeResult.error ? (
+                      <div className="text-xs text-destructive">Error: {invokeResult.error}</div>
+                    ) : (
+                      <div className="text-xs">
+                        Status: {invokeResult.statusCode}
+                        {invokeResult.executedVersion ? ` (v${invokeResult.executedVersion})` : ""}
+                      </div>
+                    )}
                     {invokeResult.functionError ? (
                       <div className="text-xs text-destructive">
                         Error: {invokeResult.functionError}
@@ -578,6 +700,151 @@ export default function LambdaView({
           )}
         </section>
       </div>
+
+      <AlertDialog
+        open={createFormOpen}
+        onOpenChange={(open) => {
+          setCreateFormOpen(open);
+          if (!open) {
+            resetCreateForm();
+          }
+        }}
+      >
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create Lambda function</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deploy a starter function to the selected local endpoint. A minimal handler zip is
+              generated automatically.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <div>
+              <div className={fieldLabel}>Function name</div>
+              <Input
+                value={createName}
+                placeholder="my-function"
+                onChange={(event) => {
+                  setCreateName(event.target.value);
+                  setCreateError(undefined);
+                }}
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <div className={fieldLabel}>Runtime</div>
+                <Select
+                  value={createRuntime}
+                  onValueChange={(value) => {
+                    setCreateRuntime(value);
+                    setCreateHandler(defaultHandlerForRuntime(value));
+                  }}
+                >
+                  <SelectTrigger aria-label="Select runtime">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RUNTIME_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <div className={fieldLabel}>Handler</div>
+                <Input
+                  value={createHandler}
+                  onChange={(event) => {
+                    setCreateHandler(event.target.value);
+                  }}
+                />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <div className={fieldLabel}>Memory (MB)</div>
+                <Input
+                  value={createMemory}
+                  inputMode="numeric"
+                  onChange={(event) => {
+                    setCreateMemory(event.target.value);
+                  }}
+                />
+              </div>
+              <div>
+                <div className={fieldLabel}>Timeout (s)</div>
+                <Input
+                  value={createTimeout}
+                  inputMode="numeric"
+                  onChange={(event) => {
+                    setCreateTimeout(event.target.value);
+                  }}
+                />
+              </div>
+            </div>
+            <div>
+              <div className={fieldLabel}>Description (optional)</div>
+              <Input
+                value={createDescription}
+                onChange={(event) => {
+                  setCreateDescription(event.target.value);
+                }}
+              />
+            </div>
+            {createError ? <p className="text-xs text-destructive">{createError}</p> : null}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCreateClick}>Review create</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(pendingCreate)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingCreate(undefined);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Lambda create</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will create a new function on the selected local endpoint profile.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <DetailFieldList
+            fields={
+              pendingCreate
+                ? [
+                    { label: "Function", value: pendingCreate.functionName },
+                    { label: "Runtime", value: pendingCreate.runtime },
+                    { label: "Handler", value: pendingCreate.handler || defaultHandlerForRuntime(pendingCreate.runtime) },
+                    {
+                      label: "Memory (MB)",
+                      value: String(pendingCreate.memorySize ?? 128),
+                    },
+                    { label: "Timeout (s)", value: String(pendingCreate.timeout ?? 30) },
+                    { label: "Region", value: workspace.selectedLambdaRegion || "Unknown" },
+                    {
+                      label: "Endpoint",
+                      value: workspace.awsEndpointUrl || "Default AWS endpoint",
+                    },
+                  ]
+                : []
+            }
+            emptyText="No create details are available."
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmCreate}>Create function</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={Boolean(pending)}

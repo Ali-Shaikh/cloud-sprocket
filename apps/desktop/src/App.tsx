@@ -61,6 +61,7 @@ import type {
   AuthMethod,
   AuthMethodStatus,
   AwsEc2Instance,
+  AwsLambdaCreateInput,
   AwsLambdaFunction,
   AwsLambdaInvokeResult,
   AwsS3PresignResult,
@@ -424,6 +425,7 @@ export default function App() {
   const [lambdaActionStatus, setLambdaActionStatus] = useState("Select a region before refreshing Lambda functions.");
   const [lambdaInvokeResult, setLambdaInvokeResult] = useState<AwsLambdaInvokeResult | null>(null);
   const [lambdaInvokeInFlight, setLambdaInvokeInFlight] = useState(false);
+  const [lambdaCreateInFlight, setLambdaCreateInFlight] = useState(false);
   const [loading, setLoading] = useState(true);
   const [openingProfileId, setOpeningProfileId] = useState<string>();
   const [localStackAuthToken, setLocalStackAuthToken] = useState("");
@@ -631,6 +633,7 @@ export default function App() {
           setActiveWorkspaceTabId("overview");
           setLambdaInvokeResult(null);
           setLambdaInvokeInFlight(false);
+          setLambdaCreateInFlight(false);
           setLambdaActionStatus("Select a region before refreshing Lambda functions.");
         }
       });
@@ -851,10 +854,35 @@ export default function App() {
         setLambdaActionStatus(`Invoke completed (status ${result?.statusCode ?? "?"})`);
       })
       .catch((error: unknown) => {
-        setLambdaActionStatus(error instanceof Error ? error.message : String(error));
-        setLambdaInvokeResult(null);
+        const message = error instanceof Error ? error.message : String(error);
+        setLambdaActionStatus(message);
+        setLambdaInvokeResult({ statusCode: 0, error: message });
       })
       .finally(() => setLambdaInvokeInFlight(false));
+  }
+
+  function createLambda(input: AwsLambdaCreateInput): void {
+    if (lambdaCreateInFlight) {
+      return;
+    }
+    setLambdaCreateInFlight(true);
+    const region = workspace.selectedLambdaRegion || "us-east-1";
+    setLambdaActionStatus(`Creating ${input.functionName} in ${region}...`);
+    void backendRequest<WorkspaceSnapshot>("aws.lambda.create", { ...input })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setLambdaActionStatus(
+          workspaceResult.lambdaStatusMessage ||
+            `Created Lambda function ${input.functionName} in ${region}.`,
+        );
+        setLambdaInvokeResult(null);
+      })
+      .catch((error: unknown) => {
+        setLambdaActionStatus(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => setLambdaCreateInFlight(false));
   }
 
   // Applies an S3 prefix filter, ignoring stale responses that finish after a
@@ -1314,8 +1342,17 @@ export default function App() {
       onRefresh={() => {
         void refreshDiscovery();
       }}
-      onNavigate={(tabId) => {
+      onNavigate={(tabId, context) => {
         setActiveWorkspaceTabId(tabId);
+        if (context?.lambdaFunctionName) {
+          selectLambdaFunction(context.lambdaFunctionName);
+        }
+        if (context?.ec2InstanceId) {
+          selectEC2Instance(context.ec2InstanceId);
+        }
+        if (context?.s3BucketName) {
+          void mutateWorkspace("aws.s3.selectBucket", { bucketName: context.s3BucketName });
+        }
       }}
     />
   ) : session.isLocked && activeWorkspaceTabId === "s3" ? (
@@ -1372,10 +1409,12 @@ export default function App() {
       actionStatus={lambdaActionStatus}
       invokeResult={lambdaInvokeResult}
       invokeInFlight={lambdaInvokeInFlight}
+      createInFlight={lambdaCreateInFlight}
       onRefresh={refreshLambdaInventory}
       onSelectRegion={selectLambdaRegion}
       onSelectFunction={selectLambdaFunction}
       onInvoke={invokeLambda}
+      onCreate={createLambda}
     />
   ) : session.isLocked &&
     ["azure-overview", "azure-resource-groups", "azure-vms"].includes(activeWorkspaceTabId) ? (

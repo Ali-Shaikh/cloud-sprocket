@@ -1,9 +1,9 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
 import LambdaView from "./LambdaView";
-import type { AwsLambdaInvokeResult, WorkspaceSnapshot } from "@/types/backend";
+import type { AwsLambdaCreateInput, AwsLambdaInvokeResult, WorkspaceSnapshot } from "@/types/backend";
 
 const workspaceFixture: WorkspaceSnapshot = {
   provider: {
@@ -84,8 +84,10 @@ const workspaceFixture: WorkspaceSnapshot = {
 function renderLambdaView(overrides?: {
   invokeResult?: AwsLambdaInvokeResult | null;
   invokeInFlight?: boolean;
+  onCreate?: (input: AwsLambdaCreateInput) => void;
 }) {
   const onInvoke = vi.fn();
+  const onCreate = overrides?.onCreate ?? vi.fn<(input: AwsLambdaCreateInput) => void>();
   render(
     <ThemeProvider>
       <LambdaView
@@ -97,10 +99,11 @@ function renderLambdaView(overrides?: {
         onSelectRegion={vi.fn()}
         onSelectFunction={vi.fn()}
         onInvoke={onInvoke}
+        onCreate={onCreate}
       />
     </ThemeProvider>,
   );
-  return { onInvoke };
+  return { onInvoke, onCreate };
 }
 
 describe("LambdaView", () => {
@@ -131,5 +134,38 @@ describe("LambdaView", () => {
 
     expect(screen.getByText("Last invoke result")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy response" })).toBeInTheDocument();
+  });
+
+  it("shows invoke transport errors in the result panel", () => {
+    renderLambdaView({
+      invokeResult: {
+        statusCode: 0,
+        error: "Lambda invoke requires a local endpoint profile with writes enabled.",
+      },
+    });
+
+    expect(screen.getByText(/Lambda invoke requires a local endpoint profile/)).toBeInTheDocument();
+  });
+
+  it("confirms create function flow", async () => {
+    const onCreate = vi.fn();
+    renderLambdaView({ onCreate });
+
+    fireEvent.click(screen.getByRole("button", { name: "Create function" }));
+    fireEvent.change(screen.getByPlaceholderText("my-function"), {
+      target: { value: "new-handler" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Review create" }));
+    const confirmDialog = screen.getByRole("alertdialog", { name: "Confirm Lambda create" });
+    fireEvent.click(within(confirmDialog).getByRole("button", { name: "Create function" }));
+    expect(onCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "new-handler",
+        runtime: "nodejs20.x",
+        handler: "index.handler",
+        memorySize: 128,
+        timeout: 30,
+      }),
+    );
   });
 });
