@@ -138,6 +138,14 @@ func TestLoadContainerRecipe(t *testing.T) {
 	if got := byName["frontend_dist_dir"]; got.Default != "./sample-site" {
 		t.Fatalf("frontend_dist_dir default = %+v", got)
 	}
+
+	present := map[string]bool{}
+	for _, o := range recipe.Outputs {
+		present[o.Name] = true
+	}
+	if !present["frontend_website_endpoint"] {
+		t.Fatal("frontend_website_endpoint output missing")
+	}
 }
 
 func TestLoadStaticSiteRecipe(t *testing.T) {

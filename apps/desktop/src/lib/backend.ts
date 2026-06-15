@@ -1422,6 +1422,7 @@ const mockRecipes: Recipe[] = [
     outputs: [
       { name: "alb_dns_name", description: "Public DNS of the load balancer.", primary: true },
       { name: "frontend_url", description: "CloudFront URL.", primary: true },
+      { name: "frontend_website_endpoint", description: "Direct S3 static website endpoint for the frontend." },
       { name: "database_endpoint", description: "Postgres endpoint." },
       { name: "ecs_cluster", description: "ECS cluster name." },
     ],

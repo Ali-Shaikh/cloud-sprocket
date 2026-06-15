@@ -70,5 +70,6 @@ outputs:
     primary: true
   - name: frontend_url
     primary: true
+  - name: frontend_website_endpoint
   - name: database_endpoint
   - name: ecs_cluster
