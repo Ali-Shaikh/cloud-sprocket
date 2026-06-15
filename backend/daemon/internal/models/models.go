@@ -205,6 +205,13 @@ type SessionSnapshot struct {
 	SelectedDynamoDBTableName  string             `json:"selectedDynamodbTableName,omitempty"`
 	SelectedSQSRegion          string             `json:"selectedSqsRegion,omitempty"`
 	SelectedSQSQueueURL        string             `json:"selectedSqsQueueUrl,omitempty"`
+	SelectedSNSRegion          string             `json:"selectedSnsRegion,omitempty"`
+	SelectedSNSTopicArn      string             `json:"selectedSnsTopicArn,omitempty"`
+	SelectedRDSRegion          string             `json:"selectedRdsRegion,omitempty"`
+	SelectedRDSInstanceID      string             `json:"selectedRdsInstanceId,omitempty"`
+	SelectedLogsRegion         string             `json:"selectedLogsRegion,omitempty"`
+	SelectedLogGroupName       string             `json:"selectedLogGroupName,omitempty"`
+	SelectedIAMRoleName        string             `json:"selectedIamRoleName,omitempty"`
 	AWSWriteModeEnabled        bool               `json:"awsWriteModeEnabled,omitempty"`
 	LockedProviderID           string             `json:"lockedProviderId,omitempty"`
 	LockedProfileID            string             `json:"lockedProfileId,omitempty"`
@@ -354,6 +361,69 @@ type AwsSqsPeekResult struct {
 	Summary  string          `json:"summary"`
 }
 
+// AwsSnsSubscription models an SNS topic subscription.
+type AwsSnsSubscription struct {
+	SubscriptionArn string `json:"subscriptionArn"`
+	Protocol        string `json:"protocol,omitempty"`
+	Endpoint        string `json:"endpoint,omitempty"`
+	Owner           string `json:"owner,omitempty"`
+}
+
+// AwsSnsTopic models an SNS topic for inventory (list + describe).
+type AwsSnsTopic struct {
+	TopicArn               string               `json:"topicArn"`
+	TopicName              string               `json:"topicName"`
+	DisplayName            string               `json:"displayName,omitempty"`
+	Owner                  string               `json:"owner,omitempty"`
+	SubscriptionsConfirmed string               `json:"subscriptionsConfirmed,omitempty"`
+	SubscriptionsPending   string               `json:"subscriptionsPending,omitempty"`
+	Subscriptions          []AwsSnsSubscription `json:"subscriptions,omitempty"`
+}
+
+// AwsRdsInstance models an RDS DB instance for inventory.
+type AwsRdsInstance struct {
+	DBInstanceIdentifier string `json:"dbInstanceIdentifier"`
+	Engine               string `json:"engine,omitempty"`
+	EngineVersion        string `json:"engineVersion,omitempty"`
+	Status               string `json:"status,omitempty"`
+	InstanceClass        string `json:"instanceClass,omitempty"`
+	Endpoint             string `json:"endpoint,omitempty"`
+	EndpointAddress      string `json:"endpointAddress,omitempty"`
+	EndpointPort         int32  `json:"endpointPort,omitempty"`
+	AvailabilityZone     string `json:"availabilityZone,omitempty"`
+	AllocatedStorage     int32  `json:"allocatedStorage,omitempty"`
+	MultiAZ              bool   `json:"multiAz,omitempty"`
+	StorageEncrypted     bool   `json:"storageEncrypted,omitempty"`
+}
+
+// AwsLogGroup models a CloudWatch Logs group for inventory.
+type AwsLogGroup struct {
+	LogGroupName    string   `json:"logGroupName"`
+	Arn             string   `json:"arn,omitempty"`
+	StoredBytes     int64    `json:"storedBytes,omitempty"`
+	RetentionInDays int32    `json:"retentionInDays,omitempty"`
+	CreationTime    int64    `json:"creationTime,omitempty"`
+	RecentEvents    []string `json:"recentEvents,omitempty"`
+}
+
+// AwsIamRole models an IAM role for read-only inventory.
+type AwsIamRole struct {
+	RoleName         string   `json:"roleName"`
+	RoleArn          string   `json:"roleArn,omitempty"`
+	Path             string   `json:"path,omitempty"`
+	Description      string   `json:"description,omitempty"`
+	CreateDate       string   `json:"createDate,omitempty"`
+	AttachedPolicies []string `json:"attachedPolicies,omitempty"`
+}
+
+// AwsIamPolicy models a customer-managed IAM policy for read-only inventory.
+type AwsIamPolicy struct {
+	PolicyName      string `json:"policyName"`
+	PolicyArn       string `json:"policyArn,omitempty"`
+	AttachmentCount int32  `json:"attachmentCount,omitempty"`
+	UpdateDate      string `json:"updateDate,omitempty"`
+}
+
 // AwsLambdaCreateInput deploys a function to a local endpoint profile.
 // Provide HandlerSource for inline code, ZipSourcePath for a local zip file,
 // or omit both to use the built-in starter template.
@@ -433,6 +503,25 @@ type WorkspaceSnapshot struct {
 	SQSStatusMessage           string                  `json:"sqsStatusMessage,omitempty"`
 	SQSRegions                 []string                `json:"sqsRegions"`
 	SQSQueues                  []AwsSqsQueue           `json:"sqsQueues"`
+	SelectedSNSRegion          string                  `json:"selectedSnsRegion,omitempty"`
+	SelectedSNSTopicArn        string                  `json:"selectedSnsTopicArn,omitempty"`
+	SNSStatusMessage           string                  `json:"snsStatusMessage,omitempty"`
+	SNSRegions                 []string                `json:"snsRegions"`
+	SNSTopics                  []AwsSnsTopic           `json:"snsTopics"`
+	SelectedRDSRegion          string                  `json:"selectedRdsRegion,omitempty"`
+	SelectedRDSInstanceID      string                  `json:"selectedRdsInstanceId,omitempty"`
+	RDSStatusMessage           string                  `json:"rdsStatusMessage,omitempty"`
+	RDSRegions                 []string                `json:"rdsRegions"`
+	RDSInstances               []AwsRdsInstance        `json:"rdsInstances"`
+	SelectedLogsRegion         string                  `json:"selectedLogsRegion,omitempty"`
+	SelectedLogGroupName       string                  `json:"selectedLogGroupName,omitempty"`
+	LogsStatusMessage          string                  `json:"logsStatusMessage,omitempty"`
+	LogsRegions                []string                `json:"logsRegions"`
+	LogGroups                  []AwsLogGroup           `json:"logGroups"`
+	SelectedIAMRoleName        string                  `json:"selectedIamRoleName,omitempty"`
+	IAMStatusMessage           string                  `json:"iamStatusMessage,omitempty"`
+	IAMRoles                   []AwsIamRole            `json:"iamRoles"`
+	IAMPolicies                []AwsIamPolicy          `json:"iamPolicies"`
 	SelectedAzureResourceGroup string                  `json:"selectedAzureResourceGroup,omitempty"`
 	SelectedAzureVMID          string                  `json:"selectedAzureVmId,omitempty"`
 	AzureStatusMessage         string                  `json:"azureStatusMessage,omitempty"`

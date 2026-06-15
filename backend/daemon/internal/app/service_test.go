@@ -83,6 +83,50 @@ func (stubSQSInventory) PeekMessages(context.Context, models.ProfileSummary, str
 	return models.AwsSqsPeekResult{}, nil
 }
 
+type stubSNSInventory struct{}
+
+func (stubSNSInventory) ListTopics(context.Context, models.ProfileSummary, string) ([]models.AwsSnsTopic, error) {
+	return nil, nil
+}
+
+func (stubSNSInventory) DescribeTopic(context.Context, models.ProfileSummary, string, string) (models.AwsSnsTopic, error) {
+	return models.AwsSnsTopic{}, nil
+}
+
+type stubRDSInventory struct{}
+
+func (stubRDSInventory) ListInstances(context.Context, models.ProfileSummary, string) ([]models.AwsRdsInstance, error) {
+	return nil, nil
+}
+
+func (stubRDSInventory) DescribeInstance(context.Context, models.ProfileSummary, string, string) (models.AwsRdsInstance, error) {
+	return models.AwsRdsInstance{}, nil
+}
+
+type stubLogsInventory struct{}
+
+func (stubLogsInventory) ListLogGroups(context.Context, models.ProfileSummary, string) ([]models.AwsLogGroup, error) {
+	return nil, nil
+}
+
+func (stubLogsInventory) DescribeLogGroup(context.Context, models.ProfileSummary, string, string) (models.AwsLogGroup, error) {
+	return models.AwsLogGroup{}, nil
+}
+
+type stubIAMInventory struct{}
+
+func (stubIAMInventory) ListRoles(context.Context, models.ProfileSummary, string) ([]models.AwsIamRole, error) {
+	return nil, nil
+}
+
+func (stubIAMInventory) DescribeRole(context.Context, models.ProfileSummary, string, string) (models.AwsIamRole, error) {
+	return models.AwsIamRole{}, nil
+}
+
+func (stubIAMInventory) ListPolicies(context.Context, models.ProfileSummary, string) ([]models.AwsIamPolicy, error) {
+	return nil, nil
+}
+
 func (s stubS3Inventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.AwsS3Bucket, error) {
 	return append([]models.AwsS3Bucket(nil), s.buckets...), nil
 }
@@ -288,6 +332,10 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 		stubLambdaInventory{},
 		stubDynamoDBInventory{},
 		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{},
 		stubAzureInventory{},
 		dockerRuntime,
 	)
@@ -556,6 +604,10 @@ func TestServiceReportsFailedEC2ActionJob(t *testing.T) {
 		stubLambdaInventory{},
 		stubDynamoDBInventory{},
 		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -629,6 +681,10 @@ func TestServiceRejectsEC2ActionWithoutLocalEndpoint(t *testing.T) {
 		stubLambdaInventory{},
 		stubDynamoDBInventory{},
 		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -688,6 +744,10 @@ func TestServiceRejectsWriteActionsWithoutWriteMode(t *testing.T) {
 		stubLambdaInventory{},
 		stubDynamoDBInventory{},
 		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -755,6 +815,10 @@ func TestServiceRejectsEC2ActionWithoutWriteOptIn(t *testing.T) {
 		stubLambdaInventory{},
 		stubDynamoDBInventory{},
 		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -820,7 +884,11 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 		return "", nil
 	})
 	firstService := New(settings, firstStore, discoveryService, s3Inventory, ec2Inventory, stubLambdaInventory{}, stubDynamoDBInventory{},
-		stubSQSInventory{}, stubAzureInventory{}, stubDockerRuntime{})
+		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{}, stubAzureInventory{}, stubDockerRuntime{})
 	ctx := context.Background()
 
 	if _, err := firstService.Handle(ctx, "session.lock", nil, nil); err != nil {
@@ -845,7 +913,11 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 	}
 	defer secondStore.Close()
 	secondService := New(settings, secondStore, discoveryService, s3Inventory, ec2Inventory, stubLambdaInventory{}, stubDynamoDBInventory{},
-		stubSQSInventory{}, stubAzureInventory{}, stubDockerRuntime{})
+		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{}, stubAzureInventory{}, stubDockerRuntime{})
 
 	sessionResult, err := secondService.Handle(ctx, "session.get", nil, nil)
 	if err != nil {
@@ -914,6 +986,10 @@ func TestServiceResetClearsOnlyAppOwnedState(t *testing.T) {
 		stubLambdaInventory{},
 		stubDynamoDBInventory{},
 		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -1026,6 +1102,10 @@ func TestPrepareProfileWritesDiscoverableLocalProfiles(t *testing.T) {
 		stubLambdaInventory{},
 		stubDynamoDBInventory{},
 		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -1126,6 +1206,10 @@ func TestDockerRuntimeProbeIsBoundedWhenEngineBlocks(t *testing.T) {
 		stubLambdaInventory{},
 		stubDynamoDBInventory{},
 		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{},
 		stubAzureInventory{},
 		blockingDockerRuntime{},
 	)
@@ -1186,6 +1270,10 @@ func TestUnlockNotBlockedBySlowWorkspaceFetch(t *testing.T) {
 		stubLambdaInventory{},
 		stubDynamoDBInventory{},
 		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{},
 		stubAzureInventory{},
 		blockingDockerRuntime{},
 	)
