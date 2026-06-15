@@ -14,6 +14,7 @@ import {
   Play,
   Rocket,
   Square,
+  Terminal,
   Trash2,
 } from "lucide-react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -65,6 +66,12 @@ interface TargetOption {
   providerId: string;
   profileId: string;
   local: boolean;
+}
+
+interface LogCommand {
+  label: string;
+  command: string;
+  detail: string;
 }
 
 const STATUS_VARIANT: Record<Deployment["status"], string> = {
@@ -658,6 +665,8 @@ function DeploymentDetail({
         </Card>
       )}
 
+      <LogCommandsCard deployment={deployment} />
+
       <div>
         <p className="mb-2 text-sm font-medium text-foreground">Logs</p>
         <div
@@ -676,6 +685,42 @@ function DeploymentDetail({
         </div>
       </div>
     </div>
+  );
+}
+
+function LogCommandsCard({ deployment }: { deployment: Deployment }) {
+  const commands = logCommandsForDeployment(deployment);
+
+  return (
+    <Card className="p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <Terminal className="size-4 text-muted-foreground" />
+        <p className="text-sm font-medium text-foreground">Runtime log commands</p>
+      </div>
+      {commands.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          This recipe does not produce application runtime logs by default. Static S3 sites need S3 or CloudFront access
+          logging configured separately.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {commands.map((entry) => (
+            <div key={entry.label} className="rounded-lg border bg-muted/40 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium text-foreground">{entry.label}</p>
+                  <p className="text-xs text-muted-foreground">{entry.detail}</p>
+                </div>
+                <CopyButton value={entry.command} />
+              </div>
+              <code className="block select-text break-all rounded bg-background px-2.5 py-2 font-mono text-xs text-foreground">
+                {entry.command}
+              </code>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -753,6 +798,89 @@ function CopyButton({ value }: { value: string }) {
       {copied ? "Copied" : "Copy"}
     </button>
   );
+}
+
+function logCommandsForDeployment(deployment: Deployment): LogCommand[] {
+  const appName = stringVariable(deployment.variables.app_name, recipeDefaultAppName(deployment.recipeId));
+  const environment = stringVariable(deployment.variables.environment, "dev");
+  const region = stringVariable(deployment.variables.aws_region, "us-east-1");
+  const stackName = `${appName}-${environment}`;
+
+  switch (deployment.recipeId) {
+    case "serverless-fullstack-aws":
+      return [
+        cloudWatchTailCommand(deployment, region, `/aws/lambda/${stackName}-api`, "API Lambda", "Lambda invocation logs for the HTTP API."),
+      ];
+    case "scheduled-job-aws":
+      return [
+        cloudWatchTailCommand(
+          deployment,
+          region,
+          `/aws/lambda/${stackName}-job`,
+          "Scheduled job Lambda",
+          "Lambda invocation logs for each scheduled run.",
+        ),
+      ];
+    case "container-fullstack-aws":
+      return [
+        cloudWatchTailCommand(
+          deployment,
+          region,
+          `/ecs/${stackName}`,
+          "ECS container service",
+          "Container STDOUT and STDERR from the awslogs log driver.",
+        ),
+      ];
+    default:
+      return [];
+  }
+}
+
+function cloudWatchTailCommand(
+  deployment: Deployment,
+  region: string,
+  logGroup: string,
+  label: string,
+  detail: string,
+): LogCommand {
+  const command = deployment.local
+    ? [
+        `$env:AWS_ACCESS_KEY_ID="test"`,
+        `$env:AWS_SECRET_ACCESS_KEY="test"`,
+        `aws --endpoint-url="http://localhost:4566" logs tail "${logGroup}" --follow --region "${region}"`,
+      ].join("; ")
+    : [
+        "aws",
+        "logs",
+        "tail",
+        quoteArg(logGroup),
+        "--follow",
+        "--region",
+        quoteArg(region),
+        ...(deployment.profileId ? ["--profile", quoteArg(deployment.profileId)] : []),
+      ].join(" ");
+
+  return { label, command, detail };
+}
+
+function recipeDefaultAppName(recipeId: string): string {
+  switch (recipeId) {
+    case "scheduled-job-aws":
+      return "myjob";
+    case "static-site-aws":
+      return "mysite";
+    default:
+      return "myapp";
+  }
+}
+
+function stringVariable(value: unknown, fallback: string): string {
+  const text = String(value ?? "").trim();
+  return text === "" ? fallback : text;
+}
+
+function quoteArg(value: string): string {
+  return `"${value.replace(/"/g, '\\"')}"`;
 }
 
 function seedValues(variables: RecipeVariable[]): Record<string, unknown> {
