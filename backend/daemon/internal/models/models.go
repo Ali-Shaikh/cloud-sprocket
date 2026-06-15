@@ -203,6 +203,8 @@ type SessionSnapshot struct {
 	SelectedLambdaFunctionName string             `json:"selectedLambdaFunctionName,omitempty"`
 	SelectedDynamoDBRegion     string             `json:"selectedDynamodbRegion,omitempty"`
 	SelectedDynamoDBTableName  string             `json:"selectedDynamodbTableName,omitempty"`
+	SelectedSQSRegion          string             `json:"selectedSqsRegion,omitempty"`
+	SelectedSQSQueueURL        string             `json:"selectedSqsQueueUrl,omitempty"`
 	AWSWriteModeEnabled        bool               `json:"awsWriteModeEnabled,omitempty"`
 	LockedProviderID           string             `json:"lockedProviderId,omitempty"`
 	LockedProfileID            string             `json:"lockedProfileId,omitempty"`
@@ -322,6 +324,36 @@ type AwsDynamoDBTable struct {
 	SampleItems            []string                          `json:"sampleItems,omitempty"`
 }
 
+// AwsSqsQueue models an SQS queue for inventory (list + describe).
+type AwsSqsQueue struct {
+	QueueName                            string `json:"queueName"`
+	QueueURL                             string `json:"queueUrl"`
+	ApproximateNumberOfMessages          int64  `json:"approximateNumberOfMessages,omitempty"`
+	ApproximateNumberOfMessagesNotVisible int64 `json:"approximateNumberOfMessagesNotVisible,omitempty"`
+	ApproximateNumberOfMessagesDelayed   int64  `json:"approximateNumberOfMessagesDelayed,omitempty"`
+	VisibilityTimeout                    int32  `json:"visibilityTimeout,omitempty"`
+	CreatedTimestamp                     int64  `json:"createdTimestamp,omitempty"`
+	QueueArn                             string `json:"queueArn,omitempty"`
+	DelaySeconds                         int32  `json:"delaySeconds,omitempty"`
+	ReceiveMessageWaitTimeSeconds        int32  `json:"receiveMessageWaitTimeSeconds,omitempty"`
+}
+
+// AwsSqsMessage is a peeked queue message (not deleted).
+type AwsSqsMessage struct {
+	MessageID               string `json:"messageId"`
+	Body                    string `json:"body"`
+	ReceiptHandle           string `json:"receiptHandle,omitempty"`
+	SentTimestamp           int64  `json:"sentTimestamp,omitempty"`
+	ApproximateReceiveCount int64  `json:"approximateReceiveCount,omitempty"`
+}
+
+// AwsSqsPeekResult is the safe write action result for bounded message peek.
+type AwsSqsPeekResult struct {
+	QueueURL string          `json:"queueUrl"`
+	Messages []AwsSqsMessage `json:"messages"`
+	Summary  string          `json:"summary"`
+}
+
 // AwsLambdaCreateInput deploys a function to a local endpoint profile.
 // Provide HandlerSource for inline code, ZipSourcePath for a local zip file,
 // or omit both to use the built-in starter template.
@@ -396,6 +428,11 @@ type WorkspaceSnapshot struct {
 	DynamoDBStatusMessage      string                  `json:"dynamodbStatusMessage,omitempty"`
 	DynamoDBRegions            []string                `json:"dynamodbRegions"`
 	DynamoDBTables             []AwsDynamoDBTable      `json:"dynamodbTables"`
+	SelectedSQSRegion          string                  `json:"selectedSqsRegion,omitempty"`
+	SelectedSQSQueueURL        string                  `json:"selectedSqsQueueUrl,omitempty"`
+	SQSStatusMessage           string                  `json:"sqsStatusMessage,omitempty"`
+	SQSRegions                 []string                `json:"sqsRegions"`
+	SQSQueues                  []AwsSqsQueue           `json:"sqsQueues"`
 	SelectedAzureResourceGroup string                  `json:"selectedAzureResourceGroup,omitempty"`
 	SelectedAzureVMID          string                  `json:"selectedAzureVmId,omitempty"`
 	AzureStatusMessage         string                  `json:"azureStatusMessage,omitempty"`
