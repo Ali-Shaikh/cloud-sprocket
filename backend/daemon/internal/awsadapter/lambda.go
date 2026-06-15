@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -101,6 +102,71 @@ func (l *LambdaInventory) DescribeFunction(
 	recent, _ := l.recentLogs(ctx, cfg, profile, fn.LogGroup, 20)
 	fn.RecentLogs = recent
 
+	return fn, nil
+}
+
+func (l *LambdaInventory) CreateFunction(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	input models.AwsLambdaCreateInput,
+) (models.AwsLambdaFunction, error) {
+	if strings.TrimSpace(input.FunctionName) == "" {
+		return models.AwsLambdaFunction{}, fmt.Errorf("function name is required")
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := l.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsLambdaFunction{}, err
+	}
+
+	zipBytes, handler, err := starterFunctionZip(input.Runtime, input.Handler)
+	if err != nil {
+		return models.AwsLambdaFunction{}, err
+	}
+
+	memorySize := input.MemorySize
+	if memorySize == 0 {
+		memorySize = 128
+	}
+	timeout := input.Timeout
+	if timeout == 0 {
+		timeout = 30
+	}
+
+	client := lambdaClient(cfg, profile)
+	res, err := client.CreateFunction(ctx, &lambda.CreateFunctionInput{
+		FunctionName: aws.String(strings.TrimSpace(input.FunctionName)),
+		Runtime:      types.Runtime(input.Runtime),
+		Role:         aws.String(defaultLocalLambdaRoleARN),
+		Handler:      aws.String(handler),
+		Code: &types.FunctionCode{
+			ZipFile: zipBytes,
+		},
+		MemorySize:  aws.Int32(memorySize),
+		Timeout:     aws.Int32(timeout),
+		Description: aws.String(strings.TrimSpace(input.Description)),
+	})
+	if err != nil {
+		return models.AwsLambdaFunction{}, err
+	}
+
+	fn := lambdaFunctionSummary(&types.FunctionConfiguration{
+		FunctionName: res.FunctionName,
+		Runtime:      res.Runtime,
+		Description:  res.Description,
+		MemorySize:   res.MemorySize,
+		State:        res.State,
+		LastModified: res.LastModified,
+	})
+	fn.Handler = handler
+	fn.Timeout = timeout
+	if fn.MemorySize == 0 {
+		fn.MemorySize = memorySize
+	}
+	fn.LogGroup = "/aws/lambda/" + fn.FunctionName
 	return fn, nil
 }
 
