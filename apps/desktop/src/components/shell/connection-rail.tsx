@@ -10,6 +10,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+import { APP_VERSION } from "@/lib/app-version";
+
 import type { ConnectionRailProps } from "./types";
 
 const STATUS_BG: Record<Status, string> = {
@@ -37,9 +39,15 @@ function ConnectionRail({
       className="flex h-full flex-col items-center gap-1.5 bg-rail py-3"
     >
       <TooltipProvider>
-        <div className="mb-2 grid size-10 place-items-center rounded-[11px] bg-gradient-to-br from-primary to-purple-500 text-[15px] font-extrabold text-white shadow-md">
-          CS
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="mb-1 grid size-10 place-items-center rounded-[11px] bg-gradient-to-br from-primary to-purple-500 text-[15px] font-extrabold text-white shadow-md">
+              CS
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="right">CloudSprocket v{APP_VERSION}</TooltipContent>
+        </Tooltip>
+        <span className="mb-2 text-[10px] font-semibold tracking-wide text-white/45">v{APP_VERSION}</span>
 
         {connections.map((c) => {
           const active = c.id === activeId;

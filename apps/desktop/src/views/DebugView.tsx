@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { APP_VERSION } from "@/lib/app-version";
 import { getDebugLogs, subscribeToDebugLogs, type DebugLogEntry } from "@/lib/backend";
 
 function typeVariant(type: DebugLogEntry["type"]): "destructive" | "default" | "success" | "secondary" {
@@ -43,7 +44,7 @@ export default function DebugView() {
       <header>
         <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">Debug Console</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Real-time RPC and application diagnostics.
+          Real-time RPC and application diagnostics. CloudSprocket v{APP_VERSION}.
         </p>
       </header>
 

@@ -2117,12 +2117,11 @@ export default function App() {
         statusText: dockerReachable ? "Docker engine running" : "Docker engine not detected",
       }
     : {
-        name: activeProvider?.label ?? "Getting started",
+        name: session.isLocked
+          ? (lockedProfile ?? selectedProfile)?.displayName ?? activeProvider?.label ?? "Workspace"
+          : activeProvider?.label ?? "Getting started",
         meta: session.isLocked
-          ? [
-              (lockedProfile ?? selectedProfile)?.displayName,
-              authLabel(session.lockedAuthMethod ?? session.selectedAuthMethod),
-            ]
+          ? [activeProvider?.label, authLabel(session.lockedAuthMethod ?? session.selectedAuthMethod)]
               .filter(Boolean)
               .join(" · ") || "Workspace open"
           : selectedProfile?.displayName ?? "Pick a profile to begin",

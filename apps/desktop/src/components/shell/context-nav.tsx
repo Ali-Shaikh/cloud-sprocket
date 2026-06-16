@@ -36,9 +36,19 @@ function ContextNav({
               <Server className="size-[22px] text-sky-500" />
             )}
           </div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-bold">{connection.name}</div>
-            <div className="truncate text-xs text-muted-foreground">{connection.meta}</div>
+          <div className="min-w-0 flex-1">
+            <div
+              className="line-clamp-2 break-words text-sm font-bold leading-snug"
+              title={connection.name}
+            >
+              {connection.name}
+            </div>
+            <div
+              className="line-clamp-2 break-words text-xs leading-snug text-muted-foreground"
+              title={connection.meta}
+            >
+              {connection.meta}
+            </div>
           </div>
         </div>
         <div className="mt-2.5 flex items-center gap-1.5">
