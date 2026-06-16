@@ -333,3 +333,77 @@ func (s *Service) emitJobStatus(notifier Notifier, job models.JobStatus, status,
 	}
 	s.notifyJob(notifier, update)
 }
+
+func (s *Service) handleRecipesGet(params json.RawMessage) (any, error) {
+	var request struct {
+		RecipeID string `json:"recipeId"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	return s.recipes.Load(request.RecipeID)
+}
+
+func (s *Service) handleTofuInstall(notifier Notifier) (any, error) {
+	job := models.JobStatus{JobID: s.newJobID(), Label: "Install OpenTofu", Status: "queued", Message: "Preparing the OpenTofu engine."}
+	go s.runTofuInstall(job, notifier)
+	return job, nil
+}
+
+func (s *Service) handleDeploymentsGet(ctx context.Context, params json.RawMessage) (any, error) {
+	var request struct {
+		DeploymentID string `json:"deploymentId"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	return s.deploymentGet(ctx, request.DeploymentID)
+}
+
+func (s *Service) handleDeploymentsPlan(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request deploymentPlanRequest
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	return s.startDeploymentPlan(ctx, request, notifier)
+}
+
+func (s *Service) handleDeploymentsApply(params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		DeploymentID string `json:"deploymentId"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	return s.startDeploymentAction(request.DeploymentID, actionApply, notifier)
+}
+
+func (s *Service) handleDeploymentsDestroy(params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		DeploymentID string `json:"deploymentId"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	return s.startDeploymentAction(request.DeploymentID, actionDestroy, notifier)
+}
+
+func (s *Service) handleDeploymentsCancel(params json.RawMessage) (any, error) {
+	var request struct {
+		DeploymentID string `json:"deploymentId"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"cancelled": true}, s.cancelDeployment(request.DeploymentID)
+}
+
+func (s *Service) handleDeploymentsDelete(ctx context.Context, params json.RawMessage) (any, error) {
+	var request struct {
+		DeploymentID string `json:"deploymentId"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"deleted": true}, s.deleteDeployment(ctx, request.DeploymentID)
+}
