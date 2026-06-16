@@ -96,6 +96,46 @@ func (s *Service) selectedSQSQueueURL(
 	return queues[0].QueueURL
 }
 
+func (s *Service) enrichSQSInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+	if workspace.Provider == nil ||
+		workspace.Provider.ProviderID != "aws" ||
+		workspace.Profile == nil ||
+		s.sqs == nil {
+		return
+	}
+	timeoutCtx, cancel := s.withAWSTimeout(context.Background())
+	workspace.SQSRegions = s.sqsRegions(timeoutCtx, *workspace.Profile)
+	cancel()
+	workspace.SelectedSQSRegion = s.selectedSQSRegion(session, workspace.SQSRegions, *workspace.Profile)
+	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
+	workspace.SQSQueues = s.sqsQueues(timeoutCtx, *workspace.Profile, workspace.SelectedSQSRegion)
+	cancel()
+	workspace.SelectedSQSQueueURL = s.selectedSQSQueueURL(session, workspace.SQSQueues)
+	if workspace.SelectedSQSRegion == "" {
+		workspace.SQSStatusMessage = "No region is available for SQS queues in this AWS workspace."
+	} else if len(workspace.SQSQueues) == 0 {
+		workspace.SQSStatusMessage = fmt.Sprintf("No SQS queues were returned for %s.", workspace.SelectedSQSRegion)
+	} else {
+		workspace.SQSStatusMessage = fmt.Sprintf(
+			"Loaded %d SQS queues from %s.",
+			len(workspace.SQSQueues),
+			workspace.SelectedSQSRegion,
+		)
+	}
+	if workspace.SelectedSQSQueueURL != "" && workspace.Profile != nil {
+		timeoutCtx, cancel := s.withAWSTimeout(context.Background())
+		if full, err := s.sqs.DescribeQueue(timeoutCtx, *workspace.Profile, workspace.SelectedSQSRegion, workspace.SelectedSQSQueueURL); err == nil {
+			for i := range workspace.SQSQueues {
+				if workspace.SQSQueues[i].QueueURL == full.QueueURL {
+					workspace.SQSQueues[i] = full
+					break
+				}
+			}
+		}
+		cancel()
+	}
+}
+
 func (s *Service) handleAwsSqsSelectRegion(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		Region string `json:"region"`

@@ -130,6 +130,34 @@ func (s *Service) selectedEC2InstanceID(
 	return instances[0].InstanceID
 }
 
+func (s *Service) enrichEC2Inventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+	if workspace.Provider == nil ||
+		workspace.Provider.ProviderID != "aws" ||
+		workspace.Profile == nil ||
+		s.ec2 == nil {
+		return
+	}
+	timeoutCtx, cancel := s.withAWSTimeout(context.Background())
+	workspace.EC2Regions = s.ec2Regions(timeoutCtx, *workspace.Profile)
+	cancel()
+	workspace.SelectedEC2Region = s.selectedEC2Region(session, workspace.EC2Regions, *workspace.Profile)
+	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
+	workspace.EC2Instances = s.ec2Instances(timeoutCtx, *workspace.Profile, workspace.SelectedEC2Region)
+	cancel()
+	workspace.SelectedEC2InstanceID = s.selectedEC2InstanceID(session, workspace.EC2Instances)
+	if workspace.SelectedEC2Region == "" {
+		workspace.EC2StatusMessage = "No EC2 region is available for this AWS workspace."
+	} else if len(workspace.EC2Instances) == 0 {
+		workspace.EC2StatusMessage = fmt.Sprintf("No EC2 instances were returned for %s.", workspace.SelectedEC2Region)
+	} else {
+		workspace.EC2StatusMessage = fmt.Sprintf(
+			"Loaded %d EC2 instances from %s.",
+			len(workspace.EC2Instances),
+			workspace.SelectedEC2Region,
+		)
+	}
+}
+
 // lambdaRegions reuses the EC2 region list for an AWS profile (single source of
 // truth for account regions, cheap, avoids duplicating the DescribeRegions call).
 

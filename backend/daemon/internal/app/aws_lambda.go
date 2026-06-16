@@ -133,6 +133,46 @@ func (s *Service) selectedLambdaFunctionName(
 	return functions[0].FunctionName
 }
 
+func (s *Service) enrichLambdaInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+	if workspace.Provider == nil ||
+		workspace.Provider.ProviderID != "aws" ||
+		workspace.Profile == nil ||
+		s.lambda == nil {
+		return
+	}
+	timeoutCtx, cancel := s.withAWSTimeout(context.Background())
+	workspace.LambdaRegions = s.lambdaRegions(timeoutCtx, *workspace.Profile)
+	cancel()
+	workspace.SelectedLambdaRegion = s.selectedLambdaRegion(session, workspace.LambdaRegions, *workspace.Profile)
+	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
+	workspace.LambdaFunctions = s.lambdaFunctions(timeoutCtx, *workspace.Profile, workspace.SelectedLambdaRegion)
+	cancel()
+	workspace.SelectedLambdaFunctionName = s.selectedLambdaFunctionName(session, workspace.LambdaFunctions)
+	if workspace.SelectedLambdaRegion == "" {
+		workspace.LambdaStatusMessage = "No region is available for Lambda functions in this AWS workspace."
+	} else if len(workspace.LambdaFunctions) == 0 {
+		workspace.LambdaStatusMessage = fmt.Sprintf("No Lambda functions were returned for %s.", workspace.SelectedLambdaRegion)
+	} else {
+		workspace.LambdaStatusMessage = fmt.Sprintf(
+			"Loaded %d Lambda functions from %s.",
+			len(workspace.LambdaFunctions),
+			workspace.SelectedLambdaRegion,
+		)
+	}
+	if workspace.SelectedLambdaFunctionName != "" && workspace.Profile != nil {
+		timeoutCtx, cancel := s.withAWSTimeout(context.Background())
+		if full, err := s.lambda.DescribeFunction(timeoutCtx, *workspace.Profile, workspace.SelectedLambdaRegion, workspace.SelectedLambdaFunctionName); err == nil {
+			for i := range workspace.LambdaFunctions {
+				if workspace.LambdaFunctions[i].FunctionName == full.FunctionName {
+					workspace.LambdaFunctions[i] = full
+					break
+				}
+			}
+		}
+		cancel()
+	}
+}
+
 func (s *Service) handleAwsLambdaSelectRegion(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		Region string `json:"region"`

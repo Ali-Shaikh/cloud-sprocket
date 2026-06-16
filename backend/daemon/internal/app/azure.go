@@ -94,6 +94,36 @@ func (s *Service) selectedAzureVMID(
 	return vms[0].VMID
 }
 
+func (s *Service) enrichAzureInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+	if workspace.Provider == nil ||
+		workspace.Provider.ProviderID != "azure" ||
+		workspace.Profile == nil ||
+		s.azure == nil {
+		return
+	}
+	workspace.AzureResourceGroups = s.azureResourceGroups(context.Background(), *workspace.Profile)
+	workspace.SelectedAzureResourceGroup = s.selectedAzureResourceGroup(session, workspace.AzureResourceGroups)
+	workspace.AzureVirtualMachines = s.azureVirtualMachines(
+		context.Background(),
+		*workspace.Profile,
+		workspace.SelectedAzureResourceGroup,
+	)
+	workspace.SelectedAzureVMID = s.selectedAzureVMID(session, workspace.AzureVirtualMachines)
+	if len(workspace.AzureResourceGroups) == 0 {
+		workspace.AzureStatusMessage = "No Azure resource groups are currently available for this workspace."
+	} else if workspace.SelectedAzureResourceGroup == "" {
+		workspace.AzureStatusMessage = "Select an Azure resource group to inspect its virtual machines."
+	} else if len(workspace.AzureVirtualMachines) == 0 {
+		workspace.AzureStatusMessage = fmt.Sprintf("No Azure virtual machines were returned for %s.", workspace.SelectedAzureResourceGroup)
+	} else {
+		workspace.AzureStatusMessage = fmt.Sprintf(
+			"Loaded %d Azure virtual machines from %s.",
+			len(workspace.AzureVirtualMachines),
+			workspace.SelectedAzureResourceGroup,
+		)
+	}
+}
+
 func (s *Service) handleAzureSelectResourceGroup(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		ResourceGroup string `json:"resourceGroup"`

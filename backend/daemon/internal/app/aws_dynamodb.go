@@ -74,6 +74,46 @@ func (s *Service) selectedDynamoDBTableName(
 	return tables[0].TableName
 }
 
+func (s *Service) enrichDynamoDBInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+	if workspace.Provider == nil ||
+		workspace.Provider.ProviderID != "aws" ||
+		workspace.Profile == nil ||
+		s.dynamodb == nil {
+		return
+	}
+	timeoutCtx, cancel := s.withAWSTimeout(context.Background())
+	workspace.DynamoDBRegions = s.dynamodbRegions(timeoutCtx, *workspace.Profile)
+	cancel()
+	workspace.SelectedDynamoDBRegion = s.selectedDynamoDBRegion(session, workspace.DynamoDBRegions, *workspace.Profile)
+	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
+	workspace.DynamoDBTables = s.dynamodbTables(timeoutCtx, *workspace.Profile, workspace.SelectedDynamoDBRegion)
+	cancel()
+	workspace.SelectedDynamoDBTableName = s.selectedDynamoDBTableName(session, workspace.DynamoDBTables)
+	if workspace.SelectedDynamoDBRegion == "" {
+		workspace.DynamoDBStatusMessage = "No region is available for DynamoDB tables in this AWS workspace."
+	} else if len(workspace.DynamoDBTables) == 0 {
+		workspace.DynamoDBStatusMessage = fmt.Sprintf("No DynamoDB tables were returned for %s.", workspace.SelectedDynamoDBRegion)
+	} else {
+		workspace.DynamoDBStatusMessage = fmt.Sprintf(
+			"Loaded %d DynamoDB tables from %s.",
+			len(workspace.DynamoDBTables),
+			workspace.SelectedDynamoDBRegion,
+		)
+	}
+	if workspace.SelectedDynamoDBTableName != "" && workspace.Profile != nil {
+		timeoutCtx, cancel := s.withAWSTimeout(context.Background())
+		if full, err := s.dynamodb.DescribeTable(timeoutCtx, *workspace.Profile, workspace.SelectedDynamoDBRegion, workspace.SelectedDynamoDBTableName); err == nil {
+			for i := range workspace.DynamoDBTables {
+				if workspace.DynamoDBTables[i].TableName == full.TableName {
+					workspace.DynamoDBTables[i] = full
+					break
+				}
+			}
+		}
+		cancel()
+	}
+}
+
 func (s *Service) handleAwsDynamodbSelectRegion(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		Region string `json:"region"`

@@ -180,6 +180,59 @@ func (s *Service) s3ExportSnippets(bucketName string, objectKey string) []models
 	}
 }
 
+func (s *Service) enrichS3Inventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+	if workspace.Provider == nil ||
+		workspace.Provider.ProviderID != "aws" ||
+		workspace.Profile == nil ||
+		s.s3 == nil {
+		return
+	}
+	timeoutCtx, cancel := s.withAWSTimeout(context.Background())
+	workspace.S3Buckets = s.s3Buckets(timeoutCtx, *workspace.Profile)
+	cancel()
+	workspace.SelectedS3BucketName = s.selectedS3BucketName(session, workspace.S3Buckets)
+	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
+	workspace.S3Objects = s.s3Objects(
+		timeoutCtx,
+		*workspace.Profile,
+		workspace.SelectedS3BucketName,
+		session.S3PrefixFilter,
+	)
+	cancel()
+	workspace.SelectedS3ObjectKey = s.selectedS3ObjectKey(session, workspace.S3Objects)
+	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
+	workspace.S3ObjectMetadata = s.s3ObjectMetadata(
+		timeoutCtx,
+		*workspace.Profile,
+		workspace.SelectedS3BucketName,
+		workspace.SelectedS3ObjectKey,
+	)
+	cancel()
+	workspace.S3ExportSnippets = s.s3ExportSnippets(
+		workspace.SelectedS3BucketName,
+		workspace.SelectedS3ObjectKey,
+	)
+	if workspace.SelectedS3BucketName == "" {
+		workspace.S3StatusMessage = "No buckets are currently available for this AWS workspace."
+	} else if len(workspace.S3Objects) == 0 {
+		if session.S3PrefixFilter != "" {
+			workspace.S3StatusMessage = fmt.Sprintf(
+				"No objects matched prefix %q in %s.",
+				session.S3PrefixFilter,
+				workspace.SelectedS3BucketName,
+			)
+		} else {
+			workspace.S3StatusMessage = fmt.Sprintf("No objects were returned for %s.", workspace.SelectedS3BucketName)
+		}
+	} else {
+		workspace.S3StatusMessage = fmt.Sprintf(
+			"Loaded %d objects from %s.",
+			len(workspace.S3Objects),
+			workspace.SelectedS3BucketName,
+		)
+	}
+}
+
 func (s *Service) handleAwsS3SelectBucket(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		BucketName string `json:"bucketName"`
