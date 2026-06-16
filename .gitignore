@@ -1,7 +1,9 @@
 .venv/
 .tmp/
 .tools/
-CHECKPOINT.local.md
+# Local-only workspace (folder committed, contents ignored)
+local/*
+!local/.gitkeep
 .idea/
 .DS_Store
 __pycache__/
@@ -27,3 +29,12 @@ apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/binaries/cloudsprocketd-*
 apps/desktop/scripts/esbuild-wrapper/esbuild-wrapper.exe
 apps/desktop/scripts/esbuild-wrapper/esbuild-wrapper.pdb
+
+# Local git worktrees for PR review / merge prep (never commit)
+.merge-dev/
+.review-pr*/
+
+# Local dev scratch (never commit)
+.claude/launch.json
+apps/desktop/test-ui.mjs
+mcps/localstack/tools/
