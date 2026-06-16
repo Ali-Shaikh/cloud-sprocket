@@ -13,9 +13,11 @@ import {
   Loader2,
   Play,
   Rocket,
+  Shield,
   Square,
   Terminal,
   Trash2,
+  FlaskConical,
 } from "lucide-react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
@@ -59,6 +61,9 @@ import type {
 } from "@/types/backend";
 
 type Mode = "list" | "configure" | "deployment";
+type GallerySection = "app-deploy" | "service-lab";
+
+const SCENARIO_TAGS = ["webhooks", "saas", "marketing", "async", "internal-tool", "staging", "ci"] as const;
 
 interface TargetOption {
   id: string;
@@ -66,6 +71,7 @@ interface TargetOption {
   providerId: string;
   profileId: string;
   local: boolean;
+  runtimeId?: string;
 }
 
 interface LogCommand {
@@ -94,6 +100,59 @@ function StatusBadge({ status }: { status: Deployment["status"] }) {
   );
 }
 
+function manifestRequiresPro(manifest: RecipeManifest): boolean {
+  if (manifest.local?.requiresPro) return true;
+  return (manifest.local?.runtimes ?? []).some((runtime) => runtime.requiresPro);
+}
+
+function RecipeCard({ manifest, onConfigure }: { manifest: RecipeManifest; onConfigure: () => void }) {
+  const isLab = manifest.kind === "service-lab";
+  return (
+    <Card className="flex flex-col gap-3 p-5">
+      <div className="flex items-start justify-between gap-2">
+        <div
+          className={cn(
+            "grid size-10 place-items-center rounded-lg",
+            isLab ? "bg-sky-500/10 text-sky-500" : "bg-violet-500/10 text-violet-500",
+          )}
+        >
+          {isLab ? <FlaskConical className="size-5" /> : <Rocket className="size-5" />}
+        </div>
+        <div className="flex items-center gap-2">
+          {manifestRequiresPro(manifest) && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+              <Crown className="size-3" /> Pro
+            </span>
+          )}
+          {manifest.superpowers?.iamPolicyStream && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400"
+              title="IAM Policy Stream available after a local run"
+            >
+              <Shield className="size-3" /> IAM
+            </span>
+          )}
+          <span className="text-xs text-muted-foreground">v{manifest.version}</span>
+        </div>
+      </div>
+      <div>
+        <p className="font-semibold text-foreground">{manifest.name}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{manifest.summary}</p>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {(manifest.tags ?? []).map((tag) => (
+          <span key={tag} className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+            {tag}
+          </span>
+        ))}
+      </div>
+      <Button className="mt-1 self-start" onClick={onConfigure}>
+        Configure
+      </Button>
+    </Card>
+  );
+}
+
 export default function DeployView({ profiles }: { profiles: ProfileSummary[] }) {
   const [mode, setMode] = useState<Mode>("list");
   const [recipes, setRecipes] = useState<RecipeManifest[]>([]);
@@ -104,6 +163,8 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [target, setTarget] = useState<string>("local");
+  const [gallerySection, setGallerySection] = useState<GallerySection>("app-deploy");
+  const [scenarioFilter, setScenarioFilter] = useState<string>("all");
   const [busy, setBusy] = useState(false);
 
   const [active, setActive] = useState<Deployment | null>(null);
@@ -142,22 +203,49 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
   }, [logs, active?.id]);
 
   const targetOptions = useMemo<TargetOption[]>(() => {
-    const options: TargetOption[] = [
-      { id: "local", label: "Local emulator (LocalStack)", providerId: "aws", profileId: "", local: true },
-    ];
+    const providers = new Set(recipe?.manifest.providers ?? ["aws"]);
+    const runtimes = recipe?.manifest.local?.runtimes ?? [];
+    const hasLocalStack =
+      runtimes.length === 0 ||
+      runtimes.some((runtime) => runtime.id === "localstack") ||
+      recipe?.manifest.local?.emulator === "localstack";
+
+    const options: TargetOption[] = [];
+    if (providers.has("aws") && hasLocalStack) {
+      options.push({
+        id: "local",
+        label: "Local emulator (LocalStack)",
+        providerId: "aws",
+        profileId: "",
+        local: true,
+        runtimeId: "localstack",
+      });
+    }
     for (const profile of profiles) {
-      if (profile.providerId === "aws") {
+      if (providers.has(profile.providerId)) {
         options.push({
           id: `profile:${profile.profileId}`,
-          label: `AWS · ${profile.displayName}`,
-          providerId: "aws",
+          label: `${profile.providerId.toUpperCase()} · ${profile.displayName}`,
+          providerId: profile.providerId,
           profileId: profile.profileId,
           local: false,
         });
       }
     }
     return options;
-  }, [profiles]);
+  }, [profiles, recipe]);
+
+  const galleryRecipes = useMemo(() => {
+    const sectionKind = gallerySection;
+    return recipes.filter((manifest) => {
+      const kind = manifest.kind ?? (manifest.id.startsWith("lab-") || manifest.id === "scheduled-job-aws" ? "service-lab" : "app-deploy");
+      if (kind !== sectionKind) return false;
+      if (sectionKind === "app-deploy" && scenarioFilter !== "all") {
+        return (manifest.tags ?? []).includes(scenarioFilter);
+      }
+      return true;
+    });
+  }, [recipes, gallerySection, scenarioFilter]);
 
   async function openRecipe(id: string) {
     try {
@@ -166,6 +254,7 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
       setValues(seedValues(loaded.variables));
       setTarget("local");
       setMode("configure");
+      setGallerySection(loaded.manifest.kind === "service-lab" ? "service-lab" : "app-deploy");
     } catch {
       /* surfaced by the debug log */
     }
@@ -256,6 +345,7 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
     return (
       <DeploymentDetail
         deployment={active}
+        recipeManifest={recipes.find((entry) => entry.id === active.recipeId) ?? null}
         logs={logs[active.id] ?? []}
         logRef={logRef}
         busy={busy}
@@ -290,8 +380,8 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
       <SectionHeader
-        title="Deploy a recipe"
-        description="Pick a parameterised stack, customise the variables, and deploy it to a local emulator or your cloud."
+        title="Deploy"
+        description="Deploy your application with infra wired, or try a single cloud service in a service lab."
       />
 
       {tofu && !tofu.available && (
@@ -307,42 +397,49 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
         </Card>
       )}
 
-      <div>
-        <h3 className="mb-3 text-sm font-semibold text-foreground">Recipes</h3>
-        {recipes.length === 0 ? (
-          <EmptyState icon={<Boxes className="size-6" />} title="No recipes available" description="Bundled recipes ship with the app." />
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={gallerySection === "app-deploy" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setGallerySection("app-deploy")}
+          >
+            <Rocket className="size-4" /> Deploy your app
+          </Button>
+          <Button
+            variant={gallerySection === "service-lab" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setGallerySection("service-lab")}
+          >
+            <FlaskConical className="size-4" /> Service labs
+          </Button>
+          {gallerySection === "app-deploy" && (
+            <Select value={scenarioFilter} onValueChange={setScenarioFilter}>
+              <SelectTrigger className="h-8 w-[180px]">
+                <SelectValue placeholder="All scenarios" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All scenarios</SelectItem>
+                {SCENARIO_TAGS.map((tag) => (
+                  <SelectItem key={tag} value={tag}>
+                    {tag}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {galleryRecipes.length === 0 ? (
+          <EmptyState
+            icon={gallerySection === "service-lab" ? <FlaskConical className="size-6" /> : <Boxes className="size-6" />}
+            title={gallerySection === "service-lab" ? "No service labs match" : "No app recipes match"}
+            description="Bundled recipes ship with the app. Try clearing the scenario filter."
+          />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
-            {recipes.map((manifest) => (
-              <Card key={manifest.id} className="flex flex-col gap-3 p-5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="grid size-10 place-items-center rounded-lg bg-violet-500/10 text-violet-500">
-                    <Rocket className="size-5" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {manifest.local?.requiresPro && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
-                        <Crown className="size-3" /> Pro
-                      </span>
-                    )}
-                    <span className="text-xs text-muted-foreground">v{manifest.version}</span>
-                  </div>
-                </div>
-                <div>
-                  <p className="font-semibold text-foreground">{manifest.name}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{manifest.summary}</p>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {(manifest.tags ?? []).map((tag) => (
-                    <span key={tag} className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-                <Button className="mt-1 self-start" onClick={() => void openRecipe(manifest.id)}>
-                  Configure
-                </Button>
-              </Card>
+            {galleryRecipes.map((manifest) => (
+              <RecipeCard key={manifest.id} manifest={manifest} onConfigure={() => void openRecipe(manifest.id)} />
             ))}
           </div>
         )}
@@ -431,7 +528,7 @@ function ConfigureRecipe({
       </button>
       <SectionHeader title={recipe.manifest.name} description={recipe.manifest.summary} />
 
-      {recipe.manifest.local?.requiresPro && (
+      {manifestRequiresPro(recipe.manifest) && (
         <Card className="flex items-center gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-400">
           <Crown className="size-4 shrink-0" />
           Uses services that only emulate on LocalStack Pro. Use a LocalStack Pro/Team token for a local
@@ -563,6 +660,7 @@ function VariableField({
 
 function DeploymentDetail({
   deployment,
+  recipeManifest,
   logs,
   logRef,
   busy,
@@ -573,6 +671,7 @@ function DeploymentDetail({
   onDelete,
 }: {
   deployment: Deployment;
+  recipeManifest: RecipeManifest | null;
   logs: string[];
   logRef: React.MutableRefObject<HTMLDivElement | null>;
   busy: boolean;
@@ -665,6 +764,14 @@ function DeploymentDetail({
         </Card>
       )}
 
+      {deployment.status === "applied" && deployment.outputs && deployment.outputs.length > 0 && (
+        <AppHandoffCard deployment={deployment} />
+      )}
+
+      {deployment.status === "applied" && recipeManifest?.superpowers && (
+        <SuperpowersCard deployment={deployment} superpowers={recipeManifest.superpowers} />
+      )}
+
       <LogCommandsCard deployment={deployment} />
 
       <div>
@@ -685,6 +792,80 @@ function DeploymentDetail({
         </div>
       </div>
     </div>
+  );
+}
+
+function AppHandoffCard({ deployment }: { deployment: Deployment }) {
+  const apiOutput =
+    deployment.outputs?.find((output) => output.name === "api_endpoint") ??
+    deployment.outputs?.find((output) => output.name === "alb_dns_name");
+  const dbOutput = deployment.outputs?.find((output) => output.name === "database_url");
+  const frontendOutput =
+    deployment.outputs?.find((output) => output.name === "frontend_url") ??
+    deployment.outputs?.find((output) => output.name === "frontend_website_endpoint") ??
+    deployment.outputs?.find((output) => output.name === "website_endpoint");
+
+  const envLines = [
+    apiOutput ? `API_URL=${String(apiOutput.value ?? "")}` : null,
+    dbOutput ? `DATABASE_URL=${String(dbOutput.value ?? "")}` : null,
+    frontendOutput ? `FRONTEND_URL=${String(frontendOutput.value ?? "")}` : null,
+  ].filter((line): line is string => Boolean(line));
+
+  if (envLines.length === 0) return null;
+
+  const snippet = envLines.join("\n");
+
+  return (
+    <Card className="p-4">
+      <p className="mb-2 text-sm font-medium text-foreground">Connect your app</p>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Copy these values into your local <code className="rounded bg-muted px-1">.env</code> or deployment config.
+      </p>
+      <code className="block select-text whitespace-pre-wrap break-all rounded bg-muted px-3 py-2 font-mono text-xs text-foreground">
+        {snippet}
+      </code>
+      <div className="mt-2">
+        <CopyButton value={snippet} />
+      </div>
+    </Card>
+  );
+}
+
+function SuperpowersCard({
+  deployment,
+  superpowers,
+}: {
+  deployment: Deployment;
+  superpowers: NonNullable<RecipeManifest["superpowers"]>;
+}) {
+  if (!superpowers.iamPolicyStream && !superpowers.cloudPod) return null;
+
+  return (
+    <Card className="border-violet-500/20 bg-violet-500/5 p-4">
+      <p className="mb-2 text-sm font-medium text-foreground">CloudSprocket superpowers</p>
+      <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+        {superpowers.iamPolicyStream && deployment.local && (
+          <p className="flex items-start gap-2">
+            <Shield className="mt-0.5 size-4 shrink-0 text-emerald-500" />
+            <span>
+              After exercising this stack locally, use <strong className="font-medium text-foreground">IAM Policy Stream</strong> in
+              the workspace to capture least-privilege policies and bake them back into your recipe.
+            </span>
+          </p>
+        )}
+        {superpowers.cloudPod && (
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="flex items-start gap-2">
+              <Boxes className="mt-0.5 size-4 shrink-0 text-violet-500" />
+              <span>Snapshot this environment as a reusable Cloud Pod for sharing or replay.</span>
+            </p>
+            <Button variant="outline" size="sm" disabled title="Cloud Pod export is wired in a follow-up release">
+              Save as Cloud Pod
+            </Button>
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }
 
@@ -825,6 +1006,7 @@ export function logCommandsForDeployment(deployment: Deployment): LogCommand[] {
         ),
       ];
     case "container-fullstack-aws":
+    case "api-postgres-containers-aws":
       return [
         cloudWatchTailCommand(
           deployment,
@@ -832,6 +1014,22 @@ export function logCommandsForDeployment(deployment: Deployment): LogCommand[] {
           `/ecs/${stackName}`,
           "ECS container service",
           "Container STDOUT and STDERR from the awslogs log driver.",
+        ),
+      ];
+    case "api-postgres-serverless-aws":
+    case "fullstack-postgres-serverless-aws":
+    case "lab-rest-api-aws":
+      return [
+        cloudWatchTailCommand(deployment, region, `/aws/lambda/${stackName}-api`, "API Lambda", "Lambda invocation logs for the HTTP API."),
+      ];
+    case "lab-queue-worker-aws":
+      return [
+        cloudWatchTailCommand(
+          deployment,
+          region,
+          `/aws/lambda/${stackName}-worker`,
+          "Queue worker Lambda",
+          "Lambda invocation logs for SQS-triggered runs.",
         ),
       ];
     default:
@@ -879,6 +1077,8 @@ function recipeDefaultAppName(recipeId: string): string {
       return "myjob";
     case "static-site-aws":
       return "mysite";
+    case "api-postgres-serverless-aws":
+      return "myapi";
     default:
       return "myapp";
   }

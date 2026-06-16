@@ -495,6 +495,17 @@ export interface AppResetResult {
 
 // --- IaC recipes & deployments ----------------------------------------------
 
+export interface RecipeLocalRuntime {
+  id: string;
+  requiresPro?: boolean;
+}
+
+export interface RecipeSuperpowers {
+  iamPolicyStream?: boolean;
+  cloudPod?: boolean;
+  chaos?: string[];
+}
+
 export interface RecipeManifest {
   apiVersion: string;
   id: string;
@@ -502,10 +513,16 @@ export interface RecipeManifest {
   name: string;
   summary?: string;
   description?: string;
+  kind?: "app-deploy" | "service-lab" | string;
   providers?: string[];
   tags?: string[];
   engine: { type: string; minVersion?: string };
-  local: { emulator?: string; requiresPro?: boolean };
+  local: {
+    emulator?: string;
+    requiresPro?: boolean;
+    runtimes?: RecipeLocalRuntime[];
+  };
+  superpowers?: RecipeSuperpowers;
 }
 
 export interface RecipeVariable {
