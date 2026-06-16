@@ -1167,6 +1167,45 @@ function coerceValues(variables: RecipeVariable[], values: Record<string, unknow
   return result;
 }
 
+const LOCALSTACK_GATEWAY_PORT = "4566";
+const LOCALSTACK_CLOUD_SUFFIX = ".localhost.localstack.cloud";
+const LOCALSTACK_LEGACY_HOST =
+  /\.(elb|s3-website|s3|execute-api|cloudfront|rds)\.localhost(?::\d+)?(?:\/|$)/i;
+
+function isLocalStackHostname(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+  return lower.endsWith(LOCALSTACK_CLOUD_SUFFIX) || LOCALSTACK_LEGACY_HOST.test(`${lower}/`);
+}
+
+function toLocalStackCloudHostname(hostname: string): string {
+  const lower = hostname.toLowerCase();
+  if (lower.endsWith(LOCALSTACK_CLOUD_SUFFIX)) {
+    return hostname;
+  }
+  const match = hostname.match(/^(.+)\.(elb|s3-website|s3|execute-api|cloudfront|rds)\.localhost$/i);
+  if (match) {
+    return `${match[1]}.${match[2]}${LOCALSTACK_CLOUD_SUFFIX}`;
+  }
+  return hostname;
+}
+
+function formatLocalStackReachableUrl(url: URL): string {
+  const hostname = toLocalStackCloudHostname(url.hostname);
+  const path = url.pathname === "/" ? "" : url.pathname;
+  return `http://${hostname}:${LOCALSTACK_GATEWAY_PORT}${path}${url.search}${url.hash}`;
+}
+
+function normaliseLocalStackUrl(candidate: string): string | null {
+  const withProtocol = /^https?:\/\//i.test(candidate) ? candidate : `http://${candidate}`;
+  try {
+    const url = new URL(withProtocol);
+    if (!isLocalStackHostname(url.hostname)) return null;
+    return formatLocalStackReachableUrl(url);
+  } catch {
+    return null;
+  }
+}
+
 // toLocalStackUrl rewrites an AWS-format endpoint (which Terraform's aws provider
 // always computes, even against LocalStack) into the URL actually reachable on
 // the local emulator via *.localhost.localstack.cloud:4566. Returns null when no
@@ -1176,27 +1215,17 @@ export function toLocalStackUrl(value: string): string | null {
   if (!original) return null;
 
   let rewritten = original
-    .replace(/\.s3-website[.-][a-z0-9-]+\.amazonaws\.com/i, ".s3-website.localhost.localstack.cloud:4566")
-    .replace(/\.s3[.-][a-z0-9-]+\.amazonaws\.com/i, ".s3.localhost.localstack.cloud:4566")
-    .replace(/\.execute-api\.[a-z0-9-]+\.amazonaws\.com/i, ".execute-api.localhost.localstack.cloud:4566")
-    .replace(/\.cloudfront\.net/i, ".cloudfront.localhost.localstack.cloud:4566")
-    .replace(/\.[a-z0-9-]+\.elb\.amazonaws\.com/i, ".elb.localhost.localstack.cloud:4566");
+    .replace(/\.s3-website[.-][a-z0-9-]+\.amazonaws\.com/i, `.s3-website${LOCALSTACK_CLOUD_SUFFIX}`)
+    .replace(/\.s3[.-][a-z0-9-]+\.amazonaws\.com/i, `.s3${LOCALSTACK_CLOUD_SUFFIX}`)
+    .replace(/\.execute-api\.[a-z0-9-]+\.amazonaws\.com/i, `.execute-api${LOCALSTACK_CLOUD_SUFFIX}`)
+    .replace(/\.cloudfront\.net/i, `.cloudfront${LOCALSTACK_CLOUD_SUFFIX}`)
+    .replace(/\.[a-z0-9-]+\.elb\.amazonaws\.com/i, `.elb${LOCALSTACK_CLOUD_SUFFIX}`);
 
-  if (rewritten.includes(".localhost.localstack.cloud")) {
-    const withProtocol = /^https?:\/\//i.test(rewritten) ? rewritten : `http://${rewritten}`;
-    try {
-      const url = new URL(withProtocol);
-      if (url.hostname.endsWith(".localhost.localstack.cloud")) {
-        url.protocol = "http:";
-        url.port = "4566";
-        const normalised = url.toString();
-        return url.pathname === "/" && url.search === "" && url.hash === ""
-          ? normalised.replace(/\/$/, "")
-          : normalised;
-      }
-    } catch {
-      // Fall through to the generic AWS-format rewrite below.
-    }
+  const mentionsLocalStack =
+    rewritten.includes(LOCALSTACK_CLOUD_SUFFIX) || LOCALSTACK_LEGACY_HOST.test(rewritten);
+  if (mentionsLocalStack) {
+    const normalised = normaliseLocalStackUrl(rewritten);
+    if (normalised) return normalised;
   }
 
   if (rewritten === original) return null;
@@ -1205,7 +1234,7 @@ export function toLocalStackUrl(value: string): string | null {
   } else {
     rewritten = rewritten.replace(/^https:\/\//i, "http://");
   }
-  return rewritten;
+  return normaliseLocalStackUrl(rewritten) ?? rewritten;
 }
 
 export function localDeploymentOutputLink(

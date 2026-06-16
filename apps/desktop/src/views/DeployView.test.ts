@@ -15,6 +15,34 @@ describe("toLocalStackUrl", () => {
     );
   });
 
+  it("normalises LocalStack-shaped load balancer URLs without an explicit port", () => {
+    expect(toLocalStackUrl("http://myappaaa-dev-alb.elb.localhost.localstack.cloud")).toBe(
+      "http://myappaaa-dev-alb.elb.localhost.localstack.cloud:4566",
+    );
+  });
+
+  it("upgrades legacy short-form LocalStack load balancer hostnames", () => {
+    expect(toLocalStackUrl("myapp-dev.elb.localhost:4566")).toBe(
+      "http://myapp-dev.elb.localhost.localstack.cloud:4566",
+    );
+  });
+
+  it("builds alb_dns_name open links with the gateway port", () => {
+    expect(
+      localDeploymentOutputLink(
+        {
+          local: true,
+          recipeId: "container-fullstack-aws",
+          variables: { app_name: "myappaaa", environment: "dev" },
+        },
+        { name: "alb_dns_name", value: "myappaaa-dev-alb.elb.localhost.localstack.cloud" },
+      ),
+    ).toMatchObject({
+      url: "http://myappaaa-dev-alb.elb.localhost.localstack.cloud:4566",
+      label: "Open on LocalStack",
+    });
+  });
+
   it("normalises already LocalStack-shaped S3 website URLs with paths", () => {
     expect(toLocalStackUrl("myapp.s3-website.localhost.localstack.cloud/index.html")).toBe(
       "http://myapp.s3-website.localhost.localstack.cloud:4566/index.html",
