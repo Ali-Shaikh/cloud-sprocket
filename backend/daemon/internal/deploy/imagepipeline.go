@@ -169,7 +169,7 @@ func (e *Engine) pushImageToECR(
 	if onLine != nil {
 		onLine(fmt.Sprintf("> Logging Docker into %s", repoURI))
 	}
-	if err := dockerECRLogin(ctx, region, e.env(deployment), onLine); err != nil {
+	if err := dockerECRLogin(ctx, region, accountID, e.env(deployment), onLine); err != nil {
 		return "", err
 	}
 
@@ -232,11 +232,7 @@ func ensureECRRepository(ctx context.Context, env []string, region, repoName str
 	return nil
 }
 
-func dockerECRLogin(ctx context.Context, region string, env []string, onLine tofu.LogFunc) error {
-	accountID, err := awsCallerAccount(ctx, env)
-	if err != nil {
-		return err
-	}
+func dockerECRLogin(ctx context.Context, region, accountID string, env []string, onLine tofu.LogFunc) error {
 	endpoint := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com", accountID, region)
 
 	password := exec.CommandContext(ctx, "aws", "ecr", "get-login-password", "--region", region)
