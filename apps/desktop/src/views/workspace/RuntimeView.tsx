@@ -16,7 +16,7 @@ import type {
   WorkspaceSnapshot,
 } from "@/types/backend";
 
-export type EmulatorAction = "prepareProfile" | "start" | "stop";
+export type EmulatorAction = "prepareProfile" | "start" | "stop" | "recreate";
 
 /** Controls and live state for one managed emulator card. */
 export type EmulatorControls = {
@@ -109,6 +109,7 @@ export default function RuntimeView({
     const profileLabel = isLocalStack ? "Create AWS Profile" : "Create Azure Profile";
     const startLabel = isLocalStack ? "Start LocalStack" : "Start floci-az";
     const stopLabel = isLocalStack ? "Stop LocalStack" : "Stop floci-az";
+    const recreateLabel = isLocalStack ? "Recreate LocalStack" : "Recreate floci-az";
 
     return (
       <div key={emulator.emulatorId} className={sectionCard}>
@@ -230,7 +231,21 @@ export default function RuntimeView({
               >
                 {stopLabel}
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={controls.actionInFlight}
+                onClick={() => {
+                  controls.onInvokeAction("recreate");
+                }}
+              >
+                {recreateLabel}
+              </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Use <span className="font-medium text-foreground">Recreate</span> when start is stuck: it
+              stops, removes, and creates a fresh container with your current settings.
+            </p>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">

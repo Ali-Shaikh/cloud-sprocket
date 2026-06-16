@@ -298,6 +298,35 @@ func TestStartPublishesGatewayAndRDSPorts(t *testing.T) {
 	}
 }
 
+func TestStartRecreateRemovesRunningContainer(t *testing.T) {
+	dockerClient := &stubDockerClient{containers: []containerapi.Summary{{
+		ID:    "ctr-running",
+		Names: []string{"/" + containerName},
+		Image: defaultImage,
+		State: containerapi.StateRunning,
+		Status: "Up 1 second",
+		Labels: map[string]string{
+			managedLabelKey:       managedLabelValue,
+			projectLabelKey:       projectLabelValue,
+			localStackConfigKey:   localStackConfigValue,
+		},
+	}}}
+	manager := newTestManager(t, dockerClient)
+
+	if _, err := manager.Start(context.Background(), models.LocalStackStartOptions{Recreate: true}); err != nil {
+		t.Fatalf("expected recreate start to succeed, got %v", err)
+	}
+	if len(dockerClient.stopCalls) != 1 || dockerClient.stopCalls[0] != "ctr-running" {
+		t.Fatalf("expected running container to be stopped for recreate, got %+v", dockerClient.stopCalls)
+	}
+	if len(dockerClient.removeCalls) != 1 || dockerClient.removeCalls[0] != "ctr-running" {
+		t.Fatalf("expected running container to be removed for recreate, got %+v", dockerClient.removeCalls)
+	}
+	if dockerClient.createCalls != 1 {
+		t.Fatalf("expected replacement container create, got %d", dockerClient.createCalls)
+	}
+}
+
 func TestStartRecreatesRunningContainerWithoutRDSPortConfig(t *testing.T) {
 	dockerClient := &stubDockerClient{containers: []containerapi.Summary{{
 		ID:     "ctr-old",

@@ -149,7 +149,11 @@ func (s *Service) emulatorsStart(ctx context.Context, options models.LocalStackS
 		if s.azureRuntime == nil {
 			return models.EmulatorActionResult{}, errors.New("floci-az manager not available")
 		}
-		actionCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		startTimeout := 20 * time.Second
+		if options.Recreate {
+			startTimeout = 90 * time.Second
+		}
+		actionCtx, cancel := context.WithTimeout(ctx, startTimeout)
 		defer cancel()
 		status, err := s.azureRuntime.Start(actionCtx, options)
 		result := emulatorActionResult("start", status)
@@ -161,7 +165,11 @@ func (s *Service) emulatorsStart(ctx context.Context, options models.LocalStackS
 	if s.localstackMgr == nil {
 		return models.EmulatorActionResult{}, errors.New("LocalStack manager not available")
 	}
-	actionCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	startTimeout := 20 * time.Second
+	if options.Recreate {
+		startTimeout = 90 * time.Second
+	}
+	actionCtx, cancel := context.WithTimeout(ctx, startTimeout)
 	defer cancel()
 	status, err := s.localstackMgr.Start(actionCtx, options)
 	result := emulatorActionResult("start", status)

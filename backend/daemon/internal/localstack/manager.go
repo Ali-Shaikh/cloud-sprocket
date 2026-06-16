@@ -104,29 +104,23 @@ func (m *Manager) Start(ctx context.Context, options models.LocalStackStartOptio
 	if err != nil {
 		return m.errorStatus("Failed to query Docker containers: " + err.Error()), err
 	}
-	// Recreate a managed container when configuration is stale: stopped
-	// containers, or running ones created before RDS host port publishing.
-	if len(containers.Items) > 0 && needsLocalStackRecreate(containers.Items[0]) {
-		container := containers.Items[0]
-		if container.State == "running" {
-			timeoutSeconds := 10
-			if _, err := api.ContainerStop(ctx, container.ID, client.ContainerStopOptions{Timeout: &timeoutSeconds}); err != nil {
-				return m.errorStatus("Failed to stop LocalStack container for reconfiguration: " + err.Error()), err
-			}
-		}
-		if _, err := api.ContainerRemove(ctx, container.ID, client.ContainerRemoveOptions{}); err != nil {
-			return m.errorStatus("Failed to replace LocalStack container with configured image: " + err.Error()), err
-		}
-		containers = client.ContainerListResult{}
-	}
 	if len(containers.Items) > 0 {
 		container := containers.Items[0]
-		if container.State != "running" {
-			if _, err := api.ContainerStart(ctx, container.ID, client.ContainerStartOptions{}); err != nil {
-				return m.errorStatus("Failed to start LocalStack container: " + err.Error()), err
+		if options.Recreate || needsLocalStackRecreate(container) || container.State == "created" {
+			if err := m.removeManagedContainer(ctx, api, container); err != nil {
+				return m.errorStatus("Failed to remove LocalStack container: " + err.Error()), err
 			}
+		} else if container.State != "running" {
+			if _, err := api.ContainerStart(ctx, container.ID, client.ContainerStartOptions{}); err != nil {
+				if removeErr := m.removeManagedContainer(ctx, api, container); removeErr != nil {
+					return m.errorStatus("Failed to start LocalStack container: " + err.Error()), err
+				}
+			} else {
+				return m.statusWithClient(ctx, api), nil
+			}
+		} else {
+			return m.statusWithClient(ctx, api), nil
 		}
-		return m.statusWithClient(ctx, api), nil
 	}
 
 	if err := m.pullImage(ctx, api); err != nil {
@@ -560,6 +554,17 @@ func managedLabels() map[string]string {
 		projectLabelKey:       projectLabelValue,
 		localStackConfigKey:   localStackConfigValue,
 	}
+}
+
+func (m *Manager) removeManagedContainer(ctx context.Context, api dockerClient, container containerapi.Summary) error {
+	if container.State == "running" {
+		timeoutSeconds := 10
+		if _, err := api.ContainerStop(ctx, container.ID, client.ContainerStopOptions{Timeout: &timeoutSeconds}); err != nil {
+			return err
+		}
+	}
+	_, err := api.ContainerRemove(ctx, container.ID, client.ContainerRemoveOptions{Force: true})
+	return err
 }
 
 func needsLocalStackRecreate(container containerapi.Summary) bool {

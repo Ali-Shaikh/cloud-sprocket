@@ -131,6 +131,8 @@ type LocalStackStartOptions struct {
 	AuthToken   string            `json:"authToken,omitempty"`
 	Persistence bool              `json:"persistence,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
+	// Recreate stops and removes any existing managed container, then creates a new one.
+	Recreate bool `json:"recreate,omitempty"`
 }
 
 type EmulatorLogSnapshot struct {

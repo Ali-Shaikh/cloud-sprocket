@@ -1591,20 +1591,21 @@ export default function App() {
     }
   }
 
-  async function invokeLocalStackAction(action: "prepareProfile" | "start" | "stop"): Promise<void> {
+  async function invokeLocalStackAction(action: "prepareProfile" | "start" | "stop" | "recreate"): Promise<void> {
     const method =
       action === "prepareProfile"
         ? "emulators.prepareProfile"
-        : action === "start"
-          ? "emulators.start"
-          : "emulators.stop";
+        : action === "stop"
+          ? "emulators.stop"
+          : "emulators.start";
     const startParams =
-      action === "start"
+      action === "start" || action === "recreate"
         ? {
           emulatorId: "localstack",
           authToken: localStackAuthToken,
           persistence: localStackPersistence,
           environment: localStackEnvironment(),
+          recreate: action === "recreate",
         }
         : { emulatorId: "localstack" };
     const label =
@@ -1612,14 +1613,17 @@ export default function App() {
         ? "Prepare LocalStack profile"
         : action === "start"
           ? "Start LocalStack"
+          : action === "recreate"
+            ? "Recreate LocalStack"
           : "Stop LocalStack";
+    const requestTimeoutMs = action === "recreate" ? 95000 : 22000;
     setLocalStackActionInFlight(true);
     setLocalStackActionStatus(`${label} requested.`);
     try {
       const result = await withTimeout(
         backendRequest<EmulatorActionResult>(method, startParams),
-        22000,
-        `${label} did not finish within 22 seconds. Check Docker and LocalStack logs, then retry.`,
+        requestTimeoutMs,
+        `${label} did not finish within ${Math.round(requestTimeoutMs / 1000)} seconds. Check Docker and LocalStack logs, then retry.`,
       );
       const summary = result.summary || `${label} completed.`;
       setLocalStackActionStatus(summary);
@@ -1633,21 +1637,21 @@ export default function App() {
       if (action === "prepareProfile") {
         await reloadProvidersAndProfiles().catch(() => undefined);
       }
-      if (action === "start" || action === "stop") {
-        pollLocalStackState(label, action === "start" ? "running" : "stopped");
+      if (action === "start" || action === "recreate" || action === "stop") {
+        pollLocalStackState(label, action === "stop" ? "stopped" : "running");
       }
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : `${label} failed.`;
       const timedOut = rawMessage.includes("did not finish within");
       const message =
         rawMessage === `${label} failed.`
-          ? `${label} failed. Docker did not complete the request. Refresh Docker, check the LocalStack logs, then retry.`
+          ? `${label} failed. Docker did not complete the request. Try Recreate LocalStack, refresh Docker, check the logs, then retry.`
           : rawMessage;
       setLocalStackActionStatus(message);
       addLocalStackNotification(timedOut ? "warning" : "error", timedOut ? `${label} still pending` : `${label} failed`, message);
       await refreshVirtualisationState().catch(() => undefined);
-      if (timedOut && (action === "start" || action === "stop")) {
-        pollLocalStackState(label, action === "start" ? "running" : "stopped");
+      if (timedOut && (action === "start" || action === "recreate" || action === "stop")) {
+        pollLocalStackState(label, action === "stop" ? "stopped" : "running");
       }
     } finally {
       setLocalStackActionInFlight(false);
@@ -1682,19 +1686,20 @@ export default function App() {
     }
   }
 
-  async function invokeFlociAzAction(action: "prepareProfile" | "start" | "stop"): Promise<void> {
+  async function invokeFlociAzAction(action: "prepareProfile" | "start" | "stop" | "recreate"): Promise<void> {
     const method =
       action === "prepareProfile"
         ? "emulators.prepareProfile"
-        : action === "start"
-          ? "emulators.start"
-          : "emulators.stop";
+        : action === "stop"
+          ? "emulators.stop"
+          : "emulators.start";
     const startParams =
-      action === "start"
+      action === "start" || action === "recreate"
         ? {
           emulatorId: "floci-az",
           persistence: flociAzPersistence,
           environment: flociAzEnvironment(),
+          recreate: action === "recreate",
         }
         : { emulatorId: "floci-az" };
     const label =
@@ -1702,14 +1707,17 @@ export default function App() {
         ? "Prepare floci-az config"
         : action === "start"
           ? "Start floci-az"
+          : action === "recreate"
+            ? "Recreate floci-az"
           : "Stop floci-az";
+    const requestTimeoutMs = action === "recreate" ? 95000 : 22000;
     setFlociAzActionInFlight(true);
     setFlociAzActionStatus(`${label} requested.`);
     try {
       const result = await withTimeout(
         backendRequest<EmulatorActionResult>(method, startParams),
-        22000,
-        `${label} did not finish within 22 seconds. Check Docker and floci-az logs, then retry.`,
+        requestTimeoutMs,
+        `${label} did not finish within ${Math.round(requestTimeoutMs / 1000)} seconds. Check Docker and floci-az logs, then retry.`,
       );
       const summary = result.summary || `${label} completed.`;
       setFlociAzActionStatus(summary);
@@ -1724,20 +1732,20 @@ export default function App() {
       if (action === "prepareProfile") {
         await reloadProvidersAndProfiles().catch(() => undefined);
       }
-      if (action === "start" || action === "stop") {
-        pollFlociAzState(label, action === "start" ? "running" : "stopped");
+      if (action === "start" || action === "recreate" || action === "stop") {
+        pollFlociAzState(label, action === "stop" ? "stopped" : "running");
       }
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : `${label} failed.`;
       const timedOut = rawMessage.includes("did not finish within");
       const message =
         rawMessage === `${label} failed.`
-          ? `${label} failed. Docker did not complete the request. Refresh Docker, check the floci-az logs, then retry.`
+          ? `${label} failed. Docker did not complete the request. Try Recreate floci-az, refresh Docker, check the logs, then retry.`
           : rawMessage;
       setFlociAzActionStatus(message);
       addEmulatorNotification("floci-az", timedOut ? "warning" : "error", timedOut ? `${label} still pending` : `${label} failed`, message);
       await refreshVirtualisationState().catch(() => undefined);
-      if (timedOut && (action === "start" || action === "stop")) {
+      if (timedOut && (action === "start" || action === "recreate" || action === "stop")) {
         pollFlociAzState(label, action === "start" ? "running" : "stopped");
       }
     } finally {

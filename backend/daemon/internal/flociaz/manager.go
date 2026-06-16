@@ -90,21 +90,26 @@ func (m *Manager) Start(ctx context.Context, options models.LocalStackStartOptio
 	if err != nil {
 		return m.errorStatus("Failed to query Docker containers: " + err.Error()), err
 	}
-	if len(containers.Items) > 0 && containers.Items[0].State != "running" &&
-		(containers.Items[0].Image != m.image || options.Persistence || len(options.Environment) > 0) {
-		if _, err := api.ContainerRemove(ctx, containers.Items[0].ID, client.ContainerRemoveOptions{}); err != nil {
-			return m.errorStatus("Failed to replace floci-az container with configured settings: " + err.Error()), err
-		}
-		containers = client.ContainerListResult{}
-	}
 	if len(containers.Items) > 0 {
 		container := containers.Items[0]
-		if container.State != "running" {
-			if _, err := api.ContainerStart(ctx, container.ID, client.ContainerStartOptions{}); err != nil {
-				return m.errorStatus("Failed to start floci-az container: " + err.Error()), err
+		shouldReplace := options.Recreate || container.State == "created" ||
+			(container.State != "running" &&
+				(container.Image != m.image || options.Persistence || len(options.Environment) > 0))
+		if shouldReplace {
+			if err := m.removeManagedContainer(ctx, api, container); err != nil {
+				return m.errorStatus("Failed to remove floci-az container: " + err.Error()), err
 			}
+		} else if container.State != "running" {
+			if _, err := api.ContainerStart(ctx, container.ID, client.ContainerStartOptions{}); err != nil {
+				if removeErr := m.removeManagedContainer(ctx, api, container); removeErr != nil {
+					return m.errorStatus("Failed to start floci-az container: " + err.Error()), err
+				}
+			} else {
+				return m.statusWithClient(ctx, api), nil
+			}
+		} else {
+			return m.statusWithClient(ctx, api), nil
 		}
-		return m.statusWithClient(ctx, api), nil
 	}
 
 	if err := m.pullImage(ctx, api); err != nil {
@@ -484,6 +489,17 @@ func truncateID(id string) string {
 		return id[:12]
 	}
 	return id
+}
+
+func (m *Manager) removeManagedContainer(ctx context.Context, api dockerClient, container containerapi.Summary) error {
+	if container.State == "running" {
+		timeoutSeconds := 10
+		if _, err := api.ContainerStop(ctx, container.ID, client.ContainerStopOptions{Timeout: &timeoutSeconds}); err != nil {
+			return err
+		}
+	}
+	_, err := api.ContainerRemove(ctx, container.ID, client.ContainerRemoveOptions{Force: true})
+	return err
 }
 
 func managedLabels() map[string]string {
