@@ -1605,7 +1605,8 @@ export default function App() {
           authToken: localStackAuthToken,
           persistence: localStackPersistence,
           environment: localStackEnvironment(),
-          recreate: action === "recreate",
+          // Only sent for recreate so a normal start keeps its minimal payload.
+          ...(action === "recreate" ? { recreate: true } : {}),
         }
         : { emulatorId: "localstack" };
     const label =
@@ -1699,7 +1700,8 @@ export default function App() {
           emulatorId: "floci-az",
           persistence: flociAzPersistence,
           environment: flociAzEnvironment(),
-          recreate: action === "recreate",
+          // Only sent for recreate so a normal start keeps its minimal payload.
+          ...(action === "recreate" ? { recreate: true } : {}),
         }
         : { emulatorId: "floci-az" };
     const label =
