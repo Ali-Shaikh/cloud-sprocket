@@ -1,0 +1,85 @@
+apiVersion: cloudsprocket.recipe/v1
+id: async-app-aws
+kind: app-deploy
+version: 0.1.0
+name: Async app (AWS)
+summary: HTTP API on Lambda, SQS with a dead-letter queue, a worker Lambda, DynamoDB, and an optional static frontend on S3.
+description: |
+  An asynchronous application starter that runs entirely on LocalStack's free tier
+  and ships unchanged to real AWS by switching the connection profile.
+
+  Provisions an HTTP API Gateway route at POST /jobs that invokes an API Lambda.
+  The API handler enqueues the JSON request body onto SQS. A worker Lambda drains
+  the queue and processes each message, with a dead-letter queue for failed
+  deliveries. A DynamoDB table is available for the worker to persist results.
+  An optional static frontend deploys to S3 when you provide a dist directory.
+
+  Uses only API Gateway, Lambda, SQS, DynamoDB and S3, which emulate on
+  LocalStack's free tier, so it dry-runs locally without Pro services. No RDS,
+  ECS or CloudFront.
+providers:
+  - aws
+tags:
+  - async
+  - serverless
+  - sqs
+  - lambda
+  - dynamodb
+  - aws
+  - starter
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+superpowers:
+  iamPolicyStream: true
+build:
+  - name: Install API dependencies
+    dirVar: api_source_dir
+    requires: package.json
+    command: ["npm", "ci", "--omit=dev"]
+  - name: Install worker dependencies
+    dirVar: worker_source_dir
+    requires: package.json
+    command: ["npm", "ci", "--omit=dev"]
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Application code
+    variables:
+      - name: api_source_dir
+        widget: directory
+        help: Folder with your Node API handler.handler export. Leave default for the sample API.
+      - name: worker_source_dir
+        widget: directory
+        help: Folder with your Node worker handler.handler export. Leave default for the sample worker.
+      - name: frontend_dist_dir
+        widget: directory
+        help: Folder of your built static frontend (e.g. Next.js `out/`). Leave default for the sample site, or clear to skip the frontend.
+  - title: Backend
+    variables:
+      - name: lambda_memory_mb
+        widget: number
+        help: Memory for both Lambda functions, in megabytes.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: api_endpoint
+    primary: true
+  - name: queue_url
+  - name: frontend_website_endpoint
+    primary: true
+  - name: dynamodb_table

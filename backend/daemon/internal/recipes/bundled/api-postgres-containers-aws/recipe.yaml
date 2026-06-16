@@ -31,7 +31,9 @@ local:
       requiresPro: true
 superpowers:
   iamPolicyStream: true
-  cloudPod: true
+imageBuild:
+  dockerfileDirVar: dockerfile_dir
+  imageVar: container_image
 variableGroups:
   - title: Application
     variables:
@@ -44,9 +46,12 @@ variableGroups:
         widget: text
   - title: Backend container
     variables:
+      - name: dockerfile_dir
+        widget: directory
+        help: Folder with your Dockerfile. When set, the app builds and pushes the image before plan (overrides container_image).
       - name: container_image
         widget: text
-        help: Container image for the backend (e.g. your ECR image or a public image). Default serves HTTP on port 80.
+        help: Pre-built image URI. Ignored when dockerfile_dir contains a Dockerfile. Default serves HTTP on port 80.
       - name: container_port
         widget: number
       - name: desired_count

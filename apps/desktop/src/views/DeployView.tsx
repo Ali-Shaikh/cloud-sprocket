@@ -536,6 +536,13 @@ function ConfigureRecipe({
         </Card>
       )}
 
+      {recipe.manifest.imageBuild && (
+        <Card className="border-sky-500/30 bg-sky-500/5 p-3 text-sm text-muted-foreground">
+          Set <span className="font-medium text-foreground">dockerfile_dir</span> to build from your Dockerfile before
+          plan. On real AWS the image is pushed to ECR automatically; locally the built tag is used for ECS.
+        </Card>
+      )}
+
       <Card className="flex flex-col gap-2 p-4">
         <label className="text-sm font-medium text-foreground">Deploy target</label>
         <Select value={target} onValueChange={onTargetChange}>
@@ -798,7 +805,9 @@ function DeploymentDetail({
 function AppHandoffCard({ deployment }: { deployment: Deployment }) {
   const apiOutput =
     deployment.outputs?.find((output) => output.name === "api_endpoint") ??
+    deployment.outputs?.find((output) => output.name === "ingest_endpoint") ??
     deployment.outputs?.find((output) => output.name === "alb_dns_name");
+  const queueOutput = deployment.outputs?.find((output) => output.name === "queue_url");
   const dbOutput = deployment.outputs?.find((output) => output.name === "database_url");
   const frontendOutput =
     deployment.outputs?.find((output) => output.name === "frontend_url") ??
@@ -807,6 +816,7 @@ function AppHandoffCard({ deployment }: { deployment: Deployment }) {
 
   const envLines = [
     apiOutput ? `API_URL=${String(apiOutput.value ?? "")}` : null,
+    queueOutput ? `QUEUE_URL=${String(queueOutput.value ?? "")}` : null,
     dbOutput ? `DATABASE_URL=${String(dbOutput.value ?? "")}` : null,
     frontendOutput ? `FRONTEND_URL=${String(frontendOutput.value ?? "")}` : null,
   ].filter((line): line is string => Boolean(line));
@@ -838,33 +848,18 @@ function SuperpowersCard({
   deployment: Deployment;
   superpowers: NonNullable<RecipeManifest["superpowers"]>;
 }) {
-  if (!superpowers.iamPolicyStream && !superpowers.cloudPod) return null;
+  if (!superpowers.iamPolicyStream || !deployment.local) return null;
 
   return (
     <Card className="border-violet-500/20 bg-violet-500/5 p-4">
-      <p className="mb-2 text-sm font-medium text-foreground">CloudSprocket superpowers</p>
-      <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-        {superpowers.iamPolicyStream && deployment.local && (
-          <p className="flex items-start gap-2">
-            <Shield className="mt-0.5 size-4 shrink-0 text-emerald-500" />
-            <span>
-              After exercising this stack locally, use <strong className="font-medium text-foreground">IAM Policy Stream</strong> in
-              the workspace to capture least-privilege policies and bake them back into your recipe.
-            </span>
-          </p>
-        )}
-        {superpowers.cloudPod && (
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="flex items-start gap-2">
-              <Boxes className="mt-0.5 size-4 shrink-0 text-violet-500" />
-              <span>Snapshot this environment as a reusable Cloud Pod for sharing or replay.</span>
-            </p>
-            <Button variant="outline" size="sm" disabled title="Cloud Pod export is wired in a follow-up release">
-              Save as Cloud Pod
-            </Button>
-          </div>
-        )}
-      </div>
+      <p className="mb-2 text-sm font-medium text-foreground">IAM Policy Stream</p>
+      <p className="flex items-start gap-2 text-sm text-muted-foreground">
+        <Shield className="mt-0.5 size-4 shrink-0 text-emerald-500" />
+        <span>
+          After exercising this stack locally, use <strong className="font-medium text-foreground">IAM Policy Stream</strong> in the
+          workspace to capture least-privilege policies and bake them back into your recipe.
+        </span>
+      </p>
     </Card>
   );
 }
@@ -1023,13 +1018,26 @@ export function logCommandsForDeployment(deployment: Deployment): LogCommand[] {
         cloudWatchTailCommand(deployment, region, `/aws/lambda/${stackName}-api`, "API Lambda", "Lambda invocation logs for the HTTP API."),
       ];
     case "lab-queue-worker-aws":
+    case "async-app-aws":
       return [
+        cloudWatchTailCommand(deployment, region, `/aws/lambda/${stackName}-api`, "API Lambda", "HTTP API invocation logs."),
         cloudWatchTailCommand(
           deployment,
           region,
           `/aws/lambda/${stackName}-worker`,
-          "Queue worker Lambda",
+          "Worker Lambda",
           "Lambda invocation logs for SQS-triggered runs.",
+        ),
+      ];
+    case "webhook-platform-aws":
+      return [
+        cloudWatchTailCommand(deployment, region, `/aws/lambda/${stackName}-ingest`, "Webhook ingest Lambda", "Inbound webhook request logs."),
+        cloudWatchTailCommand(
+          deployment,
+          region,
+          `/aws/lambda/${stackName}-processor`,
+          "Webhook processor Lambda",
+          "Lambda invocation logs for queued webhook payloads.",
         ),
       ];
     default:

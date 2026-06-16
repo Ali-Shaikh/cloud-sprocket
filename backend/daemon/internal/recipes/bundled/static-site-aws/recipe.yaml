@@ -28,7 +28,6 @@ local:
     - id: localstack
 superpowers:
   iamPolicyStream: true
-  cloudPod: true
   requiresPro: false
 variableGroups:
   - title: Application

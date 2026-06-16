@@ -204,6 +204,9 @@ func (e *Engine) Plan(ctx context.Context, deployment *Deployment, onLine tofu.L
 		if err := e.runBuildSteps(ctx, deployment, recipe.Manifest.Build, onLine); err != nil {
 			return PlanSummary{}, err
 		}
+		if err := e.runImagePipeline(ctx, deployment, recipe.Manifest.ImageBuild, onLine); err != nil {
+			return PlanSummary{}, err
+		}
 	}
 	dir := e.WorkspaceDir(deployment.ID)
 	env := e.env(deployment)

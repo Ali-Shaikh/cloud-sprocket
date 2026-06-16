@@ -1,0 +1,77 @@
+apiVersion: cloudsprocket.recipe/v1
+id: webhook-platform-aws
+kind: app-deploy
+version: 0.1.0
+name: Webhook platform (AWS)
+summary: HTTP webhook ingest on API Gateway, SQS with a dead-letter queue, and a processor Lambda writing to DynamoDB.
+description: |
+  An asynchronous webhook platform that runs entirely on LocalStack's free tier
+  and ships unchanged to real AWS by switching the connection profile.
+
+  Provisions an HTTP API Gateway route at POST /webhook that invokes an ingest
+  Lambda. The ingest handler enqueues the raw request body onto SQS. A processor
+  Lambda drains the queue and stores each payload in DynamoDB, with a dead-letter
+  queue for failed messages. Bundled sample ingest and processor code deploy when
+  you do not supply your own handlers.
+
+  Uses only API Gateway, Lambda, SQS and DynamoDB, which emulate on LocalStack's
+  free tier, so it dry-runs locally without Pro services.
+providers:
+  - aws
+tags:
+  - webhooks
+  - serverless
+  - sqs
+  - lambda
+  - dynamodb
+  - aws
+  - starter
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+superpowers:
+  iamPolicyStream: true
+build:
+  - name: Install ingest dependencies
+    dirVar: ingest_source_dir
+    requires: package.json
+    command: ["npm", "ci", "--omit=dev"]
+  - name: Install processor dependencies
+    dirVar: processor_source_dir
+    requires: package.json
+    command: ["npm", "ci", "--omit=dev"]
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Webhook code
+    variables:
+      - name: ingest_source_dir
+        widget: directory
+        help: Folder with your Node ingest handler.handler export. Leave default for the sample ingest handler.
+      - name: processor_source_dir
+        widget: directory
+        help: Folder with your Node processor handler.handler export. Leave default for the sample processor handler.
+      - name: lambda_memory_mb
+        widget: number
+        help: Memory for both Lambda functions, in megabytes.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: ingest_endpoint
+    primary: true
+  - name: queue_url
+  - name: dynamodb_table

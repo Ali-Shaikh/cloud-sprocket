@@ -14,7 +14,7 @@ func TestLoadLabRecipes(t *testing.T) {
 		if recipe.Manifest.Local.RequiresPro {
 			t.Fatalf("%s should not require LocalStack Pro", id)
 		}
-		if recipe.Manifest.Superpowers.IamPolicyStream || recipe.Manifest.Superpowers.CloudPod {
+		if recipe.Manifest.Superpowers.IamPolicyStream {
 			t.Fatalf("%s should not declare superpowers", id)
 		}
 	}

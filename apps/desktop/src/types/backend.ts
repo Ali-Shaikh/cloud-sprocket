@@ -500,9 +500,14 @@ export interface RecipeLocalRuntime {
   requiresPro?: boolean;
 }
 
+export interface RecipeImageBuild {
+  dockerfileDirVar: string;
+  imageVar: string;
+  repositoryVar?: string;
+}
+
 export interface RecipeSuperpowers {
   iamPolicyStream?: boolean;
-  cloudPod?: boolean;
   chaos?: string[];
 }
 
@@ -523,6 +528,7 @@ export interface RecipeManifest {
     runtimes?: RecipeLocalRuntime[];
   };
   superpowers?: RecipeSuperpowers;
+  imageBuild?: RecipeImageBuild;
 }
 
 export interface RecipeVariable {

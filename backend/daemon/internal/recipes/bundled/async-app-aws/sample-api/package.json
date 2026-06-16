@@ -1,0 +1,7 @@
+{
+  "name": "cloudsprocket-async-sample-api",
+  "private": true,
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.750.0"
+  }
+}

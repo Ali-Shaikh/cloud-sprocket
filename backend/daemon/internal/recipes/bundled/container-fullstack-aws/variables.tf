@@ -16,6 +16,12 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "dockerfile_dir" {
+  type        = string
+  description = "Directory containing your Dockerfile. Leave empty to use container_image directly."
+  default     = ""
+}
+
 variable "container_image" {
   type        = string
   description = "Container image for the backend service. The default nginx image serves HTTP successfully for a first deployment."

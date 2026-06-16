@@ -1815,7 +1815,7 @@ const mockRecipes: Recipe[] = [
       tags: ["serverless", "fullstack", "aws", "starter"],
       engine: { type: "opentofu", minVersion: "1.6.0" },
       local: { runtimes: [{ id: "localstack" }] },
-      superpowers: { iamPolicyStream: true, cloudPod: true },
+      superpowers: { iamPolicyStream: true },
     },
     variables: [
       { name: "app_name", type: "string", description: "Lowercase name prefix used for every resource.", default: "myapp", required: false, group: "Application", widget: "text", help: "Lowercase name prefix used for every resource." },
@@ -1847,7 +1847,7 @@ const mockRecipes: Recipe[] = [
       tags: ["container", "fullstack", "aws", "ecs", "rds"],
       engine: { type: "opentofu", minVersion: "1.6.0" },
       local: { runtimes: [{ id: "localstack", requiresPro: true }] },
-      superpowers: { iamPolicyStream: true, cloudPod: true },
+      superpowers: { iamPolicyStream: true },
     },
     variables: [
       { name: "app_name", type: "string", default: "myapp", required: false, group: "Application", widget: "text" },
@@ -1881,7 +1881,7 @@ const mockRecipes: Recipe[] = [
       tags: ["static", "website", "s3", "aws", "starter"],
       engine: { type: "opentofu", minVersion: "1.6.0" },
       local: { runtimes: [{ id: "localstack" }] },
-      superpowers: { iamPolicyStream: true, cloudPod: true },
+      superpowers: { iamPolicyStream: true },
     },
     variables: [
       { name: "app_name", type: "string", description: "Lowercase name prefix used for every resource.", default: "mysite", required: false, group: "Application", widget: "text", help: "Lowercase name prefix used for every resource." },

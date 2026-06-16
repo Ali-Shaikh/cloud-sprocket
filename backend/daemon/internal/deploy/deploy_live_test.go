@@ -214,3 +214,17 @@ func TestLivePlanLabQueueWorkerRecipe(t *testing.T) {
 	}
 	livePlanRecipe(t, "lab-queue-worker-aws", map[string]any{"app_name": "livelab", "environment": "dev"})
 }
+
+func TestLivePlanAsyncAppRecipe(t *testing.T) {
+	if os.Getenv("TOFU_LIVE") == "" {
+		t.Skip("set TOFU_LIVE=1 to run a real tofu init+plan")
+	}
+	livePlanRecipe(t, "async-app-aws", map[string]any{"app_name": "liveasync", "environment": "dev"})
+}
+
+func TestLivePlanWebhookPlatformRecipe(t *testing.T) {
+	if os.Getenv("TOFU_LIVE") == "" {
+		t.Skip("set TOFU_LIVE=1 to run a real tofu init+plan")
+	}
+	livePlanRecipe(t, "webhook-platform-aws", map[string]any{"app_name": "livehook", "environment": "dev"})
+}

@@ -7,8 +7,8 @@ func TestBundledCatalogV06(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(manifests) < 9 {
-		t.Fatalf("expected at least 9 bundled recipes, got %d", len(manifests))
+	if len(manifests) < 11 {
+		t.Fatalf("expected at least 11 bundled recipes, got %d", len(manifests))
 	}
 
 	counts := map[string]int{}
@@ -22,8 +22,8 @@ func TestBundledCatalogV06(t *testing.T) {
 			}
 		}
 	}
-	if counts[KindAppDeploy] < 6 {
-		t.Fatalf("expected at least 6 app-deploy recipes, got %d", counts[KindAppDeploy])
+	if counts[KindAppDeploy] < 8 {
+		t.Fatalf("expected at least 8 app-deploy recipes, got %d", counts[KindAppDeploy])
 	}
 	if counts[KindServiceLab] < 3 {
 		t.Fatalf("expected at least 3 service-lab recipes, got %d", counts[KindServiceLab])

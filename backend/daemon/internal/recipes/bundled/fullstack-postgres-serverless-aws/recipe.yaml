@@ -34,7 +34,6 @@ local:
       requiresPro: true
 superpowers:
   iamPolicyStream: true
-  cloudPod: true
 build:
   - name: Install backend dependencies
     dirVar: backend_source_dir

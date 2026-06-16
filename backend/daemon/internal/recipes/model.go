@@ -33,11 +33,23 @@ type LocalSpec struct {
 }
 
 // SuperpowersSpec declares how an app-deploy recipe plugs into the local-first
-// workbench (IAM Policy Stream, Cloud Pods, chaos scenarios).
+// workbench (IAM Policy Stream, chaos scenarios). Cloud Pods are intentionally
+// not surfaced in the app (LocalStack paid feature).
 type SuperpowersSpec struct {
 	IamPolicyStream bool     `yaml:"iamPolicyStream" json:"iamPolicyStream,omitempty"`
-	CloudPod        bool     `yaml:"cloudPod" json:"cloudPod,omitempty"`
 	Chaos           []string `yaml:"chaos" json:"chaos,omitempty"`
+}
+
+// ImageBuildSpec wires a Dockerfile directory into a container image variable
+// before plan/apply. Distribution differs by target (local Docker vs ECR push).
+type ImageBuildSpec struct {
+	// DockerfileDirVar is the deployment variable holding the build context.
+	DockerfileDirVar string `yaml:"dockerfileDirVar" json:"dockerfileDirVar"`
+	// ImageVar is the Terraform variable receiving the built image URI or tag.
+	ImageVar string `yaml:"imageVar" json:"imageVar"`
+	// RepositoryVar, when set, names a variable used as the ECR repository
+	// segment on real AWS (defaults to app_name-environment-api).
+	RepositoryVar string `yaml:"repositoryVar" json:"repositoryVar,omitempty"`
 }
 
 // BuildStep is a command run in the deployment workspace before plan/apply, used
@@ -92,6 +104,7 @@ type Manifest struct {
 	Engine         EngineSpec      `yaml:"engine" json:"engine"`
 	Local          LocalSpec       `yaml:"local" json:"local"`
 	Superpowers    SuperpowersSpec `yaml:"superpowers" json:"superpowers,omitempty"`
+	ImageBuild     *ImageBuildSpec `yaml:"imageBuild" json:"imageBuild,omitempty"`
 	Build          []BuildStep     `yaml:"build" json:"build,omitempty"`
 	VariableGroups []VariableGroup `yaml:"variableGroups" json:"variableGroups,omitempty"`
 	Outputs        []OutputHint    `yaml:"outputs" json:"outputs,omitempty"`

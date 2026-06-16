@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CloudSprocket async sample</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Async app recipe</p>
+      <h1>API, queue and worker infrastructure are ready.</h1>
+      <p>
+        This bundled static frontend deploys to S3. POST JSON to the API at
+        <code>/jobs</code> to enqueue work on SQS. The paired worker Lambda
+        processes messages from the queue and receives the DynamoDB table name
+        through an environment variable.
+      </p>
+    </main>
+  </body>
+</html>
