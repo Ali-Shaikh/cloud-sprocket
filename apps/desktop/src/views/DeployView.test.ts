@@ -25,6 +25,24 @@ describe("toLocalStackUrl", () => {
     expect(toLocalStackUrl("https://example.com")).toBeNull();
   });
 
+  it("explains how to connect to local RDS endpoints from the host", () => {
+    expect(
+      localDeploymentOutputLink(
+        {
+          local: true,
+          recipeId: "api-postgres-containers-aws",
+          variables: { app_name: "myapp", environment: "dev" },
+        },
+        {
+          name: "database_endpoint",
+          value: "localhost.localstack.cloud:4512",
+        },
+      ),
+    ).toMatchObject({
+      note: expect.stringContaining("127.0.0.1"),
+    });
+  });
+
   it("uses direct S3 website links for local container frontend outputs", () => {
     expect(
       localDeploymentOutputLink(

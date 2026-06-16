@@ -198,7 +198,7 @@ resource "aws_ecs_task_definition" "app" {
       protocol      = "tcp"
     }]
     environment = [
-      { name = "DATABASE_URL", value = "postgres://${var.db_username}@${aws_db_instance.main.address}:5432/app" }
+      { name = "DATABASE_URL", value = "postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/app" }
     ]
     logConfiguration = {
       logDriver = "awslogs"

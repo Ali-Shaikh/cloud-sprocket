@@ -1188,6 +1188,16 @@ export function localDeploymentOutputLink(
 ): { url: string; label: string; title: string; note?: string } | null {
   if (!deployment.local || output.sensitive) return null;
 
+  if (output.name === "database_endpoint") {
+    const port = String(output.value ?? "").match(/:(\d+)\s*$/)?.[1] ?? "4510";
+    return {
+      url: "",
+      label: "Connect from your machine",
+      title: "Use 127.0.0.1 as the host when connecting from psql or a desktop SQL client.",
+      note: `Connect from your machine with host 127.0.0.1 and port ${port}. If the port is refused, restart LocalStack from Local Runtime so RDS ports are published.`,
+    };
+  }
+
   if (deployment.recipeId === "container-fullstack-aws" && output.name === "frontend_url") {
     const appName = stringVariable(deployment.variables.app_name, recipeDefaultAppName(deployment.recipeId));
     const environment = stringVariable(deployment.variables.environment, "dev");

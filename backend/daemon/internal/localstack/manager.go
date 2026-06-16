@@ -29,12 +29,18 @@ const (
 	defaultImage      = "localstack/localstack:stable"
 	containerPort     = "4566"
 	containerPortSpec = "4566/tcp"
-	profileName       = "cloudsprocket-localstack"
-	managedLabelKey   = "com.cloudsprocket.managed"
-	managedLabelValue = "true"
-	projectLabelKey   = "com.cloudsprocket.project"
-	projectLabelValue = "cloud-sprocket"
-	dockerSocketPath  = "/var/run/docker.sock"
+	// LocalStack allocates RDS Postgres listeners inside this range; publish it
+	// to the host so developers can connect with psql or a desktop SQL client.
+	rdsPortStart = 4510
+	rdsPortEnd   = 4559
+	profileName  = "cloudsprocket-localstack"
+	managedLabelKey      = "com.cloudsprocket.managed"
+	managedLabelValue    = "true"
+	projectLabelKey      = "com.cloudsprocket.project"
+	projectLabelValue    = "cloud-sprocket"
+	localStackConfigKey  = "com.cloudsprocket.localstack.config"
+	localStackConfigValue = "rds-ports-v1"
+	dockerSocketPath     = "/var/run/docker.sock"
 )
 
 type dockerClient interface {
@@ -98,12 +104,17 @@ func (m *Manager) Start(ctx context.Context, options models.LocalStackStartOptio
 	if err != nil {
 		return m.errorStatus("Failed to query Docker containers: " + err.Error()), err
 	}
-	// Recreate a stopped managed container so the latest configuration always
-	// applies, in particular the Docker socket mount required for Lambda. A
-	// pre-fix container (or one created with different image/token/persistence)
-	// is otherwise reused as-is and Lambda creation keeps failing.
-	if len(containers.Items) > 0 && containers.Items[0].State != "running" {
-		if _, err := api.ContainerRemove(ctx, containers.Items[0].ID, client.ContainerRemoveOptions{}); err != nil {
+	// Recreate a managed container when configuration is stale: stopped
+	// containers, or running ones created before RDS host port publishing.
+	if len(containers.Items) > 0 && needsLocalStackRecreate(containers.Items[0]) {
+		container := containers.Items[0]
+		if container.State == "running" {
+			timeoutSeconds := 10
+			if _, err := api.ContainerStop(ctx, container.ID, client.ContainerStopOptions{Timeout: &timeoutSeconds}); err != nil {
+				return m.errorStatus("Failed to stop LocalStack container for reconfiguration: " + err.Error()), err
+			}
+		}
+		if _, err := api.ContainerRemove(ctx, container.ID, client.ContainerRemoveOptions{}); err != nil {
 			return m.errorStatus("Failed to replace LocalStack container with configured image: " + err.Error()), err
 		}
 		containers = client.ContainerListResult{}
@@ -122,11 +133,10 @@ func (m *Manager) Start(ctx context.Context, options models.LocalStackStartOptio
 		return m.errorStatus("Failed to pull LocalStack image: " + err.Error()), err
 	}
 
-	port, err := networkapi.ParsePort(containerPortSpec)
+	exposedPorts, portBindings, err := localStackPortConfig()
 	if err != nil {
-		return m.errorStatus("Failed to configure LocalStack port: " + err.Error()), err
+		return m.errorStatus("Failed to configure LocalStack ports: " + err.Error()), err
 	}
-	hostIP := netip.MustParseAddr("127.0.0.1")
 	mounts, err := m.containerMounts(options)
 	if err != nil {
 		return m.errorStatus("Failed to configure LocalStack persistence: " + err.Error()), err
@@ -136,16 +146,11 @@ func (m *Manager) Start(ctx context.Context, options models.LocalStackStartOptio
 		Config: &containerapi.Config{
 			Image:        m.image,
 			Env:          localStackEnv(options),
-			ExposedPorts: networkapi.PortSet{port: struct{}{}},
+			ExposedPorts: exposedPorts,
 			Labels:       managedLabels(),
 		},
 		HostConfig: &containerapi.HostConfig{
-			PortBindings: networkapi.PortMap{
-				port: []networkapi.PortBinding{{
-					HostIP:   hostIP,
-					HostPort: containerPort,
-				}},
-			},
+			PortBindings:  portBindings,
 			Mounts:        mounts,
 			RestartPolicy: containerapi.RestartPolicy{Name: containerapi.RestartPolicyDisabled},
 		},
@@ -551,7 +556,48 @@ func truncateID(id string) string {
 
 func managedLabels() map[string]string {
 	return map[string]string{
-		managedLabelKey: managedLabelValue,
-		projectLabelKey: projectLabelValue,
+		managedLabelKey:       managedLabelValue,
+		projectLabelKey:       projectLabelValue,
+		localStackConfigKey:   localStackConfigValue,
 	}
+}
+
+func needsLocalStackRecreate(container containerapi.Summary) bool {
+	if container.State != "running" {
+		return true
+	}
+	if container.Labels == nil {
+		return true
+	}
+	return container.Labels[localStackConfigKey] != localStackConfigValue
+}
+
+func localStackPortConfig() (networkapi.PortSet, networkapi.PortMap, error) {
+	hostIP := netip.MustParseAddr("127.0.0.1")
+	exposed := networkapi.PortSet{}
+	bindings := networkapi.PortMap{}
+
+	gateway, err := networkapi.ParsePort(containerPortSpec)
+	if err != nil {
+		return nil, nil, err
+	}
+	exposed[gateway] = struct{}{}
+	bindings[gateway] = []networkapi.PortBinding{{
+		HostIP:   hostIP,
+		HostPort: containerPort,
+	}}
+
+	for port := rdsPortStart; port <= rdsPortEnd; port++ {
+		spec, err := networkapi.ParsePort(strconv.Itoa(port) + "/tcp")
+		if err != nil {
+			return nil, nil, err
+		}
+		exposed[spec] = struct{}{}
+		portText := strconv.Itoa(port)
+		bindings[spec] = []networkapi.PortBinding{{
+			HostIP:   hostIP,
+			HostPort: portText,
+		}}
+	}
+	return exposed, bindings, nil
 }

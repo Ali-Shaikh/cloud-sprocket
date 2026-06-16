@@ -17,6 +17,7 @@ import (
 	containerapi "github.com/moby/moby/api/types/container"
 	jsonstreamapi "github.com/moby/moby/api/types/jsonstream"
 	mountapi "github.com/moby/moby/api/types/mount"
+	networkapi "github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 )
 
@@ -36,8 +37,9 @@ type stubDockerClient struct {
 	pullError          error
 	logsError          error
 	logsPayload        string
-	lastCreateEnv      []string
-	lastCreateMounts   []mountapi.Mount
+	lastCreateEnv         []string
+	lastCreateMounts      []mountapi.Mount
+	lastCreatePortBindings networkapi.PortMap
 }
 
 func (s *stubDockerClient) ContainerCreate(_ context.Context, options client.ContainerCreateOptions) (client.ContainerCreateResult, error) {
@@ -54,6 +56,7 @@ func (s *stubDockerClient) ContainerCreate(_ context.Context, options client.Con
 	}}
 	s.lastCreateEnv = append([]string(nil), options.Config.Env...)
 	s.lastCreateMounts = append([]mountapi.Mount(nil), options.HostConfig.Mounts...)
+	s.lastCreatePortBindings = options.HostConfig.PortBindings
 	return client.ContainerCreateResult{ID: "ctr-created"}, nil
 }
 
@@ -266,6 +269,60 @@ func TestStartReturnsDockerErrors(t *testing.T) {
 	}
 	if status.Status != models.EmulatorStatusNotConfigured || status.Summary == "" {
 		t.Fatalf("expected error status, got %+v", status)
+	}
+}
+
+func TestStartPublishesGatewayAndRDSPorts(t *testing.T) {
+	dockerClient := &stubDockerClient{}
+	manager := newTestManager(t, dockerClient)
+
+	if _, err := manager.Start(context.Background(), models.LocalStackStartOptions{}); err != nil {
+		t.Fatalf("expected start to succeed, got %v", err)
+	}
+	if len(dockerClient.lastCreatePortBindings) != (rdsPortEnd-rdsPortStart+1)+1 {
+		t.Fatalf("expected gateway plus RDS port bindings, got %d", len(dockerClient.lastCreatePortBindings))
+	}
+	gateway, err := networkapi.ParsePort(containerPortSpec)
+	if err != nil {
+		t.Fatalf("parse gateway port: %v", err)
+	}
+	if bindings := dockerClient.lastCreatePortBindings[gateway]; len(bindings) != 1 || bindings[0].HostPort != containerPort {
+		t.Fatalf("expected gateway binding on %s, got %+v", containerPort, dockerClient.lastCreatePortBindings[gateway])
+	}
+	rdsPort, err := networkapi.ParsePort("4512/tcp")
+	if err != nil {
+		t.Fatalf("parse rds port: %v", err)
+	}
+	if bindings := dockerClient.lastCreatePortBindings[rdsPort]; len(bindings) != 1 || bindings[0].HostPort != "4512" {
+		t.Fatalf("expected RDS binding on 4512, got %+v", dockerClient.lastCreatePortBindings[rdsPort])
+	}
+}
+
+func TestStartRecreatesRunningContainerWithoutRDSPortConfig(t *testing.T) {
+	dockerClient := &stubDockerClient{containers: []containerapi.Summary{{
+		ID:     "ctr-old",
+		Names:  []string{"/" + containerName},
+		Image:  defaultImage,
+		State:  containerapi.StateRunning,
+		Status: "Up 1 second",
+		Labels: map[string]string{
+			managedLabelKey:    managedLabelValue,
+			projectLabelKey:    projectLabelValue,
+		},
+	}}}
+	manager := newTestManager(t, dockerClient)
+
+	if _, err := manager.Start(context.Background(), models.LocalStackStartOptions{}); err != nil {
+		t.Fatalf("expected start to succeed, got %v", err)
+	}
+	if len(dockerClient.stopCalls) != 1 || dockerClient.stopCalls[0] != "ctr-old" {
+		t.Fatalf("expected running container to be stopped for reconfiguration, got %+v", dockerClient.stopCalls)
+	}
+	if len(dockerClient.removeCalls) != 1 || dockerClient.removeCalls[0] != "ctr-old" {
+		t.Fatalf("expected running container to be removed, got %+v", dockerClient.removeCalls)
+	}
+	if dockerClient.createCalls != 1 {
+		t.Fatalf("expected replacement container create, got %d", dockerClient.createCalls)
 	}
 }
 
