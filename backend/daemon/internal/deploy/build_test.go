@@ -70,6 +70,25 @@ func TestRunBuildStepsSkipsWhenDirVarEmpty(t *testing.T) {
 	}
 }
 
+func TestRunBuildStepsContinueOnError(t *testing.T) {
+	engine := newBuildEngine(t)
+	srcDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(srcDir, "package.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	deployment := &Deployment{ID: "d5", Variables: map[string]any{"backend_source_dir": srcDir}}
+	steps := []recipes.BuildStep{{
+		Name:            "migrate",
+		DirVar:          "backend_source_dir",
+		Requires:        "package.json",
+		Command:         failCommand(),
+		ContinueOnError: true,
+	}}
+	if err := engine.runBuildSteps(context.Background(), deployment, steps, nil); err != nil {
+		t.Fatalf("expected continue-on-error, got: %v", err)
+	}
+}
+
 func TestRunBuildStepsReturnsErrorOnFailure(t *testing.T) {
 	engine := newBuildEngine(t)
 	srcDir := t.TempDir()

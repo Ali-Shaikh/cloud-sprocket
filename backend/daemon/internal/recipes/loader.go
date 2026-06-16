@@ -114,6 +114,7 @@ func (l *Loader) readManifest(id string) (Manifest, error) {
 	if err := manifest.Validate(); err != nil {
 		return Manifest{}, err
 	}
+	NormalizeManifest(&manifest)
 	return manifest, nil
 }
 

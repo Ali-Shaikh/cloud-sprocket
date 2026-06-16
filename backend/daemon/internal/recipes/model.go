@@ -15,12 +15,29 @@ type EngineSpec struct {
 	MinVersion string `yaml:"minVersion" json:"minVersion,omitempty"`
 }
 
+// LocalRuntimeSpec declares one compatible local dry-run runtime.
+type LocalRuntimeSpec struct {
+	ID          string `yaml:"id" json:"id"`
+	RequiresPro bool   `yaml:"requiresPro" json:"requiresPro,omitempty"`
+}
+
 // LocalSpec records which local emulator (if any) a recipe can dry-run against.
 type LocalSpec struct {
 	Emulator string `yaml:"emulator" json:"emulator,omitempty"`
 	// RequiresPro marks recipes whose services only emulate on LocalStack Pro
 	// (e.g. ECS, RDS, CloudFront). Surfaced as a hint in the UI.
 	RequiresPro bool `yaml:"requiresPro" json:"requiresPro,omitempty"`
+	// Runtimes is the preferred shape; legacy emulator/requiresPro are normalised
+	// into this list on load.
+	Runtimes []LocalRuntimeSpec `yaml:"runtimes" json:"runtimes,omitempty"`
+}
+
+// SuperpowersSpec declares how an app-deploy recipe plugs into the local-first
+// workbench (IAM Policy Stream, Cloud Pods, chaos scenarios).
+type SuperpowersSpec struct {
+	IamPolicyStream bool     `yaml:"iamPolicyStream" json:"iamPolicyStream,omitempty"`
+	CloudPod        bool     `yaml:"cloudPod" json:"cloudPod,omitempty"`
+	Chaos           []string `yaml:"chaos" json:"chaos,omitempty"`
 }
 
 // BuildStep is a command run in the deployment workspace before plan/apply, used
@@ -35,6 +52,9 @@ type BuildStep struct {
 	// (e.g. "package.json" so the bundled stub directory is skipped).
 	Requires string   `yaml:"requires" json:"requires,omitempty"`
 	Command  []string `yaml:"command" json:"command"`
+	// ContinueOnError runs the step but does not abort the deploy when it fails
+	// (e.g. a migration against a not-yet-ready database).
+	ContinueOnError bool `yaml:"continueOnError" json:"continueOnError,omitempty"`
 }
 
 // VariableHint layers UI metadata over a Terraform variable block.
@@ -65,10 +85,13 @@ type Manifest struct {
 	Name           string          `yaml:"name" json:"name"`
 	Summary        string          `yaml:"summary" json:"summary,omitempty"`
 	Description    string          `yaml:"description" json:"description,omitempty"`
+	// Kind classifies gallery intent: app-deploy or service-lab.
+	Kind           string          `yaml:"kind" json:"kind,omitempty"`
 	Providers      []string        `yaml:"providers" json:"providers,omitempty"`
 	Tags           []string        `yaml:"tags" json:"tags,omitempty"`
 	Engine         EngineSpec      `yaml:"engine" json:"engine"`
 	Local          LocalSpec       `yaml:"local" json:"local"`
+	Superpowers    SuperpowersSpec `yaml:"superpowers" json:"superpowers,omitempty"`
 	Build          []BuildStep     `yaml:"build" json:"build,omitempty"`
 	VariableGroups []VariableGroup `yaml:"variableGroups" json:"variableGroups,omitempty"`
 	Outputs        []OutputHint    `yaml:"outputs" json:"outputs,omitempty"`

@@ -288,6 +288,12 @@ func (e *Engine) runBuildSteps(ctx context.Context, deployment *Deployment, step
 		err := cmd.Run()
 		writer.flush()
 		if err != nil {
+			if step.ContinueOnError {
+				if onLine != nil {
+					onLine(fmt.Sprintf("Build step %q failed (continuing): %v", step.Name, err))
+				}
+				continue
+			}
 			return fmt.Errorf("build step %q failed: %w", step.Name, err)
 		}
 	}

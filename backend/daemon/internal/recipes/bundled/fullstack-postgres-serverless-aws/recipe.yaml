@@ -1,23 +1,28 @@
 apiVersion: cloudsprocket.recipe/v1
-id: serverless-fullstack-aws
+id: fullstack-postgres-serverless-aws
 kind: app-deploy
-version: 0.2.0
-name: Serverless full-stack (AWS)
-summary: Static frontend on S3, a Node API on Lambda behind API Gateway, and a DynamoDB table.
+version: 0.1.0
+name: Full-stack Postgres (serverless)
+summary: Static frontend on S3, a Node API on Lambda behind API Gateway, and a managed Postgres database on RDS.
 description: |
-  A serverless full-stack starter that runs entirely on LocalStack's free tier
-  and ships unchanged to real AWS by switching the connection profile.
+  A serverless full-stack starter with a static frontend on S3, a Node backend on
+  Lambda behind API Gateway, and a Postgres database on RDS. The bundled sample
+  frontend and API deploy when you do not supply your own code, so a first apply
+  works without custom application code.
 
-  Provisions an S3 website bucket for a static frontend, a Node.js Lambda
-  exposed through an HTTP API Gateway as the backend, and a DynamoDB table for
-  data. Bundled sample frontend and API code deploy when you do not supply your
-  own code. No RDS/ECS/CloudFront, so it stays within the free local emulator
-  services.
+  Uses RDS, which only emulates on LocalStack Pro. Use a LocalStack Pro/Team auth
+  token for the local dry-run, or deploy to real AWS by switching the connection
+  profile.
+
+  Point `backend_source_dir` at your handler folder or keep the bundled sample.
+  Point `frontend_dist_dir` at your built static site or keep the bundled sample.
 providers:
   - aws
 tags:
   - serverless
   - fullstack
+  - postgres
+  - api
   - aws
   - starter
 engine:
@@ -26,6 +31,7 @@ engine:
 local:
   runtimes:
     - id: localstack
+      requiresPro: true
 superpowers:
   iamPolicyStream: true
   cloudPod: true
@@ -34,12 +40,16 @@ build:
     dirVar: backend_source_dir
     requires: package.json
     command: ["npm", "ci", "--omit=dev"]
+  - name: Run migrations
+    dirVar: backend_source_dir
+    requires: prisma/schema.prisma
+    command: ["npx", "prisma", "migrate", "deploy"]
+    continueOnError: true
 variableGroups:
   - title: Application
     variables:
       - name: app_name
         widget: text
-        help: Lowercase name prefix used for every resource.
       - name: environment
         widget: select
         options: [dev, staging, prod]
@@ -57,20 +67,23 @@ variableGroups:
     variables:
       - name: lambda_memory_mb
         widget: number
-        help: Memory for the API Lambda, in megabytes.
   - title: Database
     variables:
-      - name: enable_point_in_time_recovery
-        widget: switch
+      - name: db_username
+        widget: text
+      - name: db_password
+        widget: password
+      - name: db_instance_class
+        widget: text
   - title: Advanced
     variables:
       - name: tags
         widget: textarea
-        help: Extra tags as a JSON object, applied to every resource.
 outputs:
   - name: api_endpoint
-    primary: true
   - name: frontend_website_endpoint
     primary: true
+  - name: database_url
+    primary: true
   - name: frontend_bucket
-  - name: dynamodb_table
+  - name: database_endpoint

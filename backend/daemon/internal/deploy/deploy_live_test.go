@@ -151,3 +151,66 @@ func TestLivePlanScheduledJobRecipe(t *testing.T) {
 		t.Fatal("expected the scheduled-job plan to add resources")
 	}
 }
+
+func livePlanRecipe(t *testing.T, recipeID string, variables map[string]any) {
+	t.Helper()
+	ctx := context.Background()
+	path, err := tofu.NewInstaller(t.TempDir()).Ensure(ctx)
+	if err != nil {
+		t.Fatalf("install tofu: %v", err)
+	}
+	engine := NewEngine(tofu.NewRunner(path), config.Settings{DeploymentsDir: t.TempDir()}, recipes.Bundled())
+	deployment := &Deployment{
+		ID:         "live-" + recipeID,
+		RecipeID:   recipeID,
+		ProviderID: "aws",
+		Local:      true,
+		Variables:  variables,
+	}
+	if err := engine.Prepare(deployment); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	summary, err := engine.Plan(ctx, deployment, func(line string) { t.Log(line) })
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	t.Logf("%s plan summary: +%d ~%d -%d", recipeID, summary.Add, summary.Change, summary.Destroy)
+	if summary.Add == 0 {
+		t.Fatalf("expected %s plan to add resources", recipeID)
+	}
+}
+
+func TestLivePlanApiPostgresServerlessRecipe(t *testing.T) {
+	if os.Getenv("TOFU_LIVE") == "" {
+		t.Skip("set TOFU_LIVE=1 to run a real tofu init+plan")
+	}
+	livePlanRecipe(t, "api-postgres-serverless-aws", map[string]any{"app_name": "liveapi", "environment": "dev", "db_password": "supersecret123"})
+}
+
+func TestLivePlanApiPostgresContainersRecipe(t *testing.T) {
+	if os.Getenv("TOFU_LIVE") == "" {
+		t.Skip("set TOFU_LIVE=1 to run a real tofu init+plan")
+	}
+	livePlanRecipe(t, "api-postgres-containers-aws", map[string]any{"app_name": "liveapi", "environment": "dev", "db_password": "supersecret123"})
+}
+
+func TestLivePlanFullstackPostgresServerlessRecipe(t *testing.T) {
+	if os.Getenv("TOFU_LIVE") == "" {
+		t.Skip("set TOFU_LIVE=1 to run a real tofu init+plan")
+	}
+	livePlanRecipe(t, "fullstack-postgres-serverless-aws", map[string]any{"app_name": "livefs", "environment": "dev", "db_password": "supersecret123"})
+}
+
+func TestLivePlanLabRestAPIRecipe(t *testing.T) {
+	if os.Getenv("TOFU_LIVE") == "" {
+		t.Skip("set TOFU_LIVE=1 to run a real tofu init+plan")
+	}
+	livePlanRecipe(t, "lab-rest-api-aws", map[string]any{"app_name": "livelab", "environment": "dev"})
+}
+
+func TestLivePlanLabQueueWorkerRecipe(t *testing.T) {
+	if os.Getenv("TOFU_LIVE") == "" {
+		t.Skip("set TOFU_LIVE=1 to run a real tofu init+plan")
+	}
+	livePlanRecipe(t, "lab-queue-worker-aws", map[string]any{"app_name": "livelab", "environment": "dev"})
+}

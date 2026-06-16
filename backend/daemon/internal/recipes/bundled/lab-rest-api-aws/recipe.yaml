@@ -1,26 +1,26 @@
 apiVersion: cloudsprocket.recipe/v1
-id: scheduled-job-aws
+id: lab-rest-api-aws
 kind: service-lab
-version: 0.2.0
-name: Scheduled job (AWS EventBridge + Lambda)
-summary: A Node Lambda invoked on a schedule by an EventBridge rule.
+version: 0.1.0
+name: REST API lab (AWS API Gateway + Lambda)
+summary: A minimal HTTP API on API Gateway backed by a Node.js Lambda.
 description: |
-  A recurring background job: an EventBridge (CloudWatch Events) rule fires on a
-  schedule expression and invokes a Node.js Lambda. Bundled sample job code
-  deploys when you do not supply your own handler. Use it for periodic
-  clean-ups, report generation, polling or any cron-style task.
+  A focused service lab for a serverless REST API: a Node.js Lambda behind an
+  HTTP API Gateway. Point `backend_source_dir` at your handler folder or keep
+  the bundled sample API for a first deployment.
 
-  Uses only Lambda, EventBridge and IAM, which emulate on LocalStack's free tier,
+  Uses only API Gateway and Lambda, which emulate on LocalStack's free tier,
   so it dry-runs locally and ships unchanged to real AWS by switching the
   connection profile.
 providers:
   - aws
 tags:
-  - scheduled
-  - cron
+  - api
+  - rest
   - lambda
-  - eventbridge
+  - apigateway
   - aws
+  - lab
 engine:
   type: opentofu
   minVersion: "1.6.0"
@@ -43,25 +43,20 @@ variableGroups:
         options: [dev, staging, prod]
       - name: aws_region
         widget: text
-  - title: Schedule
-    variables:
-      - name: schedule_expression
-        widget: text
-        help: 'EventBridge schedule, e.g. "rate(5 minutes)" or "cron(0 12 * * ? *)".'
-  - title: Job code
+  - title: API code
     variables:
       - name: backend_source_dir
         widget: directory
-        help: Folder with your Node job handler.handler export. Leave default for the sample job.
+        help: Folder with your Node API handler.handler export. Leave default for the sample API.
       - name: lambda_memory_mb
         widget: number
-        help: Memory for the job Lambda, in megabytes.
+        help: Memory for the API Lambda, in megabytes.
   - title: Advanced
     variables:
       - name: tags
         widget: textarea
         help: Extra tags as a JSON object, applied to every resource.
 outputs:
-  - name: lambda_function_name
+  - name: api_endpoint
     primary: true
-  - name: schedule_rule_name
+  - name: lambda_function_name

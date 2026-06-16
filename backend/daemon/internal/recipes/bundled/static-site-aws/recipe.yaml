@@ -1,6 +1,7 @@
 apiVersion: cloudsprocket.recipe/v1
 id: static-site-aws
-version: 0.1.0
+kind: app-deploy
+version: 0.2.0
 name: Static website (AWS S3)
 summary: A static website served from an S3 bucket, with your built site uploaded automatically.
 description: |
@@ -23,7 +24,11 @@ engine:
   type: opentofu
   minVersion: "1.6.0"
 local:
-  emulator: localstack
+  runtimes:
+    - id: localstack
+superpowers:
+  iamPolicyStream: true
+  cloudPod: true
   requiresPro: false
 variableGroups:
   - title: Application

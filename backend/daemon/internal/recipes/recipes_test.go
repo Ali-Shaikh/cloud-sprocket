@@ -113,7 +113,7 @@ func TestLoadContainerRecipe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if !recipe.Manifest.Local.RequiresPro {
+	if !recipe.Manifest.RequiresLocalStackPro() {
 		t.Fatal("container recipe should be flagged requiresPro")
 	}
 	byName := map[string]Variable{}

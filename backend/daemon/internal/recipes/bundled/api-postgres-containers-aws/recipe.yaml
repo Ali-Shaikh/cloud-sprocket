@@ -1,24 +1,24 @@
 apiVersion: cloudsprocket.recipe/v1
-id: container-fullstack-aws
+id: api-postgres-containers-aws
 kind: app-deploy
-version: 0.2.0
-name: Container full-stack (AWS)
-summary: A long-running Node container on ECS Fargate behind an ALB, a Postgres RDS database, and a CloudFront-fronted frontend.
+version: 0.1.0
+name: API + Postgres (containers)
+summary: A container API on ECS Fargate behind an ALB with a managed Postgres database on RDS.
 description: |
-  The traditional shape: a backend container runs on ECS Fargate behind an
-  Application Load Balancer, with a managed Postgres database on RDS and a
-  static frontend served from S3 through CloudFront. Defaults use a public nginx
-  image and bundled sample frontend so a first deployment works without custom
+  Deploy your backend as a long-running container on ECS Fargate behind an
+  Application Load Balancer, with a managed Postgres database on RDS. Defaults
+  use a public nginx image so a first deployment works without custom
   application code.
 
-  Uses ECS, RDS, ELBv2 and CloudFront, which only emulate on LocalStack Pro. Use a
+  Uses ECS, RDS and ELBv2, which only emulate on LocalStack Pro. Use a
   LocalStack Pro/Team auth token for the local dry-run, or deploy to real AWS by
   switching the connection profile.
 providers:
   - aws
 tags:
   - container
-  - fullstack
+  - postgres
+  - api
   - aws
   - ecs
   - rds
@@ -60,23 +60,15 @@ variableGroups:
         widget: password
       - name: db_instance_class
         widget: text
-  - title: Frontend
-    variables:
-      - name: frontend_dist_dir
-        widget: directory
-        help: Folder of your built static frontend. Leave default for the sample frontend.
   - title: Advanced
     variables:
       - name: tags
         widget: textarea
         help: Extra tags as a JSON object.
 outputs:
-  - name: alb_dns_name
+  - name: api_endpoint
     primary: true
-  - name: frontend_url
-    primary: true
-  - name: frontend_website_endpoint
-  - name: database_endpoint
   - name: database_url
     primary: true
+  - name: database_endpoint
   - name: ecs_cluster

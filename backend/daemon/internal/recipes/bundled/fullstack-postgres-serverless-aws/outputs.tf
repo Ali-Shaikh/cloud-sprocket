@@ -1,16 +1,16 @@
-output "alb_dns_name" {
-  description = "Public DNS name of the application load balancer."
-  value       = aws_lb.main.dns_name
-}
-
-output "frontend_url" {
-  description = "CloudFront URL serving the static frontend."
-  value       = "https://${aws_cloudfront_distribution.frontend.domain_name}"
+output "frontend_bucket" {
+  description = "S3 bucket hosting the static frontend."
+  value       = aws_s3_bucket.frontend.bucket
 }
 
 output "frontend_website_endpoint" {
-  description = "Direct S3 static website endpoint for the frontend."
+  description = "Static website endpoint for the frontend."
   value       = aws_s3_bucket_website_configuration.frontend.website_endpoint
+}
+
+output "api_endpoint" {
+  description = "Base URL of the backend HTTP API."
+  value       = aws_apigatewayv2_api.http.api_endpoint
 }
 
 output "database_endpoint" {
@@ -22,9 +22,4 @@ output "database_url" {
   description = "Postgres connection URL for your application."
   value       = "postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/app"
   sensitive   = true
-}
-
-output "ecs_cluster" {
-  description = "ECS cluster name."
-  value       = aws_ecs_cluster.main.name
 }

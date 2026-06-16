@@ -1,0 +1,77 @@
+apiVersion: cloudsprocket.recipe/v1
+id: api-postgres-serverless-aws
+kind: app-deploy
+version: 0.1.0
+name: API + Postgres (serverless)
+summary: A Node API on Lambda behind API Gateway with a managed Postgres database on RDS.
+description: |
+  Deploy your Node backend as a serverless HTTP API with a Postgres database wired
+  in. The sample API returns connection details so a first apply works without
+  custom code. Uses RDS, which only emulates on LocalStack Pro.
+
+  Point `backend_source_dir` at your handler folder or keep the bundled sample.
+providers:
+  - aws
+tags:
+  - serverless
+  - postgres
+  - api
+  - aws
+  - starter
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+      requiresPro: true
+superpowers:
+  iamPolicyStream: true
+  cloudPod: true
+build:
+  - name: Install backend dependencies
+    dirVar: backend_source_dir
+    requires: package.json
+    command: ["npm", "ci", "--omit=dev"]
+  - name: Run migrations
+    dirVar: backend_source_dir
+    requires: prisma/schema.prisma
+    command: ["npx", "prisma", "migrate", "deploy"]
+    continueOnError: true
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Application code
+    variables:
+      - name: backend_source_dir
+        widget: directory
+        help: Folder with your Node backend handler.handler export. Leave default for the sample API.
+  - title: Backend
+    variables:
+      - name: lambda_memory_mb
+        widget: number
+  - title: Database
+    variables:
+      - name: db_username
+        widget: text
+      - name: db_password
+        widget: password
+      - name: db_instance_class
+        widget: text
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+outputs:
+  - name: api_endpoint
+    primary: true
+  - name: database_url
+    primary: true
+  - name: database_endpoint

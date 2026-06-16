@@ -1,0 +1,63 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-queue-worker-aws
+kind: service-lab
+version: 0.1.0
+name: Queue worker lab (AWS SQS + Lambda)
+summary: An SQS queue with a dead-letter queue and a Node.js Lambda consumer.
+description: |
+  A focused service lab for asynchronous work: an SQS queue with a dead-letter
+  queue and a Node.js Lambda triggered by an event source mapping. Point
+  `backend_source_dir` at your handler folder or keep the bundled sample worker
+  for a first deployment.
+
+  Uses only SQS and Lambda, which emulate on LocalStack's free tier, so it
+  dry-runs locally and ships unchanged to real AWS by switching the connection
+  profile.
+providers:
+  - aws
+tags:
+  - queue
+  - sqs
+  - worker
+  - lambda
+  - aws
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+build:
+  - name: Install backend dependencies
+    dirVar: backend_source_dir
+    requires: package.json
+    command: ["npm", "ci", "--omit=dev"]
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Worker code
+    variables:
+      - name: backend_source_dir
+        widget: directory
+        help: Folder with your Node worker handler.handler export. Leave default for the sample worker.
+      - name: lambda_memory_mb
+        widget: number
+        help: Memory for the worker Lambda, in megabytes.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: queue_url
+    primary: true
+  - name: lambda_function_name
