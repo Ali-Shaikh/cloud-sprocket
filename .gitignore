@@ -1,7 +1,9 @@
 .venv/
 .tmp/
 .tools/
-CHECKPOINT.local.md
+# Local planning and resume notes (never commit)
+*CHECKPOINT*.md
+LOCAL_EMULATOR_FOUNDATION_PLAN.md
 .idea/
 .DS_Store
 __pycache__/
