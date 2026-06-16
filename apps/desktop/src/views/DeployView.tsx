@@ -850,16 +850,42 @@ function SuperpowersCard({
 }) {
   if (!superpowers.iamPolicyStream || !deployment.local) return null;
 
+  // IAM Policy Stream is a LocalStack Pro feature. We surface the real steps and the
+  // exact command rather than implying an in-app control, so the guidance actually works.
+  const streamCommand = "localstack aws iam stream";
+  const dashboardUrl = "https://app.localstack.cloud/inst/default/policy-stream";
+
   return (
     <Card className="border-violet-500/20 bg-violet-500/5 p-4">
-      <p className="mb-2 text-sm font-medium text-foreground">IAM Policy Stream</p>
-      <p className="flex items-start gap-2 text-sm text-muted-foreground">
-        <Shield className="mt-0.5 size-4 shrink-0 text-emerald-500" />
-        <span>
-          After exercising this stack locally, use <strong className="font-medium text-foreground">IAM Policy Stream</strong> in the
-          workspace to capture least-privilege policies and bake them back into your recipe.
-        </span>
+      <div className="mb-2 flex items-center gap-2">
+        <Shield className="size-4 text-emerald-500" />
+        <p className="text-sm font-medium text-foreground">IAM Policy Stream (LocalStack Pro)</p>
+      </div>
+      <p className="mb-3 text-sm text-muted-foreground">
+        Capture a least-privilege IAM policy from this local run, then bake it back into the recipe.
       </p>
+      <ol className="flex flex-col gap-2 text-sm text-muted-foreground">
+        <li>
+          1. Start LocalStack with <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">IAM_SOFT_MODE=1</code> so
+          violations are logged without blocking calls.
+        </li>
+        <li className="flex flex-col gap-1.5">
+          <span>2. Stream the generated policies in a terminal:</span>
+          <span className="flex items-center justify-between gap-2 rounded-lg border bg-muted/40 p-2">
+            <code className="select-text break-all font-mono text-xs text-foreground">{streamCommand}</code>
+            <CopyButton value={streamCommand} />
+          </span>
+        </li>
+        <li>3. Exercise the deployed stack (call the API), then copy the suggested policy into your IaC.</li>
+      </ol>
+      <button
+        type="button"
+        onClick={() => void openExternalUrl(dashboardUrl)}
+        className="mt-3 inline-flex items-center gap-1 text-sm text-violet-600 hover:underline dark:text-violet-400"
+      >
+        Open the IAM Policy Stream dashboard
+        <ExternalLink className="size-3.5" />
+      </button>
     </Card>
   );
 }
