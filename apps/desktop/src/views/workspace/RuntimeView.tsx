@@ -103,7 +103,8 @@ export default function RuntimeView({
           ? flociAz
           : undefined;
     // Settings apply on the next Start or Recreate; only block edits mid-flight.
-    const settingsLocked = controls.actionInFlight;
+    // controls is undefined for unknown emulators, whose settings block is not rendered.
+    const settingsLocked = controls?.actionInFlight ?? false;
     const isLocalStack = emulator.emulatorId === "localstack";
     const profileLabel = isLocalStack ? "Create AWS Profile" : "Create Azure Profile";
     const startLabel = isLocalStack ? "Start LocalStack" : "Start floci-az";
