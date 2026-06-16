@@ -475,6 +475,40 @@ func TestStartConfiguresPersistenceAndExtraEnvironment(t *testing.T) {
 	}
 }
 
+func TestPersistenceMountUsesNamedVolumeOnWindows(t *testing.T) {
+	settings := config.FromEnv(map[string]string{}, "windows", filepath.Join(t.TempDir(), "home"))
+	manager := &Manager{settings: settings}
+
+	mount, err := manager.persistenceMount()
+	if err != nil {
+		t.Fatalf("expected persistence mount, got %v", err)
+	}
+	if mount.Type != mountapi.TypeVolume || mount.Source != localStackPersistenceVolume {
+		t.Fatalf("expected named volume on Windows, got %+v", mount)
+	}
+}
+
+func TestPersistenceMountUsesBindOnLinux(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "home")
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("expected runtime dirs, got %v", err)
+	}
+	manager := &Manager{settings: settings}
+
+	mount, err := manager.persistenceMount()
+	if err != nil {
+		t.Fatalf("expected persistence mount, got %v", err)
+	}
+	if mount.Type != mountapi.TypeBind {
+		t.Fatalf("expected bind mount on Linux, got %+v", mount)
+	}
+	expected := filepath.Join(settings.EmulatorStateDir, "localstack")
+	if mount.Source != expected {
+		t.Fatalf("expected bind source %q, got %q", expected, mount.Source)
+	}
+}
+
 func TestLogsReturnsManagedContainerLogs(t *testing.T) {
 	dockerClient := &stubDockerClient{
 		containers: []containerapi.Summary{{

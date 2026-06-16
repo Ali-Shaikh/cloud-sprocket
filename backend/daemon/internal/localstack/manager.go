@@ -38,9 +38,10 @@ const (
 	managedLabelValue    = "true"
 	projectLabelKey      = "com.cloudsprocket.project"
 	projectLabelValue    = "cloud-sprocket"
-	localStackConfigKey  = "com.cloudsprocket.localstack.config"
-	localStackConfigValue = "rds-ports-v1"
-	dockerSocketPath     = "/var/run/docker.sock"
+	localStackConfigKey           = "com.cloudsprocket.localstack.config"
+	localStackConfigValue         = "persist-volume-v1"
+	localStackPersistenceVolume   = "cloudsprocket-localstack-data"
+	dockerSocketPath              = "/var/run/docker.sock"
 )
 
 type dockerClient interface {
@@ -411,17 +412,34 @@ func (m *Manager) containerMounts(options models.LocalStackStartOptions) ([]moun
 		Target: dockerSocketPath,
 	}}
 	if options.Persistence {
-		stateDir := filepath.Join(m.settings.EmulatorStateDir, "localstack")
-		if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		stateMount, err := m.persistenceMount()
+		if err != nil {
 			return nil, err
 		}
-		mounts = append(mounts, mountapi.Mount{
+		mounts = append(mounts, stateMount)
+	}
+	return mounts, nil
+}
+
+func (m *Manager) persistenceMount() (mountapi.Mount, error) {
+	// Docker Desktop bind mounts from Windows/macOS hosts break Postgres RDS data
+	// directory permissions inside LocalStack. Use a named Docker volume there.
+	if m.settings.PlatformName == "linux" {
+		stateDir := filepath.Join(m.settings.EmulatorStateDir, "localstack")
+		if err := os.MkdirAll(stateDir, 0o755); err != nil {
+			return mountapi.Mount{}, err
+		}
+		return mountapi.Mount{
 			Type:   mountapi.TypeBind,
 			Source: stateDir,
 			Target: "/var/lib/localstack",
-		})
+		}, nil
 	}
-	return mounts, nil
+	return mountapi.Mount{
+		Type:   mountapi.TypeVolume,
+		Source: localStackPersistenceVolume,
+		Target: "/var/lib/localstack",
+	}, nil
 }
 
 func validEnvName(value string) bool {

@@ -183,6 +183,12 @@ export default function RuntimeView({
                   />
                   <span>Enable {emulator.label} persistence</span>
                 </label>
+                {isLocalStack ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    On Windows and macOS, persistence uses a Docker volume so LocalStack RDS Postgres
+                    can start with valid directory permissions.
+                  </p>
+                ) : null}
               </div>
               <div className="sm:col-span-2">
                 <div className={cn(fieldLabel, "mb-1")}>Environment Variables</div>
