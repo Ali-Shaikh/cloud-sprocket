@@ -32,6 +32,7 @@ function ConnectionRail({
   onAddConnection,
   onOpenSettings,
   userInitials,
+  showVersion = false,
 }: ConnectionRailProps) {
   return (
     <nav
@@ -39,15 +40,9 @@ function ConnectionRail({
       className="flex h-full flex-col items-center gap-1.5 bg-rail py-3"
     >
       <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="mb-1 grid size-10 place-items-center rounded-[11px] bg-gradient-to-br from-primary to-purple-500 text-[15px] font-extrabold text-white shadow-md">
-              CS
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side="right">CloudSprocket v{APP_VERSION}</TooltipContent>
-        </Tooltip>
-        <span className="mb-2 text-[10px] font-semibold tracking-wide text-white/45">v{APP_VERSION}</span>
+        <div className="mb-2 grid size-10 place-items-center rounded-[11px] bg-gradient-to-br from-primary to-purple-500 text-[15px] font-extrabold text-white shadow-md">
+          CS
+        </div>
 
         {connections.map((c) => {
           const active = c.id === activeId;
@@ -130,6 +125,15 @@ function ConnectionRail({
         <div className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-orange-300 to-pink-400 text-[13px] font-bold text-white">
           {userInitials ?? "CS"}
         </div>
+
+        {showVersion && (
+          <span
+            className="pb-1 text-[10px] font-medium tracking-wide text-white/40"
+            title={`CloudSprocket v${APP_VERSION}`}
+          >
+            v{APP_VERSION}
+          </span>
+        )}
       </TooltipProvider>
     </nav>
   );

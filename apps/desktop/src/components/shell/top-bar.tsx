@@ -12,8 +12,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-import { APP_VERSION } from "@/lib/app-version";
-
 import type { TopBarProps } from "./types";
 
 const iconBtn =
@@ -61,12 +59,6 @@ function TopBar({
         <span className="truncate font-semibold text-foreground">{breadcrumb.connection}</span>
         <span className="shrink-0 text-muted-foreground">/</span>
         <span className="truncate text-muted-foreground">{breadcrumb.view}</span>
-        <span
-          className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
-          title={`CloudSprocket v${APP_VERSION}`}
-        >
-          v{APP_VERSION}
-        </span>
       </div>
 
       {writeMode ? (

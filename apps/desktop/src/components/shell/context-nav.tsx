@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils";
 import { ProviderIcon } from "@/components/provider-icon";
 import { StatusDot } from "@/components/status-dot";
 
+import { APP_VERSION } from "@/lib/app-version";
+
 import type { ContextNavProps } from "./types";
 
 const navItemBase =
@@ -111,21 +113,29 @@ function ContextNav({
         ))}
       </div>
 
-      <div className="grid gap-1 border-t border-border p-2.5">
-        <button
-          type="button"
-          onClick={onShowActivity}
-          className={cn(
-            navItemBase,
-            activityActive
-              ? "bg-primary/10 font-semibold text-primary"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground",
-          )}
+      <div className="border-t border-border">
+        <div className="grid gap-1 p-2.5">
+          <button
+            type="button"
+            onClick={onShowActivity}
+            className={cn(
+              navItemBase,
+              activityActive
+                ? "bg-primary/10 font-semibold text-primary"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <Clock className="size-[18px]" />
+            <span className="truncate">Recent activity</span>
+          </button>
+          {footer}
+        </div>
+        <p
+          className="border-t border-border px-4 py-2 text-[10px] font-medium text-muted-foreground/70"
+          title={`CloudSprocket v${APP_VERSION}`}
         >
-          <Clock className="size-[18px]" />
-          <span className="truncate">Recent activity</span>
-        </button>
-        {footer}
+          v{APP_VERSION}
+        </p>
       </div>
     </aside>
   );

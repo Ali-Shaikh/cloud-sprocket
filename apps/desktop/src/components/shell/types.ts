@@ -81,6 +81,8 @@ export interface ConnectionRailProps {
   onOpenSettings?: () => void;
   /** Two-letter initials for the user avatar at the foot of the rail. */
   userInitials?: string;
+  /** When the contextual nav is hidden, show the app version at the rail foot. */
+  showVersion?: boolean;
 }
 
 export interface ContextNavProps {

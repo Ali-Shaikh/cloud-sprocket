@@ -2297,6 +2297,7 @@ export default function App() {
             activeId={activeConnectionId}
             onSelect={handleRailSelect}
             userInitials="AS"
+            showVersion={sidebarCollapsed || isTablet}
           />
         }
         nav={
