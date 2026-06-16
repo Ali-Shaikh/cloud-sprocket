@@ -1459,7 +1459,7 @@ describe("App", () => {
     });
   }, 10000);
 
-  it("locks persistence and environment controls while emulators are running", async () => {
+  it("keeps persistence and environment controls editable while emulators are running", async () => {
     sessionFixture = {
       ...sessionFixture,
       isLocked: true,
@@ -1497,9 +1497,9 @@ describe("App", () => {
     );
 
     fireEvent.click(await screen.findByText("Local Runtime"));
-    expect(await screen.findByLabelText("Enable LocalStack persistence")).toBeDisabled();
-    expect(screen.getByLabelText("LocalStack auth token")).toBeDisabled();
-    expect(screen.getByLabelText("Enable floci-az persistence")).toBeDisabled();
+    expect(await screen.findByLabelText("Enable LocalStack persistence")).toBeEnabled();
+    expect(screen.getByLabelText("LocalStack auth token")).toBeEnabled();
+    expect(screen.getByLabelText("Enable floci-az persistence")).toBeEnabled();
   });
 
   it("applies S3 prefix filtering and renders selected object metadata", async () => {

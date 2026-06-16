@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"cloudsprocket/backend/daemon/internal/config"
@@ -410,6 +411,36 @@ func TestStartPassesLocalStackAuthTokenWhenConfigured(t *testing.T) {
 	}
 	if len(dockerClient.lastCreateEnv) != 1 || dockerClient.lastCreateEnv[0] != "LOCALSTACK_AUTH_TOKEN=test-token" {
 		t.Fatalf("expected auth token env to be passed to LocalStack, got %+v", dockerClient.lastCreateEnv)
+	}
+}
+
+func TestStartDoesNotUseAmbientAuthTokenWhenRequestEmpty(t *testing.T) {
+	t.Setenv("LOCALSTACK_AUTH_TOKEN", "ambient-token")
+	dockerClient := &stubDockerClient{}
+	manager := newTestManager(t, dockerClient)
+
+	if _, err := manager.Start(context.Background(), models.LocalStackStartOptions{}); err != nil {
+		t.Fatalf("expected start to succeed, got %v", err)
+	}
+	for _, entry := range dockerClient.lastCreateEnv {
+		if strings.HasPrefix(entry, "LOCALSTACK_AUTH_TOKEN=") {
+			t.Fatalf("expected no auth token env when request token is empty, got %+v", dockerClient.lastCreateEnv)
+		}
+	}
+}
+
+func TestStartIgnoresPersistenceEnvWhenPersistenceDisabled(t *testing.T) {
+	dockerClient := &stubDockerClient{}
+	manager := newTestManager(t, dockerClient)
+
+	if _, err := manager.Start(context.Background(), models.LocalStackStartOptions{
+		Environment: map[string]string{"PERSISTENCE": "1", "DEBUG": "1"},
+	}); err != nil {
+		t.Fatalf("expected start to succeed, got %v", err)
+	}
+	expectedEnv := []string{"DEBUG=1"}
+	if !reflect.DeepEqual(dockerClient.lastCreateEnv, expectedEnv) {
+		t.Fatalf("expected persistence env to be omitted, got %+v", dockerClient.lastCreateEnv)
 	}
 }
 

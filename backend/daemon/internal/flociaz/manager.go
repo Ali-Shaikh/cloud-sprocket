@@ -365,7 +365,7 @@ func portConfig() (networkapi.PortSet, networkapi.PortMap, error) {
 func flociAZEnv(options models.LocalStackStartOptions) []string {
 	values := map[string]string{}
 	for key, value := range options.Environment {
-		if validEnvName(key) {
+		if validEnvName(key) && key != "FLOCI_AZ_STORAGE_MODE" && key != "FLOCI_AZ_STORAGE_PATH" {
 			values[key] = value
 		}
 	}

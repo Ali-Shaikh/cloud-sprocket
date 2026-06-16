@@ -102,9 +102,8 @@ export default function RuntimeView({
         : emulator.emulatorId === "floci-az"
           ? flociAz
           : undefined;
-    // Persistence and environment only take effect when the container is
-    // (re)created on start, so lock them while a container is present.
-    const settingsLocked = emulator.status === "running" || emulator.status === "unhealthy";
+    // Settings apply on the next Start or Recreate; only block edits mid-flight.
+    const settingsLocked = controls.actionInFlight;
     const isLocalStack = emulator.emulatorId === "localstack";
     const profileLabel = isLocalStack ? "Create AWS Profile" : "Create Azure Profile";
     const startLabel = isLocalStack ? "Start LocalStack" : "Start floci-az";
@@ -144,13 +143,10 @@ export default function RuntimeView({
             <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
               <div className={fieldLabel}>Runtime Action</div>
               <p className="text-sm">{controls.actionStatus}</p>
-              {settingsLocked ? (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Stop {emulator.label} to change{" "}
-                  {isLocalStack ? "the auth token, persistence, or environment" : "persistence or environment"}.
-                  These apply only when the container is started.
-                </p>
-              ) : null}
+              <p className="mt-1 text-xs text-muted-foreground">
+                {isLocalStack ? "Auth token, persistence, and environment" : "Persistence and environment"} apply on
+                the next Start or Recreate. Use Recreate after changing them on a running container.
+              </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">

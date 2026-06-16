@@ -372,18 +372,14 @@ func (m *Manager) pullImage(ctx context.Context, api dockerClient) error {
 func localStackEnv(options models.LocalStackStartOptions) []string {
 	values := map[string]string{}
 	for key, value := range options.Environment {
-		if validEnvName(key) && key != "LOCALSTACK_AUTH_TOKEN" {
+		if validEnvName(key) && key != "LOCALSTACK_AUTH_TOKEN" && key != "PERSISTENCE" {
 			values[key] = value
 		}
 	}
 	if options.Persistence {
 		values["PERSISTENCE"] = "1"
 	}
-	token := strings.TrimSpace(options.AuthToken)
-	if token == "" {
-		token = strings.TrimSpace(os.Getenv("LOCALSTACK_AUTH_TOKEN"))
-	}
-	if token != "" {
+	if token := strings.TrimSpace(options.AuthToken); token != "" {
 		values["LOCALSTACK_AUTH_TOKEN"] = token
 	}
 	if len(values) == 0 {

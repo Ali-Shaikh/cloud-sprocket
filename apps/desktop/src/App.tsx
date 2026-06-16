@@ -1523,7 +1523,7 @@ export default function App() {
   }
 
   function localStackEnvironment(): Record<string, string> {
-    return parseEnvironment(localStackEnvironmentText, ["LOCALSTACK_AUTH_TOKEN"]);
+    return parseEnvironment(localStackEnvironmentText, ["LOCALSTACK_AUTH_TOKEN", "PERSISTENCE"]);
   }
 
   function flociAzEnvironment(): Record<string, string> {
