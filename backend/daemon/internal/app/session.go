@@ -306,6 +306,7 @@ func (s *Service) handleSessionLock(ctx context.Context, notifier Notifier) (any
 	}
 	session.IsLocked = true
 	session.AWSWriteModeEnabled = false
+	session.AzureWriteModeEnabled = false
 	session.LockedProviderID = session.CurrentProviderID
 	session.LockedProfileID = session.SelectedProfileID
 	session.LockedAuthMethod = session.SelectedAuthMethod
@@ -333,18 +334,28 @@ func (s *Service) handleSessionSetWriteMode(ctx context.Context, params json.Raw
 	if err != nil {
 		return nil, err
 	}
-	if !session.IsLocked || session.CurrentProviderID != "aws" {
-		return nil, errors.New("open a locked AWS workspace before changing write mode")
+	if !session.IsLocked {
+		return nil, errors.New("open a locked workspace before changing write mode")
 	}
 	profiles := filterProfiles(snapshot.Profiles, session.CurrentProviderID)
 	profile, ok := findProfile(profiles, session.SelectedProfileID)
 	if !ok {
-		return nil, errors.New("the locked AWS profile is no longer available")
+		return nil, errors.New("the locked profile is no longer available")
 	}
-	if request.Enabled && !profileAllowsAWSWrites(profile) {
-		return nil, errors.New("this profile cannot enable write mode: configure a local endpoint_url and cloudsprocket_allow_writes = true")
+	switch session.CurrentProviderID {
+	case "aws":
+		if request.Enabled && !profileAllowsAWSWrites(profile) {
+			return nil, errors.New("this profile cannot enable write mode: configure a local endpoint_url and cloudsprocket_allow_writes = true")
+		}
+		session.AWSWriteModeEnabled = request.Enabled
+	case "azure":
+		if request.Enabled && !profileAllowsAzureWrites(profile, s.azureProviderCommandPath(snapshot)) {
+			return nil, errors.New("this Azure profile cannot enable write mode: use the floci-az local profile or sign in with the Azure CLI")
+		}
+		session.AzureWriteModeEnabled = request.Enabled
+	default:
+		return nil, errors.New("write mode is only available for locked AWS or Azure workspaces")
 	}
-	session.AWSWriteModeEnabled = request.Enabled
 	if err := s.store.SaveSession(ctx, session); err != nil {
 		return nil, err
 	}
@@ -353,11 +364,20 @@ func (s *Service) handleSessionSetWriteMode(ctx context.Context, params json.Raw
 		message := "Write mode disabled for this workspace session."
 		if request.Enabled {
 			level = "warning"
-			message = fmt.Sprintf(
-				"Write mode enabled for %s (target: %s).",
-				profile.DisplayName,
-				writeTargetSummary(profile),
-			)
+			switch session.CurrentProviderID {
+			case "azure":
+				message = fmt.Sprintf(
+					"Write mode enabled for %s (target: %s).",
+					profile.DisplayName,
+					azureWriteTargetSummary(profile, s.settings.FlociAZEndpoint),
+				)
+			default:
+				message = fmt.Sprintf(
+					"Write mode enabled for %s (target: %s).",
+					profile.DisplayName,
+					writeTargetSummary(profile),
+				)
+			}
 		}
 		_ = notifier.Notify("log.appended", models.ActivityLogEntry{
 			Level:     level,

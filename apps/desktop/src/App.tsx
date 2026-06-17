@@ -63,6 +63,7 @@ import LogsView from "./views/workspace/LogsView";
 import IAMView from "./views/workspace/IAMView";
 import LambdaView from "./views/workspace/LambdaView";
 import AzureView from "./views/workspace/AzureView";
+import AzureStorageView from "./views/workspace/AzureStorageView";
 import RuntimeView from "./views/workspace/RuntimeView";
 import PlaceholderView from "./views/workspace/PlaceholderView";
 import ActivityView from "./views/workspace/ActivityView";
@@ -89,7 +90,10 @@ import type {
   AwsS3Bucket,
   AwsS3ExportSnippet,
   AwsS3Object,
+  AzureBlob,
+  AzureBlobContainer,
   AzureResourceGroup,
+  AzureStorageAccount,
   AzureVirtualMachine,
   DetailField,
   EmulatorActionResult,
@@ -269,6 +273,18 @@ function normaliseAzureResourceGroup(resourceGroup: AzureResourceGroup): AzureRe
   };
 }
 
+function normaliseAzureStorageAccount(account: AzureStorageAccount): AzureStorageAccount {
+  return { ...account };
+}
+
+function normaliseAzureBlobContainer(container: AzureBlobContainer): AzureBlobContainer {
+  return { ...container };
+}
+
+function normaliseAzureBlob(blob: AzureBlob): AzureBlob {
+  return { ...blob };
+}
+
 function normaliseAzureVirtualMachine(vm: AzureVirtualMachine): AzureVirtualMachine {
   return {
     ...vm,
@@ -364,6 +380,11 @@ function normaliseSessionSnapshot(session: Partial<SessionSnapshot> | null | und
     selectedEc2InstanceId: session?.selectedEc2InstanceId,
     selectedAzureResourceGroup: session?.selectedAzureResourceGroup,
     selectedAzureVmId: session?.selectedAzureVmId,
+    selectedAzureStorageAccount: session?.selectedAzureStorageAccount,
+    selectedAzureBlobContainer: session?.selectedAzureBlobContainer,
+    selectedAzureBlobName: session?.selectedAzureBlobName,
+    azureBlobPrefixFilter: session?.azureBlobPrefixFilter ?? "",
+    azureWriteModeEnabled: session?.azureWriteModeEnabled ?? false,
   };
 }
 
@@ -402,8 +423,15 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     awsWriteCapable: source.awsWriteCapable ?? false,
     awsWriteModeEnabled: source.awsWriteModeEnabled ?? false,
     awsWritesEnabled: source.awsWritesEnabled ?? false,
+    azureWriteCapable: source.azureWriteCapable ?? false,
+    azureWriteModeEnabled: source.azureWriteModeEnabled ?? false,
+    azureWritesEnabled: source.azureWritesEnabled ?? false,
     azureResourceGroups: normaliseArray(source.azureResourceGroups).map(normaliseAzureResourceGroup),
     azureVirtualMachines: normaliseArray(source.azureVirtualMachines).map(normaliseAzureVirtualMachine),
+    azureStorageAccounts: normaliseArray(source.azureStorageAccounts).map(normaliseAzureStorageAccount),
+    azureBlobContainers: normaliseArray(source.azureBlobContainers).map(normaliseAzureBlobContainer),
+    azureBlobs: normaliseArray(source.azureBlobs).map(normaliseAzureBlob),
+    azureBlobMetadata: normaliseDetailFields(source.azureBlobMetadata),
     s3Buckets: normaliseArray(source.s3Buckets).map(normaliseS3Bucket),
     s3Objects: normaliseArray(source.s3Objects).map(normaliseS3Object),
     s3ObjectMetadata: normaliseDetailFields(source.s3ObjectMetadata),
@@ -470,8 +498,15 @@ const emptyWorkspace: WorkspaceSnapshot = {
   awsWriteCapable: false,
   awsWriteModeEnabled: false,
   awsWritesEnabled: false,
+  azureWriteCapable: false,
+  azureWriteModeEnabled: false,
+  azureWritesEnabled: false,
   azureResourceGroups: [],
   azureVirtualMachines: [],
+  azureStorageAccounts: [],
+  azureBlobContainers: [],
+  azureBlobs: [],
+  azureBlobMetadata: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -536,6 +571,8 @@ export default function App() {
   const [iamActionStatus, setIamActionStatus] = useState(
     "IAM inventory loads account-wide roles and policies.",
   );
+  const [azureActionStatus, setAzureActionStatus] = useState("");
+  const [azureStorageActionStatus, setAzureStorageActionStatus] = useState("");
   const [writeModeDialogOpen, setWriteModeDialogOpen] = useState(false);
   const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<"enable" | "incapable">("enable");
   const [loading, setLoading] = useState(true);
@@ -564,6 +601,7 @@ export default function App() {
   const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState("overview");
   const [activeS3PageId, setActiveS3PageId] = useState("buckets");
   const [activeAzurePageId, setActiveAzurePageId] = useState("resource-groups");
+  const [activeAzureStoragePageId, setActiveAzureStoragePageId] = useState("blobs");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [splitPanelOpen, setSplitPanelOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -1035,12 +1073,21 @@ export default function App() {
       });
   }
 
+  const writeModeEnabled =
+    session.lockedProviderId === "azure"
+      ? workspace.azureWriteModeEnabled
+      : workspace.awsWriteModeEnabled;
+  const writeModeCapable =
+    session.lockedProviderId === "azure"
+      ? workspace.azureWriteCapable
+      : workspace.awsWriteCapable;
+
   function requestWriteModeChange(): void {
-    if (workspace.awsWriteModeEnabled) {
+    if (writeModeEnabled) {
       void setWriteMode(false);
       return;
     }
-    setWriteModeDialogIntent(workspace.awsWriteCapable ? "enable" : "incapable");
+    setWriteModeDialogIntent(writeModeCapable ? "enable" : "incapable");
     setWriteModeDialogOpen(true);
   }
 
@@ -1928,11 +1975,100 @@ export default function App() {
             : activeAzurePageId
       }
       showSensitiveValues={showSensitiveValues}
+      actionStatus={azureActionStatus}
       onSelectResourceGroup={(resourceGroup) => {
         void mutateWorkspace("azure.selectResourceGroup", { resourceGroup });
       }}
       onSelectVirtualMachine={(vmId) => {
         void mutateWorkspace("azure.selectVirtualMachine", { vmId });
+      }}
+      onCreateResourceGroup={(name, location) => {
+        setAzureActionStatus(`Creating resource group ${name}...`);
+        void backendRequest<WorkspaceSnapshot>("azure.resourceGroups.create", { name, location })
+          .then((workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            });
+            setAzureActionStatus(workspaceResult.azureStatusMessage || `Created resource group ${name}.`);
+          })
+          .catch((error: unknown) => {
+            setAzureActionStatus(error instanceof Error ? error.message : String(error));
+          });
+      }}
+      onDeleteResourceGroup={(name) => {
+        setAzureActionStatus(`Deleting resource group ${name}...`);
+        void backendRequest<WorkspaceSnapshot>("azure.resourceGroups.delete", { name })
+          .then((workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            });
+            setAzureActionStatus(workspaceResult.azureStatusMessage || `Deleted resource group ${name}.`);
+          })
+          .catch((error: unknown) => {
+            setAzureActionStatus(error instanceof Error ? error.message : String(error));
+          });
+      }}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "azure-storage" ? (
+    <AzureStorageView
+      workspace={workspace}
+      activePageId={activeAzureStoragePageId}
+      actionStatus={azureStorageActionStatus}
+      onSelectAccount={(accountName) => {
+        void mutateWorkspace("azure.storage.selectAccount", { accountName });
+      }}
+      onSelectContainer={(containerName) => {
+        void mutateWorkspace("azure.storage.selectContainer", { containerName });
+      }}
+      onSelectBlob={(blobName) => {
+        void mutateWorkspace("azure.storage.selectBlob", { blobName });
+      }}
+      onSetPrefixFilter={(prefix) => {
+        void mutateWorkspace("azure.storage.setPrefixFilter", { prefix });
+      }}
+      onCreateContainer={(containerName) => {
+        setAzureStorageActionStatus(`Creating container ${containerName}...`);
+        void backendRequest<WorkspaceSnapshot>("azure.storage.createContainer", { containerName })
+          .then((workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            });
+            setAzureStorageActionStatus(
+              workspaceResult.azureStorageStatusMessage || `Created container ${containerName}.`,
+            );
+          })
+          .catch((error: unknown) => {
+            setAzureStorageActionStatus(error instanceof Error ? error.message : String(error));
+          });
+      }}
+      onUploadBlob={(sourcePath, blobName) => {
+        setAzureStorageActionStatus(`Uploading ${blobName}...`);
+        void backendRequest<{ workspace: WorkspaceSnapshot }>("azure.storage.uploadBlob", {
+          sourcePath,
+          blobName,
+        })
+          .then((response) => {
+            startTransition(() => {
+              setWorkspace(normaliseWorkspaceSnapshot(response.workspace));
+            });
+            setAzureStorageActionStatus(`Uploaded blob ${blobName}.`);
+          })
+          .catch((error: unknown) => {
+            setAzureStorageActionStatus(error instanceof Error ? error.message : String(error));
+          });
+      }}
+      onDeleteBlob={(blobName) => {
+        setAzureStorageActionStatus(`Deleting blob ${blobName}...`);
+        void backendRequest<WorkspaceSnapshot>("azure.storage.deleteBlob", { blobName })
+          .then((workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            });
+            setAzureStorageActionStatus(`Deleted blob ${blobName}.`);
+          })
+          .catch((error: unknown) => {
+            setAzureStorageActionStatus(error instanceof Error ? error.message : String(error));
+          });
       }}
     />
   ) : activeWorkspaceTabId === "virtualisation" ? (
@@ -2194,13 +2330,28 @@ export default function App() {
         ],
       });
     }
+    if (activeWorkspaceTabId === "azure-storage") {
+      groups.push({
+        label: "Blob storage",
+        items: [
+          { id: "azure-storage:accounts", label: "Accounts" },
+          { id: "azure-storage:containers", label: "Containers" },
+          { id: "azure-storage:blobs", label: "Blobs" },
+          { id: "azure-storage:upload", label: "Upload" },
+        ],
+      });
+    }
     groups.push({ label: "Tools", items: [{ id: "debug", label: "Debug console", icon: Bug }] });
     return groups;
   }
 
   const navGroups = buildNavGroups();
   const activeNavItemId =
-    activeWorkspaceTabId === "s3" ? `s3:${activeS3PageId}` : activeWorkspaceTabId;
+    activeWorkspaceTabId === "s3"
+      ? `s3:${activeS3PageId}`
+      : activeWorkspaceTabId === "azure-storage"
+        ? `azure-storage:${activeAzureStoragePageId}`
+        : activeWorkspaceTabId;
   const viewLabel =
     !session.isLocked && activeWorkspaceTabId === "overview"
       ? "Connect"
@@ -2280,6 +2431,8 @@ export default function App() {
         setActiveS3PageId(pageId);
       } else if (tabId === "azure-overview") {
         setActiveAzurePageId(pageId);
+      } else if (tabId === "azure-storage") {
+        setActiveAzureStoragePageId(pageId);
       }
       return;
     }
@@ -2355,11 +2508,15 @@ export default function App() {
               setSidebarCollapsed((current) => !current);
             }}
             writeMode={
-              session.isLocked && session.lockedProviderId === "aws"
+              session.isLocked &&
+              (session.lockedProviderId === "aws" || session.lockedProviderId === "azure")
                 ? {
-                    enabled: workspace.awsWriteModeEnabled,
-                    capable: workspace.awsWriteCapable,
-                    endpointUrl: workspace.awsEndpointUrl,
+                    enabled: writeModeEnabled,
+                    capable: writeModeCapable,
+                    endpointUrl:
+                      session.lockedProviderId === "azure"
+                        ? workspace.azureEndpointUrl
+                        : workspace.awsEndpointUrl,
                     profileLabel: workspace.profile?.displayName ?? lockedProfile?.displayName,
                     onClick: requestWriteModeChange,
                   }
@@ -2427,23 +2584,26 @@ export default function App() {
               <div className="space-y-3 text-sm text-muted-foreground">
                 {writeModeDialogIntent === "incapable" ? (
                   <p>
-                    Write mode needs a profile with a local <code>endpoint_url</code> and{" "}
-                    <code>cloudsprocket_allow_writes = true</code> in your AWS config. Real AWS
-                    endpoints stay read-only in this release.
+                    {session.lockedProviderId === "azure"
+                      ? "Write mode needs the floci-az local profile or an Azure CLI sign-in. Real cloud profiles require the CLI to be available."
+                      : "Write mode needs a profile with a local endpoint_url and cloudsprocket_allow_writes = true in your AWS config. Real AWS endpoints stay read-only in this release."}
                   </p>
                 ) : (
                   <>
                     <p>
-                      Mutating actions (S3 uploads, EC2 start/stop/reboot, Lambda invoke/create)
-                      will be sent to the endpoint below for the rest of this locked session.
+                      {session.lockedProviderId === "azure"
+                        ? "Mutating actions (resource group create/delete, blob upload/delete) will target the endpoint below for the rest of this locked session."
+                        : "Mutating actions (S3 uploads, EC2 start/stop/reboot, Lambda invoke/create) will be sent to the endpoint below for the rest of this locked session."}
                     </p>
                     <p>
                       <span className="font-semibold text-foreground">Profile:</span>{" "}
-                      {workspace.profile?.displayName || lockedProfile?.displayName || "AWS workspace"}
+                      {workspace.profile?.displayName || lockedProfile?.displayName || "Workspace"}
                     </p>
                     <p>
-                      <span className="font-semibold text-foreground">Endpoint:</span>{" "}
-                      {workspace.awsEndpointUrl || "Default AWS endpoint"}
+                      <span className="font-semibold text-foreground">Target:</span>{" "}
+                      {session.lockedProviderId === "azure"
+                        ? workspace.azureEndpointUrl || "Azure CLI"
+                        : workspace.awsEndpointUrl || "Default AWS endpoint"}
                     </p>
                   </>
                 )}
@@ -2518,6 +2678,7 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     "azure-overview": "Azure",
     "azure-resource-groups": "Resource groups",
     "azure-vms": "Virtual machines",
+    "azure-storage": "Storage",
     actions: "Activity",
   };
   return labels[tabId] ?? tabs.find((tab) => tab.tabId === tabId)?.label ?? "Workspace";
@@ -2551,6 +2712,8 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureResourceGroups.length };
     case "azure-vms":
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureVirtualMachines.length };
+    case "azure-storage":
+      return { ...base, iconUrl: azureIconUrl, count: workspace.azureBlobContainers.length };
     case "actions":
       return { ...base, icon: Boxes };
     case "virtualisation":

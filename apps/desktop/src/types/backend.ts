@@ -137,6 +137,11 @@ export interface SessionSnapshot {
   selectedLogGroupName?: string;
   selectedIamRoleName?: string;
   awsWriteModeEnabled?: boolean;
+  azureWriteModeEnabled?: boolean;
+  selectedAzureStorageAccount?: string;
+  selectedAzureBlobContainer?: string;
+  selectedAzureBlobName?: string;
+  azureBlobPrefixFilter?: string;
   lockedProviderId?: string;
   lockedProfileId?: string;
   lockedAuthMethod?: AuthMethod;
@@ -369,6 +374,33 @@ export interface AzureVirtualMachine {
   tags?: DetailField[];
 }
 
+export interface AzureStorageAccount {
+  name: string;
+  kind?: string;
+  location?: string;
+  blobEndpoint?: string;
+  summary?: string;
+}
+
+export interface AzureBlobContainer {
+  name: string;
+  lastModified?: string;
+}
+
+export interface AzureBlob {
+  name: string;
+  size?: string;
+  modifiedAt?: string;
+  contentType?: string;
+}
+
+export interface AzureBlobUploadResult {
+  accountName: string;
+  containerName: string;
+  blobName: string;
+  blobUrl: string;
+}
+
 export interface WorkspaceSnapshot {
   provider?: ProviderSummary;
   profile?: ProfileSummary;
@@ -384,11 +416,24 @@ export interface WorkspaceSnapshot {
   awsWriteCapable: boolean;
   awsWriteModeEnabled: boolean;
   awsWritesEnabled: boolean;
+  azureEndpointUrl?: string;
+  azureWriteCapable: boolean;
+  azureWriteModeEnabled: boolean;
+  azureWritesEnabled: boolean;
   selectedAzureResourceGroup?: string;
   selectedAzureVmId?: string;
+  selectedAzureStorageAccount?: string;
+  selectedAzureBlobContainer?: string;
+  selectedAzureBlobName?: string;
+  azureBlobPrefixFilter?: string;
   azureStatusMessage?: string;
+  azureStorageStatusMessage?: string;
   azureResourceGroups: AzureResourceGroup[];
   azureVirtualMachines: AzureVirtualMachine[];
+  azureStorageAccounts: AzureStorageAccount[];
+  azureBlobContainers: AzureBlobContainer[];
+  azureBlobs: AzureBlob[];
+  azureBlobMetadata: DetailField[];
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;

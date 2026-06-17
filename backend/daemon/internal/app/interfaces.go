@@ -66,6 +66,14 @@ type IAMInventory interface {
 type AzureInventory interface {
 	ListResourceGroups(ctx context.Context, profile models.ProfileSummary) ([]models.AzureResourceGroup, error)
 	ListVirtualMachines(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureVirtualMachine, error)
+	CreateResourceGroup(ctx context.Context, profile models.ProfileSummary, name string, location string) (models.AzureResourceGroup, error)
+	DeleteResourceGroup(ctx context.Context, profile models.ProfileSummary, name string) error
+	ListStorageAccounts(ctx context.Context, profile models.ProfileSummary) ([]models.AzureStorageAccount, error)
+	ListBlobContainers(ctx context.Context, profile models.ProfileSummary, accountName string) ([]models.AzureBlobContainer, error)
+	ListBlobs(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, prefix string) ([]models.AzureBlob, error)
+	CreateBlobContainer(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string) error
+	UploadBlob(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, blobName string, sourcePath string) (models.AzureBlobUploadResult, error)
+	DeleteBlob(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, blobName string) error
 }
 
 type DockerRuntime interface {

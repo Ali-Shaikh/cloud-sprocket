@@ -194,8 +194,13 @@ type SessionSnapshot struct {
 	CurrentProviderID          string             `json:"currentProviderId,omitempty"`
 	SelectedProfileID          string             `json:"selectedProfileId,omitempty"`
 	SelectedAuthMethod         AuthMethod         `json:"selectedAuthMethod,omitempty"`
-	SelectedAzureResourceGroup string             `json:"selectedAzureResourceGroup,omitempty"`
-	SelectedAzureVMID          string             `json:"selectedAzureVmId,omitempty"`
+	SelectedAzureResourceGroup   string `json:"selectedAzureResourceGroup,omitempty"`
+	SelectedAzureVMID            string `json:"selectedAzureVmId,omitempty"`
+	SelectedAzureStorageAccount  string `json:"selectedAzureStorageAccount,omitempty"`
+	SelectedAzureBlobContainer   string `json:"selectedAzureBlobContainer,omitempty"`
+	SelectedAzureBlobName        string `json:"selectedAzureBlobName,omitempty"`
+	AzureBlobPrefixFilter        string `json:"azureBlobPrefixFilter,omitempty"`
+	AzureWriteModeEnabled        bool   `json:"azureWriteModeEnabled,omitempty"`
 	SelectedS3BucketName       string             `json:"selectedS3BucketName,omitempty"`
 	SelectedS3ObjectKey        string             `json:"selectedS3ObjectKey,omitempty"`
 	S3PrefixFilter             string             `json:"s3PrefixFilter,omitempty"`
@@ -462,6 +467,33 @@ type AzureVirtualMachine struct {
 	Tags              []DetailField `json:"tags,omitempty"`
 }
 
+type AzureStorageAccount struct {
+	Name         string `json:"name"`
+	Kind         string `json:"kind,omitempty"`
+	Location     string `json:"location,omitempty"`
+	BlobEndpoint string `json:"blobEndpoint,omitempty"`
+	Summary      string `json:"summary,omitempty"`
+}
+
+type AzureBlobContainer struct {
+	Name       string `json:"name"`
+	LastModified string `json:"lastModified,omitempty"`
+}
+
+type AzureBlob struct {
+	Name       string `json:"name"`
+	Size       string `json:"size,omitempty"`
+	ModifiedAt string `json:"modifiedAt,omitempty"`
+	ContentType string `json:"contentType,omitempty"`
+}
+
+type AzureBlobUploadResult struct {
+	AccountName   string `json:"accountName"`
+	ContainerName string `json:"containerName"`
+	BlobName      string `json:"blobName"`
+	BlobURL       string `json:"blobUrl"`
+}
+
 type WorkspaceSnapshot struct {
 	Provider                   *ProviderSummary        `json:"provider,omitempty"`
 	Profile                    *ProfileSummary         `json:"profile,omitempty"`
@@ -524,11 +556,24 @@ type WorkspaceSnapshot struct {
 	IAMStatusMessage           string                  `json:"iamStatusMessage,omitempty"`
 	IAMRoles                   []AwsIamRole            `json:"iamRoles"`
 	IAMPolicies                []AwsIamPolicy          `json:"iamPolicies"`
-	SelectedAzureResourceGroup string                  `json:"selectedAzureResourceGroup,omitempty"`
-	SelectedAzureVMID          string                  `json:"selectedAzureVmId,omitempty"`
-	AzureStatusMessage         string                  `json:"azureStatusMessage,omitempty"`
-	AzureResourceGroups        []AzureResourceGroup    `json:"azureResourceGroups"`
-	AzureVirtualMachines       []AzureVirtualMachine   `json:"azureVirtualMachines"`
+	AzureEndpointURL             string                  `json:"azureEndpointUrl,omitempty"`
+	AzureWriteCapable            bool                    `json:"azureWriteCapable"`
+	AzureWriteModeEnabled        bool                    `json:"azureWriteModeEnabled"`
+	AzureWritesEnabled           bool                    `json:"azureWritesEnabled"`
+	SelectedAzureResourceGroup   string                  `json:"selectedAzureResourceGroup,omitempty"`
+	SelectedAzureVMID            string                  `json:"selectedAzureVmId,omitempty"`
+	SelectedAzureStorageAccount  string                  `json:"selectedAzureStorageAccount,omitempty"`
+	SelectedAzureBlobContainer   string                  `json:"selectedAzureBlobContainer,omitempty"`
+	SelectedAzureBlobName        string                  `json:"selectedAzureBlobName,omitempty"`
+	AzureBlobPrefixFilter        string                  `json:"azureBlobPrefixFilter,omitempty"`
+	AzureStatusMessage           string                  `json:"azureStatusMessage,omitempty"`
+	AzureStorageStatusMessage    string                  `json:"azureStorageStatusMessage,omitempty"`
+	AzureResourceGroups          []AzureResourceGroup    `json:"azureResourceGroups"`
+	AzureVirtualMachines         []AzureVirtualMachine   `json:"azureVirtualMachines"`
+	AzureStorageAccounts         []AzureStorageAccount   `json:"azureStorageAccounts"`
+	AzureBlobContainers          []AzureBlobContainer    `json:"azureBlobContainers"`
+	AzureBlobs                   []AzureBlob             `json:"azureBlobs"`
+	AzureBlobMetadata            []DetailField           `json:"azureBlobMetadata"`
 }
 
 type ActivityLogEntry struct {

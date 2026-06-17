@@ -37,6 +37,9 @@ func (s *Service) buildWorkspaceSnapshot(
 		LocalConfigArtifacts:   s.localConfigArtifacts(),
 		AzureResourceGroups:    []models.AzureResourceGroup{},
 		AzureVirtualMachines:   []models.AzureVirtualMachine{},
+		AzureStorageAccounts:   []models.AzureStorageAccount{},
+		AzureBlobContainers:    []models.AzureBlobContainer{},
+		AzureBlobs:             []models.AzureBlob{},
 		S3PrefixFilter:         session.S3PrefixFilter,
 		S3Buckets:              []models.AwsS3Bucket{},
 		S3Objects:              []models.AwsS3Object{},
@@ -56,13 +59,26 @@ func (s *Service) buildWorkspaceSnapshot(
 	profiles := filterProfiles(snapshot.Profiles, session.CurrentProviderID)
 	if profile, ok := findProfile(profiles, session.SelectedProfileID); ok {
 		workspace.Profile = &profile
-		workspace.AWSEndpointURL = profileEndpointURL(profile)
-		workspace.AWSWriteCapable = profileAllowsAWSWrites(profile)
-		workspace.AWSWriteModeEnabled = session.AWSWriteModeEnabled && session.IsLocked && session.CurrentProviderID == "aws"
-		workspace.AWSWritesEnabled = effectiveAWSWritesEnabled(session, profile)
+		if session.CurrentProviderID == "aws" {
+			workspace.AWSEndpointURL = profileEndpointURL(profile)
+			workspace.AWSWriteCapable = profileAllowsAWSWrites(profile)
+			workspace.AWSWriteModeEnabled = session.AWSWriteModeEnabled && session.IsLocked
+			workspace.AWSWritesEnabled = effectiveAWSWritesEnabled(session, profile)
+		}
+		if session.CurrentProviderID == "azure" {
+			azureCLI := ""
+			if provider, ok := findProvider(snapshot.Providers, "azure"); ok {
+				azureCLI = provider.CommandPath
+			}
+			workspace.AzureEndpointURL = profileAzureEndpointURL(profile, s.settings.FlociAZEndpoint)
+			workspace.AzureWriteCapable = profileAllowsAzureWrites(profile, azureCLI)
+			workspace.AzureWriteModeEnabled = session.AzureWriteModeEnabled && session.IsLocked
+			workspace.AzureWritesEnabled = effectiveAzureWritesEnabled(session, profile, azureCLI)
+		}
 	}
 
 	s.enrichAzureInventory(&workspace, session)
+	s.enrichAzureStorageInventory(&workspace, session)
 	s.enrichS3Inventory(&workspace, session)
 	s.enrichEC2Inventory(&workspace, session)
 	s.enrichLambdaInventory(&workspace, session)

@@ -188,6 +188,24 @@ func (s *Service) Handle(
 		return s.handleAzureSelectResourceGroup(ctx, params, notifier)
 	case "azure.selectVirtualMachine":
 		return s.handleAzureSelectVirtualMachine(ctx, params, notifier)
+	case "azure.resourceGroups.create":
+		return s.handleAzureResourceGroupsCreate(ctx, params, notifier)
+	case "azure.resourceGroups.delete":
+		return s.handleAzureResourceGroupsDelete(ctx, params, notifier)
+	case "azure.storage.selectAccount":
+		return s.handleAzureStorageSelectAccount(ctx, params, notifier)
+	case "azure.storage.selectContainer":
+		return s.handleAzureStorageSelectContainer(ctx, params, notifier)
+	case "azure.storage.selectBlob":
+		return s.handleAzureStorageSelectBlob(ctx, params, notifier)
+	case "azure.storage.setPrefixFilter":
+		return s.handleAzureStorageSetPrefixFilter(ctx, params, notifier)
+	case "azure.storage.createContainer":
+		return s.handleAzureStorageCreateContainer(ctx, params, notifier)
+	case "azure.storage.uploadBlob":
+		return s.handleAzureStorageUploadBlob(ctx, params, notifier)
+	case "azure.storage.deleteBlob":
+		return s.handleAzureStorageDeleteBlob(ctx, params, notifier)
 	case "session.selectProvider":
 		return s.handleSessionSelectProvider(ctx, params, notifier)
 	case "session.selectProfile":

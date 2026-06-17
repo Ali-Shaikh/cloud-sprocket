@@ -200,6 +200,12 @@ const mockAzureWorkspaceTabs: WorkspaceTab[] = [
     detail: "Browse virtual machines for the selected Azure resource group.",
   },
   {
+    tabId: "azure-storage",
+    label: "Storage",
+    summary: "Blob storage accounts, containers, and objects.",
+    detail: "Browse storage accounts and blob containers, upload and delete blobs when write mode is on.",
+  },
+  {
     tabId: "actions",
     label: "Activity",
     summary: "Recent job, log, and refresh history.",
@@ -491,6 +497,26 @@ const mockAzureResourceGroups = [
     managedBy: "",
     tags: [{ label: "Environment", value: "dev" }],
   },
+];
+
+const mockAzureStorageAccounts = [
+  {
+    name: "devstoreaccount1",
+    kind: "StorageV2",
+    location: "local",
+    blobEndpoint: "http://localhost:4577/devstoreaccount1",
+    summary: "floci-az development storage account",
+  },
+];
+
+const mockAzureBlobContainers = [
+  { name: "uploads", lastModified: "2026-06-17T10:00:00Z" },
+  { name: "assets", lastModified: "2026-06-16T14:30:00Z" },
+];
+
+const mockAzureBlobs = [
+  { name: "uploads/readme.txt", size: "128 B", modifiedAt: "2026-06-17T10:00:00Z", contentType: "text/plain" },
+  { name: "uploads/logo.png", size: "4.2 KiB", modifiedAt: "2026-06-16T09:15:00Z", contentType: "image/png" },
 ];
 
 const mockAzureVirtualMachines = {
@@ -978,6 +1004,14 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       isAWSWorkspace &&
       mockState.session.isLocked &&
       Boolean(mockState.session.awsWriteModeEnabled),
+    azureEndpointUrl: isAzureWorkspace ? "http://localhost:4577" : undefined,
+    azureWriteCapable: isAzureWorkspace && mockState.session.isLocked,
+    azureWriteModeEnabled:
+      isAzureWorkspace && mockState.session.isLocked && Boolean(mockState.session.azureWriteModeEnabled),
+    azureWritesEnabled:
+      isAzureWorkspace &&
+      mockState.session.isLocked &&
+      Boolean(mockState.session.azureWriteModeEnabled),
     selectedAzureResourceGroup,
     selectedAzureVmId,
     azureStatusMessage: isAzureWorkspace
@@ -987,6 +1021,27 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       : undefined,
     azureResourceGroups: isAzureWorkspace ? mockAzureResourceGroups : [],
     azureVirtualMachines: isAzureWorkspace ? azureVirtualMachines : [],
+    selectedAzureStorageAccount: isAzureWorkspace
+      ? mockState.session.selectedAzureStorageAccount ?? mockAzureStorageAccounts[0]?.name
+      : undefined,
+    selectedAzureBlobContainer: isAzureWorkspace
+      ? mockState.session.selectedAzureBlobContainer ?? mockAzureBlobContainers[0]?.name
+      : undefined,
+    selectedAzureBlobName: isAzureWorkspace ? mockState.session.selectedAzureBlobName : undefined,
+    azureBlobPrefixFilter: mockState.session.azureBlobPrefixFilter,
+    azureStorageStatusMessage: isAzureWorkspace
+      ? `Loaded ${mockAzureBlobs.length} blobs from ${mockState.session.selectedAzureStorageAccount ?? mockAzureStorageAccounts[0]?.name}/${mockState.session.selectedAzureBlobContainer ?? mockAzureBlobContainers[0]?.name}.`
+      : undefined,
+    azureStorageAccounts: isAzureWorkspace ? mockAzureStorageAccounts : [],
+    azureBlobContainers: isAzureWorkspace ? mockAzureBlobContainers : [],
+    azureBlobs: isAzureWorkspace ? mockAzureBlobs : [],
+    azureBlobMetadata: isAzureWorkspace && mockState.session.selectedAzureBlobName
+      ? [
+          { label: "Name", value: mockState.session.selectedAzureBlobName },
+          { label: "Size", value: "128 B" },
+          { label: "Content Type", value: "text/plain" },
+        ]
+      : [],
     selectedS3BucketName,
     selectedS3ObjectKey,
     s3PrefixFilter: mockState.session.s3PrefixFilter,
@@ -1588,6 +1643,90 @@ function handleMockRequest<T>(
       mockState.session.selectedAzureVmId = String(params.vmId ?? "");
       appendLog("info", `Selected Azure virtual machine ${params.vmId}.`);
       return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.resourceGroups.create": {
+      const name = String(params.name ?? "").trim();
+      if (!name) {
+        return Promise.reject(new Error("resource group name is required"));
+      }
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("resource group create requires write mode to be enabled for this Azure workspace"));
+      }
+      mockAzureResourceGroups.push({
+        name,
+        location: String(params.location ?? "westeurope"),
+        provisioningState: "Succeeded",
+        managedBy: "",
+        tags: [],
+      });
+      mockState.session.selectedAzureResourceGroup = name;
+      mockState.session.selectedAzureVmId = undefined;
+      appendLog("success", `Created Azure resource group ${name} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.resourceGroups.delete": {
+      const name = String(params.name ?? "").trim();
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("resource group delete requires write mode to be enabled for this Azure workspace"));
+      }
+      const index = mockAzureResourceGroups.findIndex((group) => group.name === name);
+      if (index >= 0) {
+        mockAzureResourceGroups.splice(index, 1);
+      }
+      if (mockState.session.selectedAzureResourceGroup === name) {
+        mockState.session.selectedAzureResourceGroup = undefined;
+        mockState.session.selectedAzureVmId = undefined;
+      }
+      appendLog("success", `Deleted Azure resource group ${name} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.storage.selectAccount":
+      mockState.session.selectedAzureStorageAccount = String(params.accountName ?? "");
+      mockState.session.selectedAzureBlobContainer = undefined;
+      mockState.session.selectedAzureBlobName = undefined;
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.storage.selectContainer":
+      mockState.session.selectedAzureBlobContainer = String(params.containerName ?? "");
+      mockState.session.selectedAzureBlobName = undefined;
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.storage.selectBlob":
+      mockState.session.selectedAzureBlobName = String(params.blobName ?? "");
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.storage.setPrefixFilter":
+      mockState.session.azureBlobPrefixFilter = String(params.prefix ?? "");
+      mockState.session.selectedAzureBlobName = undefined;
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.storage.createContainer": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("blob container create requires write mode to be enabled for this Azure workspace"));
+      }
+      const containerName = String(params.containerName ?? "").trim();
+      mockAzureBlobContainers.push({ name: containerName, lastModified: new Date().toISOString() });
+      mockState.session.selectedAzureBlobContainer = containerName;
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.storage.uploadBlob": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("blob upload requires write mode to be enabled for this Azure workspace"));
+      }
+      const blobName = String(params.blobName ?? "").trim();
+      mockAzureBlobs.push({ name: blobName, size: "1 KiB", modifiedAt: new Date().toISOString(), contentType: "application/octet-stream" });
+      mockState.session.selectedAzureBlobName = blobName;
+      return Promise.resolve({ workspace: buildMockWorkspace() } as T);
+    }
+    case "azure.storage.deleteBlob": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("blob delete requires write mode to be enabled for this Azure workspace"));
+      }
+      const blobName = String(params.blobName ?? "").trim();
+      const blobIndex = mockAzureBlobs.findIndex((blob) => blob.name === blobName);
+      if (blobIndex >= 0) {
+        mockAzureBlobs.splice(blobIndex, 1);
+      }
+      if (mockState.session.selectedAzureBlobName === blobName) {
+        mockState.session.selectedAzureBlobName = undefined;
+      }
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "session.selectProvider":
       setCurrentProvider(String(params.providerId ?? ""));
       emitStateChanged();
@@ -1607,17 +1746,26 @@ function handleMockRequest<T>(
       appendLog("info", `Selected auth method ${params.authMethod}.`);
       return Promise.resolve(mockState.session as T);
     case "session.setWriteMode":
-      if (!mockState.session.isLocked || mockState.session.lockedProviderId !== "aws") {
-        return Promise.reject(new Error("open a locked AWS workspace before changing write mode"));
+      if (!mockState.session.isLocked) {
+        return Promise.reject(new Error("open a locked workspace before changing write mode"));
       }
-      if (params.enabled && !buildMockWorkspace().awsWriteCapable) {
-        return Promise.reject(
-          new Error(
-            "this profile cannot enable write mode: configure a local endpoint_url and cloudsprocket_allow_writes = true",
-          ),
-        );
+      if (mockState.session.lockedProviderId === "aws") {
+        if (params.enabled && !buildMockWorkspace().awsWriteCapable) {
+          return Promise.reject(
+            new Error(
+              "this profile cannot enable write mode: configure a local endpoint_url and cloudsprocket_allow_writes = true",
+            ),
+          );
+        }
+        mockState.session.awsWriteModeEnabled = Boolean(params.enabled);
+      } else if (mockState.session.lockedProviderId === "azure") {
+        if (params.enabled && !buildMockWorkspace().azureWriteCapable) {
+          return Promise.reject(new Error("this Azure profile cannot enable write mode"));
+        }
+        mockState.session.azureWriteModeEnabled = Boolean(params.enabled);
+      } else {
+        return Promise.reject(new Error("write mode is only available for locked AWS or Azure workspaces"));
       }
-      mockState.session.awsWriteModeEnabled = Boolean(params.enabled);
       appendLog(
         params.enabled ? "warning" : "info",
         params.enabled ? "Write mode enabled for this workspace session." : "Write mode disabled for this workspace session.",
@@ -1626,6 +1774,7 @@ function handleMockRequest<T>(
     case "session.lock":
       mockState.session.isLocked = true;
       mockState.session.awsWriteModeEnabled = false;
+      mockState.session.azureWriteModeEnabled = false;
       mockState.session.lockedProviderId = mockState.session.currentProviderId;
       mockState.session.lockedProfileId = mockState.session.selectedProfileId;
       mockState.session.lockedAuthMethod = mockState.session.selectedAuthMethod;
@@ -1639,11 +1788,16 @@ function handleMockRequest<T>(
     case "session.unlock":
       mockState.session.isLocked = false;
       mockState.session.awsWriteModeEnabled = false;
+      mockState.session.azureWriteModeEnabled = false;
       mockState.session.lockedProviderId = undefined;
       mockState.session.lockedProfileId = undefined;
       mockState.session.lockedAuthMethod = undefined;
       mockState.session.selectedAzureResourceGroup = undefined;
       mockState.session.selectedAzureVmId = undefined;
+      mockState.session.selectedAzureStorageAccount = undefined;
+      mockState.session.selectedAzureBlobContainer = undefined;
+      mockState.session.selectedAzureBlobName = undefined;
+      mockState.session.azureBlobPrefixFilter = undefined;
       rebuildSessionDerivedState();
       emitStateChanged();
       appendLog("info", "Unlocked the active cloud session.");

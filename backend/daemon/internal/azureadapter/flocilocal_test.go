@@ -38,20 +38,36 @@ const (
 
 func newFlociTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
+	createdGroups := map[string]bool{}
 	mux := http.NewServeMux()
+	var server *httptest.Server
+	mux.HandleFunc("/async", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"status":"Succeeded"}`)
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := strings.ToLower(r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case strings.Contains(path, "/providers/microsoft.compute/virtualmachines"):
 			_, _ = io.WriteString(w, flociVirtualMachinesJSON)
+		case strings.HasSuffix(path, "/resourcegroups") && r.Method == http.MethodGet:
+			_, _ = io.WriteString(w, flociResourceGroupsJSON)
+		case strings.Contains(path, "/resourcegroups/") && r.Method == http.MethodPut:
+			name := strings.TrimPrefix(path, "/subscriptions/00000000-0000-0000-0000-000000000001/resourcegroups/")
+			createdGroups[name] = true
+			_, _ = io.WriteString(w, `{"name":"`+name+`","location":"westeurope","properties":{"provisioningState":"Succeeded"}}`)
+		case strings.Contains(path, "/resourcegroups/") && r.Method == http.MethodDelete:
+			w.Header().Set("Azure-AsyncOperation", server.URL+"/async")
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = io.WriteString(w, `{}`)
 		case strings.HasSuffix(path, "/resourcegroups"):
 			_, _ = io.WriteString(w, flociResourceGroupsJSON)
 		default:
 			http.NotFound(w, r)
 		}
 	})
-	server := httptest.NewServer(mux)
+	server = httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 	return server
 }
@@ -142,5 +158,22 @@ func TestListVirtualMachinesLocalFloci(t *testing.T) {
 	}
 	if vm.ProvisioningState != "Succeeded" {
 		t.Fatalf("unexpected vm provisioning state: %q", vm.ProvisioningState)
+	}
+}
+
+func TestCreateAndDeleteResourceGroupLocalFloci(t *testing.T) {
+	server := newFlociTestServer(t)
+	inv := newLocalInventory(server.URL)
+	profile := localFlociProfile()
+
+	created, err := inv.CreateResourceGroup(context.Background(), profile, "test-rg", "westeurope")
+	if err != nil {
+		t.Fatalf("CreateResourceGroup returned error: %v", err)
+	}
+	if created.Name != "test-rg" || created.Location != "westeurope" {
+		t.Fatalf("unexpected created group: %+v", created)
+	}
+	if err := inv.DeleteResourceGroup(context.Background(), profile, "test-rg"); err != nil {
+		t.Fatalf("DeleteResourceGroup returned error: %v", err)
 	}
 }

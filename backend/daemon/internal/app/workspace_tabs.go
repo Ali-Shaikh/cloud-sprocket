@@ -44,6 +44,12 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 				Summary: "Read-only Azure virtual machine inventory.",
 				Detail:  "Browse virtual machines for the selected Azure resource group.",
 			},
+			{
+				TabID:   "azure-storage",
+				Label:   "Storage",
+				Summary: "Blob storage accounts, containers, and objects.",
+				Detail:  "Browse storage accounts and blob containers, upload and delete blobs when write mode is on.",
+			},
 			activityTab,
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
@@ -184,4 +185,122 @@ func (s *Service) handleAzureSelectVirtualMachine(ctx context.Context, params js
 		return nil, err
 	}
 	return s.buildWorkspaceSnapshot(snapshot, session), nil
+}
+
+func (s *Service) handleAzureResourceGroupsCreate(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		Name     string `json:"name"`
+		Location string `json:"location"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	name := strings.TrimSpace(request.Name)
+	if name == "" {
+		return nil, errors.New("resource group name is required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !session.IsLocked || session.CurrentProviderID != "azure" {
+		s.mu.Unlock()
+		return nil, errors.New("open a locked Azure workspace before creating a resource group")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		s.mu.Unlock()
+		return nil, errors.New("the workspace's Azure profile is not available")
+	}
+	if !effectiveAzureWritesEnabled(session, profile, s.azureProviderCommandPath(snapshot)) {
+		s.mu.Unlock()
+		return nil, errors.New("resource group create requires write mode to be enabled for this Azure workspace")
+	}
+	s.mu.Unlock()
+
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+	created, err := s.azure.CreateResourceGroup(timeoutCtx, profile, name, request.Location)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	session.SelectedAzureResourceGroup = created.Name
+	session.SelectedAzureVMID = ""
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.mu.Unlock()
+	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Created Azure resource group %s.", created.Name))
+}
+
+func (s *Service) handleAzureResourceGroupsDelete(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	name := strings.TrimSpace(request.Name)
+	if name == "" {
+		return nil, errors.New("resource group name is required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !session.IsLocked || session.CurrentProviderID != "azure" {
+		s.mu.Unlock()
+		return nil, errors.New("open a locked Azure workspace before deleting a resource group")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		s.mu.Unlock()
+		return nil, errors.New("the workspace's Azure profile is not available")
+	}
+	if !effectiveAzureWritesEnabled(session, profile, s.azureProviderCommandPath(snapshot)) {
+		s.mu.Unlock()
+		return nil, errors.New("resource group delete requires write mode to be enabled for this Azure workspace")
+	}
+	s.mu.Unlock()
+
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+	if err := s.azure.DeleteResourceGroup(timeoutCtx, profile, name); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if session.SelectedAzureResourceGroup == name {
+		session.SelectedAzureResourceGroup = ""
+		session.SelectedAzureVMID = ""
+	}
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.mu.Unlock()
+	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Deleted Azure resource group %s.", name))
 }

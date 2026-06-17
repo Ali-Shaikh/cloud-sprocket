@@ -1,7 +1,19 @@
-import { Copy, Layers, MonitorCog } from "lucide-react";
+import { useState } from "react";
+import { Copy, Layers, MonitorCog, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -30,8 +42,11 @@ export type AzureViewProps = {
   /** Raw sub-page id from the nav; unknown values fall back to "overview". */
   activePageId: string;
   showSensitiveValues: boolean;
+  actionStatus?: string;
   onSelectResourceGroup: (resourceGroup: string) => void;
   onSelectVirtualMachine: (vmId: string) => void;
+  onCreateResourceGroup: (name: string, location: string) => void;
+  onDeleteResourceGroup: (name: string) => void;
 };
 
 function normalisePageId(pageId: string): AzurePageId {
@@ -100,10 +115,18 @@ export default function AzureView({
   workspace,
   activePageId,
   showSensitiveValues,
+  actionStatus,
   onSelectResourceGroup,
   onSelectVirtualMachine,
+  onCreateResourceGroup,
+  onDeleteResourceGroup,
 }: AzureViewProps) {
   const page = normalisePageId(activePageId);
+  const canWrite = workspace.azureWritesEnabled;
+  const [createOpen, setCreateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [newRgName, setNewRgName] = useState("");
+  const [newRgLocation, setNewRgLocation] = useState("westeurope");
 
   const subscriptionId =
     profileFieldValue(workspace.profile, "Subscription ID") ||
@@ -129,9 +152,12 @@ export default function AzureView({
   const metricCards = [
     {
       label: "Workspace mode",
-      value: "Read-only",
-      detail:
-        "Azure inventory starts with subscription context before resource explorers land.",
+      value: workspace.azureWritesEnabled ? "Writes on" : "Read-only",
+      detail: workspace.azureWriteCapable
+        ? workspace.azureWritesEnabled
+          ? `Mutating actions target ${workspace.azureEndpointUrl || "Azure CLI"}`
+          : "Enable write mode from the top bar for create/delete actions"
+        : "This profile is read-only in this release",
     },
     {
       label: "CLI readiness",
@@ -248,17 +274,28 @@ export default function AzureView({
   const resourceGroupsPage = (
     <>
       <section className={sectionCard}>
-        <div>
-          <h2 className="text-base font-bold">Azure Resource Groups</h2>
-          <p className="text-sm text-muted-foreground">
-            Browse resource groups discovered for the open Azure subscription.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold">Azure Resource Groups</h2>
+            <p className="text-sm text-muted-foreground">
+              Browse resource groups discovered for the open Azure subscription.
+            </p>
+          </div>
+          {canWrite ? (
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus />
+              Create group
+            </Button>
+          ) : null}
         </div>
         {inventoryStatusRow}
         <p className="text-sm text-muted-foreground">
           {workspace.azureStatusMessage ||
             "Azure inventory is waiting for an open Azure workspace."}
         </p>
+        {actionStatus ? (
+          <p className="text-sm text-muted-foreground">{actionStatus}</p>
+        ) : null}
         <div className="overflow-hidden rounded-lg border border-border">
           {workspace.azureResourceGroups.length === 0 ? (
             <EmptyState
@@ -275,6 +312,7 @@ export default function AzureView({
                   <TableHead>Location</TableHead>
                   <TableHead>Provisioning</TableHead>
                   <TableHead>Managed By</TableHead>
+                  {canWrite ? <TableHead className="w-20" /> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -298,6 +336,21 @@ export default function AzureView({
                         />
                       </TableCell>
                       <TableCell>{group.managedBy || "Direct subscription resource"}</TableCell>
+                      {canWrite ? (
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`Delete ${group.name}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setDeleteTarget(group.name);
+                            }}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </TableCell>
+                      ) : null}
                     </TableRow>
                   );
                 })}
@@ -550,6 +603,73 @@ export default function AzureView({
       {page === "overview" ? overviewPage : null}
       {page === "resource-groups" ? resourceGroupsPage : null}
       {page === "virtual-machines" ? virtualMachinesPage : null}
+
+      <AlertDialog open={createOpen} onOpenChange={setCreateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create resource group</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <div>
+                  <div className={fieldLabel}>Name</div>
+                  <Input
+                    value={newRgName}
+                    onChange={(event) => setNewRgName(event.target.value)}
+                    placeholder="my-resource-group"
+                  />
+                </div>
+                <div>
+                  <div className={fieldLabel}>Location</div>
+                  <Input
+                    value={newRgLocation}
+                    onChange={(event) => setNewRgLocation(event.target.value)}
+                    placeholder="westeurope"
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!newRgName.trim()}
+              onClick={() => {
+                onCreateResourceGroup(newRgName.trim(), newRgLocation.trim() || "westeurope");
+                setNewRgName("");
+                setCreateOpen(false);
+              }}
+            >
+              Create
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={() => setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete resource group?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This deletes <strong>{deleteTarget}</strong> and its resources. This action cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteTarget) {
+                  onDeleteResourceGroup(deleteTarget);
+                  setDeleteTarget(null);
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

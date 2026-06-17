@@ -24,6 +24,46 @@ func (blockingAzure) ListVirtualMachines(ctx context.Context, _ models.ProfileSu
 	return nil, ctx.Err()
 }
 
+func (blockingAzure) CreateResourceGroup(ctx context.Context, _ models.ProfileSummary, _ string, _ string) (models.AzureResourceGroup, error) {
+	<-ctx.Done()
+	return models.AzureResourceGroup{}, ctx.Err()
+}
+
+func (blockingAzure) DeleteResourceGroup(ctx context.Context, _ models.ProfileSummary, _ string) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (blockingAzure) ListStorageAccounts(ctx context.Context, _ models.ProfileSummary) ([]models.AzureStorageAccount, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) ListBlobContainers(ctx context.Context, _ models.ProfileSummary, _ string) ([]models.AzureBlobContainer, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) ListBlobs(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) ([]models.AzureBlob, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) CreateBlobContainer(ctx context.Context, _ models.ProfileSummary, _ string, _ string) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (blockingAzure) UploadBlob(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ string) (models.AzureBlobUploadResult, error) {
+	<-ctx.Done()
+	return models.AzureBlobUploadResult{}, ctx.Err()
+}
+
+func (blockingAzure) DeleteBlob(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
 // TestAzureInventoryBoundedByTimeout proves a stalled Azure inventory call is
 // cut off by the configured timeout (and falls back to empty) instead of
 // hanging the workspace snapshot.

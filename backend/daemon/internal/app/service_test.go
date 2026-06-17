@@ -204,6 +204,38 @@ func (s stubAzureInventory) ListVirtualMachines(_ context.Context, _ models.Prof
 	return append([]models.AzureVirtualMachine(nil), s.virtualMachines[resourceGroup]...), nil
 }
 
+func (stubAzureInventory) CreateResourceGroup(context.Context, models.ProfileSummary, string, string) (models.AzureResourceGroup, error) {
+	return models.AzureResourceGroup{Name: "created-rg", Location: "westeurope", ProvisioningState: "Succeeded"}, nil
+}
+
+func (stubAzureInventory) DeleteResourceGroup(context.Context, models.ProfileSummary, string) error {
+	return nil
+}
+
+func (stubAzureInventory) ListStorageAccounts(context.Context, models.ProfileSummary) ([]models.AzureStorageAccount, error) {
+	return []models.AzureStorageAccount{{Name: "devstoreaccount1", BlobEndpoint: "http://localhost:4577/devstoreaccount1"}}, nil
+}
+
+func (stubAzureInventory) ListBlobContainers(context.Context, models.ProfileSummary, string) ([]models.AzureBlobContainer, error) {
+	return []models.AzureBlobContainer{{Name: "test-container"}}, nil
+}
+
+func (stubAzureInventory) ListBlobs(context.Context, models.ProfileSummary, string, string, string) ([]models.AzureBlob, error) {
+	return []models.AzureBlob{{Name: "sample.txt", Size: "12 B"}}, nil
+}
+
+func (stubAzureInventory) CreateBlobContainer(context.Context, models.ProfileSummary, string, string) error {
+	return nil
+}
+
+func (stubAzureInventory) UploadBlob(context.Context, models.ProfileSummary, string, string, string, string) (models.AzureBlobUploadResult, error) {
+	return models.AzureBlobUploadResult{AccountName: "devstoreaccount1", ContainerName: "test-container", BlobName: "sample.txt"}, nil
+}
+
+func (stubAzureInventory) DeleteBlob(context.Context, models.ProfileSummary, string, string, string) error {
+	return nil
+}
+
 func (s stubDockerRuntime) Snapshot(context.Context) (models.DockerRuntimeSnapshot, error) {
 	return s.snapshot, nil
 }

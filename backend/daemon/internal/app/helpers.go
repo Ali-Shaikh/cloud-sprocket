@@ -134,6 +134,11 @@ func clearLockState(session models.SessionSnapshot) models.SessionSnapshot {
 	session.LockedAuthMethod = ""
 	session.SelectedAzureResourceGroup = ""
 	session.SelectedAzureVMID = ""
+	session.SelectedAzureStorageAccount = ""
+	session.SelectedAzureBlobContainer = ""
+	session.SelectedAzureBlobName = ""
+	session.AzureBlobPrefixFilter = ""
+	session.AzureWriteModeEnabled = false
 	session.SelectedS3BucketName = ""
 	session.SelectedS3ObjectKey = ""
 	session.S3PrefixFilter = ""
@@ -276,6 +281,9 @@ func pathStatus(path string, directory bool) string {
 }
 
 func writePolicySummary(profile models.ProfileSummary) string {
+	if isLocalFlociProfile(profile) {
+		return "Writes enabled for floci-az local profile"
+	}
 	if profileAllowsAWSWrites(profile) {
 		return "Writes enabled for local endpoint profile"
 	}
