@@ -31,7 +31,7 @@ build:
   - name: Install backend dependencies
     dirVar: backend_source_dir
     requires: package.json
-    command: ["npm", "ci", "--omit=dev"]
+    command: ["npm", "install", "--omit=dev"]
 variableGroups:
   - title: Application
     variables:

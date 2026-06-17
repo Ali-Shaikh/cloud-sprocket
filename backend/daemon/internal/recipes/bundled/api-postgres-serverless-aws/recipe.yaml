@@ -31,11 +31,13 @@ build:
   - name: Install backend dependencies
     dirVar: backend_source_dir
     requires: package.json
-    command: ["npm", "ci", "--omit=dev"]
-# Migrations run against the live database, which does not exist until apply. Build
-# steps run before plan, so a migration step here cannot reach the DB. Run migrations
-# from your app after the first deploy using the database_url output (a post-apply
-# lifecycle phase is tracked for a future release).
+    command: ["npm", "install", "--omit=dev"]
+postApply:
+  - name: Run database migrations
+    dirVar: backend_source_dir
+    requires: prisma/schema.prisma
+    command: ["npx", "prisma", "migrate", "deploy"]
+    continueOnError: true
 variableGroups:
   - title: Application
     variables:

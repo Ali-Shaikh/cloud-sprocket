@@ -39,11 +39,11 @@ build:
   - name: Install API dependencies
     dirVar: api_source_dir
     requires: package.json
-    command: ["npm", "ci", "--omit=dev"]
+    command: ["npm", "install", "--omit=dev"]
   - name: Install worker dependencies
     dirVar: worker_source_dir
     requires: package.json
-    command: ["npm", "ci", "--omit=dev"]
+    command: ["npm", "install", "--omit=dev"]
 variableGroups:
   - title: Application
     variables:

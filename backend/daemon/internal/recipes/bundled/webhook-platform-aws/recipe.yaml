@@ -38,11 +38,11 @@ build:
   - name: Install ingest dependencies
     dirVar: ingest_source_dir
     requires: package.json
-    command: ["npm", "ci", "--omit=dev"]
+    command: ["npm", "install", "--omit=dev"]
   - name: Install processor dependencies
     dirVar: processor_source_dir
     requires: package.json
-    command: ["npm", "ci", "--omit=dev"]
+    command: ["npm", "install", "--omit=dev"]
 variableGroups:
   - title: Application
     variables:

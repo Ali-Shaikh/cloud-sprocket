@@ -34,6 +34,12 @@ superpowers:
 imageBuild:
   dockerfileDirVar: dockerfile_dir
   imageVar: container_image
+postApply:
+  - name: Run database migrations
+    dirVar: dockerfile_dir
+    requires: prisma/schema.prisma
+    command: ["npx", "prisma", "migrate", "deploy"]
+    continueOnError: true
 variableGroups:
   - title: Application
     variables:

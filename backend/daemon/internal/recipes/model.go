@@ -106,6 +106,10 @@ type Manifest struct {
 	Superpowers    SuperpowersSpec `yaml:"superpowers" json:"superpowers,omitempty"`
 	ImageBuild     *ImageBuildSpec `yaml:"imageBuild" json:"imageBuild,omitempty"`
 	Build          []BuildStep     `yaml:"build" json:"build,omitempty"`
+	// PostApply runs after a successful apply, with deployment outputs injected as
+	// environment variables (e.g. database_url → DATABASE_URL) so migrations can
+	// reach the live database.
+	PostApply      []BuildStep     `yaml:"postApply" json:"postApply,omitempty"`
 	VariableGroups []VariableGroup `yaml:"variableGroups" json:"variableGroups,omitempty"`
 	Outputs        []OutputHint    `yaml:"outputs" json:"outputs,omitempty"`
 }
