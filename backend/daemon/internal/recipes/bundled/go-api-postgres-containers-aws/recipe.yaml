@@ -1,0 +1,74 @@
+apiVersion: cloudsprocket.recipe/v1
+id: go-api-postgres-containers-aws
+kind: app-deploy
+version: 0.1.0
+name: Go API + Postgres (containers)
+summary: A Go container API on ECS Fargate behind an ALB with managed Postgres on RDS.
+description: |
+  Deploy your Go backend as a long-running container on ECS Fargate behind an
+  Application Load Balancer, with a managed Postgres database on RDS. Set
+  dockerfile_dir to build from the bundled multi-stage Go sample, or leave it
+  empty to use the default nginx image for a first plan.
+
+  Uses ECS, RDS and ELBv2, which only emulate on LocalStack Pro.
+providers:
+  - aws
+tags:
+  - container
+  - postgres
+  - api
+  - go
+  - aws
+  - ecs
+  - rds
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+      requiresPro: true
+imageBuild:
+  dockerfileDirVar: dockerfile_dir
+  imageVar: container_image
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Backend container
+    variables:
+      - name: dockerfile_dir
+        widget: directory
+        help: Folder with your Dockerfile and Go sources. When set, the app builds and pushes the image before plan.
+      - name: container_image
+        widget: text
+        help: Pre-built image URI. Ignored when dockerfile_dir contains a Dockerfile.
+      - name: container_port
+        widget: number
+      - name: desired_count
+        widget: number
+  - title: Database
+    variables:
+      - name: db_username
+        widget: text
+      - name: db_password
+        widget: password
+      - name: db_instance_class
+        widget: text
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+outputs:
+  - name: api_endpoint
+    primary: true
+  - name: database_url
+    primary: true
+  - name: database_endpoint
+  - name: ecs_cluster

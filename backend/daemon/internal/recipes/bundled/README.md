@@ -14,7 +14,7 @@ Each folder here is one portable OpenTofu recipe shipped with CloudSprocket.
 |-------|---------|
 | `kind` | `app-deploy` (full application) or `service-lab` (single-service try-out) |
 | `providers` | Cloud providers the module targets (today: `aws`) |
-| `local.runtimes` | Compatible local emulators (`id: localstack`, optional `requiresPro`) |
+| `local.runtimes` | Compatible local emulators (`id: localstack`, `id: docker-compose`, optional `requiresPro`) |
 | `build` | Pre-plan steps (e.g. `npm ci`, `pip install`) |
 | `imageBuild` | Container image pipeline before plan (ECS/Fargate recipes) |
 | `postApply` | Post-apply steps with outputs injected as env vars (`database_url` → `DATABASE_URL`) |

@@ -249,3 +249,24 @@ func TestLivePlanLabDynamoDBRecipe(t *testing.T) {
 	}
 	livePlanRecipe(t, "lab-dynamodb-aws", map[string]any{"app_name": "livelab", "environment": "dev"})
 }
+
+func TestLivePlanFullstackDynamoDBServerlessRecipe(t *testing.T) {
+	if os.Getenv("TOFU_LIVE") == "" {
+		t.Skip("set TOFU_LIVE=1 to run a real tofu init+plan")
+	}
+	livePlanRecipe(t, "fullstack-dynamodb-serverless-aws", map[string]any{"app_name": "livefsdb", "environment": "dev"})
+}
+
+func TestLivePlanWorkerBatchRecipe(t *testing.T) {
+	if os.Getenv("TOFU_LIVE") == "" {
+		t.Skip("set TOFU_LIVE=1 to run a real tofu init+plan")
+	}
+	livePlanRecipe(t, "worker-batch-aws", map[string]any{"app_name": "livebatch", "environment": "dev"})
+}
+
+func TestLivePlanGoApiPostgresContainersRecipe(t *testing.T) {
+	if os.Getenv("TOFU_LIVE") == "" {
+		t.Skip("set TOFU_LIVE=1 to run a real tofu init+plan")
+	}
+	livePlanRecipe(t, "go-api-postgres-containers-aws", map[string]any{"app_name": "livego", "environment": "dev", "db_password": "supersecret123"})
+}

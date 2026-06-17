@@ -1,0 +1,69 @@
+apiVersion: cloudsprocket.recipe/v1
+id: worker-batch-aws
+kind: app-deploy
+version: 0.1.0
+name: Batch worker (AWS)
+summary: SQS-driven worker Lambda with a private S3 batch bucket and DynamoDB job status.
+description: |
+  A queue-driven batch processing starter with no HTTP ingress. Messages on the
+  main SQS queue trigger a worker Lambda that can read and write objects in a
+  private S3 batch bucket and persist job status to DynamoDB. Includes a
+  dead-letter queue for failed deliveries.
+
+  Uses SQS, Lambda, S3 and DynamoDB on LocalStack's free tier.
+providers:
+  - aws
+tags:
+  - batch
+  - worker
+  - sqs
+  - s3
+  - dynamodb
+  - aws
+  - async
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+    - id: docker-compose
+build:
+  - name: Install worker dependencies
+    dirVar: worker_source_dir
+    requires: package.json
+    command: ["npm", "install", "--omit=dev"]
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Worker code
+    variables:
+      - name: worker_source_dir
+        widget: directory
+        help: Folder with your Node worker handler.handler export. Leave default for the sample worker.
+  - title: Backend
+    variables:
+      - name: lambda_memory_mb
+        widget: number
+      - name: sqs_batch_size
+        widget: number
+        help: Maximum records per Lambda invocation from SQS.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+outputs:
+  - name: queue_url
+    primary: true
+  - name: batch_bucket
+    primary: true
+  - name: dynamodb_table
+    primary: true
+  - name: dlq_url

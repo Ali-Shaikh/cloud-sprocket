@@ -1,0 +1,71 @@
+apiVersion: cloudsprocket.recipe/v1
+id: fullstack-dynamodb-serverless-aws
+kind: app-deploy
+version: 0.1.0
+name: Full-stack + DynamoDB (serverless)
+summary: SPA on S3, Node API on Lambda, and DynamoDB with CRUD-ready sample code.
+description: |
+  A DynamoDB-first full-stack starter: static frontend on S3, a Node API on
+  Lambda behind API Gateway, and a DynamoDB table with proper IAM grants. The
+  bundled sample API supports list/create items and the frontend documents how
+  to wire your SPA to the API endpoint output.
+
+  Uses only API Gateway, Lambda, DynamoDB and S3 on LocalStack's free tier.
+providers:
+  - aws
+tags:
+  - serverless
+  - fullstack
+  - dynamodb
+  - aws
+  - starter
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+    - id: docker-compose
+build:
+  - name: Install backend dependencies
+    dirVar: backend_source_dir
+    requires: package.json
+    command: ["npm", "install", "--omit=dev"]
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Application code
+    variables:
+      - name: backend_source_dir
+        widget: directory
+        help: Folder with your Node backend handler.handler export. Leave default for the CRUD sample API.
+      - name: frontend_dist_dir
+        widget: directory
+        help: Folder of your built static frontend. Leave default for the sample site.
+  - title: Backend
+    variables:
+      - name: lambda_memory_mb
+        widget: number
+  - title: Database
+    variables:
+      - name: enable_point_in_time_recovery
+        widget: switch
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+outputs:
+  - name: api_endpoint
+    primary: true
+  - name: frontend_website_endpoint
+    primary: true
+  - name: dynamodb_table
+    primary: true
+  - name: frontend_bucket
