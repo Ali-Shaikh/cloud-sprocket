@@ -104,7 +104,8 @@ type Deployer interface {
 	TargetLabel(deployment *deploy.Deployment) string
 	Prepare(deployment *deploy.Deployment) error
 	Plan(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) (deploy.PlanSummary, error)
-	Apply(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) ([]deploy.Output, error)
+	Apply(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) (deploy.ApplyResult, error)
+	RetryPostApply(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) error
 	Destroy(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) error
 	RemoveWorkspace(id string) error
 }

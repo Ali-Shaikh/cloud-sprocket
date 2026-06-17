@@ -55,9 +55,20 @@ type Deployment struct {
 	// SensitiveVars names the variables whose values are secret (from the
 	// recipe), so they can be sealed at rest in the persisted record.
 	SensitiveVars []string `json:"sensitiveVars,omitempty"`
-	Error         string   `json:"error,omitempty"`
-	CreatedAt  string         `json:"createdAt"`
-	UpdatedAt  string         `json:"updatedAt"`
+	Error          string `json:"error,omitempty"`
+	// PostApplyError is set when infrastructure applied successfully but a
+	// post-apply build step failed (e.g. database migrations). The deployment
+	// stays in StatusApplied so outputs remain usable and steps can be retried.
+	PostApplyError string `json:"postApplyError,omitempty"`
+	CreatedAt      string `json:"createdAt"`
+	UpdatedAt      string `json:"updatedAt"`
+}
+
+// ApplyResult is the outcome of a successful tofu apply. PostApplyError is
+// non-empty when infra landed but a post-apply step failed.
+type ApplyResult struct {
+	Outputs        []Output
+	PostApplyError string
 }
 
 // Output is a resolved Terraform output value.
@@ -228,30 +239,48 @@ func (e *Engine) Plan(ctx context.Context, deployment *Deployment, onLine tofu.L
 	return parsePlan(raw)
 }
 
-// Apply applies the previously saved plan and returns the captured outputs.
-func (e *Engine) Apply(ctx context.Context, deployment *Deployment, onLine tofu.LogFunc) ([]Output, error) {
+// Apply applies the previously saved plan and returns captured outputs. When
+// post-apply steps fail the result still carries outputs and PostApplyError.
+func (e *Engine) Apply(ctx context.Context, deployment *Deployment, onLine tofu.LogFunc) (ApplyResult, error) {
 	if err := e.requireRunner(); err != nil {
-		return nil, err
+		return ApplyResult{}, err
 	}
 	dir := e.WorkspaceDir(deployment.ID)
 	env := e.env(deployment)
 	if _, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, OnLine: onLine, Args: []string{"apply", "-input=false", "-no-color", planFile}}); err != nil {
-		return nil, err
+		return ApplyResult{}, err
 	}
 	raw, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, Args: []string{"output", "-json"}})
 	if err != nil {
-		return nil, err
+		return ApplyResult{}, err
 	}
 	outputs, err := parseOutputs(raw)
 	if err != nil {
-		return nil, err
+		return ApplyResult{}, err
 	}
+	result := ApplyResult{Outputs: outputs}
 	if recipe, loadErr := e.loader.Load(deployment.RecipeID); loadErr == nil && len(recipe.Manifest.PostApply) > 0 {
 		if err := e.runBuildSteps(ctx, deployment, recipe.Manifest.PostApply, outputEnvVars(outputs), onLine); err != nil {
-			return outputs, fmt.Errorf("post-apply step: %w", err)
+			result.PostApplyError = err.Error()
 		}
 	}
-	return outputs, nil
+	return result, nil
+}
+
+// RetryPostApply re-runs post-apply steps for an already-applied deployment
+// using the stored outputs as environment injection. Tofu is not invoked.
+func (e *Engine) RetryPostApply(ctx context.Context, deployment *Deployment, onLine tofu.LogFunc) error {
+	if len(deployment.Outputs) == 0 {
+		return fmt.Errorf("deployment has no outputs; apply infrastructure first")
+	}
+	recipe, err := e.loader.Load(deployment.RecipeID)
+	if err != nil {
+		return err
+	}
+	if len(recipe.Manifest.PostApply) == 0 {
+		return fmt.Errorf("recipe %q has no post-apply steps", deployment.RecipeID)
+	}
+	return e.runBuildSteps(ctx, deployment, recipe.Manifest.PostApply, outputEnvVars(deployment.Outputs), onLine)
 }
 
 // Destroy tears the deployment down.

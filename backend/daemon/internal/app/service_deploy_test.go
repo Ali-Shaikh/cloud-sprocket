@@ -17,11 +17,13 @@ import (
 )
 
 type fakeDeployer struct {
-	available    bool
-	plan         deploy.PlanSummary
-	outputs      []deploy.Output
-	planErr      error
-	preflightErr error
+	available       bool
+	plan            deploy.PlanSummary
+	outputs         []deploy.Output
+	postApplyErr    string
+	retryPostApplyErr error
+	planErr         error
+	preflightErr    error
 	// planBlocks makes Plan wait for context cancellation, modelling a
 	// long-running tofu invocation so cancellation can be exercised.
 	planBlocks bool
@@ -61,11 +63,18 @@ func (f *fakeDeployer) Plan(ctx context.Context, _ *deploy.Deployment, onLine to
 	return f.plan, f.planErr
 }
 
-func (f *fakeDeployer) Apply(_ context.Context, _ *deploy.Deployment, onLine tofu.LogFunc) ([]deploy.Output, error) {
+func (f *fakeDeployer) Apply(_ context.Context, _ *deploy.Deployment, onLine tofu.LogFunc) (deploy.ApplyResult, error) {
 	if onLine != nil {
 		onLine("Applying...")
 	}
-	return f.outputs, nil
+	return deploy.ApplyResult{Outputs: f.outputs, PostApplyError: f.postApplyErr}, nil
+}
+
+func (f *fakeDeployer) RetryPostApply(_ context.Context, _ *deploy.Deployment, onLine tofu.LogFunc) error {
+	if onLine != nil {
+		onLine("Retrying post-apply...")
+	}
+	return f.retryPostApplyErr
 }
 
 func (f *fakeDeployer) Destroy(_ context.Context, _ *deploy.Deployment, _ tofu.LogFunc) error {

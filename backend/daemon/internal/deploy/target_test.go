@@ -39,6 +39,7 @@ func TestRegistryResolvesBuiltInTargets(t *testing.T) {
 	}{
 		{"localstack", Deployment{ProviderID: "aws", Local: true}, "localstack"},
 		{"aws-cloud", Deployment{ProviderID: "aws", ProfileID: "prod"}, "aws-cloud"},
+		{"docker-compose", Deployment{ProviderID: "aws", Local: true, RuntimeID: "docker-compose"}, "docker-compose"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

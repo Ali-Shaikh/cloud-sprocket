@@ -46,6 +46,7 @@ type deploymentAction int
 const (
 	actionApply deploymentAction = iota
 	actionDestroy
+	actionRetryPostApply
 )
 
 func (s *Service) newJobID() string {
@@ -284,16 +285,45 @@ func (s *Service) runDeploymentAction(deployment *deploy.Deployment, action depl
 		return
 	}
 
+	if action == actionRetryPostApply {
+		if deployment.Status != deploy.StatusApplied {
+			s.failDeployment(ctx, deployment, job, notifier, fmt.Errorf("retry post-apply requires an applied deployment"))
+			return
+		}
+		if strings.TrimSpace(deployment.PostApplyError) == "" {
+			s.failDeployment(ctx, deployment, job, notifier, fmt.Errorf("deployment has no post-apply error to retry"))
+			return
+		}
+		s.emitJobStatus(notifier, job, "running", "Retrying post-apply steps for "+deployment.Name+".")
+		if err := s.deployer.RetryPostApply(runCtx, deployment, onLine); err != nil {
+			deployment.PostApplyError = err.Error()
+			deployment.Error = ""
+			s.setDeploymentStatus(ctx, deployment, deploy.StatusApplied, notifier)
+			s.emitJobStatus(notifier, job, "failed", err.Error())
+			return
+		}
+		deployment.PostApplyError = ""
+		deployment.Error = ""
+		s.setDeploymentStatus(ctx, deployment, deploy.StatusApplied, notifier)
+		s.emitJobStatus(notifier, job, "completed", "Post-apply steps completed for "+deployment.Name+".")
+		return
+	}
+
 	s.setDeploymentStatus(ctx, deployment, deploy.StatusApplying, notifier)
 	s.emitJobStatus(notifier, job, "running", "Applying "+deployment.Name+".")
-	outputs, err := s.deployer.Apply(runCtx, deployment, onLine)
+	result, err := s.deployer.Apply(runCtx, deployment, onLine)
 	if err != nil {
 		s.finishWithError(ctx, runCtx, deployment, job, notifier, err)
 		return
 	}
-	deployment.Outputs = outputs
+	deployment.Outputs = result.Outputs
+	deployment.PostApplyError = result.PostApplyError
 	deployment.Error = ""
 	s.setDeploymentStatus(ctx, deployment, deploy.StatusApplied, notifier)
+	if result.PostApplyError != "" {
+		s.emitJobStatus(notifier, job, "completed", deployment.Name+" deployed; post-apply step failed (retry available).")
+		return
+	}
 	s.emitJobStatus(notifier, job, "completed", deployment.Name+" deployed.")
 }
 
@@ -391,6 +421,16 @@ func (s *Service) handleDeploymentsCancel(params json.RawMessage) (any, error) {
 		return nil, err
 	}
 	return map[string]bool{"cancelled": true}, s.cancelDeployment(request.DeploymentID)
+}
+
+func (s *Service) handleDeploymentsRetryPostApply(params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		DeploymentID string `json:"deploymentId"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	return s.startDeploymentAction(request.DeploymentID, actionRetryPostApply, notifier)
 }
 
 func (s *Service) handleDeploymentsDelete(ctx context.Context, params json.RawMessage) (any, error) {

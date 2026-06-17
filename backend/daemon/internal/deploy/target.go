@@ -58,6 +58,9 @@ func NewRegistry(settings config.Settings, opts TargetOptions) *Registry {
 	r.RegisterFactory("aws-cloud", func(settings config.Settings, opts TargetOptions) Target {
 		return &awsCloudTarget{}
 	})
+	r.RegisterFactory("docker-compose", func(settings config.Settings, opts TargetOptions) Target {
+		return newDockerComposeTarget(settings, opts)
+	})
 	return r
 }
 

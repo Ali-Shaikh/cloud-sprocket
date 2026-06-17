@@ -244,6 +244,8 @@ func (s *Service) Handle(
 		return s.handleDeploymentsCancel(params)
 	case "deployments.delete":
 		return s.handleDeploymentsDelete(ctx, params)
+	case "deployments.retryPostApply":
+		return s.handleDeploymentsRetryPostApply(params, notifier)
 	default:
 		return nil, fmt.Errorf("unknown backend method: %s", method)
 	}
