@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { localDeploymentOutputLink, logCommandsForDeployment, toLocalStackUrl } from "./DeployView";
+import { deploymentOutputLink, localDeploymentOutputLink, logCommandsForDeployment, toLocalStackUrl } from "./deployOutputLinks";
 
 describe("toLocalStackUrl", () => {
   it("rewrites AWS-format load balancer URLs to LocalStack", () => {
@@ -90,7 +90,7 @@ describe("toLocalStackUrl", () => {
     });
   });
 
-  it("does not expose direct local links for real cloud deployments", () => {
+  it("does not expose LocalStack rewrite links for real cloud deployments", () => {
     expect(
       localDeploymentOutputLink(
         {
@@ -104,6 +104,25 @@ describe("toLocalStackUrl", () => {
         },
       ),
     ).toBeNull();
+  });
+
+  it("opens real cloud HTTP endpoints directly", () => {
+    expect(
+      deploymentOutputLink(
+        {
+          local: false,
+          recipeId: "api-dynamodb-serverless-aws",
+          variables: { app_name: "myapi", environment: "dev" },
+        },
+        {
+          name: "api_endpoint",
+          value: "https://abc123.execute-api.us-east-1.amazonaws.com",
+        },
+      ),
+    ).toMatchObject({
+      url: "https://abc123.execute-api.us-east-1.amazonaws.com/",
+      label: "Open endpoint",
+    });
   });
 
   it("uses unsigned LocalStack log commands without credential environment variables", () => {

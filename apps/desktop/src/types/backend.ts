@@ -595,6 +595,7 @@ export interface Deployment {
   providerId: string;
   profileId: string;
   local: boolean;
+  runtimeId?: string;
   variables: Record<string, unknown>;
   status: DeploymentStatus;
   plan?: PlanSummary;

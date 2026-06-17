@@ -36,6 +36,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/empty-state";
 import { SectionHeader } from "@/components/section-header";
 import { cn } from "@/lib/utils";
+import { deploymentOutputLink, logCommandsForDeployment, runtimeDisplayName } from "./deployOutputLinks";
 import {
   applyDeployment,
   cancelDeployment,
@@ -72,12 +73,6 @@ interface TargetOption {
   profileId: string;
   local: boolean;
   runtimeId?: string;
-}
-
-interface LogCommand {
-  label: string;
-  command: string;
-  detail: string;
 }
 
 const STATUS_VARIANT: Record<Deployment["status"], string> = {
@@ -204,22 +199,28 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
 
   const targetOptions = useMemo<TargetOption[]>(() => {
     const providers = new Set(recipe?.manifest.providers ?? ["aws"]);
-    const runtimes = recipe?.manifest.local?.runtimes ?? [];
-    const hasLocalStack =
-      runtimes.length === 0 ||
-      runtimes.some((runtime) => runtime.id === "localstack") ||
-      recipe?.manifest.local?.emulator === "localstack";
+    const declaredRuntimes = recipe?.manifest.local?.runtimes ?? [];
+    const legacyEmulator = recipe?.manifest.local?.emulator;
+    const runtimes =
+      declaredRuntimes.length > 0
+        ? declaredRuntimes
+        : legacyEmulator
+          ? [{ id: legacyEmulator, requiresPro: recipe?.manifest.local?.requiresPro }]
+          : [{ id: "localstack" }];
 
     const options: TargetOption[] = [];
-    if (providers.has("aws") && hasLocalStack) {
-      options.push({
-        id: "local",
-        label: "Local emulator (LocalStack)",
-        providerId: "aws",
-        profileId: "",
-        local: true,
-        runtimeId: "localstack",
-      });
+    if (providers.has("aws")) {
+      for (const runtime of runtimes) {
+        const proSuffix = runtime.requiresPro ? " · Pro" : "";
+        options.push({
+          id: `local:${runtime.id}`,
+          label: `Local emulator (${runtimeDisplayName(runtime.id)})${proSuffix}`,
+          providerId: "aws",
+          profileId: "",
+          local: true,
+          runtimeId: runtime.id,
+        });
+      }
     }
     for (const profile of profiles) {
       if (providers.has(profile.providerId)) {
@@ -234,6 +235,13 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
     }
     return options;
   }, [profiles, recipe]);
+
+  useEffect(() => {
+    if (targetOptions.length === 0) return;
+    if (!targetOptions.some((option) => option.id === target)) {
+      setTarget(targetOptions[0].id);
+    }
+  }, [target, targetOptions]);
 
   const galleryRecipes = useMemo(() => {
     const sectionKind = gallerySection;
@@ -252,7 +260,8 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
       const loaded = await getRecipe(id);
       setRecipe(loaded);
       setValues(seedValues(loaded.variables));
-      setTarget("local");
+      const firstRuntime = loaded.manifest.local?.runtimes?.[0]?.id ?? loaded.manifest.local?.emulator ?? "localstack";
+      setTarget(`local:${firstRuntime}`);
       setMode("configure");
       setGallerySection(loaded.manifest.kind === "service-lab" ? "service-lab" : "app-deploy");
     } catch {
@@ -289,6 +298,7 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
         providerId: option.providerId,
         profileId: option.profileId,
         local: option.local,
+        runtimeId: option.runtimeId,
         variables: coerceValues(recipe.variables, values),
       });
       setActive(response.deployment);
@@ -558,7 +568,7 @@ function ConfigureRecipe({
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          The local emulator runs the same recipe against LocalStack. Switch to a profile to deploy to real AWS.
+          Pick a local runtime to dry-run the recipe, or switch to a cloud profile to deploy to real AWS unchanged.
         </p>
       </Card>
 
@@ -931,9 +941,8 @@ function OutputRow({ output, deployment }: { output: DeploymentOutput; deploymen
   const value = String(output.value ?? "");
   const masked = Boolean(output.sensitive) && !revealed;
   const display = masked ? "••••••••" : value;
-  const localLink = !output.sensitive ? localDeploymentOutputLink(deployment, output) : null;
-  const directUrl = !deployment.local && !output.sensitive && /^https?:\/\//i.test(value) ? value : null;
-  const openUrl = localLink?.url ?? directUrl;
+  const outputLink = !output.sensitive ? deploymentOutputLink(deployment, output) : null;
+  const openUrl = outputLink?.url?.trim() ? outputLink.url : null;
 
   return (
     <div className="flex flex-col gap-1.5 py-3 first:pt-0 last:pb-0">
@@ -957,22 +966,18 @@ function OutputRow({ output, deployment }: { output: DeploymentOutput; deploymen
       <code className="block select-text break-all rounded bg-muted px-2.5 py-1.5 text-xs text-foreground">
         {display}
       </code>
-      {localLink?.note && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">{localLink.note}</p>
+      {outputLink?.note && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">{outputLink.note}</p>
       )}
       {openUrl && (
         <button
           type="button"
           onClick={() => void openExternalUrl(openUrl)}
           className="inline-flex w-fit items-center gap-1 text-xs text-violet-500 hover:underline"
-          title={
-            localLink
-              ? localLink.title
-              : "Open in your browser"
-          }
+          title={outputLink?.title ?? "Open in your browser"}
         >
           <ExternalLink className="size-3" />
-          {localLink ? `${localLink.label}: ${localLink.url}` : "Open"}
+          {outputLink ? `${outputLink.label}: ${outputLink.url}` : "Open"}
         </button>
       )}
     </div>
@@ -1003,128 +1008,6 @@ function CopyButton({ value }: { value: string }) {
       {copied ? "Copied" : "Copy"}
     </button>
   );
-}
-
-export function logCommandsForDeployment(deployment: Deployment): LogCommand[] {
-  const appName = stringVariable(deployment.variables.app_name, recipeDefaultAppName(deployment.recipeId));
-  const environment = stringVariable(deployment.variables.environment, "dev");
-  const region = stringVariable(deployment.variables.aws_region, "us-east-1");
-  const stackName = `${appName}-${environment}`;
-
-  switch (deployment.recipeId) {
-    case "serverless-fullstack-aws":
-      return [
-        cloudWatchTailCommand(deployment, region, `/aws/lambda/${stackName}-api`, "API Lambda", "Lambda invocation logs for the HTTP API."),
-      ];
-    case "scheduled-job-aws":
-      return [
-        cloudWatchTailCommand(
-          deployment,
-          region,
-          `/aws/lambda/${stackName}-job`,
-          "Scheduled job Lambda",
-          "Lambda invocation logs for each scheduled run.",
-        ),
-      ];
-    case "container-fullstack-aws":
-    case "api-postgres-containers-aws":
-      return [
-        cloudWatchTailCommand(
-          deployment,
-          region,
-          `/ecs/${stackName}`,
-          "ECS container service",
-          "Container STDOUT and STDERR from the awslogs log driver.",
-        ),
-      ];
-    case "api-postgres-serverless-aws":
-    case "fullstack-postgres-serverless-aws":
-    case "lab-rest-api-aws":
-      return [
-        cloudWatchTailCommand(deployment, region, `/aws/lambda/${stackName}-api`, "API Lambda", "Lambda invocation logs for the HTTP API."),
-      ];
-    case "lab-queue-worker-aws":
-    case "async-app-aws":
-      return [
-        cloudWatchTailCommand(deployment, region, `/aws/lambda/${stackName}-api`, "API Lambda", "HTTP API invocation logs."),
-        cloudWatchTailCommand(
-          deployment,
-          region,
-          `/aws/lambda/${stackName}-worker`,
-          "Worker Lambda",
-          "Lambda invocation logs for SQS-triggered runs.",
-        ),
-      ];
-    case "webhook-platform-aws":
-      return [
-        cloudWatchTailCommand(deployment, region, `/aws/lambda/${stackName}-ingest`, "Webhook ingest Lambda", "Inbound webhook request logs."),
-        cloudWatchTailCommand(
-          deployment,
-          region,
-          `/aws/lambda/${stackName}-processor`,
-          "Webhook processor Lambda",
-          "Lambda invocation logs for queued webhook payloads.",
-        ),
-      ];
-    default:
-      return [];
-  }
-}
-
-function cloudWatchTailCommand(
-  deployment: Deployment,
-  region: string,
-  logGroup: string,
-  label: string,
-  detail: string,
-): LogCommand {
-  const command = deployment.local
-    ? [
-        "aws",
-        "--endpoint-url",
-        quoteArg("http://localhost:4566"),
-        "--no-sign-request",
-        "logs",
-        "tail",
-        quoteArg(logGroup),
-        "--follow",
-        "--region",
-        quoteArg(region),
-      ].join(" ")
-    : [
-        "aws",
-        "logs",
-        "tail",
-        quoteArg(logGroup),
-        "--follow",
-        "--region",
-        quoteArg(region),
-        ...(deployment.profileId ? ["--profile", quoteArg(deployment.profileId)] : []),
-      ].join(" ");
-
-  return { label, command, detail };
-}
-
-function recipeDefaultAppName(recipeId: string): string {
-  switch (recipeId) {
-    case "scheduled-job-aws":
-      return "myjob";
-    case "static-site-aws":
-      return "mysite";
-    case "api-postgres-serverless-aws":
-      return "myapi";
-    default:
-      return "myapp";
-  }
-}
-
-function stringVariable(value: unknown, fallback: string): string {
-  const text = String(value ?? "").trim();
-  return text === "" ? fallback : text;
-}
-
-function quoteArg(value: string): string {
-  return `"${value.replace(/"/g, '\\"')}"`;
 }
 
 function seedValues(variables: RecipeVariable[]): Record<string, unknown> {
@@ -1165,113 +1048,6 @@ function coerceValues(variables: RecipeVariable[], values: Record<string, unknow
     }
   }
   return result;
-}
-
-const LOCALSTACK_GATEWAY_PORT = "4566";
-const LOCALSTACK_CLOUD_SUFFIX = ".localhost.localstack.cloud";
-const LOCALSTACK_LEGACY_HOST =
-  /\.(elb|s3-website|s3|execute-api|cloudfront|rds)\.localhost(?::\d+)?(?:\/|$)/i;
-
-function isLocalStackHostname(hostname: string): boolean {
-  const lower = hostname.toLowerCase();
-  return lower.endsWith(LOCALSTACK_CLOUD_SUFFIX) || LOCALSTACK_LEGACY_HOST.test(`${lower}/`);
-}
-
-function toLocalStackCloudHostname(hostname: string): string {
-  const lower = hostname.toLowerCase();
-  if (lower.endsWith(LOCALSTACK_CLOUD_SUFFIX)) {
-    return hostname;
-  }
-  const match = hostname.match(/^(.+)\.(elb|s3-website|s3|execute-api|cloudfront|rds)\.localhost$/i);
-  if (match) {
-    return `${match[1]}.${match[2]}${LOCALSTACK_CLOUD_SUFFIX}`;
-  }
-  return hostname;
-}
-
-function formatLocalStackReachableUrl(url: URL): string {
-  const hostname = toLocalStackCloudHostname(url.hostname);
-  const path = url.pathname === "/" ? "" : url.pathname;
-  return `http://${hostname}:${LOCALSTACK_GATEWAY_PORT}${path}${url.search}${url.hash}`;
-}
-
-function normaliseLocalStackUrl(candidate: string): string | null {
-  const withProtocol = /^https?:\/\//i.test(candidate) ? candidate : `http://${candidate}`;
-  try {
-    const url = new URL(withProtocol);
-    if (!isLocalStackHostname(url.hostname)) return null;
-    return formatLocalStackReachableUrl(url);
-  } catch {
-    return null;
-  }
-}
-
-// toLocalStackUrl rewrites an AWS-format endpoint (which Terraform's aws provider
-// always computes, even against LocalStack) into the URL actually reachable on
-// the local emulator via *.localhost.localstack.cloud:4566. Returns null when no
-// known pattern matches, so real-cloud values are left untouched.
-export function toLocalStackUrl(value: string): string | null {
-  const original = value.trim();
-  if (!original) return null;
-
-  let rewritten = original
-    .replace(/\.s3-website[.-][a-z0-9-]+\.amazonaws\.com/i, `.s3-website${LOCALSTACK_CLOUD_SUFFIX}`)
-    .replace(/\.s3[.-][a-z0-9-]+\.amazonaws\.com/i, `.s3${LOCALSTACK_CLOUD_SUFFIX}`)
-    .replace(/\.execute-api\.[a-z0-9-]+\.amazonaws\.com/i, `.execute-api${LOCALSTACK_CLOUD_SUFFIX}`)
-    .replace(/\.cloudfront\.net/i, `.cloudfront${LOCALSTACK_CLOUD_SUFFIX}`)
-    .replace(/\.[a-z0-9-]+\.elb\.amazonaws\.com/i, `.elb${LOCALSTACK_CLOUD_SUFFIX}`);
-
-  const mentionsLocalStack =
-    rewritten.includes(LOCALSTACK_CLOUD_SUFFIX) || LOCALSTACK_LEGACY_HOST.test(rewritten);
-  if (mentionsLocalStack) {
-    const normalised = normaliseLocalStackUrl(rewritten);
-    if (normalised) return normalised;
-  }
-
-  if (rewritten === original) return null;
-  if (!/^https?:\/\//i.test(rewritten)) {
-    rewritten = "http://" + rewritten;
-  } else {
-    rewritten = rewritten.replace(/^https:\/\//i, "http://");
-  }
-  return normaliseLocalStackUrl(rewritten) ?? rewritten;
-}
-
-export function localDeploymentOutputLink(
-  deployment: Pick<Deployment, "local" | "recipeId" | "variables">,
-  output: Pick<DeploymentOutput, "name" | "value" | "sensitive">,
-): { url: string; label: string; title: string; note?: string } | null {
-  if (!deployment.local || output.sensitive) return null;
-
-  if (output.name === "database_endpoint") {
-    const port = String(output.value ?? "").match(/:(\d+)\s*$/)?.[1] ?? "4510";
-    return {
-      url: "",
-      label: "Connect from your machine",
-      title: "Use 127.0.0.1 as the host when connecting from psql or a desktop SQL client.",
-      note: `Connect from your machine with host 127.0.0.1 and port ${port}. If the port is refused, restart LocalStack from Local Runtime so RDS ports are published.`,
-    };
-  }
-
-  if (deployment.recipeId === "container-fullstack-aws" && output.name === "frontend_url") {
-    const appName = stringVariable(deployment.variables.app_name, recipeDefaultAppName(deployment.recipeId));
-    const environment = stringVariable(deployment.variables.environment, "dev");
-    const bucket = `${appName}-${environment}-frontend`;
-    return {
-      url: `http://${bucket}.s3-website.localhost.localstack.cloud:4566`,
-      label: "Open S3 website on LocalStack",
-      title: "LocalStack CloudFront can fail to route S3 website origins; this opens the direct S3 website endpoint.",
-      note: "This CloudFront URL is for real AWS. CloudFront isn't reliably reachable on LocalStack, so locally use the S3 website endpoint below.",
-    };
-  }
-
-  const url = toLocalStackUrl(String(output.value ?? ""));
-  if (!url) return null;
-  return {
-    url,
-    label: "Open on LocalStack",
-    title: "The value above is the AWS-format endpoint Terraform reports; this opens the URL actually reachable on LocalStack.",
-  };
 }
 
 function groupVariables(variables: RecipeVariable[]): { title: string; variables: RecipeVariable[] }[] {

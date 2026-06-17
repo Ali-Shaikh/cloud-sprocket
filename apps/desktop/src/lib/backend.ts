@@ -1767,6 +1767,7 @@ export interface PlanDeploymentRequest {
   providerId: string;
   profileId: string;
   local: boolean;
+  runtimeId?: string;
   variables: Record<string, unknown>;
 }
 
