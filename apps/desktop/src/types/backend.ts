@@ -601,6 +601,7 @@ export interface Deployment {
   plan?: PlanSummary;
   outputs?: DeploymentOutput[];
   error?: string;
+  postApplyError?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -1730,6 +1730,8 @@ function handleMockRequest<T>(
       return mockCancelDeployment(params.deploymentId as string) as Promise<T>;
     case "deployments.delete":
       return mockDeleteDeployment(params.deploymentId as string) as Promise<T>;
+    case "deployments.retryPostApply":
+      return mockRetryPostApply(params.deploymentId as string) as Promise<T>;
     default:
       return Promise.reject(new Error(`Mock backend method not implemented: ${method}`));
   }
@@ -1789,6 +1791,10 @@ export async function cancelDeployment(deploymentId: string): Promise<void> {
 
 export async function deleteDeployment(deploymentId: string): Promise<void> {
   await backendRequest("deployments.delete", { deploymentId });
+}
+
+export async function retryPostApplyDeployment(deploymentId: string): Promise<DeploymentJob> {
+  return backendRequest<DeploymentJob>("deployments.retryPostApply", { deploymentId });
 }
 
 // openExternalUrl opens a URL in the user's default browser. The Tauri webview
@@ -2043,6 +2049,30 @@ function mockRunDeployment(deploymentId: string, action: "apply" | "destroy"): P
 }
 
 const inFlightStatuses: Deployment["status"][] = ["pending", "planning", "applying", "destroying"];
+
+function mockRetryPostApply(deploymentId: string): Promise<DeploymentJob> {
+  const deployment = mockDeployments.find((entry) => entry.id === deploymentId);
+  if (!deployment) {
+    return Promise.reject(new Error(`deployment ${deploymentId} not found`));
+  }
+  const job: JobStatus = {
+    jobId: `job-${Date.now()}`,
+    label: `Retry post-apply ${deployment.name}`,
+    status: "queued",
+    message: "Retrying post-apply steps.",
+  };
+  setTimeout(() => {
+    deployment.postApplyError = undefined;
+    emitMockEvent("job.updated", {
+      ...job,
+      status: "completed",
+      message: `Post-apply steps completed for ${deployment.name}.`,
+      completedAt: new Date().toISOString(),
+    });
+    emitMockEvent("deployment.changed", { ...deployment });
+  }, 40);
+  return Promise.resolve({ deployment, job });
+}
 
 function mockCancelDeployment(deploymentId: string): Promise<{ cancelled: boolean }> {
   const deployment = mockDeployments.find((entry) => entry.id === deploymentId);
