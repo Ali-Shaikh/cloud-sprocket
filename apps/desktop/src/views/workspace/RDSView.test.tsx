@@ -68,6 +68,7 @@ const workspaceFixture: RdsWorkspaceSnapshot = {
   azureBlobContainers: [],
   azureBlobs: [],
   azureBlobMetadata: [],
+      azureWebApps: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],

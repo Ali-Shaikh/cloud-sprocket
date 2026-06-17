@@ -142,6 +142,7 @@ export interface SessionSnapshot {
   selectedAzureBlobContainer?: string;
   selectedAzureBlobName?: string;
   azureBlobPrefixFilter?: string;
+  selectedAzureWebAppName?: string;
   lockedProviderId?: string;
   lockedProfileId?: string;
   lockedAuthMethod?: AuthMethod;
@@ -401,6 +402,16 @@ export interface AzureBlobUploadResult {
   blobUrl: string;
 }
 
+export interface AzureWebApp {
+  name: string;
+  resourceGroup?: string;
+  location?: string;
+  state?: string;
+  defaultHostName?: string;
+  kind?: string;
+  httpsOnly?: boolean;
+}
+
 export interface WorkspaceSnapshot {
   provider?: ProviderSummary;
   profile?: ProfileSummary;
@@ -426,14 +437,17 @@ export interface WorkspaceSnapshot {
   selectedAzureBlobContainer?: string;
   selectedAzureBlobName?: string;
   azureBlobPrefixFilter?: string;
+  selectedAzureWebAppName?: string;
   azureStatusMessage?: string;
   azureStorageStatusMessage?: string;
+  azureAppServiceStatusMessage?: string;
   azureResourceGroups: AzureResourceGroup[];
   azureVirtualMachines: AzureVirtualMachine[];
   azureStorageAccounts: AzureStorageAccount[];
   azureBlobContainers: AzureBlobContainer[];
   azureBlobs: AzureBlob[];
   azureBlobMetadata: DetailField[];
+  azureWebApps: AzureWebApp[];
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;

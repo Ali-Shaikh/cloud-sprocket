@@ -224,6 +224,10 @@ func (stubAzureInventory) ListBlobs(context.Context, models.ProfileSummary, stri
 	return []models.AzureBlob{{Name: "sample.txt", Size: "12 B"}}, nil
 }
 
+func (stubAzureInventory) CreateStorageAccount(context.Context, models.ProfileSummary, string, string, string) (models.AzureStorageAccount, error) {
+	return models.AzureStorageAccount{Name: "newaccount", Location: "westeurope"}, nil
+}
+
 func (stubAzureInventory) CreateBlobContainer(context.Context, models.ProfileSummary, string, string) error {
 	return nil
 }
@@ -234,6 +238,22 @@ func (stubAzureInventory) UploadBlob(context.Context, models.ProfileSummary, str
 
 func (stubAzureInventory) DeleteBlob(context.Context, models.ProfileSummary, string, string, string) error {
 	return nil
+}
+
+func (stubAzureInventory) InvokeVirtualMachineAction(context.Context, models.ProfileSummary, string, string, string) error {
+	return nil
+}
+
+func (stubAzureInventory) GetVirtualMachine(_ context.Context, _ models.ProfileSummary, resourceGroup string, vmName string) (models.AzureVirtualMachine, error) {
+	return models.AzureVirtualMachine{VMID: vmName, Name: vmName, ResourceGroup: resourceGroup}, nil
+}
+
+func (stubAzureInventory) ListWebApps(context.Context, models.ProfileSummary, string) ([]models.AzureWebApp, error) {
+	return []models.AzureWebApp{{Name: "demo-app", ResourceGroup: "demo-rg", State: "Running"}}, nil
+}
+
+func (stubAzureInventory) CreateWebApp(context.Context, models.ProfileSummary, string, string, string, string) (models.AzureWebApp, error) {
+	return models.AzureWebApp{Name: "demo-app", ResourceGroup: "demo-rg", State: "Running"}, nil
 }
 
 func (s stubDockerRuntime) Snapshot(context.Context) (models.DockerRuntimeSnapshot, error) {

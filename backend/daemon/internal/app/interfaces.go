@@ -71,9 +71,14 @@ type AzureInventory interface {
 	ListStorageAccounts(ctx context.Context, profile models.ProfileSummary) ([]models.AzureStorageAccount, error)
 	ListBlobContainers(ctx context.Context, profile models.ProfileSummary, accountName string) ([]models.AzureBlobContainer, error)
 	ListBlobs(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, prefix string) ([]models.AzureBlob, error)
+	CreateStorageAccount(ctx context.Context, profile models.ProfileSummary, resourceGroup string, accountName string, location string) (models.AzureStorageAccount, error)
 	CreateBlobContainer(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string) error
 	UploadBlob(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, blobName string, sourcePath string) (models.AzureBlobUploadResult, error)
 	DeleteBlob(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, blobName string) error
+	InvokeVirtualMachineAction(ctx context.Context, profile models.ProfileSummary, resourceGroup string, vmName string, action string) error
+	GetVirtualMachine(ctx context.Context, profile models.ProfileSummary, resourceGroup string, vmName string) (models.AzureVirtualMachine, error)
+	ListWebApps(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureWebApp, error)
+	CreateWebApp(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, location string, runtime string) (models.AzureWebApp, error)
 }
 
 type DockerRuntime interface {

@@ -64,6 +64,7 @@ import IAMView from "./views/workspace/IAMView";
 import LambdaView from "./views/workspace/LambdaView";
 import AzureView from "./views/workspace/AzureView";
 import AzureStorageView from "./views/workspace/AzureStorageView";
+import AzureAppServiceView from "./views/workspace/AzureAppServiceView";
 import RuntimeView from "./views/workspace/RuntimeView";
 import PlaceholderView from "./views/workspace/PlaceholderView";
 import ActivityView from "./views/workspace/ActivityView";
@@ -95,6 +96,7 @@ import type {
   AzureResourceGroup,
   AzureStorageAccount,
   AzureVirtualMachine,
+  AzureWebApp,
   DetailField,
   EmulatorActionResult,
   EmulatorLogSnapshot,
@@ -285,6 +287,10 @@ function normaliseAzureBlob(blob: AzureBlob): AzureBlob {
   return { ...blob };
 }
 
+function normaliseAzureWebApp(app: AzureWebApp): AzureWebApp {
+  return { ...app, name: app.name ?? "" };
+}
+
 function normaliseAzureVirtualMachine(vm: AzureVirtualMachine): AzureVirtualMachine {
   return {
     ...vm,
@@ -432,6 +438,7 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     azureBlobContainers: normaliseArray(source.azureBlobContainers).map(normaliseAzureBlobContainer),
     azureBlobs: normaliseArray(source.azureBlobs).map(normaliseAzureBlob),
     azureBlobMetadata: normaliseDetailFields(source.azureBlobMetadata),
+    azureWebApps: normaliseArray(source.azureWebApps).map(normaliseAzureWebApp),
     s3Buckets: normaliseArray(source.s3Buckets).map(normaliseS3Bucket),
     s3Objects: normaliseArray(source.s3Objects).map(normaliseS3Object),
     s3ObjectMetadata: normaliseDetailFields(source.s3ObjectMetadata),
@@ -507,6 +514,7 @@ const emptyWorkspace: WorkspaceSnapshot = {
   azureBlobContainers: [],
   azureBlobs: [],
   azureBlobMetadata: [],
+  azureWebApps: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -573,6 +581,7 @@ export default function App() {
   );
   const [azureActionStatus, setAzureActionStatus] = useState("");
   const [azureStorageActionStatus, setAzureStorageActionStatus] = useState("");
+  const [azureAppServiceActionStatus, setAzureAppServiceActionStatus] = useState("");
   const [writeModeDialogOpen, setWriteModeDialogOpen] = useState(false);
   const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<"enable" | "incapable">("enable");
   const [loading, setLoading] = useState(true);
@@ -2008,6 +2017,19 @@ export default function App() {
             setAzureActionStatus(error instanceof Error ? error.message : String(error));
           });
       }}
+      onInvokeVMAction={(action, vmId) => {
+        setAzureActionStatus(`Invoking ${action} on virtual machine...`);
+        void backendRequest<WorkspaceSnapshot>("azure.virtualMachines.invokeAction", { action, vmId })
+          .then((workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            });
+            setAzureActionStatus(workspaceResult.azureStatusMessage || `Invoked ${action} on virtual machine.`);
+          })
+          .catch((error: unknown) => {
+            setAzureActionStatus(error instanceof Error ? error.message : String(error));
+          });
+      }}
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-storage" ? (
     <AzureStorageView
@@ -2025,6 +2047,25 @@ export default function App() {
       }}
       onSetPrefixFilter={(prefix) => {
         void mutateWorkspace("azure.storage.setPrefixFilter", { prefix });
+      }}
+      onCreateAccount={(resourceGroup, accountName, location) => {
+        setAzureStorageActionStatus(`Creating storage account ${accountName}...`);
+        void backendRequest<WorkspaceSnapshot>("azure.storage.createAccount", {
+          resourceGroup,
+          accountName,
+          location,
+        })
+          .then((workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            });
+            setAzureStorageActionStatus(
+              workspaceResult.azureStorageStatusMessage || `Created storage account ${accountName}.`,
+            );
+          })
+          .catch((error: unknown) => {
+            setAzureStorageActionStatus(error instanceof Error ? error.message : String(error));
+          });
       }}
       onCreateContainer={(containerName) => {
         setAzureStorageActionStatus(`Creating container ${containerName}...`);
@@ -2068,6 +2109,37 @@ export default function App() {
           })
           .catch((error: unknown) => {
             setAzureStorageActionStatus(error instanceof Error ? error.message : String(error));
+          });
+      }}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "azure-app-service" ? (
+    <AzureAppServiceView
+      workspace={workspace}
+      actionStatus={azureAppServiceActionStatus}
+      onSelectResourceGroup={(resourceGroup) => {
+        void mutateWorkspace("azure.selectResourceGroup", { resourceGroup });
+      }}
+      onSelectWebApp={(appName) => {
+        void mutateWorkspace("azure.webApps.select", { appName });
+      }}
+      onCreateWebApp={(resourceGroup, appName, location, runtime) => {
+        setAzureAppServiceActionStatus(`Creating web app ${appName}...`);
+        void backendRequest<WorkspaceSnapshot>("azure.webApps.create", {
+          resourceGroup,
+          appName,
+          location,
+          runtime,
+        })
+          .then((workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            });
+            setAzureAppServiceActionStatus(
+              workspaceResult.azureAppServiceStatusMessage || `Created web app ${appName}.`,
+            );
+          })
+          .catch((error: unknown) => {
+            setAzureAppServiceActionStatus(error instanceof Error ? error.message : String(error));
           });
       }}
     />
@@ -2679,6 +2751,7 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     "azure-resource-groups": "Resource groups",
     "azure-vms": "Virtual machines",
     "azure-storage": "Storage",
+    "azure-app-service": "App Service",
     actions: "Activity",
   };
   return labels[tabId] ?? tabs.find((tab) => tab.tabId === tabId)?.label ?? "Workspace";
@@ -2714,6 +2787,8 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureVirtualMachines.length };
     case "azure-storage":
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureBlobContainers.length };
+    case "azure-app-service":
+      return { ...base, iconUrl: azureIconUrl, count: workspace.azureWebApps.length };
     case "actions":
       return { ...base, icon: Boxes };
     case "virtualisation":

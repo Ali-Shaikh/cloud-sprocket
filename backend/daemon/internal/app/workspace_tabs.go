@@ -50,6 +50,12 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 				Summary: "Blob storage accounts, containers, and objects.",
 				Detail:  "Browse storage accounts and blob containers, upload and delete blobs when write mode is on.",
 			},
+			{
+				TabID:   "azure-app-service",
+				Label:   "App Service",
+				Summary: "Cloud App Service web apps.",
+				Detail:  "Browse and create App Service web apps on cloud Azure profiles. Not available on floci-az local.",
+			},
 			activityTab,
 		}
 	}

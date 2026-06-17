@@ -79,6 +79,7 @@ func (s *Service) buildWorkspaceSnapshot(
 
 	s.enrichAzureInventory(&workspace, session)
 	s.enrichAzureStorageInventory(&workspace, session)
+	s.enrichAzureAppServiceInventory(&workspace, session)
 	s.enrichS3Inventory(&workspace, session)
 	s.enrichEC2Inventory(&workspace, session)
 	s.enrichLambdaInventory(&workspace, session)

@@ -304,3 +304,64 @@ func (s *Service) handleAzureResourceGroupsDelete(ctx context.Context, params js
 	s.mu.Unlock()
 	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Deleted Azure resource group %s.", name))
 }
+
+func (s *Service) handleAzureVirtualMachinesInvokeAction(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		Action string `json:"action"`
+		VMID   string `json:"vmId"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	action := strings.TrimSpace(request.Action)
+	if action == "" {
+		return nil, errors.New("virtual machine action is required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	profile, resourceGroup, vm, err := s.activeAzureVMSelection(snapshot, session, request.VMID)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !effectiveAzureWritesEnabled(session, profile, s.azureProviderCommandPath(snapshot)) {
+		s.mu.Unlock()
+		return nil, errors.New("virtual machine actions require write mode to be enabled for this Azure workspace")
+	}
+	s.mu.Unlock()
+
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+	if err := s.azure.InvokeVirtualMachineAction(timeoutCtx, profile, resourceGroup, vm.Name, action); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	session.SelectedAzureResourceGroup = resourceGroup
+	session.SelectedAzureVMID = vm.VMID
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.mu.Unlock()
+	return s.finishAzureWorkspace(
+		ctx,
+		snapshot,
+		session,
+		notifier,
+		"success",
+		fmt.Sprintf("Invoked %s on Azure virtual machine %s.", action, vm.Name),
+	)
+}

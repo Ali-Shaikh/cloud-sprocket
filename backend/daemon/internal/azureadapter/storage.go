@@ -25,16 +25,7 @@ func (i *Inventory) ListStorageAccounts(
 	profile models.ProfileSummary,
 ) ([]models.AzureStorageAccount, error) {
 	if isLocalFlociProfile(profile) {
-		endpoint := i.flociEndpoint()
-		return []models.AzureStorageAccount{
-			{
-				Name:         flociDevAccountName,
-				Kind:         "StorageV2",
-				Location:     "local",
-				BlobEndpoint: endpoint + "/" + flociDevAccountName,
-				Summary:      "floci-az development storage account",
-			},
-		}, nil
+		return i.listLocalStorageAccounts(ctx)
 	}
 	args := []string{
 		"storage", "account", "list",
@@ -248,29 +239,17 @@ func (i *Inventory) blobServiceClient(
 	profile models.ProfileSummary,
 	accountName string,
 ) (*azblob.Client, error) {
+	accountKey, err := i.storageAccountKey(ctx, profile, accountName)
+	if err != nil {
+		return nil, err
+	}
 	if isLocalFlociProfile(profile) {
 		endpoint := i.flociEndpoint() + "/" + accountName
-		credential, err := azblob.NewSharedKeyCredential(accountName, flociDevAccountKey)
+		credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
 		if err != nil {
 			return nil, fmt.Errorf("floci-az storage credential: %w", err)
 		}
 		return azblob.NewClientWithSharedKeyCredential(endpoint, credential, nil)
-	}
-	args := []string{
-		"storage", "account", "keys", "list",
-		"--subscription", profile.ProfileID,
-		"--account-name", accountName,
-		"--query", "[0].value",
-		"--output", "tsv",
-		"--only-show-errors",
-	}
-	keyBytes, err := i.run(ctx, args...)
-	if err != nil {
-		return nil, err
-	}
-	accountKey := strings.TrimSpace(string(keyBytes))
-	if accountKey == "" {
-		return nil, fmt.Errorf("no storage account key returned for %s", accountName)
 	}
 	endpoint := fmt.Sprintf("https://%s.blob.core.windows.net", accountName)
 	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)

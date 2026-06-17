@@ -200,6 +200,7 @@ type SessionSnapshot struct {
 	SelectedAzureBlobContainer   string `json:"selectedAzureBlobContainer,omitempty"`
 	SelectedAzureBlobName        string `json:"selectedAzureBlobName,omitempty"`
 	AzureBlobPrefixFilter        string `json:"azureBlobPrefixFilter,omitempty"`
+	SelectedAzureWebAppName      string `json:"selectedAzureWebAppName,omitempty"`
 	AzureWriteModeEnabled        bool   `json:"azureWriteModeEnabled,omitempty"`
 	SelectedS3BucketName       string             `json:"selectedS3BucketName,omitempty"`
 	SelectedS3ObjectKey        string             `json:"selectedS3ObjectKey,omitempty"`
@@ -494,6 +495,16 @@ type AzureBlobUploadResult struct {
 	BlobURL       string `json:"blobUrl"`
 }
 
+type AzureWebApp struct {
+	Name            string `json:"name"`
+	ResourceGroup   string `json:"resourceGroup,omitempty"`
+	Location        string `json:"location,omitempty"`
+	State           string `json:"state,omitempty"`
+	DefaultHostName string `json:"defaultHostName,omitempty"`
+	Kind            string `json:"kind,omitempty"`
+	HTTPSOnly       bool   `json:"httpsOnly,omitempty"`
+}
+
 type WorkspaceSnapshot struct {
 	Provider                   *ProviderSummary        `json:"provider,omitempty"`
 	Profile                    *ProfileSummary         `json:"profile,omitempty"`
@@ -566,14 +577,17 @@ type WorkspaceSnapshot struct {
 	SelectedAzureBlobContainer   string                  `json:"selectedAzureBlobContainer,omitempty"`
 	SelectedAzureBlobName        string                  `json:"selectedAzureBlobName,omitempty"`
 	AzureBlobPrefixFilter        string                  `json:"azureBlobPrefixFilter,omitempty"`
+	SelectedAzureWebAppName      string                  `json:"selectedAzureWebAppName,omitempty"`
 	AzureStatusMessage           string                  `json:"azureStatusMessage,omitempty"`
 	AzureStorageStatusMessage    string                  `json:"azureStorageStatusMessage,omitempty"`
+	AzureAppServiceStatusMessage string                  `json:"azureAppServiceStatusMessage,omitempty"`
 	AzureResourceGroups          []AzureResourceGroup    `json:"azureResourceGroups"`
 	AzureVirtualMachines         []AzureVirtualMachine   `json:"azureVirtualMachines"`
 	AzureStorageAccounts         []AzureStorageAccount   `json:"azureStorageAccounts"`
 	AzureBlobContainers          []AzureBlobContainer    `json:"azureBlobContainers"`
 	AzureBlobs                   []AzureBlob             `json:"azureBlobs"`
 	AzureBlobMetadata            []DetailField           `json:"azureBlobMetadata"`
+	AzureWebApps                 []AzureWebApp           `json:"azureWebApps"`
 }
 
 type ActivityLogEntry struct {

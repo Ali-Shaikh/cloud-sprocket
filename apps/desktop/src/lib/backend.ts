@@ -206,6 +206,12 @@ const mockAzureWorkspaceTabs: WorkspaceTab[] = [
     detail: "Browse storage accounts and blob containers, upload and delete blobs when write mode is on.",
   },
   {
+    tabId: "azure-app-service",
+    label: "App Service",
+    summary: "Cloud App Service web apps.",
+    detail: "Browse and create App Service web apps on cloud Azure profiles.",
+  },
+  {
     tabId: "actions",
     label: "Activity",
     summary: "Recent job, log, and refresh history.",
@@ -517,6 +523,18 @@ const mockAzureBlobContainers = [
 const mockAzureBlobs = [
   { name: "uploads/readme.txt", size: "128 B", modifiedAt: "2026-06-17T10:00:00Z", contentType: "text/plain" },
   { name: "uploads/logo.png", size: "4.2 KiB", modifiedAt: "2026-06-16T09:15:00Z", contentType: "image/png" },
+];
+
+const mockAzureWebApps = [
+  {
+    name: "mkt-portal",
+    resourceGroup: "rg-marketing-prod",
+    location: "uaenorth",
+    state: "Running",
+    defaultHostName: "mkt-portal.azurewebsites.net",
+    kind: "app,linux",
+    httpsOnly: true,
+  },
 ];
 
 const mockAzureVirtualMachines = {
@@ -1042,6 +1060,13 @@ function buildMockWorkspace(): WorkspaceSnapshot {
           { label: "Content Type", value: "text/plain" },
         ]
       : [],
+    selectedAzureWebAppName: isAzureWorkspace
+      ? mockState.session.selectedAzureWebAppName ?? mockAzureWebApps[0]?.name
+      : undefined,
+    azureAppServiceStatusMessage: isAzureWorkspace
+      ? `Loaded ${mockAzureWebApps.length} App Service web apps from ${selectedAzureResourceGroup}.`
+      : undefined,
+    azureWebApps: isAzureWorkspace ? mockAzureWebApps : [],
     selectedS3BucketName,
     selectedS3ObjectKey,
     s3PrefixFilter: mockState.session.s3PrefixFilter,
@@ -1661,6 +1686,68 @@ function handleMockRequest<T>(
       mockState.session.selectedAzureResourceGroup = name;
       mockState.session.selectedAzureVmId = undefined;
       appendLog("success", `Created Azure resource group ${name} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.virtualMachines.invokeAction": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("virtual machine actions require write mode to be enabled for this Azure workspace"));
+      }
+      const vmId = String(params.vmId ?? "");
+      const action = String(params.action ?? "");
+      const resourceGroup = mockState.session.selectedAzureResourceGroup ?? mockAzureResourceGroups[0]?.name;
+      const vms = resourceGroup
+        ? mockAzureVirtualMachines[resourceGroup as keyof typeof mockAzureVirtualMachines] ?? []
+        : [];
+      const vm = vms.find((entry) => entry.vmId === vmId);
+      if (vm) {
+        if (action === "start") {
+          vm.powerState = "VM running";
+        } else if (action === "powerOff" || action === "deallocate") {
+          vm.powerState = action === "deallocate" ? "VM deallocated" : "VM stopped";
+        }
+      }
+      appendLog("success", `Invoked ${action} on Azure virtual machine ${vm?.name ?? vmId} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.webApps.select":
+      mockState.session.selectedAzureWebAppName = String(params.appName ?? "");
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.webApps.create": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("web app create requires write mode to be enabled for this Azure workspace"));
+      }
+      const appName = String(params.appName ?? "").trim();
+      const resourceGroup = String(params.resourceGroup ?? "").trim();
+      mockAzureWebApps.push({
+        name: appName,
+        resourceGroup,
+        location: String(params.location ?? "westeurope"),
+        state: "Running",
+        defaultHostName: `${appName}.azurewebsites.net`,
+        kind: "app,linux",
+        httpsOnly: true,
+      });
+      mockState.session.selectedAzureResourceGroup = resourceGroup;
+      mockState.session.selectedAzureWebAppName = appName;
+      appendLog("success", `Created App Service web app ${appName} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.storage.createAccount": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("storage account create requires write mode to be enabled for this Azure workspace"));
+      }
+      const accountName = String(params.accountName ?? "").trim().toLowerCase();
+      mockAzureStorageAccounts.push({
+        name: accountName,
+        kind: "StorageV2",
+        location: String(params.location ?? "westeurope"),
+        blobEndpoint: `http://localhost:4577/${accountName}`,
+        summary: "User-created storage account",
+      });
+      mockState.session.selectedAzureStorageAccount = accountName;
+      mockState.session.selectedAzureBlobContainer = undefined;
+      mockState.session.selectedAzureBlobName = undefined;
+      appendLog("success", `Created storage account ${accountName} (mock).`);
       return Promise.resolve(buildMockWorkspace() as T);
     }
     case "azure.resourceGroups.delete": {

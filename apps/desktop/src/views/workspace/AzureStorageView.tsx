@@ -46,6 +46,7 @@ export type AzureStorageViewProps = {
   onSelectContainer: (containerName: string) => void;
   onSelectBlob: (blobName: string) => void;
   onSetPrefixFilter: (prefix: string) => void;
+  onCreateAccount: (resourceGroup: string, accountName: string, location: string) => void;
   onCreateContainer: (containerName: string) => void;
   onUploadBlob: (sourcePath: string, blobName: string) => void;
   onDeleteBlob: (blobName: string) => void;
@@ -71,6 +72,7 @@ export default function AzureStorageView({
   onSelectContainer,
   onSelectBlob,
   onSetPrefixFilter,
+  onCreateAccount,
   onCreateContainer,
   onUploadBlob,
   onDeleteBlob,
@@ -78,6 +80,12 @@ export default function AzureStorageView({
   const page = normalisePageId(activePageId);
   const canWrite = workspace.azureWritesEnabled;
   const [prefixInput, setPrefixInput] = useState(workspace.azureBlobPrefixFilter ?? "");
+  const [createAccountOpen, setCreateAccountOpen] = useState(false);
+  const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountLocation, setNewAccountLocation] = useState("westeurope");
+  const [newAccountResourceGroup, setNewAccountResourceGroup] = useState(
+    workspace.selectedAzureResourceGroup ?? "",
+  );
   const [newContainerName, setNewContainerName] = useState("");
   const [uploadSourcePath, setUploadSourcePath] = useState("");
   const [uploadBlobName, setUploadBlobName] = useState("");
@@ -89,12 +97,24 @@ export default function AzureStorageView({
 
   const accountsPage = (
     <section className={sectionCard}>
-      <div>
-        <h2 className="text-base font-bold">Storage Accounts</h2>
-        <p className="text-sm text-muted-foreground">
-          Blob storage accounts for the open Azure subscription. floci-az exposes{" "}
-          <code className="text-xs">devstoreaccount1</code> on port 4577.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-bold">Storage Accounts</h2>
+          <p className="text-sm text-muted-foreground">
+            Blob storage accounts for the open Azure subscription. floci-az includes{" "}
+            <code className="text-xs">devstoreaccount1</code> plus any accounts you create via ARM.
+          </p>
+        </div>
+        {canWrite ? (
+          <Button
+            onClick={() => {
+              setNewAccountResourceGroup(workspace.selectedAzureResourceGroup ?? "");
+              setCreateAccountOpen(true);
+            }}
+          >
+            Create account
+          </Button>
+        ) : null}
       </div>
       <p className="text-sm text-muted-foreground">{workspace.azureStorageStatusMessage}</p>
       <div className="overflow-hidden rounded-lg border border-border">
@@ -449,6 +469,69 @@ export default function AzureStorageView({
       {page === "containers" ? containersPage : null}
       {page === "blobs" ? blobsPage : null}
       {page === "upload" ? uploadPage : null}
+
+      <AlertDialog open={createAccountOpen} onOpenChange={setCreateAccountOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create storage account</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <div>
+                  <div className={cn(fieldLabel, "mb-1")}>Resource group</div>
+                  <Select
+                    value={newAccountResourceGroup}
+                    onValueChange={setNewAccountResourceGroup}
+                  >
+                    <SelectTrigger aria-label="Resource group for new storage account">
+                      <SelectValue placeholder="Select resource group" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {workspace.azureResourceGroups.map((group) => (
+                        <SelectItem key={group.name} value={group.name}>
+                          {group.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <div className={cn(fieldLabel, "mb-1")}>Account name</div>
+                  <Input
+                    value={newAccountName}
+                    onChange={(event) => setNewAccountName(event.target.value.toLowerCase())}
+                    placeholder="mystorageacct"
+                  />
+                </div>
+                <div>
+                  <div className={cn(fieldLabel, "mb-1")}>Location</div>
+                  <Input
+                    value={newAccountLocation}
+                    onChange={(event) => setNewAccountLocation(event.target.value)}
+                    placeholder="westeurope"
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!newAccountResourceGroup.trim() || !newAccountName.trim()}
+              onClick={() => {
+                onCreateAccount(
+                  newAccountResourceGroup.trim(),
+                  newAccountName.trim(),
+                  newAccountLocation.trim() || "westeurope",
+                );
+                setNewAccountName("");
+                setCreateAccountOpen(false);
+              }}
+            >
+              Create
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={deleteTarget !== null} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>

@@ -299,6 +299,68 @@ func (s *Service) handleAzureStorageSetPrefixFilter(ctx context.Context, params 
 	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "info", fmt.Sprintf("Updated Azure blob prefix filter to %q.", request.Prefix))
 }
 
+func (s *Service) handleAzureStorageCreateAccount(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		ResourceGroup string `json:"resourceGroup"`
+		AccountName   string `json:"accountName"`
+		Location      string `json:"location"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	resourceGroup := strings.TrimSpace(request.ResourceGroup)
+	accountName := strings.ToLower(strings.TrimSpace(request.AccountName))
+	if resourceGroup == "" || accountName == "" {
+		return nil, errors.New("resource group and storage account name are required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !session.IsLocked || session.CurrentProviderID != "azure" {
+		s.mu.Unlock()
+		return nil, errors.New("open a locked Azure workspace before creating a storage account")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		s.mu.Unlock()
+		return nil, errors.New("the workspace's Azure profile is not available")
+	}
+	if !effectiveAzureWritesEnabled(session, profile, s.azureProviderCommandPath(snapshot)) {
+		s.mu.Unlock()
+		return nil, errors.New("storage account create requires write mode to be enabled for this Azure workspace")
+	}
+	s.mu.Unlock()
+
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+	created, err := s.azure.CreateStorageAccount(timeoutCtx, profile, resourceGroup, accountName, request.Location)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	session.SelectedAzureStorageAccount = created.Name
+	session.SelectedAzureBlobContainer = ""
+	session.SelectedAzureBlobName = ""
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.mu.Unlock()
+	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Created storage account %s.", created.Name))
+}
+
 func (s *Service) handleAzureStorageCreateContainer(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		ContainerName string `json:"containerName"`

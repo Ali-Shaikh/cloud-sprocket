@@ -49,6 +49,11 @@ func (blockingAzure) ListBlobs(ctx context.Context, _ models.ProfileSummary, _ s
 	return nil, ctx.Err()
 }
 
+func (blockingAzure) CreateStorageAccount(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) (models.AzureStorageAccount, error) {
+	<-ctx.Done()
+	return models.AzureStorageAccount{}, ctx.Err()
+}
+
 func (blockingAzure) CreateBlobContainer(ctx context.Context, _ models.ProfileSummary, _ string, _ string) error {
 	<-ctx.Done()
 	return ctx.Err()
@@ -62,6 +67,26 @@ func (blockingAzure) UploadBlob(ctx context.Context, _ models.ProfileSummary, _ 
 func (blockingAzure) DeleteBlob(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) error {
 	<-ctx.Done()
 	return ctx.Err()
+}
+
+func (blockingAzure) InvokeVirtualMachineAction(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (blockingAzure) GetVirtualMachine(ctx context.Context, _ models.ProfileSummary, _ string, _ string) (models.AzureVirtualMachine, error) {
+	<-ctx.Done()
+	return models.AzureVirtualMachine{}, ctx.Err()
+}
+
+func (blockingAzure) ListWebApps(ctx context.Context, _ models.ProfileSummary, _ string) ([]models.AzureWebApp, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) CreateWebApp(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ string) (models.AzureWebApp, error) {
+	<-ctx.Done()
+	return models.AzureWebApp{}, ctx.Err()
 }
 
 // TestAzureInventoryBoundedByTimeout proves a stalled Azure inventory call is

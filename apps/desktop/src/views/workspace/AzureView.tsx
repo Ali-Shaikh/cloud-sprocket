@@ -37,6 +37,8 @@ import type { WorkspaceSnapshot } from "@/types/backend";
 
 export type AzurePageId = "overview" | "resource-groups" | "virtual-machines";
 
+export type AzureVMAction = "start" | "powerOff" | "deallocate" | "restart";
+
 export type AzureViewProps = {
   workspace: WorkspaceSnapshot;
   /** Raw sub-page id from the nav; unknown values fall back to "overview". */
@@ -47,6 +49,7 @@ export type AzureViewProps = {
   onSelectVirtualMachine: (vmId: string) => void;
   onCreateResourceGroup: (name: string, location: string) => void;
   onDeleteResourceGroup: (name: string) => void;
+  onInvokeVMAction: (action: AzureVMAction, vmId: string) => void;
 };
 
 function normalisePageId(pageId: string): AzurePageId {
@@ -74,6 +77,20 @@ function azureStatus(value?: string): Status {
     return "warning";
   }
   return "off";
+}
+
+function normaliseVMPowerState(value?: string): string {
+  const normalised = value?.toLowerCase() ?? "";
+  if (normalised.includes("running")) {
+    return "running";
+  }
+  if (normalised.includes("deallocat")) {
+    return "deallocated";
+  }
+  if (normalised.includes("stop")) {
+    return "stopped";
+  }
+  return normalised;
 }
 
 function profileFieldValue(
@@ -120,11 +137,15 @@ export default function AzureView({
   onSelectVirtualMachine,
   onCreateResourceGroup,
   onDeleteResourceGroup,
+  onInvokeVMAction,
 }: AzureViewProps) {
   const page = normalisePageId(activePageId);
   const canWrite = workspace.azureWritesEnabled;
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [pendingVmAction, setPendingVmAction] = useState<
+    { action: AzureVMAction; vm: WorkspaceSnapshot["azureVirtualMachines"][number] } | undefined
+  >();
   const [newRgName, setNewRgName] = useState("");
   const [newRgLocation, setNewRgLocation] = useState("westeurope");
 
@@ -148,6 +169,11 @@ export default function AzureView({
     workspace.azureVirtualMachines.find(
       (vm) => vm.vmId === workspace.selectedAzureVmId,
     ) ?? workspace.azureVirtualMachines[0];
+  const selectedVmPower = normaliseVMPowerState(selectedVm?.powerState);
+  const canStartVm = canWrite && (selectedVmPower === "stopped" || selectedVmPower === "deallocated");
+  const canPowerOffVm = canWrite && selectedVmPower === "running";
+  const canDeallocateVm = canWrite && (selectedVmPower === "running" || selectedVmPower === "stopped");
+  const canRestartVm = canWrite && selectedVmPower === "running";
 
   const metricCards = [
     {
@@ -451,10 +477,57 @@ export default function AzureView({
               </SelectContent>
             </Select>
           </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              disabled={!canStartVm || !selectedVm}
+              onClick={() => {
+                if (selectedVm) {
+                  setPendingVmAction({ action: "start", vm: selectedVm });
+                }
+              }}
+            >
+              Start
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!canPowerOffVm || !selectedVm}
+              onClick={() => {
+                if (selectedVm) {
+                  setPendingVmAction({ action: "powerOff", vm: selectedVm });
+                }
+              }}
+            >
+              Power off
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!canDeallocateVm || !selectedVm}
+              onClick={() => {
+                if (selectedVm) {
+                  setPendingVmAction({ action: "deallocate", vm: selectedVm });
+                }
+              }}
+            >
+              Deallocate
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!canRestartVm || !selectedVm}
+              onClick={() => {
+                if (selectedVm) {
+                  setPendingVmAction({ action: "restart", vm: selectedVm });
+                }
+              }}
+            >
+              Restart
+            </Button>
+          </div>
           <div className="pb-2 text-xs text-muted-foreground">
             {countLabel(workspace.azureVirtualMachines.length, "VM", "VMs")}
           </div>
         </div>
+        {actionStatus ? <p className="text-sm text-muted-foreground">{actionStatus}</p> : null}
         <div className="overflow-hidden rounded-lg border border-border">
           {workspace.azureVirtualMachines.length === 0 ? (
             <EmptyState
@@ -640,6 +713,46 @@ export default function AzureView({
               }}
             >
               Create
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(pendingVmAction)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingVmAction(undefined);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingVmAction?.action === "powerOff"
+                ? "Power off"
+                : pendingVmAction?.action === "deallocate"
+                  ? "Deallocate"
+                  : pendingVmAction?.action === "restart"
+                    ? "Restart"
+                    : "Start"}{" "}
+              virtual machine
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This sends a live Azure VM {pendingVmAction?.action} request for the selected machine.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingVmAction) {
+                  onInvokeVMAction(pendingVmAction.action, pendingVmAction.vm.vmId);
+                }
+                setPendingVmAction(undefined);
+              }}
+            >
+              Confirm
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
