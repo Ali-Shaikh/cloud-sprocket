@@ -17,6 +17,7 @@ type deploymentPlanRequest struct {
 	ProviderID string         `json:"providerId"`
 	ProfileID  string         `json:"profileId"`
 	Local      bool           `json:"local"`
+	RuntimeID  string         `json:"runtimeId,omitempty"`
 	Variables  map[string]any `json:"variables"`
 }
 
@@ -51,16 +52,9 @@ func (s *Service) newJobID() string {
 	return fmt.Sprintf("job-%d", s.now().UnixNano())
 }
 
-// targetLabel names a deployment's target for log lines, e.g. "LocalStack" for
-// a local emulator or "AWS profile prod" for a cloud profile.
-func targetLabel(deployment *deploy.Deployment) string {
-	if deployment.Local {
-		return "LocalStack"
-	}
-	if profile := strings.TrimSpace(deployment.ProfileID); profile != "" {
-		return strings.ToUpper(deployment.ProviderID) + " profile " + profile
-	}
-	return strings.ToUpper(deployment.ProviderID)
+// targetLabel names a deployment's target for log lines via the deploy engine.
+func (s *Service) targetLabel(deployment *deploy.Deployment) string {
+	return s.deployer.TargetLabel(deployment)
 }
 
 func (s *Service) tofuStatus(ctx context.Context) tofuStatus {
@@ -157,6 +151,7 @@ func (s *Service) startDeploymentPlan(ctx context.Context, request deploymentPla
 		ProviderID:    request.ProviderID,
 		ProfileID:     request.ProfileID,
 		Local:         request.Local,
+		RuntimeID:     request.RuntimeID,
 		Variables:     request.Variables,
 		SensitiveVars: sensitiveVariableNames(recipe),
 		Status:        deploy.StatusPending,
@@ -240,7 +235,7 @@ func (s *Service) runDeploymentPlan(deployment *deploy.Deployment, job models.Jo
 	s.emitJobStatus(notifier, job, "running", "Planning "+deployment.Name+".")
 
 	onLine := s.deploymentLogger(deployment.ID, job.JobID, notifier)
-	onLine("Checking " + targetLabel(deployment) + " connectivity...")
+	onLine("Checking " + s.targetLabel(deployment) + " connectivity...")
 	if err := s.deployer.Preflight(runCtx, deployment); err != nil {
 		s.finishWithError(ctx, runCtx, deployment, job, notifier, err)
 		return
@@ -269,7 +264,7 @@ func (s *Service) runDeploymentAction(deployment *deploy.Deployment, action depl
 
 	onLine := s.deploymentLogger(deployment.ID, job.JobID, notifier)
 
-	onLine("Checking " + targetLabel(deployment) + " connectivity...")
+	onLine("Checking " + s.targetLabel(deployment) + " connectivity...")
 	if err := s.deployer.Preflight(runCtx, deployment); err != nil {
 		s.finishWithError(ctx, runCtx, deployment, job, notifier, err)
 		return

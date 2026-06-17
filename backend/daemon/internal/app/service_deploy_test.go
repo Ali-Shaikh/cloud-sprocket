@@ -36,7 +36,13 @@ func (f *fakeDeployer) Install(context.Context) (string, error) {
 	return "1.12.2", nil
 }
 func (f *fakeDeployer) Preflight(context.Context, *deploy.Deployment) error { return f.preflightErr }
-func (f *fakeDeployer) Prepare(*deploy.Deployment) error                    { return nil }
+func (f *fakeDeployer) TargetLabel(deployment *deploy.Deployment) string {
+	if deployment.Local {
+		return "LocalStack"
+	}
+	return "AWS profile " + deployment.ProfileID
+}
+func (f *fakeDeployer) Prepare(*deploy.Deployment) error { return nil }
 
 func (f *fakeDeployer) Plan(ctx context.Context, _ *deploy.Deployment, onLine tofu.LogFunc) (deploy.PlanSummary, error) {
 	if onLine != nil {

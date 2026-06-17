@@ -45,6 +45,9 @@ type Deployment struct {
 	ProviderID string         `json:"providerId"`
 	ProfileID  string         `json:"profileId"`
 	Local      bool           `json:"local"`
+	// RuntimeID names the local emulator when Local is true (e.g. "localstack").
+	// Empty means the default for the provider (localstack for local AWS).
+	RuntimeID  string         `json:"runtimeId,omitempty"`
 	Variables  map[string]any `json:"variables"`
 	Status     Status         `json:"status"`
 	Plan       *PlanSummary   `json:"plan,omitempty"`
@@ -82,9 +85,8 @@ type PlanSummary struct {
 
 const (
 	tfvarsFile    = "cloudsprocket.auto.tfvars.json"
-	overrideFile  = "cloudsprocket_localstack_override.tf"
-	planFile      = "cloudsprocket.tfplan"
-	localStackURL = "http://localhost:4566"
+	overrideFile = "cloudsprocket_localstack_override.tf"
+	planFile     = "cloudsprocket.tfplan"
 )
 
 // Engine runs deployments via a tofu runner.
@@ -92,18 +94,17 @@ type Engine struct {
 	runner   *tofu.Runner
 	settings config.Settings
 	loader   *recipes.Loader
-	// localStackEndpoint is overridable for tests.
-	localStackEndpoint string
+	registry *Registry
 }
 
 // NewEngine builds an engine bound to a runner, settings and recipe loader.
 // The runner may be unresolved; it is (re)resolved lazily and on install.
 func NewEngine(runner *tofu.Runner, settings config.Settings, loader *recipes.Loader) *Engine {
 	return &Engine{
-		runner:             runner,
-		settings:           settings,
-		loader:             loader,
-		localStackEndpoint: localStackURL,
+		runner:   runner,
+		settings: settings,
+		loader:   loader,
+		registry: NewRegistry(settings, TargetOptions{LocalStackEndpoint: DefaultLocalStackEndpoint}),
 	}
 }
 
@@ -187,9 +188,13 @@ func (e *Engine) Prepare(deployment *Deployment) error {
 	if err := writeTfvars(dir, deployment.Variables); err != nil {
 		return fmt.Errorf("write tfvars: %w", err)
 	}
-	if deployment.Local && deployment.ProviderID == "aws" {
-		if err := os.WriteFile(filepath.Join(dir, overrideFile), []byte(localStackOverride(e.localStackEndpoint)), 0o644); err != nil {
-			return fmt.Errorf("write localstack override: %w", err)
+	if deployment.ProviderID == "aws" {
+		target, err := e.registry.Resolve(deployment)
+		if err != nil {
+			return err
+		}
+		if err := target.WriteOverrides(dir, deployment, e.registry.opts); err != nil {
+			return fmt.Errorf("write provider overrides: %w", err)
 		}
 	}
 	return nil
@@ -201,7 +206,7 @@ func (e *Engine) Plan(ctx context.Context, deployment *Deployment, onLine tofu.L
 		return PlanSummary{}, err
 	}
 	if recipe, err := e.loader.Load(deployment.RecipeID); err == nil {
-		if err := e.runBuildSteps(ctx, deployment, recipe.Manifest.Build, onLine); err != nil {
+		if err := e.runBuildSteps(ctx, deployment, recipe.Manifest.Build, nil, onLine); err != nil {
 			return PlanSummary{}, err
 		}
 		if err := e.runImagePipeline(ctx, deployment, recipe.Manifest.ImageBuild, onLine); err != nil {
@@ -237,7 +242,16 @@ func (e *Engine) Apply(ctx context.Context, deployment *Deployment, onLine tofu.
 	if err != nil {
 		return nil, err
 	}
-	return parseOutputs(raw)
+	outputs, err := parseOutputs(raw)
+	if err != nil {
+		return nil, err
+	}
+	if recipe, loadErr := e.loader.Load(deployment.RecipeID); loadErr == nil && len(recipe.Manifest.PostApply) > 0 {
+		if err := e.runBuildSteps(ctx, deployment, recipe.Manifest.PostApply, outputEnvVars(outputs), onLine); err != nil {
+			return outputs, fmt.Errorf("post-apply step: %w", err)
+		}
+	}
+	return outputs, nil
 }
 
 // Destroy tears the deployment down.
@@ -254,7 +268,29 @@ func (e *Engine) Destroy(ctx context.Context, deployment *Deployment, onLine tof
 // runBuildSteps runs a recipe's build commands (e.g. `npm ci`) to package
 // application code before planning. A step is skipped when its DirVar is empty
 // or its Requires file is absent (so the bundled stub directory is left alone).
-func (e *Engine) runBuildSteps(ctx context.Context, deployment *Deployment, steps []recipes.BuildStep, onLine tofu.LogFunc) error {
+// outputEnvVars maps deployment outputs to process environment variables so
+// post-apply steps can read live infrastructure values (database_url → DATABASE_URL).
+func outputEnvVars(outputs []Output) []string {
+	env := make([]string, 0, len(outputs))
+	for _, output := range outputs {
+		key := outputToEnvKey(output.Name)
+		if key == "" {
+			continue
+		}
+		env = append(env, key+"="+fmt.Sprint(output.Value))
+	}
+	return env
+}
+
+func outputToEnvKey(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	return strings.ToUpper(strings.ReplaceAll(name, "-", "_"))
+}
+
+func (e *Engine) runBuildSteps(ctx context.Context, deployment *Deployment, steps []recipes.BuildStep, extraEnv []string, onLine tofu.LogFunc) error {
 	for _, step := range steps {
 		dir := ""
 		if step.DirVar != "" {
@@ -284,6 +320,9 @@ func (e *Engine) runBuildSteps(ctx context.Context, deployment *Deployment, step
 		}
 		cmd := exec.CommandContext(ctx, step.Command[0], step.Command[1:]...)
 		cmd.Dir = dir
+		if len(extraEnv) > 0 {
+			cmd.Env = append(os.Environ(), extraEnv...)
+		}
 		sysproc.Hide(cmd)
 		writer := &buildLineWriter{onLine: onLine}
 		cmd.Stdout = writer
@@ -341,24 +380,41 @@ func (w *buildLineWriter) flush() {
 	}
 }
 
-// env builds the provider environment: dummy credentials for a local emulator,
-// otherwise the user's real profile and config files.
+// env builds the provider environment via the resolved deployment target.
 func (e *Engine) env(deployment *Deployment) []string {
-	if deployment.Local && deployment.ProviderID == "aws" {
-		return []string{
-			"AWS_ACCESS_KEY_ID=test",
-			"AWS_SECRET_ACCESS_KEY=test",
-			"AWS_DEFAULT_REGION=us-east-1",
-		}
+	if deployment.ProviderID != "aws" {
+		return nil
 	}
-	if deployment.ProviderID == "aws" {
-		return []string{
-			"AWS_PROFILE=" + deployment.ProfileID,
-			"AWS_CONFIG_FILE=" + e.settings.AWSConfigPath,
-			"AWS_SHARED_CREDENTIALS_FILE=" + e.settings.AWSCredentialsPath,
-		}
+	target, err := e.registry.Resolve(deployment)
+	if err != nil {
+		return nil
 	}
-	return nil
+	return target.Env(deployment, e.settings)
+}
+
+// TargetLabel names a deployment's target for log lines.
+func (e *Engine) TargetLabel(deployment *Deployment) string {
+	if deployment.ProviderID != "aws" {
+		if deployment.Local {
+			return "local emulator"
+		}
+		return strings.ToUpper(deployment.ProviderID)
+	}
+	target, err := e.registry.Resolve(deployment)
+	if err != nil {
+		return fallbackTargetLabel(deployment)
+	}
+	return target.Label(deployment)
+}
+
+func fallbackTargetLabel(deployment *Deployment) string {
+	if deployment.Local {
+		return "LocalStack"
+	}
+	if profile := strings.TrimSpace(deployment.ProfileID); profile != "" {
+		return strings.ToUpper(deployment.ProviderID) + " profile " + profile
+	}
+	return strings.ToUpper(deployment.ProviderID)
 }
 
 func writeTfvars(dir string, variables map[string]any) error {

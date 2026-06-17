@@ -228,3 +228,24 @@ func TestLivePlanWebhookPlatformRecipe(t *testing.T) {
 	}
 	livePlanRecipe(t, "webhook-platform-aws", map[string]any{"app_name": "livehook", "environment": "dev"})
 }
+
+func TestLivePlanApiDynamoDBServerlessRecipe(t *testing.T) {
+	if os.Getenv("TOFU_LIVE") == "" {
+		t.Skip("set TOFU_LIVE=1 to run a real tofu init+plan")
+	}
+	livePlanRecipe(t, "api-dynamodb-serverless-aws", map[string]any{"app_name": "livedb", "environment": "dev"})
+}
+
+func TestLivePlanPythonApiPostgresServerlessRecipe(t *testing.T) {
+	if os.Getenv("TOFU_LIVE") == "" {
+		t.Skip("set TOFU_LIVE=1 to run a real tofu init+plan")
+	}
+	livePlanRecipe(t, "python-api-postgres-serverless-aws", map[string]any{"app_name": "livepy", "environment": "dev", "db_password": "supersecret123"})
+}
+
+func TestLivePlanLabDynamoDBRecipe(t *testing.T) {
+	if os.Getenv("TOFU_LIVE") == "" {
+		t.Skip("set TOFU_LIVE=1 to run a real tofu init+plan")
+	}
+	livePlanRecipe(t, "lab-dynamodb-aws", map[string]any{"app_name": "livelab", "environment": "dev"})
+}

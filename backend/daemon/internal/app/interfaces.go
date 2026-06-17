@@ -101,6 +101,7 @@ type Deployer interface {
 	BinaryPath() string
 	Install(ctx context.Context) (string, error)
 	Preflight(ctx context.Context, deployment *deploy.Deployment) error
+	TargetLabel(deployment *deploy.Deployment) string
 	Prepare(deployment *deploy.Deployment) error
 	Plan(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) (deploy.PlanSummary, error)
 	Apply(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) ([]deploy.Output, error)

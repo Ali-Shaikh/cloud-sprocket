@@ -24,7 +24,7 @@ func TestPreflightLocalStackReachable(t *testing.T) {
 	defer server.Close()
 
 	e := NewEngine(tofu.NewRunner("tofu"), config.Settings{}, recipes.Bundled())
-	e.localStackEndpoint = server.URL
+	e.registry.SetOptions(TargetOptions{LocalStackEndpoint: server.URL})
 
 	if err := e.Preflight(context.Background(), &Deployment{ProviderID: "aws", Local: true}); err != nil {
 		t.Fatalf("expected reachable LocalStack to pass preflight, got %v", err)
@@ -34,7 +34,7 @@ func TestPreflightLocalStackReachable(t *testing.T) {
 func TestPreflightLocalStackUnreachable(t *testing.T) {
 	e := NewEngine(tofu.NewRunner("tofu"), config.Settings{}, recipes.Bundled())
 	// A closed port: nothing is listening, so the probe must fail fast.
-	e.localStackEndpoint = "http://127.0.0.1:1"
+	e.registry.SetOptions(TargetOptions{LocalStackEndpoint: "http://127.0.0.1:1"})
 
 	err := e.Preflight(context.Background(), &Deployment{ProviderID: "aws", Local: true})
 	if err == nil {
