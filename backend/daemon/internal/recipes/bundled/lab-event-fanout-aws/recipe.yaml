@@ -1,0 +1,54 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-event-fanout-aws
+kind: service-lab
+version: 0.1.0
+name: Event fan-out lab (SNS → SQS → Lambda)
+summary: Publish to SNS, buffer on SQS, and process with a Lambda consumer.
+description: |
+  A focused service lab for event fan-out: an SNS topic forwards messages to an
+  SQS queue consumed by a Node.js Lambda. Emulates on LocalStack's free tier.
+providers:
+  - aws
+tags:
+  - sns
+  - sqs
+  - lambda
+  - events
+  - aws
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+build:
+  - name: Install worker dependencies
+    dirVar: worker_source_dir
+    requires: package.json
+    command: ["npm", "install", "--omit=dev"]
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Worker code
+    variables:
+      - name: worker_source_dir
+        widget: directory
+        help: Folder with your SQS worker handler. Leave default for the sample worker.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+outputs:
+  - name: topic_arn
+    primary: true
+  - name: queue_url
+    primary: true
+  - name: lambda_function_name

@@ -1,0 +1,45 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-secrets-aws
+kind: service-lab
+version: 0.1.0
+name: Secrets Manager lab (AWS)
+summary: A Secrets Manager secret with a starter value you can rotate later.
+description: |
+  A focused service lab for AWS Secrets Manager: one secret with an initial
+  version. Emulates on LocalStack's free tier.
+providers:
+  - aws
+tags:
+  - secrets
+  - security
+  - aws
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Secret
+    variables:
+      - name: secret_value
+        widget: password
+        help: Initial secret payload. Change after deploy in your app or the AWS console.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+outputs:
+  - name: secret_arn
+    primary: true
+  - name: secret_name

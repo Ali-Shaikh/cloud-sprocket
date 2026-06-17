@@ -1,0 +1,40 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-dynamodb-aws
+kind: service-lab
+version: 0.1.0
+name: DynamoDB lab (AWS)
+summary: A single on-demand DynamoDB table you can query from your app.
+description: |
+  A focused service lab for DynamoDB: one pay-per-request table with a string
+  partition key. Emulates on LocalStack's free tier.
+providers:
+  - aws
+tags:
+  - dynamodb
+  - database
+  - aws
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+outputs:
+  - name: table_name
+    primary: true
+  - name: table_arn
