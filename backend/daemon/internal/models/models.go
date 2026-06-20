@@ -201,6 +201,7 @@ type SessionSnapshot struct {
 	SelectedAzureBlobName        string `json:"selectedAzureBlobName,omitempty"`
 	AzureBlobPrefixFilter        string `json:"azureBlobPrefixFilter,omitempty"`
 	SelectedAzureWebAppName      string `json:"selectedAzureWebAppName,omitempty"`
+	SelectedAzureLogWorkspace    string `json:"selectedAzureLogWorkspace,omitempty"`
 	AzureWriteModeEnabled        bool   `json:"azureWriteModeEnabled,omitempty"`
 	SelectedS3BucketName       string             `json:"selectedS3BucketName,omitempty"`
 	SelectedS3ObjectKey        string             `json:"selectedS3ObjectKey,omitempty"`
@@ -594,9 +595,11 @@ type WorkspaceSnapshot struct {
 	SelectedAzureBlobName        string                  `json:"selectedAzureBlobName,omitempty"`
 	AzureBlobPrefixFilter        string                  `json:"azureBlobPrefixFilter,omitempty"`
 	SelectedAzureWebAppName      string                  `json:"selectedAzureWebAppName,omitempty"`
+	SelectedAzureLogWorkspace    string                  `json:"selectedAzureLogWorkspace,omitempty"`
 	AzureStatusMessage           string                  `json:"azureStatusMessage,omitempty"`
 	AzureStorageStatusMessage    string                  `json:"azureStorageStatusMessage,omitempty"`
 	AzureAppServiceStatusMessage string                  `json:"azureAppServiceStatusMessage,omitempty"`
+	AzureLogAnalyticsStatusMessage string                `json:"azureLogAnalyticsStatusMessage,omitempty"`
 	AzureResourceGroups          []AzureResourceGroup    `json:"azureResourceGroups"`
 	AzureVirtualMachines         []AzureVirtualMachine   `json:"azureVirtualMachines"`
 	AzureStorageAccounts         []AzureStorageAccount   `json:"azureStorageAccounts"`
@@ -604,6 +607,7 @@ type WorkspaceSnapshot struct {
 	AzureBlobs                   []AzureBlob             `json:"azureBlobs"`
 	AzureBlobMetadata            []DetailField           `json:"azureBlobMetadata"`
 	AzureWebApps                 []AzureWebApp           `json:"azureWebApps"`
+	AzureLogAnalyticsWorkspaces  []AzureLogAnalyticsWorkspace `json:"azureLogAnalyticsWorkspaces"`
 }
 
 type ActivityLogEntry struct {

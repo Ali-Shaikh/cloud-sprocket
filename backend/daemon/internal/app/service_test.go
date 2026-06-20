@@ -256,6 +256,14 @@ func (stubAzureInventory) CreateWebApp(context.Context, models.ProfileSummary, s
 	return models.AzureWebApp{Name: "demo-app", ResourceGroup: "demo-rg", State: "Running"}, nil
 }
 
+func (stubAzureInventory) ListLogAnalyticsWorkspaces(context.Context, models.ProfileSummary) ([]models.AzureLogAnalyticsWorkspace, error) {
+	return []models.AzureLogAnalyticsWorkspace{{Name: "demo-law", ResourceGroup: "demo-rg", CustomerID: "demo-guid"}}, nil
+}
+
+func (stubAzureInventory) RunLogAnalyticsQuery(context.Context, models.ProfileSummary, string, string, string) (models.AzureLogQueryResult, error) {
+	return models.AzureLogQueryResult{Columns: []string{"Level", "Count"}, Rows: [][]string{{"Info", "1"}}}, nil
+}
+
 func (s stubDockerRuntime) Snapshot(context.Context) (models.DockerRuntimeSnapshot, error) {
 	return s.snapshot, nil
 }

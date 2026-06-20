@@ -56,6 +56,12 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 				Summary: "Cloud App Service web apps.",
 				Detail:  "Browse and create App Service web apps on cloud Azure profiles. Not available on floci-az local.",
 			},
+			{
+				TabID:   "azure-log-analytics",
+				Label:   "Log Analytics",
+				Summary: "Run KQL queries against Log Analytics workspaces.",
+				Detail:  "Query Azure Monitor logs with KQL, locally against floci-az or on a real Azure workspace.",
+			},
 			activityTab,
 		}
 	}

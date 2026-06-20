@@ -214,6 +214,10 @@ func (s *Service) Handle(
 		return s.handleAzureStorageUploadBlob(ctx, params, notifier)
 	case "azure.storage.deleteBlob":
 		return s.handleAzureStorageDeleteBlob(ctx, params, notifier)
+	case "azure.logAnalytics.selectWorkspace":
+		return s.handleAzureLogAnalyticsSelectWorkspace(ctx, params, notifier)
+	case "azure.logAnalytics.query":
+		return s.handleAzureLogAnalyticsQuery(ctx, params, notifier)
 	case "session.selectProvider":
 		return s.handleSessionSelectProvider(ctx, params, notifier)
 	case "session.selectProfile":
