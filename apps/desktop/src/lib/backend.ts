@@ -537,6 +537,11 @@ const mockAzureWebApps = [
   },
 ];
 
+const mockAzureLogAnalyticsWorkspaces = [
+  { name: "law-platform", resourceGroup: "rg-marketing-prod", location: "uaenorth", customerId: "law-guid-1" },
+  { name: "law-shared", resourceGroup: "rg-shared", location: "westeurope", customerId: "law-guid-2" },
+];
+
 const mockAzureVirtualMachines = {
   "rg-marketing-prod": [
     {
@@ -1067,6 +1072,13 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       ? `Loaded ${mockAzureWebApps.length} App Service web apps from ${selectedAzureResourceGroup}.`
       : undefined,
     azureWebApps: isAzureWorkspace ? mockAzureWebApps : [],
+    selectedAzureLogWorkspace: isAzureWorkspace
+      ? mockState.session.selectedAzureLogWorkspace ?? mockAzureLogAnalyticsWorkspaces[0]?.name
+      : undefined,
+    azureLogAnalyticsStatusMessage: isAzureWorkspace
+      ? `Loaded ${mockAzureLogAnalyticsWorkspaces.length} Log Analytics workspace(s). Local KQL is a subset of Azure KQL.`
+      : undefined,
+    azureLogAnalyticsWorkspaces: isAzureWorkspace ? mockAzureLogAnalyticsWorkspaces : [],
     selectedS3BucketName,
     selectedS3ObjectKey,
     s3PrefixFilter: mockState.session.s3PrefixFilter,
@@ -1712,6 +1724,20 @@ function handleMockRequest<T>(
     case "azure.webApps.select":
       mockState.session.selectedAzureWebAppName = String(params.appName ?? "");
       return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.logAnalytics.selectWorkspace":
+      mockState.session.selectedAzureLogWorkspace = String(params.workspace ?? "");
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.logAnalytics.query": {
+      const queryText = String(params.query ?? "");
+      appendLog("success", `Ran Log Analytics query (mock): ${queryText.slice(0, 40)}`);
+      return Promise.resolve({
+        columns: ["TimeGenerated", "Level", "Message"],
+        rows: [
+          ["2026-06-21T10:00:00Z", "Info", "mock log row one"],
+          ["2026-06-21T10:01:00Z", "Error", "mock log row two"],
+        ],
+      } as T);
+    }
     case "azure.webApps.create": {
       if (!mockState.session.azureWriteModeEnabled) {
         return Promise.reject(new Error("web app create requires write mode to be enabled for this Azure workspace"));

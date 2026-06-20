@@ -143,6 +143,7 @@ export interface SessionSnapshot {
   selectedAzureBlobName?: string;
   azureBlobPrefixFilter?: string;
   selectedAzureWebAppName?: string;
+  selectedAzureLogWorkspace?: string;
   lockedProviderId?: string;
   lockedProfileId?: string;
   lockedAuthMethod?: AuthMethod;
@@ -412,6 +413,18 @@ export interface AzureWebApp {
   httpsOnly?: boolean;
 }
 
+export interface AzureLogAnalyticsWorkspace {
+  name: string;
+  resourceGroup?: string;
+  location?: string;
+  customerId?: string;
+}
+
+export interface AzureLogQueryResult {
+  columns: string[];
+  rows: string[][];
+}
+
 export interface WorkspaceSnapshot {
   provider?: ProviderSummary;
   profile?: ProfileSummary;
@@ -438,9 +451,11 @@ export interface WorkspaceSnapshot {
   selectedAzureBlobName?: string;
   azureBlobPrefixFilter?: string;
   selectedAzureWebAppName?: string;
+  selectedAzureLogWorkspace?: string;
   azureStatusMessage?: string;
   azureStorageStatusMessage?: string;
   azureAppServiceStatusMessage?: string;
+  azureLogAnalyticsStatusMessage?: string;
   azureResourceGroups: AzureResourceGroup[];
   azureVirtualMachines: AzureVirtualMachine[];
   azureStorageAccounts: AzureStorageAccount[];
@@ -448,6 +463,7 @@ export interface WorkspaceSnapshot {
   azureBlobs: AzureBlob[];
   azureBlobMetadata: DetailField[];
   azureWebApps: AzureWebApp[];
+  azureLogAnalyticsWorkspaces: AzureLogAnalyticsWorkspace[];
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;

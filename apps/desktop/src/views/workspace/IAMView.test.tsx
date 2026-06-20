@@ -69,6 +69,7 @@ const workspaceFixture: IamWorkspaceSnapshot = {
   azureBlobs: [],
   azureBlobMetadata: [],
       azureWebApps: [],
+      azureLogAnalyticsWorkspaces: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],

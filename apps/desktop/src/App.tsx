@@ -65,6 +65,7 @@ import LambdaView from "./views/workspace/LambdaView";
 import AzureView from "./views/workspace/AzureView";
 import AzureStorageView from "./views/workspace/AzureStorageView";
 import AzureAppServiceView from "./views/workspace/AzureAppServiceView";
+import LogAnalyticsView from "./views/workspace/LogAnalyticsView";
 import RuntimeView from "./views/workspace/RuntimeView";
 import PlaceholderView from "./views/workspace/PlaceholderView";
 import ActivityView from "./views/workspace/ActivityView";
@@ -97,6 +98,7 @@ import type {
   AzureStorageAccount,
   AzureVirtualMachine,
   AzureWebApp,
+  AzureLogQueryResult,
   DetailField,
   EmulatorActionResult,
   EmulatorLogSnapshot,
@@ -439,6 +441,7 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     azureBlobs: normaliseArray(source.azureBlobs).map(normaliseAzureBlob),
     azureBlobMetadata: normaliseDetailFields(source.azureBlobMetadata),
     azureWebApps: normaliseArray(source.azureWebApps).map(normaliseAzureWebApp),
+    azureLogAnalyticsWorkspaces: normaliseArray(source.azureLogAnalyticsWorkspaces),
     s3Buckets: normaliseArray(source.s3Buckets).map(normaliseS3Bucket),
     s3Objects: normaliseArray(source.s3Objects).map(normaliseS3Object),
     s3ObjectMetadata: normaliseDetailFields(source.s3ObjectMetadata),
@@ -515,6 +518,7 @@ const emptyWorkspace: WorkspaceSnapshot = {
   azureBlobs: [],
   azureBlobMetadata: [],
   azureWebApps: [],
+  azureLogAnalyticsWorkspaces: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -2143,6 +2147,19 @@ export default function App() {
           });
       }}
     />
+  ) : session.isLocked && activeWorkspaceTabId === "azure-log-analytics" ? (
+    <LogAnalyticsView
+      workspace={workspace}
+      onSelectWorkspace={(ws) => {
+        void mutateWorkspace("azure.logAnalytics.selectWorkspace", { workspace: ws });
+      }}
+      onRunQuery={(ws, query) =>
+        backendRequest<AzureLogQueryResult>("azure.logAnalytics.query", {
+          workspace: ws,
+          query,
+        })
+      }
+    />
   ) : activeWorkspaceTabId === "virtualisation" ? (
     <RuntimeView
       workspace={workspace}
@@ -2752,6 +2769,7 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     "azure-vms": "Virtual machines",
     "azure-storage": "Storage",
     "azure-app-service": "App Service",
+    "azure-log-analytics": "Log Analytics",
     actions: "Activity",
   };
   return labels[tabId] ?? tabs.find((tab) => tab.tabId === tabId)?.label ?? "Workspace";
@@ -2789,6 +2807,8 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureBlobContainers.length };
     case "azure-app-service":
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureWebApps.length };
+    case "azure-log-analytics":
+      return { ...base, iconUrl: azureIconUrl, count: workspace.azureLogAnalyticsWorkspaces.length };
     case "actions":
       return { ...base, icon: Boxes };
     case "virtualisation":
