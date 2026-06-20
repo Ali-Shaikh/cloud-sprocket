@@ -22,7 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "pytest==9.0.2",
+  "pytest==9.1.1",
 ]
 build = [
   "PyInstaller==6.19.0",
