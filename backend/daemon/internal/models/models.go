@@ -505,6 +505,22 @@ type AzureWebApp struct {
 	HTTPSOnly       bool   `json:"httpsOnly,omitempty"`
 }
 
+// AzureLogAnalyticsWorkspace is a Log Analytics (Azure Monitor) workspace. CustomerID
+// is the GUID the query data-plane keys on.
+type AzureLogAnalyticsWorkspace struct {
+	Name          string `json:"name"`
+	ResourceGroup string `json:"resourceGroup,omitempty"`
+	Location      string `json:"location,omitempty"`
+	CustomerID    string `json:"customerId,omitempty"`
+}
+
+// AzureLogQueryResult is a normalised KQL result table (columns + string rows),
+// the same shape whether it came from floci-az locally or real Azure Monitor.
+type AzureLogQueryResult struct {
+	Columns []string   `json:"columns"`
+	Rows    [][]string `json:"rows"`
+}
+
 type WorkspaceSnapshot struct {
 	Provider                   *ProviderSummary        `json:"provider,omitempty"`
 	Profile                    *ProfileSummary         `json:"profile,omitempty"`

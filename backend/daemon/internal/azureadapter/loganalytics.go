@@ -1,0 +1,288 @@
+package azureadapter
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"sort"
+	"strings"
+	"time"
+
+	"cloudsprocket/backend/daemon/internal/models"
+)
+
+// logAnalyticsQueryTimeout bounds a KQL run so a slow workspace fails fast.
+const logAnalyticsQueryTimeout = 30 * time.Second
+
+// ListLogAnalyticsWorkspaces returns the Log Analytics workspaces visible to the
+// profile. floci-az serves the OperationalInsights ARM list locally; real Azure
+// uses the az CLI.
+func (i *Inventory) ListLogAnalyticsWorkspaces(
+	ctx context.Context,
+	profile models.ProfileSummary,
+) ([]models.AzureLogAnalyticsWorkspace, error) {
+	if isLocalFlociProfile(profile) {
+		return i.listLocalLogAnalyticsWorkspaces(ctx)
+	}
+	args := []string{
+		"monitor", "log-analytics", "workspace", "list",
+		"--subscription", profile.ProfileID,
+		"--output", "json",
+		"--only-show-errors",
+	}
+	payload, err := i.run(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+	return decodeLogAnalyticsWorkspaces(payload)
+}
+
+func decodeLogAnalyticsWorkspaces(payload []byte) ([]models.AzureLogAnalyticsWorkspace, error) {
+	var decoded []struct {
+		Name          string `json:"name"`
+		ResourceGroup string `json:"resourceGroup"`
+		Location      string `json:"location"`
+		CustomerID    string `json:"customerId"`
+	}
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		return nil, fmt.Errorf("decode log analytics workspaces: %w", err)
+	}
+	workspaces := make([]models.AzureLogAnalyticsWorkspace, 0, len(decoded))
+	for _, item := range decoded {
+		workspaces = append(workspaces, models.AzureLogAnalyticsWorkspace{
+			Name:          item.Name,
+			ResourceGroup: item.ResourceGroup,
+			Location:      item.Location,
+			CustomerID:    item.CustomerID,
+		})
+	}
+	sort.Slice(workspaces, func(left, right int) bool {
+		return strings.ToLower(workspaces[left].Name) < strings.ToLower(workspaces[right].Name)
+	})
+	return workspaces, nil
+}
+
+func (i *Inventory) listLocalLogAnalyticsWorkspaces(ctx context.Context) ([]models.AzureLogAnalyticsWorkspace, error) {
+	url := fmt.Sprintf("%s/subscriptions/%s/providers/Microsoft.OperationalInsights/workspaces?api-version=2022-10-01",
+		i.flociBaseURL(), i.localSubscriptionID)
+	var decoded struct {
+		Value []struct {
+			Name       string `json:"name"`
+			Location   string `json:"location"`
+			Properties struct {
+				CustomerID string `json:"customerId"`
+			} `json:"properties"`
+		} `json:"value"`
+	}
+	if err := i.flociJSON(ctx, http.MethodGet, url, nil, &decoded); err != nil {
+		return nil, err
+	}
+	workspaces := make([]models.AzureLogAnalyticsWorkspace, 0, len(decoded.Value))
+	for _, item := range decoded.Value {
+		workspaces = append(workspaces, models.AzureLogAnalyticsWorkspace{
+			Name:       item.Name,
+			Location:   item.Location,
+			CustomerID: item.Properties.CustomerID,
+		})
+	}
+	sort.Slice(workspaces, func(left, right int) bool {
+		return strings.ToLower(workspaces[left].Name) < strings.ToLower(workspaces[right].Name)
+	})
+	return workspaces, nil
+}
+
+// RunLogAnalyticsQuery runs a KQL query against a workspace and returns a
+// normalised column/row table. workspace is the workspace name or customer GUID.
+func (i *Inventory) RunLogAnalyticsQuery(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	workspace string,
+	query string,
+	timespan string,
+) (models.AzureLogQueryResult, error) {
+	workspace = strings.TrimSpace(workspace)
+	query = strings.TrimSpace(query)
+	if workspace == "" {
+		return models.AzureLogQueryResult{}, fmt.Errorf("a workspace is required")
+	}
+	if query == "" {
+		return models.AzureLogQueryResult{}, fmt.Errorf("a KQL query is required")
+	}
+	ctx, cancel := context.WithTimeout(ctx, logAnalyticsQueryTimeout)
+	defer cancel()
+	if isLocalFlociProfile(profile) {
+		return i.runLocalLogAnalyticsQuery(ctx, workspace, query, timespan)
+	}
+	args := []string{
+		"monitor", "log-analytics", "query",
+		"--subscription", profile.ProfileID,
+		"--workspace", workspace,
+		"--analytics-query", query,
+		"--output", "json",
+		"--only-show-errors",
+	}
+	payload, err := i.run(ctx, args...)
+	if err != nil {
+		return models.AzureLogQueryResult{}, err
+	}
+	return parseAzCLIRows(payload)
+}
+
+func (i *Inventory) runLocalLogAnalyticsQuery(
+	ctx context.Context,
+	workspace string,
+	query string,
+	timespan string,
+) (models.AzureLogQueryResult, error) {
+	url := fmt.Sprintf("%s/v1/workspaces/%s/query", i.flociBaseURL(), workspace)
+	body := map[string]string{"query": query}
+	if strings.TrimSpace(timespan) != "" {
+		body["timespan"] = timespan
+	}
+	var decoded struct {
+		Tables []struct {
+			Columns []struct {
+				Name string `json:"name"`
+			} `json:"columns"`
+			Rows [][]any `json:"rows"`
+		} `json:"tables"`
+	}
+	if err := i.flociJSON(ctx, http.MethodPost, url, body, &decoded); err != nil {
+		return models.AzureLogQueryResult{}, err
+	}
+	if len(decoded.Tables) == 0 {
+		return models.AzureLogQueryResult{Columns: []string{}, Rows: [][]string{}}, nil
+	}
+	table := decoded.Tables[0]
+	columns := make([]string, 0, len(table.Columns))
+	for _, c := range table.Columns {
+		columns = append(columns, c.Name)
+	}
+	rows := make([][]string, 0, len(table.Rows))
+	for _, raw := range table.Rows {
+		row := make([]string, 0, len(raw))
+		for _, cell := range raw {
+			row = append(row, cellToString(cell))
+		}
+		rows = append(rows, row)
+	}
+	return models.AzureLogQueryResult{Columns: columns, Rows: rows}, nil
+}
+
+// parseAzCLIRows normalises the `az monitor log-analytics query` output (a JSON
+// array of row objects) into ordered columns + rows. Column order follows the
+// first row's key order so the table reads as the user wrote it.
+func parseAzCLIRows(payload []byte) (models.AzureLogQueryResult, error) {
+	var rawRows []json.RawMessage
+	if err := json.Unmarshal(payload, &rawRows); err != nil {
+		return models.AzureLogQueryResult{}, fmt.Errorf("decode log analytics query result: %w", err)
+	}
+	if len(rawRows) == 0 {
+		return models.AzureLogQueryResult{Columns: []string{}, Rows: [][]string{}}, nil
+	}
+	columns, err := orderedJSONKeys(rawRows[0])
+	if err != nil {
+		return models.AzureLogQueryResult{}, err
+	}
+	rows := make([][]string, 0, len(rawRows))
+	for _, raw := range rawRows {
+		var obj map[string]any
+		if err := json.Unmarshal(raw, &obj); err != nil {
+			return models.AzureLogQueryResult{}, fmt.Errorf("decode log analytics row: %w", err)
+		}
+		row := make([]string, 0, len(columns))
+		for _, col := range columns {
+			row = append(row, cellToString(obj[col]))
+		}
+		rows = append(rows, row)
+	}
+	return models.AzureLogQueryResult{Columns: columns, Rows: rows}, nil
+}
+
+// orderedJSONKeys returns an object's keys in document order.
+func orderedJSONKeys(raw json.RawMessage) ([]string, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	if _, err := decoder.Token(); err != nil { // opening '{'
+		return nil, fmt.Errorf("decode log analytics columns: %w", err)
+	}
+	var keys []string
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, fmt.Errorf("decode log analytics columns: %w", err)
+		}
+		key, ok := token.(string)
+		if !ok {
+			continue
+		}
+		keys = append(keys, key)
+		// Skip the value (handles nested objects/arrays).
+		var skip json.RawMessage
+		if err := decoder.Decode(&skip); err != nil {
+			return nil, fmt.Errorf("decode log analytics columns: %w", err)
+		}
+	}
+	return keys, nil
+}
+
+func cellToString(value any) string {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	case float64:
+		return strings.TrimSuffix(strings.TrimSuffix(fmt.Sprintf("%v", v), ".0"), ".000000")
+	default:
+		return fmt.Sprint(v)
+	}
+}
+
+// flociBaseURL is the floci-az endpoint without a trailing slash.
+func (i *Inventory) flociBaseURL() string {
+	endpoint := strings.TrimSpace(i.localEndpoint)
+	if endpoint == "" {
+		endpoint = "http://localhost:4577"
+	}
+	return strings.TrimRight(endpoint, "/")
+}
+
+// flociJSON performs a JSON request against floci-az. floci does not validate the
+// bearer token, so a placeholder is sent purely to satisfy the API shape.
+func (i *Inventory) flociJSON(ctx context.Context, method, url string, body any, out any) error {
+	var reader *bytes.Reader
+	if body != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		reader = bytes.NewReader(encoded)
+	} else {
+		reader = bytes.NewReader(nil)
+	}
+	request, err := http.NewRequestWithContext(ctx, method, url, reader)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Authorization", "Bearer floci-local")
+	if body != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return fmt.Errorf("floci-az request: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return fmt.Errorf("floci-az %s %s returned HTTP %d", method, url, response.StatusCode)
+	}
+	if out == nil {
+		return nil
+	}
+	if err := json.NewDecoder(response.Body).Decode(out); err != nil {
+		return fmt.Errorf("decode floci-az response: %w", err)
+	}
+	return nil
+}
