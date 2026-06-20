@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -24,6 +25,16 @@ func Open(path string) (*Store, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
+	}
+
+	// The store is a single embedded SQLite file written from concurrent job
+	// goroutines (deployment status, activity log). Serialise access to one
+	// connection and wait on locks so a write is never silently dropped with
+	// SQLITE_BUSY, which previously stranded deployments at "planning" under load.
+	db.SetMaxOpenConns(1)
+	if _, err := db.ExecContext(context.Background(), "PRAGMA busy_timeout=5000"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("configure sqlite busy_timeout: %w", err)
 	}
 
 	store := &Store{db: db}
