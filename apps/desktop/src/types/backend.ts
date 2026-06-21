@@ -431,6 +431,8 @@ export interface AzureLogAnalyticsWorkspace {
 export interface AzureLogQueryResult {
   columns: string[];
   rows: string[][];
+  durationMs?: number;
+  truncated?: boolean;
 }
 
 export interface AzureLogAnalyticsSelectionResult {

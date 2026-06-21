@@ -526,8 +526,10 @@ type AzureLogAnalyticsWorkspace struct {
 // AzureLogQueryResult is a normalised KQL result table (columns + string rows),
 // the same shape whether it came from floci-az locally or real Azure Monitor.
 type AzureLogQueryResult struct {
-	Columns []string   `json:"columns"`
-	Rows    [][]string `json:"rows"`
+	Columns    []string   `json:"columns"`
+	Rows       [][]string `json:"rows"`
+	DurationMs int64      `json:"durationMs,omitempty"`
+	Truncated  bool       `json:"truncated,omitempty"`
 }
 
 type AzureLogAnalyticsSelectionResult struct {

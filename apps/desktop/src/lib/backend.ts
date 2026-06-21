@@ -1830,11 +1830,31 @@ function handleMockRequest<T>(
       const queryText = String(params.query ?? "");
       appendLog("success", `Ran Log Analytics query (mock): ${queryText.slice(0, 40)}`);
       return Promise.resolve({
-        columns: ["TimeGenerated", "Level", "Message"],
-        rows: [
-          ["2026-06-21T10:00:00Z", "Info", "mock log row one"],
-          ["2026-06-21T10:01:00Z", "Error", "mock log row two"],
+        columns: [
+          "TimeGenerated",
+          "action_s",
+          "ruleName_s",
+          "trackingReference_s",
+          "details_matches_s",
         ],
+        rows: [
+          [
+            "2026-06-21T10:00:00Z",
+            "Block",
+            "Microsoft_DefaultRuleSet-2.1-SQLI-942100",
+            "20260619T211623Z-abc123",
+            '{"matches":[{"matchVariableName":"QueryParamValue:q","matchVariableValue":"\' or 1=1"}]}',
+          ],
+          [
+            "2026-06-21T10:01:00Z",
+            "Log",
+            "Microsoft_DefaultRuleSet-2.1-XSS-941320",
+            "20260619T211700Z-def456",
+            '{"matches":[{"matchVariableName":"RequestHeader:User-Agent","matchVariableValue":"sqlmap"}]}',
+          ],
+        ],
+        durationMs: 142,
+        truncated: false,
       } as T);
     }
     case "azure.functions.selectApp":

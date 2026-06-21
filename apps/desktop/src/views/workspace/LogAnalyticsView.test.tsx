@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
@@ -12,11 +12,23 @@ const workspace = {
   azureLogAnalyticsStatusMessage: "Loaded 1 Log Analytics workspace(s).",
 } as unknown as WorkspaceSnapshot;
 
+const wafResult = {
+  columns: ["action_s", "details_matches_s"],
+  rows: [
+    [
+      "Block",
+      '{"matches":[{"matchVariableName":"QueryParamValue:q","matchVariableValue":"\' or 1=1"}]}',
+    ],
+  ],
+  durationMs: 88,
+};
+
 describe("LogAnalyticsView", () => {
   it("runs a KQL query and renders the result table", async () => {
     const onRunQuery = vi.fn().mockResolvedValue({
       columns: ["Level", "Message"],
       rows: [["Info", "hello-from-kql"]],
+      durationMs: 10,
     });
     render(
       <ThemeProvider>
@@ -31,6 +43,26 @@ describe("LogAnalyticsView", () => {
     );
     expect(await screen.findByText("hello-from-kql")).toBeTruthy();
     expect(screen.getByText("Message")).toBeTruthy();
+    expect(screen.getByText(/10 ms/)).toBeTruthy();
+  });
+
+  it("opens the row drawer with full column values", async () => {
+    const onRunQuery = vi.fn().mockResolvedValue(wafResult);
+    render(
+      <ThemeProvider>
+        <LogAnalyticsView workspace={workspace} onSelectWorkspace={() => {}} onRunQuery={onRunQuery} />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /run query/i }));
+    expect(await screen.findByText("Block")).toBeTruthy();
+
+    const dataRows = screen.getAllByRole("row");
+    fireEvent.click(dataRows[1]!);
+    const drawer = await screen.findByRole("dialog");
+    expect(within(drawer).getByText("Row 1 of 1")).toBeTruthy();
+    expect(within(drawer).getByText("details_matches_s")).toBeTruthy();
+    expect(within(drawer).getByText(/matchVariableName/)).toBeTruthy();
   });
 
   it("surfaces a query error", async () => {

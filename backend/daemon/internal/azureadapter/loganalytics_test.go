@@ -70,7 +70,7 @@ func TestRunLogAnalyticsQueryCloud(t *testing.T) {
 	inv := NewInventory(config.Settings{})
 	inv.runner = fake
 
-	result, err := inv.RunLogAnalyticsQuery(context.Background(), cloudAzureProfile(), "ws-1", "AppLogs | summarize count()", "")
+	result, err := inv.RunLogAnalyticsQuery(context.Background(), cloudAzureProfile(), "ws-1", "AppLogs | summarize count()", "", 0)
 	if err != nil {
 		t.Fatalf("RunLogAnalyticsQuery: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestRunLogAnalyticsQueryLocalFloci(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	inv := newLocalInventory(server.URL)
-	result, err := inv.RunLogAnalyticsQuery(context.Background(), localFlociProfile(), "ws-guid", "AppLogs", "")
+	result, err := inv.RunLogAnalyticsQuery(context.Background(), localFlociProfile(), "ws-guid", "AppLogs", "", 0)
 	if err != nil {
 		t.Fatalf("RunLogAnalyticsQuery local: %v", err)
 	}
@@ -104,6 +104,20 @@ func TestRunLogAnalyticsQueryLocalFloci(t *testing.T) {
 	}
 	if len(result.Rows) != 2 || result.Rows[1][0] != "Error" || result.Rows[1][1] != "2" {
 		t.Fatalf("unexpected rows: %v", result.Rows)
+	}
+}
+
+func TestApplyLogAnalyticsRowCap(t *testing.T) {
+	base := models.AzureLogQueryResult{
+		Columns: []string{"Id"},
+		Rows:    [][]string{{"1"}, {"2"}, {"3"}},
+	}
+	capped := applyLogAnalyticsRowCap(base, 2)
+	if !capped.Truncated || len(capped.Rows) != 2 {
+		t.Fatalf("expected truncated cap of 2 rows, got %+v", capped)
+	}
+	if capped.Rows[1][0] != "2" {
+		t.Fatalf("expected first two rows preserved, got %v", capped.Rows)
 	}
 }
 

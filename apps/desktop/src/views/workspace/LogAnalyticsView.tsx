@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { Loader2, Play, Table2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Loader2, Play } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { LogQueryResultPanel } from "@/components/log-analytics/LogQueryResultPanel";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -10,15 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import type { AzureLogQueryResult, WorkspaceSnapshot } from "@/types/backend";
 
@@ -64,6 +56,11 @@ export default function LogAnalyticsView({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AzureLogQueryResult | null>(null);
+
+  const timeRangeLabel = useMemo(
+    () => TIMESPAN_OPTIONS.find((option) => option.value === timespanValue)?.label ?? "All time",
+    [timespanValue],
+  );
 
   const canRun = selected.trim() !== "" && query.trim() !== "" && !running;
 
@@ -160,53 +157,13 @@ export default function LogAnalyticsView({
           <p className="text-sm text-muted-foreground">{workspace.azureLogAnalyticsStatusMessage}</p>
           <StatusPill status="warning" label="Local KQL is a subset" />
         </div>
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
       </section>
 
-      <section className={sectionCard}>
-        <h2 className="text-base font-bold">Results</h2>
-        <div className="overflow-auto rounded-lg border border-border">
-          {result && result.columns.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {result.columns.map((column) => (
-                    <TableHead key={column}>{column}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {result.rows.map((row, rowIndex) => (
-                  <TableRow key={rowIndex}>
-                    {row.map((cell, cellIndex) => (
-                      <TableCell
-                        key={cellIndex}
-                        className="max-w-[320px] truncate font-mono text-xs"
-                      >
-                        {cell}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <EmptyState
-              icon={<Table2 />}
-              title={result ? "No rows" : "No results yet"}
-              description={
-                result
-                  ? "The query ran but returned no rows."
-                  : "Run a KQL query to see results here."
-              }
-              className="border-0"
-            />
-          )}
-        </div>
-        {result && result.rows.length > 0 ? (
-          <p className="text-xs text-muted-foreground">{result.rows.length} row(s).</p>
-        ) : null}
-      </section>
+      <LogQueryResultPanel
+        result={result}
+        error={error}
+        timeRangeLabel={timeRangeLabel}
+      />
     </div>
   );
 }

@@ -142,6 +142,7 @@ func (s *Service) handleAzureLogAnalyticsQuery(ctx context.Context, params json.
 		Workspace string `json:"workspace"`
 		Query     string `json:"query"`
 		Timespan  string `json:"timespan"`
+		MaxRows   int    `json:"maxRows"`
 	}
 	if err := json.Unmarshal(params, &request); err != nil {
 		return nil, err
@@ -184,5 +185,5 @@ func (s *Service) handleAzureLogAnalyticsQuery(ctx context.Context, params json.
 	}
 
 	// The adapter bounds the query itself; do not also wrap in the shorter inventory timeout.
-	return s.azure.RunLogAnalyticsQuery(ctx, profile, workspace, request.Query, request.Timespan)
+	return s.azure.RunLogAnalyticsQuery(ctx, profile, workspace, request.Query, request.Timespan, request.MaxRows)
 }

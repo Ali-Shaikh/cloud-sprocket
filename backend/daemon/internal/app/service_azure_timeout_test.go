@@ -94,7 +94,7 @@ func (blockingAzure) ListLogAnalyticsWorkspaces(ctx context.Context, _ models.Pr
 	return nil, ctx.Err()
 }
 
-func (blockingAzure) RunLogAnalyticsQuery(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) (models.AzureLogQueryResult, error) {
+func (blockingAzure) RunLogAnalyticsQuery(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ int) (models.AzureLogQueryResult, error) {
 	<-ctx.Done()
 	return models.AzureLogQueryResult{}, ctx.Err()
 }

@@ -16,6 +16,9 @@ import (
 // logAnalyticsQueryTimeout bounds a KQL run so a slow workspace fails fast.
 const logAnalyticsQueryTimeout = 30 * time.Second
 
+// DefaultLogAnalyticsMaxRows is the row cap applied when the caller omits maxRows.
+const DefaultLogAnalyticsMaxRows = 5000
+
 // ListLogAnalyticsWorkspaces returns the Log Analytics workspaces visible to the
 // profile. floci-az serves the OperationalInsights ARM list locally; real Azure
 // uses the az CLI.
@@ -95,12 +98,15 @@ func (i *Inventory) listLocalLogAnalyticsWorkspaces(ctx context.Context) ([]mode
 
 // RunLogAnalyticsQuery runs a KQL query against a workspace and returns a
 // normalised column/row table. workspace is the workspace name or customer GUID.
+// maxRows caps the returned row count; zero or negative values use
+// DefaultLogAnalyticsMaxRows.
 func (i *Inventory) RunLogAnalyticsQuery(
 	ctx context.Context,
 	profile models.ProfileSummary,
 	workspace string,
 	query string,
 	timespan string,
+	maxRows int,
 ) (models.AzureLogQueryResult, error) {
 	workspace = strings.TrimSpace(workspace)
 	query = strings.TrimSpace(query)
@@ -110,28 +116,48 @@ func (i *Inventory) RunLogAnalyticsQuery(
 	if query == "" {
 		return models.AzureLogQueryResult{}, fmt.Errorf("a KQL query is required")
 	}
+	started := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, logAnalyticsQueryTimeout)
 	defer cancel()
+	var result models.AzureLogQueryResult
+	var err error
 	if isLocalFlociProfile(profile) {
-		return i.runLocalLogAnalyticsQuery(ctx, workspace, query, timespan)
+		result, err = i.runLocalLogAnalyticsQuery(ctx, workspace, query, timespan)
+	} else {
+		args := []string{
+			"monitor", "log-analytics", "query",
+			"--subscription", profile.ProfileID,
+			"--workspace", workspace,
+			"--analytics-query", query,
+			"--output", "json",
+			"--only-show-errors",
+		}
+		if span := strings.TrimSpace(timespan); span != "" {
+			// az -t accepts an ISO8601 duration (e.g. P7D) or a start/end interval.
+			args = append(args, "--timespan", span)
+		}
+		var payload []byte
+		payload, err = i.run(ctx, args...)
+		if err == nil {
+			result, err = parseAzCLIRows(payload)
+		}
 	}
-	args := []string{
-		"monitor", "log-analytics", "query",
-		"--subscription", profile.ProfileID,
-		"--workspace", workspace,
-		"--analytics-query", query,
-		"--output", "json",
-		"--only-show-errors",
-	}
-	if span := strings.TrimSpace(timespan); span != "" {
-		// az -t accepts an ISO8601 duration (e.g. P7D) or a start/end interval.
-		args = append(args, "--timespan", span)
-	}
-	payload, err := i.run(ctx, args...)
 	if err != nil {
 		return models.AzureLogQueryResult{}, err
 	}
-	return parseAzCLIRows(payload)
+	result.DurationMs = time.Since(started).Milliseconds()
+	return applyLogAnalyticsRowCap(result, maxRows), nil
+}
+
+func applyLogAnalyticsRowCap(result models.AzureLogQueryResult, maxRows int) models.AzureLogQueryResult {
+	if maxRows <= 0 {
+		maxRows = DefaultLogAnalyticsMaxRows
+	}
+	if len(result.Rows) > maxRows {
+		result.Rows = result.Rows[:maxRows]
+		result.Truncated = true
+	}
+	return result
 }
 
 func (i *Inventory) runLocalLogAnalyticsQuery(

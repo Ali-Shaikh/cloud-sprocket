@@ -260,8 +260,8 @@ func (stubAzureInventory) ListLogAnalyticsWorkspaces(context.Context, models.Pro
 	return []models.AzureLogAnalyticsWorkspace{{Name: "demo-law", ResourceGroup: "demo-rg", CustomerID: "demo-guid"}}, nil
 }
 
-func (stubAzureInventory) RunLogAnalyticsQuery(context.Context, models.ProfileSummary, string, string, string) (models.AzureLogQueryResult, error) {
-	return models.AzureLogQueryResult{Columns: []string{"Level", "Count"}, Rows: [][]string{{"Info", "1"}}}, nil
+func (stubAzureInventory) RunLogAnalyticsQuery(context.Context, models.ProfileSummary, string, string, string, int) (models.AzureLogQueryResult, error) {
+	return models.AzureLogQueryResult{Columns: []string{"Level", "Count"}, Rows: [][]string{{"Info", "1"}}, DurationMs: 12}, nil
 }
 
 func (stubAzureInventory) ListFunctionApps(context.Context, models.ProfileSummary) ([]models.AzureFunctionApp, error) {
