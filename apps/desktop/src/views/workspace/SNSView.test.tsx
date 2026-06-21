@@ -70,6 +70,8 @@ const workspaceFixture: SnsWorkspaceSnapshot = {
   azureBlobMetadata: [],
       azureWebApps: [],
       azureLogAnalyticsWorkspaces: [],
+      azureWafPolicies: [],
+      azureWafRuleFireCounts: [],
       azureFunctionApps: [],
       azureFunctions: [],
       azureKeyVaults: [],

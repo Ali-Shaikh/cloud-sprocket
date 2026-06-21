@@ -7,7 +7,17 @@ import {
   useState,
 } from "react";
 import type { ErrorInfo, ReactNode } from "react";
-import { ArrowLeftRight, Boxes, Bug, LayoutGrid, Rocket, Server, Trash2, TriangleAlert } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Boxes,
+  Bug,
+  LayoutGrid,
+  Rocket,
+  Server,
+  Shield,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import { Toaster } from "sonner";
 import awsEc2IconUrl from "./assets/cloud-icons/aws-ec2.svg";
 import awsDynamodbIconUrl from "./assets/cloud-icons/aws-dynamodb.svg";
@@ -67,6 +77,7 @@ import AzureView from "./views/workspace/AzureView";
 import AzureStorageView from "./views/workspace/AzureStorageView";
 import AzureAppServiceView from "./views/workspace/AzureAppServiceView";
 import LogAnalyticsView from "./views/workspace/LogAnalyticsView";
+import AzureWafView from "./views/workspace/AzureWafView";
 import AzureFunctionsView from "./views/workspace/AzureFunctionsView";
 import AzureKeyVaultView from "./views/workspace/AzureKeyVaultView";
 import AzureCosmosView from "./views/workspace/AzureCosmosView";
@@ -104,7 +115,10 @@ import type {
   AzureStorageAccount,
   AzureVirtualMachine,
   AzureWebApp,
+  AzureLogAnalyticsHistoryEntry,
+  AzureLogAnalyticsSavedQuery,
   AzureLogAnalyticsSelectionResult,
+  AzureLogAnalyticsTableInfo,
   AzureLogQueryResult,
   AzureFunctionInvokeResult,
   DetailField,
@@ -450,6 +464,8 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     azureBlobMetadata: normaliseDetailFields(source.azureBlobMetadata),
     azureWebApps: normaliseArray(source.azureWebApps).map(normaliseAzureWebApp),
     azureLogAnalyticsWorkspaces: normaliseArray(source.azureLogAnalyticsWorkspaces),
+    azureWafPolicies: normaliseArray(source.azureWafPolicies),
+    azureWafRuleFireCounts: normaliseArray(source.azureWafRuleFireCounts),
     azureFunctionApps: normaliseArray(source.azureFunctionApps),
     azureFunctions: normaliseArray(source.azureFunctions),
     azureKeyVaults: normaliseArray(source.azureKeyVaults),
@@ -544,6 +560,8 @@ const emptyWorkspace: WorkspaceSnapshot = {
   azureBlobMetadata: [],
   azureWebApps: [],
   azureLogAnalyticsWorkspaces: [],
+  azureWafPolicies: [],
+  azureWafRuleFireCounts: [],
   azureFunctionApps: [],
   azureFunctions: [],
   azureKeyVaults: [],
@@ -657,6 +675,10 @@ export default function App() {
   const [flociAzActionStatus, setFlociAzActionStatus] = useState("No floci-az action has run yet.");
   const [flociAzActionInFlight, setFlociAzActionInFlight] = useState(false);
   const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState("overview");
+  const [logAnalyticsPrefill, setLogAnalyticsPrefill] = useState<{
+    query?: string;
+    timespan?: string;
+  } | null>(null);
   const [activeS3PageId, setActiveS3PageId] = useState("buckets");
   const [activeAzurePageId, setActiveAzurePageId] = useState("resource-groups");
   const [activeAzureStoragePageId, setActiveAzureStoragePageId] = useState("blobs");
@@ -2244,6 +2266,8 @@ export default function App() {
     <LogAnalyticsView
       workspace={workspace}
       workspaceSelectionLoading={azureLogWorkspaceSelectionLoading}
+      initialQuery={logAnalyticsPrefill?.query}
+      initialTimespan={logAnalyticsPrefill?.timespan}
       onSelectWorkspace={(ws) => {
         void selectAzureLogAnalyticsWorkspace(ws);
       }}
@@ -2252,6 +2276,106 @@ export default function App() {
           workspace: ws,
           query,
           timespan,
+        })
+      }
+      onListHistory={(ws) =>
+        backendRequest<AzureLogAnalyticsHistoryEntry[]>("azure.logAnalytics.history.list", {
+          workspace: ws,
+        })
+      }
+      onListSaved={(ws) =>
+        backendRequest<AzureLogAnalyticsSavedQuery[]>("azure.logAnalytics.saved.list", { workspace: ws })
+      }
+      onSaveQuery={(ws, name, query, timespan, id) =>
+        backendRequest<AzureLogAnalyticsSavedQuery>("azure.logAnalytics.saved.save", {
+          workspace: ws,
+          name,
+          query,
+          timespan,
+          id,
+        })
+      }
+      onDeleteSaved={(ws, id) =>
+        backendRequest<{ deleted: boolean }>("azure.logAnalytics.saved.delete", { workspace: ws, id }).then(
+          () => undefined,
+        )
+      }
+      onListTables={(ws, includeColumns) =>
+        backendRequest<AzureLogAnalyticsTableInfo[]>("azure.logAnalytics.tables.list", {
+          workspace: ws,
+          includeColumns,
+        })
+      }
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "azure-waf" ? (
+    <AzureWafView
+      workspace={workspace}
+      workspaceSelectionLoading={azureLogWorkspaceSelectionLoading}
+      onSelectWorkspace={(ws) => {
+        void selectAzureLogAnalyticsWorkspace(ws);
+      }}
+      onSelectPolicy={(policyName) => {
+        void mutateWorkspace("azure.waf.selectPolicy", { policyName });
+      }}
+      onRunQuery={(ws, query, timespan) =>
+        backendRequest<AzureLogQueryResult>("azure.logAnalytics.query", {
+          workspace: ws,
+          query,
+          timespan,
+        })
+      }
+      onEditInLogAnalytics={(ws, query, timespan) => {
+        setLogAnalyticsPrefill({ query, timespan });
+        void selectAzureLogAnalyticsWorkspace(ws).finally(() => {
+          setActiveWorkspaceTabId("azure-log-analytics");
+        });
+      }}
+      onSetMode={(resourceGroup, policyName, mode) =>
+        backendRequest<WorkspaceSnapshot>("azure.waf.config.setMode", {
+          resourceGroup,
+          policyName,
+          mode,
+          confirm: true,
+        }).then((workspaceResult) => {
+          startTransition(() => {
+            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          });
+        })
+      }
+      onSetManagedRule={(
+        resourceGroup,
+        policyName,
+        ruleSetType,
+        ruleSetVersion,
+        ruleGroupName,
+        ruleId,
+        enabled,
+      ) =>
+        backendRequest<WorkspaceSnapshot>("azure.waf.config.setManagedRule", {
+          resourceGroup,
+          policyName,
+          ruleSetType,
+          ruleSetVersion,
+          ruleGroupName,
+          ruleId,
+          enabled,
+          confirm: true,
+        }).then((workspaceResult) => {
+          startTransition(() => {
+            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          });
+        })
+      }
+      onRemoveExclusion={(resourceGroup, policyName, exclusion) =>
+        backendRequest<WorkspaceSnapshot>("azure.waf.config.removeExclusion", {
+          resourceGroup,
+          policyName,
+          exclusion,
+          confirm: true,
+        }).then((workspaceResult) => {
+          startTransition(() => {
+            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          });
         })
       }
     />
@@ -2945,6 +3069,7 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     "azure-storage": "Storage",
     "azure-app-service": "App Service",
     "azure-log-analytics": "Log Analytics",
+    "azure-waf": "WAF",
     "azure-functions": "Functions",
     "azure-key-vault": "Key Vault",
     "azure-cosmos": "Cosmos DB",
@@ -2989,6 +3114,8 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureWebApps.length };
     case "azure-log-analytics":
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureLogAnalyticsWorkspaces.length };
+    case "azure-waf":
+      return { ...base, icon: Shield, count: workspace.azureWafPolicies.length };
     case "azure-functions":
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureFunctionApps.length };
     case "azure-key-vault":

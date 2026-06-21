@@ -36,7 +36,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
-import type { AzureLogQueryResult } from "@/types/backend";
+import type { AzureLogQueryResult, AzureWafLogColumnMap } from "@/types/backend";
+import { decodeWafRow, isTuningCandidate } from "@/lib/waf-decode";
 import {
   downloadTextFile,
   formatCellValue,
@@ -54,6 +55,7 @@ export type LogQueryResultPanelProps = {
   timeRangeLabel?: string;
   emptyTitle?: string;
   emptyDescription?: string;
+  wafColumnMap?: AzureWafLogColumnMap;
 };
 
 type SortDirection = "asc" | "desc" | null;
@@ -84,6 +86,7 @@ function LogQueryRowDrawer({
   row,
   rowIndex,
   rowCount,
+  wafColumnMap,
   onOpenChange,
   onSelectRowIndex,
 }: {
@@ -92,6 +95,7 @@ function LogQueryRowDrawer({
   row: string[] | null;
   rowIndex: number;
   rowCount: number;
+  wafColumnMap?: AzureWafLogColumnMap;
   onOpenChange: (open: boolean) => void;
   onSelectRowIndex: (index: number) => void;
 }) {
@@ -126,6 +130,7 @@ function LogQueryRowDrawer({
   }
 
   const rowJson = JSON.stringify(rowToRecord(columns, row), null, 2);
+  const decodedWaf = wafColumnMap ? decodeWafRow(columns, row, wafColumnMap) : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -151,6 +156,64 @@ function LogQueryRowDrawer({
           </div>
         </SheetHeader>
         <div className="space-y-3 px-6 py-4">
+          {decodedWaf ? (
+            <div className="rounded-lg border border-border bg-muted/40 px-3 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                WAF decode
+              </div>
+              <dl className="mt-2 space-y-1 text-xs">
+                {decodedWaf.ruleName ? (
+                  <div>
+                    <dt className="inline font-medium text-muted-foreground">Rule: </dt>
+                    <dd className="inline font-mono">{decodedWaf.ruleName}</dd>
+                  </div>
+                ) : null}
+                {decodedWaf.action ? (
+                  <div>
+                    <dt className="inline font-medium text-muted-foreground">Action: </dt>
+                    <dd className="inline font-mono">{decodedWaf.action}</dd>
+                    {isTuningCandidate(decodedWaf.action) ? (
+                      <span className="ml-2 text-amber-600 dark:text-amber-400">Tuning candidate</span>
+                    ) : null}
+                  </div>
+                ) : null}
+                {decodedWaf.trackingReference ? (
+                  <div>
+                    <dt className="inline font-medium text-muted-foreground">Tracking ref: </dt>
+                    <dd className="inline font-mono">{decodedWaf.trackingReference}</dd>
+                  </div>
+                ) : null}
+                {decodedWaf.detailsMessage ? (
+                  <div>
+                    <dt className="font-medium text-muted-foreground">Message</dt>
+                    <dd className="mt-0.5 font-mono whitespace-pre-wrap break-all">{decodedWaf.detailsMessage}</dd>
+                  </div>
+                ) : null}
+              </dl>
+              {decodedWaf.matches.length > 0 ? (
+                <div className="mt-3 overflow-auto rounded border border-border">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/50 text-left">
+                        <th className="px-2 py-1 font-semibold">Match variable</th>
+                        <th className="px-2 py-1 font-semibold">Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {decodedWaf.matches.map((match, index) => (
+                        <tr key={index} className="border-b border-border/60 last:border-0">
+                          <td className="px-2 py-1 font-mono">{match.matchVariableName}</td>
+                          <td className="px-2 py-1 font-mono whitespace-pre-wrap break-all">
+                            {match.matchVariableValue}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {columns.map((column, columnIndex) => {
             const value = row[columnIndex] ?? "";
             const formatted = formatCellValue(value);
@@ -199,6 +262,7 @@ function LogQueryResultPanel({
   timeRangeLabel = "All time",
   emptyTitle = "No results yet",
   emptyDescription = "Run a KQL query to see results here.",
+  wafColumnMap,
 }: LogQueryResultPanelProps) {
   const [wrapCells, setWrapCells] = useState(false);
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => new Set());
@@ -443,6 +507,7 @@ function LogQueryResultPanel({
         row={selectedRow}
         rowIndex={selectedRowIndex ?? 0}
         rowCount={displayRows.length}
+        wafColumnMap={wafColumnMap}
         onOpenChange={setDrawerOpen}
         onSelectRowIndex={(index) => {
           setSelectedRowIndex(index);
