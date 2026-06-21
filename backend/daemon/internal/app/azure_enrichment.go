@@ -10,7 +10,8 @@ import (
 // workspace snapshot. Lightweight mode skips expensive drill-down calls that
 // selection handlers and finishAzureWorkspace load on demand.
 type azureEnrichmentOptions struct {
-	lightweight bool
+	lightweight            bool
+	resourceGroupSelection bool
 }
 
 func (s *Service) enrichAzureWorkspace(
@@ -22,6 +23,13 @@ func (s *Service) enrichAzureWorkspace(
 		workspace.Provider.ProviderID != "azure" ||
 		workspace.Profile == nil ||
 		s.azure == nil {
+		return
+	}
+
+	if opts.resourceGroupSelection {
+		var mu sync.Mutex
+		s.enrichAzureInventory(workspace, session, &mu)
+		s.enrichAzureAppServiceInventory(workspace, session, nil)
 		return
 	}
 

@@ -142,20 +142,26 @@ func (s *Service) handleAzureSelectResourceGroup(ctx context.Context, params jso
 		return nil, err
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	session, err := s.currentState(ctx, snapshot)
 	if err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
 	if !session.IsLocked || session.CurrentProviderID != "azure" {
+		s.mu.Unlock()
 		return nil, errors.New("open an Azure workspace before selecting a resource group")
 	}
-	session.SelectedAzureResourceGroup = request.ResourceGroup
+	session.SelectedAzureResourceGroup = strings.TrimSpace(request.ResourceGroup)
 	session.SelectedAzureVMID = ""
 	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
-	return s.buildWorkspaceSnapshot(snapshot, session), s.notifyStateAndLog(
+	s.mu.Unlock()
+	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+		azureResourceGroupSelection: true,
+	})
+	return workspace, s.notifyStateAndLog(
 		ctx,
 		snapshot,
 		session,
@@ -177,19 +183,24 @@ func (s *Service) handleAzureSelectVirtualMachine(ctx context.Context, params js
 		return nil, err
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	session, err := s.currentState(ctx, snapshot)
 	if err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
 	if !session.IsLocked || session.CurrentProviderID != "azure" {
+		s.mu.Unlock()
 		return nil, errors.New("open an Azure workspace before selecting a virtual machine")
 	}
-	session.SelectedAzureVMID = request.VMID
+	session.SelectedAzureVMID = strings.TrimSpace(request.VMID)
 	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
-	return s.buildWorkspaceSnapshot(snapshot, session), nil
+	s.mu.Unlock()
+	return s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+		azureResourceGroupSelection: true,
+	}), nil
 }
 
 func (s *Service) handleAzureResourceGroupsCreate(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

@@ -11,6 +11,9 @@ type workspaceSnapshotOptions struct {
 	// lightweightAzure skips expensive Azure drill-down on workspace.get while
 	// selection handlers and finishAzureWorkspace load detail on demand.
 	lightweightAzure bool
+	// azureResourceGroupSelection only refreshes resource groups, VMs, and App
+	// Service inventory for the selected resource group.
+	azureResourceGroupSelection bool
 }
 
 func (s *Service) buildWorkspaceSnapshot(
@@ -91,20 +94,22 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 		}
 	}
 
-	s.enrichAzureWorkspace(
-		&workspace,
-		session,
-		azureEnrichmentOptions{lightweight: opts.lightweightAzure},
-	)
-	s.enrichS3Inventory(&workspace, session)
-	s.enrichEC2Inventory(&workspace, session)
-	s.enrichLambdaInventory(&workspace, session)
-	s.enrichDynamoDBInventory(&workspace, session)
-	s.enrichSQSInventory(&workspace, session)
-	s.enrichSNSInventory(&workspace, session)
-	s.enrichRDSInventory(&workspace, session)
-	s.enrichLogsInventory(&workspace, session)
-	s.enrichIAMInventory(&workspace, session)
+	azureOpts := azureEnrichmentOptions{lightweight: opts.lightweightAzure}
+	if opts.azureResourceGroupSelection {
+		azureOpts.resourceGroupSelection = true
+	}
+	s.enrichAzureWorkspace(&workspace, session, azureOpts)
+	if !opts.azureResourceGroupSelection {
+		s.enrichS3Inventory(&workspace, session)
+		s.enrichEC2Inventory(&workspace, session)
+		s.enrichLambdaInventory(&workspace, session)
+		s.enrichDynamoDBInventory(&workspace, session)
+		s.enrichSQSInventory(&workspace, session)
+		s.enrichSNSInventory(&workspace, session)
+		s.enrichRDSInventory(&workspace, session)
+		s.enrichLogsInventory(&workspace, session)
+		s.enrichIAMInventory(&workspace, session)
+	}
 
 	return workspace
 }

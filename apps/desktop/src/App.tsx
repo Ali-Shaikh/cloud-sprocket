@@ -431,6 +431,24 @@ function normaliseSessionSnapshot(session: Partial<SessionSnapshot> | null | und
   };
 }
 
+function mergeAzureResourceGroupSelection(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  return normaliseWorkspaceSnapshot({
+    ...current,
+    selectedAzureResourceGroup: normalised.selectedAzureResourceGroup,
+    selectedAzureVmId: normalised.selectedAzureVmId,
+    azureResourceGroups: normalised.azureResourceGroups,
+    azureVirtualMachines: normalised.azureVirtualMachines,
+    azureWebApps: normalised.azureWebApps,
+    selectedAzureWebAppName: normalised.selectedAzureWebAppName,
+    azureStatusMessage: normalised.azureStatusMessage,
+    azureAppServiceStatusMessage: normalised.azureAppServiceStatusMessage,
+  });
+}
+
 function applySessionWriteModeToWorkspace(
   workspace: WorkspaceSnapshot,
   session: SessionSnapshot,
@@ -998,6 +1016,81 @@ export default function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Workspace mutation failed";
       pushNotification("error", `Failed to execute ${method}`, message);
+    }
+  }
+
+  async function selectAzureVirtualMachine(vmId: string): Promise<void> {
+    const trimmed = vmId.trim();
+    if (!trimmed) {
+      return;
+    }
+    startTransition(() => {
+      setSession((current) =>
+        normaliseSessionSnapshot({
+          ...current,
+          selectedAzureVmId: trimmed,
+        }),
+      );
+      setWorkspace((current) =>
+        normaliseWorkspaceSnapshot({
+          ...current,
+          selectedAzureVmId: trimmed,
+        }),
+      );
+    });
+    try {
+      const workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.selectVirtualMachine", {
+        vmId: trimmed,
+      });
+      startTransition(() => {
+        setWorkspace((current) =>
+          mergeAzureResourceGroupSelection(current, workspaceResult),
+        );
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Virtual machine selection failed";
+      pushNotification("error", "Could not select virtual machine", message);
+    }
+  }
+
+  async function selectAzureResourceGroup(resourceGroup: string): Promise<void> {
+    const trimmed = resourceGroup.trim();
+    if (!trimmed) {
+      return;
+    }
+    startTransition(() => {
+      setSession((current) =>
+        normaliseSessionSnapshot({
+          ...current,
+          selectedAzureResourceGroup: trimmed,
+          selectedAzureVmId: undefined,
+        }),
+      );
+      setWorkspace((current) =>
+        normaliseWorkspaceSnapshot({
+          ...current,
+          selectedAzureResourceGroup: trimmed,
+          selectedAzureVmId: undefined,
+          azureVirtualMachines: [],
+          azureWebApps: [],
+          selectedAzureWebAppName: undefined,
+          azureStatusMessage: `Loading virtual machines from ${trimmed}...`,
+          azureAppServiceStatusMessage: `Loading App Service web apps from ${trimmed}...`,
+        }),
+      );
+    });
+    try {
+      const workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.selectResourceGroup", {
+        resourceGroup: trimmed,
+      });
+      startTransition(() => {
+        setWorkspace((current) =>
+          mergeAzureResourceGroupSelection(current, workspaceResult),
+        );
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Resource group selection failed";
+      pushNotification("error", "Could not load resource group inventory", message);
     }
   }
 
@@ -2203,10 +2296,10 @@ export default function App() {
       showSensitiveValues={showSensitiveValues}
       actionStatus={azureActionStatus}
       onSelectResourceGroup={(resourceGroup) => {
-        void mutateWorkspace("azure.selectResourceGroup", { resourceGroup });
+        void selectAzureResourceGroup(resourceGroup);
       }}
       onSelectVirtualMachine={(vmId) => {
-        void mutateWorkspace("azure.selectVirtualMachine", { vmId });
+        void selectAzureVirtualMachine(vmId);
       }}
       onCreateResourceGroup={(name, location) => {
         setAzureActionStatus(`Creating resource group ${name}...`);
@@ -2340,7 +2433,7 @@ export default function App() {
       workspace={activeWorkspace}
       actionStatus={azureAppServiceActionStatus}
       onSelectResourceGroup={(resourceGroup) => {
-        void mutateWorkspace("azure.selectResourceGroup", { resourceGroup });
+        void selectAzureResourceGroup(resourceGroup);
       }}
       onSelectWebApp={(appName) => {
         void mutateWorkspace("azure.webApps.select", { appName });

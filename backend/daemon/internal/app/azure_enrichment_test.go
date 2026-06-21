@@ -18,7 +18,15 @@ type countingAzureInventory struct {
 	detectSchemaCalls atomic.Int32
 	getPolicyCalls    atomic.Int32
 	listBlobsCalls    atomic.Int32
+	listVMCalls       atomic.Int32
+	lastVMResourceGroup string
 	peekQueueCalls    atomic.Int32
+}
+
+func (c *countingAzureInventory) ListVirtualMachines(_ context.Context, _ models.ProfileSummary, resourceGroup string) ([]models.AzureVirtualMachine, error) {
+	c.listVMCalls.Add(1)
+	c.lastVMResourceGroup = resourceGroup
+	return c.stubAzureInventory.ListVirtualMachines(context.Background(), models.ProfileSummary{}, resourceGroup)
 }
 
 func (c *countingAzureInventory) DetectWafLogSchema(context.Context, models.ProfileSummary, string, string) (models.AzureWafLogSchemaProfile, error) {
@@ -127,6 +135,109 @@ func TestWorkspaceGetSkipsHeavyAzureDrillDown(t *testing.T) {
 	}
 	if azure.peekQueueCalls.Load() != 0 {
 		t.Fatalf("PeekQueueMessages calls = %d, want 0", azure.peekQueueCalls.Load())
+	}
+}
+
+func TestSelectResourceGroupRefreshesVirtualMachinesOnly(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+	mustWriteFile(
+		t,
+		filepath.Join(home, ".azure", "azureProfile.json"),
+		`{"subscriptions":[{"id":"sub-001","name":"Marketing","tenantId":"tenant-123","user":{"name":"ali@example.com"}}]}`,
+	)
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("EnsureRuntimeDirs: %v", err)
+	}
+
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer dataStore.Close()
+
+	azure := &countingAzureInventory{
+		stubAzureInventory: stubAzureInventory{
+			resourceGroups: []models.AzureResourceGroup{
+				{Name: "rg-primary", Location: "westeurope"},
+				{Name: "rg-secondary", Location: "westeurope"},
+			},
+			virtualMachines: map[string][]models.AzureVirtualMachine{
+				"rg-secondary": {
+					{
+						VMID:          "/subscriptions/sub-001/resourceGroups/rg-secondary/providers/Microsoft.Compute/virtualMachines/vm-2",
+						Name:          "vm-2",
+						ResourceGroup: "rg-secondary",
+						PowerState:    "VM running",
+					},
+				},
+			},
+		},
+	}
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(command string) (string, error) {
+			if command == "az" {
+				return "/usr/bin/az", nil
+			}
+			return "", nil
+		}),
+		&stubS3Inventory{},
+		&stubEC2Inventory{},
+		stubLambdaInventory{},
+		stubDynamoDBInventory{},
+		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{},
+		azure,
+		stubDockerRuntime{},
+	)
+
+	ctx := context.Background()
+	for _, step := range []struct {
+		method string
+		params []byte
+	}{
+		{"session.selectProvider", []byte(`{"providerId":"azure"}`)},
+		{"session.selectProfile", []byte(`{"providerId":"azure","profileId":"sub-001"}`)},
+		{"session.selectAuthMethod", []byte(`{"authMethod":"cli"}`)},
+		{"session.lock", nil},
+	} {
+		if _, err := service.Handle(ctx, step.method, step.params, nil); err != nil {
+			t.Fatalf("%s: %v", step.method, err)
+		}
+	}
+
+	result, err := service.Handle(ctx, "azure.selectResourceGroup", []byte(`{"resourceGroup":"rg-secondary"}`), nil)
+	if err != nil {
+		t.Fatalf("azure.selectResourceGroup: %v", err)
+	}
+	workspace, ok := result.(models.WorkspaceSnapshot)
+	if !ok {
+		t.Fatalf("expected WorkspaceSnapshot, got %T", result)
+	}
+	if workspace.SelectedAzureResourceGroup != "rg-secondary" {
+		t.Fatalf("selected resource group = %q, want rg-secondary", workspace.SelectedAzureResourceGroup)
+	}
+	if len(workspace.AzureVirtualMachines) == 0 {
+		t.Fatal("expected virtual machines for selected resource group")
+	}
+	if azure.listVMCalls.Load() == 0 {
+		t.Fatal("expected ListVirtualMachines to run for resource group selection")
+	}
+	if azure.lastVMResourceGroup != "rg-secondary" {
+		t.Fatalf("ListVirtualMachines resource group = %q, want rg-secondary", azure.lastVMResourceGroup)
+	}
+	if azure.detectSchemaCalls.Load() != 0 {
+		t.Fatalf("DetectWafLogSchema calls = %d, want 0", azure.detectSchemaCalls.Load())
+	}
+	if azure.listBlobsCalls.Load() != 0 {
+		t.Fatalf("ListBlobs calls = %d, want 0", azure.listBlobsCalls.Load())
 	}
 }
 
