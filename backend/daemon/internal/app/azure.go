@@ -158,17 +158,9 @@ func (s *Service) handleAzureSelectResourceGroup(ctx context.Context, params jso
 		return nil, err
 	}
 	s.mu.Unlock()
-	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+	return s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
 		azureResourceGroupSelection: true,
-	})
-	return workspace, s.notifyStateAndLog(
-		ctx,
-		snapshot,
-		session,
-		notifier,
-		"info",
-		fmt.Sprintf("Selected Azure resource group %s.", request.ResourceGroup),
-	)
+	}), nil
 }
 
 func (s *Service) handleAzureSelectVirtualMachine(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
