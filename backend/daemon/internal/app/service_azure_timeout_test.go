@@ -134,6 +134,26 @@ func (blockingAzure) SetKeyVaultSecret(ctx context.Context, _ models.ProfileSumm
 	return models.AzureKeyVaultSecret{}, ctx.Err()
 }
 
+func (blockingAzure) ListCosmosAccounts(ctx context.Context, _ models.ProfileSummary) ([]models.AzureCosmosAccount, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) ListCosmosDatabases(ctx context.Context, _ models.ProfileSummary, _ string, _ string) ([]models.AzureCosmosDatabase, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) ListCosmosContainers(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) ([]models.AzureCosmosContainer, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) ListCosmosItems(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ string) ([]models.AzureCosmosItem, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
 // TestAzureInventoryBoundedByTimeout proves a stalled Azure inventory call is
 // cut off by the configured timeout (and falls back to empty) instead of
 // hanging the workspace snapshot.

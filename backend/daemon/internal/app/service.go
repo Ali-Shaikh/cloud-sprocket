@@ -232,6 +232,12 @@ func (s *Service) Handle(
 		return s.handleAzureKeyVaultRevealSecret(ctx, params, notifier)
 	case "azure.keyVault.setSecret":
 		return s.handleAzureKeyVaultSetSecret(ctx, params, notifier)
+	case "azure.cosmos.selectAccount":
+		return s.handleAzureCosmosSelectAccount(ctx, params, notifier)
+	case "azure.cosmos.selectDatabase":
+		return s.handleAzureCosmosSelectDatabase(ctx, params, notifier)
+	case "azure.cosmos.selectContainer":
+		return s.handleAzureCosmosSelectContainer(ctx, params, notifier)
 	case "session.selectProvider":
 		return s.handleSessionSelectProvider(ctx, params, notifier)
 	case "session.selectProfile":

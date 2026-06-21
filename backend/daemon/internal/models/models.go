@@ -206,6 +206,9 @@ type SessionSnapshot struct {
 	SelectedAzureFunction        string `json:"selectedAzureFunction,omitempty"`
 	SelectedAzureKeyVault        string `json:"selectedAzureKeyVault,omitempty"`
 	SelectedAzureSecret          string `json:"selectedAzureSecret,omitempty"`
+	SelectedAzureCosmosAccount   string `json:"selectedAzureCosmosAccount,omitempty"`
+	SelectedAzureCosmosDatabase  string `json:"selectedAzureCosmosDatabase,omitempty"`
+	SelectedAzureCosmosContainer string `json:"selectedAzureCosmosContainer,omitempty"`
 	AzureWriteModeEnabled        bool   `json:"azureWriteModeEnabled,omitempty"`
 	SelectedS3BucketName       string             `json:"selectedS3BucketName,omitempty"`
 	SelectedS3ObjectKey        string             `json:"selectedS3ObjectKey,omitempty"`
@@ -671,8 +674,12 @@ type WorkspaceSnapshot struct {
 	AzureLogAnalyticsStatusMessage string                `json:"azureLogAnalyticsStatusMessage,omitempty"`
 	AzureFunctionsStatusMessage  string                  `json:"azureFunctionsStatusMessage,omitempty"`
 	AzureKeyVaultStatusMessage   string                  `json:"azureKeyVaultStatusMessage,omitempty"`
+	AzureCosmosStatusMessage     string                  `json:"azureCosmosStatusMessage,omitempty"`
 	SelectedAzureKeyVault        string                  `json:"selectedAzureKeyVault,omitempty"`
 	SelectedAzureSecret          string                  `json:"selectedAzureSecret,omitempty"`
+	SelectedAzureCosmosAccount   string                  `json:"selectedAzureCosmosAccount,omitempty"`
+	SelectedAzureCosmosDatabase  string                  `json:"selectedAzureCosmosDatabase,omitempty"`
+	SelectedAzureCosmosContainer string                  `json:"selectedAzureCosmosContainer,omitempty"`
 	AzureResourceGroups          []AzureResourceGroup    `json:"azureResourceGroups"`
 	AzureVirtualMachines         []AzureVirtualMachine   `json:"azureVirtualMachines"`
 	AzureStorageAccounts         []AzureStorageAccount   `json:"azureStorageAccounts"`
@@ -685,6 +692,10 @@ type WorkspaceSnapshot struct {
 	AzureFunctions               []AzureFunction         `json:"azureFunctions"`
 	AzureKeyVaults               []AzureKeyVault         `json:"azureKeyVaults"`
 	AzureKeyVaultSecrets         []AzureKeyVaultSecret   `json:"azureKeyVaultSecrets"`
+	AzureCosmosAccounts          []AzureCosmosAccount    `json:"azureCosmosAccounts"`
+	AzureCosmosDatabases         []AzureCosmosDatabase   `json:"azureCosmosDatabases"`
+	AzureCosmosContainers        []AzureCosmosContainer  `json:"azureCosmosContainers"`
+	AzureCosmosItems             []AzureCosmosItem       `json:"azureCosmosItems"`
 }
 
 type ActivityLogEntry struct {

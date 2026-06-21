@@ -88,6 +88,10 @@ type AzureInventory interface {
 	ListKeyVaultSecrets(ctx context.Context, profile models.ProfileSummary, vaultName string) ([]models.AzureKeyVaultSecret, error)
 	GetKeyVaultSecret(ctx context.Context, profile models.ProfileSummary, vaultName string, secretName string) (string, error)
 	SetKeyVaultSecret(ctx context.Context, profile models.ProfileSummary, vaultName string, secretName string, value string) (models.AzureKeyVaultSecret, error)
+	ListCosmosAccounts(ctx context.Context, profile models.ProfileSummary) ([]models.AzureCosmosAccount, error)
+	ListCosmosDatabases(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string) ([]models.AzureCosmosDatabase, error)
+	ListCosmosContainers(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string, database string) ([]models.AzureCosmosContainer, error)
+	ListCosmosItems(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string, database string, container string) ([]models.AzureCosmosItem, error)
 }
 
 type DockerRuntime interface {

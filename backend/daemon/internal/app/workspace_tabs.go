@@ -74,6 +74,12 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 				Summary: "Browse and manage Key Vault secrets.",
 				Detail:  "List vaults and secrets, reveal a secret value, and set secrets when write mode is on.",
 			},
+			{
+				TabID:   "azure-cosmos",
+				Label:   "Cosmos DB",
+				Summary: "Browse Cosmos DB databases, containers, and items.",
+				Detail:  "Read-only browse of Cosmos SQL databases, containers, and a sample of documents.",
+			},
 			activityTab,
 		}
 	}

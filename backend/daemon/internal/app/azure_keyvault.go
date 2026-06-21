@@ -191,7 +191,7 @@ func (s *Service) handleAzureKeyVaultRevealSecret(ctx context.Context, params js
 	return map[string]string{"value": value}, nil
 }
 
-func (s *Service) handleAzureKeyVaultSetSecret(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
+func (s *Service) handleAzureKeyVaultSetSecret(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		VaultName  string `json:"vaultName"`
 		SecretName string `json:"secretName"`
@@ -232,5 +232,22 @@ func (s *Service) handleAzureKeyVaultSetSecret(ctx context.Context, params json.
 
 	timeoutCtx, cancel := s.withAzureTimeout(ctx)
 	defer cancel()
-	return s.azure.SetKeyVaultSecret(timeoutCtx, profile, vaultName, secretName, request.Value)
+	if _, err := s.azure.SetKeyVaultSecret(timeoutCtx, profile, vaultName, secretName, request.Value); err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	session.SelectedAzureKeyVault = vaultName
+	session.SelectedAzureSecret = secretName
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.mu.Unlock()
+	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Set secret %s.", secretName))
 }

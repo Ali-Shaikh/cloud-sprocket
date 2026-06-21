@@ -292,6 +292,22 @@ func (stubAzureInventory) SetKeyVaultSecret(context.Context, models.ProfileSumma
 	return models.AzureKeyVaultSecret{Name: "db-password", Enabled: true}, nil
 }
 
+func (stubAzureInventory) ListCosmosAccounts(context.Context, models.ProfileSummary) ([]models.AzureCosmosAccount, error) {
+	return []models.AzureCosmosAccount{{Name: "devstoreaccount1"}}, nil
+}
+
+func (stubAzureInventory) ListCosmosDatabases(context.Context, models.ProfileSummary, string, string) ([]models.AzureCosmosDatabase, error) {
+	return []models.AzureCosmosDatabase{{Name: "appdb"}}, nil
+}
+
+func (stubAzureInventory) ListCosmosContainers(context.Context, models.ProfileSummary, string, string, string) ([]models.AzureCosmosContainer, error) {
+	return []models.AzureCosmosContainer{{Name: "orders", PartitionKey: "/customerId"}}, nil
+}
+
+func (stubAzureInventory) ListCosmosItems(context.Context, models.ProfileSummary, string, string, string, string) ([]models.AzureCosmosItem, error) {
+	return []models.AzureCosmosItem{{ID: "doc-1", JSON: `{"id":"doc-1"}`}}, nil
+}
+
 func (s stubDockerRuntime) Snapshot(context.Context) (models.DockerRuntimeSnapshot, error) {
 	return s.snapshot, nil
 }

@@ -1,0 +1,197 @@
+package app
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"cloudsprocket/backend/daemon/internal/models"
+)
+
+func (s *Service) azureCosmosAccounts(ctx context.Context, profile models.ProfileSummary) []models.AzureCosmosAccount {
+	const scope = "azure.cosmos-accounts"
+	accounts, err := s.azure.ListCosmosAccounts(ctx, profile)
+	if err == nil {
+		_ = s.store.SaveResourceCache(ctx, scope, profile.ProfileID, accounts, s.timestamp())
+		return accounts
+	}
+	var cached []models.AzureCosmosAccount
+	if _, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, profile.ProfileID, &cached); cacheErr == nil && ok {
+		return cached
+	}
+	return []models.AzureCosmosAccount{}
+}
+
+func (s *Service) azureCosmosDatabases(ctx context.Context, profile models.ProfileSummary, account, rg string) []models.AzureCosmosDatabase {
+	if account == "" {
+		return []models.AzureCosmosDatabase{}
+	}
+	const scope = "azure.cosmos-databases"
+	hash := profile.ProfileID + "|" + account
+	databases, err := s.azure.ListCosmosDatabases(ctx, profile, account, rg)
+	if err == nil {
+		_ = s.store.SaveResourceCache(ctx, scope, hash, databases, s.timestamp())
+		return databases
+	}
+	var cached []models.AzureCosmosDatabase
+	if _, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, hash, &cached); cacheErr == nil && ok {
+		return cached
+	}
+	return []models.AzureCosmosDatabase{}
+}
+
+func (s *Service) azureCosmosContainers(ctx context.Context, profile models.ProfileSummary, account, rg, database string) []models.AzureCosmosContainer {
+	if account == "" || database == "" {
+		return []models.AzureCosmosContainer{}
+	}
+	const scope = "azure.cosmos-containers"
+	hash := profile.ProfileID + "|" + account + "|" + database
+	containers, err := s.azure.ListCosmosContainers(ctx, profile, account, rg, database)
+	if err == nil {
+		_ = s.store.SaveResourceCache(ctx, scope, hash, containers, s.timestamp())
+		return containers
+	}
+	var cached []models.AzureCosmosContainer
+	if _, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, hash, &cached); cacheErr == nil && ok {
+		return cached
+	}
+	return []models.AzureCosmosContainer{}
+}
+
+func (s *Service) azureCosmosItems(ctx context.Context, profile models.ProfileSummary, account, rg, database, container string) []models.AzureCosmosItem {
+	if account == "" || database == "" || container == "" {
+		return []models.AzureCosmosItem{}
+	}
+	items, err := s.azure.ListCosmosItems(ctx, profile, account, rg, database, container)
+	if err != nil {
+		return []models.AzureCosmosItem{}
+	}
+	return items
+}
+
+func selectedName(selected string, names []string) string {
+	for _, name := range names {
+		if name == selected {
+			return selected
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return names[0]
+}
+
+func cosmosAccountNames(accounts []models.AzureCosmosAccount) []string {
+	names := make([]string, 0, len(accounts))
+	for _, account := range accounts {
+		names = append(names, account.Name)
+	}
+	return names
+}
+
+func resourceGroupForCosmosAccount(accounts []models.AzureCosmosAccount, name string) string {
+	for _, account := range accounts {
+		if account.Name == name {
+			return account.ResourceGroup
+		}
+	}
+	return ""
+}
+
+func (s *Service) enrichAzureCosmosInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+	if workspace.Provider == nil ||
+		workspace.Provider.ProviderID != "azure" ||
+		workspace.Profile == nil ||
+		s.azure == nil {
+		return
+	}
+	ctx, cancel := s.withAzureTimeout(context.Background())
+	defer cancel()
+	profile := *workspace.Profile
+
+	accounts := s.azureCosmosAccounts(ctx, profile)
+	account := selectedName(session.SelectedAzureCosmosAccount, cosmosAccountNames(accounts))
+	rg := resourceGroupForCosmosAccount(accounts, account)
+
+	databases := s.azureCosmosDatabases(ctx, profile, account, rg)
+	dbNames := make([]string, 0, len(databases))
+	for _, db := range databases {
+		dbNames = append(dbNames, db.Name)
+	}
+	database := selectedName(session.SelectedAzureCosmosDatabase, dbNames)
+
+	containers := s.azureCosmosContainers(ctx, profile, account, rg, database)
+	containerNames := make([]string, 0, len(containers))
+	for _, c := range containers {
+		containerNames = append(containerNames, c.Name)
+	}
+	container := selectedName(session.SelectedAzureCosmosContainer, containerNames)
+
+	workspace.AzureCosmosAccounts = accounts
+	workspace.SelectedAzureCosmosAccount = account
+	workspace.AzureCosmosDatabases = databases
+	workspace.SelectedAzureCosmosDatabase = database
+	workspace.AzureCosmosContainers = containers
+	workspace.SelectedAzureCosmosContainer = container
+	workspace.AzureCosmosItems = s.azureCosmosItems(ctx, profile, account, rg, database, container)
+
+	if len(accounts) == 0 {
+		workspace.AzureCosmosStatusMessage = "No Cosmos DB accounts found."
+		return
+	}
+	workspace.AzureCosmosStatusMessage = fmt.Sprintf("Loaded %d Cosmos account(s).", len(accounts))
+}
+
+func (s *Service) handleAzureCosmosSelectAccount(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		Account string `json:"account"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a Cosmos account", func(session *models.SessionSnapshot) error {
+		session.SelectedAzureCosmosAccount = request.Account
+		session.SelectedAzureCosmosDatabase = ""
+		session.SelectedAzureCosmosContainer = ""
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "", "")
+}
+
+func (s *Service) handleAzureCosmosSelectDatabase(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		Database string `json:"database"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a Cosmos database", func(session *models.SessionSnapshot) error {
+		session.SelectedAzureCosmosDatabase = request.Database
+		session.SelectedAzureCosmosContainer = ""
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "", "")
+}
+
+func (s *Service) handleAzureCosmosSelectContainer(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		Container string `json:"container"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a Cosmos container", func(session *models.SessionSnapshot) error {
+		session.SelectedAzureCosmosContainer = request.Container
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "", "")
+}
