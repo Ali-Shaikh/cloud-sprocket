@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { backendRequest } from "./lib/backend";
 import { ThemeProvider } from "./lib/theme";
 import { __resetNotifications } from "./lib/notify";
 import type {
@@ -915,6 +916,10 @@ describe("App", () => {
 
     expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Switch connection" })).toBeInTheDocument();
+    await waitFor(() => {
+      const workspaceRequests = vi.mocked(backendRequest).mock.calls.filter(([method]) => method === "workspace.get");
+      expect(workspaceRequests).toHaveLength(1);
+    });
   });
 
   it("shows auth chips for a multi-path profile and opens after a chip click", async () => {

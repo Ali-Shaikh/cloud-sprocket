@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -240,6 +241,7 @@ func (s *Service) discoverAzure() []rawProfile {
 	if err != nil {
 		return nil
 	}
+	payload = bytes.TrimPrefix(payload, []byte{0xEF, 0xBB, 0xBF})
 
 	var decoded struct {
 		Subscriptions []map[string]any `json:"subscriptions"`

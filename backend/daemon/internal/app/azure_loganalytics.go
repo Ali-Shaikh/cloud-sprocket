@@ -47,6 +47,57 @@ func (s *Service) selectedAzureLogWorkspace(
 	return workspaces[0].Name
 }
 
+// azureLogAnalyticsQueryWorkspace resolves a workspace selection (a name or a
+// GUID) to the workspace customer GUID the query API expects. requireGUID is set
+// for real Azure, where `az monitor log-analytics query -w` only accepts the
+// customer GUID; the local floci path accepts a name too, so it stays relaxed.
+func azureLogAnalyticsQueryWorkspace(
+	selection string,
+	workspaces []models.AzureLogAnalyticsWorkspace,
+	requireGUID bool,
+) (string, error) {
+	selection = strings.TrimSpace(selection)
+	for _, workspace := range workspaces {
+		if workspace.Name == selection || workspace.CustomerID == selection {
+			if customerID := strings.TrimSpace(workspace.CustomerID); customerID != "" {
+				return customerID, nil
+			}
+			if requireGUID {
+				return "", fmt.Errorf("workspace %q has no customer ID; reload the workspace list and try again", workspace.Name)
+			}
+			return workspace.Name, nil
+		}
+	}
+	// The selection was not in the loaded list. Accept a directly typed GUID,
+	// but on cloud reject a bare name since `-w` would fail with it.
+	if requireGUID && !looksLikeWorkspaceGUID(selection) {
+		return "", fmt.Errorf("could not resolve a workspace GUID for %q; pick a workspace from the list", selection)
+	}
+	return selection, nil
+}
+
+// looksLikeWorkspaceGUID reports whether value is an 8-4-4-4-12 hex GUID.
+func looksLikeWorkspaceGUID(value string) bool {
+	value = strings.TrimSpace(value)
+	if len(value) != 36 {
+		return false
+	}
+	for i, r := range value {
+		switch i {
+		case 8, 13, 18, 23:
+			if r != '-' {
+				return false
+			}
+		default:
+			isHex := (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
+			if !isHex {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func (s *Service) enrichAzureLogAnalyticsInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "azure" ||
@@ -69,21 +120,21 @@ func (s *Service) enrichAzureLogAnalyticsInventory(workspace *models.WorkspaceSn
 	)
 }
 
-func (s *Service) handleAzureLogAnalyticsSelectWorkspace(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+func (s *Service) handleAzureLogAnalyticsSelectWorkspace(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
 	var request struct {
 		Workspace string `json:"workspace"`
 	}
 	if err := json.Unmarshal(params, &request); err != nil {
 		return nil, err
 	}
-	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a Log Analytics workspace", func(session *models.SessionSnapshot) error {
+	_, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a Log Analytics workspace", func(session *models.SessionSnapshot) error {
 		session.SelectedAzureLogWorkspace = strings.TrimSpace(request.Workspace)
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "", "")
+	return models.AzureLogAnalyticsSelectionResult{Workspace: session.SelectedAzureLogWorkspace}, nil
 }
 
 func (s *Service) handleAzureLogAnalyticsQuery(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
@@ -119,12 +170,17 @@ func (s *Service) handleAzureLogAnalyticsQuery(ctx context.Context, params json.
 	}
 	s.mu.Unlock()
 
+	workspaces := s.azureLogAnalyticsWorkspaces(ctx, profile)
 	workspace := strings.TrimSpace(request.Workspace)
 	if workspace == "" {
-		workspace = s.selectedAzureLogWorkspace(session, s.azureLogAnalyticsWorkspaces(ctx, profile))
+		workspace = s.selectedAzureLogWorkspace(session, workspaces)
 	}
 	if workspace == "" {
 		return nil, errors.New("select a Log Analytics workspace before running a query")
+	}
+	workspace, err = azureLogAnalyticsQueryWorkspace(workspace, workspaces, !isLocalFlociProfile(profile))
+	if err != nil {
+		return nil, err
 	}
 
 	// The adapter bounds the query itself; do not also wrap in the shorter inventory timeout.

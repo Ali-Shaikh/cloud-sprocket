@@ -1,9 +1,11 @@
 package azureadapter
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"sort"
 	"strings"
@@ -23,9 +25,32 @@ type CLIExecutor interface {
 type execRunner struct{}
 
 func (execRunner) CommandContext(ctx context.Context, name string, args ...string) ([]byte, error) {
+	isAz := strings.EqualFold(name, "az")
+	name, args = normaliseCLICommand(name, args)
 	cmd := exec.CommandContext(ctx, name, args...)
+	if isAz {
+		// Some commands (notably `monitor log-analytics query`) live in az
+		// extensions. Without this, a missing extension makes az block on an
+		// interactive install prompt until the context times out; with it, az
+		// installs the extension silently on first use.
+		cmd.Env = append(os.Environ(), "AZURE_EXTENSION_USE_DYNAMIC_INSTALL=yes_without_prompt")
+	}
 	sysproc.Hide(cmd)
-	return cmd.Output()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	payload, err := cmd.Output()
+	if err == nil {
+		return payload, nil
+	}
+	detail := strings.TrimSpace(stderr.String())
+	const maxDiagnosticLength = 4096
+	if len(detail) > maxDiagnosticLength {
+		detail = detail[:maxDiagnosticLength] + "..."
+	}
+	if detail != "" {
+		return nil, fmt.Errorf("%w: %s", err, detail)
+	}
+	return nil, err
 }
 
 type Inventory struct {
@@ -61,10 +86,10 @@ func (i *Inventory) ListResourceGroups(ctx context.Context, profile models.Profi
 		return nil, err
 	}
 	var decoded []struct {
-		Name              string            `json:"name"`
-		Location          string            `json:"location"`
-		ManagedBy         string            `json:"managedBy"`
-		Properties        struct {
+		Name       string `json:"name"`
+		Location   string `json:"location"`
+		ManagedBy  string `json:"managedBy"`
+		Properties struct {
 			ProvisioningState string `json:"provisioningState"`
 		} `json:"properties"`
 		Tags map[string]string `json:"tags"`
@@ -98,13 +123,13 @@ func (i *Inventory) ListVirtualMachines(ctx context.Context, profile models.Prof
 		return nil, err
 	}
 	var decoded []struct {
-		ID              string `json:"id"`
-		Name            string `json:"name"`
-		ResourceGroup   string `json:"resourceGroup"`
-		Location        string `json:"location"`
-		PowerState      string `json:"powerState"`
+		ID                string `json:"id"`
+		Name              string `json:"name"`
+		ResourceGroup     string `json:"resourceGroup"`
+		Location          string `json:"location"`
+		PowerState        string `json:"powerState"`
 		ProvisioningState string `json:"provisioningState"`
-		HardwareProfile struct {
+		HardwareProfile   struct {
 			VMSize string `json:"vmSize"`
 		} `json:"hardwareProfile"`
 		StorageProfile struct {

@@ -1825,7 +1825,7 @@ function handleMockRequest<T>(
       return Promise.resolve(buildMockWorkspace() as T);
     case "azure.logAnalytics.selectWorkspace":
       mockState.session.selectedAzureLogWorkspace = String(params.workspace ?? "");
-      return Promise.resolve(buildMockWorkspace() as T);
+      return Promise.resolve({ workspace: mockState.session.selectedAzureLogWorkspace } as T);
     case "azure.logAnalytics.query": {
       const queryText = String(params.query ?? "");
       appendLog("success", `Ran Log Analytics query (mock): ${queryText.slice(0, 40)}`);

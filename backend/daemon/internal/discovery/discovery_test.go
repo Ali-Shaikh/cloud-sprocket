@@ -14,7 +14,7 @@ func TestDiscoverCollectsAWSAzureAndGCP(t *testing.T) {
 
 	mustWriteFile(t, filepath.Join(home, ".aws", "config"), "[profile sandbox]\nregion = us-east-1\nsso_start_url = https://example.awsapps.com/start\n")
 	mustWriteFile(t, filepath.Join(home, ".aws", "credentials"), "[sandbox]\naws_access_key_id = AKIAEXAMPLE\n")
-	mustWriteFile(t, filepath.Join(home, ".azure", "azureProfile.json"), "{\"subscriptions\":[{\"id\":\"sub-001\",\"name\":\"Marketing\",\"tenantId\":\"tenant-123\",\"user\":{\"name\":\"ali@example.com\"}}]}")
+	mustWriteFile(t, filepath.Join(home, ".azure", "azureProfile.json"), "\ufeff{\"subscriptions\":[{\"id\":\"sub-001\",\"name\":\"Marketing\",\"tenantId\":\"tenant-123\",\"user\":{\"name\":\"ali@example.com\"}}]}")
 	mustWriteFile(t, filepath.Join(home, ".config", "gcloud", "configurations", "config_default"), "[core]\naccount = ali@example.com\nproject = platform\n")
 
 	settings := config.FromEnv(map[string]string{}, "linux", home)
@@ -40,6 +40,9 @@ func TestDiscoverCollectsAWSAzureAndGCP(t *testing.T) {
 	}
 	if len(snapshot.Profiles) != 3 {
 		t.Fatalf("expected 3 profiles, got %d", len(snapshot.Profiles))
+	}
+	if snapshot.Providers[1].ProfileCount != 1 {
+		t.Fatalf("expected BOM-prefixed Azure profile to be discovered, got %d profiles", snapshot.Providers[1].ProfileCount)
 	}
 
 	awsProfile := snapshot.Profiles[0]

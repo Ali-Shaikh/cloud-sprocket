@@ -103,6 +103,7 @@ import type {
   AzureStorageAccount,
   AzureVirtualMachine,
   AzureWebApp,
+  AzureLogAnalyticsSelectionResult,
   AzureLogQueryResult,
   AzureFunctionInvokeResult,
   DetailField,
@@ -580,6 +581,8 @@ export default function App() {
   const [session, setSession] = useState<SessionSnapshot>(emptySession);
   const [appSettings, setAppSettings] = useState<AppSettingsSnapshot>(emptySettings);
   const [workspace, setWorkspace] = useState<WorkspaceSnapshot>(emptyWorkspace);
+  const [azureLogWorkspaceSelectionLoading, setAzureLogWorkspaceSelectionLoading] = useState(false);
+  const azureLogWorkspaceSelectionRequest = useRef(0);
   const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
   const [s3UploadStatus, setS3UploadStatus] = useState("Select a bucket and provide a local file path to upload.");
   const [s3SignedUrlStatus, setS3SignedUrlStatus] = useState("Select an object to generate a signed URL.");
@@ -834,7 +837,7 @@ export default function App() {
         }
       });
       await loadWorkspace(normalisedSession);
-      await loadState();
+      await loadState({ refreshWorkspace: false });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Session mutation failed";
       pushNotification("error", `Failed to execute ${method}`, message);
@@ -848,10 +851,9 @@ export default function App() {
     return snapshot.availableAuthMethods.filter((method) => method.available);
   }
 
-  // Selects an auth method and locks the session in one chain, applying state
-  // (session + workspace + discovery) exactly once at the end so the view does
-  // not flicker through intermediate snapshots. Used by both the one-click open
-  // path and the auth-chip choice. Throws on failure for the caller to report.
+  // Selects an auth method and locks the session in one chain. Inventory is
+  // refreshed once in the background so slow cloud APIs do not hold the user on
+  // the Connect screen. Used by both the one-click path and auth-chip choice.
   async function chooseAuthAndOpen(authMethod: string): Promise<void> {
     await backendRequest<SessionSnapshot>("session.selectAuthMethod", { authMethod });
     const lockedSnapshot = normaliseSessionSnapshot(
@@ -860,7 +862,6 @@ export default function App() {
     startTransition(() => {
       setSession(lockedSnapshot);
     });
-    await loadWorkspace(lockedSnapshot);
     await loadState();
   }
 
@@ -922,6 +923,30 @@ export default function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Workspace mutation failed";
       pushNotification("error", `Failed to execute ${method}`, message);
+    }
+  }
+
+  async function selectAzureLogAnalyticsWorkspace(nextWorkspace: string): Promise<void> {
+    const requestID = ++azureLogWorkspaceSelectionRequest.current;
+    const previousWorkspace = workspace.selectedAzureLogWorkspace;
+    setAzureLogWorkspaceSelectionLoading(true);
+    setWorkspace((current) => ({ ...current, selectedAzureLogWorkspace: nextWorkspace }));
+    try {
+      const result = await backendRequest<AzureLogAnalyticsSelectionResult>(
+        "azure.logAnalytics.selectWorkspace",
+        { workspace: nextWorkspace },
+      );
+      if (requestID !== azureLogWorkspaceSelectionRequest.current) return;
+      setWorkspace((current) => ({ ...current, selectedAzureLogWorkspace: result.workspace }));
+    } catch (error) {
+      if (requestID !== azureLogWorkspaceSelectionRequest.current) return;
+      setWorkspace((current) => ({ ...current, selectedAzureLogWorkspace: previousWorkspace }));
+      const message = error instanceof Error ? error.message : "Workspace selection failed";
+      pushNotification("error", "Could not select Log Analytics workspace", message);
+    } finally {
+      if (requestID === azureLogWorkspaceSelectionRequest.current) {
+        setAzureLogWorkspaceSelectionLoading(false);
+      }
     }
   }
 
@@ -1516,7 +1541,9 @@ export default function App() {
     }
   }
 
-  async function loadState(): Promise<void> {
+  async function loadState(
+    options: { refreshWorkspace?: boolean } = {},
+  ): Promise<void> {
     setLoading(true);
     try {
       const [providersResult, sessionResult, settingsResult, logsResult] = await Promise.all([
@@ -1538,7 +1565,12 @@ export default function App() {
         setLogs(normaliseArray(logsResult));
       });
 
-      await loadWorkspace(normalisedSession);
+      if (options.refreshWorkspace !== false) {
+        void loadWorkspace(normalisedSession).catch((error) => {
+          const message = error instanceof Error ? error.message : "Workspace refresh failed";
+          pushNotification("error", "Could not refresh the workspace", message);
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -2182,13 +2214,15 @@ export default function App() {
   ) : session.isLocked && activeWorkspaceTabId === "azure-log-analytics" ? (
     <LogAnalyticsView
       workspace={workspace}
+      workspaceSelectionLoading={azureLogWorkspaceSelectionLoading}
       onSelectWorkspace={(ws) => {
-        void mutateWorkspace("azure.logAnalytics.selectWorkspace", { workspace: ws });
+        void selectAzureLogAnalyticsWorkspace(ws);
       }}
-      onRunQuery={(ws, query) =>
+      onRunQuery={(ws, query, timespan) =>
         backendRequest<AzureLogQueryResult>("azure.logAnalytics.query", {
           workspace: ws,
           query,
+          timespan,
         })
       }
     />

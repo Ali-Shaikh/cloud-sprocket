@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Play, Table2 } from "lucide-react";
+import { Loader2, Play, Table2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -24,8 +24,13 @@ import type { AzureLogQueryResult, WorkspaceSnapshot } from "@/types/backend";
 
 export type LogAnalyticsViewProps = {
   workspace: WorkspaceSnapshot;
+  workspaceSelectionLoading?: boolean;
   onSelectWorkspace: (workspace: string) => void;
-  onRunQuery: (workspace: string, query: string) => Promise<AzureLogQueryResult>;
+  onRunQuery: (
+    workspace: string,
+    query: string,
+    timespan: string,
+  ) => Promise<AzureLogQueryResult>;
 };
 
 const fieldLabel =
@@ -34,14 +39,28 @@ const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] 
 
 const SAMPLE_QUERY = "AppEvents\n| take 50";
 
+// Timespan presets map to the ISO8601 durations az -t / the Logs API accept.
+// "all" sends no timespan, so the query's own time filters (or full retention)
+// apply, matching the panel's original behaviour.
+const TIMESPAN_OPTIONS = [
+  { label: "All time", value: "all", timespan: "" },
+  { label: "Last 30 minutes", value: "PT30M", timespan: "PT30M" },
+  { label: "Last hour", value: "PT1H", timespan: "PT1H" },
+  { label: "Last 24 hours", value: "P1D", timespan: "P1D" },
+  { label: "Last 7 days", value: "P7D", timespan: "P7D" },
+  { label: "Last 30 days", value: "P30D", timespan: "P30D" },
+] as const;
+
 export default function LogAnalyticsView({
   workspace,
+  workspaceSelectionLoading = false,
   onSelectWorkspace,
   onRunQuery,
 }: LogAnalyticsViewProps) {
   const workspaces = workspace.azureLogAnalyticsWorkspaces ?? [];
   const selected = workspace.selectedAzureLogWorkspace ?? workspaces[0]?.name ?? "";
   const [query, setQuery] = useState(SAMPLE_QUERY);
+  const [timespanValue, setTimespanValue] = useState<string>(TIMESPAN_OPTIONS[0].value);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AzureLogQueryResult | null>(null);
@@ -53,7 +72,9 @@ export default function LogAnalyticsView({
     setRunning(true);
     setError(null);
     try {
-      const queryResult = await onRunQuery(selected, query);
+      const timespan =
+        TIMESPAN_OPTIONS.find((option) => option.value === timespanValue)?.timespan ?? "";
+      const queryResult = await onRunQuery(selected, query, timespan);
       setResult(queryResult);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -78,6 +99,7 @@ export default function LogAnalyticsView({
             <div className={cn(fieldLabel, "mb-1")}>Workspace</div>
             <Select
               value={selected}
+              disabled={workspaceSelectionLoading}
               onValueChange={(value) => {
                 if (value) onSelectWorkspace(value);
               }}
@@ -93,9 +115,30 @@ export default function LogAnalyticsView({
                 ))}
               </SelectContent>
             </Select>
+            {workspaceSelectionLoading ? (
+              <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground" role="status">
+                <Loader2 className="size-3.5 animate-spin" />
+                Switching workspace...
+              </p>
+            ) : null}
+          </div>
+          <div className="w-48">
+            <div className={cn(fieldLabel, "mb-1")}>Time range</div>
+            <Select value={timespanValue} onValueChange={setTimespanValue}>
+              <SelectTrigger aria-label="Select query time range">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TIMESPAN_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <Button onClick={() => void run()} disabled={!canRun}>
-            <Play />
+            {running ? <Loader2 className="animate-spin" /> : <Play />}
             {running ? "Running…" : "Run query"}
           </Button>
         </div>

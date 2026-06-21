@@ -433,6 +433,10 @@ export interface AzureLogQueryResult {
   rows: string[][];
 }
 
+export interface AzureLogAnalyticsSelectionResult {
+  workspace: string;
+}
+
 export interface AzureFunctionApp {
   name: string;
   resourceGroup?: string;

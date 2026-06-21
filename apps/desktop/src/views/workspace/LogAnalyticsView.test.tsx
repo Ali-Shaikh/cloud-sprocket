@@ -26,7 +26,9 @@ describe("LogAnalyticsView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /run query/i }));
 
-    await waitFor(() => expect(onRunQuery).toHaveBeenCalledWith("law-platform", expect.any(String)));
+    await waitFor(() =>
+      expect(onRunQuery).toHaveBeenCalledWith("law-platform", expect.any(String), expect.any(String)),
+    );
     expect(await screen.findByText("hello-from-kql")).toBeTruthy();
     expect(screen.getByText("Message")).toBeTruthy();
   });
@@ -41,5 +43,21 @@ describe("LogAnalyticsView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /run query/i }));
     expect(await screen.findByText("bad KQL")).toBeTruthy();
+  });
+
+  it("shows a loader and disables workspace changes while selection is saving", () => {
+    render(
+      <ThemeProvider>
+        <LogAnalyticsView
+          workspace={workspace}
+          workspaceSelectionLoading
+          onSelectWorkspace={() => {}}
+          onRunQuery={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("Switching workspace...");
+    expect(screen.getByRole("combobox", { name: "Select Log Analytics workspace" })).toBeDisabled();
   });
 });

@@ -123,6 +123,10 @@ func (i *Inventory) RunLogAnalyticsQuery(
 		"--output", "json",
 		"--only-show-errors",
 	}
+	if span := strings.TrimSpace(timespan); span != "" {
+		// az -t accepts an ISO8601 duration (e.g. P7D) or a start/end interval.
+		args = append(args, "--timespan", span)
+	}
 	payload, err := i.run(ctx, args...)
 	if err != nil {
 		return models.AzureLogQueryResult{}, err
