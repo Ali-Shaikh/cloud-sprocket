@@ -565,6 +565,30 @@ type AzureKeyVaultSecret struct {
 	Updated string `json:"updated,omitempty"`
 }
 
+// AzureCosmosAccount is a Cosmos DB account.
+type AzureCosmosAccount struct {
+	Name             string `json:"name"`
+	ResourceGroup    string `json:"resourceGroup,omitempty"`
+	DocumentEndpoint string `json:"documentEndpoint,omitempty"`
+}
+
+// AzureCosmosDatabase is a SQL-API database within an account.
+type AzureCosmosDatabase struct {
+	Name string `json:"name"`
+}
+
+// AzureCosmosContainer is a container (collection) within a database.
+type AzureCosmosContainer struct {
+	Name         string `json:"name"`
+	PartitionKey string `json:"partitionKey,omitempty"`
+}
+
+// AzureCosmosItem is a sampled document: its id plus the raw JSON.
+type AzureCosmosItem struct {
+	ID   string `json:"id"`
+	JSON string `json:"json"`
+}
+
 type WorkspaceSnapshot struct {
 	Provider                   *ProviderSummary        `json:"provider,omitempty"`
 	Profile                    *ProfileSummary         `json:"profile,omitempty"`
