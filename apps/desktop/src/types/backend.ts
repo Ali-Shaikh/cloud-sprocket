@@ -151,6 +151,7 @@ export interface SessionSnapshot {
   selectedAzureCosmosAccount?: string;
   selectedAzureCosmosDatabase?: string;
   selectedAzureCosmosContainer?: string;
+  selectedAzureQueue?: string;
   lockedProviderId?: string;
   lockedProfileId?: string;
   lockedAuthMethod?: AuthMethod;
@@ -485,6 +486,17 @@ export interface AzureCosmosItem {
   json: string;
 }
 
+export interface AzureStorageQueue {
+  name: string;
+}
+
+export interface AzureQueueMessage {
+  id: string;
+  text: string;
+  dequeueCount: number;
+  insertionTime?: string;
+}
+
 export interface WorkspaceSnapshot {
   provider?: ProviderSummary;
   profile?: ProfileSummary;
@@ -519,6 +531,7 @@ export interface WorkspaceSnapshot {
   selectedAzureCosmosAccount?: string;
   selectedAzureCosmosDatabase?: string;
   selectedAzureCosmosContainer?: string;
+  selectedAzureQueue?: string;
   azureStatusMessage?: string;
   azureStorageStatusMessage?: string;
   azureAppServiceStatusMessage?: string;
@@ -526,6 +539,7 @@ export interface WorkspaceSnapshot {
   azureFunctionsStatusMessage?: string;
   azureKeyVaultStatusMessage?: string;
   azureCosmosStatusMessage?: string;
+  azureQueuesStatusMessage?: string;
   azureResourceGroups: AzureResourceGroup[];
   azureVirtualMachines: AzureVirtualMachine[];
   azureStorageAccounts: AzureStorageAccount[];
@@ -542,6 +556,8 @@ export interface WorkspaceSnapshot {
   azureCosmosDatabases: AzureCosmosDatabase[];
   azureCosmosContainers: AzureCosmosContainer[];
   azureCosmosItems: AzureCosmosItem[];
+  azureStorageQueues: AzureStorageQueue[];
+  azureQueueMessages: AzureQueueMessage[];
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;

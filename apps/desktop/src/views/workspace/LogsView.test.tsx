@@ -78,6 +78,8 @@ const workspaceFixture: LogsWorkspaceSnapshot = {
       azureCosmosDatabases: [],
       azureCosmosContainers: [],
       azureCosmosItems: [],
+      azureStorageQueues: [],
+      azureQueueMessages: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],

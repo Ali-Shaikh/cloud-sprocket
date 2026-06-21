@@ -581,6 +581,13 @@ const mockAzureCosmosItems = [
   { id: "order-2", json: '{"id":"order-2","customerId":"c-3","total":17}' },
 ];
 
+const mockAzureStorageQueues = [{ name: "jobs" }, { name: "events" }];
+
+const mockAzureQueueMessages = [
+  { id: "msg-1", text: "process order 42", dequeueCount: 0, insertionTime: "2026-06-21T10:00:00Z" },
+  { id: "msg-2", text: "process order 43", dequeueCount: 1, insertionTime: "2026-06-21T10:01:00Z" },
+];
+
 const mockAzureVirtualMachines = {
   "rg-marketing-prod": [
     {
@@ -1150,6 +1157,12 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     azureCosmosDatabases: isAzureWorkspace ? mockAzureCosmosDatabases : [],
     azureCosmosContainers: isAzureWorkspace ? mockAzureCosmosContainers : [],
     azureCosmosItems: isAzureWorkspace ? mockAzureCosmosItems : [],
+    selectedAzureQueue: isAzureWorkspace ? mockState.session.selectedAzureQueue : undefined,
+    azureQueuesStatusMessage: isAzureWorkspace
+      ? `Loaded ${mockAzureStorageQueues.length} queue(s).`
+      : undefined,
+    azureStorageQueues: isAzureWorkspace ? mockAzureStorageQueues : [],
+    azureQueueMessages: isAzureWorkspace && mockState.session.selectedAzureQueue ? mockAzureQueueMessages : [],
     selectedS3BucketName,
     selectedS3ObjectKey,
     s3PrefixFilter: mockState.session.s3PrefixFilter,
@@ -1858,6 +1871,9 @@ function handleMockRequest<T>(
       return Promise.resolve(buildMockWorkspace() as T);
     case "azure.cosmos.selectContainer":
       mockState.session.selectedAzureCosmosContainer = String(params.container ?? "");
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.queues.selectQueue":
+      mockState.session.selectedAzureQueue = String(params.queue ?? "");
       return Promise.resolve(buildMockWorkspace() as T);
     case "azure.webApps.create": {
       if (!mockState.session.azureWriteModeEnabled) {
