@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
@@ -87,6 +88,7 @@ describe("AzureWafView", () => {
   });
 
   it("routes Edit in Log Analytics with the current query", async () => {
+    const user = userEvent.setup();
     const onEditInLogAnalytics = vi.fn();
     render(
       <ThemeProvider>
@@ -103,7 +105,10 @@ describe("AzureWafView", () => {
       </ThemeProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /blocked requests/i }));
+    await user.click(screen.getByRole("button", { name: /curated queries/i }));
+    await user.click(
+      screen.getByRole("menuitem", { name: /Blocked requests.*All blocked WAF actions/i }),
+    );
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /edit in log analytics/i })).not.toBeDisabled(),
     );

@@ -1,18 +1,10 @@
-import { useMemo, useRef, useState } from "react";
-import { ExternalLink, Loader2, Play, Shield, Square } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BookOpen, ExternalLink, Loader2, Play, Save, Shield, Square, Trash2 } from "lucide-react";
 
 import { KqlEditor } from "@/components/kql/KqlEditor";
 import { LogQueryResultPanel } from "@/components/log-analytics/LogQueryResultPanel";
 import { cn } from "@/lib/utils";
 import {
-  buildActionBreakdownQuery,
-  buildAnomalyScoringQuery,
-  buildBlockedRequestsQuery,
-  buildJsChallengeQuery,
-  buildTopClientIPsQuery,
-  buildTopHostsQuery,
-  buildTopRulesQuery,
-  buildTopUrisQuery,
   buildTrackingReferenceExtendQuery,
   buildTrackingReferenceSearchQuery,
   buildWafFilteredQuery,
@@ -20,6 +12,11 @@ import {
   normaliseWafSchema,
   type WafLogFilters,
 } from "@/lib/waf-kql";
+import {
+  curatedQueriesByCategory,
+  WAF_CURATED_QUERY_CATEGORIES,
+  type WafCuratedQueryCategory,
+} from "@/lib/waf-curated-queries";
 import { isTuningCandidate } from "@/lib/waf-decode";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,8 +46,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { StatusPill } from "@/components/status-pill";
 import type {
+  AzureLogAnalyticsSavedQuery,
   AzureLogQueryResult,
   AzureWafExclusion,
   AzureWafLogSchemaProfile,
@@ -83,6 +97,15 @@ export type AzureWafViewProps = {
     policyName: string,
     exclusion: AzureWafExclusion,
   ) => Promise<void>;
+  onListSaved?: (workspace: string) => Promise<AzureLogAnalyticsSavedQuery[]>;
+  onSaveQuery?: (
+    workspace: string,
+    name: string,
+    query: string,
+    timespan: string,
+    id?: string,
+  ) => Promise<AzureLogAnalyticsSavedQuery>;
+  onDeleteSaved?: (workspace: string, id: string) => Promise<void>;
 };
 
 const fieldLabel =
@@ -96,17 +119,6 @@ const TIMESPAN_OPTIONS = [
   { label: "All time", value: "all", timespan: "" },
 ] as const;
 
-const CURATED_QUERIES = [
-  { id: "blocked", label: "Blocked requests", build: buildBlockedRequestsQuery },
-  { id: "actions", label: "Action breakdown", build: buildActionBreakdownQuery },
-  { id: "rules", label: "Top rules", build: buildTopRulesQuery },
-  { id: "ips", label: "Top client IPs", build: buildTopClientIPsQuery },
-  { id: "hosts", label: "Top hosts", build: buildTopHostsQuery },
-  { id: "uris", label: "Top URIs", build: buildTopUrisQuery },
-  { id: "anomaly", label: "Anomaly scoring", build: buildAnomalyScoringQuery },
-  { id: "js", label: "JS challenge", build: buildJsChallengeQuery },
-] as const;
-
 export default function AzureWafView({
   workspace,
   workspaceSelectionLoading = false,
@@ -117,6 +129,9 @@ export default function AzureWafView({
   onSetMode,
   onSetManagedRule,
   onRemoveExclusion,
+  onListSaved,
+  onSaveQuery,
+  onDeleteSaved,
 }: AzureWafViewProps) {
   const workspaces = workspace.azureLogAnalyticsWorkspaces ?? [];
   const policies = workspace.azureWafPolicies ?? [];
@@ -146,7 +161,19 @@ export default function AzureWafView({
     enabled: boolean;
   } | null>(null);
   const [pendingExclusion, setPendingExclusion] = useState<AzureWafExclusion | null>(null);
+  const [saved, setSaved] = useState<AzureLogAnalyticsSavedQuery[]>([]);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
   const runTokenRef = useRef(0);
+  const curatedByCategory = useMemo(() => curatedQueriesByCategory(), []);
+
+  useEffect(() => {
+    if (!selectedWorkspace || !onListSaved) {
+      setSaved([]);
+      return;
+    }
+    void onListSaved(selectedWorkspace).then(setSaved).catch(() => setSaved([]));
+  }, [selectedWorkspace, onListSaved]);
 
   const timeRangeLabel = useMemo(
     () => TIMESPAN_OPTIONS.find((option) => option.value === timespanValue)?.label ?? "Last 24 hours",
@@ -201,10 +228,45 @@ export default function AzureWafView({
     void run(nextQuery);
   }
 
-  function applyCurated(build: (schema: AzureWafLogSchemaProfile, filters?: WafLogFilters) => string) {
-    const nextQuery = build(schema, baseFilters);
-    setQuery(nextQuery);
-    void run(nextQuery);
+  function loadCurated(build: (schema: AzureWafLogSchemaProfile, filters?: WafLogFilters) => string) {
+    setQuery(build(schema, baseFilters));
+    setError(null);
+  }
+
+  function loadSavedEntry(entry: AzureLogAnalyticsSavedQuery) {
+    setQuery(entry.query);
+    if (entry.timespan) {
+      const match = TIMESPAN_OPTIONS.find((option) => option.timespan === entry.timespan);
+      if (match) {
+        setTimespanValue(match.value);
+      }
+    }
+    setError(null);
+  }
+
+  async function confirmSaveQuery() {
+    const name = saveName.trim();
+    if (!name || !onSaveQuery || !selectedWorkspace) {
+      return;
+    }
+    await onSaveQuery(selectedWorkspace, name, query, timespan);
+    setSaveDialogOpen(false);
+    setSaveName("");
+    if (onListSaved) {
+      const refreshed = await onListSaved(selectedWorkspace);
+      setSaved(refreshed);
+    }
+  }
+
+  async function deleteSaved(id: string) {
+    if (!onDeleteSaved || !selectedWorkspace) {
+      return;
+    }
+    await onDeleteSaved(selectedWorkspace, id);
+    if (onListSaved) {
+      const refreshed = await onListSaved(selectedWorkspace);
+      setSaved(refreshed);
+    }
   }
 
   function applyFilteredQuery() {
@@ -423,18 +485,100 @@ export default function AzureWafView({
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {CURATED_QUERIES.map((item) => (
+            <div className="flex flex-wrap items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={running}>
+                    <BookOpen />
+                    Curated queries
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="max-h-80 w-96 overflow-y-auto">
+                  {(Object.keys(WAF_CURATED_QUERY_CATEGORIES) as WafCuratedQueryCategory[]).map(
+                    (category) => {
+                      const items = curatedByCategory[category];
+                      if (items.length === 0) {
+                        return null;
+                      }
+                      return (
+                        <div key={category}>
+                          <DropdownMenuLabel>
+                            {WAF_CURATED_QUERY_CATEGORIES[category]}
+                          </DropdownMenuLabel>
+                          {items.map((item) => (
+                            <DropdownMenuItem
+                              key={item.id}
+                              className="flex flex-col items-start gap-0.5"
+                              onClick={() => loadCurated(item.build)}
+                            >
+                              <span className="font-medium">{item.label}</span>
+                              <span className="text-xs text-muted-foreground">{item.description}</span>
+                            </DropdownMenuItem>
+                          ))}
+                          <DropdownMenuSeparator />
+                        </div>
+                      );
+                    },
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {onListSaved ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" disabled={!selectedWorkspace}>
+                      <Save />
+                      Saved
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="max-h-72 w-96 overflow-y-auto">
+                    <DropdownMenuLabel>Saved queries (local)</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {saved.length === 0 ? (
+                      <DropdownMenuItem disabled>No saved queries yet</DropdownMenuItem>
+                    ) : (
+                      saved.map((entry) => (
+                        <DropdownMenuItem
+                          key={entry.id}
+                          className="flex items-start justify-between gap-2"
+                          onClick={() => loadSavedEntry(entry)}
+                        >
+                          <span className="line-clamp-2">
+                            <span className="font-medium">{entry.name}</span>
+                            <span className="mt-0.5 block font-mono text-xs text-muted-foreground">
+                              {entry.query}
+                            </span>
+                          </span>
+                          {onDeleteSaved ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 shrink-0"
+                              aria-label={`Delete saved query ${entry.name}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void deleteSaved(entry.id);
+                              }}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          ) : null}
+                        </DropdownMenuItem>
+                      ))
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+              {onSaveQuery ? (
                 <Button
-                  key={item.id}
                   variant="outline"
                   size="sm"
-                  disabled={running}
-                  onClick={() => applyCurated(item.build)}
+                  disabled={!query.trim() || !selectedWorkspace}
+                  onClick={() => setSaveDialogOpen(true)}
                 >
-                  {item.label}
+                  <Save />
+                  Save query
                 </Button>
-              ))}
+              ) : null}
               <Button variant="outline" size="sm" disabled={running} onClick={applyFilteredQuery}>
                 Apply filters
               </Button>
@@ -754,6 +898,32 @@ export default function AzureWafView({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save WAF query</DialogTitle>
+            <DialogDescription>
+              Saved locally for this Log Analytics workspace. Reuse from the Saved menu or in Log
+              Analytics.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={saveName}
+            onChange={(event) => setSaveName(event.target.value)}
+            placeholder="Anomaly scoring prod"
+            aria-label="Saved query name"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button disabled={!saveName.trim()} onClick={() => void confirmSaveQuery()}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

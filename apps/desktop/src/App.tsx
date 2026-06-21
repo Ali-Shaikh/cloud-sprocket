@@ -2632,6 +2632,26 @@ export default function App() {
           });
         })
       }
+      onListSaved={(ws) =>
+        backendRequest<AzureLogAnalyticsSavedQuery[]>("azure.logAnalytics.saved.list", {
+          workspace: ws,
+        })
+      }
+      onSaveQuery={(ws, name, queryText, timespan, id) =>
+        backendRequest<AzureLogAnalyticsSavedQuery>("azure.logAnalytics.saved.save", {
+          workspace: ws,
+          name,
+          query: queryText,
+          timespan,
+          id,
+        })
+      }
+      onDeleteSaved={(ws, id) =>
+        backendRequest<{ deleted: boolean }>("azure.logAnalytics.saved.delete", {
+          workspace: ws,
+          id,
+        }).then(() => undefined)
+      }
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-functions" ? (
     <AzureFunctionsView

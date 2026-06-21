@@ -177,6 +177,31 @@ func TestSetWafManagedRuleOverrideBuildsExpectedArgs(t *testing.T) {
 	}
 }
 
+func TestRemoveWafExclusionBuildsExpectedArgs(t *testing.T) {
+	fake := &fakeCLI{}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	err := inv.RemoveWafExclusion(context.Background(), cloudAzureProfile(), "rg-prod", "waf-portal", models.AzureWafExclusion{
+		RuleSetType:           "Microsoft_DefaultRuleSet",
+		MatchVariable:         "RequestHeaderNames",
+		SelectorMatchOperator: "Equals",
+		Selector:              "User-Agent",
+	})
+	if err != nil {
+		t.Fatalf("RemoveWafExclusion: %v", err)
+	}
+	expectCLIArgsContain(t, fake.args,
+		"network", "front-door", "waf-policy", "managed-rules", "exclusion", "remove",
+		"--resource-group", "rg-prod",
+		"--policy-name", "waf-portal",
+		"--type", "Microsoft_DefaultRuleSet",
+		"--match-variable", "RequestHeaderNames",
+		"--operator", "Equals",
+		"--value", "User-Agent",
+	)
+}
+
 func TestAddWafExclusionBuildsExpectedArgs(t *testing.T) {
 	fake := &fakeCLI{}
 	inv := NewInventory(config.Settings{})
