@@ -63,6 +63,12 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 				Detail:  "Query Azure Monitor logs with KQL, locally against floci-az or on a real Azure workspace.",
 			},
 			{
+				TabID:   "azure-waf",
+				Label:   "WAF",
+				Summary: "Front Door WAF logs and policy workbench.",
+				Detail:  "Track requests by X-Azure-Ref, explore WAF logs with schema-aware KQL, and inspect policy config.",
+			},
+			{
 				TabID:   "azure-functions",
 				Label:   "Functions",
 				Summary: "Browse and invoke Azure Functions.",
