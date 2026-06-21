@@ -179,14 +179,14 @@ func (s *Service) handleAzureLogAnalyticsQuery(ctx context.Context, params json.
 	s.mu.Unlock()
 
 	workspaces := s.azureLogAnalyticsWorkspaces(ctx, profile)
-	workspace := strings.TrimSpace(request.Workspace)
-	if workspace == "" {
-		workspace = s.selectedAzureLogWorkspace(session, workspaces)
+	requestedWorkspace := strings.TrimSpace(request.Workspace)
+	if requestedWorkspace == "" {
+		requestedWorkspace = s.selectedAzureLogWorkspace(session, workspaces)
 	}
-	if workspace == "" {
+	if requestedWorkspace == "" {
 		return nil, errors.New("select a Log Analytics workspace before running a query")
 	}
-	workspace, err = azureLogAnalyticsQueryWorkspace(workspace, workspaces, !isLocalFlociProfile(profile))
+	workspace, err := azureLogAnalyticsQueryWorkspace(requestedWorkspace, workspaces, !isLocalFlociProfile(profile))
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +194,7 @@ func (s *Service) handleAzureLogAnalyticsQuery(ctx context.Context, params json.
 	// The adapter bounds the query itself; do not also wrap in the shorter inventory timeout.
 	result, err := s.azure.RunLogAnalyticsQuery(ctx, profile, workspace, request.Query, request.Timespan, request.MaxRows)
 	if err == nil {
-		s.appendLogAnalyticsHistory(ctx, workspace, request.Query, request.Timespan)
+		s.appendLogAnalyticsHistory(ctx, requestedWorkspace, request.Query, request.Timespan)
 	}
 	return result, err
 }

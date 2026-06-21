@@ -16,9 +16,10 @@ const (
 	wafDiagnosticsCategoryClassic  = "FrontdoorWebApplicationFirewallLog"
 )
 
+// Front Door Standard/Premium resource-specific WAF table. Classic-cased Category
+// values are diagnostics-only and are not probed here.
 var wafResourceSpecificTables = []string{
 	wafDiagnosticsCategoryStandard,
-	wafDiagnosticsCategoryClassic,
 }
 
 // DetectWafLogSchema probes a workspace to learn where Front Door WAF logs live and
@@ -79,9 +80,9 @@ func diagnosticsSchemaProfile(columns []string) models.AzureWafLogSchemaProfile 
 		PolicyName:        pickColumn(columns, "policy_s", "PolicyName", "Policy"),
 		PolicyMode:        pickColumn(columns, "policyMode_s", "PolicyMode"),
 		TrackingReference: pickColumn(columns, "trackingReference_s", "TrackingReference"),
-		DetailsMatches:    pickColumn(columns, "details_matches_s", "details_matches_s"),
-		DetailsMessage:    pickColumn(columns, "details_msg_s", "details_msg_s"),
-		DetailsData:       pickColumn(columns, "details_data_s", "details_data_s"),
+		DetailsMatches:    pickColumn(columns, "details_matches_s"),
+		DetailsMessage:    pickColumn(columns, "details_msg_s"),
+		DetailsData:       pickColumn(columns, "details_data_s"),
 		AdditionalFields:  pickColumn(columns, "AdditionalFields"),
 	}
 	return models.AzureWafLogSchemaProfile{

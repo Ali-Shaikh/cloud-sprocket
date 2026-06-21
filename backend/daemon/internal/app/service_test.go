@@ -280,7 +280,7 @@ func (stubAzureInventory) DetectWafLogSchema(context.Context, models.ProfileSumm
 	}, nil
 }
 
-func (stubAzureInventory) ListWafPolicies(context.Context, models.ProfileSummary) ([]models.AzureWafPolicySummary, error) {
+func (stubAzureInventory) ListWafPolicies(context.Context, models.ProfileSummary, bool) ([]models.AzureWafPolicySummary, error) {
 	return []models.AzureWafPolicySummary{{Name: "demo-waf", ResourceGroup: "demo-rg", Mode: "Prevention", Enabled: true}}, nil
 }
 

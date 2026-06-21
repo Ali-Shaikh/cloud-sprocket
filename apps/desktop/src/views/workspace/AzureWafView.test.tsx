@@ -81,7 +81,8 @@ describe("AzureWafView", () => {
     fireEvent.click(screen.getByRole("button", { name: /look up ref/i }));
 
     await waitFor(() => expect(onRunQuery).toHaveBeenCalled());
-    expect(onRunQuery.mock.calls[0]?.[1]).toContain("AdditionalFields.trackingReference");
+    expect(onRunQuery.mock.calls[0]?.[1]).toContain("trackingReference_s ==");
+    expect(onRunQuery.mock.calls[0]?.[1]).not.toContain("AdditionalFields");
     expect(await screen.findByText("20260619T211623Z-abc123")).toBeTruthy();
   });
 

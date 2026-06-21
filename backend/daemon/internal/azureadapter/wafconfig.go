@@ -12,10 +12,12 @@ import (
 var errWafConfigLocalUnsupported = fmt.Errorf(
 	"WAF policy config is a cloud-only Azure feature; use a cloud Azure profile")
 
-// ListWafPolicies lists Front Door WAF policies across the subscription.
+// ListWafPolicies lists Front Door WAF policies across the subscription. When
+// withDetail is false only names and locations are returned (no per-policy show).
 func (i *Inventory) ListWafPolicies(
 	ctx context.Context,
 	profile models.ProfileSummary,
+	withDetail bool,
 ) ([]models.AzureWafPolicySummary, error) {
 	if isLocalFlociProfile(profile) {
 		return nil, errWafConfigLocalUnsupported
@@ -52,17 +54,19 @@ func (i *Inventory) ListWafPolicies(
 				continue
 			}
 			seen[key] = struct{}{}
-			detail, detailErr := i.GetWafPolicy(ctx, profile, resource.ResourceGroup, resource.Name)
 			summary := models.AzureWafPolicySummary{
 				Name:          resource.Name,
 				ResourceGroup: resource.ResourceGroup,
 				Location:      resource.Location,
 				Enabled:       true,
 			}
-			if detailErr == nil {
-				summary.SKU = detail.SKU
-				summary.Mode = detail.Mode
-				summary.Enabled = detail.Enabled
+			if withDetail {
+				detail, detailErr := i.GetWafPolicy(ctx, profile, resource.ResourceGroup, resource.Name)
+				if detailErr == nil {
+					summary.SKU = detail.SKU
+					summary.Mode = detail.Mode
+					summary.Enabled = detail.Enabled
+				}
 			}
 			policies = append(policies, summary)
 		}
@@ -221,6 +225,7 @@ func decodeWafPolicyDetail(payload []byte, resourceGroup string) (models.AzureWa
 				ManagedRuleSets []struct {
 					RuleSetType    string `json:"ruleSetType"`
 					RuleSetVersion string `json:"ruleSetVersion"`
+					RuleSetAction  string `json:"ruleSetAction"`
 					RuleGroupOverrides []struct {
 						RuleGroupName string `json:"ruleGroupName"`
 						Rules []struct {
@@ -267,12 +272,12 @@ func decodeWafPolicyDetail(payload []byte, resourceGroup string) (models.AzureWa
 		CustomRules:           []models.AzureWafCustomRule{},
 	}
 	for _, ruleSet := range decoded.Properties.ManagedRules.ManagedRuleSets {
+		detail.ManagedRuleSets = append(detail.ManagedRuleSets, models.AzureWafManagedRuleGroup{
+			RuleSetType:    ruleSet.RuleSetType,
+			RuleSetVersion: ruleSet.RuleSetVersion,
+			RuleSetAction:  ruleSet.RuleSetAction,
+		})
 		for _, group := range ruleSet.RuleGroupOverrides {
-			detail.ManagedRuleSets = append(detail.ManagedRuleSets, models.AzureWafManagedRuleGroup{
-				RuleSetType:    ruleSet.RuleSetType,
-				RuleSetVersion: ruleSet.RuleSetVersion,
-				RuleGroupName:  group.RuleGroupName,
-			})
 			for _, rule := range group.Rules {
 				detail.ManagedRuleOverrides = append(detail.ManagedRuleOverrides, models.AzureWafManagedRuleOverride{
 					RuleID:        rule.RuleID,

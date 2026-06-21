@@ -616,7 +616,8 @@ type AzureWafPolicySummary struct {
 type AzureWafManagedRuleGroup struct {
 	RuleSetType    string `json:"ruleSetType"`
 	RuleSetVersion string `json:"ruleSetVersion"`
-	RuleGroupName  string `json:"ruleGroupName"`
+	RuleSetAction  string `json:"ruleSetAction,omitempty"`
+	RuleGroupName  string `json:"ruleGroupName,omitempty"`
 }
 
 // AzureWafManagedRuleOverride is a per-rule override on a managed rule set.

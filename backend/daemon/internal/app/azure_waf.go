@@ -57,7 +57,7 @@ func (s *Service) enrichAzureWafInventory(
 		return
 	}
 
-	policies, err := s.azure.ListWafPolicies(ctx, profile)
+	policies, err := s.azure.ListWafPolicies(ctx, profile, !opts.lightweight)
 	if err != nil {
 		lockWorkspace(mu, func() {
 			workspace.AzureWafStatusMessage = friendlyAzureError(err)

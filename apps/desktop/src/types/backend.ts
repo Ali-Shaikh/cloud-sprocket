@@ -510,7 +510,8 @@ export interface AzureWafPolicySummary {
 export interface AzureWafManagedRuleGroup {
   ruleSetType: string;
   ruleSetVersion: string;
-  ruleGroupName: string;
+  ruleSetAction?: string;
+  ruleGroupName?: string;
 }
 
 export interface AzureWafManagedRuleOverride {

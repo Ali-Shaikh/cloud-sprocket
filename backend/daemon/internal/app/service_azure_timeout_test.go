@@ -189,7 +189,7 @@ func (blockingAzure) DetectWafLogSchema(ctx context.Context, _ models.ProfileSum
 	return models.AzureWafLogSchemaProfile{}, ctx.Err()
 }
 
-func (blockingAzure) ListWafPolicies(ctx context.Context, _ models.ProfileSummary) ([]models.AzureWafPolicySummary, error) {
+func (blockingAzure) ListWafPolicies(ctx context.Context, _ models.ProfileSummary, _ bool) ([]models.AzureWafPolicySummary, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()
 }

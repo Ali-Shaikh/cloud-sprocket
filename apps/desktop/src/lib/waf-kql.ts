@@ -96,8 +96,8 @@ export function buildTrackingReferenceColumnQuery(
 }
 
 /**
- * AzureDiagnostics lookup via AdditionalFields.trackingReference. This is the
- * reliable path for Front Door WAF rows where trackingReference_s is often null.
+ * Tracking-reference lookup. AzureDiagnostics uses the flattened trackingReference_s
+ * column; resource-specific tables use AdditionalFields.trackingReference.
  */
 export function buildTrackingReferenceExtendQuery(
   schema: AzureWafLogSchemaProfile,
@@ -107,16 +107,23 @@ export function buildTrackingReferenceExtendQuery(
   if (!trimmed) {
     return baseWafTable(schema);
   }
-  if (schema.mode !== "azureDiagnostics") {
-    return buildTrackingReferenceColumnQuery(schema, trimmed);
-  }
   const columns = schema.columns;
-  return `${schema.tableName}
+  if (schema.mode === "azureDiagnostics") {
+    let query = `${schema.tableName}
 | where Category in (${wafCategoryList(schema)})
+| where ${columns.trackingReference} == "${escapeKql(trimmed)}"`;
+    return `${query}
+| project ${trackingReferenceProjectColumns(schema)}
+| order by ${columns.timeGenerated} desc`;
+  }
+  if (schema.mode === "resourceSpecific") {
+    return `${schema.tableName}
 | extend trackingRef = tostring(AdditionalFields.trackingReference)
 | where trackingRef == "${escapeKql(trimmed)}"
 | project ${trackingReferenceProjectColumns(schema, true)}
 | order by ${columns.timeGenerated} desc`;
+  }
+  return buildTrackingReferenceColumnQuery(schema, trimmed);
 }
 
 /**
@@ -227,8 +234,8 @@ export function describeWafLogSchema(schema: AzureWafLogSchemaProfile): WafSchem
         : "Unknown schema mode";
   const trackingLookup =
     modeKey === "azureDiagnostics"
-      ? "AdditionalFields.trackingReference (use Look up ref)"
-      : `${schema.columns.trackingReference || "TrackingReference"} column`;
+      ? `${schema.columns.trackingReference || "trackingReference_s"} column`
+      : "AdditionalFields.trackingReference (use Look up ref)";
   return {
     modeKey,
     modeLabel,

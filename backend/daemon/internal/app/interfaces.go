@@ -84,7 +84,7 @@ type AzureInventory interface {
 	RunLogAnalyticsQuery(ctx context.Context, profile models.ProfileSummary, workspace string, query string, timespan string, maxRows int) (models.AzureLogQueryResult, error)
 	ListLogAnalyticsTables(ctx context.Context, profile models.ProfileSummary, workspaceName string, resourceGroup string, includeColumns bool) ([]models.AzureLogAnalyticsTableInfo, error)
 	DetectWafLogSchema(ctx context.Context, profile models.ProfileSummary, workspace string, timespan string) (models.AzureWafLogSchemaProfile, error)
-	ListWafPolicies(ctx context.Context, profile models.ProfileSummary) ([]models.AzureWafPolicySummary, error)
+	ListWafPolicies(ctx context.Context, profile models.ProfileSummary, withDetail bool) ([]models.AzureWafPolicySummary, error)
 	GetWafPolicy(ctx context.Context, profile models.ProfileSummary, resourceGroup string, policyName string) (models.AzureWafPolicyDetail, error)
 	UpdateWafPolicyMode(ctx context.Context, profile models.ProfileSummary, resourceGroup string, policyName string, mode string) error
 	SetWafManagedRuleOverride(ctx context.Context, profile models.ProfileSummary, resourceGroup string, policyName string, ruleSetType string, ruleSetVersion string, ruleGroupName string, ruleID string, enabled bool) error
