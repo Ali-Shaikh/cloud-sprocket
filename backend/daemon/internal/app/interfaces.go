@@ -81,6 +81,14 @@ type AzureInventory interface {
 	CreateWebApp(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, location string, runtime string) (models.AzureWebApp, error)
 	ListLogAnalyticsWorkspaces(ctx context.Context, profile models.ProfileSummary) ([]models.AzureLogAnalyticsWorkspace, error)
 	RunLogAnalyticsQuery(ctx context.Context, profile models.ProfileSummary, workspace string, query string, timespan string, maxRows int) (models.AzureLogQueryResult, error)
+	ListLogAnalyticsTables(ctx context.Context, profile models.ProfileSummary, workspaceName string, resourceGroup string, includeColumns bool) ([]models.AzureLogAnalyticsTableInfo, error)
+	DetectWafLogSchema(ctx context.Context, profile models.ProfileSummary, workspace string, timespan string) (models.AzureWafLogSchemaProfile, error)
+	ListWafPolicies(ctx context.Context, profile models.ProfileSummary) ([]models.AzureWafPolicySummary, error)
+	GetWafPolicy(ctx context.Context, profile models.ProfileSummary, resourceGroup string, policyName string) (models.AzureWafPolicyDetail, error)
+	UpdateWafPolicyMode(ctx context.Context, profile models.ProfileSummary, resourceGroup string, policyName string, mode string) error
+	SetWafManagedRuleOverride(ctx context.Context, profile models.ProfileSummary, resourceGroup string, policyName string, ruleSetType string, ruleSetVersion string, ruleGroupName string, ruleID string, enabled bool) error
+	AddWafExclusion(ctx context.Context, profile models.ProfileSummary, resourceGroup string, policyName string, exclusion models.AzureWafExclusion) error
+	RemoveWafExclusion(ctx context.Context, profile models.ProfileSummary, resourceGroup string, policyName string, exclusion models.AzureWafExclusion) error
 	ListFunctionApps(ctx context.Context, profile models.ProfileSummary) ([]models.AzureFunctionApp, error)
 	ListFunctions(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string) ([]models.AzureFunction, error)
 	InvokeFunction(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, functionName string, payload string) (models.AzureFunctionInvokeResult, error)

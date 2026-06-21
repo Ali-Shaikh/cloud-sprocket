@@ -264,6 +264,46 @@ func (stubAzureInventory) RunLogAnalyticsQuery(context.Context, models.ProfileSu
 	return models.AzureLogQueryResult{Columns: []string{"Level", "Count"}, Rows: [][]string{{"Info", "1"}}, DurationMs: 12}, nil
 }
 
+func (stubAzureInventory) ListLogAnalyticsTables(context.Context, models.ProfileSummary, string, string, bool) ([]models.AzureLogAnalyticsTableInfo, error) {
+	return []models.AzureLogAnalyticsTableInfo{{Name: "AzureDiagnostics", Columns: []string{"Category", "action_s"}}}, nil
+}
+
+func (stubAzureInventory) DetectWafLogSchema(context.Context, models.ProfileSummary, string, string) (models.AzureWafLogSchemaProfile, error) {
+	return models.AzureWafLogSchemaProfile{
+		Mode:      "azureDiagnostics",
+		TableName: "AzureDiagnostics",
+		Detected:  true,
+		Categories: []string{"FrontDoorWebApplicationFirewallLog"},
+		Columns: models.AzureWafLogColumnMap{
+			Action: "action_s", RuleName: "ruleName_s", TrackingReference: "trackingReference_s",
+		},
+	}, nil
+}
+
+func (stubAzureInventory) ListWafPolicies(context.Context, models.ProfileSummary) ([]models.AzureWafPolicySummary, error) {
+	return []models.AzureWafPolicySummary{{Name: "demo-waf", ResourceGroup: "demo-rg", Mode: "Prevention", Enabled: true}}, nil
+}
+
+func (stubAzureInventory) GetWafPolicy(context.Context, models.ProfileSummary, string, string) (models.AzureWafPolicyDetail, error) {
+	return models.AzureWafPolicyDetail{Name: "demo-waf", ResourceGroup: "demo-rg", Mode: "Prevention", Enabled: true}, nil
+}
+
+func (stubAzureInventory) UpdateWafPolicyMode(context.Context, models.ProfileSummary, string, string, string) error {
+	return nil
+}
+
+func (stubAzureInventory) SetWafManagedRuleOverride(context.Context, models.ProfileSummary, string, string, string, string, string, string, bool) error {
+	return nil
+}
+
+func (stubAzureInventory) AddWafExclusion(context.Context, models.ProfileSummary, string, string, models.AzureWafExclusion) error {
+	return nil
+}
+
+func (stubAzureInventory) RemoveWafExclusion(context.Context, models.ProfileSummary, string, string, models.AzureWafExclusion) error {
+	return nil
+}
+
 func (stubAzureInventory) ListFunctionApps(context.Context, models.ProfileSummary) ([]models.AzureFunctionApp, error) {
 	return []models.AzureFunctionApp{{Name: "demo-fn", ResourceGroup: "demo-rg", State: "Running"}}, nil
 }

@@ -42,6 +42,117 @@ func (i *Inventory) ListLogAnalyticsWorkspaces(
 	return decodeLogAnalyticsWorkspaces(payload)
 }
 
+// ListLogAnalyticsTables returns table names (and optional columns) for a workspace.
+func (i *Inventory) ListLogAnalyticsTables(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	workspaceName string,
+	resourceGroup string,
+	includeColumns bool,
+) ([]models.AzureLogAnalyticsTableInfo, error) {
+	workspaceName = strings.TrimSpace(workspaceName)
+	if workspaceName == "" {
+		return nil, fmt.Errorf("a workspace name is required")
+	}
+	if isLocalFlociProfile(profile) {
+		query := "search * | distinct $table | order by $table asc"
+		workspaces := []models.AzureLogAnalyticsWorkspace{{Name: workspaceName, CustomerID: workspaceName}}
+		workspaceID, err := azureLogAnalyticsQueryWorkspaceLocal(workspaceName, workspaces)
+		if err != nil {
+			workspaceID = workspaceName
+		}
+		result, err := i.runLocalLogAnalyticsQuery(ctx, workspaceID, query, "P7D")
+		if err != nil {
+			return []models.AzureLogAnalyticsTableInfo{}, nil
+		}
+		tables := make([]models.AzureLogAnalyticsTableInfo, 0, len(result.Rows))
+		tableIndex := indexOfColumn(result.Columns, "Table")
+		if tableIndex < 0 {
+			tableIndex = 0
+		}
+		for _, row := range result.Rows {
+			if tableIndex >= len(row) || strings.TrimSpace(row[tableIndex]) == "" {
+				continue
+			}
+			tables = append(tables, models.AzureLogAnalyticsTableInfo{Name: row[tableIndex]})
+		}
+		return tables, nil
+	}
+	resourceGroup = strings.TrimSpace(resourceGroup)
+	if resourceGroup == "" {
+		return nil, fmt.Errorf("a resource group is required to list tables on cloud Azure")
+	}
+	args := []string{
+		"monitor", "log-analytics", "workspace", "table", "list",
+		"--subscription", profile.ProfileID,
+		"--resource-group", resourceGroup,
+		"--workspace-name", workspaceName,
+		"--output", "json",
+		"--only-show-errors",
+	}
+	payload, err := i.run(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+	var decoded []struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		return nil, fmt.Errorf("decode log analytics tables: %w", err)
+	}
+	tables := make([]models.AzureLogAnalyticsTableInfo, 0, len(decoded))
+	workspaces, _ := i.ListLogAnalyticsWorkspaces(ctx, profile)
+	workspaceID, err := azureLogAnalyticsQueryWorkspaceLocal(workspaceName, workspaces)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range decoded {
+		info := models.AzureLogAnalyticsTableInfo{Name: item.Name}
+		if includeColumns {
+			schemaQuery := fmt.Sprintf("%s | getschema", item.Name)
+			schemaResult, schemaErr := i.RunLogAnalyticsQuery(ctx, profile, workspaceID, schemaQuery, "", 500)
+			if schemaErr == nil {
+				columnIndex := indexOfColumn(schemaResult.Columns, "ColumnName")
+				if columnIndex < 0 {
+					columnIndex = indexOfColumn(schemaResult.Columns, "Column")
+				}
+				for _, row := range schemaResult.Rows {
+					if columnIndex >= 0 && columnIndex < len(row) && strings.TrimSpace(row[columnIndex]) != "" {
+						info.Columns = append(info.Columns, row[columnIndex])
+					}
+				}
+			}
+		}
+		tables = append(tables, info)
+	}
+	return tables, nil
+}
+
+func azureLogAnalyticsQueryWorkspaceLocal(
+	selection string,
+	workspaces []models.AzureLogAnalyticsWorkspace,
+) (string, error) {
+	selection = strings.TrimSpace(selection)
+	for _, workspace := range workspaces {
+		if workspace.Name == selection || workspace.CustomerID == selection {
+			if customerID := strings.TrimSpace(workspace.CustomerID); customerID != "" {
+				return customerID, nil
+			}
+			return workspace.Name, nil
+		}
+	}
+	return selection, nil
+}
+
+func indexOfColumn(columns []string, name string) int {
+	for index, column := range columns {
+		if strings.EqualFold(column, name) {
+			return index
+		}
+	}
+	return -1
+}
+
 func decodeLogAnalyticsWorkspaces(payload []byte) ([]models.AzureLogAnalyticsWorkspace, error) {
 	var decoded []struct {
 		Name          string `json:"name"`

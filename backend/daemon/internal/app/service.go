@@ -218,6 +218,28 @@ func (s *Service) Handle(
 		return s.handleAzureLogAnalyticsSelectWorkspace(ctx, params, notifier)
 	case "azure.logAnalytics.query":
 		return s.handleAzureLogAnalyticsQuery(ctx, params, notifier)
+	case "azure.logAnalytics.history.list":
+		return s.handleAzureLogAnalyticsHistoryList(ctx, params, notifier)
+	case "azure.logAnalytics.saved.list":
+		return s.handleAzureLogAnalyticsSavedList(ctx, params, notifier)
+	case "azure.logAnalytics.saved.save":
+		return s.handleAzureLogAnalyticsSavedSave(ctx, params, notifier)
+	case "azure.logAnalytics.saved.delete":
+		return s.handleAzureLogAnalyticsSavedDelete(ctx, params, notifier)
+	case "azure.logAnalytics.tables.list":
+		return s.handleAzureLogAnalyticsTablesList(ctx, params, notifier)
+	case "azure.waf.logs.schema":
+		return s.handleAzureWafLogsSchema(ctx, params, notifier)
+	case "azure.waf.selectPolicy":
+		return s.handleAzureWafSelectPolicy(ctx, params, notifier)
+	case "azure.waf.config.setMode":
+		return s.handleAzureWafConfigSetMode(ctx, params, notifier)
+	case "azure.waf.config.setManagedRule":
+		return s.handleAzureWafConfigSetManagedRule(ctx, params, notifier)
+	case "azure.waf.config.addExclusion":
+		return s.handleAzureWafConfigAddExclusion(ctx, params, notifier)
+	case "azure.waf.config.removeExclusion":
+		return s.handleAzureWafConfigRemoveExclusion(ctx, params, notifier)
 	case "azure.functions.selectApp":
 		return s.handleAzureFunctionsSelectApp(ctx, params, notifier)
 	case "azure.functions.selectFunction":

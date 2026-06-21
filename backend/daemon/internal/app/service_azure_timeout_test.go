@@ -179,6 +179,46 @@ func (blockingAzure) ListEntraAppRegistrations(ctx context.Context, _ models.Pro
 	return nil, ctx.Err()
 }
 
+func (blockingAzure) ListLogAnalyticsTables(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ bool) ([]models.AzureLogAnalyticsTableInfo, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) DetectWafLogSchema(ctx context.Context, _ models.ProfileSummary, _ string, _ string) (models.AzureWafLogSchemaProfile, error) {
+	<-ctx.Done()
+	return models.AzureWafLogSchemaProfile{}, ctx.Err()
+}
+
+func (blockingAzure) ListWafPolicies(ctx context.Context, _ models.ProfileSummary) ([]models.AzureWafPolicySummary, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) GetWafPolicy(ctx context.Context, _ models.ProfileSummary, _ string, _ string) (models.AzureWafPolicyDetail, error) {
+	<-ctx.Done()
+	return models.AzureWafPolicyDetail{}, ctx.Err()
+}
+
+func (blockingAzure) UpdateWafPolicyMode(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (blockingAzure) SetWafManagedRuleOverride(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ string, _ string, _ string, _ bool) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (blockingAzure) AddWafExclusion(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ models.AzureWafExclusion) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (blockingAzure) RemoveWafExclusion(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ models.AzureWafExclusion) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
 // TestAzureInventoryBoundedByTimeout proves a stalled Azure inventory call is
 // cut off by the configured timeout (and falls back to empty) instead of
 // hanging the workspace snapshot.

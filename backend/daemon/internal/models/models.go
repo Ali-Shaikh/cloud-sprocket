@@ -202,6 +202,7 @@ type SessionSnapshot struct {
 	AzureBlobPrefixFilter        string             `json:"azureBlobPrefixFilter,omitempty"`
 	SelectedAzureWebAppName      string             `json:"selectedAzureWebAppName,omitempty"`
 	SelectedAzureLogWorkspace    string             `json:"selectedAzureLogWorkspace,omitempty"`
+	SelectedAzureWafPolicy       string             `json:"selectedAzureWafPolicy,omitempty"`
 	SelectedAzureFunctionApp     string             `json:"selectedAzureFunctionApp,omitempty"`
 	SelectedAzureFunction        string             `json:"selectedAzureFunction,omitempty"`
 	SelectedAzureKeyVault        string             `json:"selectedAzureKeyVault,omitempty"`
@@ -536,6 +537,120 @@ type AzureLogAnalyticsSelectionResult struct {
 	Workspace string `json:"workspace"`
 }
 
+// AzureLogAnalyticsHistoryEntry is one successful query remembered locally.
+type AzureLogAnalyticsHistoryEntry struct {
+	Query     string `json:"query"`
+	Timespan  string `json:"timespan,omitempty"`
+	RanAt     string `json:"ranAt"`
+}
+
+// AzureLogAnalyticsSavedQuery is a user-named query stored locally (cloud sync later).
+type AzureLogAnalyticsSavedQuery struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Query     string `json:"query"`
+	Timespan  string `json:"timespan,omitempty"`
+}
+
+// AzureLogAnalyticsTableInfo describes a workspace table for the schema browser.
+type AzureLogAnalyticsTableInfo struct {
+	Name    string   `json:"name"`
+	Columns []string `json:"columns,omitempty"`
+}
+
+// AzureWafLogColumnMap maps logical WAF fields to workspace-specific column names.
+type AzureWafLogColumnMap struct {
+	TimeGenerated      string `json:"timeGenerated"`
+	Category           string `json:"category,omitempty"`
+	Action             string `json:"action"`
+	RuleName           string `json:"ruleName"`
+	RequestUri         string `json:"requestUri"`
+	ClientIP           string `json:"clientIP"`
+	Host               string `json:"host"`
+	PolicyName         string `json:"policyName"`
+	PolicyMode         string `json:"policyMode"`
+	TrackingReference  string `json:"trackingReference"`
+	DetailsMatches     string `json:"detailsMatches"`
+	DetailsMessage     string `json:"detailsMessage"`
+	DetailsData        string `json:"detailsData,omitempty"`
+	AdditionalFields   string `json:"additionalFields,omitempty"`
+}
+
+// AzureWafLogSchemaProfile describes how WAF logs are stored in a workspace.
+type AzureWafLogSchemaProfile struct {
+	Mode       string               `json:"mode"` // azureDiagnostics | resourceSpecific
+	TableName  string               `json:"tableName"`
+	Categories []string             `json:"categories,omitempty"`
+	Columns    AzureWafLogColumnMap `json:"columns"`
+	Detected   bool                 `json:"detected"`
+	Message    string               `json:"message,omitempty"`
+}
+
+// AzureWafPolicySummary is a Front Door WAF policy visible in the subscription.
+type AzureWafPolicySummary struct {
+	Name          string `json:"name"`
+	ResourceGroup string `json:"resourceGroup"`
+	Location      string `json:"location,omitempty"`
+	SKU           string `json:"sku,omitempty"`
+	Mode          string `json:"mode,omitempty"`
+	Enabled       bool   `json:"enabled"`
+}
+
+// AzureWafManagedRuleGroup is a managed rule set group on a policy.
+type AzureWafManagedRuleGroup struct {
+	RuleSetType    string `json:"ruleSetType"`
+	RuleSetVersion string `json:"ruleSetVersion"`
+	RuleGroupName  string `json:"ruleGroupName"`
+}
+
+// AzureWafManagedRuleOverride is a per-rule override on a managed rule set.
+type AzureWafManagedRuleOverride struct {
+	RuleID        string `json:"ruleId"`
+	RuleGroupName string `json:"ruleGroupName,omitempty"`
+	Enabled       bool   `json:"enabled"`
+	Action        string `json:"action,omitempty"`
+}
+
+// AzureWafExclusion is a managed-rule exclusion on a policy.
+type AzureWafExclusion struct {
+	MatchVariable         string `json:"matchVariable"`
+	SelectorMatchOperator string `json:"selectorMatchOperator"`
+	Selector              string `json:"selector,omitempty"`
+}
+
+// AzureWafCustomRule is a custom rule on a WAF policy.
+type AzureWafCustomRule struct {
+	Name     string `json:"name"`
+	Priority int    `json:"priority"`
+	RuleType string `json:"ruleType"`
+	Action   string `json:"action"`
+	Enabled  bool   `json:"enabled"`
+}
+
+// AzureWafPolicyDetail is the full read-only config for a selected policy.
+type AzureWafPolicyDetail struct {
+	Name                   string                        `json:"name"`
+	ResourceGroup          string                        `json:"resourceGroup"`
+	Location               string                        `json:"location,omitempty"`
+	SKU                    string                        `json:"sku,omitempty"`
+	Mode                   string                        `json:"mode"`
+	Enabled                bool                          `json:"enabled"`
+	RequestBodyCheck       string                        `json:"requestBodyCheck,omitempty"`
+	ManagedRuleSets        []AzureWafManagedRuleGroup    `json:"managedRuleSets"`
+	ManagedRuleOverrides   []AzureWafManagedRuleOverride `json:"managedRuleOverrides"`
+	Exclusions             []AzureWafExclusion           `json:"exclusions"`
+	CustomRules            []AzureWafCustomRule          `json:"customRules"`
+	RedirectURL            string                        `json:"redirectUrl,omitempty"`
+	CustomBlockStatusCode  int                           `json:"customBlockStatusCode,omitempty"`
+}
+
+// AzureWafRuleFireCount correlates a managed rule with recent log volume.
+type AzureWafRuleFireCount struct {
+	RuleName string `json:"ruleName"`
+	Count    int    `json:"count"`
+	Action   string `json:"action,omitempty"`
+}
+
 // AzureFunctionApp is a Function App (Microsoft.Web/sites, kind functionapp).
 type AzureFunctionApp struct {
 	Name            string `json:"name"`
@@ -705,6 +820,7 @@ type WorkspaceSnapshot struct {
 	AzureBlobPrefixFilter          string                       `json:"azureBlobPrefixFilter,omitempty"`
 	SelectedAzureWebAppName        string                       `json:"selectedAzureWebAppName,omitempty"`
 	SelectedAzureLogWorkspace      string                       `json:"selectedAzureLogWorkspace,omitempty"`
+	SelectedAzureWafPolicy         string                       `json:"selectedAzureWafPolicy,omitempty"`
 	SelectedAzureFunctionApp       string                       `json:"selectedAzureFunctionApp,omitempty"`
 	SelectedAzureFunction          string                       `json:"selectedAzureFunction,omitempty"`
 	AzureStatusMessage             string                       `json:"azureStatusMessage,omitempty"`
@@ -729,6 +845,11 @@ type WorkspaceSnapshot struct {
 	AzureBlobMetadata              []DetailField                `json:"azureBlobMetadata"`
 	AzureWebApps                   []AzureWebApp                `json:"azureWebApps"`
 	AzureLogAnalyticsWorkspaces    []AzureLogAnalyticsWorkspace `json:"azureLogAnalyticsWorkspaces"`
+	AzureWafLogSchema              *AzureWafLogSchemaProfile    `json:"azureWafLogSchema,omitempty"`
+	AzureWafStatusMessage          string                       `json:"azureWafStatusMessage,omitempty"`
+	AzureWafPolicies               []AzureWafPolicySummary      `json:"azureWafPolicies"`
+	AzureWafPolicyDetail           *AzureWafPolicyDetail        `json:"azureWafPolicyDetail,omitempty"`
+	AzureWafRuleFireCounts         []AzureWafRuleFireCount      `json:"azureWafRuleFireCounts"`
 	AzureFunctionApps              []AzureFunctionApp           `json:"azureFunctionApps"`
 	AzureFunctions                 []AzureFunction              `json:"azureFunctions"`
 	AzureKeyVaults                 []AzureKeyVault              `json:"azureKeyVaults"`
