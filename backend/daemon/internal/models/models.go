@@ -630,6 +630,9 @@ type AzureWafManagedRuleOverride struct {
 
 // AzureWafExclusion is a managed-rule exclusion on a policy.
 type AzureWafExclusion struct {
+	// RuleSetType is the managed rule set the exclusion is scoped to. The az CLI
+	// exclusion add/remove commands require it (--type).
+	RuleSetType           string `json:"ruleSetType,omitempty"`
 	MatchVariable         string `json:"matchVariable"`
 	SelectorMatchOperator string `json:"selectorMatchOperator"`
 	Selector              string `json:"selector,omitempty"`

@@ -125,6 +125,8 @@ func (i *Inventory) UpdateWafPolicyMode(
 }
 
 // SetWafManagedRuleOverride enables or disables a managed rule via override add.
+// ruleSetVersion is accepted for symmetry with the policy model but is not a
+// parameter of `override add`; the rule set is identified by --type alone.
 func (i *Inventory) SetWafManagedRuleOverride(
 	ctx context.Context,
 	profile models.ProfileSummary,
@@ -139,19 +141,18 @@ func (i *Inventory) SetWafManagedRuleOverride(
 	if isLocalFlociProfile(profile) {
 		return errWafConfigLocalUnsupported
 	}
-	state := "Disabled"
+	disabled := "true"
 	if enabled {
-		state = "Enabled"
+		disabled = "false"
 	}
 	_, err := i.run(ctx,
 		"network", "front-door", "waf-policy", "managed-rules", "override", "add",
 		"--resource-group", strings.TrimSpace(resourceGroup),
 		"--policy-name", strings.TrimSpace(policyName),
 		"--type", strings.TrimSpace(ruleSetType),
-		"--version", strings.TrimSpace(ruleSetVersion),
-		"--group-name", strings.TrimSpace(ruleGroupName),
+		"--rule-group-id", strings.TrimSpace(ruleGroupName),
 		"--rule-id", strings.TrimSpace(ruleID),
-		"--enabled-state", state,
+		"--disabled", disabled,
 		"--output", "none",
 		"--only-show-errors",
 	)
@@ -173,9 +174,10 @@ func (i *Inventory) AddWafExclusion(
 		"network", "front-door", "waf-policy", "managed-rules", "exclusion", "add",
 		"--resource-group", strings.TrimSpace(resourceGroup),
 		"--policy-name", strings.TrimSpace(policyName),
+		"--type", strings.TrimSpace(exclusion.RuleSetType),
 		"--match-variable", strings.TrimSpace(exclusion.MatchVariable),
-		"--selector-match-operator", strings.TrimSpace(exclusion.SelectorMatchOperator),
-		"--selector", strings.TrimSpace(exclusion.Selector),
+		"--operator", strings.TrimSpace(exclusion.SelectorMatchOperator),
+		"--value", strings.TrimSpace(exclusion.Selector),
 		"--output", "none",
 		"--only-show-errors",
 	)
@@ -197,9 +199,10 @@ func (i *Inventory) RemoveWafExclusion(
 		"network", "front-door", "waf-policy", "managed-rules", "exclusion", "remove",
 		"--resource-group", strings.TrimSpace(resourceGroup),
 		"--policy-name", strings.TrimSpace(policyName),
+		"--type", strings.TrimSpace(exclusion.RuleSetType),
 		"--match-variable", strings.TrimSpace(exclusion.MatchVariable),
-		"--selector-match-operator", strings.TrimSpace(exclusion.SelectorMatchOperator),
-		"--selector", strings.TrimSpace(exclusion.Selector),
+		"--operator", strings.TrimSpace(exclusion.SelectorMatchOperator),
+		"--value", strings.TrimSpace(exclusion.Selector),
 		"--output", "none",
 		"--only-show-errors",
 	)
@@ -234,6 +237,11 @@ func decodeWafPolicyDetail(payload []byte, resourceGroup string) (models.AzureWa
 							Action       string `json:"action"`
 						} `json:"rules"`
 					} `json:"ruleGroupOverrides"`
+					Exclusions []struct {
+						MatchVariable         string `json:"matchVariable"`
+						SelectorMatchOperator string `json:"selectorMatchOperator"`
+						Selector              string `json:"selector"`
+					} `json:"exclusions"`
 				} `json:"managedRuleSets"`
 				Exclusions []struct {
 					MatchVariable         string `json:"matchVariable"`
@@ -286,6 +294,16 @@ func decodeWafPolicyDetail(payload []byte, resourceGroup string) (models.AzureWa
 					Action:        rule.Action,
 				})
 			}
+		}
+		// Exclusions are scoped to a managed rule set; tag each with its type so
+		// removal can pass the required --type.
+		for _, exclusion := range ruleSet.Exclusions {
+			detail.Exclusions = append(detail.Exclusions, models.AzureWafExclusion{
+				RuleSetType:           ruleSet.RuleSetType,
+				MatchVariable:         exclusion.MatchVariable,
+				SelectorMatchOperator: exclusion.SelectorMatchOperator,
+				Selector:              exclusion.Selector,
+			})
 		}
 	}
 	for _, exclusion := range decoded.Properties.ManagedRules.Exclusions {

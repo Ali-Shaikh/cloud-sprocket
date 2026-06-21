@@ -522,6 +522,7 @@ export interface AzureWafManagedRuleOverride {
 }
 
 export interface AzureWafExclusion {
+  ruleSetType?: string;
   matchVariable: string;
   selectorMatchOperator: string;
   selector?: string;

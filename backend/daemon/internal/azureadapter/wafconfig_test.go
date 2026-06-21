@@ -98,6 +98,35 @@ func TestDecodeWafPolicyDetailIncludesDefaultManagedRuleSet(t *testing.T) {
 	}
 }
 
+func TestDecodeWafPolicyDetailTagsExclusionsWithRuleSetType(t *testing.T) {
+	payload := []byte(`{
+		"name":"waf-portal",
+		"properties":{
+			"managedRules":{
+				"managedRuleSets":[
+					{
+						"ruleSetType":"Microsoft_DefaultRuleSet",
+						"ruleSetVersion":"2.1",
+						"exclusions":[
+							{"matchVariable":"RequestHeaderNames","selectorMatchOperator":"Equals","selector":"User-Agent"}
+						]
+					}
+				]
+			}
+		}
+	}`)
+	detail, err := decodeWafPolicyDetail(payload, "rg-prod")
+	if err != nil {
+		t.Fatalf("decodeWafPolicyDetail: %v", err)
+	}
+	if len(detail.Exclusions) != 1 {
+		t.Fatalf("exclusions = %+v", detail.Exclusions)
+	}
+	if detail.Exclusions[0].RuleSetType != "Microsoft_DefaultRuleSet" {
+		t.Fatalf("exclusion ruleSetType = %q, want Microsoft_DefaultRuleSet", detail.Exclusions[0].RuleSetType)
+	}
+}
+
 func TestUpdateWafPolicyModeBuildsExpectedArgs(t *testing.T) {
 	fake := &fakeCLI{}
 	inv := NewInventory(config.Settings{})
@@ -138,11 +167,14 @@ func TestSetWafManagedRuleOverrideBuildsExpectedArgs(t *testing.T) {
 		"--resource-group", "rg-prod",
 		"--policy-name", "waf-portal",
 		"--type", "Microsoft_DefaultRuleSet",
-		"--version", "2.1",
-		"--group-name", "SQLI",
+		"--rule-group-id", "SQLI",
 		"--rule-id", "942100",
-		"--enabled-state", "Disabled",
+		"--disabled", "true",
 	)
+	if joined := strings.Join(fake.args, " "); strings.Contains(joined, "--enabled-state") ||
+		strings.Contains(joined, "--group-name") || strings.Contains(joined, "--version") {
+		t.Fatalf("override add used a non-existent flag: %q", joined)
+	}
 }
 
 func TestAddWafExclusionBuildsExpectedArgs(t *testing.T) {
@@ -151,7 +183,8 @@ func TestAddWafExclusionBuildsExpectedArgs(t *testing.T) {
 	inv.runner = fake
 
 	err := inv.AddWafExclusion(context.Background(), cloudAzureProfile(), "rg-prod", "waf-portal", models.AzureWafExclusion{
-		MatchVariable:         "RequestHeader",
+		RuleSetType:           "Microsoft_DefaultRuleSet",
+		MatchVariable:         "RequestHeaderNames",
 		SelectorMatchOperator: "Equals",
 		Selector:              "User-Agent",
 	})
@@ -162,10 +195,15 @@ func TestAddWafExclusionBuildsExpectedArgs(t *testing.T) {
 		"network", "front-door", "waf-policy", "managed-rules", "exclusion", "add",
 		"--resource-group", "rg-prod",
 		"--policy-name", "waf-portal",
-		"--match-variable", "RequestHeader",
-		"--selector-match-operator", "Equals",
-		"--selector", "User-Agent",
+		"--type", "Microsoft_DefaultRuleSet",
+		"--match-variable", "RequestHeaderNames",
+		"--operator", "Equals",
+		"--value", "User-Agent",
 	)
+	if joined := strings.Join(fake.args, " "); strings.Contains(joined, "--selector-match-operator") ||
+		strings.Contains(joined, "--selector ") {
+		t.Fatalf("exclusion add used a non-existent flag: %q", joined)
+	}
 }
 
 type recordingCLI struct {
