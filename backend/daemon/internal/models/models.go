@@ -547,6 +547,22 @@ type AzureFunctionInvokeResult struct {
 	Body       string `json:"body"`
 }
 
+// AzureKeyVault is a Key Vault (Microsoft.KeyVault/vaults).
+type AzureKeyVault struct {
+	Name          string `json:"name"`
+	ResourceGroup string `json:"resourceGroup,omitempty"`
+	Location      string `json:"location,omitempty"`
+	VaultURI      string `json:"vaultUri,omitempty"`
+}
+
+// AzureKeyVaultSecret is a secret's metadata (never its value; the value is only
+// fetched on an explicit reveal).
+type AzureKeyVaultSecret struct {
+	Name    string `json:"name"`
+	Enabled bool   `json:"enabled"`
+	Updated string `json:"updated,omitempty"`
+}
+
 type WorkspaceSnapshot struct {
 	Provider                   *ProviderSummary        `json:"provider,omitempty"`
 	Profile                    *ProfileSummary         `json:"profile,omitempty"`
