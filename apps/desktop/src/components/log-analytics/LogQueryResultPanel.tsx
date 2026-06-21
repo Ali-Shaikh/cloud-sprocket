@@ -3,10 +3,13 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
   Columns3,
   Copy,
   Download,
   Table2,
+  X,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -18,15 +21,9 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -41,10 +38,11 @@ import { decodeWafRow, isTuningCandidate } from "@/lib/waf-decode";
 import {
   downloadTextFile,
   formatCellValue,
+  populatedRowFields,
   projectRow,
   resultToCsv,
   resultToJson,
-  rowToRecord,
+  rowToRecordPopulated,
   sortRows,
   visibleColumns,
 } from "./log-query-utils";
@@ -59,6 +57,9 @@ export type LogQueryResultPanelProps = {
 };
 
 type SortDirection = "asc" | "desc" | null;
+
+const fieldLabel =
+  "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
 
 function copyToClipboard(value: string, label = "Copied to clipboard"): void {
   if (!navigator.clipboard) {
@@ -80,33 +81,138 @@ function sortIcon(column: string, activeColumn: string | null, direction: SortDi
   );
 }
 
-function LogQueryRowDrawer({
-  open,
+function wafDefaultVisibleColumns(
+  columns: string[],
+  columnMap: AzureWafLogColumnMap,
+): Set<string> {
+  const visible = new Set<string>();
+  Object.values(columnMap).forEach((name) => {
+    if (name && columns.includes(name)) {
+      visible.add(name);
+    }
+  });
+  ["TimeGenerated", "Category", "Resource", "ResourceGroup"].forEach((name) => {
+    if (columns.includes(name)) {
+      visible.add(name);
+    }
+  });
+  return visible;
+}
+
+function WafSummaryCard({ decoded }: { decoded: ReturnType<typeof decodeWafRow> }) {
+  const facts: Array<{ label: string; value: string; mono?: boolean }> = [
+    { label: "Time", value: decoded.timeGenerated ?? "" },
+    { label: "Action", value: decoded.action ?? "", mono: true },
+    { label: "Rule", value: decoded.ruleName ?? "", mono: true },
+    { label: "Client IP", value: decoded.clientIP ?? "", mono: true },
+    { label: "Host", value: decoded.host ?? "" },
+    { label: "URI", value: decoded.requestUri ?? "", mono: true },
+    { label: "Policy", value: decoded.policyName ?? "", mono: true },
+    { label: "Mode", value: decoded.policyMode ?? "", mono: true },
+    { label: "Tracking ref", value: decoded.trackingReference ?? "", mono: true },
+  ].filter((fact) => fact.value.trim() !== "" && fact.value.toLowerCase() !== "none");
+
+  return (
+    <div className="space-y-3">
+      {facts.length > 0 ? (
+        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {facts.map((fact) => (
+            <div key={fact.label}>
+              <dt className={fieldLabel}>{fact.label}</dt>
+              <dd
+                className={cn(
+                  "mt-1 text-sm break-all",
+                  fact.mono ? "font-mono text-xs" : "",
+                )}
+              >
+                {fact.value}
+                {fact.label === "Action" && isTuningCandidate(decoded.action) ? (
+                  <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
+                    Tuning candidate
+                  </span>
+                ) : null}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {decoded.detailsMessage ? (
+        <div>
+          <div className={fieldLabel}>Message</div>
+          <p className="mt-1 font-mono text-xs whitespace-pre-wrap break-all">
+            {decoded.detailsMessage}
+          </p>
+        </div>
+      ) : null}
+      {decoded.matches.length > 0 ? (
+        <div className="overflow-auto rounded border border-border">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-border bg-muted/50 text-left">
+                <th className="px-2 py-1 font-semibold">Match variable</th>
+                <th className="px-2 py-1 font-semibold">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {decoded.matches.map((match, index) => (
+                <tr key={index} className="border-b border-border/60 last:border-0">
+                  <td className="px-2 py-1 font-mono">{match.matchVariableName}</td>
+                  <td className="px-2 py-1 font-mono whitespace-pre-wrap break-all">
+                    {match.matchVariableValue}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function LogQueryRowDetailPanel({
   columns,
   row,
   rowIndex,
   rowCount,
   wafColumnMap,
-  onOpenChange,
+  onClose,
   onSelectRowIndex,
 }: {
-  open: boolean;
   columns: string[];
-  row: string[] | null;
+  row: string[];
   rowIndex: number;
   rowCount: number;
   wafColumnMap?: AzureWafLogColumnMap;
-  onOpenChange: (open: boolean) => void;
+  onClose: () => void;
   onSelectRowIndex: (index: number) => void;
 }) {
-  useEffect(() => {
-    if (!open) {
-      return;
+  const [fieldFilter, setFieldFilter] = useState("");
+  const [detailTab, setDetailTab] = useState("summary");
+
+  const populated = useMemo(() => populatedRowFields(columns, row), [columns, row]);
+  const rowJson = useMemo(
+    () => JSON.stringify(rowToRecordPopulated(columns, row), null, 2),
+    [columns, row],
+  );
+  const decodedWaf = wafColumnMap ? decodeWafRow(columns, row, wafColumnMap) : null;
+
+  const filteredFields = useMemo(() => {
+    const query = fieldFilter.trim().toLowerCase();
+    if (!query) {
+      return populated;
     }
+    return populated.filter(
+      ({ column, value }) =>
+        column.toLowerCase().includes(query) || value.toLowerCase().includes(query),
+    );
+  }, [fieldFilter, populated]);
+
+  useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        onOpenChange(false);
+        onClose();
         return;
       }
       if (event.key === "ArrowDown") {
@@ -123,136 +229,142 @@ function LogQueryRowDrawer({
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [open, onOpenChange, onSelectRowIndex, rowCount, rowIndex]);
-
-  if (!row) {
-    return null;
-  }
-
-  const rowJson = JSON.stringify(rowToRecord(columns, row), null, 2);
-  const decodedWaf = wafColumnMap ? decodeWafRow(columns, row, wafColumnMap) : null;
+  }, [onClose, onSelectRowIndex, rowCount, rowIndex]);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        aria-label="Query result row details"
-        className="w-full gap-0 overflow-y-auto p-0 sm:max-w-lg"
-      >
-        <SheetHeader className="border-b border-border px-6 py-4">
-          <SheetTitle>Row {rowIndex + 1} of {rowCount}</SheetTitle>
-          <SheetDescription>
-            Full values for every column. Use Up/Down to move between rows; Esc to close.
-          </SheetDescription>
-          <div className="flex flex-wrap gap-2 pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => copyToClipboard(rowJson, "Row copied as JSON")}
-            >
-              <Copy />
-              Copy row as JSON
-            </Button>
-          </div>
-        </SheetHeader>
-        <div className="space-y-3 px-6 py-4">
-          {decodedWaf ? (
-            <div className="rounded-lg border border-border bg-muted/40 px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                WAF decode
-              </div>
-              <dl className="mt-2 space-y-1 text-xs">
-                {decodedWaf.ruleName ? (
-                  <div>
-                    <dt className="inline font-medium text-muted-foreground">Rule: </dt>
-                    <dd className="inline font-mono">{decodedWaf.ruleName}</dd>
-                  </div>
-                ) : null}
-                {decodedWaf.action ? (
-                  <div>
-                    <dt className="inline font-medium text-muted-foreground">Action: </dt>
-                    <dd className="inline font-mono">{decodedWaf.action}</dd>
-                    {isTuningCandidate(decodedWaf.action) ? (
-                      <span className="ml-2 text-amber-600 dark:text-amber-400">Tuning candidate</span>
-                    ) : null}
-                  </div>
-                ) : null}
-                {decodedWaf.trackingReference ? (
-                  <div>
-                    <dt className="inline font-medium text-muted-foreground">Tracking ref: </dt>
-                    <dd className="inline font-mono">{decodedWaf.trackingReference}</dd>
-                  </div>
-                ) : null}
-                {decodedWaf.detailsMessage ? (
-                  <div>
-                    <dt className="font-medium text-muted-foreground">Message</dt>
-                    <dd className="mt-0.5 font-mono whitespace-pre-wrap break-all">{decodedWaf.detailsMessage}</dd>
-                  </div>
-                ) : null}
-              </dl>
-              {decodedWaf.matches.length > 0 ? (
-                <div className="mt-3 overflow-auto rounded border border-border">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/50 text-left">
-                        <th className="px-2 py-1 font-semibold">Match variable</th>
-                        <th className="px-2 py-1 font-semibold">Value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {decodedWaf.matches.map((match, index) => (
-                        <tr key={index} className="border-b border-border/60 last:border-0">
-                          <td className="px-2 py-1 font-mono">{match.matchVariableName}</td>
-                          <td className="px-2 py-1 font-mono whitespace-pre-wrap break-all">
-                            {match.matchVariableValue}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          {columns.map((column, columnIndex) => {
-            const value = row[columnIndex] ?? "";
-            const formatted = formatCellValue(value);
-            return (
-              <div
-                key={`${column}-${columnIndex}`}
-                className="rounded-lg border border-border bg-muted/30 px-3 py-2"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {column}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7 shrink-0"
-                    aria-label={`Copy ${column}`}
-                    onClick={() => copyToClipboard(value, `${column} copied`)}
-                  >
-                    <Copy className="size-3.5" />
-                  </Button>
-                </div>
-                {formatted.kind === "json" ? (
-                  <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-foreground">
-                    {formatted.display}
-                  </pre>
-                ) : formatted.display ? (
-                  <p className="mt-2 whitespace-pre-wrap break-all font-mono text-xs text-foreground">
-                    {formatted.display}
-                  </p>
-                ) : (
-                  <p className="mt-2 text-xs text-muted-foreground">(empty)</p>
-                )}
-              </div>
-            );
-          })}
+    <div
+      className="border-t border-border bg-muted/20"
+      data-slot="log-query-row-detail"
+      aria-label="Query result row details"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold">
+            Row {rowIndex + 1} of {rowCount}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {populated.length} populated field{populated.length === 1 ? "" : "s"} of{" "}
+            {columns.length}
+          </span>
         </div>
-      </SheetContent>
-    </Sheet>
+        <div className="flex flex-wrap items-center gap-1">
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            aria-label="Previous row"
+            disabled={rowIndex <= 0}
+            onClick={() => onSelectRowIndex(rowIndex - 1)}
+          >
+            <ChevronLeft />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            aria-label="Next row"
+            disabled={rowIndex >= rowCount - 1}
+            onClick={() => onSelectRowIndex(rowIndex + 1)}
+          >
+            <ChevronRight />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => copyToClipboard(rowJson, "Row copied as JSON")}
+          >
+            <Copy />
+            Copy JSON
+          </Button>
+          <Button variant="ghost" size="icon" className="size-8" aria-label="Close row detail" onClick={onClose}>
+            <X />
+          </Button>
+        </div>
+      </div>
+
+      <Tabs value={detailTab} onValueChange={setDetailTab} className="gap-0">
+        <div className="border-b border-border px-4 py-2">
+          <TabsList>
+            <TabsTrigger value="summary">Summary</TabsTrigger>
+            <TabsTrigger value="json">JSON</TabsTrigger>
+            <TabsTrigger value="fields">
+              Fields ({populated.length})
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="summary" className="mt-0 max-h-72 overflow-y-auto px-4 py-3">
+          {decodedWaf ? (
+            <WafSummaryCard decoded={decodedWaf} />
+          ) : populated.length > 0 ? (
+            <dl className="grid gap-3 sm:grid-cols-2">
+              {populated.slice(0, 12).map(({ column, value }) => (
+                <div key={column}>
+                  <dt className={fieldLabel}>{column}</dt>
+                  <dd className="mt-1 font-mono text-xs whitespace-pre-wrap break-all">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="text-sm text-muted-foreground">No populated fields in this row.</p>
+          )}
+          {decodedWaf && populated.length > 12 ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Open the Fields tab for the full list of populated columns.
+            </p>
+          ) : null}
+        </TabsContent>
+
+        <TabsContent value="json" className="mt-0 max-h-72 overflow-y-auto px-4 py-3">
+          <pre className="rounded-lg border border-border bg-card p-3 font-mono text-xs whitespace-pre-wrap break-all">
+            {rowJson}
+          </pre>
+        </TabsContent>
+
+        <TabsContent value="fields" className="mt-0 space-y-3 px-4 py-3">
+          <Input
+            value={fieldFilter}
+            onChange={(event) => setFieldFilter(event.target.value)}
+            placeholder="Filter fields…"
+            aria-label="Filter populated fields"
+            className="max-w-sm"
+          />
+          <div className="max-h-64 overflow-y-auto rounded-lg border border-border">
+            {filteredFields.length > 0 ? (
+              <dl className="divide-y divide-border">
+                {filteredFields.map(({ column, value }) => {
+                  const formatted = formatCellValue(value);
+                  return (
+                    <div key={column} className="grid gap-1 px-3 py-2 sm:grid-cols-[minmax(140px,220px)_1fr]">
+                      <dt className="font-mono text-[11px] font-semibold text-muted-foreground break-all">
+                        {column}
+                      </dt>
+                      <dd className="min-w-0">
+                        {formatted.kind === "json" ? (
+                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-xs">
+                            {formatted.display}
+                          </pre>
+                        ) : (
+                          <span className="font-mono text-xs whitespace-pre-wrap break-all">
+                            {formatted.display}
+                          </span>
+                        )}
+                      </dd>
+                    </div>
+                  );
+                })}
+              </dl>
+            ) : (
+              <p className="px-3 py-4 text-sm text-muted-foreground">
+                {populated.length === 0
+                  ? "No populated fields in this row."
+                  : "No fields match your filter."}
+              </p>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }
 
@@ -269,18 +381,26 @@ function LogQueryResultPanel({
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const columns = result?.columns ?? [];
   const rows = result?.rows ?? [];
 
   useEffect(() => {
-    setHiddenColumns(new Set());
     setSortColumn(null);
     setSortDirection(null);
     setSelectedRowIndex(null);
-    setDrawerOpen(false);
-  }, [result]);
+    const nextColumns = result?.columns ?? [];
+    if (!result || nextColumns.length === 0) {
+      setHiddenColumns(new Set());
+      return;
+    }
+    if (wafColumnMap) {
+      const visible = wafDefaultVisibleColumns(nextColumns, wafColumnMap);
+      setHiddenColumns(new Set(nextColumns.filter((column) => !visible.has(column))));
+      return;
+    }
+    setHiddenColumns(new Set());
+  }, [result, wafColumnMap]);
 
   const shownColumns = useMemo(
     () => visibleColumns(columns, hiddenColumns),
@@ -318,8 +438,7 @@ function LogQueryResultPanel({
   }, [sortColumn, sortDirection]);
 
   const openRow = useCallback((rowIndex: number) => {
-    setSelectedRowIndex(rowIndex);
-    setDrawerOpen(true);
+    setSelectedRowIndex((current) => (current === rowIndex ? null : rowIndex));
   }, []);
 
   const toggleColumnVisibility = useCallback((column: string, visible: boolean) => {
@@ -337,6 +456,7 @@ function LogQueryResultPanel({
   const hasResult = result != null;
   const hasRows = rows.length > 0;
   const hasColumns = columns.length > 0;
+  const detailOpen = selectedRow != null && selectedRowIndex != null;
 
   return (
     <section className="space-y-4 rounded-lg border border-border bg-card p-[18px] shadow-sm">
@@ -347,6 +467,9 @@ function LogQueryResultPanel({
             <p className="mt-1 text-xs text-muted-foreground">
               {rows.length} row{rows.length === 1 ? "" : "s"} · {columns.length} column
               {columns.length === 1 ? "" : "s"}
+              {shownColumns.length < columns.length
+                ? ` · ${shownColumns.length} visible`
+                : ""}
               {typeof result.durationMs === "number" ? ` · ${result.durationMs} ms` : ""}
               {timeRangeLabel ? ` · ${timeRangeLabel}` : ""}
               {result.truncated ? " · results capped" : ""}
@@ -440,80 +563,90 @@ function LogQueryResultPanel({
         ) : null}
       </div>
 
-      <div className="max-h-[min(70vh,640px)] overflow-auto rounded-lg border border-border">
-        {hasRows && shownColumns.length > 0 ? (
-          <Table>
-            <TableHeader className="sticky top-0 z-10 bg-card">
-              <TableRow>
-                {shownColumns.map((column) => (
-                  <TableHead key={column} className="whitespace-nowrap bg-card">
-                    <button
-                      type="button"
-                      className="inline-flex items-center font-semibold hover:text-foreground"
-                      onClick={() => toggleSort(column)}
-                    >
-                      {column}
-                      {sortIcon(column, sortColumn, sortDirection)}
-                    </button>
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {displayRows.map((row, rowIndex) => (
-                <TableRow
-                  key={rowIndex}
-                  className={cn(
-                    "cursor-pointer hover:bg-muted/50",
-                    selectedRowIndex === rowIndex && drawerOpen && "bg-muted/60",
-                  )}
-                  onClick={() => openRow(rowIndex)}
-                >
-                  {projectRow(row, columns, shownColumns).map((cell, cellIndex) => (
-                    <TableCell
-                      key={`${rowIndex}-${cellIndex}`}
-                      title={cell}
-                      className={cn(
-                        "max-w-[320px] font-mono text-xs",
-                        wrapCells
-                          ? "whitespace-pre-wrap break-all"
-                          : "truncate",
-                      )}
-                    >
-                      {cell}
-                    </TableCell>
+      <div className="overflow-hidden rounded-lg border border-border">
+        <div
+          className={cn(
+            "overflow-auto",
+            detailOpen ? "max-h-[min(45vh,420px)]" : "max-h-[min(70vh,640px)]",
+          )}
+        >
+          {hasRows && shownColumns.length > 0 ? (
+            <Table>
+              <TableHeader className="sticky top-0 z-10 bg-card">
+                <TableRow>
+                  {shownColumns.map((column) => (
+                    <TableHead key={column} className="whitespace-nowrap bg-card">
+                      <button
+                        type="button"
+                        className="inline-flex items-center font-semibold hover:text-foreground"
+                        onClick={() => toggleSort(column)}
+                      >
+                        {column}
+                        {sortIcon(column, sortColumn, sortDirection)}
+                      </button>
+                    </TableHead>
                   ))}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : (
-          <EmptyState
-            icon={<Table2 />}
-            title={hasResult && !hasRows ? "No rows" : emptyTitle}
-            description={
-              hasResult && !hasRows
-                ? "The query ran but returned no rows."
-                : emptyDescription
-            }
-            className="border-0"
+              </TableHeader>
+              <TableBody>
+                {displayRows.map((row, rowIndex) => (
+                  <TableRow
+                    key={rowIndex}
+                    className={cn(
+                      "cursor-pointer hover:bg-muted/50",
+                      selectedRowIndex === rowIndex && "bg-primary/10 hover:bg-primary/10",
+                    )}
+                    onClick={() => openRow(rowIndex)}
+                    aria-selected={selectedRowIndex === rowIndex}
+                  >
+                    {projectRow(row, columns, shownColumns).map((cell, cellIndex) => (
+                      <TableCell
+                        key={`${rowIndex}-${cellIndex}`}
+                        title={cell}
+                        className={cn(
+                          "max-w-[320px] font-mono text-xs",
+                          wrapCells ? "whitespace-pre-wrap break-all" : "truncate",
+                        )}
+                      >
+                        {cell}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <EmptyState
+              icon={<Table2 />}
+              title={hasResult && !hasRows ? "No rows" : emptyTitle}
+              description={
+                hasResult && !hasRows
+                  ? "The query ran but returned no rows."
+                  : emptyDescription
+              }
+              className="border-0"
+            />
+          )}
+        </div>
+
+        {detailOpen && selectedRow && selectedRowIndex != null ? (
+          <LogQueryRowDetailPanel
+            columns={columns}
+            row={selectedRow}
+            rowIndex={selectedRowIndex}
+            rowCount={displayRows.length}
+            wafColumnMap={wafColumnMap}
+            onClose={() => setSelectedRowIndex(null)}
+            onSelectRowIndex={setSelectedRowIndex}
           />
-        )}
+        ) : null}
       </div>
 
-      <LogQueryRowDrawer
-        open={drawerOpen}
-        columns={columns}
-        row={selectedRow}
-        rowIndex={selectedRowIndex ?? 0}
-        rowCount={displayRows.length}
-        wafColumnMap={wafColumnMap}
-        onOpenChange={setDrawerOpen}
-        onSelectRowIndex={(index) => {
-          setSelectedRowIndex(index);
-          setDrawerOpen(true);
-        }}
-      />
+      {hasRows ? (
+        <p className="text-xs text-muted-foreground">
+          Click a row to inspect it below. Use Up/Down arrows to move between rows; Esc to close.
+        </p>
+      ) : null}
     </section>
   );
 }

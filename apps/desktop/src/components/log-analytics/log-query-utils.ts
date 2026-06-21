@@ -22,6 +22,41 @@ export function rowToRecord(columns: string[], row: string[]): Record<string, st
   return record;
 }
 
+const EMPTY_CELL_VALUES = new Set(["", "none", "null", "n/a", "na", "-"]);
+
+/** True when a Log Analytics cell carries no useful value (None, empty, etc.). */
+export function isPopulatedCellValue(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
+  return !EMPTY_CELL_VALUES.has(trimmed.toLowerCase());
+}
+
+export type PopulatedField = {
+  column: string;
+  value: string;
+};
+
+export function populatedRowFields(columns: string[], row: string[]): PopulatedField[] {
+  const fields: PopulatedField[] = [];
+  columns.forEach((column, index) => {
+    const value = row[index] ?? "";
+    if (isPopulatedCellValue(value)) {
+      fields.push({ column, value });
+    }
+  });
+  return fields;
+}
+
+export function rowToRecordPopulated(columns: string[], row: string[]): Record<string, string> {
+  const record: Record<string, string> = {};
+  populatedRowFields(columns, row).forEach(({ column, value }) => {
+    record[column] = value;
+  });
+  return record;
+}
+
 export function resultToJson(columns: string[], rows: string[][]): string {
   const records = rows.map((row) => rowToRecord(columns, row));
   return JSON.stringify(records, null, 2);

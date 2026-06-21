@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { csvEscapeCell, formatCellValue, resultToCsv, resultToJson } from "./log-query-utils";
+import {
+  csvEscapeCell,
+  formatCellValue,
+  isPopulatedCellValue,
+  populatedRowFields,
+  resultToCsv,
+  resultToJson,
+  rowToRecordPopulated,
+} from "./log-query-utils";
 
 describe("log-query-utils", () => {
   it("quotes CSV cells containing commas, quotes, or newlines", () => {
@@ -30,5 +38,24 @@ describe("log-query-utils", () => {
     const formatted = formatCellValue("{not json");
     expect(formatted.kind).toBe("text");
     expect(formatted.display).toBe("{not json");
+  });
+
+  it("treats None and empty cells as unpopulated", () => {
+    expect(isPopulatedCellValue("")).toBe(false);
+    expect(isPopulatedCellValue("None")).toBe(false);
+    expect(isPopulatedCellValue("Log")).toBe(true);
+  });
+
+  it("builds populated field lists and JSON without sparse columns", () => {
+    const columns = ["action_s", "host_s", "empty_s"];
+    const row = ["Log", "cdn.example.com", "None"];
+    expect(populatedRowFields(columns, row)).toEqual([
+      { column: "action_s", value: "Log" },
+      { column: "host_s", value: "cdn.example.com" },
+    ]);
+    expect(rowToRecordPopulated(columns, row)).toEqual({
+      action_s: "Log",
+      host_s: "cdn.example.com",
+    });
   });
 });

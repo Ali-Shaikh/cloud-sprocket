@@ -7,6 +7,11 @@ export type WafMatchRow = {
 };
 
 export type DecodedWafRow = {
+  timeGenerated?: string;
+  host?: string;
+  requestUri?: string;
+  clientIP?: string;
+  policyMode?: string;
   ruleName?: string;
   policyName?: string;
   action?: string;
@@ -59,6 +64,11 @@ export function decodeWafRow(
     formatted.kind === "json" ? parseMatchesPayload(formatted.display) : parseMatchesPayload(rawMatches);
 
   return {
+    timeGenerated: record[columnMap.timeGenerated],
+    host: record[columnMap.host],
+    requestUri: record[columnMap.requestUri],
+    clientIP: record[columnMap.clientIP],
+    policyMode: record[columnMap.policyMode],
     ruleName: record[columnMap.ruleName],
     policyName: record[columnMap.policyName],
     action: record[columnMap.action],

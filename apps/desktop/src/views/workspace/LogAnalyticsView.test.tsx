@@ -60,7 +60,7 @@ describe("LogAnalyticsView", () => {
     expect(screen.getByText(/10 ms/)).toBeTruthy();
   });
 
-  it("opens the row drawer with full column values", async () => {
+  it("opens the inline row detail panel with populated fields", async () => {
     const onRunQuery = vi.fn().mockResolvedValue(wafResult);
     render(
       <ThemeProvider>
@@ -78,10 +78,12 @@ describe("LogAnalyticsView", () => {
 
     const dataRows = screen.getAllByRole("row");
     fireEvent.click(dataRows[1]!);
-    const drawer = await screen.findByRole("dialog");
-    expect(within(drawer).getByText("Row 1 of 1")).toBeTruthy();
-    expect(within(drawer).getByText("details_matches_s")).toBeTruthy();
-    expect(within(drawer).getByText(/matchVariableName/)).toBeTruthy();
+    const detail = await screen.findByLabelText("Query result row details");
+    expect(within(detail).getByText("Row 1 of 1")).toBeTruthy();
+    expect(within(detail).getByText("Summary")).toBeTruthy();
+    fireEvent.click(within(detail).getByRole("tab", { name: /fields/i }));
+    expect(within(detail).getByText("details_matches_s")).toBeTruthy();
+    expect(within(detail).getByText(/matchVariableName/)).toBeTruthy();
   });
 
   it("surfaces a query error", async () => {
