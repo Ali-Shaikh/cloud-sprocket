@@ -14,7 +14,6 @@ import {
   LayoutGrid,
   Rocket,
   Server,
-  Shield,
   Trash2,
   TriangleAlert,
 } from "lucide-react";
@@ -29,6 +28,17 @@ import awsRdsIconUrl from "./assets/cloud-icons/aws-rds.svg";
 import awsCloudwatchIconUrl from "./assets/cloud-icons/aws-cloudwatch.svg";
 import awsIamIconUrl from "./assets/cloud-icons/aws-iam.svg";
 import azureIconUrl from "./assets/cloud-icons/azure.svg";
+import azureResourceGroupsIconUrl from "./assets/cloud-icons/azure-resource-groups.svg";
+import azureVmIconUrl from "./assets/cloud-icons/azure-vm.svg";
+import azureStorageIconUrl from "./assets/cloud-icons/azure-storage.svg";
+import azureAppServiceIconUrl from "./assets/cloud-icons/azure-app-service.svg";
+import azureLogAnalyticsIconUrl from "./assets/cloud-icons/azure-log-analytics.svg";
+import azureWafIconUrl from "./assets/cloud-icons/azure-waf.svg";
+import azureFunctionsIconUrl from "./assets/cloud-icons/azure-functions.svg";
+import azureKeyVaultIconUrl from "./assets/cloud-icons/azure-key-vault.svg";
+import azureCosmosIconUrl from "./assets/cloud-icons/azure-cosmos.svg";
+import azureQueuesIconUrl from "./assets/cloud-icons/azure-queues.svg";
+import azureEntraIconUrl from "./assets/cloud-icons/azure-entra.svg";
 import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
 import { notify, notifyJob, useNotifications, type NotificationTone } from "./lib/notify";
 import { useTheme } from "./lib/theme";
@@ -3104,28 +3114,29 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
     case "iam":
       return { ...base, iconUrl: awsIamIconUrl, count: workspace.iamRoles.length };
     case "azure-overview":
-    case "azure-resource-groups":
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureResourceGroups.length };
+    case "azure-resource-groups":
+      return { ...base, iconUrl: azureResourceGroupsIconUrl, count: workspace.azureResourceGroups.length };
     case "azure-vms":
-      return { ...base, iconUrl: azureIconUrl, count: workspace.azureVirtualMachines.length };
+      return { ...base, iconUrl: azureVmIconUrl, count: workspace.azureVirtualMachines.length };
     case "azure-storage":
-      return { ...base, iconUrl: azureIconUrl, count: workspace.azureBlobContainers.length };
+      return { ...base, iconUrl: azureStorageIconUrl, count: workspace.azureBlobContainers.length };
     case "azure-app-service":
-      return { ...base, iconUrl: azureIconUrl, count: workspace.azureWebApps.length };
+      return { ...base, iconUrl: azureAppServiceIconUrl, count: workspace.azureWebApps.length };
     case "azure-log-analytics":
-      return { ...base, iconUrl: azureIconUrl, count: workspace.azureLogAnalyticsWorkspaces.length };
+      return { ...base, iconUrl: azureLogAnalyticsIconUrl, count: workspace.azureLogAnalyticsWorkspaces.length };
     case "azure-waf":
-      return { ...base, icon: Shield, count: workspace.azureWafPolicies.length };
+      return { ...base, iconUrl: azureWafIconUrl, count: workspace.azureWafPolicies.length };
     case "azure-functions":
-      return { ...base, iconUrl: azureIconUrl, count: workspace.azureFunctionApps.length };
+      return { ...base, iconUrl: azureFunctionsIconUrl, count: workspace.azureFunctionApps.length };
     case "azure-key-vault":
-      return { ...base, iconUrl: azureIconUrl, count: workspace.azureKeyVaults.length };
+      return { ...base, iconUrl: azureKeyVaultIconUrl, count: workspace.azureKeyVaults.length };
     case "azure-cosmos":
-      return { ...base, iconUrl: azureIconUrl, count: workspace.azureCosmosAccounts.length };
+      return { ...base, iconUrl: azureCosmosIconUrl, count: workspace.azureCosmosAccounts.length };
     case "azure-queues":
-      return { ...base, iconUrl: azureIconUrl, count: workspace.azureStorageQueues.length };
+      return { ...base, iconUrl: azureQueuesIconUrl, count: workspace.azureStorageQueues.length };
     case "azure-entra":
-      return { ...base, iconUrl: azureIconUrl, count: workspace.azureEntraUsers.length };
+      return { ...base, iconUrl: azureEntraIconUrl, count: workspace.azureEntraUsers.length };
     case "actions":
       return { ...base, icon: Boxes };
     case "virtualisation":

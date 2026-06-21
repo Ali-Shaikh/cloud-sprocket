@@ -13,7 +13,8 @@ import awsSnsIconUrl from "@/assets/cloud-icons/aws-sns.svg";
 import awsRdsIconUrl from "@/assets/cloud-icons/aws-rds.svg";
 import awsCloudwatchIconUrl from "@/assets/cloud-icons/aws-cloudwatch.svg";
 import awsIamIconUrl from "@/assets/cloud-icons/aws-iam.svg";
-import azureIconUrl from "@/assets/cloud-icons/azure.svg";
+import azureResourceGroupsIconUrl from "@/assets/cloud-icons/azure-resource-groups.svg";
+import azureVmIconUrl from "@/assets/cloud-icons/azure-vm.svg";
 import type { SessionSnapshot, WorkspaceSnapshot } from "@/types/backend";
 
 export type OverviewNavigateContext = {
@@ -323,7 +324,7 @@ export default function OverviewView({
         sub:
           [group.location, group.provisioningState].filter(Boolean).join(" · ") ||
           "Resource group",
-        iconUrl: azureIconUrl,
+        iconUrl: azureResourceGroupsIconUrl,
         tabId: "azure-overview",
       }),
     );
@@ -332,7 +333,7 @@ export default function OverviewView({
         key: `vm-${vm.vmId}`,
         name: vm.name,
         sub: [vm.size, vm.location].filter(Boolean).join(" · ") || "Virtual machine",
-        iconUrl: azureIconUrl,
+        iconUrl: azureVmIconUrl,
         status: isRunning(vm.powerState) ? "on" : "off",
         statusLabel: vm.powerState || "unknown",
         tabId: "azure-vms",
