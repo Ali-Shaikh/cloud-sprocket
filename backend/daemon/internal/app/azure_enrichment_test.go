@@ -390,14 +390,10 @@ func TestAzurePhaseOneEnrichmentRunsInParallel(t *testing.T) {
 	}
 	defer dataStore.Close()
 
-	workspace := &models.WorkspaceSnapshot{
-		Provider: &models.ProviderSummary{ProviderID: "azure"},
-		Profile:  &models.ProfileSummary{ProviderID: "azure", ProfileID: "sub-001"},
-	}
 	session := models.SessionSnapshot{
-		CurrentProviderID:  "azure",
-		SelectedProfileID:  "sub-001",
-		IsLocked:           true,
+		CurrentProviderID: "azure",
+		SelectedProfileID: "sub-001",
+		IsLocked:          true,
 	}
 	service := &Service{
 		store: dataStore,
@@ -410,21 +406,39 @@ func TestAzurePhaseOneEnrichmentRunsInParallel(t *testing.T) {
 		now: func() time.Time { return time.Now().UTC() },
 	}
 
-	const phaseOneEnrichers = 7
-	start := time.Now()
-	service.enrichAzureWorkspace(workspace, session, azureEnrichmentOptions{lightweight: true})
-	elapsed := time.Since(start)
-
-	// Seven phase-one enrichers each sleep 50ms. Serial would take at least 350ms;
-	// parallel should finish near one delay. Allow headroom for slow CI runners.
-	serialFloor := time.Duration(phaseOneEnrichers) * 50 * time.Millisecond
-	if elapsed >= serialFloor {
-		t.Fatalf("phase-one enrichment took %v; expected parallel completion faster than serial floor %v", elapsed, serialFloor)
+	newWorkspace := func() *models.WorkspaceSnapshot {
+		return &models.WorkspaceSnapshot{
+			Provider: &models.ProviderSummary{ProviderID: "azure"},
+			Profile:  &models.ProfileSummary{ProviderID: "azure", ProfileID: "sub-001"},
+		}
 	}
-	if len(workspace.AzureResourceGroups) == 0 {
+
+	parallelWorkspace := newWorkspace()
+	parallelStart := time.Now()
+	service.enrichAzureWorkspace(parallelWorkspace, session, azureEnrichmentOptions{lightweight: true})
+	parallelElapsed := time.Since(parallelStart)
+
+	serialWorkspace := newWorkspace()
+	serialStart := time.Now()
+	service.enrichAzureWorkspace(serialWorkspace, session, azureEnrichmentOptions{
+		lightweight:    true,
+		serialPhaseOne: true,
+	})
+	serialElapsed := time.Since(serialStart)
+
+	// Compare against a serial baseline on the same runner so Windows CI variance
+	// does not flake absolute timing thresholds.
+	if parallelElapsed >= serialElapsed {
+		t.Fatalf(
+			"parallel enrichment took %v; expected faster than serial baseline %v",
+			parallelElapsed,
+			serialElapsed,
+		)
+	}
+	if len(parallelWorkspace.AzureResourceGroups) == 0 {
 		t.Fatal("expected resource groups after parallel enrichment")
 	}
-	if len(workspace.AzureEntraUsers) == 0 {
+	if len(parallelWorkspace.AzureEntraUsers) == 0 {
 		t.Fatal("expected Entra users after parallel enrichment")
 	}
 }

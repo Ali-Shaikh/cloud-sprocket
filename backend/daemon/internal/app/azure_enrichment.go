@@ -13,6 +13,8 @@ type azureEnrichmentOptions struct {
 	lightweight            bool
 	resourceGroupSelection bool
 	scope                  string
+	// serialPhaseOne runs phase-one enrichers sequentially. Test-only.
+	serialPhaseOne bool
 }
 
 func (s *Service) enrichAzureWorkspace(
@@ -39,26 +41,32 @@ func (s *Service) enrichAzureWorkspace(
 		return
 	}
 
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-
-	run := func(fn func(*sync.Mutex)) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			fn(&mu)
-		}()
+	phaseOne := []func(*sync.Mutex){
+		func(mu *sync.Mutex) { s.enrichAzureInventory(workspace, session, mu) },
+		func(mu *sync.Mutex) { s.enrichAzureStorageInventory(workspace, session, opts, mu) },
+		func(mu *sync.Mutex) { s.enrichAzureLogAnalyticsInventory(workspace, session, mu) },
+		func(mu *sync.Mutex) { s.enrichAzureFunctionsInventory(workspace, session, opts, mu) },
+		func(mu *sync.Mutex) { s.enrichAzureKeyVaultInventory(workspace, session, opts, mu) },
+		func(mu *sync.Mutex) { s.enrichAzureCosmosInventory(workspace, session, opts, mu) },
+		func(mu *sync.Mutex) { s.enrichAzureEntraInventory(workspace, session, mu) },
 	}
 
-	// Phase 1: independent service inventories (parallel I/O, brief locked writes).
-	run(func(mu *sync.Mutex) { s.enrichAzureInventory(workspace, session, mu) })
-	run(func(mu *sync.Mutex) { s.enrichAzureStorageInventory(workspace, session, opts, mu) })
-	run(func(mu *sync.Mutex) { s.enrichAzureLogAnalyticsInventory(workspace, session, mu) })
-	run(func(mu *sync.Mutex) { s.enrichAzureFunctionsInventory(workspace, session, opts, mu) })
-	run(func(mu *sync.Mutex) { s.enrichAzureKeyVaultInventory(workspace, session, opts, mu) })
-	run(func(mu *sync.Mutex) { s.enrichAzureCosmosInventory(workspace, session, opts, mu) })
-	run(func(mu *sync.Mutex) { s.enrichAzureEntraInventory(workspace, session, mu) })
-	wg.Wait()
+	var mu sync.Mutex
+	if opts.serialPhaseOne {
+		for _, enrich := range phaseOne {
+			enrich(&mu)
+		}
+	} else {
+		var wg sync.WaitGroup
+		for _, enrich := range phaseOne {
+			wg.Add(1)
+			go func(fn func(*sync.Mutex)) {
+				defer wg.Done()
+				fn(&mu)
+			}(enrich)
+		}
+		wg.Wait()
+	}
 
 	// Phase 2: depends on phase 1 fields (resource groups, storage accounts, LA workspaces).
 	s.enrichAzureAppServiceInventory(workspace, session, nil)
