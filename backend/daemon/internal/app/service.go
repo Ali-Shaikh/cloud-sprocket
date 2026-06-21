@@ -218,6 +218,12 @@ func (s *Service) Handle(
 		return s.handleAzureLogAnalyticsSelectWorkspace(ctx, params, notifier)
 	case "azure.logAnalytics.query":
 		return s.handleAzureLogAnalyticsQuery(ctx, params, notifier)
+	case "azure.functions.selectApp":
+		return s.handleAzureFunctionsSelectApp(ctx, params, notifier)
+	case "azure.functions.selectFunction":
+		return s.handleAzureFunctionsSelectFunction(ctx, params, notifier)
+	case "azure.functions.invoke":
+		return s.handleAzureFunctionsInvoke(ctx, params, notifier)
 	case "session.selectProvider":
 		return s.handleSessionSelectProvider(ctx, params, notifier)
 	case "session.selectProfile":

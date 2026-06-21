@@ -202,6 +202,8 @@ type SessionSnapshot struct {
 	AzureBlobPrefixFilter        string `json:"azureBlobPrefixFilter,omitempty"`
 	SelectedAzureWebAppName      string `json:"selectedAzureWebAppName,omitempty"`
 	SelectedAzureLogWorkspace    string `json:"selectedAzureLogWorkspace,omitempty"`
+	SelectedAzureFunctionApp     string `json:"selectedAzureFunctionApp,omitempty"`
+	SelectedAzureFunction        string `json:"selectedAzureFunction,omitempty"`
 	AzureWriteModeEnabled        bool   `json:"azureWriteModeEnabled,omitempty"`
 	SelectedS3BucketName       string             `json:"selectedS3BucketName,omitempty"`
 	SelectedS3ObjectKey        string             `json:"selectedS3ObjectKey,omitempty"`
@@ -619,10 +621,13 @@ type WorkspaceSnapshot struct {
 	AzureBlobPrefixFilter        string                  `json:"azureBlobPrefixFilter,omitempty"`
 	SelectedAzureWebAppName      string                  `json:"selectedAzureWebAppName,omitempty"`
 	SelectedAzureLogWorkspace    string                  `json:"selectedAzureLogWorkspace,omitempty"`
+	SelectedAzureFunctionApp     string                  `json:"selectedAzureFunctionApp,omitempty"`
+	SelectedAzureFunction        string                  `json:"selectedAzureFunction,omitempty"`
 	AzureStatusMessage           string                  `json:"azureStatusMessage,omitempty"`
 	AzureStorageStatusMessage    string                  `json:"azureStorageStatusMessage,omitempty"`
 	AzureAppServiceStatusMessage string                  `json:"azureAppServiceStatusMessage,omitempty"`
 	AzureLogAnalyticsStatusMessage string                `json:"azureLogAnalyticsStatusMessage,omitempty"`
+	AzureFunctionsStatusMessage  string                  `json:"azureFunctionsStatusMessage,omitempty"`
 	AzureResourceGroups          []AzureResourceGroup    `json:"azureResourceGroups"`
 	AzureVirtualMachines         []AzureVirtualMachine   `json:"azureVirtualMachines"`
 	AzureStorageAccounts         []AzureStorageAccount   `json:"azureStorageAccounts"`
@@ -631,6 +636,8 @@ type WorkspaceSnapshot struct {
 	AzureBlobMetadata            []DetailField           `json:"azureBlobMetadata"`
 	AzureWebApps                 []AzureWebApp           `json:"azureWebApps"`
 	AzureLogAnalyticsWorkspaces  []AzureLogAnalyticsWorkspace `json:"azureLogAnalyticsWorkspaces"`
+	AzureFunctionApps            []AzureFunctionApp      `json:"azureFunctionApps"`
+	AzureFunctions               []AzureFunction         `json:"azureFunctions"`
 }
 
 type ActivityLogEntry struct {

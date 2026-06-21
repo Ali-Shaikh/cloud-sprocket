@@ -81,6 +81,9 @@ type AzureInventory interface {
 	CreateWebApp(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, location string, runtime string) (models.AzureWebApp, error)
 	ListLogAnalyticsWorkspaces(ctx context.Context, profile models.ProfileSummary) ([]models.AzureLogAnalyticsWorkspace, error)
 	RunLogAnalyticsQuery(ctx context.Context, profile models.ProfileSummary, workspace string, query string, timespan string) (models.AzureLogQueryResult, error)
+	ListFunctionApps(ctx context.Context, profile models.ProfileSummary) ([]models.AzureFunctionApp, error)
+	ListFunctions(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string) ([]models.AzureFunction, error)
+	InvokeFunction(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, functionName string, payload string) (models.AzureFunctionInvokeResult, error)
 }
 
 type DockerRuntime interface {

@@ -99,6 +99,21 @@ func (blockingAzure) RunLogAnalyticsQuery(ctx context.Context, _ models.ProfileS
 	return models.AzureLogQueryResult{}, ctx.Err()
 }
 
+func (blockingAzure) ListFunctionApps(ctx context.Context, _ models.ProfileSummary) ([]models.AzureFunctionApp, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) ListFunctions(ctx context.Context, _ models.ProfileSummary, _ string, _ string) ([]models.AzureFunction, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) InvokeFunction(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ string) (models.AzureFunctionInvokeResult, error) {
+	<-ctx.Done()
+	return models.AzureFunctionInvokeResult{}, ctx.Err()
+}
+
 // TestAzureInventoryBoundedByTimeout proves a stalled Azure inventory call is
 // cut off by the configured timeout (and falls back to empty) instead of
 // hanging the workspace snapshot.

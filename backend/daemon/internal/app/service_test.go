@@ -264,6 +264,18 @@ func (stubAzureInventory) RunLogAnalyticsQuery(context.Context, models.ProfileSu
 	return models.AzureLogQueryResult{Columns: []string{"Level", "Count"}, Rows: [][]string{{"Info", "1"}}}, nil
 }
 
+func (stubAzureInventory) ListFunctionApps(context.Context, models.ProfileSummary) ([]models.AzureFunctionApp, error) {
+	return []models.AzureFunctionApp{{Name: "demo-fn", ResourceGroup: "demo-rg", State: "Running"}}, nil
+}
+
+func (stubAzureInventory) ListFunctions(context.Context, models.ProfileSummary, string, string) ([]models.AzureFunction, error) {
+	return []models.AzureFunction{{Name: "createOrder", Trigger: "httpTrigger"}}, nil
+}
+
+func (stubAzureInventory) InvokeFunction(context.Context, models.ProfileSummary, string, string, string, string) (models.AzureFunctionInvokeResult, error) {
+	return models.AzureFunctionInvokeResult{StatusCode: 200, Body: "ok"}, nil
+}
+
 func (s stubDockerRuntime) Snapshot(context.Context) (models.DockerRuntimeSnapshot, error) {
 	return s.snapshot, nil
 }

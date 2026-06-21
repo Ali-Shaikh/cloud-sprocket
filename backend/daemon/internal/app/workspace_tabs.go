@@ -62,6 +62,12 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 				Summary: "Run KQL queries against Log Analytics workspaces.",
 				Detail:  "Query Azure Monitor logs with KQL, locally against floci-az or on a real Azure workspace.",
 			},
+			{
+				TabID:   "azure-functions",
+				Label:   "Functions",
+				Summary: "Browse and invoke Azure Functions.",
+				Detail:  "List Function Apps and their functions, and invoke HTTP-triggered functions when write mode is on.",
+			},
 			activityTab,
 		}
 	}
