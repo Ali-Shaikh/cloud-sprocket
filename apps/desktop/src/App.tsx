@@ -714,6 +714,22 @@ export default function App() {
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
   const [workspaceFetching, setWorkspaceFetching] = useState(false);
   const workspaceFetchDepthRef = useRef(0);
+  const [azureInventoryLoading, setAzureInventoryLoading] = useState(false);
+  const azureInventoryFetchDepthRef = useRef(0);
+
+  function beginAzureInventoryFetch(): void {
+    azureInventoryFetchDepthRef.current += 1;
+    if (azureInventoryFetchDepthRef.current === 1) {
+      setAzureInventoryLoading(true);
+    }
+  }
+
+  function endAzureInventoryFetch(): void {
+    azureInventoryFetchDepthRef.current = Math.max(0, azureInventoryFetchDepthRef.current - 1);
+    if (azureInventoryFetchDepthRef.current === 0) {
+      setAzureInventoryLoading(false);
+    }
+  }
 
   function beginWorkspaceFetch(): void {
     workspaceFetchDepthRef.current += 1;
@@ -1052,7 +1068,7 @@ export default function App() {
     if (!trimmed) {
       return;
     }
-    beginWorkspaceFetch();
+    beginAzureInventoryFetch();
     startTransition(() => {
       setSession((current) =>
         normaliseSessionSnapshot({
@@ -1080,7 +1096,7 @@ export default function App() {
       const message = error instanceof Error ? error.message : "Virtual machine selection failed";
       pushNotification("error", "Could not select virtual machine", message);
     } finally {
-      endWorkspaceFetch();
+      endAzureInventoryFetch();
     }
   }
 
@@ -1089,7 +1105,7 @@ export default function App() {
     if (!trimmed) {
       return;
     }
-    beginWorkspaceFetch();
+    beginAzureInventoryFetch();
     startTransition(() => {
       setSession((current) =>
         normaliseSessionSnapshot({
@@ -1124,7 +1140,7 @@ export default function App() {
       const message = error instanceof Error ? error.message : "Resource group selection failed";
       pushNotification("error", "Could not load resource group inventory", message);
     } finally {
-      endWorkspaceFetch();
+      endAzureInventoryFetch();
     }
   }
 
@@ -2325,7 +2341,7 @@ export default function App() {
     ["azure-overview", "azure-resource-groups", "azure-vms"].includes(activeWorkspaceTabId) ? (
     <AzureView
       workspace={activeWorkspace}
-      inventoryLoading={workspaceFetching}
+      inventoryLoading={azureInventoryLoading}
       activePageId={
         activeWorkspaceTabId === "azure-resource-groups"
           ? "resource-groups"
@@ -2471,7 +2487,7 @@ export default function App() {
   ) : session.isLocked && activeWorkspaceTabId === "azure-app-service" ? (
     <AzureAppServiceView
       workspace={activeWorkspace}
-      inventoryLoading={workspaceFetching}
+      inventoryLoading={azureInventoryLoading}
       actionStatus={azureAppServiceActionStatus}
       onSelectResourceGroup={(resourceGroup) => {
         void selectAzureResourceGroup(resourceGroup);
