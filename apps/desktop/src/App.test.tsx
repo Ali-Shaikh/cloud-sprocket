@@ -1031,6 +1031,7 @@ describe("App", () => {
       lockedProviderId: "aws",
       lockedProfileId: "sandbox",
       lockedAuthMethod: "cli",
+      awsWriteModeEnabled: true,
       workspaceTabs: [
         {
           tabId: "overview",
@@ -1197,6 +1198,7 @@ describe("App", () => {
       lockedProviderId: "aws",
       lockedProfileId: "sandbox",
       lockedAuthMethod: "cli",
+      awsWriteModeEnabled: true,
       workspaceTabs: [
         { tabId: "overview", label: "Overview", summary: "Summary", detail: "Overview panel" },
         { tabId: "lambda", label: "Lambda", summary: "Lambda summary", detail: "Lambda panel" },
@@ -1730,6 +1732,7 @@ describe("App", () => {
       lockedProviderId: "aws",
       lockedProfileId: "sandbox",
       lockedAuthMethod: "cli",
+      awsWriteModeEnabled: true,
       workspaceTabs: [
         {
           tabId: "overview",

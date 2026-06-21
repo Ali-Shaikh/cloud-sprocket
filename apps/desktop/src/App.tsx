@@ -3,6 +3,7 @@ import {
   Suspense,
   startTransition,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -430,6 +431,32 @@ function normaliseSessionSnapshot(session: Partial<SessionSnapshot> | null | und
   };
 }
 
+function applySessionWriteModeToWorkspace(
+  workspace: WorkspaceSnapshot,
+  session: SessionSnapshot,
+): WorkspaceSnapshot {
+  if (!session.isLocked) {
+    return workspace;
+  }
+  if (session.lockedProviderId === "azure") {
+    const writeMode = Boolean(session.azureWriteModeEnabled);
+    return {
+      ...workspace,
+      azureWriteModeEnabled: writeMode,
+      azureWritesEnabled: writeMode && workspace.azureWriteCapable,
+    };
+  }
+  if (session.lockedProviderId === "aws") {
+    const writeMode = Boolean(session.awsWriteModeEnabled);
+    return {
+      ...workspace,
+      awsWriteModeEnabled: writeMode,
+      awsWritesEnabled: writeMode && workspace.awsWriteCapable,
+    };
+  }
+  return workspace;
+}
+
 function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null | undefined): WorkspaceSnapshot {
   const source = snapshot ?? {};
   const dockerRuntime = source.dockerRuntime ?? emptyWorkspace.dockerRuntime;
@@ -659,6 +686,7 @@ export default function App() {
   const [writeModeDialogOpen, setWriteModeDialogOpen] = useState(false);
   const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<"enable" | "incapable">("enable");
   const [writeModePending, setWriteModePending] = useState(false);
+  const writeModeRequestRef = useRef(0);
   const [loading, setLoading] = useState(true);
   // workspaceLoading: an inventory fetch (workspace.get / discovery refresh) is
   // in flight. workspaceLoaded: at least one fetch has completed for the current
@@ -1216,16 +1244,23 @@ export default function App() {
       });
   }
 
+  const activeWorkspace = useMemo(
+    () => applySessionWriteModeToWorkspace(workspace, session),
+    [workspace, session],
+  );
   const writeModeEnabled =
     session.lockedProviderId === "azure"
-      ? workspace.azureWriteModeEnabled
-      : workspace.awsWriteModeEnabled;
+      ? activeWorkspace.azureWriteModeEnabled
+      : activeWorkspace.awsWriteModeEnabled;
   const writeModeCapable =
     session.lockedProviderId === "azure"
-      ? workspace.azureWriteCapable
-      : workspace.awsWriteCapable;
+      ? activeWorkspace.azureWriteCapable
+      : activeWorkspace.awsWriteCapable;
 
   function requestWriteModeChange(): void {
+    if (writeModePending) {
+      return;
+    }
     if (writeModeEnabled) {
       void setWriteMode(false);
       return;
@@ -1235,15 +1270,42 @@ export default function App() {
   }
 
   function setWriteMode(enabled: boolean): void {
+    const token = ++writeModeRequestRef.current;
     setWriteModePending(true);
     void backendRequest<WorkspaceSnapshot>("session.setWriteMode", { enabled })
       .then((workspaceResult) => {
+        if (token !== writeModeRequestRef.current) {
+          return;
+        }
+        const normalised = normaliseWorkspaceSnapshot(workspaceResult);
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setSession((current) =>
+            normaliseSessionSnapshot({
+              ...current,
+              azureWriteModeEnabled:
+                current.lockedProviderId === "azure"
+                  ? normalised.azureWriteModeEnabled
+                  : current.azureWriteModeEnabled,
+              awsWriteModeEnabled:
+                current.lockedProviderId === "aws"
+                  ? normalised.awsWriteModeEnabled
+                  : current.awsWriteModeEnabled,
+            }),
+          );
+          setWorkspace((currentWorkspace) => ({
+            ...currentWorkspace,
+            azureWriteModeEnabled: normalised.azureWriteModeEnabled,
+            azureWritesEnabled: normalised.azureWritesEnabled,
+            awsWriteModeEnabled: normalised.awsWriteModeEnabled,
+            awsWritesEnabled: normalised.awsWritesEnabled,
+          }));
         });
         setWriteModeDialogOpen(false);
       })
       .catch((error: unknown) => {
+        if (token !== writeModeRequestRef.current) {
+          return;
+        }
         notify(
           "error",
           "Write mode",
@@ -1251,7 +1313,9 @@ export default function App() {
         );
       })
       .finally(() => {
-        setWriteModePending(false);
+        if (token === writeModeRequestRef.current) {
+          setWriteModePending(false);
+        }
       });
   }
 
@@ -1970,7 +2034,7 @@ export default function App() {
     <DeployView profiles={profiles} />
   ) : session.isLocked && activeWorkspaceTabId === "overview" ? (
     <OverviewView
-      workspace={workspace}
+      workspace={activeWorkspace}
       session={session}
       providerLabel={workspace.provider?.label ?? selectedProvider?.label ?? "Workspace"}
       profileLabel={workspace.profile?.displayName ?? selectedProfile?.displayName}
@@ -2013,7 +2077,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "s3" ? (
     <StorageView
-      workspace={workspace}
+      workspace={activeWorkspace}
       activePageId={activeS3PageId}
       onNavigatePage={setActiveS3PageId}
       showSensitiveValues={showSensitiveValues}
@@ -2050,7 +2114,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "ec2" ? (
     <ComputeView
-      workspace={workspace}
+      workspace={activeWorkspace}
       actionStatus={ec2ActionStatus}
       actionInFlight={ec2ActionInFlight}
       actionHistory={ec2ActionHistory}
@@ -2061,7 +2125,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "lambda" ? (
     <LambdaView
-      workspace={workspace}
+      workspace={activeWorkspace}
       actionStatus={lambdaActionStatus}
       invokeResult={lambdaInvokeResult}
       invokeInFlight={lambdaInvokeInFlight}
@@ -2076,7 +2140,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "dynamodb" ? (
     <DynamoDBView
-      workspace={workspace}
+      workspace={activeWorkspace}
       actionStatus={dynamodbActionStatus}
       onRefresh={refreshDynamoDBInventory}
       onSelectRegion={selectDynamoDBRegion}
@@ -2084,7 +2148,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "sqs" ? (
     <SQSView
-      workspace={workspace}
+      workspace={activeWorkspace}
       actionStatus={sqsActionStatus}
       peekResult={sqsPeekResult}
       peekInFlight={sqsPeekInFlight}
@@ -2095,7 +2159,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "sns" ? (
     <SNSView
-      workspace={workspace}
+      workspace={activeWorkspace}
       actionStatus={snsActionStatus}
       onRefresh={refreshSNSInventory}
       onSelectRegion={selectSNSRegion}
@@ -2103,7 +2167,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "rds" ? (
     <RDSView
-      workspace={workspace}
+      workspace={activeWorkspace}
       actionStatus={rdsActionStatus}
       onRefresh={refreshRDSInventory}
       onSelectRegion={selectRDSRegion}
@@ -2111,7 +2175,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "logs" ? (
     <LogsView
-      workspace={workspace}
+      workspace={activeWorkspace}
       actionStatus={logsActionStatus}
       onRefresh={refreshLogsInventory}
       onSelectRegion={selectLogsRegion}
@@ -2119,7 +2183,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "iam" ? (
     <IAMView
-      workspace={workspace}
+      workspace={activeWorkspace}
       actionStatus={iamActionStatus}
       onRefresh={refreshIAMInventory}
       onSelectRegion={selectSQSRegion}
@@ -2128,7 +2192,7 @@ export default function App() {
   ) : session.isLocked &&
     ["azure-overview", "azure-resource-groups", "azure-vms"].includes(activeWorkspaceTabId) ? (
     <AzureView
-      workspace={workspace}
+      workspace={activeWorkspace}
       activePageId={
         activeWorkspaceTabId === "azure-resource-groups"
           ? "resource-groups"
@@ -2192,7 +2256,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-storage" ? (
     <AzureStorageView
-      workspace={workspace}
+      workspace={activeWorkspace}
       activePageId={activeAzureStoragePageId}
       actionStatus={azureStorageActionStatus}
       onSelectAccount={(accountName) => {
@@ -2273,7 +2337,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-app-service" ? (
     <AzureAppServiceView
-      workspace={workspace}
+      workspace={activeWorkspace}
       actionStatus={azureAppServiceActionStatus}
       onSelectResourceGroup={(resourceGroup) => {
         void mutateWorkspace("azure.selectResourceGroup", { resourceGroup });
@@ -2304,7 +2368,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-log-analytics" ? (
     <LogAnalyticsView
-      workspace={workspace}
+      workspace={activeWorkspace}
       workspaceSelectionLoading={azureLogWorkspaceSelectionLoading}
       initialQuery={logAnalyticsPrefill?.query}
       initialTimespan={logAnalyticsPrefill?.timespan}
@@ -2349,7 +2413,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-waf" ? (
     <AzureWafView
-      workspace={workspace}
+      workspace={activeWorkspace}
       workspaceSelectionLoading={azureLogWorkspaceSelectionLoading}
       onSelectWorkspace={(ws) => {
         void selectAzureLogAnalyticsWorkspace(ws);
@@ -2421,7 +2485,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-functions" ? (
     <AzureFunctionsView
-      workspace={workspace}
+      workspace={activeWorkspace}
       onSelectApp={(appName) => {
         void mutateWorkspace("azure.functions.selectApp", { appName });
       }}
@@ -2438,7 +2502,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-key-vault" ? (
     <AzureKeyVaultView
-      workspace={workspace}
+      workspace={activeWorkspace}
       onSelectVault={(vaultName) => {
         void mutateWorkspace("azure.keyVault.selectVault", { vaultName });
       }}
@@ -2459,7 +2523,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-cosmos" ? (
     <AzureCosmosView
-      workspace={workspace}
+      workspace={activeWorkspace}
       onSelectAccount={(account) => {
         void mutateWorkspace("azure.cosmos.selectAccount", { account });
       }}
@@ -2472,7 +2536,7 @@ export default function App() {
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-queues" ? (
     <AzureQueuesView
-      workspace={workspace}
+      workspace={activeWorkspace}
       onSelectAccount={(account) => {
         void mutateWorkspace("azure.storage.selectAccount", { accountName: account });
       }}
@@ -2481,10 +2545,10 @@ export default function App() {
       }}
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-entra" ? (
-    <AzureEntraView workspace={workspace} />
+    <AzureEntraView workspace={activeWorkspace} />
   ) : activeWorkspaceTabId === "virtualisation" ? (
     <RuntimeView
-      workspace={workspace}
+      workspace={activeWorkspace}
       unlocked={!session.isLocked}
       showSensitiveValues={showSensitiveValues}
       onRefreshDockerRuntime={() => {
@@ -2528,7 +2592,7 @@ export default function App() {
   ) : session.isLocked && activeWorkspaceTabId !== "actions" ? (
     <PlaceholderView
       tab={session.workspaceTabs.find((tab) => tab.tabId === activeWorkspaceTabId)}
-      workspace={workspace}
+      workspace={activeWorkspace}
       showSensitiveValues={showSensitiveValues}
       onToggleSensitiveValues={() => {
         setShowSensitiveValues((current) => !current);
@@ -2935,8 +2999,8 @@ export default function App() {
                     capable: writeModeCapable,
                     endpointUrl:
                       session.lockedProviderId === "azure"
-                        ? workspace.azureEndpointUrl
-                        : workspace.awsEndpointUrl,
+                        ? activeWorkspace.azureEndpointUrl
+                        : activeWorkspace.awsEndpointUrl,
                     profileLabel: workspace.profile?.displayName ?? lockedProfile?.displayName,
                     onClick: requestWriteModeChange,
                   }
@@ -3030,8 +3094,8 @@ export default function App() {
                     <p>
                       <span className="font-semibold text-foreground">Target:</span>{" "}
                       {session.lockedProviderId === "azure"
-                        ? workspace.azureEndpointUrl || "Azure CLI"
-                        : workspace.awsEndpointUrl || "Default AWS endpoint"}
+                        ? activeWorkspace.azureEndpointUrl || "Azure CLI"
+                        : activeWorkspace.awsEndpointUrl || "Default AWS endpoint"}
                     </p>
                   </>
                 )}

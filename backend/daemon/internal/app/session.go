@@ -371,6 +371,7 @@ func (s *Service) handleSessionSetWriteMode(ctx context.Context, params json.Raw
 	}
 	s.mu.Unlock()
 	if notifier != nil {
+		_ = notifier.Notify("state.changed", statePayload(snapshot, session))
 		level := "info"
 		message := "Write mode disabled for this workspace session."
 		if request.Enabled {

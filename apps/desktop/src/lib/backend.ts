@@ -2357,6 +2357,7 @@ function handleMockRequest<T>(
         params.enabled ? "warning" : "info",
         params.enabled ? "Write mode enabled for this workspace session." : "Write mode disabled for this workspace session.",
       );
+      emitStateChanged();
       return Promise.resolve(buildMockWorkspace() as T);
     case "session.lock":
       mockState.session.isLocked = true;
