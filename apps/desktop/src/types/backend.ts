@@ -497,6 +497,22 @@ export interface AzureQueueMessage {
   insertionTime?: string;
 }
 
+export interface AzureEntraUser {
+  displayName: string;
+  userPrincipalName?: string;
+  id?: string;
+}
+
+export interface AzureEntraGroup {
+  displayName: string;
+  id?: string;
+}
+
+export interface AzureEntraApp {
+  displayName: string;
+  appId?: string;
+}
+
 export interface WorkspaceSnapshot {
   provider?: ProviderSummary;
   profile?: ProfileSummary;
@@ -540,6 +556,7 @@ export interface WorkspaceSnapshot {
   azureKeyVaultStatusMessage?: string;
   azureCosmosStatusMessage?: string;
   azureQueuesStatusMessage?: string;
+  azureEntraStatusMessage?: string;
   azureResourceGroups: AzureResourceGroup[];
   azureVirtualMachines: AzureVirtualMachine[];
   azureStorageAccounts: AzureStorageAccount[];
@@ -558,6 +575,9 @@ export interface WorkspaceSnapshot {
   azureCosmosItems: AzureCosmosItem[];
   azureStorageQueues: AzureStorageQueue[];
   azureQueueMessages: AzureQueueMessage[];
+  azureEntraUsers: AzureEntraUser[];
+  azureEntraGroups: AzureEntraGroup[];
+  azureEntraApps: AzureEntraApp[];
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;

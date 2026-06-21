@@ -70,6 +70,7 @@ import AzureFunctionsView from "./views/workspace/AzureFunctionsView";
 import AzureKeyVaultView from "./views/workspace/AzureKeyVaultView";
 import AzureCosmosView from "./views/workspace/AzureCosmosView";
 import AzureQueuesView from "./views/workspace/AzureQueuesView";
+import AzureEntraView from "./views/workspace/AzureEntraView";
 import RuntimeView from "./views/workspace/RuntimeView";
 import PlaceholderView from "./views/workspace/PlaceholderView";
 import ActivityView from "./views/workspace/ActivityView";
@@ -457,6 +458,9 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     azureCosmosItems: normaliseArray(source.azureCosmosItems),
     azureStorageQueues: normaliseArray(source.azureStorageQueues),
     azureQueueMessages: normaliseArray(source.azureQueueMessages),
+    azureEntraUsers: normaliseArray(source.azureEntraUsers),
+    azureEntraGroups: normaliseArray(source.azureEntraGroups),
+    azureEntraApps: normaliseArray(source.azureEntraApps),
     s3Buckets: normaliseArray(source.s3Buckets).map(normaliseS3Bucket),
     s3Objects: normaliseArray(source.s3Objects).map(normaliseS3Object),
     s3ObjectMetadata: normaliseDetailFields(source.s3ObjectMetadata),
@@ -544,6 +548,9 @@ const emptyWorkspace: WorkspaceSnapshot = {
   azureCosmosItems: [],
   azureStorageQueues: [],
   azureQueueMessages: [],
+  azureEntraUsers: [],
+  azureEntraGroups: [],
+  azureEntraApps: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -2246,6 +2253,8 @@ export default function App() {
         void mutateWorkspace("azure.queues.selectQueue", { queue });
       }}
     />
+  ) : session.isLocked && activeWorkspaceTabId === "azure-entra" ? (
+    <AzureEntraView workspace={workspace} />
   ) : activeWorkspaceTabId === "virtualisation" ? (
     <RuntimeView
       workspace={workspace}
@@ -2860,6 +2869,7 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     "azure-key-vault": "Key Vault",
     "azure-cosmos": "Cosmos DB",
     "azure-queues": "Queues",
+    "azure-entra": "Entra ID",
     actions: "Activity",
   };
   return labels[tabId] ?? tabs.find((tab) => tab.tabId === tabId)?.label ?? "Workspace";
@@ -2907,6 +2917,8 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureCosmosAccounts.length };
     case "azure-queues":
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureStorageQueues.length };
+    case "azure-entra":
+      return { ...base, iconUrl: azureIconUrl, count: workspace.azureEntraUsers.length };
     case "actions":
       return { ...base, icon: Boxes };
     case "virtualisation":

@@ -588,6 +588,15 @@ const mockAzureQueueMessages = [
   { id: "msg-2", text: "process order 43", dequeueCount: 1, insertionTime: "2026-06-21T10:01:00Z" },
 ];
 
+const mockAzureEntraUsers = [
+  { displayName: "Ada Lovelace", userPrincipalName: "ada@contoso.com", id: "u-1" },
+  { displayName: "Alan Turing", userPrincipalName: "alan@contoso.com", id: "u-2" },
+];
+
+const mockAzureEntraGroups = [{ displayName: "Engineers", id: "g-1" }];
+
+const mockAzureEntraApps = [{ displayName: "orders-api", appId: "app-1" }];
+
 const mockAzureVirtualMachines = {
   "rg-marketing-prod": [
     {
@@ -1163,6 +1172,12 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       : undefined,
     azureStorageQueues: isAzureWorkspace ? mockAzureStorageQueues : [],
     azureQueueMessages: isAzureWorkspace && mockState.session.selectedAzureQueue ? mockAzureQueueMessages : [],
+    azureEntraStatusMessage: isAzureWorkspace
+      ? `Loaded ${mockAzureEntraUsers.length} user(s), ${mockAzureEntraGroups.length} group(s), ${mockAzureEntraApps.length} app registration(s).`
+      : undefined,
+    azureEntraUsers: isAzureWorkspace ? mockAzureEntraUsers : [],
+    azureEntraGroups: isAzureWorkspace ? mockAzureEntraGroups : [],
+    azureEntraApps: isAzureWorkspace ? mockAzureEntraApps : [],
     selectedS3BucketName,
     selectedS3ObjectKey,
     s3PrefixFilter: mockState.session.s3PrefixFilter,
