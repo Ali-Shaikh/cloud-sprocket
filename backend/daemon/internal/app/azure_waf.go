@@ -187,6 +187,9 @@ func buildWafTopRulesQuery(schema models.AzureWafLogSchemaProfile, policyName st
 }
 
 func escapeKQLString(value string) string {
+	// Escape backslashes first (so an existing backslash is not doubled by the
+	// quote pass), then double-quotes. Mirrors the frontend escapeKql helper.
+	value = strings.ReplaceAll(value, `\`, `\\`)
 	return strings.ReplaceAll(value, `"`, `\"`)
 }
 
@@ -265,6 +268,19 @@ func (s *Service) handleAzureWafSelectPolicy(ctx context.Context, params json.Ra
 	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "", "")
 }
 
+// normaliseWafPolicyMode validates and canonicalises the WAF policy mode so only
+// the two values az accepts reach the CLI.
+func normaliseWafPolicyMode(mode string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "prevention":
+		return "Prevention", nil
+	case "detection":
+		return "Detection", nil
+	default:
+		return "", fmt.Errorf("WAF policy mode must be Prevention or Detection, got %q", mode)
+	}
+}
+
 func (s *Service) handleAzureWafConfigSetMode(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		ResourceGroup string `json:"resourceGroup"`
@@ -278,16 +294,20 @@ func (s *Service) handleAzureWafConfigSetMode(ctx context.Context, params json.R
 	if !request.Confirm {
 		return nil, errors.New("confirm the policy mode change before applying it")
 	}
+	mode, err := normaliseWafPolicyMode(request.Mode)
+	if err != nil {
+		return nil, err
+	}
 	profile, session, snapshot, err := s.lockedAzureProfileForMutation(ctx)
 	if err != nil {
 		return nil, err
 	}
 	timeoutCtx, cancel := s.withAzureTimeout(ctx)
 	defer cancel()
-	if err := s.azure.UpdateWafPolicyMode(timeoutCtx, profile, request.ResourceGroup, request.PolicyName, request.Mode); err != nil {
+	if err := s.azure.UpdateWafPolicyMode(timeoutCtx, profile, request.ResourceGroup, request.PolicyName, mode); err != nil {
 		return nil, err
 	}
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Updated WAF policy %s mode to %s.", request.PolicyName, request.Mode))
+	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Updated WAF policy %s mode to %s.", request.PolicyName, mode))
 }
 
 func (s *Service) handleAzureWafConfigSetManagedRule(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

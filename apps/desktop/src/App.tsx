@@ -2,6 +2,7 @@ import {
   Component,
   Suspense,
   startTransition,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -1187,6 +1188,23 @@ export default function App() {
       }
     }
   }
+
+  // Stable references so the Log Analytics / WAF views' history+saved effects
+  // (which list them on workspace change) do not re-fire on every App re-render.
+  const listLogAnalyticsHistory = useCallback(
+    (ws: string) =>
+      backendRequest<AzureLogAnalyticsHistoryEntry[]>("azure.logAnalytics.history.list", {
+        workspace: ws,
+      }),
+    [],
+  );
+  const listLogAnalyticsSaved = useCallback(
+    (ws: string) =>
+      backendRequest<AzureLogAnalyticsSavedQuery[]>("azure.logAnalytics.saved.list", {
+        workspace: ws,
+      }),
+    [],
+  );
 
   async function refreshDiscovery(): Promise<void> {
     // The refresh runs as a backend job; the new workspace arrives via a
@@ -2532,14 +2550,8 @@ export default function App() {
           timespan,
         })
       }
-      onListHistory={(ws) =>
-        backendRequest<AzureLogAnalyticsHistoryEntry[]>("azure.logAnalytics.history.list", {
-          workspace: ws,
-        })
-      }
-      onListSaved={(ws) =>
-        backendRequest<AzureLogAnalyticsSavedQuery[]>("azure.logAnalytics.saved.list", { workspace: ws })
-      }
+      onListHistory={listLogAnalyticsHistory}
+      onListSaved={listLogAnalyticsSaved}
       onSaveQuery={(ws, name, query, timespan, id) =>
         backendRequest<AzureLogAnalyticsSavedQuery>("azure.logAnalytics.saved.save", {
           workspace: ws,
@@ -2632,11 +2644,7 @@ export default function App() {
           });
         })
       }
-      onListSaved={(ws) =>
-        backendRequest<AzureLogAnalyticsSavedQuery[]>("azure.logAnalytics.saved.list", {
-          workspace: ws,
-        })
-      }
+      onListSaved={listLogAnalyticsSaved}
       onSaveQuery={(ws, name, queryText, timespan, id) =>
         backendRequest<AzureLogAnalyticsSavedQuery>("azure.logAnalytics.saved.save", {
           workspace: ws,

@@ -11,6 +11,30 @@ import (
 	"cloudsprocket/backend/daemon/internal/store"
 )
 
+func TestNormaliseWafPolicyMode(t *testing.T) {
+	cases := map[string]struct {
+		want string
+		ok   bool
+	}{
+		"prevention": {"Prevention", true},
+		"Prevention": {"Prevention", true},
+		" detection": {"Detection", true},
+		"DETECTION":  {"Detection", true},
+		"":           {"", false},
+		"Prevention --subscription x": {"", false},
+		"audit":                       {"", false},
+	}
+	for input, expect := range cases {
+		got, err := normaliseWafPolicyMode(input)
+		if expect.ok && (err != nil || got != expect.want) {
+			t.Fatalf("normaliseWafPolicyMode(%q) = %q, %v; want %q, nil", input, got, err, expect.want)
+		}
+		if !expect.ok && err == nil {
+			t.Fatalf("normaliseWafPolicyMode(%q) = %q, nil; want error", input, got)
+		}
+	}
+}
+
 func TestHandleAzureWafSelectPolicyReturnsWorkspaceSnapshot(t *testing.T) {
 	tempDir := t.TempDir()
 	home := filepath.Join(tempDir, "home")

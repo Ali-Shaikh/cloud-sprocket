@@ -65,9 +65,10 @@ function copyToClipboard(value: string, label = "Copied to clipboard"): void {
   if (!navigator.clipboard) {
     return;
   }
-  void navigator.clipboard.writeText(value).then(() => {
-    notify("success", label);
-  });
+  void navigator.clipboard.writeText(value).then(
+    () => notify("success", label),
+    () => notify("error", "Could not copy to clipboard"),
+  );
 }
 
 function sortIcon(column: string, activeColumn: string | null, direction: SortDirection) {
