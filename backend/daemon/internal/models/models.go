@@ -209,6 +209,7 @@ type SessionSnapshot struct {
 	SelectedAzureCosmosAccount   string `json:"selectedAzureCosmosAccount,omitempty"`
 	SelectedAzureCosmosDatabase  string `json:"selectedAzureCosmosDatabase,omitempty"`
 	SelectedAzureCosmosContainer string `json:"selectedAzureCosmosContainer,omitempty"`
+	SelectedAzureQueue           string `json:"selectedAzureQueue,omitempty"`
 	AzureWriteModeEnabled        bool   `json:"azureWriteModeEnabled,omitempty"`
 	SelectedS3BucketName       string             `json:"selectedS3BucketName,omitempty"`
 	SelectedS3ObjectKey        string             `json:"selectedS3ObjectKey,omitempty"`
@@ -688,6 +689,8 @@ type WorkspaceSnapshot struct {
 	AzureFunctionsStatusMessage  string                  `json:"azureFunctionsStatusMessage,omitempty"`
 	AzureKeyVaultStatusMessage   string                  `json:"azureKeyVaultStatusMessage,omitempty"`
 	AzureCosmosStatusMessage     string                  `json:"azureCosmosStatusMessage,omitempty"`
+	AzureQueuesStatusMessage     string                  `json:"azureQueuesStatusMessage,omitempty"`
+	SelectedAzureQueue           string                  `json:"selectedAzureQueue,omitempty"`
 	SelectedAzureKeyVault        string                  `json:"selectedAzureKeyVault,omitempty"`
 	SelectedAzureSecret          string                  `json:"selectedAzureSecret,omitempty"`
 	SelectedAzureCosmosAccount   string                  `json:"selectedAzureCosmosAccount,omitempty"`
@@ -709,6 +712,8 @@ type WorkspaceSnapshot struct {
 	AzureCosmosDatabases         []AzureCosmosDatabase   `json:"azureCosmosDatabases"`
 	AzureCosmosContainers        []AzureCosmosContainer  `json:"azureCosmosContainers"`
 	AzureCosmosItems             []AzureCosmosItem       `json:"azureCosmosItems"`
+	AzureStorageQueues           []AzureStorageQueue     `json:"azureStorageQueues"`
+	AzureQueueMessages           []AzureQueueMessage     `json:"azureQueueMessages"`
 }
 
 type ActivityLogEntry struct {

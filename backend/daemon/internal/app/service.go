@@ -238,6 +238,8 @@ func (s *Service) Handle(
 		return s.handleAzureCosmosSelectDatabase(ctx, params, notifier)
 	case "azure.cosmos.selectContainer":
 		return s.handleAzureCosmosSelectContainer(ctx, params, notifier)
+	case "azure.queues.selectQueue":
+		return s.handleAzureQueuesSelectQueue(ctx, params, notifier)
 	case "session.selectProvider":
 		return s.handleSessionSelectProvider(ctx, params, notifier)
 	case "session.selectProfile":

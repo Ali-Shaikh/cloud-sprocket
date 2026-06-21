@@ -92,6 +92,8 @@ type AzureInventory interface {
 	ListCosmosDatabases(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string) ([]models.AzureCosmosDatabase, error)
 	ListCosmosContainers(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string, database string) ([]models.AzureCosmosContainer, error)
 	ListCosmosItems(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string, database string, container string) ([]models.AzureCosmosItem, error)
+	ListStorageQueues(ctx context.Context, profile models.ProfileSummary, accountName string) ([]models.AzureStorageQueue, error)
+	PeekQueueMessages(ctx context.Context, profile models.ProfileSummary, accountName string, queueName string) ([]models.AzureQueueMessage, error)
 }
 
 type DockerRuntime interface {

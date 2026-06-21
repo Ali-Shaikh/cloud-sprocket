@@ -308,6 +308,14 @@ func (stubAzureInventory) ListCosmosItems(context.Context, models.ProfileSummary
 	return []models.AzureCosmosItem{{ID: "doc-1", JSON: `{"id":"doc-1"}`}}, nil
 }
 
+func (stubAzureInventory) ListStorageQueues(context.Context, models.ProfileSummary, string) ([]models.AzureStorageQueue, error) {
+	return []models.AzureStorageQueue{{Name: "jobs"}}, nil
+}
+
+func (stubAzureInventory) PeekQueueMessages(context.Context, models.ProfileSummary, string, string) ([]models.AzureQueueMessage, error) {
+	return []models.AzureQueueMessage{{ID: "m1", Text: "hello", DequeueCount: 0}}, nil
+}
+
 func (s stubDockerRuntime) Snapshot(context.Context) (models.DockerRuntimeSnapshot, error) {
 	return s.snapshot, nil
 }

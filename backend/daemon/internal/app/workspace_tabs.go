@@ -80,6 +80,12 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 				Summary: "Browse Cosmos DB databases, containers, and items.",
 				Detail:  "Read-only browse of Cosmos SQL databases, containers, and a sample of documents.",
 			},
+			{
+				TabID:   "azure-queues",
+				Label:   "Queues",
+				Summary: "Browse storage queues and peek messages.",
+				Detail:  "List storage account queues and peek messages without consuming them.",
+			},
 			activityTab,
 		}
 	}
