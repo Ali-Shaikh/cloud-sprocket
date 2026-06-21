@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
-import { Loader2, Play } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BookOpen, Clock, Loader2, Play, Save, Square, Trash2 } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { KqlEditor } from "@/components/kql/KqlEditor";
 import { LogQueryResultPanel } from "@/components/log-analytics/LogQueryResultPanel";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -11,18 +13,53 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { StatusPill } from "@/components/status-pill";
-import type { AzureLogQueryResult, WorkspaceSnapshot } from "@/types/backend";
+import type {
+  AzureLogAnalyticsHistoryEntry,
+  AzureLogAnalyticsSavedQuery,
+  AzureLogAnalyticsTableInfo,
+  AzureLogQueryResult,
+  WorkspaceSnapshot,
+} from "@/types/backend";
 
 export type LogAnalyticsViewProps = {
   workspace: WorkspaceSnapshot;
   workspaceSelectionLoading?: boolean;
+  initialQuery?: string;
+  initialTimespan?: string;
   onSelectWorkspace: (workspace: string) => void;
   onRunQuery: (
     workspace: string,
     query: string,
     timespan: string,
   ) => Promise<AzureLogQueryResult>;
+  onListHistory: (workspace: string) => Promise<AzureLogAnalyticsHistoryEntry[]>;
+  onListSaved: (workspace: string) => Promise<AzureLogAnalyticsSavedQuery[]>;
+  onSaveQuery: (
+    workspace: string,
+    name: string,
+    query: string,
+    timespan: string,
+    id?: string,
+  ) => Promise<AzureLogAnalyticsSavedQuery>;
+  onDeleteSaved: (workspace: string, id: string) => Promise<void>;
+  onListTables: (workspace: string, includeColumns: boolean) => Promise<AzureLogAnalyticsTableInfo[]>;
 };
 
 const fieldLabel =
@@ -31,9 +68,6 @@ const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] 
 
 const SAMPLE_QUERY = "AppEvents\n| take 50";
 
-// Timespan presets map to the ISO8601 durations az -t / the Logs API accept.
-// "all" sends no timespan, so the query's own time filters (or full retention)
-// apply, matching the panel's original behaviour.
 const TIMESPAN_OPTIONS = [
   { label: "All time", value: "all", timespan: "" },
   { label: "Last 30 minutes", value: "PT30M", timespan: "PT30M" },
@@ -43,19 +77,56 @@ const TIMESPAN_OPTIONS = [
   { label: "Last 30 days", value: "P30D", timespan: "P30D" },
 ] as const;
 
+function timespanValueFor(timespan: string): string {
+  const match = TIMESPAN_OPTIONS.find((option) => option.timespan === timespan);
+  return match?.value ?? TIMESPAN_OPTIONS[0].value;
+}
+
 export default function LogAnalyticsView({
   workspace,
   workspaceSelectionLoading = false,
+  initialQuery,
+  initialTimespan,
   onSelectWorkspace,
   onRunQuery,
+  onListHistory,
+  onListSaved,
+  onSaveQuery,
+  onDeleteSaved,
+  onListTables,
 }: LogAnalyticsViewProps) {
   const workspaces = workspace.azureLogAnalyticsWorkspaces ?? [];
   const selected = workspace.selectedAzureLogWorkspace ?? workspaces[0]?.name ?? "";
-  const [query, setQuery] = useState(SAMPLE_QUERY);
-  const [timespanValue, setTimespanValue] = useState<string>(TIMESPAN_OPTIONS[0].value);
+  const [query, setQuery] = useState(initialQuery ?? SAMPLE_QUERY);
+  const [timespanValue, setTimespanValue] = useState<string>(
+    initialTimespan != null ? timespanValueFor(initialTimespan) : TIMESPAN_OPTIONS[0].value,
+  );
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AzureLogQueryResult | null>(null);
+  const [history, setHistory] = useState<AzureLogAnalyticsHistoryEntry[]>([]);
+  const [saved, setSaved] = useState<AzureLogAnalyticsSavedQuery[]>([]);
+  const [tables, setTables] = useState<AzureLogAnalyticsTableInfo[]>([]);
+  const [schemaOpen, setSchemaOpen] = useState(false);
+  const [schemaLoading, setSchemaLoading] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const runTokenRef = useRef(0);
+
+  useEffect(() => {
+    if (initialQuery) {
+      setQuery(initialQuery);
+    }
+    if (initialTimespan != null) {
+      setTimespanValue(timespanValueFor(initialTimespan));
+    }
+  }, [initialQuery, initialTimespan]);
+
+  useEffect(() => {
+    if (!selected) return;
+    void onListHistory(selected).then(setHistory).catch(() => setHistory([]));
+    void onListSaved(selected).then(setSaved).catch(() => setSaved([]));
+  }, [selected, onListHistory, onListSaved]);
 
   const timeRangeLabel = useMemo(
     () => TIMESPAN_OPTIONS.find((option) => option.value === timespanValue)?.label ?? "All time",
@@ -66,19 +137,75 @@ export default function LogAnalyticsView({
 
   async function run() {
     if (!canRun) return;
+    const token = ++runTokenRef.current;
     setRunning(true);
     setError(null);
     try {
       const timespan =
         TIMESPAN_OPTIONS.find((option) => option.value === timespanValue)?.timespan ?? "";
       const queryResult = await onRunQuery(selected, query, timespan);
+      if (token !== runTokenRef.current) return;
       setResult(queryResult);
+      void onListHistory(selected).then(setHistory).catch(() => undefined);
     } catch (caught) {
+      if (token !== runTokenRef.current) return;
       setError(caught instanceof Error ? caught.message : String(caught));
       setResult(null);
     } finally {
-      setRunning(false);
+      if (token === runTokenRef.current) {
+        setRunning(false);
+      }
     }
+  }
+
+  function cancelRun() {
+    runTokenRef.current += 1;
+    setRunning(false);
+  }
+
+  function loadHistoryEntry(entry: AzureLogAnalyticsHistoryEntry) {
+    setQuery(entry.query);
+    if (entry.timespan != null) {
+      setTimespanValue(timespanValueFor(entry.timespan));
+    }
+  }
+
+  function loadSavedEntry(entry: AzureLogAnalyticsSavedQuery) {
+    setQuery(entry.query);
+    if (entry.timespan != null) {
+      setTimespanValue(timespanValueFor(entry.timespan));
+    }
+  }
+
+  async function openSchemaBrowser() {
+    setSchemaOpen(true);
+    setSchemaLoading(true);
+    try {
+      const listed = await onListTables(selected, true);
+      setTables(listed);
+    } catch {
+      setTables([]);
+    } finally {
+      setSchemaLoading(false);
+    }
+  }
+
+  async function confirmSaveQuery() {
+    const name = saveName.trim();
+    if (!name) return;
+    const timespan =
+      TIMESPAN_OPTIONS.find((option) => option.value === timespanValue)?.timespan ?? "";
+    await onSaveQuery(selected, name, query, timespan);
+    setSaveDialogOpen(false);
+    setSaveName("");
+    const refreshed = await onListSaved(selected);
+    setSaved(refreshed);
+  }
+
+  async function deleteSaved(id: string) {
+    await onDeleteSaved(selected, id);
+    const refreshed = await onListSaved(selected);
+    setSaved(refreshed);
   }
 
   return (
@@ -138,19 +265,91 @@ export default function LogAnalyticsView({
             {running ? <Loader2 className="animate-spin" /> : <Play />}
             {running ? "Running…" : "Run query"}
           </Button>
+          {running ? (
+            <Button variant="outline" onClick={cancelRun}>
+              <Square />
+              Cancel
+            </Button>
+          ) : null}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={!selected}>
+                <Clock />
+                History
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-72 w-80 overflow-y-auto">
+              <DropdownMenuLabel>Recent queries</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {history.length === 0 ? (
+                <DropdownMenuItem disabled>No history yet</DropdownMenuItem>
+              ) : (
+                history.map((entry, index) => (
+                  <DropdownMenuItem
+                    key={`${entry.ranAt}-${index}`}
+                    onClick={() => loadHistoryEntry(entry)}
+                  >
+                    <span className="line-clamp-2 font-mono text-xs">{entry.query}</span>
+                  </DropdownMenuItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={!selected}>
+                <Save />
+                Saved
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-72 w-80 overflow-y-auto">
+              <DropdownMenuLabel>Saved queries (local)</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {saved.length === 0 ? (
+                <DropdownMenuItem disabled>No saved queries</DropdownMenuItem>
+              ) : (
+                saved.map((entry) => (
+                  <DropdownMenuItem
+                    key={entry.id}
+                    className="flex items-start justify-between gap-2"
+                    onClick={() => loadSavedEntry(entry)}
+                  >
+                    <span className="line-clamp-2">
+                      <span className="font-medium">{entry.name}</span>
+                      <span className="mt-0.5 block font-mono text-xs text-muted-foreground">
+                        {entry.query}
+                      </span>
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 shrink-0"
+                      aria-label={`Delete saved query ${entry.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void deleteSaved(entry.id);
+                      }}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </DropdownMenuItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="outline" disabled={!query.trim()} onClick={() => setSaveDialogOpen(true)}>
+            <Save />
+            Save query
+          </Button>
+          <Button variant="outline" disabled={!selected} onClick={() => void openSchemaBrowser()}>
+            <BookOpen />
+            Schema
+          </Button>
         </div>
 
         <div>
           <div className={cn(fieldLabel, "mb-1")}>KQL query</div>
-          <textarea
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            spellCheck={false}
-            rows={6}
-            aria-label="KQL query"
-            className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            placeholder="AppEvents | take 50"
-          />
+          <KqlEditor value={query} onChange={setQuery} onRun={() => void run()} disabled={running} />
         </div>
 
         <div className="flex items-center justify-between gap-3">
@@ -159,11 +358,74 @@ export default function LogAnalyticsView({
         </div>
       </section>
 
-      <LogQueryResultPanel
-        result={result}
-        error={error}
-        timeRangeLabel={timeRangeLabel}
-      />
+      <LogQueryResultPanel result={result} error={error} timeRangeLabel={timeRangeLabel} />
+
+      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save query</DialogTitle>
+            <DialogDescription>
+              Stored locally for this workspace. Cloud sync is planned for a later release.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={saveName}
+            onChange={(event) => setSaveName(event.target.value)}
+            placeholder="Query name"
+            aria-label="Saved query name"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void confirmSaveQuery()} disabled={!saveName.trim()}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={schemaOpen} onOpenChange={setSchemaOpen}>
+        <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Schema browser</DialogTitle>
+            <DialogDescription>
+              Tables in workspace {selected}. Click a table name to insert it into the editor.
+            </DialogDescription>
+          </DialogHeader>
+          {schemaLoading ? (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              Loading tables...
+            </p>
+          ) : tables.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No tables returned for this workspace.</p>
+          ) : (
+            <ul className="space-y-3">
+              {tables.map((table) => (
+                <li key={table.name} className="rounded-lg border border-border px-3 py-2">
+                  <button
+                    type="button"
+                    className="font-mono text-sm font-semibold hover:underline"
+                    onClick={() => {
+                      setQuery((current) => (current.trim() ? `${current}\n${table.name}` : table.name));
+                      setSchemaOpen(false);
+                    }}
+                  >
+                    {table.name}
+                  </button>
+                  {table.columns && table.columns.length > 0 ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {table.columns.slice(0, 12).join(", ")}
+                      {table.columns.length > 12 ? "…" : ""}
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

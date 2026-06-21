@@ -212,6 +212,48 @@ const mockAzureWorkspaceTabs: WorkspaceTab[] = [
     detail: "Browse and create App Service web apps on cloud Azure profiles.",
   },
   {
+    tabId: "azure-log-analytics",
+    label: "Log Analytics",
+    summary: "Run KQL queries against Log Analytics workspaces.",
+    detail: "Query Azure Monitor logs with KQL.",
+  },
+  {
+    tabId: "azure-waf",
+    label: "WAF",
+    summary: "Front Door WAF logs and policy workbench.",
+    detail: "Track requests by X-Azure-Ref and inspect WAF policy config.",
+  },
+  {
+    tabId: "azure-functions",
+    label: "Functions",
+    summary: "Browse and invoke Azure Functions.",
+    detail: "List Function Apps and invoke HTTP-triggered functions.",
+  },
+  {
+    tabId: "azure-key-vault",
+    label: "Key Vault",
+    summary: "Browse and manage Key Vault secrets.",
+    detail: "List vaults and secrets.",
+  },
+  {
+    tabId: "azure-cosmos",
+    label: "Cosmos DB",
+    summary: "Browse Cosmos DB databases and items.",
+    detail: "Read-only Cosmos browse.",
+  },
+  {
+    tabId: "azure-queues",
+    label: "Queues",
+    summary: "Browse storage queues and peek messages.",
+    detail: "List queues and peek messages.",
+  },
+  {
+    tabId: "azure-entra",
+    label: "Entra ID",
+    summary: "Browse directory users, groups, and apps.",
+    detail: "Read-only Entra directory browse.",
+  },
+  {
     tabId: "actions",
     label: "Activity",
     summary: "Recent job, log, and refresh history.",
@@ -541,6 +583,65 @@ const mockAzureLogAnalyticsWorkspaces = [
   { name: "law-platform", resourceGroup: "rg-marketing-prod", location: "uaenorth", customerId: "law-guid-1" },
   { name: "law-shared", resourceGroup: "rg-shared", location: "westeurope", customerId: "law-guid-2" },
 ];
+
+const mockAzureWafLogSchema = {
+  mode: "azureDiagnostics",
+  tableName: "AzureDiagnostics",
+  categories: ["FrontDoorWebApplicationFirewallLog"],
+  columns: {
+    timeGenerated: "TimeGenerated",
+    action: "action_s",
+    ruleName: "ruleName_s",
+    requestUri: "requestUri_s",
+    clientIP: "clientIP_s",
+    host: "host_s",
+    policyName: "policy_s",
+    policyMode: "policyMode_s",
+    trackingReference: "trackingReference_s",
+    detailsMatches: "details_matches_s",
+    detailsMessage: "details_msg_s",
+  },
+  detected: true,
+  message: "AzureDiagnostics WAF rows detected (mock).",
+};
+
+const mockAzureWafPolicies = [
+  {
+    name: "waf-portal",
+    resourceGroup: "rg-marketing-prod",
+    location: "global",
+    sku: "Premium_AzureFrontDoor",
+    mode: "Prevention",
+    enabled: true,
+  },
+];
+
+const mockAzureWafPolicyDetail = {
+  name: "waf-portal",
+  resourceGroup: "rg-marketing-prod",
+  location: "global",
+  sku: "Premium_AzureFrontDoor",
+  mode: "Prevention",
+  enabled: true,
+  managedRuleSets: [
+    { ruleSetType: "Microsoft_DefaultRuleSet", ruleSetVersion: "2.1", ruleGroupName: "SQLI" },
+  ],
+  managedRuleOverrides: [{ ruleId: "942100", ruleGroupName: "SQLI", enabled: false }],
+  exclusions: [
+    { matchVariable: "RequestHeader", selectorMatchOperator: "Equals", selector: "X-Debug" },
+  ],
+  customRules: [{ name: "AllowHealth", priority: 1, ruleType: "MatchRule", action: "Allow", enabled: true }],
+};
+
+const mockAzureWafRuleFireCounts = [
+  { ruleName: "Microsoft_DefaultRuleSet-2.1-SQLI-942100", count: 42, action: "Block" },
+  { ruleName: "Microsoft_DefaultRuleSet-2.1-XSS-941320", count: 7, action: "Log" },
+];
+
+const mockLogAnalyticsHistory: Record<string, { query: string; timespan?: string; ranAt: string }[]> =
+  {};
+const mockLogAnalyticsSaved: Record<string, { id: string; name: string; query: string; timespan?: string }[]> =
+  {};
 
 const mockAzureFunctionApps = [
   { name: "orders-fn", resourceGroup: "rg-marketing-prod", location: "uaenorth", state: "Running", defaultHostName: "orders-fn.azurewebsites.net" },
@@ -1134,6 +1235,16 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       ? `Loaded ${mockAzureLogAnalyticsWorkspaces.length} Log Analytics workspace(s). Local KQL is a subset of Azure KQL.`
       : undefined,
     azureLogAnalyticsWorkspaces: isAzureWorkspace ? mockAzureLogAnalyticsWorkspaces : [],
+    selectedAzureWafPolicy: isAzureWorkspace
+      ? mockState.session.selectedAzureWafPolicy ?? mockAzureWafPolicies[0]?.name
+      : undefined,
+    azureWafLogSchema: isAzureWorkspace ? mockAzureWafLogSchema : undefined,
+    azureWafStatusMessage: isAzureWorkspace
+      ? `Loaded ${mockAzureWafPolicies.length} Front Door WAF polic${mockAzureWafPolicies.length === 1 ? "y" : "ies"}.`
+      : undefined,
+    azureWafPolicies: isAzureWorkspace ? mockAzureWafPolicies : [],
+    azureWafPolicyDetail: isAzureWorkspace ? mockAzureWafPolicyDetail : undefined,
+    azureWafRuleFireCounts: isAzureWorkspace ? mockAzureWafRuleFireCounts : [],
     selectedAzureFunctionApp: isAzureWorkspace
       ? mockState.session.selectedAzureFunctionApp ?? mockAzureFunctionApps[0]?.name
       : undefined,
@@ -1828,7 +1939,15 @@ function handleMockRequest<T>(
       return Promise.resolve({ workspace: mockState.session.selectedAzureLogWorkspace } as T);
     case "azure.logAnalytics.query": {
       const queryText = String(params.query ?? "");
+      const workspaceName = String(params.workspace ?? mockState.session.selectedAzureLogWorkspace ?? "");
       appendLog("success", `Ran Log Analytics query (mock): ${queryText.slice(0, 40)}`);
+      if (workspaceName && queryText.trim()) {
+        const history = mockLogAnalyticsHistory[workspaceName] ?? [];
+        mockLogAnalyticsHistory[workspaceName] = [
+          { query: queryText, timespan: String(params.timespan ?? ""), ranAt: new Date().toISOString() },
+          ...history.filter((entry) => entry.query !== queryText).slice(0, 49),
+        ];
+      }
       return Promise.resolve({
         columns: [
           "TimeGenerated",
@@ -1856,6 +1975,112 @@ function handleMockRequest<T>(
         durationMs: 142,
         truncated: false,
       } as T);
+    }
+    case "azure.logAnalytics.history.list": {
+      const workspaceName = String(params.workspace ?? "");
+      return Promise.resolve((mockLogAnalyticsHistory[workspaceName] ?? []) as T);
+    }
+    case "azure.logAnalytics.saved.list": {
+      const workspaceName = String(params.workspace ?? "");
+      return Promise.resolve((mockLogAnalyticsSaved[workspaceName] ?? []) as T);
+    }
+    case "azure.logAnalytics.saved.save": {
+      const workspaceName = String(params.workspace ?? "");
+      const name = String(params.name ?? "").trim();
+      const queryText = String(params.query ?? "").trim();
+      const id = String(params.id ?? `saved-${Date.now()}`);
+      const entry = {
+        id,
+        name,
+        query: queryText,
+        timespan: String(params.timespan ?? ""),
+      };
+      const saved = mockLogAnalyticsSaved[workspaceName] ?? [];
+      const updated = saved.some((item) => item.id === id)
+        ? saved.map((item) => (item.id === id ? entry : item))
+        : [...saved, entry];
+      mockLogAnalyticsSaved[workspaceName] = updated;
+      return Promise.resolve(entry as T);
+    }
+    case "azure.logAnalytics.saved.delete": {
+      const workspaceName = String(params.workspace ?? "");
+      const id = String(params.id ?? "");
+      mockLogAnalyticsSaved[workspaceName] = (mockLogAnalyticsSaved[workspaceName] ?? []).filter(
+        (item) => item.id !== id,
+      );
+      return Promise.resolve({ deleted: true } as T);
+    }
+    case "azure.logAnalytics.tables.list":
+      return Promise.resolve([
+        { name: "AzureDiagnostics", columns: ["TimeGenerated", "Category", "action_s"] },
+        { name: "AppEvents", columns: ["TimeGenerated", "Level", "Message"] },
+        { name: "Heartbeat", columns: ["TimeGenerated", "Category"] },
+      ] as T);
+    case "azure.waf.logs.schema":
+      return Promise.resolve(mockAzureWafLogSchema as T);
+    case "azure.waf.selectPolicy":
+      mockState.session.selectedAzureWafPolicy = String(params.policyName ?? "");
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.waf.config.setMode": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("enable Azure write mode before applying WAF changes"));
+      }
+      const mode = String(params.mode ?? "");
+      mockAzureWafPolicyDetail.mode = mode;
+      const policy = mockAzureWafPolicies.find((item) => item.name === mockAzureWafPolicyDetail.name);
+      if (policy) policy.mode = mode;
+      appendLog("success", `Updated WAF policy mode to ${mode} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.waf.config.setManagedRule": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("enable Azure write mode before applying WAF changes"));
+      }
+      const ruleId = String(params.ruleId ?? "");
+      const enabled = Boolean(params.enabled);
+      const override = mockAzureWafPolicyDetail.managedRuleOverrides.find((item) => item.ruleId === ruleId);
+      if (override) override.enabled = enabled;
+      appendLog("success", `${enabled ? "Enabled" : "Disabled"} WAF rule ${ruleId} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.waf.config.removeExclusion": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("enable Azure write mode before applying WAF changes"));
+      }
+      const exclusion = params.exclusion as {
+        matchVariable?: string;
+        selectorMatchOperator?: string;
+        selector?: string;
+      };
+      mockAzureWafPolicyDetail.exclusions = mockAzureWafPolicyDetail.exclusions.filter(
+        (item) =>
+          !(
+            item.matchVariable === exclusion?.matchVariable &&
+            item.selectorMatchOperator === exclusion?.selectorMatchOperator &&
+            item.selector === exclusion?.selector
+          ),
+      );
+      appendLog("success", "Removed WAF exclusion (mock).");
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.waf.config.addExclusion": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("enable Azure write mode before applying WAF changes"));
+      }
+      const exclusion = params.exclusion as {
+        matchVariable?: string;
+        selectorMatchOperator?: string;
+        selector?: string;
+      };
+      if (exclusion?.matchVariable) {
+        mockAzureWafPolicyDetail.exclusions.push({
+          matchVariable: exclusion.matchVariable,
+          selectorMatchOperator: exclusion.selectorMatchOperator ?? "Equals",
+          selector: exclusion.selector ?? "",
+        });
+      }
+      appendLog("success", "Added WAF exclusion (mock).");
+      return Promise.resolve(buildMockWorkspace() as T);
     }
     case "azure.functions.selectApp":
       mockState.session.selectedAzureFunctionApp = String(params.appName ?? "");

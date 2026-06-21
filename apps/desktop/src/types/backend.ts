@@ -144,6 +144,7 @@ export interface SessionSnapshot {
   azureBlobPrefixFilter?: string;
   selectedAzureWebAppName?: string;
   selectedAzureLogWorkspace?: string;
+  selectedAzureWafPolicy?: string;
   selectedAzureFunctionApp?: string;
   selectedAzureFunction?: string;
   selectedAzureKeyVault?: string;
@@ -439,6 +440,108 @@ export interface AzureLogAnalyticsSelectionResult {
   workspace: string;
 }
 
+export interface AzureLogAnalyticsHistoryEntry {
+  query: string;
+  timespan?: string;
+  ranAt: string;
+}
+
+export interface AzureLogAnalyticsSavedQuery {
+  id: string;
+  name: string;
+  query: string;
+  timespan?: string;
+}
+
+export interface AzureLogAnalyticsTableInfo {
+  name: string;
+  columns?: string[];
+}
+
+export interface AzureWafLogColumnMap {
+  timeGenerated: string;
+  category?: string;
+  action: string;
+  ruleName: string;
+  requestUri: string;
+  clientIP: string;
+  host: string;
+  policyName: string;
+  policyMode: string;
+  trackingReference: string;
+  detailsMatches: string;
+  detailsMessage: string;
+  detailsData?: string;
+  additionalFields?: string;
+}
+
+export interface AzureWafLogSchemaProfile {
+  mode: "azureDiagnostics" | "resourceSpecific" | string;
+  tableName: string;
+  categories?: string[];
+  columns: AzureWafLogColumnMap;
+  detected: boolean;
+  message?: string;
+}
+
+export interface AzureWafPolicySummary {
+  name: string;
+  resourceGroup: string;
+  location?: string;
+  sku?: string;
+  mode?: string;
+  enabled: boolean;
+}
+
+export interface AzureWafManagedRuleGroup {
+  ruleSetType: string;
+  ruleSetVersion: string;
+  ruleGroupName: string;
+}
+
+export interface AzureWafManagedRuleOverride {
+  ruleId: string;
+  ruleGroupName?: string;
+  enabled: boolean;
+  action?: string;
+}
+
+export interface AzureWafExclusion {
+  matchVariable: string;
+  selectorMatchOperator: string;
+  selector?: string;
+}
+
+export interface AzureWafCustomRule {
+  name: string;
+  priority: number;
+  ruleType: string;
+  action: string;
+  enabled: boolean;
+}
+
+export interface AzureWafPolicyDetail {
+  name: string;
+  resourceGroup: string;
+  location?: string;
+  sku?: string;
+  mode: string;
+  enabled: boolean;
+  requestBodyCheck?: string;
+  managedRuleSets: AzureWafManagedRuleGroup[];
+  managedRuleOverrides: AzureWafManagedRuleOverride[];
+  exclusions: AzureWafExclusion[];
+  customRules: AzureWafCustomRule[];
+  redirectUrl?: string;
+  customBlockStatusCode?: number;
+}
+
+export interface AzureWafRuleFireCount {
+  ruleName: string;
+  count: number;
+  action?: string;
+}
+
 export interface AzureFunctionApp {
   name: string;
   resourceGroup?: string;
@@ -546,6 +649,7 @@ export interface WorkspaceSnapshot {
   azureBlobPrefixFilter?: string;
   selectedAzureWebAppName?: string;
   selectedAzureLogWorkspace?: string;
+  selectedAzureWafPolicy?: string;
   selectedAzureFunctionApp?: string;
   selectedAzureFunction?: string;
   selectedAzureKeyVault?: string;
@@ -571,6 +675,11 @@ export interface WorkspaceSnapshot {
   azureBlobMetadata: DetailField[];
   azureWebApps: AzureWebApp[];
   azureLogAnalyticsWorkspaces: AzureLogAnalyticsWorkspace[];
+  azureWafLogSchema?: AzureWafLogSchemaProfile;
+  azureWafStatusMessage?: string;
+  azureWafPolicies: AzureWafPolicySummary[];
+  azureWafPolicyDetail?: AzureWafPolicyDetail;
+  azureWafRuleFireCounts: AzureWafRuleFireCount[];
   azureFunctionApps: AzureFunctionApp[];
   azureFunctions: AzureFunction[];
   azureKeyVaults: AzureKeyVault[];

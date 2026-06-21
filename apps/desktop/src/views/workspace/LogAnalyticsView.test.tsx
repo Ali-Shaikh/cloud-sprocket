@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
@@ -23,6 +24,14 @@ const wafResult = {
   durationMs: 88,
 };
 
+const laMocks = {
+  onListHistory: vi.fn().mockResolvedValue([]),
+  onListSaved: vi.fn().mockResolvedValue([]),
+  onSaveQuery: vi.fn().mockResolvedValue({ id: "s1", name: "test", query: "AppEvents" }),
+  onDeleteSaved: vi.fn().mockResolvedValue(undefined),
+  onListTables: vi.fn().mockResolvedValue([{ name: "AppEvents", columns: ["TimeGenerated"] }]),
+};
+
 describe("LogAnalyticsView", () => {
   it("runs a KQL query and renders the result table", async () => {
     const onRunQuery = vi.fn().mockResolvedValue({
@@ -32,7 +41,12 @@ describe("LogAnalyticsView", () => {
     });
     render(
       <ThemeProvider>
-        <LogAnalyticsView workspace={workspace} onSelectWorkspace={() => {}} onRunQuery={onRunQuery} />
+        <LogAnalyticsView
+          workspace={workspace}
+          onSelectWorkspace={() => {}}
+          onRunQuery={onRunQuery}
+          {...laMocks}
+        />
       </ThemeProvider>,
     );
 
@@ -50,7 +64,12 @@ describe("LogAnalyticsView", () => {
     const onRunQuery = vi.fn().mockResolvedValue(wafResult);
     render(
       <ThemeProvider>
-        <LogAnalyticsView workspace={workspace} onSelectWorkspace={() => {}} onRunQuery={onRunQuery} />
+        <LogAnalyticsView
+          workspace={workspace}
+          onSelectWorkspace={() => {}}
+          onRunQuery={onRunQuery}
+          {...laMocks}
+        />
       </ThemeProvider>,
     );
 
@@ -69,7 +88,12 @@ describe("LogAnalyticsView", () => {
     const onRunQuery = vi.fn().mockRejectedValue(new Error("bad KQL"));
     render(
       <ThemeProvider>
-        <LogAnalyticsView workspace={workspace} onSelectWorkspace={() => {}} onRunQuery={onRunQuery} />
+        <LogAnalyticsView
+          workspace={workspace}
+          onSelectWorkspace={() => {}}
+          onRunQuery={onRunQuery}
+          {...laMocks}
+        />
       </ThemeProvider>,
     );
 
@@ -85,11 +109,34 @@ describe("LogAnalyticsView", () => {
           workspaceSelectionLoading
           onSelectWorkspace={() => {}}
           onRunQuery={vi.fn()}
+          {...laMocks}
         />
       </ThemeProvider>,
     );
 
     expect(screen.getByRole("status")).toHaveTextContent("Switching workspace...");
     expect(screen.getByRole("combobox", { name: "Select Log Analytics workspace" })).toBeDisabled();
+  });
+
+  it("lists history entries in the history menu", async () => {
+    const user = userEvent.setup();
+    const onListHistory = vi.fn().mockResolvedValue([
+      { query: "Heartbeat | take 5", timespan: "P1D", ranAt: "2026-06-21T10:00:00Z" },
+    ]);
+    render(
+      <ThemeProvider>
+        <LogAnalyticsView
+          workspace={workspace}
+          onSelectWorkspace={() => {}}
+          onRunQuery={vi.fn()}
+          {...laMocks}
+          onListHistory={onListHistory}
+        />
+      </ThemeProvider>,
+    );
+
+    await waitFor(() => expect(onListHistory).toHaveBeenCalled());
+    await user.click(screen.getByRole("button", { name: /^history$/i }));
+    expect(await screen.findByText("Heartbeat | take 5")).toBeTruthy();
   });
 });
