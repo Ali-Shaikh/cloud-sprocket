@@ -13,6 +13,9 @@ import (
 // runs a console child without allocating a visible console window.
 const createNoWindow = 0x08000000
 
+// createNewConsole allocates a new console window for an interactive child process.
+const createNewConsole = 0x00000010
+
 // Hide configures cmd to run without opening a console window.
 func Hide(cmd *exec.Cmd) {
 	if cmd == nil {

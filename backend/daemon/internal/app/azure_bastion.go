@@ -127,9 +127,9 @@ func (s *Service) handleAzureBastionConnect(ctx context.Context, params json.Raw
 		Protocol:          protocol,
 	}
 	if request.Launch {
-		timeoutCtx, cancel := context.WithTimeout(ctx, defaultAzureInventoryTimeout)
-		defer cancel()
-		if err := sysproc.SpawnInteractiveConsole(timeoutCtx, azPath, args...); err != nil {
+		// Launch is fire-and-forget: do not pass a cancelable RPC/timeout context or
+		// the helper process is killed before the visible console window opens.
+		if err := sysproc.SpawnInteractiveConsole(context.Background(), azPath, args...); err != nil {
 			return nil, fmt.Errorf("launch Bastion session: %w", err)
 		}
 		result.Launched = true

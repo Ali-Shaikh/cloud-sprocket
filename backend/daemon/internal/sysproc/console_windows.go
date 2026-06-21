@@ -7,20 +7,29 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"syscall"
 )
 
 // SpawnInteractiveConsole opens a new visible console running command with args.
 // Used for interactive Azure Bastion SSH/RDP sessions via the local az CLI.
-func SpawnInteractiveConsole(ctx context.Context, command string, args ...string) error {
-	command = strings.TrimSpace(command)
-	if command == "" {
+func SpawnInteractiveConsole(_ context.Context, command string, args ...string) error {
+	cmd := buildInteractiveConsoleCmd(command, args...)
+	if cmd == nil {
 		return fmt.Errorf("command is required")
 	}
-	inner := BuildWindowsCmdLine(command, args...)
-	// An empty window title (`start ""`) is required when the executable path is
-	// quoted or contains spaces. Otherwise `start` treats the title string as the
-	// program name ("cannot find CloudSprocket Bastion").
-	script := `start "" cmd /k ` + inner
-	cmd := exec.CommandContext(ctx, "cmd.exe", "/c", script)
 	return cmd.Start()
+}
+
+func buildInteractiveConsoleCmd(command string, args ...string) *exec.Cmd {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return nil
+	}
+	inner := BuildWindowsCmdLine(command, args...)
+	// cmd /k keeps the window open for the blocking az bastion session.
+	cmd := exec.Command("cmd.exe", "/k", inner)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: createNewConsole,
+	}
+	return cmd
 }

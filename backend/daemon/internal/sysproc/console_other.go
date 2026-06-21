@@ -10,7 +10,7 @@ import (
 )
 
 // SpawnInteractiveConsole opens a terminal emulator running command with args.
-func SpawnInteractiveConsole(ctx context.Context, command string, args ...string) error {
+func SpawnInteractiveConsole(_ context.Context, command string, args ...string) error {
 	command = strings.TrimSpace(command)
 	if command == "" {
 		return fmt.Errorf("command is required")
@@ -31,7 +31,7 @@ func SpawnInteractiveConsole(ctx context.Context, command string, args ...string
 		if _, err := exec.LookPath(spec[0]); err != nil {
 			continue
 		}
-		cmd := exec.CommandContext(ctx, spec[0], spec[1:]...)
+		cmd := exec.Command(spec[0], spec[1:]...)
 		if err := cmd.Start(); err == nil {
 			return nil
 		}
