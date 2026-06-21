@@ -14,6 +14,12 @@ type workspaceSnapshotOptions struct {
 	// azureResourceGroupSelection only refreshes resource groups, VMs, and App
 	// Service inventory for the selected resource group.
 	azureResourceGroupSelection bool
+	// skipAwsInventory avoids reloading AWS service inventories during Azure
+	// workspace selection handlers.
+	skipAwsInventory bool
+	// azureScope limits Azure enrichment to one service during selection
+	// handlers (storage, functions, keyvault, cosmos, waf, queues, webapps).
+	azureScope string
 }
 
 func (s *Service) buildWorkspaceSnapshot(
@@ -94,12 +100,13 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 		}
 	}
 
-	azureOpts := azureEnrichmentOptions{lightweight: opts.lightweightAzure}
-	if opts.azureResourceGroupSelection {
-		azureOpts.resourceGroupSelection = true
+	azureOpts := azureEnrichmentOptions{
+		lightweight:            opts.lightweightAzure,
+		scope:                  opts.azureScope,
+		resourceGroupSelection: opts.azureResourceGroupSelection,
 	}
 	s.enrichAzureWorkspace(&workspace, session, azureOpts)
-	if !opts.azureResourceGroupSelection {
+	if !opts.azureResourceGroupSelection && !opts.skipAwsInventory {
 		s.enrichS3Inventory(&workspace, session)
 		s.enrichEC2Inventory(&workspace, session)
 		s.enrichLambdaInventory(&workspace, session)

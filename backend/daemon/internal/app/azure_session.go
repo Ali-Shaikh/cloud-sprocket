@@ -43,7 +43,19 @@ func (s *Service) finishAzureWorkspace(
 	logLevel string,
 	logMsg string,
 ) (models.WorkspaceSnapshot, error) {
-	workspace := s.buildWorkspaceSnapshot(snapshot, session)
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{}, logLevel, logMsg)
+}
+
+func (s *Service) finishAzureWorkspaceOpts(
+	ctx context.Context,
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	notifier Notifier,
+	opts workspaceSnapshotOptions,
+	logLevel string,
+	logMsg string,
+) (models.WorkspaceSnapshot, error) {
+	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, opts)
 	if logMsg == "" {
 		return workspace, nil
 	}

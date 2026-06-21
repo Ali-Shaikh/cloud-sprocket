@@ -98,7 +98,10 @@ func (s *Service) handleAzureSelectWebApp(ctx context.Context, params json.RawMe
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "", "")
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "webapps",
+	}, "", "")
 }
 
 func (s *Service) handleAzureWebAppsCreate(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

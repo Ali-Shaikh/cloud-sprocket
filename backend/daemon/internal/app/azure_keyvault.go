@@ -157,7 +157,10 @@ func (s *Service) handleAzureKeyVaultSelectVault(ctx context.Context, params jso
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "", "")
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "keyvault",
+	}, "", "")
 }
 
 func (s *Service) handleAzureKeyVaultSelectSecret(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -174,7 +177,10 @@ func (s *Service) handleAzureKeyVaultSelectSecret(ctx context.Context, params js
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "", "")
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "keyvault",
+	}, "", "")
 }
 
 // lockedAzureProfile resolves the locked Azure workspace's profile, returning an

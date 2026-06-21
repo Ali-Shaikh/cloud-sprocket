@@ -265,7 +265,10 @@ func (s *Service) handleAzureWafSelectPolicy(ctx context.Context, params json.Ra
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "", "")
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "waf",
+	}, "", "")
 }
 
 // normaliseWafPolicyMode validates and canonicalises the WAF policy mode so only

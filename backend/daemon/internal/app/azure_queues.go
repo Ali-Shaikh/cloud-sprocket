@@ -90,5 +90,8 @@ func (s *Service) handleAzureQueuesSelectQueue(ctx context.Context, params json.
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "", "")
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "queues",
+	}, "", "")
 }

@@ -12,6 +12,7 @@ import (
 type azureEnrichmentOptions struct {
 	lightweight            bool
 	resourceGroupSelection bool
+	scope                  string
 }
 
 func (s *Service) enrichAzureWorkspace(
@@ -30,6 +31,11 @@ func (s *Service) enrichAzureWorkspace(
 		var mu sync.Mutex
 		s.enrichAzureInventory(workspace, session, &mu)
 		s.enrichAzureAppServiceInventory(workspace, session, nil)
+		return
+	}
+
+	if opts.scope != "" {
+		s.enrichAzureScoped(workspace, session, opts)
 		return
 	}
 
@@ -58,6 +64,33 @@ func (s *Service) enrichAzureWorkspace(
 	s.enrichAzureAppServiceInventory(workspace, session, nil)
 	s.enrichAzureQueuesInventory(workspace, session, opts, nil)
 	s.enrichAzureWafInventory(workspace, session, opts, nil)
+}
+
+func (s *Service) enrichAzureScoped(
+	workspace *models.WorkspaceSnapshot,
+	session models.SessionSnapshot,
+	opts azureEnrichmentOptions,
+) {
+	scopeOpts := azureEnrichmentOptions{lightweight: opts.lightweight}
+	switch opts.scope {
+	case "storage":
+		s.enrichAzureStorageInventory(workspace, session, scopeOpts, nil)
+	case "functions":
+		s.enrichAzureFunctionsInventory(workspace, session, scopeOpts, nil)
+	case "keyvault":
+		s.enrichAzureKeyVaultInventory(workspace, session, scopeOpts, nil)
+	case "cosmos":
+		s.enrichAzureCosmosInventory(workspace, session, scopeOpts, nil)
+	case "waf":
+		s.enrichAzureLogAnalyticsInventory(workspace, session, nil)
+		s.enrichAzureWafInventory(workspace, session, scopeOpts, nil)
+	case "queues":
+		s.enrichAzureStorageInventory(workspace, session, azureEnrichmentOptions{lightweight: true}, nil)
+		s.enrichAzureQueuesInventory(workspace, session, scopeOpts, nil)
+	case "webapps":
+		s.enrichAzureInventory(workspace, session, nil)
+		s.enrichAzureAppServiceInventory(workspace, session, nil)
+	}
 }
 
 func lockWorkspace(mu *sync.Mutex, fn func()) {

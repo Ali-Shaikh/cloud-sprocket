@@ -168,7 +168,10 @@ func (s *Service) handleAzureFunctionsSelectApp(ctx context.Context, params json
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "", "")
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "functions",
+	}, "", "")
 }
 
 func (s *Service) handleAzureFunctionsSelectFunction(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -185,7 +188,10 @@ func (s *Service) handleAzureFunctionsSelectFunction(ctx context.Context, params
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "", "")
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "functions",
+	}, "", "")
 }
 
 func (s *Service) handleAzureFunctionsInvoke(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {

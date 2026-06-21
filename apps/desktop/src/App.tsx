@@ -451,6 +451,123 @@ function mergeAzureResourceGroupSelection(
   });
 }
 
+function mergeAzureStorageSelection(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  return normaliseWorkspaceSnapshot({
+    ...current,
+    selectedAzureStorageAccount: normalised.selectedAzureStorageAccount,
+    selectedAzureBlobContainer: normalised.selectedAzureBlobContainer,
+    selectedAzureBlobName: normalised.selectedAzureBlobName,
+    azureBlobPrefixFilter: normalised.azureBlobPrefixFilter,
+    azureStorageAccounts: normalised.azureStorageAccounts,
+    azureBlobContainers: normalised.azureBlobContainers,
+    azureBlobs: normalised.azureBlobs,
+    azureBlobMetadata: normalised.azureBlobMetadata,
+    azureStorageStatusMessage: normalised.azureStorageStatusMessage,
+  });
+}
+
+function mergeAzureFunctionsSelection(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  return normaliseWorkspaceSnapshot({
+    ...current,
+    selectedAzureFunctionApp: normalised.selectedAzureFunctionApp,
+    selectedAzureFunction: normalised.selectedAzureFunction,
+    azureFunctionApps: normalised.azureFunctionApps,
+    azureFunctions: normalised.azureFunctions,
+    azureFunctionsStatusMessage: normalised.azureFunctionsStatusMessage,
+  });
+}
+
+function mergeAzureKeyVaultSelection(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  return normaliseWorkspaceSnapshot({
+    ...current,
+    selectedAzureKeyVault: normalised.selectedAzureKeyVault,
+    selectedAzureSecret: normalised.selectedAzureSecret,
+    azureKeyVaults: normalised.azureKeyVaults,
+    azureKeyVaultSecrets: normalised.azureKeyVaultSecrets,
+    azureKeyVaultStatusMessage: normalised.azureKeyVaultStatusMessage,
+  });
+}
+
+function mergeAzureCosmosSelection(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  return normaliseWorkspaceSnapshot({
+    ...current,
+    selectedAzureCosmosAccount: normalised.selectedAzureCosmosAccount,
+    selectedAzureCosmosDatabase: normalised.selectedAzureCosmosDatabase,
+    selectedAzureCosmosContainer: normalised.selectedAzureCosmosContainer,
+    azureCosmosAccounts: normalised.azureCosmosAccounts,
+    azureCosmosDatabases: normalised.azureCosmosDatabases,
+    azureCosmosContainers: normalised.azureCosmosContainers,
+    azureCosmosItems: normalised.azureCosmosItems,
+    azureCosmosStatusMessage: normalised.azureCosmosStatusMessage,
+  });
+}
+
+function mergeAzureWafSelection(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  return normaliseWorkspaceSnapshot({
+    ...current,
+    selectedAzureWafPolicy: normalised.selectedAzureWafPolicy,
+    azureLogAnalyticsWorkspaces: normalised.azureLogAnalyticsWorkspaces,
+    azureWafLogSchema: normalised.azureWafLogSchema,
+    azureWafPolicies: normalised.azureWafPolicies,
+    azureWafPolicyDetail: normalised.azureWafPolicyDetail,
+    azureWafRuleFireCounts: normalised.azureWafRuleFireCounts,
+    azureWafStatusMessage: normalised.azureWafStatusMessage,
+  });
+}
+
+function mergeAzureQueuesSelection(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  return normaliseWorkspaceSnapshot({
+    ...current,
+    selectedAzureStorageAccount: normalised.selectedAzureStorageAccount,
+    selectedAzureQueue: normalised.selectedAzureQueue,
+    azureStorageAccounts: normalised.azureStorageAccounts,
+    azureStorageQueues: normalised.azureStorageQueues,
+    azureQueueMessages: normalised.azureQueueMessages,
+    azureQueuesStatusMessage: normalised.azureQueuesStatusMessage,
+    azureStorageStatusMessage: normalised.azureStorageStatusMessage,
+  });
+}
+
+function mergeAwsS3Selection(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  return normaliseWorkspaceSnapshot({
+    ...current,
+    selectedS3BucketName: normalised.selectedS3BucketName,
+    selectedS3ObjectKey: normalised.selectedS3ObjectKey,
+    s3PrefixFilter: normalised.s3PrefixFilter,
+    s3Buckets: normalised.s3Buckets,
+    s3Objects: normalised.s3Objects,
+    s3ObjectMetadata: normalised.s3ObjectMetadata,
+  });
+}
+
 function applySessionWriteModeToWorkspace(
   workspace: WorkspaceSnapshot,
   session: SessionSnapshot,
@@ -1046,21 +1163,69 @@ export default function App() {
   // SessionSnapshot. Routing them through mutateSession misread the response,
   // briefly marked the session unlocked, wiped the workspace, and reloaded all
   // state, so the whole view flickered on every selection change.
-  async function mutateWorkspace(
+  type WorkspaceSelectionOptions = {
+    panelLoading?: boolean;
+    persistOnly?: boolean;
+    merge?: (current: WorkspaceSnapshot, incoming: WorkspaceSnapshot) => WorkspaceSnapshot;
+    onOptimistic?: () => void;
+    errorTitle?: string;
+  };
+
+  async function mutateWorkspaceSelection(
     method: string,
     params: Record<string, unknown> = {},
+    options: WorkspaceSelectionOptions = {},
   ): Promise<void> {
-    beginWorkspaceFetch();
+    const { panelLoading = false, persistOnly = false, merge, onOptimistic, errorTitle } = options;
+    if (onOptimistic) {
+      startTransition(onOptimistic);
+    }
+    if (panelLoading) {
+      beginAzureInventoryFetch();
+    }
     try {
       const workspaceResult = await backendRequest<WorkspaceSnapshot>(method, params);
-      startTransition(() => {
-        setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
-      });
+      if (!persistOnly) {
+        startTransition(() => {
+          setWorkspace((current) =>
+            merge ? merge(current, workspaceResult) : normaliseWorkspaceSnapshot(workspaceResult),
+          );
+        });
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Workspace mutation failed";
-      pushNotification("error", `Failed to execute ${method}`, message);
+      const message = error instanceof Error ? error.message : "Workspace selection failed";
+      pushNotification("error", errorTitle ?? `Failed to execute ${method}`, message);
     } finally {
-      endWorkspaceFetch();
+      if (panelLoading) {
+        endAzureInventoryFetch();
+      }
+    }
+  }
+
+  async function selectAzureWebApp(appName: string): Promise<void> {
+    const trimmed = appName.trim();
+    if (!trimmed) {
+      return;
+    }
+    startTransition(() => {
+      setSession((current) =>
+        normaliseSessionSnapshot({
+          ...current,
+          selectedAzureWebAppName: trimmed,
+        }),
+      );
+      setWorkspace((current) =>
+        normaliseWorkspaceSnapshot({
+          ...current,
+          selectedAzureWebAppName: trimmed,
+        }),
+      );
+    });
+    try {
+      await backendRequest("azure.webApps.select", { appName: trimmed });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "App Service selection failed";
+      pushNotification("error", "Could not select web app", message);
     }
   }
 
@@ -1146,22 +1311,39 @@ export default function App() {
   }
 
   async function selectAzureWafPolicy(policyName: string): Promise<void> {
+    const trimmed = policyName.trim();
+    if (!trimmed) {
+      return;
+    }
     const previousPolicy = workspace.selectedAzureWafPolicy;
-    setWorkspace((current) => ({ ...current, selectedAzureWafPolicy: policyName }));
-    beginWorkspaceFetch();
+    beginAzureInventoryFetch();
+    startTransition(() => {
+      setSession((current) =>
+        normaliseSessionSnapshot({
+          ...current,
+          selectedAzureWafPolicy: trimmed,
+        }),
+      );
+      setWorkspace((current) =>
+        normaliseWorkspaceSnapshot({
+          ...current,
+          selectedAzureWafPolicy: trimmed,
+        }),
+      );
+    });
     try {
       const workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.waf.selectPolicy", {
-        policyName,
+        policyName: trimmed,
       });
       startTransition(() => {
-        setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        setWorkspace((current) => mergeAzureWafSelection(current, workspaceResult));
       });
     } catch (error) {
       setWorkspace((current) => ({ ...current, selectedAzureWafPolicy: previousPolicy }));
       const message = error instanceof Error ? error.message : "WAF policy selection failed";
       pushNotification("error", "Could not select WAF policy", message);
     } finally {
-      endWorkspaceFetch();
+      endAzureInventoryFetch();
     }
   }
 
@@ -2234,7 +2416,18 @@ export default function App() {
           selectEC2Instance(context.ec2InstanceId);
         }
         if (context?.s3BucketName) {
-          void mutateWorkspace("aws.s3.selectBucket", { bucketName: context.s3BucketName });
+          void mutateWorkspaceSelection("aws.s3.selectBucket", { bucketName: context.s3BucketName }, {
+            merge: mergeAwsS3Selection,
+            onOptimistic: () => {
+              setWorkspace((current) =>
+                normaliseWorkspaceSnapshot({
+                  ...current,
+                  selectedS3BucketName: context.s3BucketName,
+                  selectedS3ObjectKey: undefined,
+                }),
+              );
+            },
+          });
         }
         if (context?.openLambdaCreate) {
           setLambdaCreateFormOpen(true);
@@ -2248,10 +2441,32 @@ export default function App() {
       onNavigatePage={setActiveS3PageId}
       showSensitiveValues={showSensitiveValues}
       onSelectBucket={(bucketName) => {
-        void mutateWorkspace("aws.s3.selectBucket", { bucketName });
+        void mutateWorkspaceSelection("aws.s3.selectBucket", { bucketName }, {
+          merge: mergeAwsS3Selection,
+          onOptimistic: () => {
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedS3BucketName: bucketName,
+                selectedS3ObjectKey: undefined,
+              }),
+            );
+          },
+        });
       }}
       onSelectObject={(objectKey) => {
-        void mutateWorkspace("aws.s3.selectObject", { objectKey });
+        void mutateWorkspaceSelection("aws.s3.selectObject", { objectKey }, {
+          merge: mergeAwsS3Selection,
+          persistOnly: true,
+          onOptimistic: () => {
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedS3ObjectKey: objectKey,
+              }),
+            );
+          },
+        });
       }}
       onSetPrefixFilter={applyS3PrefixFilter}
       uploadStatus={s3UploadStatus}
@@ -2427,16 +2642,99 @@ export default function App() {
       activePageId={activeAzureStoragePageId}
       actionStatus={azureStorageActionStatus}
       onSelectAccount={(accountName) => {
-        void mutateWorkspace("azure.storage.selectAccount", { accountName });
+        void mutateWorkspaceSelection("azure.storage.selectAccount", { accountName }, {
+          panelLoading: true,
+          merge: mergeAzureStorageSelection,
+          onOptimistic: () => {
+            setSession((current) =>
+              normaliseSessionSnapshot({
+                ...current,
+                selectedAzureStorageAccount: accountName,
+                selectedAzureBlobContainer: undefined,
+                selectedAzureBlobName: undefined,
+              }),
+            );
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedAzureStorageAccount: accountName,
+                selectedAzureBlobContainer: undefined,
+                selectedAzureBlobName: undefined,
+                azureBlobContainers: [],
+                azureBlobs: [],
+              }),
+            );
+          },
+          errorTitle: "Could not select storage account",
+        });
       }}
       onSelectContainer={(containerName) => {
-        void mutateWorkspace("azure.storage.selectContainer", { containerName });
+        void mutateWorkspaceSelection("azure.storage.selectContainer", { containerName }, {
+          panelLoading: true,
+          merge: mergeAzureStorageSelection,
+          onOptimistic: () => {
+            setSession((current) =>
+              normaliseSessionSnapshot({
+                ...current,
+                selectedAzureBlobContainer: containerName,
+                selectedAzureBlobName: undefined,
+              }),
+            );
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedAzureBlobContainer: containerName,
+                selectedAzureBlobName: undefined,
+                azureBlobs: [],
+              }),
+            );
+          },
+          errorTitle: "Could not select blob container",
+        });
       }}
       onSelectBlob={(blobName) => {
-        void mutateWorkspace("azure.storage.selectBlob", { blobName });
+        void mutateWorkspaceSelection("azure.storage.selectBlob", { blobName }, {
+          persistOnly: true,
+          onOptimistic: () => {
+            setSession((current) =>
+              normaliseSessionSnapshot({
+                ...current,
+                selectedAzureBlobName: blobName,
+              }),
+            );
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedAzureBlobName: blobName,
+              }),
+            );
+          },
+          errorTitle: "Could not select blob",
+        });
       }}
       onSetPrefixFilter={(prefix) => {
-        void mutateWorkspace("azure.storage.setPrefixFilter", { prefix });
+        void mutateWorkspaceSelection("azure.storage.setPrefixFilter", { prefix }, {
+          panelLoading: true,
+          merge: mergeAzureStorageSelection,
+          onOptimistic: () => {
+            setSession((current) =>
+              normaliseSessionSnapshot({
+                ...current,
+                azureBlobPrefixFilter: prefix,
+                selectedAzureBlobName: undefined,
+              }),
+            );
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                azureBlobPrefixFilter: prefix,
+                selectedAzureBlobName: undefined,
+                azureBlobs: [],
+              }),
+            );
+          },
+          errorTitle: "Could not update blob prefix filter",
+        });
       }}
       onCreateAccount={(resourceGroup, accountName, location) => {
         setAzureStorageActionStatus(`Creating storage account ${accountName}...`);
@@ -2511,7 +2809,7 @@ export default function App() {
         void selectAzureResourceGroup(resourceGroup);
       }}
       onSelectWebApp={(appName) => {
-        void mutateWorkspace("azure.webApps.select", { appName });
+        void selectAzureWebApp(appName);
       }}
       onCreateWebApp={(resourceGroup, appName, location, runtime) => {
         setAzureAppServiceActionStatus(`Creating web app ${appName}...`);
@@ -2665,10 +2963,48 @@ export default function App() {
     <AzureFunctionsView
       workspace={activeWorkspace}
       onSelectApp={(appName) => {
-        void mutateWorkspace("azure.functions.selectApp", { appName });
+        void mutateWorkspaceSelection("azure.functions.selectApp", { appName }, {
+          panelLoading: true,
+          merge: mergeAzureFunctionsSelection,
+          onOptimistic: () => {
+            setSession((current) =>
+              normaliseSessionSnapshot({
+                ...current,
+                selectedAzureFunctionApp: appName,
+                selectedAzureFunction: undefined,
+              }),
+            );
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedAzureFunctionApp: appName,
+                selectedAzureFunction: undefined,
+                azureFunctions: [],
+              }),
+            );
+          },
+          errorTitle: "Could not select Function App",
+        });
       }}
       onSelectFunction={(functionName) => {
-        void mutateWorkspace("azure.functions.selectFunction", { functionName });
+        void mutateWorkspaceSelection("azure.functions.selectFunction", { functionName }, {
+          persistOnly: true,
+          onOptimistic: () => {
+            setSession((current) =>
+              normaliseSessionSnapshot({
+                ...current,
+                selectedAzureFunction: functionName,
+              }),
+            );
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedAzureFunction: functionName,
+              }),
+            );
+          },
+          errorTitle: "Could not select function",
+        });
       }}
       onInvoke={(appName, functionName, payload) =>
         backendRequest<AzureFunctionInvokeResult>("azure.functions.invoke", {
@@ -2682,7 +3018,28 @@ export default function App() {
     <AzureKeyVaultView
       workspace={activeWorkspace}
       onSelectVault={(vaultName) => {
-        void mutateWorkspace("azure.keyVault.selectVault", { vaultName });
+        void mutateWorkspaceSelection("azure.keyVault.selectVault", { vaultName }, {
+          panelLoading: true,
+          merge: mergeAzureKeyVaultSelection,
+          onOptimistic: () => {
+            setSession((current) =>
+              normaliseSessionSnapshot({
+                ...current,
+                selectedAzureKeyVault: vaultName,
+                selectedAzureSecret: undefined,
+              }),
+            );
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedAzureKeyVault: vaultName,
+                selectedAzureSecret: undefined,
+                azureKeyVaultSecrets: [],
+              }),
+            );
+          },
+          errorTitle: "Could not select Key Vault",
+        });
       }}
       onReveal={(vaultName, secretName) =>
         backendRequest<{ value: string }>("azure.keyVault.revealSecret", { vaultName, secretName }).then(
@@ -2703,23 +3060,129 @@ export default function App() {
     <AzureCosmosView
       workspace={activeWorkspace}
       onSelectAccount={(account) => {
-        void mutateWorkspace("azure.cosmos.selectAccount", { account });
+        void mutateWorkspaceSelection("azure.cosmos.selectAccount", { account }, {
+          panelLoading: true,
+          merge: mergeAzureCosmosSelection,
+          onOptimistic: () => {
+            setSession((current) =>
+              normaliseSessionSnapshot({
+                ...current,
+                selectedAzureCosmosAccount: account,
+                selectedAzureCosmosDatabase: undefined,
+                selectedAzureCosmosContainer: undefined,
+              }),
+            );
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedAzureCosmosAccount: account,
+                selectedAzureCosmosDatabase: undefined,
+                selectedAzureCosmosContainer: undefined,
+                azureCosmosDatabases: [],
+                azureCosmosContainers: [],
+                azureCosmosItems: [],
+              }),
+            );
+          },
+          errorTitle: "Could not select Cosmos account",
+        });
       }}
       onSelectDatabase={(database) => {
-        void mutateWorkspace("azure.cosmos.selectDatabase", { database });
+        void mutateWorkspaceSelection("azure.cosmos.selectDatabase", { database }, {
+          panelLoading: true,
+          merge: mergeAzureCosmosSelection,
+          onOptimistic: () => {
+            setSession((current) =>
+              normaliseSessionSnapshot({
+                ...current,
+                selectedAzureCosmosDatabase: database,
+                selectedAzureCosmosContainer: undefined,
+              }),
+            );
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedAzureCosmosDatabase: database,
+                selectedAzureCosmosContainer: undefined,
+                azureCosmosContainers: [],
+                azureCosmosItems: [],
+              }),
+            );
+          },
+          errorTitle: "Could not select Cosmos database",
+        });
       }}
       onSelectContainer={(container) => {
-        void mutateWorkspace("azure.cosmos.selectContainer", { container });
+        void mutateWorkspaceSelection("azure.cosmos.selectContainer", { container }, {
+          panelLoading: true,
+          merge: mergeAzureCosmosSelection,
+          onOptimistic: () => {
+            setSession((current) =>
+              normaliseSessionSnapshot({
+                ...current,
+                selectedAzureCosmosContainer: container,
+              }),
+            );
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedAzureCosmosContainer: container,
+                azureCosmosItems: [],
+              }),
+            );
+          },
+          errorTitle: "Could not select Cosmos container",
+        });
       }}
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-queues" ? (
     <AzureQueuesView
       workspace={activeWorkspace}
       onSelectAccount={(account) => {
-        void mutateWorkspace("azure.storage.selectAccount", { accountName: account });
+        void mutateWorkspaceSelection("azure.storage.selectAccount", { accountName: account }, {
+          panelLoading: true,
+          merge: mergeAzureQueuesSelection,
+          onOptimistic: () => {
+            setSession((current) =>
+              normaliseSessionSnapshot({
+                ...current,
+                selectedAzureStorageAccount: account,
+                selectedAzureQueue: undefined,
+              }),
+            );
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedAzureStorageAccount: account,
+                selectedAzureQueue: undefined,
+                azureStorageQueues: [],
+                azureQueueMessages: [],
+              }),
+            );
+          },
+          errorTitle: "Could not select storage account",
+        });
       }}
       onSelectQueue={(queue) => {
-        void mutateWorkspace("azure.queues.selectQueue", { queue });
+        void mutateWorkspaceSelection("azure.queues.selectQueue", { queue }, {
+          panelLoading: true,
+          merge: mergeAzureQueuesSelection,
+          onOptimistic: () => {
+            setSession((current) =>
+              normaliseSessionSnapshot({
+                ...current,
+                selectedAzureQueue: queue,
+              }),
+            );
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedAzureQueue: queue,
+              }),
+            );
+          },
+          errorTitle: "Could not select queue",
+        });
       }}
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-entra" ? (

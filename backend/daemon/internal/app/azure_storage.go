@@ -280,7 +280,10 @@ func (s *Service) handleAzureStorageSelectAccount(ctx context.Context, params js
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "info", fmt.Sprintf("Selected Azure storage account %s.", request.AccountName))
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "storage",
+	}, "", "")
 }
 
 func (s *Service) handleAzureStorageSelectContainer(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -298,7 +301,10 @@ func (s *Service) handleAzureStorageSelectContainer(ctx context.Context, params 
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "info", fmt.Sprintf("Selected Azure blob container %s.", request.ContainerName))
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "storage",
+	}, "", "")
 }
 
 func (s *Service) handleAzureStorageSelectBlob(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -315,7 +321,10 @@ func (s *Service) handleAzureStorageSelectBlob(ctx context.Context, params json.
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "", "")
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "storage",
+	}, "", "")
 }
 
 func (s *Service) handleAzureStorageSetPrefixFilter(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -333,7 +342,10 @@ func (s *Service) handleAzureStorageSetPrefixFilter(ctx context.Context, params 
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "info", fmt.Sprintf("Updated Azure blob prefix filter to %q.", request.Prefix))
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "storage",
+	}, "", "")
 }
 
 func (s *Service) handleAzureStorageCreateAccount(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

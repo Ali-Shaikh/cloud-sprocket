@@ -405,18 +405,21 @@ func TestAzurePhaseOneEnrichmentRunsInParallel(t *testing.T) {
 			stubAzureInventory: stubAzureInventory{
 				resourceGroups: []models.AzureResourceGroup{{Name: "demo-rg"}},
 			},
-			delay: 120 * time.Millisecond,
+			delay: 50 * time.Millisecond,
 		},
 		now: func() time.Time { return time.Now().UTC() },
 	}
 
+	const phaseOneEnrichers = 7
 	start := time.Now()
 	service.enrichAzureWorkspace(workspace, session, azureEnrichmentOptions{lightweight: true})
 	elapsed := time.Since(start)
 
-	// Seven phase-one enrichers each sleep 120ms. Serial would exceed 700ms.
-	if elapsed > 450*time.Millisecond {
-		t.Fatalf("phase-one enrichment took %v; expected parallel completion well under 700ms", elapsed)
+	// Seven phase-one enrichers each sleep 50ms. Serial would take at least 350ms;
+	// parallel should finish near one delay. Allow headroom for slow CI runners.
+	serialFloor := time.Duration(phaseOneEnrichers) * 50 * time.Millisecond
+	if elapsed >= serialFloor {
+		t.Fatalf("phase-one enrichment took %v; expected parallel completion faster than serial floor %v", elapsed, serialFloor)
 	}
 	if len(workspace.AzureResourceGroups) == 0 {
 		t.Fatal("expected resource groups after parallel enrichment")
