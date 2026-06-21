@@ -146,6 +146,8 @@ export interface SessionSnapshot {
   selectedAzureLogWorkspace?: string;
   selectedAzureFunctionApp?: string;
   selectedAzureFunction?: string;
+  selectedAzureKeyVault?: string;
+  selectedAzureSecret?: string;
   lockedProviderId?: string;
   lockedProfileId?: string;
   lockedAuthMethod?: AuthMethod;
@@ -447,6 +449,19 @@ export interface AzureFunctionInvokeResult {
   body: string;
 }
 
+export interface AzureKeyVault {
+  name: string;
+  resourceGroup?: string;
+  location?: string;
+  vaultUri?: string;
+}
+
+export interface AzureKeyVaultSecret {
+  name: string;
+  enabled: boolean;
+  updated?: string;
+}
+
 export interface WorkspaceSnapshot {
   provider?: ProviderSummary;
   profile?: ProfileSummary;
@@ -476,11 +491,14 @@ export interface WorkspaceSnapshot {
   selectedAzureLogWorkspace?: string;
   selectedAzureFunctionApp?: string;
   selectedAzureFunction?: string;
+  selectedAzureKeyVault?: string;
+  selectedAzureSecret?: string;
   azureStatusMessage?: string;
   azureStorageStatusMessage?: string;
   azureAppServiceStatusMessage?: string;
   azureLogAnalyticsStatusMessage?: string;
   azureFunctionsStatusMessage?: string;
+  azureKeyVaultStatusMessage?: string;
   azureResourceGroups: AzureResourceGroup[];
   azureVirtualMachines: AzureVirtualMachine[];
   azureStorageAccounts: AzureStorageAccount[];
@@ -491,6 +509,8 @@ export interface WorkspaceSnapshot {
   azureLogAnalyticsWorkspaces: AzureLogAnalyticsWorkspace[];
   azureFunctionApps: AzureFunctionApp[];
   azureFunctions: AzureFunction[];
+  azureKeyVaults: AzureKeyVault[];
+  azureKeyVaultSecrets: AzureKeyVaultSecret[];
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;

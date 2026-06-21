@@ -67,6 +67,7 @@ import AzureStorageView from "./views/workspace/AzureStorageView";
 import AzureAppServiceView from "./views/workspace/AzureAppServiceView";
 import LogAnalyticsView from "./views/workspace/LogAnalyticsView";
 import AzureFunctionsView from "./views/workspace/AzureFunctionsView";
+import AzureKeyVaultView from "./views/workspace/AzureKeyVaultView";
 import RuntimeView from "./views/workspace/RuntimeView";
 import PlaceholderView from "./views/workspace/PlaceholderView";
 import ActivityView from "./views/workspace/ActivityView";
@@ -446,6 +447,8 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     azureLogAnalyticsWorkspaces: normaliseArray(source.azureLogAnalyticsWorkspaces),
     azureFunctionApps: normaliseArray(source.azureFunctionApps),
     azureFunctions: normaliseArray(source.azureFunctions),
+    azureKeyVaults: normaliseArray(source.azureKeyVaults),
+    azureKeyVaultSecrets: normaliseArray(source.azureKeyVaultSecrets),
     s3Buckets: normaliseArray(source.s3Buckets).map(normaliseS3Bucket),
     s3Objects: normaliseArray(source.s3Objects).map(normaliseS3Object),
     s3ObjectMetadata: normaliseDetailFields(source.s3ObjectMetadata),
@@ -525,6 +528,8 @@ const emptyWorkspace: WorkspaceSnapshot = {
   azureLogAnalyticsWorkspaces: [],
   azureFunctionApps: [],
   azureFunctions: [],
+  azureKeyVaults: [],
+  azureKeyVaultSecrets: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -2183,6 +2188,27 @@ export default function App() {
         })
       }
     />
+  ) : session.isLocked && activeWorkspaceTabId === "azure-key-vault" ? (
+    <AzureKeyVaultView
+      workspace={workspace}
+      onSelectVault={(vaultName) => {
+        void mutateWorkspace("azure.keyVault.selectVault", { vaultName });
+      }}
+      onReveal={(vaultName, secretName) =>
+        backendRequest<{ value: string }>("azure.keyVault.revealSecret", { vaultName, secretName }).then(
+          (result) => result.value,
+        )
+      }
+      onSetSecret={(vaultName, secretName, value) =>
+        backendRequest<WorkspaceSnapshot>("azure.keyVault.setSecret", { vaultName, secretName, value }).then(
+          (workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            });
+          },
+        )
+      }
+    />
   ) : activeWorkspaceTabId === "virtualisation" ? (
     <RuntimeView
       workspace={workspace}
@@ -2794,6 +2820,7 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     "azure-app-service": "App Service",
     "azure-log-analytics": "Log Analytics",
     "azure-functions": "Functions",
+    "azure-key-vault": "Key Vault",
     actions: "Activity",
   };
   return labels[tabId] ?? tabs.find((tab) => tab.tabId === tabId)?.label ?? "Workspace";
@@ -2835,6 +2862,8 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureLogAnalyticsWorkspaces.length };
     case "azure-functions":
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureFunctionApps.length };
+    case "azure-key-vault":
+      return { ...base, iconUrl: azureIconUrl, count: workspace.azureKeyVaults.length };
     case "actions":
       return { ...base, icon: Boxes };
     case "virtualisation":

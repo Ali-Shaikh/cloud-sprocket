@@ -551,6 +551,20 @@ const mockAzureFunctions = [
   { name: "timerCleanup", trigger: "timerTrigger" },
 ];
 
+const mockAzureKeyVaults = [
+  { name: "app-vault", resourceGroup: "rg-marketing-prod", location: "uaenorth", vaultUri: "https://app-vault.vault.azure.net/" },
+];
+
+const mockAzureKeyVaultSecrets = [
+  { name: "db-password", enabled: true },
+  { name: "api-key", enabled: true },
+];
+
+const mockSecretValues: Record<string, string> = {
+  "db-password": "p@ssw0rd-mock",
+  "api-key": "ak-mock-123",
+};
+
 const mockAzureVirtualMachines = {
   "rg-marketing-prod": [
     {
@@ -1097,6 +1111,15 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       : undefined,
     azureFunctionApps: isAzureWorkspace ? mockAzureFunctionApps : [],
     azureFunctions: isAzureWorkspace ? mockAzureFunctions : [],
+    selectedAzureKeyVault: isAzureWorkspace
+      ? mockState.session.selectedAzureKeyVault ?? mockAzureKeyVaults[0]?.name
+      : undefined,
+    selectedAzureSecret: isAzureWorkspace ? mockState.session.selectedAzureSecret : undefined,
+    azureKeyVaultStatusMessage: isAzureWorkspace
+      ? `Loaded ${mockAzureKeyVaults.length} Key Vault(s).`
+      : undefined,
+    azureKeyVaults: isAzureWorkspace ? mockAzureKeyVaults : [],
+    azureKeyVaultSecrets: isAzureWorkspace ? mockAzureKeyVaultSecrets : [],
     selectedS3BucketName,
     selectedS3ObjectKey,
     s3PrefixFilter: mockState.session.s3PrefixFilter,
@@ -1769,6 +1792,30 @@ function handleMockRequest<T>(
       }
       appendLog("success", `Invoked Azure function ${String(params.functionName ?? "")} (mock).`);
       return Promise.resolve({ statusCode: 200, body: '{"ok":true}' } as T);
+    }
+    case "azure.keyVault.selectVault":
+      mockState.session.selectedAzureKeyVault = String(params.vaultName ?? "");
+      mockState.session.selectedAzureSecret = "";
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.keyVault.selectSecret":
+      mockState.session.selectedAzureSecret = String(params.secretName ?? "");
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.keyVault.revealSecret": {
+      const name = String(params.secretName ?? "");
+      return Promise.resolve({ value: mockSecretValues[name] ?? "(no value)" } as T);
+    }
+    case "azure.keyVault.setSecret": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("setting a secret requires write mode to be enabled for this Azure workspace"));
+      }
+      const name = String(params.secretName ?? "").trim();
+      if (name && !mockAzureKeyVaultSecrets.some((secret) => secret.name === name)) {
+        mockAzureKeyVaultSecrets.push({ name, enabled: true });
+      }
+      mockSecretValues[name] = String(params.value ?? "");
+      mockState.session.selectedAzureSecret = name;
+      appendLog("success", `Set Key Vault secret ${name} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
     }
     case "azure.webApps.create": {
       if (!mockState.session.azureWriteModeEnabled) {

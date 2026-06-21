@@ -72,6 +72,8 @@ const workspaceFixture: WorkspaceSnapshot = {
       azureLogAnalyticsWorkspaces: [],
       azureFunctionApps: [],
       azureFunctions: [],
+      azureKeyVaults: [],
+      azureKeyVaultSecrets: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
