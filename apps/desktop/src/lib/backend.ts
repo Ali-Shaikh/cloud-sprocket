@@ -542,6 +542,15 @@ const mockAzureLogAnalyticsWorkspaces = [
   { name: "law-shared", resourceGroup: "rg-shared", location: "westeurope", customerId: "law-guid-2" },
 ];
 
+const mockAzureFunctionApps = [
+  { name: "orders-fn", resourceGroup: "rg-marketing-prod", location: "uaenorth", state: "Running", defaultHostName: "orders-fn.azurewebsites.net" },
+];
+
+const mockAzureFunctions = [
+  { name: "createOrder", trigger: "httpTrigger" },
+  { name: "timerCleanup", trigger: "timerTrigger" },
+];
+
 const mockAzureVirtualMachines = {
   "rg-marketing-prod": [
     {
@@ -1079,6 +1088,15 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       ? `Loaded ${mockAzureLogAnalyticsWorkspaces.length} Log Analytics workspace(s). Local KQL is a subset of Azure KQL.`
       : undefined,
     azureLogAnalyticsWorkspaces: isAzureWorkspace ? mockAzureLogAnalyticsWorkspaces : [],
+    selectedAzureFunctionApp: isAzureWorkspace
+      ? mockState.session.selectedAzureFunctionApp ?? mockAzureFunctionApps[0]?.name
+      : undefined,
+    selectedAzureFunction: isAzureWorkspace ? mockState.session.selectedAzureFunction : undefined,
+    azureFunctionsStatusMessage: isAzureWorkspace
+      ? `Loaded ${mockAzureFunctionApps.length} Function App(s).`
+      : undefined,
+    azureFunctionApps: isAzureWorkspace ? mockAzureFunctionApps : [],
+    azureFunctions: isAzureWorkspace ? mockAzureFunctions : [],
     selectedS3BucketName,
     selectedS3ObjectKey,
     s3PrefixFilter: mockState.session.s3PrefixFilter,
@@ -1737,6 +1755,20 @@ function handleMockRequest<T>(
           ["2026-06-21T10:01:00Z", "Error", "mock log row two"],
         ],
       } as T);
+    }
+    case "azure.functions.selectApp":
+      mockState.session.selectedAzureFunctionApp = String(params.appName ?? "");
+      mockState.session.selectedAzureFunction = "";
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.functions.selectFunction":
+      mockState.session.selectedAzureFunction = String(params.functionName ?? "");
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.functions.invoke": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("invoking a function requires write mode to be enabled for this Azure workspace"));
+      }
+      appendLog("success", `Invoked Azure function ${String(params.functionName ?? "")} (mock).`);
+      return Promise.resolve({ statusCode: 200, body: '{"ok":true}' } as T);
     }
     case "azure.webApps.create": {
       if (!mockState.session.azureWriteModeEnabled) {

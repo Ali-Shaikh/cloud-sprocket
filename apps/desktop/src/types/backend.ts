@@ -144,6 +144,8 @@ export interface SessionSnapshot {
   azureBlobPrefixFilter?: string;
   selectedAzureWebAppName?: string;
   selectedAzureLogWorkspace?: string;
+  selectedAzureFunctionApp?: string;
+  selectedAzureFunction?: string;
   lockedProviderId?: string;
   lockedProfileId?: string;
   lockedAuthMethod?: AuthMethod;
@@ -425,6 +427,26 @@ export interface AzureLogQueryResult {
   rows: string[][];
 }
 
+export interface AzureFunctionApp {
+  name: string;
+  resourceGroup?: string;
+  location?: string;
+  state?: string;
+  defaultHostName?: string;
+  runtime?: string;
+}
+
+export interface AzureFunction {
+  name: string;
+  trigger?: string;
+  language?: string;
+}
+
+export interface AzureFunctionInvokeResult {
+  statusCode: number;
+  body: string;
+}
+
 export interface WorkspaceSnapshot {
   provider?: ProviderSummary;
   profile?: ProfileSummary;
@@ -452,10 +474,13 @@ export interface WorkspaceSnapshot {
   azureBlobPrefixFilter?: string;
   selectedAzureWebAppName?: string;
   selectedAzureLogWorkspace?: string;
+  selectedAzureFunctionApp?: string;
+  selectedAzureFunction?: string;
   azureStatusMessage?: string;
   azureStorageStatusMessage?: string;
   azureAppServiceStatusMessage?: string;
   azureLogAnalyticsStatusMessage?: string;
+  azureFunctionsStatusMessage?: string;
   azureResourceGroups: AzureResourceGroup[];
   azureVirtualMachines: AzureVirtualMachine[];
   azureStorageAccounts: AzureStorageAccount[];
@@ -464,6 +489,8 @@ export interface WorkspaceSnapshot {
   azureBlobMetadata: DetailField[];
   azureWebApps: AzureWebApp[];
   azureLogAnalyticsWorkspaces: AzureLogAnalyticsWorkspace[];
+  azureFunctionApps: AzureFunctionApp[];
+  azureFunctions: AzureFunction[];
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;

@@ -70,6 +70,8 @@ const workspaceFixture: LogsWorkspaceSnapshot = {
   azureBlobMetadata: [],
       azureWebApps: [],
       azureLogAnalyticsWorkspaces: [],
+      azureFunctionApps: [],
+      azureFunctions: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
