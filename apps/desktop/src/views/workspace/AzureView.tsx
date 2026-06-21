@@ -31,6 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
+import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
 import { DetailFieldList } from "./detail-fields";
@@ -42,6 +43,7 @@ export type AzureVMAction = "start" | "powerOff" | "deallocate" | "restart";
 
 export type AzureViewProps = {
   workspace: WorkspaceSnapshot;
+  inventoryLoading?: boolean;
   /** Raw sub-page id from the nav; unknown values fall back to "overview". */
   activePageId: string;
   showSensitiveValues: boolean;
@@ -145,6 +147,7 @@ const snippetCard = "rounded-lg border border-border bg-muted/40 p-3";
  */
 export default function AzureView({
   workspace,
+  inventoryLoading = false,
   activePageId,
   showSensitiveValues,
   actionStatus,
@@ -408,15 +411,29 @@ export default function AzureView({
           ) : null}
         </div>
         {inventoryStatusRow}
-        <p className="text-sm text-muted-foreground">
-          {workspace.azureStatusMessage ||
-            "Azure inventory is waiting for an open Azure workspace."}
-        </p>
+        {inventoryLoading ? (
+          <InventoryLoadingState
+            variant="inline"
+            label={
+              workspace.azureStatusMessage || "Loading Azure resource groups..."
+            }
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {workspace.azureStatusMessage ||
+              "Azure inventory is waiting for an open Azure workspace."}
+          </p>
+        )}
         {actionStatus ? (
           <p className="text-sm text-muted-foreground">{actionStatus}</p>
         ) : null}
         <div className="overflow-hidden rounded-lg border border-border">
-          {workspace.azureResourceGroups.length === 0 ? (
+          {inventoryLoading && workspace.azureResourceGroups.length === 0 ? (
+            <InventoryLoadingState
+              label={workspace.azureStatusMessage || "Loading resource groups..."}
+              className="border-0 bg-transparent"
+            />
+          ) : workspace.azureResourceGroups.length === 0 ? (
             <EmptyState
               icon={<Layers />}
               title="No resource groups"
@@ -552,6 +569,7 @@ export default function AzureView({
             <div className={cn(fieldLabel, "mb-1")}>Resource group</div>
             <Select
               value={workspace.selectedAzureResourceGroup ?? ""}
+              disabled={inventoryLoading}
               onValueChange={(value) => {
                 if (value) {
                   onSelectResourceGroup(value);
@@ -620,9 +638,20 @@ export default function AzureView({
             {countLabel(workspace.azureVirtualMachines.length, "VM", "VMs")}
           </div>
         </div>
+        {inventoryLoading ? (
+          <InventoryLoadingState
+            variant="inline"
+            label={workspace.azureStatusMessage || "Loading virtual machines..."}
+          />
+        ) : null}
         {actionStatus ? <p className="text-sm text-muted-foreground">{actionStatus}</p> : null}
         <div className="overflow-hidden rounded-lg border border-border">
-          {workspace.azureVirtualMachines.length === 0 ? (
+          {inventoryLoading && workspace.azureVirtualMachines.length === 0 ? (
+            <InventoryLoadingState
+              label={workspace.azureStatusMessage || "Loading virtual machines..."}
+              className="border-0 bg-transparent"
+            />
+          ) : workspace.azureVirtualMachines.length === 0 ? (
             <EmptyState
               icon={<MonitorCog />}
               title="No virtual machines"
@@ -681,7 +710,12 @@ export default function AzureView({
               {selectedVm?.vmId || "Select a virtual machine for detail."}
             </p>
           </div>
-          {selectedVm ? (
+          {inventoryLoading ? (
+            <InventoryLoadingState
+              variant="inline"
+              label="Loading virtual machine details..."
+            />
+          ) : selectedVm ? (
             <DetailFieldList
               fields={[
                 { label: "Name", value: selectedVm.name },
@@ -762,7 +796,7 @@ export default function AzureView({
           </div>
         </div>
         {bastionLoading ? (
-          <p className="text-sm text-muted-foreground">Loading Bastion hosts...</p>
+          <InventoryLoadingState variant="inline" label="Loading Bastion hosts..." />
         ) : bastionHosts.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {bastionStatus || "No Bastion hosts are available for this subscription."}

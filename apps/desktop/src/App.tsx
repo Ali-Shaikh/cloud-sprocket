@@ -73,6 +73,7 @@ import ConnectView from "./views/ConnectView";
 import OverviewView from "./views/OverviewView";
 import DeployView from "./views/DeployView";
 import { CommandPalette, type Command } from "./components/command-palette";
+import { InventoryLoadingState } from "./components/inventory-loading-state";
 import { WorkspaceSkeleton } from "./components/workspace-skeleton";
 import DebugView from "./views/DebugView";
 import StorageView from "./views/workspace/StorageView";
@@ -711,6 +712,30 @@ export default function App() {
   // lock, so zero counts are real rather than "not fetched yet".
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
+  const [workspaceFetching, setWorkspaceFetching] = useState(false);
+  const workspaceFetchDepthRef = useRef(0);
+
+  function beginWorkspaceFetch(): void {
+    workspaceFetchDepthRef.current += 1;
+    if (workspaceFetchDepthRef.current === 1) {
+      setWorkspaceFetching(true);
+      setWorkspaceLoading(true);
+    }
+  }
+
+  function endWorkspaceFetch(): void {
+    workspaceFetchDepthRef.current = Math.max(0, workspaceFetchDepthRef.current - 1);
+    if (workspaceFetchDepthRef.current === 0) {
+      setWorkspaceFetching(false);
+      setWorkspaceLoading(false);
+    }
+  }
+
+  function resetWorkspaceFetch(): void {
+    workspaceFetchDepthRef.current = 0;
+    setWorkspaceFetching(false);
+    setWorkspaceLoading(false);
+  }
   const [openingProfileId, setOpeningProfileId] = useState<string>();
   const [localStackAuthToken, setLocalStackAuthToken] = useState("");
   const [localStackPersistence, setLocalStackPersistence] = useState(false);
@@ -844,7 +869,7 @@ export default function App() {
               setWorkspace(workspaceResult);
               setWorkspaceLoaded(true);
             });
-            setWorkspaceLoading(false);
+            resetWorkspaceFetch();
           }
           if (job.label.toLowerCase().includes("ec2")) {
             setEC2ActionStatus(job.message);
@@ -1008,6 +1033,7 @@ export default function App() {
     method: string,
     params: Record<string, unknown> = {},
   ): Promise<void> {
+    beginWorkspaceFetch();
     try {
       const workspaceResult = await backendRequest<WorkspaceSnapshot>(method, params);
       startTransition(() => {
@@ -1016,6 +1042,8 @@ export default function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Workspace mutation failed";
       pushNotification("error", `Failed to execute ${method}`, message);
+    } finally {
+      endWorkspaceFetch();
     }
   }
 
@@ -1024,6 +1052,7 @@ export default function App() {
     if (!trimmed) {
       return;
     }
+    beginWorkspaceFetch();
     startTransition(() => {
       setSession((current) =>
         normaliseSessionSnapshot({
@@ -1050,6 +1079,8 @@ export default function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Virtual machine selection failed";
       pushNotification("error", "Could not select virtual machine", message);
+    } finally {
+      endWorkspaceFetch();
     }
   }
 
@@ -1058,6 +1089,7 @@ export default function App() {
     if (!trimmed) {
       return;
     }
+    beginWorkspaceFetch();
     startTransition(() => {
       setSession((current) =>
         normaliseSessionSnapshot({
@@ -1091,12 +1123,15 @@ export default function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Resource group selection failed";
       pushNotification("error", "Could not load resource group inventory", message);
+    } finally {
+      endWorkspaceFetch();
     }
   }
 
   async function selectAzureWafPolicy(policyName: string): Promise<void> {
     const previousPolicy = workspace.selectedAzureWafPolicy;
     setWorkspace((current) => ({ ...current, selectedAzureWafPolicy: policyName }));
+    beginWorkspaceFetch();
     try {
       const workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.waf.selectPolicy", {
         policyName,
@@ -1108,6 +1143,8 @@ export default function App() {
       setWorkspace((current) => ({ ...current, selectedAzureWafPolicy: previousPolicy }));
       const message = error instanceof Error ? error.message : "WAF policy selection failed";
       pushNotification("error", "Could not select WAF policy", message);
+    } finally {
+      endWorkspaceFetch();
     }
   }
 
@@ -1137,15 +1174,15 @@ export default function App() {
 
   async function refreshDiscovery(): Promise<void> {
     // The refresh runs as a backend job; the new workspace arrives via a
-    // "job.updated" event, which clears workspaceLoading. Show the indicator
+    // "job.updated" event, which clears workspace loading. Show the indicator
     // straight away, and clear it if the job fails to even start.
-    setWorkspaceLoading(true);
+    beginWorkspaceFetch();
     try {
       await backendRequest<JobStatus>("actions.invoke", {
         actionId: "refresh",
       });
     } catch (error) {
-      setWorkspaceLoading(false);
+      endWorkspaceFetch();
       throw error;
     }
   }
@@ -1365,6 +1402,7 @@ export default function App() {
   function setWriteMode(enabled: boolean): void {
     const token = ++writeModeRequestRef.current;
     setWriteModePending(true);
+    beginWorkspaceFetch();
     void backendRequest<WorkspaceSnapshot>("session.setWriteMode", { enabled })
       .then((workspaceResult) => {
         if (token !== writeModeRequestRef.current) {
@@ -1408,6 +1446,7 @@ export default function App() {
       .finally(() => {
         if (token === writeModeRequestRef.current) {
           setWriteModePending(false);
+          endWorkspaceFetch();
         }
       });
   }
@@ -1814,41 +1853,41 @@ export default function App() {
     if (!sessionSnapshot.isLocked) {
       setWorkspace(emptyWorkspace);
       setWorkspaceLoaded(false);
+      resetWorkspaceFetch();
       return;
     }
-    setWorkspaceLoading(true);
-    let workspaceResult: WorkspaceSnapshot;
+    beginWorkspaceFetch();
     try {
-      workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
+      const workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
+      startTransition(() => {
+        const normalised = normaliseWorkspaceSnapshot(workspaceResult);
+        setWorkspace(normalised);
+        setWorkspaceLoaded(true);
+        if (!lambdaInvokeInFlight && normalised.lambdaStatusMessage) {
+          setLambdaActionStatus(normalised.lambdaStatusMessage);
+        }
+        if (normalised.dynamodbStatusMessage) {
+          setDynamodbActionStatus(normalised.dynamodbStatusMessage);
+        }
+        if (!sqsPeekInFlight && normalised.sqsStatusMessage) {
+          setSqsActionStatus(normalised.sqsStatusMessage);
+        }
+        if (normalised.snsStatusMessage) {
+          setSnsActionStatus(normalised.snsStatusMessage);
+        }
+        if (normalised.rdsStatusMessage) {
+          setRdsActionStatus(normalised.rdsStatusMessage);
+        }
+        if (normalised.logsStatusMessage) {
+          setLogsActionStatus(normalised.logsStatusMessage);
+        }
+        if (normalised.iamStatusMessage) {
+          setIamActionStatus(normalised.iamStatusMessage);
+        }
+      });
     } finally {
-      setWorkspaceLoading(false);
+      endWorkspaceFetch();
     }
-    startTransition(() => {
-      const normalised = normaliseWorkspaceSnapshot(workspaceResult);
-      setWorkspace(normalised);
-      setWorkspaceLoaded(true);
-      if (!lambdaInvokeInFlight && normalised.lambdaStatusMessage) {
-        setLambdaActionStatus(normalised.lambdaStatusMessage);
-      }
-      if (normalised.dynamodbStatusMessage) {
-        setDynamodbActionStatus(normalised.dynamodbStatusMessage);
-      }
-      if (!sqsPeekInFlight && normalised.sqsStatusMessage) {
-        setSqsActionStatus(normalised.sqsStatusMessage);
-      }
-      if (normalised.snsStatusMessage) {
-        setSnsActionStatus(normalised.snsStatusMessage);
-      }
-      if (normalised.rdsStatusMessage) {
-        setRdsActionStatus(normalised.rdsStatusMessage);
-      }
-      if (normalised.logsStatusMessage) {
-        setLogsActionStatus(normalised.logsStatusMessage);
-      }
-      if (normalised.iamStatusMessage) {
-        setIamActionStatus(normalised.iamStatusMessage);
-      }
-    });
   }
 
   // Re-run discovery and refresh the provider/profile lists without touching the
@@ -2286,6 +2325,7 @@ export default function App() {
     ["azure-overview", "azure-resource-groups", "azure-vms"].includes(activeWorkspaceTabId) ? (
     <AzureView
       workspace={activeWorkspace}
+      inventoryLoading={workspaceFetching}
       activePageId={
         activeWorkspaceTabId === "azure-resource-groups"
           ? "resource-groups"
@@ -2431,6 +2471,7 @@ export default function App() {
   ) : session.isLocked && activeWorkspaceTabId === "azure-app-service" ? (
     <AzureAppServiceView
       workspace={activeWorkspace}
+      inventoryLoading={workspaceFetching}
       actionStatus={azureAppServiceActionStatus}
       onSelectResourceGroup={(resourceGroup) => {
         void selectAzureResourceGroup(resourceGroup);
@@ -2879,7 +2920,7 @@ export default function App() {
     // provider resources sit under "Services". While the first inventory fetch
     // is in flight, swap count badges for a spinner so empty counts do not read
     // as "zero resources".
-    const countsPending = workspaceLoading && !workspaceLoaded;
+    const countsPending = workspaceFetching || (workspaceLoading && !workspaceLoaded);
     const tabItems = session.workspaceTabs.map((tab) => {
       const item = navItemForTab(tab, workspace);
       if (countsPending && item.count != null) {
@@ -3111,7 +3152,7 @@ export default function App() {
             }}
             notificationCount={notifications.unreadCount}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-            loading={loading || workspaceLoading}
+            loading={loading || workspaceLoading || workspaceFetching}
           />
         }
         drawer={
@@ -3151,7 +3192,19 @@ export default function App() {
               !NON_INVENTORY_TABS.has(activeWorkspaceTabId) ? (
                 <WorkspaceSkeleton label={`${navConnection.name} inventory`} />
               ) : (
-                content
+                <>
+                  {session.isLocked &&
+                  workspaceFetching &&
+                  workspaceLoaded &&
+                  !NON_INVENTORY_TABS.has(activeWorkspaceTabId) ? (
+                    <InventoryLoadingState
+                      variant="banner"
+                      label="Refreshing inventory..."
+                      className="mb-4"
+                    />
+                  ) : null}
+                  {content}
+                </>
               )}
             </Suspense>
           </AppErrorBoundary>

@@ -30,6 +30,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/empty-state";
+import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
 import { DetailFieldList } from "./detail-fields";
@@ -62,6 +63,7 @@ function appStatus(value?: string): Status {
 
 export type AzureAppServiceViewProps = {
   workspace: WorkspaceSnapshot;
+  inventoryLoading?: boolean;
   actionStatus?: string;
   onSelectResourceGroup: (resourceGroup: string) => void;
   onSelectWebApp: (appName: string) => void;
@@ -75,6 +77,7 @@ const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] 
 
 export default function AzureAppServiceView({
   workspace,
+  inventoryLoading = false,
   actionStatus,
   onSelectResourceGroup,
   onSelectWebApp,
@@ -146,6 +149,7 @@ export default function AzureAppServiceView({
             <div className={cn(fieldLabel, "mb-1")}>Resource group</div>
             <Select
               value={workspace.selectedAzureResourceGroup ?? ""}
+              disabled={inventoryLoading}
               onValueChange={(value) => {
                 if (value) {
                   onSelectResourceGroup(value);
@@ -169,10 +173,26 @@ export default function AzureAppServiceView({
             label={canWrite ? "Writes enabled" : "Read-only"}
           />
         </div>
-        <p className="text-sm text-muted-foreground">{workspace.azureAppServiceStatusMessage}</p>
+        {inventoryLoading ? (
+          <InventoryLoadingState
+            variant="inline"
+            label={
+              workspace.azureAppServiceStatusMessage || "Loading App Service web apps..."
+            }
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">{workspace.azureAppServiceStatusMessage}</p>
+        )}
         {actionStatus ? <p className="text-sm text-muted-foreground">{actionStatus}</p> : null}
         <div className="overflow-hidden rounded-lg border border-border">
-          {workspace.azureWebApps.length === 0 ? (
+          {inventoryLoading && workspace.azureWebApps.length === 0 ? (
+            <InventoryLoadingState
+              label={
+                workspace.azureAppServiceStatusMessage || "Loading App Service web apps..."
+              }
+              className="border-0 bg-transparent"
+            />
+          ) : workspace.azureWebApps.length === 0 ? (
             <EmptyState
               icon={<Globe />}
               title="No web apps"
@@ -220,7 +240,9 @@ export default function AzureAppServiceView({
 
       <section className={sectionCard}>
         <h2 className="text-base font-bold">Web app detail</h2>
-        {selectedApp ? (
+        {inventoryLoading ? (
+          <InventoryLoadingState variant="inline" label="Loading web app details..." />
+        ) : selectedApp ? (
           <DetailFieldList
             fields={[
               { label: "Name", value: selectedApp.name },
