@@ -522,6 +522,29 @@ type AzureLogQueryResult struct {
 	Rows    [][]string `json:"rows"`
 }
 
+// AzureFunctionApp is a Function App (Microsoft.Web/sites, kind functionapp).
+type AzureFunctionApp struct {
+	Name            string `json:"name"`
+	ResourceGroup   string `json:"resourceGroup,omitempty"`
+	Location        string `json:"location,omitempty"`
+	State           string `json:"state,omitempty"`
+	DefaultHostName string `json:"defaultHostName,omitempty"`
+	Runtime         string `json:"runtime,omitempty"`
+}
+
+// AzureFunction is a single function within a Function App.
+type AzureFunction struct {
+	Name     string `json:"name"`
+	Trigger  string `json:"trigger,omitempty"`
+	Language string `json:"language,omitempty"`
+}
+
+// AzureFunctionInvokeResult is the response from invoking an HTTP-triggered function.
+type AzureFunctionInvokeResult struct {
+	StatusCode int    `json:"statusCode"`
+	Body       string `json:"body"`
+}
+
 type WorkspaceSnapshot struct {
 	Provider                   *ProviderSummary        `json:"provider,omitempty"`
 	Profile                    *ProfileSummary         `json:"profile,omitempty"`
