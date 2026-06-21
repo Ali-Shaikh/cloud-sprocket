@@ -224,6 +224,14 @@ func (s *Service) Handle(
 		return s.handleAzureFunctionsSelectFunction(ctx, params, notifier)
 	case "azure.functions.invoke":
 		return s.handleAzureFunctionsInvoke(ctx, params, notifier)
+	case "azure.keyVault.selectVault":
+		return s.handleAzureKeyVaultSelectVault(ctx, params, notifier)
+	case "azure.keyVault.selectSecret":
+		return s.handleAzureKeyVaultSelectSecret(ctx, params, notifier)
+	case "azure.keyVault.revealSecret":
+		return s.handleAzureKeyVaultRevealSecret(ctx, params, notifier)
+	case "azure.keyVault.setSecret":
+		return s.handleAzureKeyVaultSetSecret(ctx, params, notifier)
 	case "session.selectProvider":
 		return s.handleSessionSelectProvider(ctx, params, notifier)
 	case "session.selectProfile":

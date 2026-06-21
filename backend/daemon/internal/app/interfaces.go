@@ -84,6 +84,10 @@ type AzureInventory interface {
 	ListFunctionApps(ctx context.Context, profile models.ProfileSummary) ([]models.AzureFunctionApp, error)
 	ListFunctions(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string) ([]models.AzureFunction, error)
 	InvokeFunction(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, functionName string, payload string) (models.AzureFunctionInvokeResult, error)
+	ListKeyVaults(ctx context.Context, profile models.ProfileSummary) ([]models.AzureKeyVault, error)
+	ListKeyVaultSecrets(ctx context.Context, profile models.ProfileSummary, vaultName string) ([]models.AzureKeyVaultSecret, error)
+	GetKeyVaultSecret(ctx context.Context, profile models.ProfileSummary, vaultName string, secretName string) (string, error)
+	SetKeyVaultSecret(ctx context.Context, profile models.ProfileSummary, vaultName string, secretName string, value string) (models.AzureKeyVaultSecret, error)
 }
 
 type DockerRuntime interface {

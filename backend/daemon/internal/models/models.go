@@ -204,6 +204,8 @@ type SessionSnapshot struct {
 	SelectedAzureLogWorkspace    string `json:"selectedAzureLogWorkspace,omitempty"`
 	SelectedAzureFunctionApp     string `json:"selectedAzureFunctionApp,omitempty"`
 	SelectedAzureFunction        string `json:"selectedAzureFunction,omitempty"`
+	SelectedAzureKeyVault        string `json:"selectedAzureKeyVault,omitempty"`
+	SelectedAzureSecret          string `json:"selectedAzureSecret,omitempty"`
 	AzureWriteModeEnabled        bool   `json:"azureWriteModeEnabled,omitempty"`
 	SelectedS3BucketName       string             `json:"selectedS3BucketName,omitempty"`
 	SelectedS3ObjectKey        string             `json:"selectedS3ObjectKey,omitempty"`
@@ -644,6 +646,9 @@ type WorkspaceSnapshot struct {
 	AzureAppServiceStatusMessage string                  `json:"azureAppServiceStatusMessage,omitempty"`
 	AzureLogAnalyticsStatusMessage string                `json:"azureLogAnalyticsStatusMessage,omitempty"`
 	AzureFunctionsStatusMessage  string                  `json:"azureFunctionsStatusMessage,omitempty"`
+	AzureKeyVaultStatusMessage   string                  `json:"azureKeyVaultStatusMessage,omitempty"`
+	SelectedAzureKeyVault        string                  `json:"selectedAzureKeyVault,omitempty"`
+	SelectedAzureSecret          string                  `json:"selectedAzureSecret,omitempty"`
 	AzureResourceGroups          []AzureResourceGroup    `json:"azureResourceGroups"`
 	AzureVirtualMachines         []AzureVirtualMachine   `json:"azureVirtualMachines"`
 	AzureStorageAccounts         []AzureStorageAccount   `json:"azureStorageAccounts"`
@@ -654,6 +659,8 @@ type WorkspaceSnapshot struct {
 	AzureLogAnalyticsWorkspaces  []AzureLogAnalyticsWorkspace `json:"azureLogAnalyticsWorkspaces"`
 	AzureFunctionApps            []AzureFunctionApp      `json:"azureFunctionApps"`
 	AzureFunctions               []AzureFunction         `json:"azureFunctions"`
+	AzureKeyVaults               []AzureKeyVault         `json:"azureKeyVaults"`
+	AzureKeyVaultSecrets         []AzureKeyVaultSecret   `json:"azureKeyVaultSecrets"`
 }
 
 type ActivityLogEntry struct {

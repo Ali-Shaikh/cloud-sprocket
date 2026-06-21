@@ -68,6 +68,12 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 				Summary: "Browse and invoke Azure Functions.",
 				Detail:  "List Function Apps and their functions, and invoke HTTP-triggered functions when write mode is on.",
 			},
+			{
+				TabID:   "azure-key-vault",
+				Label:   "Key Vault",
+				Summary: "Browse and manage Key Vault secrets.",
+				Detail:  "List vaults and secrets, reveal a secret value, and set secrets when write mode is on.",
+			},
 			activityTab,
 		}
 	}

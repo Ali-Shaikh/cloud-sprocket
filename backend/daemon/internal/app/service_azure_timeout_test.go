@@ -114,6 +114,26 @@ func (blockingAzure) InvokeFunction(ctx context.Context, _ models.ProfileSummary
 	return models.AzureFunctionInvokeResult{}, ctx.Err()
 }
 
+func (blockingAzure) ListKeyVaults(ctx context.Context, _ models.ProfileSummary) ([]models.AzureKeyVault, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) ListKeyVaultSecrets(ctx context.Context, _ models.ProfileSummary, _ string) ([]models.AzureKeyVaultSecret, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) GetKeyVaultSecret(ctx context.Context, _ models.ProfileSummary, _ string, _ string) (string, error) {
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
+func (blockingAzure) SetKeyVaultSecret(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) (models.AzureKeyVaultSecret, error) {
+	<-ctx.Done()
+	return models.AzureKeyVaultSecret{}, ctx.Err()
+}
+
 // TestAzureInventoryBoundedByTimeout proves a stalled Azure inventory call is
 // cut off by the configured timeout (and falls back to empty) instead of
 // hanging the workspace snapshot.

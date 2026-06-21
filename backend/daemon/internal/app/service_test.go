@@ -276,6 +276,22 @@ func (stubAzureInventory) InvokeFunction(context.Context, models.ProfileSummary,
 	return models.AzureFunctionInvokeResult{StatusCode: 200, Body: "ok"}, nil
 }
 
+func (stubAzureInventory) ListKeyVaults(context.Context, models.ProfileSummary) ([]models.AzureKeyVault, error) {
+	return []models.AzureKeyVault{{Name: "demo-vault", ResourceGroup: "demo-rg"}}, nil
+}
+
+func (stubAzureInventory) ListKeyVaultSecrets(context.Context, models.ProfileSummary, string) ([]models.AzureKeyVaultSecret, error) {
+	return []models.AzureKeyVaultSecret{{Name: "db-password", Enabled: true}}, nil
+}
+
+func (stubAzureInventory) GetKeyVaultSecret(context.Context, models.ProfileSummary, string, string) (string, error) {
+	return "secret-value", nil
+}
+
+func (stubAzureInventory) SetKeyVaultSecret(context.Context, models.ProfileSummary, string, string, string) (models.AzureKeyVaultSecret, error) {
+	return models.AzureKeyVaultSecret{Name: "db-password", Enabled: true}, nil
+}
+
 func (s stubDockerRuntime) Snapshot(context.Context) (models.DockerRuntimeSnapshot, error) {
 	return s.snapshot, nil
 }
