@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ali Shaikh
+
 import { useEffect, useState } from "react";
 import { Copy, Layers, MonitorCog, Plus, Terminal, Trash2 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";

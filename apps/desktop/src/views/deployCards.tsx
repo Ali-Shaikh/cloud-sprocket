@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ali Shaikh
+
 import { ExternalLink, Shield, Terminal } from "lucide-react";
 
 import { Card } from "@/components/ui/card";

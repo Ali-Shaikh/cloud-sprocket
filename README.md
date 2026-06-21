@@ -50,6 +50,12 @@ before invoking the Tauri bundle step.
 The archived Python code remains available under `legacy/pyside-v1/` while the
 rewrite reaches parity. It is no longer the active implementation path.
 
+## Licence
+
+CloudSprocket is licensed under the GNU Affero General Public License v3.0
+(AGPL-3.0-or-later). See [`LICENSE`](LICENSE) for the full text and
+[`COPYRIGHT`](COPYRIGHT) for project-specific copyright and notice details.
+
 ## Sponsors
 
 [![Termius](docs/sponsors/termius-logo.svg)](https://termius.com/)

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ali Shaikh
+
 export type ProviderState = "configured" | "tooling-only" | "missing";
 export type AuthMethod = "cli" | "sso" | "local-files";
 export type JobLifecycle = "queued" | "running" | "completed" | "failed";

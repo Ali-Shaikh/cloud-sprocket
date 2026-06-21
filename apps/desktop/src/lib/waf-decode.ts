@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ali Shaikh
+
 import type { AzureWafLogColumnMap } from "@/types/backend";
 import { formatCellValue, rowToRecord } from "@/components/log-analytics/log-query-utils";
 

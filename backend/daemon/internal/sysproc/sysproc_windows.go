@@ -1,5 +1,8 @@
 //go:build windows
 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ali Shaikh
+
 // Package sysproc configures spawned child processes so the GUI-subsystem daemon
 // does not flash a console window when it runs CLI tools (tofu, npm, az).
 package sysproc

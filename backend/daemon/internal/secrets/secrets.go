@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ali Shaikh
+
 // Package secrets seals sensitive values (recipe variables, Terraform outputs)
 // so they are not persisted in plaintext in the local database. Values are
 // encrypted with AES-256-GCM using a per-install key (see key.go). Sealed

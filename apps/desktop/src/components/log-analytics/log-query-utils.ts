@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ali Shaikh
+
 import type { AzureLogQueryResult } from "@/types/backend";
 
 /** Escape a single CSV cell per RFC 4180-style quoting rules. */

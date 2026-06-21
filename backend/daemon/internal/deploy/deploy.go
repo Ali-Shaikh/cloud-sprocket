@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ali Shaikh
+
 // Package deploy orchestrates recipe deployments through the OpenTofu engine:
 // it prepares a per-deployment workspace (materialised recipe + tfvars + an
 // optional LocalStack endpoint override), then runs init/plan/apply/destroy and

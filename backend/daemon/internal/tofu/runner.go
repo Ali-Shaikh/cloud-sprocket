@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ali Shaikh
+
 // Package tofu locates, installs, and runs the OpenTofu CLI on behalf of the
 // daemon. It backs the IaC "recipe" deployment feature: a pinned OpenTofu
 // binary is resolved (explicit path, cached download, or PATH) and invoked for

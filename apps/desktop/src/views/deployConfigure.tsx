@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ali Shaikh
+
 import { ArrowLeft, Crown, FolderOpen, Loader2, Play } from "lucide-react";
 import { useMemo } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";

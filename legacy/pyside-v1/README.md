@@ -64,6 +64,6 @@ The current shell includes:
 
 ## Licence
 
-CloudSprocket is licensed under the GNU General Public License v3.0.
+CloudSprocket is licensed under the GNU Affero General Public License v3.0.
 See [`LICENSE`](LICENSE) for the full text.
 Project-specific copyright and notice details are in [`COPYRIGHT`](COPYRIGHT).

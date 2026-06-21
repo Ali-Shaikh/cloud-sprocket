@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ali Shaikh
+
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Database, Trash2, Upload } from "lucide-react";

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ali Shaikh
+
 // Package recipes models parameterised IaC "recipes" (curated OpenTofu modules
 // plus a manifest of UI hints) and loads them from a filesystem source. Bundled
 // recipes ship embedded; the same Loader will later back a remote recipe

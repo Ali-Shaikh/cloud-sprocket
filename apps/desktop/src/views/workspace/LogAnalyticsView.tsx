@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ali Shaikh
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, Clock, Loader2, Play, Save, Square, Trash2 } from "lucide-react";
 
