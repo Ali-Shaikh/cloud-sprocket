@@ -13,7 +13,8 @@ import {
   buildTopHostsQuery,
   buildTopRulesQuery,
   buildTopUrisQuery,
-  buildTrackingReferenceQuery,
+  buildTrackingReferenceExtendQuery,
+  buildTrackingReferenceSearchQuery,
   buildWafFilteredQuery,
   normaliseWafSchema,
   type WafLogFilters,
@@ -187,10 +188,13 @@ export default function AzureWafView({
     setRunning(false);
   }
 
-  function applyTrackingLookup() {
+  function applyTrackingLookup(mode: "extend" | "search") {
     const trimmed = trackingRef.trim();
     if (!trimmed) return;
-    const nextQuery = buildTrackingReferenceQuery(schema, trimmed);
+    const nextQuery =
+      mode === "search"
+        ? buildTrackingReferenceSearchQuery(schema, trimmed)
+        : buildTrackingReferenceExtendQuery(schema, trimmed);
     setQuery(nextQuery);
     void run(nextQuery);
   }
@@ -346,8 +350,19 @@ export default function AzureWafView({
                   aria-label="WAF tracking reference"
                 />
               </div>
-              <Button variant="secondary" onClick={applyTrackingLookup} disabled={!trackingRef.trim() || running}>
-                Look up
+              <Button
+                variant="secondary"
+                onClick={() => applyTrackingLookup("extend")}
+                disabled={!trackingRef.trim() || running}
+              >
+                Look up ref
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => applyTrackingLookup("search")}
+                disabled={!trackingRef.trim() || running}
+              >
+                Search table
               </Button>
             </div>
 

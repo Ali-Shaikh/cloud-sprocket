@@ -14,14 +14,36 @@ function escapeKql(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
+function wafCategoryList(schema: AzureWafLogSchemaProfile): string {
+  const categories = schema.categories?.length
+    ? schema.categories
+    : ["FrontDoorWebApplicationFirewallLog", "FrontdoorWebApplicationFirewallLog"];
+  return categories.map((category) => `"${category}"`).join(",");
+}
+
 function baseWafTable(schema: AzureWafLogSchemaProfile): string {
   if (schema.mode === "azureDiagnostics") {
-    const categories = schema.categories?.length
-      ? schema.categories.map((category) => `"${category}"`).join(",")
-      : `"FrontDoorWebApplicationFirewallLog","FrontdoorWebApplicationFirewallLog"`;
-    return `${schema.tableName} | where Category in (${categories})`;
+    return `${schema.tableName} | where Category in (${wafCategoryList(schema)})`;
   }
   return schema.tableName;
+}
+
+function trackingReferenceProjectColumns(schema: AzureWafLogSchemaProfile, includeTrackingRef = false): string {
+  const columns = schema.columns;
+  const fields = [
+    columns.timeGenerated,
+    columns.action,
+    columns.ruleName,
+    columns.requestUri,
+    columns.detailsMatches,
+    columns.detailsMessage,
+    columns.clientIP,
+    columns.host,
+  ].filter(Boolean);
+  if (includeTrackingRef) {
+    fields.push("trackingRef");
+  }
+  return fields.join(", ");
 }
 
 function appendEqualsFilter(query: string, column: string | undefined, value: string | undefined): string {
@@ -65,8 +87,64 @@ export function buildWafFilteredQuery(
   return `${query}\n| order by ${columns.timeGenerated} desc`;
 }
 
-export function buildTrackingReferenceQuery(schema: AzureWafLogSchemaProfile, trackingReference: string): string {
+/** Direct column equality against trackingReference_s (resource-specific tables). */
+export function buildTrackingReferenceColumnQuery(
+  schema: AzureWafLogSchemaProfile,
+  trackingReference: string,
+): string {
   return buildWafFilteredQuery(schema, { trackingReference });
+}
+
+/**
+ * AzureDiagnostics lookup via AdditionalFields.trackingReference. This is the
+ * reliable path for Front Door WAF rows where trackingReference_s is often null.
+ */
+export function buildTrackingReferenceExtendQuery(
+  schema: AzureWafLogSchemaProfile,
+  trackingReference: string,
+): string {
+  const trimmed = trackingReference.trim();
+  if (!trimmed) {
+    return baseWafTable(schema);
+  }
+  if (schema.mode !== "azureDiagnostics") {
+    return buildTrackingReferenceColumnQuery(schema, trimmed);
+  }
+  const columns = schema.columns;
+  return `${schema.tableName}
+| where Category in (${wafCategoryList(schema)})
+| extend trackingRef = tostring(AdditionalFields.trackingReference)
+| where trackingRef == "${escapeKql(trimmed)}"
+| project ${trackingReferenceProjectColumns(schema, true)}
+| order by ${columns.timeGenerated} desc`;
+}
+
+/**
+ * Broad AzureDiagnostics search when the tracking ref may appear in any column.
+ */
+export function buildTrackingReferenceSearchQuery(
+  schema: AzureWafLogSchemaProfile,
+  trackingReference: string,
+): string {
+  const trimmed = trackingReference.trim();
+  if (!trimmed) {
+    return baseWafTable(schema);
+  }
+  const columns = schema.columns;
+  if (schema.mode === "azureDiagnostics") {
+    return `search in (${schema.tableName}) "${escapeKql(trimmed)}"
+| where Category in (${wafCategoryList(schema)})
+| project ${trackingReferenceProjectColumns(schema)}
+| order by ${columns.timeGenerated} desc`;
+  }
+  return `search in (${schema.tableName}) "${escapeKql(trimmed)}"
+| project ${trackingReferenceProjectColumns(schema)}
+| order by ${columns.timeGenerated} desc`;
+}
+
+/** Default tracking lookup: extend for AzureDiagnostics, column filter otherwise. */
+export function buildTrackingReferenceQuery(schema: AzureWafLogSchemaProfile, trackingReference: string): string {
+  return buildTrackingReferenceExtendQuery(schema, trackingReference);
 }
 
 export function buildBlockedRequestsQuery(schema: AzureWafLogSchemaProfile, filters: WafLogFilters = {}): string {

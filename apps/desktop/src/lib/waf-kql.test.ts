@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { buildTrackingReferenceQuery, normaliseWafSchema } from "./waf-kql";
+import {
+  buildTrackingReferenceExtendQuery,
+  buildTrackingReferenceQuery,
+  buildTrackingReferenceSearchQuery,
+  normaliseWafSchema,
+} from "./waf-kql";
 
-const schema = normaliseWafSchema({
+const diagnosticsSchema = normaliseWafSchema({
   mode: "azureDiagnostics",
   tableName: "AzureDiagnostics",
   categories: ["FrontDoorWebApplicationFirewallLog"],
@@ -22,11 +27,30 @@ const schema = normaliseWafSchema({
   detected: true,
 });
 
-describe("waf-kql", () => {
-  it("builds a tracking-reference query against diagnostics columns", () => {
-    const query = buildTrackingReferenceQuery(schema, "20260619T211623Z-abc");
+const trackingRef = "20260619T211623Z-157c4db97d7z2jghhC1DXBy14000000002pg000000006z97";
+
+describe("waf-kql tracking reference", () => {
+  it("builds the AdditionalFields extend lookup for AzureDiagnostics", () => {
+    const query = buildTrackingReferenceExtendQuery(diagnosticsSchema, trackingRef);
     expect(query).toContain("AzureDiagnostics");
-    expect(query).toContain('trackingReference_s == "20260619T211623Z-abc"');
+    expect(query).toContain('Category in ("FrontDoorWebApplicationFirewallLog"');
+    expect(query).toContain("extend trackingRef = tostring(AdditionalFields.trackingReference)");
+    expect(query).toContain(`trackingRef == "${trackingRef}"`);
+    expect(query).toContain("project TimeGenerated, action_s, ruleName_s, requestUri_s");
+    expect(query).toContain("trackingRef");
+    expect(query).not.toContain("trackingReference_s ==");
+  });
+
+  it("builds the search-in lookup for AzureDiagnostics", () => {
+    const query = buildTrackingReferenceSearchQuery(diagnosticsSchema, trackingRef);
+    expect(query).toContain(`search in (AzureDiagnostics) "${trackingRef}"`);
+    expect(query).toContain('Category in ("FrontDoorWebApplicationFirewallLog"');
+    expect(query).toContain("project TimeGenerated, action_s, ruleName_s, requestUri_s");
     expect(query).not.toContain("AdditionalFields.trackingReference");
+  });
+
+  it("defaults buildTrackingReferenceQuery to the extend lookup", () => {
+    const query = buildTrackingReferenceQuery(diagnosticsSchema, trackingRef);
+    expect(query).toContain("AdditionalFields.trackingReference");
   });
 });
