@@ -148,6 +148,9 @@ export interface SessionSnapshot {
   selectedAzureFunction?: string;
   selectedAzureKeyVault?: string;
   selectedAzureSecret?: string;
+  selectedAzureCosmosAccount?: string;
+  selectedAzureCosmosDatabase?: string;
+  selectedAzureCosmosContainer?: string;
   lockedProviderId?: string;
   lockedProfileId?: string;
   lockedAuthMethod?: AuthMethod;
@@ -462,6 +465,26 @@ export interface AzureKeyVaultSecret {
   updated?: string;
 }
 
+export interface AzureCosmosAccount {
+  name: string;
+  resourceGroup?: string;
+  documentEndpoint?: string;
+}
+
+export interface AzureCosmosDatabase {
+  name: string;
+}
+
+export interface AzureCosmosContainer {
+  name: string;
+  partitionKey?: string;
+}
+
+export interface AzureCosmosItem {
+  id: string;
+  json: string;
+}
+
 export interface WorkspaceSnapshot {
   provider?: ProviderSummary;
   profile?: ProfileSummary;
@@ -493,12 +516,16 @@ export interface WorkspaceSnapshot {
   selectedAzureFunction?: string;
   selectedAzureKeyVault?: string;
   selectedAzureSecret?: string;
+  selectedAzureCosmosAccount?: string;
+  selectedAzureCosmosDatabase?: string;
+  selectedAzureCosmosContainer?: string;
   azureStatusMessage?: string;
   azureStorageStatusMessage?: string;
   azureAppServiceStatusMessage?: string;
   azureLogAnalyticsStatusMessage?: string;
   azureFunctionsStatusMessage?: string;
   azureKeyVaultStatusMessage?: string;
+  azureCosmosStatusMessage?: string;
   azureResourceGroups: AzureResourceGroup[];
   azureVirtualMachines: AzureVirtualMachine[];
   azureStorageAccounts: AzureStorageAccount[];
@@ -511,6 +538,10 @@ export interface WorkspaceSnapshot {
   azureFunctions: AzureFunction[];
   azureKeyVaults: AzureKeyVault[];
   azureKeyVaultSecrets: AzureKeyVaultSecret[];
+  azureCosmosAccounts: AzureCosmosAccount[];
+  azureCosmosDatabases: AzureCosmosDatabase[];
+  azureCosmosContainers: AzureCosmosContainer[];
+  azureCosmosItems: AzureCosmosItem[];
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;

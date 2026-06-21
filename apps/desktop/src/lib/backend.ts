@@ -565,6 +565,22 @@ const mockSecretValues: Record<string, string> = {
   "api-key": "ak-mock-123",
 };
 
+const mockAzureCosmosAccounts = [
+  { name: "devstoreaccount1", resourceGroup: "rg-marketing-prod", documentEndpoint: "http://localhost:4577/devstoreaccount1-cosmos" },
+];
+
+const mockAzureCosmosDatabases = [{ name: "appdb" }];
+
+const mockAzureCosmosContainers = [
+  { name: "orders", partitionKey: "/customerId" },
+  { name: "users", partitionKey: "/id" },
+];
+
+const mockAzureCosmosItems = [
+  { id: "order-1", json: '{"id":"order-1","customerId":"c-9","total":42}' },
+  { id: "order-2", json: '{"id":"order-2","customerId":"c-3","total":17}' },
+];
+
 const mockAzureVirtualMachines = {
   "rg-marketing-prod": [
     {
@@ -1120,6 +1136,20 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       : undefined,
     azureKeyVaults: isAzureWorkspace ? mockAzureKeyVaults : [],
     azureKeyVaultSecrets: isAzureWorkspace ? mockAzureKeyVaultSecrets : [],
+    selectedAzureCosmosAccount: isAzureWorkspace
+      ? mockState.session.selectedAzureCosmosAccount ?? mockAzureCosmosAccounts[0]?.name
+      : undefined,
+    selectedAzureCosmosDatabase: isAzureWorkspace
+      ? mockState.session.selectedAzureCosmosDatabase ?? mockAzureCosmosDatabases[0]?.name
+      : undefined,
+    selectedAzureCosmosContainer: isAzureWorkspace ? mockState.session.selectedAzureCosmosContainer : undefined,
+    azureCosmosStatusMessage: isAzureWorkspace
+      ? `Loaded ${mockAzureCosmosAccounts.length} Cosmos account(s).`
+      : undefined,
+    azureCosmosAccounts: isAzureWorkspace ? mockAzureCosmosAccounts : [],
+    azureCosmosDatabases: isAzureWorkspace ? mockAzureCosmosDatabases : [],
+    azureCosmosContainers: isAzureWorkspace ? mockAzureCosmosContainers : [],
+    azureCosmosItems: isAzureWorkspace ? mockAzureCosmosItems : [],
     selectedS3BucketName,
     selectedS3ObjectKey,
     s3PrefixFilter: mockState.session.s3PrefixFilter,
@@ -1817,6 +1847,18 @@ function handleMockRequest<T>(
       appendLog("success", `Set Key Vault secret ${name} (mock).`);
       return Promise.resolve(buildMockWorkspace() as T);
     }
+    case "azure.cosmos.selectAccount":
+      mockState.session.selectedAzureCosmosAccount = String(params.account ?? "");
+      mockState.session.selectedAzureCosmosDatabase = "";
+      mockState.session.selectedAzureCosmosContainer = "";
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.cosmos.selectDatabase":
+      mockState.session.selectedAzureCosmosDatabase = String(params.database ?? "");
+      mockState.session.selectedAzureCosmosContainer = "";
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.cosmos.selectContainer":
+      mockState.session.selectedAzureCosmosContainer = String(params.container ?? "");
+      return Promise.resolve(buildMockWorkspace() as T);
     case "azure.webApps.create": {
       if (!mockState.session.azureWriteModeEnabled) {
         return Promise.reject(new Error("web app create requires write mode to be enabled for this Azure workspace"));

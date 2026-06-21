@@ -68,6 +68,7 @@ import AzureAppServiceView from "./views/workspace/AzureAppServiceView";
 import LogAnalyticsView from "./views/workspace/LogAnalyticsView";
 import AzureFunctionsView from "./views/workspace/AzureFunctionsView";
 import AzureKeyVaultView from "./views/workspace/AzureKeyVaultView";
+import AzureCosmosView from "./views/workspace/AzureCosmosView";
 import RuntimeView from "./views/workspace/RuntimeView";
 import PlaceholderView from "./views/workspace/PlaceholderView";
 import ActivityView from "./views/workspace/ActivityView";
@@ -449,6 +450,10 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     azureFunctions: normaliseArray(source.azureFunctions),
     azureKeyVaults: normaliseArray(source.azureKeyVaults),
     azureKeyVaultSecrets: normaliseArray(source.azureKeyVaultSecrets),
+    azureCosmosAccounts: normaliseArray(source.azureCosmosAccounts),
+    azureCosmosDatabases: normaliseArray(source.azureCosmosDatabases),
+    azureCosmosContainers: normaliseArray(source.azureCosmosContainers),
+    azureCosmosItems: normaliseArray(source.azureCosmosItems),
     s3Buckets: normaliseArray(source.s3Buckets).map(normaliseS3Bucket),
     s3Objects: normaliseArray(source.s3Objects).map(normaliseS3Object),
     s3ObjectMetadata: normaliseDetailFields(source.s3ObjectMetadata),
@@ -530,6 +535,10 @@ const emptyWorkspace: WorkspaceSnapshot = {
   azureFunctions: [],
   azureKeyVaults: [],
   azureKeyVaultSecrets: [],
+  azureCosmosAccounts: [],
+  azureCosmosDatabases: [],
+  azureCosmosContainers: [],
+  azureCosmosItems: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -2209,6 +2218,19 @@ export default function App() {
         )
       }
     />
+  ) : session.isLocked && activeWorkspaceTabId === "azure-cosmos" ? (
+    <AzureCosmosView
+      workspace={workspace}
+      onSelectAccount={(account) => {
+        void mutateWorkspace("azure.cosmos.selectAccount", { account });
+      }}
+      onSelectDatabase={(database) => {
+        void mutateWorkspace("azure.cosmos.selectDatabase", { database });
+      }}
+      onSelectContainer={(container) => {
+        void mutateWorkspace("azure.cosmos.selectContainer", { container });
+      }}
+    />
   ) : activeWorkspaceTabId === "virtualisation" ? (
     <RuntimeView
       workspace={workspace}
@@ -2821,6 +2843,7 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     "azure-log-analytics": "Log Analytics",
     "azure-functions": "Functions",
     "azure-key-vault": "Key Vault",
+    "azure-cosmos": "Cosmos DB",
     actions: "Activity",
   };
   return labels[tabId] ?? tabs.find((tab) => tab.tabId === tabId)?.label ?? "Workspace";
@@ -2864,6 +2887,8 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureFunctionApps.length };
     case "azure-key-vault":
       return { ...base, iconUrl: azureIconUrl, count: workspace.azureKeyVaults.length };
+    case "azure-cosmos":
+      return { ...base, iconUrl: azureIconUrl, count: workspace.azureCosmosAccounts.length };
     case "actions":
       return { ...base, icon: Boxes };
     case "virtualisation":
