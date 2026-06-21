@@ -52,6 +52,7 @@ import ConnectView from "./views/ConnectView";
 import OverviewView from "./views/OverviewView";
 import DeployView from "./views/DeployView";
 import { CommandPalette, type Command } from "./components/command-palette";
+import { WorkspaceSkeleton } from "./components/workspace-skeleton";
 import DebugView from "./views/DebugView";
 import StorageView from "./views/workspace/StorageView";
 import ComputeView from "./views/workspace/ComputeView";
@@ -491,6 +492,10 @@ const emptySession: SessionSnapshot = {
   workspaceTabs: [],
 };
 
+// Tabs that do not render provider inventory, so they never show the
+// first-load skeleton (they have their own content regardless of the fetch).
+const NON_INVENTORY_TABS = new Set(["debug", "deploy", "actions", "virtualisation"]);
+
 const emptySettings: AppSettingsSnapshot = {
   platformName: "",
   configDir: "",
@@ -624,6 +629,11 @@ export default function App() {
   const [writeModeDialogOpen, setWriteModeDialogOpen] = useState(false);
   const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<"enable" | "incapable">("enable");
   const [loading, setLoading] = useState(true);
+  // workspaceLoading: an inventory fetch (workspace.get / discovery refresh) is
+  // in flight. workspaceLoaded: at least one fetch has completed for the current
+  // lock, so zero counts are real rather than "not fetched yet".
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
   const [openingProfileId, setOpeningProfileId] = useState<string>();
   const [localStackAuthToken, setLocalStackAuthToken] = useState("");
   const [localStackPersistence, setLocalStackPersistence] = useState(false);
@@ -751,7 +761,9 @@ export default function App() {
             const workspaceResult = normaliseWorkspaceSnapshot(job.result);
             startTransition(() => {
               setWorkspace(workspaceResult);
+              setWorkspaceLoaded(true);
             });
+            setWorkspaceLoading(false);
           }
           if (job.label.toLowerCase().includes("ec2")) {
             setEC2ActionStatus(job.message);
@@ -951,9 +963,18 @@ export default function App() {
   }
 
   async function refreshDiscovery(): Promise<void> {
-    await backendRequest<JobStatus>("actions.invoke", {
-      actionId: "refresh",
-    });
+    // The refresh runs as a backend job; the new workspace arrives via a
+    // "job.updated" event, which clears workspaceLoading. Show the indicator
+    // straight away, and clear it if the job fails to even start.
+    setWorkspaceLoading(true);
+    try {
+      await backendRequest<JobStatus>("actions.invoke", {
+        actionId: "refresh",
+      });
+    } catch (error) {
+      setWorkspaceLoading(false);
+      throw error;
+    }
   }
 
   function refreshEC2Inventory(): void {
@@ -1579,12 +1600,20 @@ export default function App() {
   async function loadWorkspace(sessionSnapshot: SessionSnapshot): Promise<void> {
     if (!sessionSnapshot.isLocked) {
       setWorkspace(emptyWorkspace);
+      setWorkspaceLoaded(false);
       return;
     }
-    const workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
+    setWorkspaceLoading(true);
+    let workspaceResult: WorkspaceSnapshot;
+    try {
+      workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
+    } finally {
+      setWorkspaceLoading(false);
+    }
     startTransition(() => {
       const normalised = normaliseWorkspaceSnapshot(workspaceResult);
       setWorkspace(normalised);
+      setWorkspaceLoaded(true);
       if (!lambdaInvokeInFlight && normalised.lambdaStatusMessage) {
         setLambdaActionStatus(normalised.lambdaStatusMessage);
       }
@@ -2526,8 +2555,17 @@ export default function App() {
       ];
     }
     // Mirror the prototype's split: Overview sits under "Workspace"; the
-    // provider resources sit under "Services".
-    const tabItems = session.workspaceTabs.map((tab) => navItemForTab(tab, workspace));
+    // provider resources sit under "Services". While the first inventory fetch
+    // is in flight, swap count badges for a spinner so empty counts do not read
+    // as "zero resources".
+    const countsPending = workspaceLoading && !workspaceLoaded;
+    const tabItems = session.workspaceTabs.map((tab) => {
+      const item = navItemForTab(tab, workspace);
+      if (countsPending && item.count != null) {
+        return { ...item, count: undefined, countLoading: true };
+      }
+      return item;
+    });
     const overviewItems = tabItems.filter((item) => item.id === "overview");
     const serviceItems = tabItems.filter((item) => item.id !== "overview");
     const groups: NavGroup[] = [];
@@ -2752,6 +2790,7 @@ export default function App() {
             }}
             notificationCount={notifications.unreadCount}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+            loading={loading || workspaceLoading}
           />
         }
         drawer={
@@ -2785,7 +2824,14 @@ export default function App() {
                 <p className="p-4 text-sm text-muted-foreground">Loading workspace shell...</p>
               }
             >
-              {content}
+              {session.isLocked &&
+              workspaceLoading &&
+              !workspaceLoaded &&
+              !NON_INVENTORY_TABS.has(activeWorkspaceTabId) ? (
+                <WorkspaceSkeleton label={`${navConnection.name} inventory`} />
+              ) : (
+                content
+              )}
             </Suspense>
           </AppErrorBoundary>
         </div>

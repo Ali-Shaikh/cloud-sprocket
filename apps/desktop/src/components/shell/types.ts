@@ -36,6 +36,8 @@ export interface NavItem {
   iconUrl?: string;
   /** Optional count badge. A string keeps "—" placeholders flexible. */
   count?: string | number;
+  /** When true, the badge shows a spinner instead of a count (data still loading). */
+  countLoading?: boolean;
 }
 
 export interface NavGroup {
@@ -116,6 +118,8 @@ export interface TopBarProps {
   searchPlaceholder?: string;
   /** Opens the command palette (also bound to ⌘K / Ctrl+K globally). */
   onOpenCommandPalette?: () => void;
+  /** Drives the indeterminate top progress bar and the refresh spinner. */
+  loading?: boolean;
 }
 
 export interface ActivityDrawerProps {

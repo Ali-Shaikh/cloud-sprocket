@@ -1,4 +1,4 @@
-import { Clock, Server } from "lucide-react";
+import { Clock, Loader2, Server } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { ProviderIcon } from "@/components/provider-icon";
@@ -96,7 +96,9 @@ function ContextNav({
                     />
                   ) : null}
                   <span className="truncate">{item.label}</span>
-                  {item.count != null && (
+                  {item.countLoading ? (
+                    <Loader2 className="ml-auto size-3.5 shrink-0 animate-spin text-muted-foreground" />
+                  ) : item.count != null ? (
                     <span
                       className={cn(
                         "ml-auto rounded-full px-1.5 py-px text-[11px] font-bold",
@@ -105,7 +107,7 @@ function ContextNav({
                     >
                       {item.count}
                     </span>
-                  )}
+                  ) : null}
                 </button>
               );
             })}

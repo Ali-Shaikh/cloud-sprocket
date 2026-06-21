@@ -146,3 +146,20 @@
     -webkit-font-smoothing: antialiased;
   }
 }
+
+/*
+ * Indeterminate top progress bar: a short segment sweeping across the full
+ * width, used while data (the workspace inventory) is being fetched.
+ */
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+.animate-progress-indeterminate {
+  animation: progress-indeterminate 1.15s ease-in-out infinite;
+}

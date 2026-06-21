@@ -2,6 +2,7 @@ import { Bell, Check, Monitor, Moon, PanelLeft, RefreshCw, Search, ShieldAlert, 
 
 import { cn } from "@/lib/utils";
 
+import { TopProgressBar } from "@/components/top-progress-bar";
 import { useTheme } from "@/lib/theme";
 import {
   DropdownMenu,
@@ -30,6 +31,7 @@ function TopBar({
   notificationCount,
   searchPlaceholder,
   onOpenCommandPalette,
+  loading = false,
 }: TopBarProps) {
   const { theme, setTheme } = useTheme();
   const commandShortcut =
@@ -42,8 +44,9 @@ function TopBar({
   return (
     <header
       data-slot="top-bar"
-      className="flex h-14 flex-none items-center gap-3.5 border-b border-border bg-card px-5"
+      className="relative flex h-14 flex-none items-center gap-3.5 border-b border-border bg-card px-5"
     >
+      <TopProgressBar active={loading} />
       {onToggleNav && (
         <button
           type="button"
@@ -92,8 +95,15 @@ function TopBar({
       </button>
 
       {onRefresh && (
-        <button type="button" onClick={onRefresh} aria-label="Refresh" className={iconBtn}>
-          <RefreshCw className="size-[17px]" />
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          aria-label="Refresh"
+          aria-busy={loading}
+          className={cn(iconBtn, loading && "cursor-not-allowed opacity-70")}
+        >
+          <RefreshCw className={cn("size-[17px]", loading && "animate-spin")} />
         </button>
       )}
 
