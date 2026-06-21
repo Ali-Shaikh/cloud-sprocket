@@ -970,6 +970,23 @@ export default function App() {
     }
   }
 
+  async function selectAzureWafPolicy(policyName: string): Promise<void> {
+    const previousPolicy = workspace.selectedAzureWafPolicy;
+    setWorkspace((current) => ({ ...current, selectedAzureWafPolicy: policyName }));
+    try {
+      const workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.waf.selectPolicy", {
+        policyName,
+      });
+      startTransition(() => {
+        setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+      });
+    } catch (error) {
+      setWorkspace((current) => ({ ...current, selectedAzureWafPolicy: previousPolicy }));
+      const message = error instanceof Error ? error.message : "WAF policy selection failed";
+      pushNotification("error", "Could not select WAF policy", message);
+    }
+  }
+
   async function selectAzureLogAnalyticsWorkspace(nextWorkspace: string): Promise<void> {
     const requestID = ++azureLogWorkspaceSelectionRequest.current;
     const previousWorkspace = workspace.selectedAzureLogWorkspace;
@@ -2325,7 +2342,7 @@ export default function App() {
         void selectAzureLogAnalyticsWorkspace(ws);
       }}
       onSelectPolicy={(policyName) => {
-        void mutateWorkspace("azure.waf.selectPolicy", { policyName });
+        void selectAzureWafPolicy(policyName);
       }}
       onRunQuery={(ws, query, timespan) =>
         backendRequest<AzureLogQueryResult>("azure.logAnalytics.query", {

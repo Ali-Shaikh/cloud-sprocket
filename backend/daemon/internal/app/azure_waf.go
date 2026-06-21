@@ -59,6 +59,7 @@ func (s *Service) enrichAzureWafInventory(workspace *models.WorkspaceSnapshot, s
 	if selected == "" && len(policies) > 0 {
 		selected = policies[0].Name
 	}
+	workspace.SelectedAzureWafPolicy = selected
 	if selected != "" {
 		resourceGroup := ""
 		for _, policy := range policies {
@@ -214,21 +215,21 @@ func (s *Service) handleAzureWafLogsSchema(ctx context.Context, params json.RawM
 	return s.azure.DetectWafLogSchema(ctx, profile, workspace, request.Timespan)
 }
 
-func (s *Service) handleAzureWafSelectPolicy(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
+func (s *Service) handleAzureWafSelectPolicy(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		PolicyName string `json:"policyName"`
 	}
 	if err := json.Unmarshal(params, &request); err != nil {
 		return nil, err
 	}
-	_, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a WAF policy", func(session *models.SessionSnapshot) error {
+	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a WAF policy", func(session *models.SessionSnapshot) error {
 		session.SelectedAzureWafPolicy = strings.TrimSpace(request.PolicyName)
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return map[string]string{"policyName": session.SelectedAzureWafPolicy}, nil
+	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "", "")
 }
 
 func (s *Service) handleAzureWafConfigSetMode(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

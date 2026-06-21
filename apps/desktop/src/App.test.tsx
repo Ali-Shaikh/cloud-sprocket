@@ -558,6 +558,24 @@ vi.mock("./lib/backend", () => ({
           awsWritesEnabled: Boolean(params?.enabled) && workspaceFixture.awsWriteCapable,
         };
         return workspaceFixture;
+      case "azure.waf.selectPolicy": {
+        const policyName = String(params?.policyName ?? "");
+        workspaceFixture = {
+          ...workspaceFixture,
+          selectedAzureWafPolicy: policyName,
+          azureWafPolicyDetail: {
+            name: policyName,
+            resourceGroup: "rg-marketing-prod",
+            mode: "Prevention",
+            enabled: true,
+            managedRuleSets: [],
+            managedRuleOverrides: [],
+            exclusions: [],
+            customRules: [],
+          },
+        };
+        return workspaceFixture;
+      }
       default:
         return sessionFixture;
     }
