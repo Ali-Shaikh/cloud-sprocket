@@ -368,6 +368,12 @@ func (stubAzureInventory) ListEntraAppRegistrations(context.Context, models.Prof
 	return []models.AzureEntraApp{{DisplayName: "my-api", AppID: "app-1"}}, nil
 }
 
+func (stubAzureInventory) ListBastionHosts(context.Context, models.ProfileSummary) ([]models.AzureBastionHost, error) {
+	return []models.AzureBastionHost{
+		{Name: "bastion-hub", ResourceGroup: "rg-network", Location: "westeurope", SKU: "Standard"},
+	}, nil
+}
+
 func (s stubDockerRuntime) Snapshot(context.Context) (models.DockerRuntimeSnapshot, error) {
 	return s.snapshot, nil
 }

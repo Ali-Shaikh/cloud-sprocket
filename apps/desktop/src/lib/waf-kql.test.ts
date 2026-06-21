@@ -4,6 +4,7 @@ import {
   buildTrackingReferenceExtendQuery,
   buildTrackingReferenceQuery,
   buildTrackingReferenceSearchQuery,
+  describeWafLogSchema,
   normaliseWafSchema,
 } from "./waf-kql";
 
@@ -52,5 +53,12 @@ describe("waf-kql tracking reference", () => {
   it("defaults buildTrackingReferenceQuery to the extend lookup", () => {
     const query = buildTrackingReferenceQuery(diagnosticsSchema, trackingRef);
     expect(query).toContain("AdditionalFields.trackingReference");
+  });
+
+  it("describes AzureDiagnostics schema mode for the UI", () => {
+    const description = describeWafLogSchema(diagnosticsSchema);
+    expect(description.modeKey).toBe("azureDiagnostics");
+    expect(description.modeLabel).toContain("AzureDiagnostics");
+    expect(description.trackingLookup).toContain("AdditionalFields.trackingReference");
   });
 });

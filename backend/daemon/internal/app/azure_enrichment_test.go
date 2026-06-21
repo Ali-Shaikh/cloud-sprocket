@@ -130,6 +130,92 @@ func TestWorkspaceGetSkipsHeavyAzureDrillDown(t *testing.T) {
 	}
 }
 
+func TestSetWriteModeSkipsHeavyAzureDrillDown(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+	mustWriteFile(
+		t,
+		filepath.Join(home, ".azure", "azureProfile.json"),
+		`{"subscriptions":[{"id":"sub-001","name":"Marketing","tenantId":"tenant-123","user":{"name":"ali@example.com"}}]}`,
+	)
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("EnsureRuntimeDirs: %v", err)
+	}
+
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer dataStore.Close()
+
+	azure := &countingAzureInventory{}
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(command string) (string, error) {
+			if command == "az" {
+				return "/usr/bin/az", nil
+			}
+			return "", nil
+		}),
+		&stubS3Inventory{},
+		&stubEC2Inventory{},
+		stubLambdaInventory{},
+		stubDynamoDBInventory{},
+		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{},
+		azure,
+		stubDockerRuntime{},
+	)
+
+	ctx := context.Background()
+	for _, step := range []struct {
+		method string
+		params []byte
+	}{
+		{"session.selectProvider", []byte(`{"providerId":"azure"}`)},
+		{"session.selectProfile", []byte(`{"providerId":"azure","profileId":"sub-001"}`)},
+		{"session.selectAuthMethod", []byte(`{"authMethod":"cli"}`)},
+		{"session.lock", nil},
+	} {
+		if _, err := service.Handle(ctx, step.method, step.params, nil); err != nil {
+			t.Fatalf("%s: %v", step.method, err)
+		}
+	}
+
+	result, err := service.Handle(ctx, "session.setWriteMode", []byte(`{"enabled":true}`), nil)
+	if err != nil {
+		t.Fatalf("session.setWriteMode: %v", err)
+	}
+	workspace, ok := result.(models.WorkspaceSnapshot)
+	if !ok {
+		t.Fatalf("expected WorkspaceSnapshot, got %T", result)
+	}
+	if !workspace.AzureWriteModeEnabled {
+		t.Fatal("expected AzureWriteModeEnabled after enabling write mode")
+	}
+	if !workspace.AzureWritesEnabled {
+		t.Fatal("expected AzureWritesEnabled after enabling write mode")
+	}
+	if workspace.AzureWafPolicyDetail != nil {
+		t.Fatal("setWriteMode should not load WAF policy detail")
+	}
+	if workspace.AzureWafLogSchema != nil {
+		t.Fatal("setWriteMode should not probe WAF log schema")
+	}
+	if azure.detectSchemaCalls.Load() != 0 {
+		t.Fatalf("DetectWafLogSchema calls = %d, want 0", azure.detectSchemaCalls.Load())
+	}
+	if azure.getPolicyCalls.Load() != 0 {
+		t.Fatalf("GetWafPolicy calls = %d, want 0", azure.getPolicyCalls.Load())
+	}
+}
+
 type delayedAzureInventory struct {
 	stubAzureInventory
 	delay time.Duration

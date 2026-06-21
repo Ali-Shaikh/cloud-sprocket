@@ -584,6 +584,15 @@ const mockAzureLogAnalyticsWorkspaces = [
   { name: "law-shared", resourceGroup: "rg-shared", location: "westeurope", customerId: "law-guid-2" },
 ];
 
+const mockAzureBastionHosts = [
+  {
+    name: "bastion-hub",
+    resourceGroup: "rg-network",
+    location: "westeurope",
+    sku: "Standard",
+  },
+];
+
 const mockAzureWafLogSchema = {
   mode: "azureDiagnostics",
   tableName: "AzureDiagnostics",
@@ -1909,6 +1918,74 @@ function handleMockRequest<T>(
       mockState.session.selectedAzureVmId = undefined;
       appendLog("success", `Created Azure resource group ${name} (mock).`);
       return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.bastion.list":
+      return Promise.resolve({
+        hosts: mockAzureBastionHosts,
+        statusMessage: `Loaded ${mockAzureBastionHosts.length} Bastion host(s) (mock).`,
+      } as T);
+    case "azure.bastion.connect": {
+      const bastionName = String(params.bastionName ?? "");
+      const bastionResourceGroup = String(params.bastionResourceGroup ?? "");
+      const vmId = String(params.vmId ?? "");
+      const username = String(params.username ?? "azureuser");
+      const authType = String(params.authType ?? "password");
+      const sshKeyPath = String(params.sshKeyPath ?? "");
+      const launch = Boolean(params.launch);
+      const resourceGroup = mockState.session.selectedAzureResourceGroup ?? mockAzureResourceGroups[0]?.name;
+      const vms = resourceGroup
+        ? mockAzureVirtualMachines[resourceGroup as keyof typeof mockAzureVirtualMachines] ?? []
+        : [];
+      const vm = vms.find((entry) => entry.vmId === vmId) ?? vms[0];
+      if (!bastionName || !bastionResourceGroup) {
+        return Promise.reject(new Error("select a Bastion host before connecting"));
+      }
+      if (!vm?.vmId) {
+        return Promise.reject(new Error("select a virtual machine before connecting via Bastion"));
+      }
+      const isWindows = String(vm.osType ?? "").toLowerCase() === "windows";
+      const protocol = isWindows ? "rdp" : "ssh";
+      const args = isWindows
+        ? [
+            "network",
+            "bastion",
+            "rdp",
+            "--name",
+            bastionName,
+            "--resource-group",
+            bastionResourceGroup,
+            "--target-resource-id",
+            vm.vmId,
+          ]
+        : [
+            "network",
+            "bastion",
+            "ssh",
+            "--name",
+            bastionName,
+            "--resource-group",
+            bastionResourceGroup,
+            "--target-resource-id",
+            vm.vmId,
+            "--auth-type",
+            authType,
+            ...(authType === "ssh-key"
+              ? ["--username", username, "--ssh-key", sshKeyPath]
+              : authType === "password"
+                ? ["--username", username]
+                : []),
+          ];
+      const command = `az ${args.join(" ")}`;
+      if (launch) {
+        appendLog("success", `Launched Bastion ${protocol} session to ${vm.name} (mock).`);
+      } else {
+        appendLog("success", `Built Bastion ${protocol} command for ${vm.name} (mock).`);
+      }
+      return Promise.resolve({
+        command,
+        launched: launch,
+        protocol,
+      } as T);
     }
     case "azure.virtualMachines.invokeAction": {
       if (!mockState.session.azureWriteModeEnabled) {

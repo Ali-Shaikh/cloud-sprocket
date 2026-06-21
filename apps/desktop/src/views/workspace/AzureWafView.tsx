@@ -16,6 +16,7 @@ import {
   buildTrackingReferenceExtendQuery,
   buildTrackingReferenceSearchQuery,
   buildWafFilteredQuery,
+  describeWafLogSchema,
   normaliseWafSchema,
   type WafLogFilters,
 } from "@/lib/waf-kql";
@@ -125,6 +126,7 @@ export default function AzureWafView({
     () => normaliseWafSchema(workspace.azureWafLogSchema),
     [workspace.azureWafLogSchema],
   );
+  const schemaDescription = useMemo(() => describeWafLogSchema(schema), [schema]);
   const policyDetail = workspace.azureWafPolicyDetail;
   const fireCounts = workspace.azureWafRuleFireCounts ?? [];
   const canWrite = workspace.azureWritesEnabled;
@@ -264,6 +266,18 @@ export default function AzureWafView({
         <p className="mt-1 text-sm text-muted-foreground">
           {workspace.profile?.displayName || "Subscription"} · Front Door WAF logs and policy
         </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <StatusPill
+            status={schemaDescription.detected ? "on" : "warning"}
+            label={schemaDescription.detected ? "Schema detected" : "Schema assumed"}
+          />
+          <span className="rounded-md border border-border bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
+            {schemaDescription.modeLabel}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Table <span className="font-mono text-foreground">{schemaDescription.tableLabel}</span>
+          </span>
+        </div>
       </header>
 
       <Tabs defaultValue="logs">
@@ -334,9 +348,15 @@ export default function AzureWafView({
             </div>
 
             <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-              Schema: {schema.tableName}
-              {schema.detected ? " (detected)" : " (default)"}
-              {schema.message ? ` · ${schema.message}` : ""}
+              <div className="font-medium text-foreground">{schemaDescription.modeLabel}</div>
+              <div className="mt-1">
+                Table <span className="font-mono">{schemaDescription.tableLabel}</span>
+                {schemaDescription.detected ? " · detected from workspace data" : " · default until schema is probed"}
+              </div>
+              <div className="mt-1">
+                Tracking ref lookup: {schemaDescription.trackingLookup}
+              </div>
+              {schemaDescription.message ? <div className="mt-1">{schemaDescription.message}</div> : null}
             </div>
 
             <div className="flex flex-wrap items-end gap-2">

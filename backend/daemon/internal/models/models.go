@@ -478,6 +478,21 @@ type AzureVirtualMachine struct {
 	Tags              []DetailField `json:"tags,omitempty"`
 }
 
+// AzureBastionHost is a Bastion resource in the subscription (cloud only).
+type AzureBastionHost struct {
+	Name          string `json:"name"`
+	ResourceGroup string `json:"resourceGroup"`
+	Location      string `json:"location,omitempty"`
+	SKU           string `json:"sku,omitempty"`
+}
+
+// AzureBastionConnectResult is returned when building or launching a native-client session.
+type AzureBastionConnectResult struct {
+	Command  string `json:"command"`
+	Launched bool   `json:"launched"`
+	Protocol string `json:"protocol,omitempty"`
+}
+
 type AzureStorageAccount struct {
 	Name         string `json:"name"`
 	Kind         string `json:"kind,omitempty"`

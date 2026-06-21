@@ -202,6 +202,43 @@ export function buildJsChallengeQuery(schema: AzureWafLogSchemaProfile, filters:
   });
 }
 
+export type WafSchemaDescription = {
+  modeKey: "azureDiagnostics" | "resourceSpecific" | "unknown";
+  modeLabel: string;
+  tableLabel: string;
+  trackingLookup: string;
+  detected: boolean;
+  message?: string;
+};
+
+/** Human-readable summary of which WAF log schema/mode the workspace is using. */
+export function describeWafLogSchema(schema: AzureWafLogSchemaProfile): WafSchemaDescription {
+  const modeKey =
+    schema.mode === "azureDiagnostics"
+      ? "azureDiagnostics"
+      : schema.mode === "resourceSpecific"
+        ? "resourceSpecific"
+        : "unknown";
+  const modeLabel =
+    modeKey === "azureDiagnostics"
+      ? "AzureDiagnostics (classic diagnostic logs)"
+      : modeKey === "resourceSpecific"
+        ? "Resource-specific WAF table"
+        : "Unknown schema mode";
+  const trackingLookup =
+    modeKey === "azureDiagnostics"
+      ? "AdditionalFields.trackingReference (use Look up ref)"
+      : `${schema.columns.trackingReference || "TrackingReference"} column`;
+  return {
+    modeKey,
+    modeLabel,
+    tableLabel: schema.tableName,
+    trackingLookup,
+    detected: schema.detected,
+    message: schema.message,
+  };
+}
+
 export function normaliseWafSchema(schema?: AzureWafLogSchemaProfile | null): AzureWafLogSchemaProfile {
   if (schema?.columns?.trackingReference) {
     return schema;

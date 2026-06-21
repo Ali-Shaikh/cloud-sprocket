@@ -333,36 +333,43 @@ func (s *Service) handleSessionSetWriteMode(ctx context.Context, params json.Raw
 		return nil, err
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	session, err := s.currentState(ctx, snapshot)
 	if err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
 	if !session.IsLocked {
+		s.mu.Unlock()
 		return nil, errors.New("open a locked workspace before changing write mode")
 	}
 	profiles := filterProfiles(snapshot.Profiles, session.CurrentProviderID)
 	profile, ok := findProfile(profiles, session.SelectedProfileID)
 	if !ok {
+		s.mu.Unlock()
 		return nil, errors.New("the locked profile is no longer available")
 	}
 	switch session.CurrentProviderID {
 	case "aws":
 		if request.Enabled && !profileAllowsAWSWrites(profile) {
+			s.mu.Unlock()
 			return nil, errors.New("this profile cannot enable write mode: configure a local endpoint_url and cloudsprocket_allow_writes = true")
 		}
 		session.AWSWriteModeEnabled = request.Enabled
 	case "azure":
 		if request.Enabled && !profileAllowsAzureWrites(profile, s.azureProviderCommandPath(snapshot)) {
+			s.mu.Unlock()
 			return nil, errors.New("this Azure profile cannot enable write mode: use the floci-az local profile or sign in with the Azure CLI")
 		}
 		session.AzureWriteModeEnabled = request.Enabled
 	default:
+		s.mu.Unlock()
 		return nil, errors.New("write mode is only available for locked AWS or Azure workspaces")
 	}
 	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
+	s.mu.Unlock()
 	if notifier != nil {
 		level := "info"
 		message := "Write mode disabled for this workspace session."
@@ -389,7 +396,13 @@ func (s *Service) handleSessionSetWriteMode(ctx context.Context, params json.Raw
 			Timestamp: s.timestamp(),
 		})
 	}
-	return s.buildWorkspaceSnapshot(snapshot, session), nil
+	// Toggling write mode only flips session flags; do not block on full Azure
+	// enrichment (WAF schema, blob drill-down, etc.) while the dialog waits.
+	return s.buildWorkspaceSnapshotOpts(
+		snapshot,
+		session,
+		workspaceSnapshotOptions{lightweightAzure: true},
+	), nil
 }
 
 func (s *Service) handleSessionUnlock(ctx context.Context, notifier Notifier) (any, error) {

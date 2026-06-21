@@ -385,6 +385,19 @@ export interface AzureVirtualMachine {
   tags?: DetailField[];
 }
 
+export interface AzureBastionHost {
+  name: string;
+  resourceGroup: string;
+  location?: string;
+  sku?: string;
+}
+
+export interface AzureBastionConnectResult {
+  command: string;
+  launched: boolean;
+  protocol?: string;
+}
+
 export interface AzureStorageAccount {
   name: string;
   kind?: string;

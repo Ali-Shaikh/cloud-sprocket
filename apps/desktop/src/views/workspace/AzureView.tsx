@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Copy, Layers, MonitorCog, Plus, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Copy, Layers, MonitorCog, Plus, Terminal, Trash2 } from "lucide-react";
+import { open } from "@tauri-apps/plugin-dialog";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -33,7 +34,7 @@ import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
 import { DetailFieldList } from "./detail-fields";
-import type { WorkspaceSnapshot } from "@/types/backend";
+import type { AzureBastionConnectResult, AzureBastionHost, WorkspaceSnapshot } from "@/types/backend";
 
 export type AzurePageId = "overview" | "resource-groups" | "virtual-machines";
 
@@ -50,6 +51,16 @@ export type AzureViewProps = {
   onCreateResourceGroup: (name: string, location: string) => void;
   onDeleteResourceGroup: (name: string) => void;
   onInvokeVMAction: (action: AzureVMAction, vmId: string) => void;
+  onListBastionHosts: () => Promise<{ hosts: AzureBastionHost[]; statusMessage: string }>;
+  onBastionConnect: (request: {
+    bastionName: string;
+    bastionResourceGroup: string;
+    vmId: string;
+    username: string;
+    authType: string;
+    sshKeyPath: string;
+    launch: boolean;
+  }) => Promise<AzureBastionConnectResult>;
 };
 
 function normalisePageId(pageId: string): AzurePageId {
@@ -116,6 +127,10 @@ function copyToClipboard(value: string): void {
   }
 }
 
+function bastionHostKey(host: AzureBastionHost): string {
+  return `${host.name}|${host.resourceGroup}`;
+}
+
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
 
@@ -138,6 +153,8 @@ export default function AzureView({
   onCreateResourceGroup,
   onDeleteResourceGroup,
   onInvokeVMAction,
+  onListBastionHosts,
+  onBastionConnect,
 }: AzureViewProps) {
   const page = normalisePageId(activePageId);
   const canWrite = workspace.azureWritesEnabled;
@@ -148,6 +165,16 @@ export default function AzureView({
   >();
   const [newRgName, setNewRgName] = useState("");
   const [newRgLocation, setNewRgLocation] = useState("westeurope");
+  const [bastionHosts, setBastionHosts] = useState<AzureBastionHost[]>([]);
+  const [bastionStatus, setBastionStatus] = useState("");
+  const [bastionLoading, setBastionLoading] = useState(false);
+  const [selectedBastionKey, setSelectedBastionKey] = useState("");
+  const [bastionUsername, setBastionUsername] = useState("azureuser");
+  const [bastionAuthType, setBastionAuthType] = useState("password");
+  const [bastionSSHKeyPath, setBastionSSHKeyPath] = useState("");
+  const [bastionCommand, setBastionCommand] = useState("");
+  const [bastionConnectStatus, setBastionConnectStatus] = useState("");
+  const [bastionConnecting, setBastionConnecting] = useState(false);
 
   const subscriptionId =
     profileFieldValue(workspace.profile, "Subscription ID") ||
@@ -174,6 +201,70 @@ export default function AzureView({
   const canPowerOffVm = canWrite && selectedVmPower === "running";
   const canDeallocateVm = canWrite && (selectedVmPower === "running" || selectedVmPower === "stopped");
   const canRestartVm = canWrite && selectedVmPower === "running";
+  const selectedBastion = bastionHosts.find(
+    (host) => bastionHostKey(host) === selectedBastionKey,
+  );
+  const isWindowsVm = (selectedVm?.osType ?? "").toLowerCase() === "windows";
+
+  useEffect(() => {
+    if (page !== "virtual-machines") {
+      return;
+    }
+    let cancelled = false;
+    setBastionLoading(true);
+    void onListBastionHosts()
+      .then((result) => {
+        if (cancelled) return;
+        setBastionHosts(result.hosts);
+        setBastionStatus(result.statusMessage);
+        if (result.hosts.length > 0) {
+          setSelectedBastionKey((current) => current || bastionHostKey(result.hosts[0]));
+        }
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setBastionStatus(error instanceof Error ? error.message : String(error));
+        setBastionHosts([]);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setBastionLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [page, onListBastionHosts]);
+
+  async function runBastionConnect(launch: boolean) {
+    if (!selectedVm || !selectedBastion) {
+      setBastionConnectStatus("Select a virtual machine and Bastion host first.");
+      return;
+    }
+    setBastionConnecting(true);
+    setBastionConnectStatus(launch ? "Launching Bastion session..." : "Building Bastion command...");
+    try {
+      const result = await onBastionConnect({
+        bastionName: selectedBastion.name,
+        bastionResourceGroup: selectedBastion.resourceGroup,
+        vmId: selectedVm.vmId,
+        username: bastionUsername,
+        authType: bastionAuthType,
+        sshKeyPath: bastionSSHKeyPath,
+        launch,
+      });
+      setBastionCommand(result.command);
+      setBastionConnectStatus(
+        launch
+          ? `Launched ${result.protocol?.toUpperCase() || "Bastion"} session in a new terminal.`
+          : "Bastion command ready to copy.",
+      );
+    } catch (error: unknown) {
+      setBastionConnectStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBastionConnecting(false);
+    }
+  }
 
   const metricCards = [
     {
@@ -656,6 +747,140 @@ export default function AzureView({
           )}
         </section>
       </div>
+
+      <section className={sectionCard}>
+        <div className="flex items-start gap-3">
+          <Terminal className="mt-0.5 size-5 text-muted-foreground" />
+          <div className="space-y-1">
+            <h2 className="text-base font-bold">Bastion connect</h2>
+            <p className="text-sm text-muted-foreground">
+              Native-client SSH or RDP via <span className="font-mono">az network bastion</span>. Requires
+              Bastion Standard with native client support enabled.
+            </p>
+          </div>
+        </div>
+        {bastionLoading ? (
+          <p className="text-sm text-muted-foreground">Loading Bastion hosts...</p>
+        ) : bastionHosts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {bastionStatus || "No Bastion hosts are available for this subscription."}
+          </p>
+        ) : !selectedVm ? (
+          <p className="text-sm text-muted-foreground">Select a virtual machine to connect.</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="sm:col-span-2">
+                <div className={cn(fieldLabel, "mb-1")}>Bastion host</div>
+                <Select value={selectedBastionKey} onValueChange={setSelectedBastionKey}>
+                  <SelectTrigger aria-label="Select Bastion host">
+                    <SelectValue placeholder="Select Bastion host" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {bastionHosts.map((host) => (
+                      <SelectItem key={bastionHostKey(host)} value={bastionHostKey(host)}>
+                        {host.name} ({host.resourceGroup})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {!isWindowsVm ? (
+                <>
+                  <div>
+                    <div className={cn(fieldLabel, "mb-1")}>SSH username</div>
+                    <Input
+                      value={bastionUsername}
+                      onChange={(event) => setBastionUsername(event.target.value)}
+                      spellCheck={false}
+                    />
+                  </div>
+                  <div>
+                    <div className={cn(fieldLabel, "mb-1")}>Auth type</div>
+                    <Select value={bastionAuthType} onValueChange={setBastionAuthType}>
+                      <SelectTrigger aria-label="Select Bastion auth type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="password">Password</SelectItem>
+                        <SelectItem value="ssh-key">SSH key file</SelectItem>
+                        <SelectItem value="aad">Microsoft Entra ID</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              ) : (
+                <div className="sm:col-span-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+                  Windows VM selected: Bastion will launch native RDP via the Azure CLI.
+                </div>
+              )}
+            </div>
+            {!isWindowsVm && bastionAuthType === "ssh-key" ? (
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-[280px] flex-1">
+                  <div className={cn(fieldLabel, "mb-1")}>SSH private key path</div>
+                  <Input
+                    value={bastionSSHKeyPath}
+                    onChange={(event) => setBastionSSHKeyPath(event.target.value)}
+                    placeholder="C:\\Users\\you\\.ssh\\id_rsa"
+                    spellCheck={false}
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    void open({ multiple: false, directory: false }).then((path) => {
+                      if (typeof path === "string") {
+                        setBastionSSHKeyPath(path);
+                      }
+                    });
+                  }}
+                >
+                  Browse
+                </Button>
+              </div>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                disabled={bastionConnecting || !selectedBastion}
+                onClick={() => {
+                  void runBastionConnect(false);
+                }}
+              >
+                Copy command
+              </Button>
+              <Button
+                disabled={bastionConnecting || !selectedBastion}
+                onClick={() => {
+                  void runBastionConnect(true);
+                }}
+              >
+                Connect in terminal
+              </Button>
+              {bastionCommand ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    copyToClipboard(bastionCommand);
+                  }}
+                >
+                  <Copy />
+                  Copy last command
+                </Button>
+              ) : null}
+            </div>
+            {bastionConnectStatus ? (
+              <p className="text-sm text-muted-foreground">{bastionConnectStatus}</p>
+            ) : null}
+            {bastionCommand ? (
+              <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border bg-muted/30 p-3 font-mono text-xs">
+                {bastionCommand}
+              </pre>
+            ) : null}
+          </div>
+        )}
+      </section>
     </>
   );
 

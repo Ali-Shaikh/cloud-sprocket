@@ -77,6 +77,7 @@ type AzureInventory interface {
 	DeleteBlob(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, blobName string) error
 	InvokeVirtualMachineAction(ctx context.Context, profile models.ProfileSummary, resourceGroup string, vmName string, action string) error
 	GetVirtualMachine(ctx context.Context, profile models.ProfileSummary, resourceGroup string, vmName string) (models.AzureVirtualMachine, error)
+	ListBastionHosts(ctx context.Context, profile models.ProfileSummary) ([]models.AzureBastionHost, error)
 	ListWebApps(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureWebApp, error)
 	CreateWebApp(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, location string, runtime string) (models.AzureWebApp, error)
 	ListLogAnalyticsWorkspaces(ctx context.Context, profile models.ProfileSummary) ([]models.AzureLogAnalyticsWorkspace, error)

@@ -219,6 +219,11 @@ func (blockingAzure) RemoveWafExclusion(ctx context.Context, _ models.ProfileSum
 	return ctx.Err()
 }
 
+func (blockingAzure) ListBastionHosts(ctx context.Context, _ models.ProfileSummary) ([]models.AzureBastionHost, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
 // TestAzureInventoryBoundedByTimeout proves a stalled Azure inventory call is
 // cut off by the configured timeout (and falls back to empty) instead of
 // hanging the workspace snapshot.

@@ -119,6 +119,8 @@ import type {
   AwsS3Bucket,
   AwsS3ExportSnippet,
   AwsS3Object,
+  AzureBastionConnectResult,
+  AzureBastionHost,
   AzureBlob,
   AzureBlobContainer,
   AzureResourceGroup,
@@ -656,6 +658,7 @@ export default function App() {
   const [azureAppServiceActionStatus, setAzureAppServiceActionStatus] = useState("");
   const [writeModeDialogOpen, setWriteModeDialogOpen] = useState(false);
   const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<"enable" | "incapable">("enable");
+  const [writeModePending, setWriteModePending] = useState(false);
   const [loading, setLoading] = useState(true);
   // workspaceLoading: an inventory fetch (workspace.get / discovery refresh) is
   // in flight. workspaceLoaded: at least one fetch has completed for the current
@@ -1232,6 +1235,7 @@ export default function App() {
   }
 
   function setWriteMode(enabled: boolean): void {
+    setWriteModePending(true);
     void backendRequest<WorkspaceSnapshot>("session.setWriteMode", { enabled })
       .then((workspaceResult) => {
         startTransition(() => {
@@ -1245,6 +1249,9 @@ export default function App() {
           "Write mode",
           error instanceof Error ? error.message : String(error),
         );
+      })
+      .finally(() => {
+        setWriteModePending(false);
       });
   }
 
@@ -2176,6 +2183,12 @@ export default function App() {
             setAzureActionStatus(error instanceof Error ? error.message : String(error));
           });
       }}
+      onListBastionHosts={() =>
+        backendRequest<{ hosts: AzureBastionHost[]; statusMessage: string }>("azure.bastion.list")
+      }
+      onBastionConnect={(request) =>
+        backendRequest<AzureBastionConnectResult>("azure.bastion.connect", request)
+      }
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-storage" ? (
     <AzureStorageView
@@ -3026,17 +3039,22 @@ export default function App() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <Button variant="outline" onClick={() => setWriteModeDialogOpen(false)}>
+            <Button
+              variant="outline"
+              disabled={writeModePending}
+              onClick={() => setWriteModeDialogOpen(false)}
+            >
               Cancel
             </Button>
             {writeModeDialogIntent === "enable" ? (
               <Button
                 variant="destructive"
+                disabled={writeModePending}
                 onClick={() => {
                   setWriteMode(true);
                 }}
               >
-                Enable writes
+                {writeModePending ? "Enabling..." : "Enable writes"}
               </Button>
             ) : null}
           </AlertDialogFooter>
