@@ -86,6 +86,12 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 				Summary: "Browse storage queues and peek messages.",
 				Detail:  "List storage account queues and peek messages without consuming them.",
 			},
+			{
+				TabID:   "azure-entra",
+				Label:   "Entra ID",
+				Summary: "Browse directory users, groups, and app registrations.",
+				Detail:  "Read-only directory browse on a cloud Azure profile. Not available on floci-az local.",
+			},
 			activityTab,
 		}
 	}

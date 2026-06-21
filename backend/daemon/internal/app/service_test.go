@@ -316,6 +316,18 @@ func (stubAzureInventory) PeekQueueMessages(context.Context, models.ProfileSumma
 	return []models.AzureQueueMessage{{ID: "m1", Text: "hello", DequeueCount: 0}}, nil
 }
 
+func (stubAzureInventory) ListEntraUsers(context.Context, models.ProfileSummary) ([]models.AzureEntraUser, error) {
+	return []models.AzureEntraUser{{DisplayName: "Ada", UserPrincipalName: "ada@contoso.com"}}, nil
+}
+
+func (stubAzureInventory) ListEntraGroups(context.Context, models.ProfileSummary) ([]models.AzureEntraGroup, error) {
+	return []models.AzureEntraGroup{{DisplayName: "Engineers"}}, nil
+}
+
+func (stubAzureInventory) ListEntraAppRegistrations(context.Context, models.ProfileSummary) ([]models.AzureEntraApp, error) {
+	return []models.AzureEntraApp{{DisplayName: "my-api", AppID: "app-1"}}, nil
+}
+
 func (s stubDockerRuntime) Snapshot(context.Context) (models.DockerRuntimeSnapshot, error) {
 	return s.snapshot, nil
 }

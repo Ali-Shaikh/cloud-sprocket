@@ -164,6 +164,21 @@ func (blockingAzure) PeekQueueMessages(ctx context.Context, _ models.ProfileSumm
 	return nil, ctx.Err()
 }
 
+func (blockingAzure) ListEntraUsers(ctx context.Context, _ models.ProfileSummary) ([]models.AzureEntraUser, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) ListEntraGroups(ctx context.Context, _ models.ProfileSummary) ([]models.AzureEntraGroup, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) ListEntraAppRegistrations(ctx context.Context, _ models.ProfileSummary) ([]models.AzureEntraApp, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
 // TestAzureInventoryBoundedByTimeout proves a stalled Azure inventory call is
 // cut off by the configured timeout (and falls back to empty) instead of
 // hanging the workspace snapshot.

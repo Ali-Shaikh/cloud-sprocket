@@ -733,6 +733,10 @@ type WorkspaceSnapshot struct {
 	AzureCosmosItems             []AzureCosmosItem       `json:"azureCosmosItems"`
 	AzureStorageQueues           []AzureStorageQueue     `json:"azureStorageQueues"`
 	AzureQueueMessages           []AzureQueueMessage     `json:"azureQueueMessages"`
+	AzureEntraStatusMessage      string                  `json:"azureEntraStatusMessage,omitempty"`
+	AzureEntraUsers              []AzureEntraUser        `json:"azureEntraUsers"`
+	AzureEntraGroups             []AzureEntraGroup       `json:"azureEntraGroups"`
+	AzureEntraApps               []AzureEntraApp         `json:"azureEntraApps"`
 }
 
 type ActivityLogEntry struct {
