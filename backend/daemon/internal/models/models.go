@@ -592,6 +592,19 @@ type AzureCosmosItem struct {
 	JSON string `json:"json"`
 }
 
+// AzureStorageQueue is a queue within a storage account.
+type AzureStorageQueue struct {
+	Name string `json:"name"`
+}
+
+// AzureQueueMessage is a peeked queue message (read without consuming).
+type AzureQueueMessage struct {
+	ID            string `json:"id"`
+	Text          string `json:"text"`
+	DequeueCount  int64  `json:"dequeueCount"`
+	InsertionTime string `json:"insertionTime,omitempty"`
+}
+
 type WorkspaceSnapshot struct {
 	Provider                   *ProviderSummary        `json:"provider,omitempty"`
 	Profile                    *ProfileSummary         `json:"profile,omitempty"`
