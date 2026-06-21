@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
@@ -95,7 +96,12 @@ func resourceGroupForApp(apps []models.AzureFunctionApp, appName string) string 
 	return ""
 }
 
-func (s *Service) enrichAzureFunctionsInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+func (s *Service) enrichAzureFunctionsInventory(
+	workspace *models.WorkspaceSnapshot,
+	session models.SessionSnapshot,
+	opts azureEnrichmentOptions,
+	mu *sync.Mutex,
+) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "azure" ||
 		workspace.Profile == nil ||
@@ -104,19 +110,47 @@ func (s *Service) enrichAzureFunctionsInventory(workspace *models.WorkspaceSnaps
 	}
 	ctx, cancel := s.withAzureTimeout(context.Background())
 	defer cancel()
-	workspace.AzureFunctionApps = s.azureFunctionApps(ctx, *workspace.Profile)
-	workspace.SelectedAzureFunctionApp = s.selectedAzureFunctionApp(session, workspace.AzureFunctionApps)
-	resourceGroup := resourceGroupForApp(workspace.AzureFunctionApps, workspace.SelectedAzureFunctionApp)
-	workspace.AzureFunctions = s.azureFunctions(ctx, *workspace.Profile, resourceGroup, workspace.SelectedAzureFunctionApp)
-	workspace.SelectedAzureFunction = s.selectedAzureFunction(session, workspace.AzureFunctions)
-	if len(workspace.AzureFunctionApps) == 0 {
-		workspace.AzureFunctionsStatusMessage = "No Function Apps found. Deploy one, then browse and invoke functions here."
+	profile := *workspace.Profile
+
+	apps := s.azureFunctionApps(ctx, profile)
+	selectedApp := s.selectedAzureFunctionApp(session, apps)
+
+	var (
+		functions        []models.AzureFunction
+		selectedFunction string
+		status           string
+	)
+	if opts.lightweight {
+		if len(apps) == 0 {
+			status = "No Function Apps found. Deploy one, then browse and invoke functions here."
+		} else {
+			status = fmt.Sprintf("Loaded %d Function App(s).", len(apps))
+		}
+		lockWorkspace(mu, func() {
+			workspace.AzureFunctionApps = apps
+			workspace.SelectedAzureFunctionApp = selectedApp
+			workspace.AzureFunctions = []models.AzureFunction{}
+			workspace.SelectedAzureFunction = ""
+			workspace.AzureFunctionsStatusMessage = status
+		})
 		return
 	}
-	workspace.AzureFunctionsStatusMessage = fmt.Sprintf(
-		"Loaded %d Function App(s).",
-		len(workspace.AzureFunctionApps),
-	)
+
+	resourceGroup := resourceGroupForApp(apps, selectedApp)
+	functions = s.azureFunctions(ctx, profile, resourceGroup, selectedApp)
+	selectedFunction = s.selectedAzureFunction(session, functions)
+	if len(apps) == 0 {
+		status = "No Function Apps found. Deploy one, then browse and invoke functions here."
+	} else {
+		status = fmt.Sprintf("Loaded %d Function App(s).", len(apps))
+	}
+	lockWorkspace(mu, func() {
+		workspace.AzureFunctionApps = apps
+		workspace.SelectedAzureFunctionApp = selectedApp
+		workspace.AzureFunctions = functions
+		workspace.SelectedAzureFunction = selectedFunction
+		workspace.AzureFunctionsStatusMessage = status
+	})
 }
 
 func (s *Service) handleAzureFunctionsSelectApp(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

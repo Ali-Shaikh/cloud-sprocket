@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
@@ -98,7 +99,12 @@ func resourceGroupForCosmosAccount(accounts []models.AzureCosmosAccount, name st
 	return ""
 }
 
-func (s *Service) enrichAzureCosmosInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+func (s *Service) enrichAzureCosmosInventory(
+	workspace *models.WorkspaceSnapshot,
+	session models.SessionSnapshot,
+	opts azureEnrichmentOptions,
+	mu *sync.Mutex,
+) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "azure" ||
 		workspace.Profile == nil ||
@@ -113,33 +119,64 @@ func (s *Service) enrichAzureCosmosInventory(workspace *models.WorkspaceSnapshot
 	account := selectedName(session.SelectedAzureCosmosAccount, cosmosAccountNames(accounts))
 	rg := resourceGroupForCosmosAccount(accounts, account)
 
-	databases := s.azureCosmosDatabases(ctx, profile, account, rg)
+	var (
+		databases        []models.AzureCosmosDatabase
+		database         string
+		containers       []models.AzureCosmosContainer
+		container        string
+		items            []models.AzureCosmosItem
+		status           string
+	)
+
+	if opts.lightweight {
+		if len(accounts) == 0 {
+			status = "No Cosmos DB accounts found."
+		} else {
+			status = fmt.Sprintf("Loaded %d Cosmos account(s).", len(accounts))
+		}
+		lockWorkspace(mu, func() {
+			workspace.AzureCosmosAccounts = accounts
+			workspace.SelectedAzureCosmosAccount = account
+			workspace.AzureCosmosDatabases = []models.AzureCosmosDatabase{}
+			workspace.SelectedAzureCosmosDatabase = ""
+			workspace.AzureCosmosContainers = []models.AzureCosmosContainer{}
+			workspace.SelectedAzureCosmosContainer = ""
+			workspace.AzureCosmosItems = []models.AzureCosmosItem{}
+			workspace.AzureCosmosStatusMessage = status
+		})
+		return
+	}
+
+	databases = s.azureCosmosDatabases(ctx, profile, account, rg)
 	dbNames := make([]string, 0, len(databases))
 	for _, db := range databases {
 		dbNames = append(dbNames, db.Name)
 	}
-	database := selectedName(session.SelectedAzureCosmosDatabase, dbNames)
+	database = selectedName(session.SelectedAzureCosmosDatabase, dbNames)
 
-	containers := s.azureCosmosContainers(ctx, profile, account, rg, database)
+	containers = s.azureCosmosContainers(ctx, profile, account, rg, database)
 	containerNames := make([]string, 0, len(containers))
 	for _, c := range containers {
 		containerNames = append(containerNames, c.Name)
 	}
-	container := selectedName(session.SelectedAzureCosmosContainer, containerNames)
-
-	workspace.AzureCosmosAccounts = accounts
-	workspace.SelectedAzureCosmosAccount = account
-	workspace.AzureCosmosDatabases = databases
-	workspace.SelectedAzureCosmosDatabase = database
-	workspace.AzureCosmosContainers = containers
-	workspace.SelectedAzureCosmosContainer = container
-	workspace.AzureCosmosItems = s.azureCosmosItems(ctx, profile, account, rg, database, container)
+	container = selectedName(session.SelectedAzureCosmosContainer, containerNames)
+	items = s.azureCosmosItems(ctx, profile, account, rg, database, container)
 
 	if len(accounts) == 0 {
-		workspace.AzureCosmosStatusMessage = "No Cosmos DB accounts found."
-		return
+		status = "No Cosmos DB accounts found."
+	} else {
+		status = fmt.Sprintf("Loaded %d Cosmos account(s).", len(accounts))
 	}
-	workspace.AzureCosmosStatusMessage = fmt.Sprintf("Loaded %d Cosmos account(s).", len(accounts))
+	lockWorkspace(mu, func() {
+		workspace.AzureCosmosAccounts = accounts
+		workspace.SelectedAzureCosmosAccount = account
+		workspace.AzureCosmosDatabases = databases
+		workspace.SelectedAzureCosmosDatabase = database
+		workspace.AzureCosmosContainers = containers
+		workspace.SelectedAzureCosmosContainer = container
+		workspace.AzureCosmosItems = items
+		workspace.AzureCosmosStatusMessage = status
+	})
 }
 
 func (s *Service) handleAzureCosmosSelectAccount(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

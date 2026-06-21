@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
@@ -85,7 +86,12 @@ func (s *Service) selectedAzureSecret(
 	return secrets[0].Name
 }
 
-func (s *Service) enrichAzureKeyVaultInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+func (s *Service) enrichAzureKeyVaultInventory(
+	workspace *models.WorkspaceSnapshot,
+	session models.SessionSnapshot,
+	opts azureEnrichmentOptions,
+	mu *sync.Mutex,
+) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "azure" ||
 		workspace.Profile == nil ||
@@ -94,15 +100,46 @@ func (s *Service) enrichAzureKeyVaultInventory(workspace *models.WorkspaceSnapsh
 	}
 	ctx, cancel := s.withAzureTimeout(context.Background())
 	defer cancel()
-	workspace.AzureKeyVaults = s.azureKeyVaults(ctx, *workspace.Profile)
-	workspace.SelectedAzureKeyVault = s.selectedAzureKeyVault(session, workspace.AzureKeyVaults)
-	workspace.AzureKeyVaultSecrets = s.azureKeyVaultSecrets(ctx, *workspace.Profile, workspace.SelectedAzureKeyVault)
-	workspace.SelectedAzureSecret = s.selectedAzureSecret(session, workspace.AzureKeyVaultSecrets)
-	if len(workspace.AzureKeyVaults) == 0 {
-		workspace.AzureKeyVaultStatusMessage = "No Key Vaults found. Create one, then manage secrets here."
+	profile := *workspace.Profile
+
+	vaults := s.azureKeyVaults(ctx, profile)
+	selectedVault := s.selectedAzureKeyVault(session, vaults)
+
+	var (
+		secrets        []models.AzureKeyVaultSecret
+		selectedSecret string
+		status         string
+	)
+	if opts.lightweight {
+		if len(vaults) == 0 {
+			status = "No Key Vaults found. Create one, then manage secrets here."
+		} else {
+			status = fmt.Sprintf("Loaded %d Key Vault(s).", len(vaults))
+		}
+		lockWorkspace(mu, func() {
+			workspace.AzureKeyVaults = vaults
+			workspace.SelectedAzureKeyVault = selectedVault
+			workspace.AzureKeyVaultSecrets = []models.AzureKeyVaultSecret{}
+			workspace.SelectedAzureSecret = ""
+			workspace.AzureKeyVaultStatusMessage = status
+		})
 		return
 	}
-	workspace.AzureKeyVaultStatusMessage = fmt.Sprintf("Loaded %d Key Vault(s).", len(workspace.AzureKeyVaults))
+
+	secrets = s.azureKeyVaultSecrets(ctx, profile, selectedVault)
+	selectedSecret = s.selectedAzureSecret(session, secrets)
+	if len(vaults) == 0 {
+		status = "No Key Vaults found. Create one, then manage secrets here."
+	} else {
+		status = fmt.Sprintf("Loaded %d Key Vault(s).", len(vaults))
+	}
+	lockWorkspace(mu, func() {
+		workspace.AzureKeyVaults = vaults
+		workspace.SelectedAzureKeyVault = selectedVault
+		workspace.AzureKeyVaultSecrets = secrets
+		workspace.SelectedAzureSecret = selectedSecret
+		workspace.AzureKeyVaultStatusMessage = status
+	})
 }
 
 func (s *Service) handleAzureKeyVaultSelectVault(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

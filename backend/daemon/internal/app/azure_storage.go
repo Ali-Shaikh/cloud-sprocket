@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
@@ -129,7 +130,12 @@ func (s *Service) azureBlobs(
 	return []models.AzureBlob{}
 }
 
-func (s *Service) enrichAzureStorageInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+func (s *Service) enrichAzureStorageInventory(
+	workspace *models.WorkspaceSnapshot,
+	session models.SessionSnapshot,
+	opts azureEnrichmentOptions,
+	mu *sync.Mutex,
+) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "azure" ||
 		workspace.Profile == nil ||
@@ -138,53 +144,72 @@ func (s *Service) enrichAzureStorageInventory(workspace *models.WorkspaceSnapsho
 	}
 	ctx, cancel := s.withAzureTimeout(context.Background())
 	defer cancel()
-	workspace.AzureStorageAccounts = s.azureStorageAccounts(ctx, *workspace.Profile)
-	workspace.SelectedAzureStorageAccount = s.selectedAzureStorageAccount(session, workspace.AzureStorageAccounts)
-	workspace.AzureBlobContainers = s.azureBlobContainers(ctx, *workspace.Profile, workspace.SelectedAzureStorageAccount)
-	workspace.SelectedAzureBlobContainer = s.selectedAzureBlobContainer(session, workspace.AzureBlobContainers)
-	workspace.AzureBlobPrefixFilter = session.AzureBlobPrefixFilter
-	workspace.AzureBlobs = s.azureBlobs(
-		ctx,
-		*workspace.Profile,
-		workspace.SelectedAzureStorageAccount,
-		workspace.SelectedAzureBlobContainer,
-		session.AzureBlobPrefixFilter,
+	profile := *workspace.Profile
+
+	accounts := s.azureStorageAccounts(ctx, profile)
+	selectedAccount := s.selectedAzureStorageAccount(session, accounts)
+
+	var (
+		containers       []models.AzureBlobContainer
+		selectedContainer string
+		blobs            []models.AzureBlob
+		selectedBlob     string
+		metadata         []models.DetailField
+		status           string
 	)
-	workspace.SelectedAzureBlobName = s.selectedAzureBlobName(session, workspace.AzureBlobs)
-	if workspace.SelectedAzureStorageAccount == "" {
-		workspace.AzureStorageStatusMessage = "No Azure storage accounts are currently available for this workspace."
-	} else if workspace.SelectedAzureBlobContainer == "" {
-		workspace.AzureStorageStatusMessage = fmt.Sprintf(
-			"Select a blob container in %s to browse objects.",
-			workspace.SelectedAzureStorageAccount,
-		)
-	} else if len(workspace.AzureBlobs) == 0 {
+
+	if opts.lightweight {
+		switch {
+		case len(accounts) == 0:
+			status = "No Azure storage accounts are currently available for this workspace."
+		case selectedAccount == "":
+			status = "Select a storage account to browse blob containers."
+		default:
+			status = fmt.Sprintf("Loaded %d storage account(s). Select one to browse containers.", len(accounts))
+		}
+		lockWorkspace(mu, func() {
+			workspace.AzureStorageAccounts = accounts
+			workspace.SelectedAzureStorageAccount = selectedAccount
+			workspace.AzureBlobContainers = []models.AzureBlobContainer{}
+			workspace.SelectedAzureBlobContainer = ""
+			workspace.AzureBlobPrefixFilter = session.AzureBlobPrefixFilter
+			workspace.AzureBlobs = []models.AzureBlob{}
+			workspace.SelectedAzureBlobName = ""
+			workspace.AzureBlobMetadata = nil
+			workspace.AzureStorageStatusMessage = status
+		})
+		return
+	}
+
+	containers = s.azureBlobContainers(ctx, profile, selectedAccount)
+	selectedContainer = s.selectedAzureBlobContainer(session, containers)
+	blobs = s.azureBlobs(ctx, profile, selectedAccount, selectedContainer, session.AzureBlobPrefixFilter)
+	selectedBlob = s.selectedAzureBlobName(session, blobs)
+
+	switch {
+	case selectedAccount == "":
+		status = "No Azure storage accounts are currently available for this workspace."
+	case selectedContainer == "":
+		status = fmt.Sprintf("Select a blob container in %s to browse objects.", selectedAccount)
+	case len(blobs) == 0:
 		if session.AzureBlobPrefixFilter != "" {
-			workspace.AzureStorageStatusMessage = fmt.Sprintf(
+			status = fmt.Sprintf(
 				"No blobs matched prefix %q in %s/%s.",
 				session.AzureBlobPrefixFilter,
-				workspace.SelectedAzureStorageAccount,
-				workspace.SelectedAzureBlobContainer,
+				selectedAccount,
+				selectedContainer,
 			)
 		} else {
-			workspace.AzureStorageStatusMessage = fmt.Sprintf(
-				"No blobs were returned for %s/%s.",
-				workspace.SelectedAzureStorageAccount,
-				workspace.SelectedAzureBlobContainer,
-			)
+			status = fmt.Sprintf("No blobs were returned for %s/%s.", selectedAccount, selectedContainer)
 		}
-	} else {
-		workspace.AzureStorageStatusMessage = fmt.Sprintf(
-			"Loaded %d blobs from %s/%s.",
-			len(workspace.AzureBlobs),
-			workspace.SelectedAzureStorageAccount,
-			workspace.SelectedAzureBlobContainer,
-		)
+	default:
+		status = fmt.Sprintf("Loaded %d blobs from %s/%s.", len(blobs), selectedAccount, selectedContainer)
 	}
-	if len(workspace.AzureBlobs) > 0 && workspace.SelectedAzureBlobName != "" {
-		for _, blob := range workspace.AzureBlobs {
-			if blob.Name == workspace.SelectedAzureBlobName {
-				workspace.AzureBlobMetadata = []models.DetailField{
+
+	if len(blobs) > 0 && selectedBlob != "" {
+		for _, blob := range blobs {
+			if blob.Name == selectedBlob {
+				metadata = []models.DetailField{
 					{Label: "Name", Value: blob.Name},
 					{Label: "Size", Value: blob.Size},
 					{Label: "Last Modified", Value: blob.ModifiedAt},
@@ -194,6 +219,18 @@ func (s *Service) enrichAzureStorageInventory(workspace *models.WorkspaceSnapsho
 			}
 		}
 	}
+
+	lockWorkspace(mu, func() {
+		workspace.AzureStorageAccounts = accounts
+		workspace.SelectedAzureStorageAccount = selectedAccount
+		workspace.AzureBlobContainers = containers
+		workspace.SelectedAzureBlobContainer = selectedContainer
+		workspace.AzureBlobPrefixFilter = session.AzureBlobPrefixFilter
+		workspace.AzureBlobs = blobs
+		workspace.SelectedAzureBlobName = selectedBlob
+		workspace.AzureBlobMetadata = metadata
+		workspace.AzureStorageStatusMessage = status
+	})
 }
 
 func (s *Service) activeAzureStorageSelection(

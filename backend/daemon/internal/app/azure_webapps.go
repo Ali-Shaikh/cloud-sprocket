@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
@@ -48,7 +49,7 @@ func (s *Service) selectedAzureWebAppName(
 	return apps[0].Name
 }
 
-func (s *Service) enrichAzureAppServiceInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+func (s *Service) enrichAzureAppServiceInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot, mu *sync.Mutex) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "azure" ||
 		workspace.Profile == nil ||
@@ -57,31 +58,30 @@ func (s *Service) enrichAzureAppServiceInventory(workspace *models.WorkspaceSnap
 	}
 	ctx, cancel := s.withAzureTimeout(context.Background())
 	defer cancel()
+	profile := *workspace.Profile
 	resourceGroup := workspace.SelectedAzureResourceGroup
 	if resourceGroup == "" {
 		resourceGroup = s.selectedAzureResourceGroup(session, workspace.AzureResourceGroups)
 	}
-	workspace.AzureWebApps = s.azureWebApps(ctx, *workspace.Profile, resourceGroup)
-	workspace.SelectedAzureWebAppName = s.selectedAzureWebAppName(session, workspace.AzureWebApps)
-	if isLocalFlociProfile(*workspace.Profile) {
-		workspace.AzureAppServiceStatusMessage =
-			"App Service is not emulated by floci-az. Use a cloud Azure profile or deploy Azure Functions locally."
-		return
-	}
-	if resourceGroup == "" {
-		workspace.AzureAppServiceStatusMessage = "Select an Azure resource group to browse App Service web apps."
-	} else if len(workspace.AzureWebApps) == 0 {
-		workspace.AzureAppServiceStatusMessage = fmt.Sprintf(
-			"No App Service web apps were returned for %s.",
-			resourceGroup,
-		)
+	apps := s.azureWebApps(ctx, profile, resourceGroup)
+	selectedApp := s.selectedAzureWebAppName(session, apps)
+
+	var status string
+	if isLocalFlociProfile(profile) {
+		status = "App Service is not emulated by floci-az. Use a cloud Azure profile or deploy Azure Functions locally."
+	} else if resourceGroup == "" {
+		status = "Select an Azure resource group to browse App Service web apps."
+	} else if len(apps) == 0 {
+		status = fmt.Sprintf("No App Service web apps were returned for %s.", resourceGroup)
 	} else {
-		workspace.AzureAppServiceStatusMessage = fmt.Sprintf(
-			"Loaded %d App Service web apps from %s.",
-			len(workspace.AzureWebApps),
-			resourceGroup,
-		)
+		status = fmt.Sprintf("Loaded %d App Service web apps from %s.", len(apps), resourceGroup)
 	}
+
+	lockWorkspace(mu, func() {
+		workspace.AzureWebApps = apps
+		workspace.SelectedAzureWebAppName = selectedApp
+		workspace.AzureAppServiceStatusMessage = status
+	})
 }
 
 func (s *Service) handleAzureSelectWebApp(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

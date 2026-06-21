@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
@@ -26,7 +27,12 @@ func (s *Service) azureStorageQueues(ctx context.Context, profile models.Profile
 	return []models.AzureStorageQueue{}
 }
 
-func (s *Service) enrichAzureQueuesInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+func (s *Service) enrichAzureQueuesInventory(
+	workspace *models.WorkspaceSnapshot,
+	session models.SessionSnapshot,
+	opts azureEnrichmentOptions,
+	mu *sync.Mutex,
+) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "azure" ||
 		workspace.Profile == nil ||
@@ -45,27 +51,29 @@ func (s *Service) enrichAzureQueuesInventory(workspace *models.WorkspaceSnapshot
 	}
 	queue := selectedName(session.SelectedAzureQueue, names)
 
-	workspace.AzureStorageQueues = queues
-	workspace.SelectedAzureQueue = queue
-	if queue != "" {
-		if messages, err := s.azure.PeekQueueMessages(ctx, profile, account, queue); err == nil {
-			workspace.AzureQueueMessages = messages
-		} else {
-			workspace.AzureQueueMessages = []models.AzureQueueMessage{}
+	var messages []models.AzureQueueMessage
+	if !opts.lightweight && queue != "" {
+		if peeked, err := s.azure.PeekQueueMessages(ctx, profile, account, queue); err == nil {
+			messages = peeked
 		}
-	} else {
-		workspace.AzureQueueMessages = []models.AzureQueueMessage{}
 	}
 
-	if account == "" {
-		workspace.AzureQueuesStatusMessage = "Select a storage account to browse queues."
-		return
+	var status string
+	switch {
+	case account == "":
+		status = "Select a storage account to browse queues."
+	case len(queues) == 0:
+		status = fmt.Sprintf("No queues found in %s.", account)
+	default:
+		status = fmt.Sprintf("Loaded %d queue(s) from %s.", len(queues), account)
 	}
-	if len(queues) == 0 {
-		workspace.AzureQueuesStatusMessage = fmt.Sprintf("No queues found in %s.", account)
-		return
-	}
-	workspace.AzureQueuesStatusMessage = fmt.Sprintf("Loaded %d queue(s) from %s.", len(queues), account)
+
+	lockWorkspace(mu, func() {
+		workspace.AzureStorageQueues = queues
+		workspace.SelectedAzureQueue = queue
+		workspace.AzureQueueMessages = messages
+		workspace.AzureQueuesStatusMessage = status
+	})
 }
 
 func (s *Service) handleAzureQueuesSelectQueue(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

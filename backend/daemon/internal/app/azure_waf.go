@@ -6,12 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
 )
 
-func (s *Service) enrichAzureWafInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+func (s *Service) enrichAzureWafInventory(
+	workspace *models.WorkspaceSnapshot,
+	session models.SessionSnapshot,
+	opts azureEnrichmentOptions,
+	mu *sync.Mutex,
+) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "azure" ||
 		workspace.Profile == nil ||
@@ -20,47 +26,57 @@ func (s *Service) enrichAzureWafInventory(workspace *models.WorkspaceSnapshot, s
 	}
 	ctx, cancel := s.withAzureTimeout(context.Background())
 	defer cancel()
+	profile := *workspace.Profile
 
 	workspaces := workspace.AzureLogAnalyticsWorkspaces
 	if len(workspaces) == 0 {
-		workspaces = s.azureLogAnalyticsWorkspaces(ctx, *workspace.Profile)
+		workspaces = s.azureLogAnalyticsWorkspaces(ctx, profile)
 	}
 	workspaceID := s.selectedAzureLogWorkspace(session, workspaces)
 	if workspaceID == "" && len(workspaces) > 0 {
 		workspaceID = workspaces[0].Name
 	}
 	if workspaceID != "" {
-		resolvedID, err := azureLogAnalyticsQueryWorkspace(workspaceID, workspaces, !isLocalFlociProfile(*workspace.Profile))
-		if err == nil {
+		if resolvedID, err := azureLogAnalyticsQueryWorkspace(workspaceID, workspaces, !isLocalFlociProfile(profile)); err == nil {
 			workspaceID = resolvedID
 		}
-		schema, err := s.azure.DetectWafLogSchema(ctx, *workspace.Profile, workspaceID, "P1D")
-		if err == nil {
-			workspace.AzureWafLogSchema = &schema
+	}
+
+	var schema *models.AzureWafLogSchemaProfile
+	if !opts.lightweight && workspaceID != "" {
+		if detected, err := s.azure.DetectWafLogSchema(ctx, profile, workspaceID, "P1D"); err == nil {
+			schema = &detected
 		}
 	}
 
-	if isLocalFlociProfile(*workspace.Profile) {
-		workspace.AzureWafStatusMessage = "WAF policy config is cloud-only. Local KQL may still surface WAF rows when logging is configured."
-		workspace.AzureWafPolicies = []models.AzureWafPolicySummary{}
+	if isLocalFlociProfile(profile) {
+		lockWorkspace(mu, func() {
+			workspace.AzureWafStatusMessage = "WAF policy config is cloud-only. Local KQL may still surface WAF rows when logging is configured."
+			workspace.AzureWafPolicies = []models.AzureWafPolicySummary{}
+		})
 		return
 	}
 
-	policies, err := s.azure.ListWafPolicies(ctx, *workspace.Profile)
+	policies, err := s.azure.ListWafPolicies(ctx, profile)
 	if err != nil {
-		workspace.AzureWafStatusMessage = friendlyAzureError(err)
-		workspace.AzureWafPolicies = []models.AzureWafPolicySummary{}
+		lockWorkspace(mu, func() {
+			workspace.AzureWafStatusMessage = friendlyAzureError(err)
+			workspace.AzureWafPolicies = []models.AzureWafPolicySummary{}
+		})
 		return
 	}
-	workspace.AzureWafPolicies = policies
-	workspace.AzureWafStatusMessage = fmt.Sprintf("Loaded %d Front Door WAF polic%s.", len(policies), pluralSuffix(len(policies), "y", "ies"))
 
 	selected := strings.TrimSpace(session.SelectedAzureWafPolicy)
 	if selected == "" && len(policies) > 0 {
 		selected = policies[0].Name
 	}
-	workspace.SelectedAzureWafPolicy = selected
-	if selected != "" {
+	status := fmt.Sprintf("Loaded %d Front Door WAF polic%s.", len(policies), pluralSuffix(len(policies), "y", "ies"))
+
+	var (
+		detail     *models.AzureWafPolicyDetail
+		fireCounts []models.AzureWafRuleFireCount
+	)
+	if !opts.lightweight && selected != "" {
 		resourceGroup := ""
 		for _, policy := range policies {
 			if policy.Name == selected {
@@ -69,13 +85,30 @@ func (s *Service) enrichAzureWafInventory(workspace *models.WorkspaceSnapshot, s
 			}
 		}
 		if resourceGroup != "" {
-			detail, detailErr := s.azure.GetWafPolicy(ctx, *workspace.Profile, resourceGroup, selected)
-			if detailErr == nil {
-				workspace.AzureWafPolicyDetail = &detail
-				workspace.AzureWafRuleFireCounts = s.wafRuleFireCounts(ctx, *workspace.Profile, workspaceID, workspace.AzureWafLogSchema, detail.Name)
+			if policyDetail, detailErr := s.azure.GetWafPolicy(ctx, profile, resourceGroup, selected); detailErr == nil {
+				detail = &policyDetail
+				fireCounts = s.wafRuleFireCounts(ctx, profile, workspaceID, schema, policyDetail.Name)
 			}
 		}
 	}
+
+	lockWorkspace(mu, func() {
+		if schema != nil {
+			workspace.AzureWafLogSchema = schema
+		} else if opts.lightweight {
+			workspace.AzureWafLogSchema = nil
+		}
+		workspace.AzureWafPolicies = policies
+		workspace.AzureWafStatusMessage = status
+		workspace.SelectedAzureWafPolicy = selected
+		if detail != nil {
+			workspace.AzureWafPolicyDetail = detail
+			workspace.AzureWafRuleFireCounts = fireCounts
+		} else if opts.lightweight {
+			workspace.AzureWafPolicyDetail = nil
+			workspace.AzureWafRuleFireCounts = nil
+		}
+	})
 }
 
 func (s *Service) wafRuleFireCounts(

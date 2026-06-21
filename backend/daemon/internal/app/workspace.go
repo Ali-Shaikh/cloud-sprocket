@@ -7,9 +7,23 @@ import (
 	"cloudsprocket/backend/daemon/internal/models"
 )
 
+type workspaceSnapshotOptions struct {
+	// lightweightAzure skips expensive Azure drill-down on workspace.get while
+	// selection handlers and finishAzureWorkspace load detail on demand.
+	lightweightAzure bool
+}
+
 func (s *Service) buildWorkspaceSnapshot(
 	snapshot discovery.Snapshot,
 	session models.SessionSnapshot,
+) models.WorkspaceSnapshot {
+	return s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{})
+}
+
+func (s *Service) buildWorkspaceSnapshotOpts(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	opts workspaceSnapshotOptions,
 ) models.WorkspaceSnapshot {
 	dockerRuntime := s.dockerRuntimeSnapshot()
 	// Only enumerate managed Docker resources when the engine is reachable. When
@@ -77,16 +91,11 @@ func (s *Service) buildWorkspaceSnapshot(
 		}
 	}
 
-	s.enrichAzureInventory(&workspace, session)
-	s.enrichAzureStorageInventory(&workspace, session)
-	s.enrichAzureAppServiceInventory(&workspace, session)
-	s.enrichAzureLogAnalyticsInventory(&workspace, session)
-	s.enrichAzureWafInventory(&workspace, session)
-	s.enrichAzureFunctionsInventory(&workspace, session)
-	s.enrichAzureKeyVaultInventory(&workspace, session)
-	s.enrichAzureCosmosInventory(&workspace, session)
-	s.enrichAzureQueuesInventory(&workspace, session)
-	s.enrichAzureEntraInventory(&workspace, session)
+	s.enrichAzureWorkspace(
+		&workspace,
+		session,
+		azureEnrichmentOptions{lightweight: opts.lightweightAzure},
+	)
 	s.enrichS3Inventory(&workspace, session)
 	s.enrichEC2Inventory(&workspace, session)
 	s.enrichLambdaInventory(&workspace, session)

@@ -186,7 +186,11 @@ func (s *Service) handleWorkspaceGet(ctx context.Context, notifier Notifier) (an
 	if err != nil {
 		return nil, err
 	}
-	return s.buildWorkspaceSnapshot(snapshot, session), nil
+	return s.buildWorkspaceSnapshotOpts(
+		snapshot,
+		session,
+		workspaceSnapshotOptions{lightweightAzure: true},
+	), nil
 }
 
 func (s *Service) handleSessionSelectProvider(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
@@ -49,7 +50,7 @@ func (s *Service) azureEntraApps(ctx context.Context, profile models.ProfileSumm
 	return []models.AzureEntraApp{}
 }
 
-func (s *Service) enrichAzureEntraInventory(workspace *models.WorkspaceSnapshot, _ models.SessionSnapshot) {
+func (s *Service) enrichAzureEntraInventory(workspace *models.WorkspaceSnapshot, _ models.SessionSnapshot, mu *sync.Mutex) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "azure" ||
 		workspace.Profile == nil ||
@@ -57,19 +58,45 @@ func (s *Service) enrichAzureEntraInventory(workspace *models.WorkspaceSnapshot,
 		return
 	}
 	if isLocalFlociProfile(*workspace.Profile) {
-		workspace.AzureEntraStatusMessage =
-			"floci-az emulates the Entra token/OIDC plane only, not the directory. Use a cloud Azure profile to browse users, groups, and app registrations."
+		lockWorkspace(mu, func() {
+			workspace.AzureEntraStatusMessage =
+				"floci-az emulates the Entra token/OIDC plane only, not the directory. Use a cloud Azure profile to browse users, groups, and app registrations."
+		})
 		return
 	}
 	ctx, cancel := s.withAzureTimeout(context.Background())
 	defer cancel()
 	profile := *workspace.Profile
 
-	workspace.AzureEntraUsers = s.azureEntraUsers(ctx, profile)
-	workspace.AzureEntraGroups = s.azureEntraGroups(ctx, profile)
-	workspace.AzureEntraApps = s.azureEntraApps(ctx, profile)
-	workspace.AzureEntraStatusMessage = fmt.Sprintf(
-		"Loaded %d user(s), %d group(s), %d app registration(s).",
-		len(workspace.AzureEntraUsers), len(workspace.AzureEntraGroups), len(workspace.AzureEntraApps),
+	var (
+		users  []models.AzureEntraUser
+		groups []models.AzureEntraGroup
+		apps   []models.AzureEntraApp
+		wg     sync.WaitGroup
 	)
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		users = s.azureEntraUsers(ctx, profile)
+	}()
+	go func() {
+		defer wg.Done()
+		groups = s.azureEntraGroups(ctx, profile)
+	}()
+	go func() {
+		defer wg.Done()
+		apps = s.azureEntraApps(ctx, profile)
+	}()
+	wg.Wait()
+
+	status := fmt.Sprintf(
+		"Loaded %d user(s), %d group(s), %d app registration(s).",
+		len(users), len(groups), len(apps),
+	)
+	lockWorkspace(mu, func() {
+		workspace.AzureEntraUsers = users
+		workspace.AzureEntraGroups = groups
+		workspace.AzureEntraApps = apps
+		workspace.AzureEntraStatusMessage = status
+	})
 }

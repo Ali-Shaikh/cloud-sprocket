@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
@@ -95,34 +96,38 @@ func (s *Service) selectedAzureVMID(
 	return vms[0].VMID
 }
 
-func (s *Service) enrichAzureInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+func (s *Service) enrichAzureInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot, mu *sync.Mutex) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "azure" ||
 		workspace.Profile == nil ||
 		s.azure == nil {
 		return
 	}
-	workspace.AzureResourceGroups = s.azureResourceGroups(context.Background(), *workspace.Profile)
-	workspace.SelectedAzureResourceGroup = s.selectedAzureResourceGroup(session, workspace.AzureResourceGroups)
-	workspace.AzureVirtualMachines = s.azureVirtualMachines(
-		context.Background(),
-		*workspace.Profile,
-		workspace.SelectedAzureResourceGroup,
-	)
-	workspace.SelectedAzureVMID = s.selectedAzureVMID(session, workspace.AzureVirtualMachines)
-	if len(workspace.AzureResourceGroups) == 0 {
-		workspace.AzureStatusMessage = "No Azure resource groups are currently available for this workspace."
-	} else if workspace.SelectedAzureResourceGroup == "" {
-		workspace.AzureStatusMessage = "Select an Azure resource group to inspect its virtual machines."
-	} else if len(workspace.AzureVirtualMachines) == 0 {
-		workspace.AzureStatusMessage = fmt.Sprintf("No Azure virtual machines were returned for %s.", workspace.SelectedAzureResourceGroup)
-	} else {
-		workspace.AzureStatusMessage = fmt.Sprintf(
-			"Loaded %d Azure virtual machines from %s.",
-			len(workspace.AzureVirtualMachines),
-			workspace.SelectedAzureResourceGroup,
-		)
+	profile := *workspace.Profile
+	groups := s.azureResourceGroups(context.Background(), profile)
+	selectedRG := s.selectedAzureResourceGroup(session, groups)
+	vms := s.azureVirtualMachines(context.Background(), profile, selectedRG)
+	selectedVM := s.selectedAzureVMID(session, vms)
+
+	var status string
+	switch {
+	case len(groups) == 0:
+		status = "No Azure resource groups are currently available for this workspace."
+	case selectedRG == "":
+		status = "Select an Azure resource group to inspect its virtual machines."
+	case len(vms) == 0:
+		status = fmt.Sprintf("No Azure virtual machines were returned for %s.", selectedRG)
+	default:
+		status = fmt.Sprintf("Loaded %d Azure virtual machines from %s.", len(vms), selectedRG)
 	}
+
+	lockWorkspace(mu, func() {
+		workspace.AzureResourceGroups = groups
+		workspace.SelectedAzureResourceGroup = selectedRG
+		workspace.AzureVirtualMachines = vms
+		workspace.SelectedAzureVMID = selectedVM
+		workspace.AzureStatusMessage = status
+	})
 }
 
 func (s *Service) handleAzureSelectResourceGroup(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
@@ -98,7 +99,7 @@ func looksLikeWorkspaceGUID(value string) bool {
 	return true
 }
 
-func (s *Service) enrichAzureLogAnalyticsInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+func (s *Service) enrichAzureLogAnalyticsInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot, mu *sync.Mutex) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "azure" ||
 		workspace.Profile == nil ||
@@ -107,17 +108,23 @@ func (s *Service) enrichAzureLogAnalyticsInventory(workspace *models.WorkspaceSn
 	}
 	ctx, cancel := s.withAzureTimeout(context.Background())
 	defer cancel()
-	workspace.AzureLogAnalyticsWorkspaces = s.azureLogAnalyticsWorkspaces(ctx, *workspace.Profile)
-	workspace.SelectedAzureLogWorkspace = s.selectedAzureLogWorkspace(session, workspace.AzureLogAnalyticsWorkspaces)
-	if len(workspace.AzureLogAnalyticsWorkspaces) == 0 {
-		workspace.AzureLogAnalyticsStatusMessage =
-			"No Log Analytics workspaces found. Create one, then run KQL queries here."
-		return
+	workspaces := s.azureLogAnalyticsWorkspaces(ctx, *workspace.Profile)
+	selected := s.selectedAzureLogWorkspace(session, workspaces)
+
+	var status string
+	if len(workspaces) == 0 {
+		status = "No Log Analytics workspaces found. Create one, then run KQL queries here."
+	} else {
+		status = fmt.Sprintf(
+			"Loaded %d Log Analytics workspace(s). Local KQL is a subset of Azure KQL.",
+			len(workspaces),
+		)
 	}
-	workspace.AzureLogAnalyticsStatusMessage = fmt.Sprintf(
-		"Loaded %d Log Analytics workspace(s). Local KQL is a subset of Azure KQL.",
-		len(workspace.AzureLogAnalyticsWorkspaces),
-	)
+	lockWorkspace(mu, func() {
+		workspace.AzureLogAnalyticsWorkspaces = workspaces
+		workspace.SelectedAzureLogWorkspace = selected
+		workspace.AzureLogAnalyticsStatusMessage = status
+	})
 }
 
 func (s *Service) handleAzureLogAnalyticsSelectWorkspace(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
