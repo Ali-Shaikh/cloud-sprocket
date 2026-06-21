@@ -606,6 +606,25 @@ type AzureQueueMessage struct {
 	InsertionTime string `json:"insertionTime,omitempty"`
 }
 
+// AzureEntraUser is a directory user (Microsoft Entra ID / Azure AD).
+type AzureEntraUser struct {
+	DisplayName       string `json:"displayName"`
+	UserPrincipalName string `json:"userPrincipalName,omitempty"`
+	ID                string `json:"id,omitempty"`
+}
+
+// AzureEntraGroup is a directory group.
+type AzureEntraGroup struct {
+	DisplayName string `json:"displayName"`
+	ID          string `json:"id,omitempty"`
+}
+
+// AzureEntraApp is an app registration.
+type AzureEntraApp struct {
+	DisplayName string `json:"displayName"`
+	AppID       string `json:"appId,omitempty"`
+}
+
 type WorkspaceSnapshot struct {
 	Provider                   *ProviderSummary        `json:"provider,omitempty"`
 	Profile                    *ProfileSummary         `json:"profile,omitempty"`
