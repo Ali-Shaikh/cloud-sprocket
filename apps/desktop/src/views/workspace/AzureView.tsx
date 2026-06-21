@@ -173,6 +173,7 @@ export default function AzureView({
   const [bastionAuthType, setBastionAuthType] = useState("password");
   const [bastionSSHKeyPath, setBastionSSHKeyPath] = useState("");
   const [bastionCommand, setBastionCommand] = useState("");
+  const [bastionPowerShellCommand, setBastionPowerShellCommand] = useState("");
   const [bastionConnectStatus, setBastionConnectStatus] = useState("");
   const [bastionConnecting, setBastionConnecting] = useState(false);
 
@@ -254,10 +255,11 @@ export default function AzureView({
         launch,
       });
       setBastionCommand(result.command);
+      setBastionPowerShellCommand(result.powershellCommand ?? "");
       setBastionConnectStatus(
         launch
           ? `Launched ${result.protocol?.toUpperCase() || "Bastion"} session in a new terminal.`
-          : "Bastion command ready to copy.",
+          : "Bastion commands ready to copy (cmd and PowerShell).",
       );
     } catch (error: unknown) {
       setBastionConnectStatus(error instanceof Error ? error.message : String(error));
@@ -848,7 +850,7 @@ export default function AzureView({
                   void runBastionConnect(false);
                 }}
               >
-                Copy command
+                Build commands
               </Button>
               <Button
                 disabled={bastionConnecting || !selectedBastion}
@@ -866,7 +868,18 @@ export default function AzureView({
                   }}
                 >
                   <Copy />
-                  Copy last command
+                  Copy cmd
+                </Button>
+              ) : null}
+              {bastionPowerShellCommand ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    copyToClipboard(bastionPowerShellCommand);
+                  }}
+                >
+                  <Copy />
+                  Copy PowerShell
                 </Button>
               ) : null}
             </div>
@@ -874,9 +887,20 @@ export default function AzureView({
               <p className="text-sm text-muted-foreground">{bastionConnectStatus}</p>
             ) : null}
             {bastionCommand ? (
-              <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border bg-muted/30 p-3 font-mono text-xs">
-                {bastionCommand}
-              </pre>
+              <div className="space-y-2">
+                <div className={cn(fieldLabel)}>Command Prompt (cmd.exe)</div>
+                <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border bg-muted/30 p-3 font-mono text-xs">
+                  {bastionCommand}
+                </pre>
+              </div>
+            ) : null}
+            {bastionPowerShellCommand ? (
+              <div className="space-y-2">
+                <div className={cn(fieldLabel)}>PowerShell</div>
+                <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border bg-muted/30 p-3 font-mono text-xs">
+                  {bastionPowerShellCommand}
+                </pre>
+              </div>
             ) : null}
           </div>
         )}

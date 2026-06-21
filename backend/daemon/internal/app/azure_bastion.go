@@ -119,11 +119,12 @@ func (s *Service) handleAzureBastionConnect(ctx context.Context, params json.Raw
 		return nil, err
 	}
 
-	command := formatShellCommand(azPath, args...)
+	cmdCommand, psCommand := formatBastionConnectCommands(s.settings.PlatformName, azPath, args)
 	result := models.AzureBastionConnectResult{
-		Command:  command,
-		Launched: false,
-		Protocol: protocol,
+		Command:           cmdCommand,
+		PowerShellCommand: psCommand,
+		Launched:          false,
+		Protocol:          protocol,
 	}
 	if request.Launch {
 		timeoutCtx, cancel := context.WithTimeout(ctx, defaultAzureInventoryTimeout)
@@ -227,21 +228,11 @@ func isWindowsVM(vm models.AzureVirtualMachine) bool {
 	return strings.EqualFold(strings.TrimSpace(vm.OSType), "Windows")
 }
 
-func formatShellCommand(command string, args ...string) string {
-	parts := make([]string, 0, len(args)+1)
-	parts = append(parts, quoteShellToken(command))
-	for _, arg := range args {
-		parts = append(parts, quoteShellToken(arg))
+func formatBastionConnectCommands(platform string, command string, args []string) (cmd string, powershell string) {
+	switch strings.ToLower(strings.TrimSpace(platform)) {
+	case "windows":
+		return sysproc.BuildWindowsCmdLine(command, args...), sysproc.BuildWindowsPowerShellLine(command, args...)
+	default:
+		return sysproc.BuildWindowsCmdLine(command, args...), ""
 	}
-	return strings.Join(parts, " ")
-}
-
-func quoteShellToken(value string) string {
-	if value == "" {
-		return `""`
-	}
-	if !strings.ContainsAny(value, " \t\"'") {
-		return value
-	}
-	return `"` + strings.ReplaceAll(value, `"`, `\"`) + `"`
 }

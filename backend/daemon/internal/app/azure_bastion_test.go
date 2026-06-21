@@ -1,6 +1,7 @@
 package app
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 
@@ -46,5 +47,31 @@ func TestBastionConnectArgsWindowsRDP(t *testing.T) {
 		if !strings.Contains(joined, needle) {
 			t.Fatalf("expected %q in args %q", needle, joined)
 		}
+	}
+}
+
+func TestFormatBastionConnectCommandsWindowsQuotesResourceID(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows command formatting is platform-specific")
+	}
+	resourceID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/ERW-JUMPBOX"
+	args := []string{
+		"network", "bastion", "rdp",
+		"--name", "bastion-hub",
+		"--resource-group", "rg-network",
+		"--target-resource-id", resourceID,
+	}
+	cmd, ps := formatBastionConnectCommands("windows", `C:\Program Files\az.cmd`, args)
+	if !strings.Contains(cmd, `"`+resourceID+`"`) {
+		t.Fatalf("cmd command should quote resource ID, got %q", cmd)
+	}
+	if !strings.HasPrefix(cmd, `call "C:\Program Files\az.cmd"`) {
+		t.Fatalf("cmd command should call quoted az.cmd, got %q", cmd)
+	}
+	if !strings.Contains(ps, "'"+resourceID+"'") {
+		t.Fatalf("PowerShell command should quote resource ID, got %q", ps)
+	}
+	if !strings.HasPrefix(ps, `& 'C:\Program Files\az.cmd'`) {
+		t.Fatalf("PowerShell command should use call operator, got %q", ps)
 	}
 }

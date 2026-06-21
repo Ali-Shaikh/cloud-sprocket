@@ -394,6 +394,7 @@ export interface AzureBastionHost {
 
 export interface AzureBastionConnectResult {
   command: string;
+  powershellCommand?: string;
   launched: boolean;
   protocol?: string;
 }

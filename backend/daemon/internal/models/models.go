@@ -488,9 +488,10 @@ type AzureBastionHost struct {
 
 // AzureBastionConnectResult is returned when building or launching a native-client session.
 type AzureBastionConnectResult struct {
-	Command  string `json:"command"`
-	Launched bool   `json:"launched"`
-	Protocol string `json:"protocol,omitempty"`
+	Command           string `json:"command"`
+	PowerShellCommand string `json:"powershellCommand,omitempty"`
+	Launched          bool   `json:"launched"`
+	Protocol          string `json:"protocol,omitempty"`
 }
 
 type AzureStorageAccount struct {

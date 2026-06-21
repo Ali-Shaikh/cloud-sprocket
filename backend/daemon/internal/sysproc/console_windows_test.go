@@ -7,27 +7,32 @@ import (
 	"testing"
 )
 
-func TestBuildWindowsCommandLineQuotesAzPath(t *testing.T) {
-	line := buildWindowsCommandLine(
+func TestBuildWindowsCmdLineQuotesAzPathAndResourceID(t *testing.T) {
+	line := BuildWindowsCmdLine(
 		`C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd`,
 		"network", "bastion", "rdp",
 		"--name", "erw-prod-vnet-01-bastion",
 		"--resource-group", "erw-prod-rg",
-		"--target-resource-id", "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm",
+		"--target-resource-id", "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/ERW-JUMPBOX",
 	)
 	if !strings.HasPrefix(line, `call "C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd"`) {
 		t.Fatalf("expected call + quoted az.cmd path, got %q", line)
 	}
-	if !strings.Contains(line, `--name erw-prod-vnet-01-bastion`) {
-		t.Fatalf("expected bastion args in command line, got %q", line)
+	if !strings.Contains(line, `--target-resource-id "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/ERW-JUMPBOX"`) {
+		t.Fatalf("expected quoted resource ID, got %q", line)
 	}
 }
 
-func TestQuoteWindowsArg(t *testing.T) {
-	if quoteWindowsArg("plain") != "plain" {
-		t.Fatal("expected plain token to stay unquoted")
+func TestBuildWindowsPowerShellLineUsesCallOperator(t *testing.T) {
+	line := BuildWindowsPowerShellLine(
+		`C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd`,
+		"network", "bastion", "rdp",
+		"--target-resource-id", "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/ERW-JUMPBOX",
+	)
+	if !strings.HasPrefix(line, `& 'C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd'`) {
+		t.Fatalf("expected PowerShell call operator, got %q", line)
 	}
-	if quoteWindowsArg(`C:\Program Files\az.cmd`) != `"C:\Program Files\az.cmd"` {
-		t.Fatal("expected spaced path to be quoted")
+	if !strings.Contains(line, `'/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/ERW-JUMPBOX'`) {
+		t.Fatalf("expected single-quoted resource ID, got %q", line)
 	}
 }
