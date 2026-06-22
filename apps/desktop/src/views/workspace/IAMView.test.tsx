@@ -74,6 +74,7 @@ const workspaceFixture: IamWorkspaceSnapshot = {
       azureWebApps: [],
       azureAppServicePlans: [],
       azureWebAppSettings: [],
+      azureWebAppDeploymentSlots: [],
       azureLogAnalyticsWorkspaces: [],
       azureWafPolicies: [],
       azureWafRuleFireCounts: [],

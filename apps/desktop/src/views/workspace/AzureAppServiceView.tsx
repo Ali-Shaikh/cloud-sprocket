@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { useState } from "react";
-import { Globe, Plus, RotateCw, Square, Play } from "lucide-react";
+import { ArrowLeftRight, ExternalLink, Globe, Plus, RotateCw, Square, Play } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,12 @@ import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
 import { DetailFieldList } from "./detail-fields";
+import {
+  buildAppServiceAppLogsQuery,
+  buildAppServiceConsoleErrorsQuery,
+  buildAppServiceHttpStatusQuery,
+  buildAppServiceRecentHttpQuery,
+} from "@/lib/appservice-kql";
 import type { AzureWebAppAction, WorkspaceSnapshot } from "@/types/backend";
 
 function profileFieldValue(
@@ -90,7 +96,19 @@ export type AzureAppServiceViewProps = {
   actionStatus?: string;
   onSelectResourceGroup: (resourceGroup: string) => void;
   onSelectWebApp: (appName: string) => void;
-  onCreateWebApp: (resourceGroup: string, appName: string, location: string, runtime: string) => void;
+  onSelectSlot: (slot: string) => void;
+  onEditInLogAnalytics: (workspace: string, query: string, timespan: string) => void;
+  onCreateWebApp: (
+    resourceGroup: string,
+    appName: string,
+    location: string,
+    runtime: string,
+    planOptions: {
+      existingPlanName?: string;
+      newPlanName?: string;
+      planSku?: string;
+    },
+  ) => void;
   onInvokeAction: (action: AzureWebAppAction, appName: string) => void;
   onSetSetting: (
     appName: string,
@@ -99,6 +117,8 @@ export type AzureAppServiceViewProps = {
     slotSetting: boolean,
   ) => Promise<void>;
   onDeleteSetting: (appName: string, name: string) => Promise<void>;
+  onCreateSlot: (appName: string, slotName: string) => void;
+  onSwapSlot: (appName: string, slotName: string) => void;
 };
 
 const fieldLabel =
@@ -112,10 +132,14 @@ export default function AzureAppServiceView({
   actionStatus,
   onSelectResourceGroup,
   onSelectWebApp,
+  onSelectSlot,
+  onEditInLogAnalytics,
   onCreateWebApp,
   onInvokeAction,
   onSetSetting,
   onDeleteSetting,
+  onCreateSlot,
+  onSwapSlot,
 }: AzureAppServiceViewProps) {
   const localProfile = isLocalFlociProfile(workspace);
   const canWrite = workspace.azureWritesEnabled && !localProfile;
@@ -129,18 +153,32 @@ export default function AzureAppServiceView({
   const [settingError, setSettingError] = useState<string | null>(null);
   const [pendingDeleteSetting, setPendingDeleteSetting] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<AzureWebAppAction | null>(null);
+  const [createSlotOpen, setCreateSlotOpen] = useState(false);
+  const [newSlotName, setNewSlotName] = useState("");
+  const [pendingSwapSlot, setPendingSwapSlot] = useState<string | null>(null);
   const [newAppName, setNewAppName] = useState("");
   const [newAppLocation, setNewAppLocation] = useState("westeurope");
   const [newAppRuntime, setNewAppRuntime] = useState("NODE:22-lts");
   const [createResourceGroup, setCreateResourceGroup] = useState(
     workspace.selectedAzureResourceGroup ?? "",
   );
+  const [planMode, setPlanMode] = useState<"new" | "existing">("new");
+  const [existingPlanName, setExistingPlanName] = useState("");
+  const [newPlanName, setNewPlanName] = useState("");
+  const [planSku, setPlanSku] = useState("F1");
+  const [logWorkspace, setLogWorkspace] = useState(
+    workspace.selectedAzureLogWorkspace ?? workspace.azureLogAnalyticsWorkspaces[0]?.name ?? "",
+  );
 
   const selectedApp = workspace.azureWebApps.find(
     (app) => app.name === workspace.selectedAzureWebAppName,
   );
+  const activeApp = workspace.azureWebAppActiveDetail ?? selectedApp;
   const plans = workspace.azureAppServicePlans ?? [];
   const settings = workspace.azureWebAppSettings ?? [];
+  const deploymentSlots = workspace.azureWebAppDeploymentSlots ?? [];
+  const activeSlot = workspace.selectedAzureWebAppSlot ?? "";
+  const slotLabel = activeSlot ? activeSlot : "production";
 
   function openAddSettingDialog() {
     setSettingDialogMode("add");
@@ -338,12 +376,12 @@ export default function AzureAppServiceView({
       <section className={sectionCard}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <h2 className="text-base font-bold">Web app detail</h2>
-          {selectedApp && canWrite ? (
+          {activeApp && canWrite ? (
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                disabled={selectedApp.state?.toLowerCase() === "running"}
+                disabled={activeApp.state?.toLowerCase() === "running"}
                 onClick={() => setPendingAction("start")}
               >
                 <Play />
@@ -352,7 +390,7 @@ export default function AzureAppServiceView({
               <Button
                 variant="outline"
                 size="sm"
-                disabled={selectedApp.state?.toLowerCase() === "stopped"}
+                disabled={activeApp.state?.toLowerCase() === "stopped"}
                 onClick={() => setPendingAction("stop")}
               >
                 <Square />
@@ -367,24 +405,25 @@ export default function AzureAppServiceView({
         </div>
         {inventoryLoading ? (
           <InventoryLoadingState variant="inline" label="Loading web app details..." />
-        ) : selectedApp ? (
+        ) : activeApp ? (
           <DetailFieldList
             fields={[
-              { label: "Name", value: selectedApp.name },
-              { label: "Resource group", value: selectedApp.resourceGroup || "Unknown" },
-              { label: "State", value: selectedApp.state || "Unknown" },
-              { label: "Location", value: selectedApp.location || "Unknown" },
-              { label: "Default hostname", value: selectedApp.defaultHostName || "Unavailable" },
-              { label: "Kind", value: selectedApp.kind || "Unknown" },
-              { label: "HTTPS only", value: selectedApp.httpsOnly ? "Yes" : "No" },
-              { label: "App Service plan", value: selectedApp.appServicePlan || "Unknown" },
-              { label: "Plan SKU", value: selectedApp.planSku || "Unknown" },
-              { label: "Runtime", value: selectedApp.runtime || "Unknown" },
-              { label: "Outbound IPs", value: selectedApp.outboundIpAddresses || "Unknown" },
-              { label: "Managed identity", value: selectedApp.identityType || "None" },
+              { label: "Name", value: activeApp.name },
+              { label: "Deployment slot", value: slotLabel },
+              { label: "Resource group", value: activeApp.resourceGroup || "Unknown" },
+              { label: "State", value: activeApp.state || "Unknown" },
+              { label: "Location", value: activeApp.location || "Unknown" },
+              { label: "Default hostname", value: activeApp.defaultHostName || "Unavailable" },
+              { label: "Kind", value: activeApp.kind || "Unknown" },
+              { label: "HTTPS only", value: activeApp.httpsOnly ? "Yes" : "No" },
+              { label: "App Service plan", value: activeApp.appServicePlan || "Unknown" },
+              { label: "Plan SKU", value: activeApp.planSku || "Unknown" },
+              { label: "Runtime", value: activeApp.runtime || "Unknown" },
+              { label: "Outbound IPs", value: activeApp.outboundIpAddresses || "Unknown" },
+              { label: "Managed identity", value: activeApp.identityType || "None" },
               {
                 label: "Identity principal ID",
-                value: selectedApp.identityPrincipalId || "—",
+                value: activeApp.identityPrincipalId || "—",
               },
             ]}
             emptyText="No web app details are available."
@@ -392,6 +431,181 @@ export default function AzureAppServiceView({
         ) : (
           <p className="text-sm text-muted-foreground">Select a web app to inspect details.</p>
         )}
+      </section>
+
+      <section className={sectionCard}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold">Deployment slots</h2>
+            <p className="text-sm text-muted-foreground">
+              Browse staging slots, create new slots, or swap with production.
+            </p>
+          </div>
+          {selectedApp && canWrite ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setNewSlotName("");
+                  setCreateSlotOpen(true);
+                }}
+              >
+                <Plus />
+                Create slot
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!activeSlot}
+                onClick={() => activeSlot && setPendingSwapSlot(activeSlot)}
+              >
+                <ArrowLeftRight />
+                Swap with production
+              </Button>
+            </div>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-56">
+            <div className={cn(fieldLabel, "mb-1")}>Deployment slot</div>
+            <Select
+              value={activeSlot || "production"}
+              onValueChange={(value) => value && onSelectSlot(value === "production" ? "" : value)}
+              disabled={!selectedApp}
+            >
+              <SelectTrigger aria-label="Select deployment slot">
+                <SelectValue placeholder="Production" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="production">Production</SelectItem>
+                {deploymentSlots.map((slot) => (
+                  <SelectItem key={slot.name} value={slot.name}>
+                    {slot.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {selectedApp ? (
+            <p className="text-sm text-muted-foreground">
+              Viewing settings and actions for the <span className="font-medium">{slotLabel}</span> slot.
+            </p>
+          ) : null}
+        </div>
+        {deploymentSlots.length > 0 ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Slot</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Hostname</TableHead>
+                <TableHead>Traffic %</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {deploymentSlots.map((slot) => (
+                <TableRow
+                  key={slot.name}
+                  data-state={slot.name === activeSlot ? "selected" : undefined}
+                  className="cursor-pointer"
+                  onClick={() => onSelectSlot(slot.name)}
+                >
+                  <TableCell className="font-medium">{slot.name}</TableCell>
+                  <TableCell>{slot.status || "—"}</TableCell>
+                  <TableCell className="font-mono text-xs">{slot.defaultHostName || "—"}</TableCell>
+                  <TableCell>{slot.trafficPercent ?? "—"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : selectedApp ? (
+          <p className="text-sm text-muted-foreground">No deployment slots returned for this web app.</p>
+        ) : null}
+      </section>
+
+      <section className={sectionCard}>
+        <h2 className="text-base font-bold">Diagnostic logs (Log Analytics)</h2>
+        <p className="text-sm text-muted-foreground">
+          Open curated KQL for App Service HTTP, console, and application logs when diagnostics
+          are sent to a workspace.
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-72">
+            <div className={cn(fieldLabel, "mb-1")}>Workspace</div>
+            <Select value={logWorkspace} onValueChange={(value) => value && setLogWorkspace(value)}>
+              <SelectTrigger aria-label="Select Log Analytics workspace">
+                <SelectValue placeholder="Workspace" />
+              </SelectTrigger>
+              <SelectContent>
+                {workspace.azureLogAnalyticsWorkspaces.map((item) => (
+                  <SelectItem key={item.name} value={item.name}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!logWorkspace}
+            onClick={() =>
+              onEditInLogAnalytics(
+                logWorkspace,
+                buildAppServiceRecentHttpQuery(selectedApp?.name),
+                "P1D",
+              )
+            }
+          >
+            <ExternalLink className="h-4 w-4" />
+            Recent HTTP
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!logWorkspace}
+            onClick={() =>
+              onEditInLogAnalytics(
+                logWorkspace,
+                buildAppServiceHttpStatusQuery("AppServiceHTTPLogs", selectedApp?.name),
+                "P1D",
+              )
+            }
+          >
+            HTTP status breakdown
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!logWorkspace}
+            onClick={() =>
+              onEditInLogAnalytics(
+                logWorkspace,
+                buildAppServiceConsoleErrorsQuery(selectedApp?.name),
+                "P1D",
+              )
+            }
+          >
+            Console errors
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!logWorkspace}
+            onClick={() =>
+              onEditInLogAnalytics(
+                logWorkspace,
+                buildAppServiceAppLogsQuery(selectedApp?.name),
+                "P1D",
+              )
+            }
+          >
+            Application logs
+          </Button>
+        </div>
       </section>
 
       <section className={sectionCard}>
@@ -432,11 +646,11 @@ export default function AzureAppServiceView({
       <section className={sectionCard}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold">Application settings</h2>
+            <h2 className="text-base font-bold">Application settings · {slotLabel}</h2>
             <p className="text-sm text-muted-foreground">
               On container web apps these settings are exposed as environment variables. Updates
-              trigger an app recycle. Sensitive names are masked in the table only; values still
-              travel in the workspace payload for this local desktop session.
+              trigger an app recycle for the active slot. Sensitive names are masked in the table
+              only; values still travel in the workspace payload for this local desktop session.
             </p>
           </div>
           {selectedApp && canWrite ? (
@@ -541,19 +755,80 @@ export default function AzureAppServiceView({
                     placeholder="NODE:22-lts"
                   />
                 </div>
+                <div>
+                  <div className={fieldLabel}>App Service plan</div>
+                  <Select value={planMode} onValueChange={(value) => setPlanMode(value as "new" | "existing")}>
+                    <SelectTrigger aria-label="Plan mode">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="new">Create new Linux plan</SelectItem>
+                      <SelectItem value="existing">Use existing plan</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {planMode === "existing" ? (
+                  <div>
+                    <div className={fieldLabel}>Existing plan</div>
+                    <Select value={existingPlanName} onValueChange={setExistingPlanName}>
+                      <SelectTrigger aria-label="Existing App Service plan">
+                        <SelectValue placeholder="Select plan" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {plans.map((plan) => (
+                          <SelectItem key={plan.name} value={plan.name}>
+                            {plan.name} · {plan.sku || "SKU unknown"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <div className={fieldLabel}>New plan name (optional)</div>
+                      <Input
+                        value={newPlanName}
+                        onChange={(event) => setNewPlanName(event.target.value)}
+                        placeholder="Defaults to app-name-plan"
+                      />
+                    </div>
+                    <div>
+                      <div className={fieldLabel}>Plan SKU</div>
+                      <Select value={planSku} onValueChange={setPlanSku}>
+                        <SelectTrigger aria-label="Plan SKU">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="F1">F1 (Free)</SelectItem>
+                          <SelectItem value="B1">B1 (Basic)</SelectItem>
+                          <SelectItem value="S1">S1 (Standard)</SelectItem>
+                          <SelectItem value="P1v3">P1v3 (Premium v3)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={!createResourceGroup.trim() || !newAppName.trim()}
+              disabled={
+                !createResourceGroup.trim() ||
+                !newAppName.trim() ||
+                (planMode === "existing" && !existingPlanName.trim())
+              }
               onClick={() => {
                 onCreateWebApp(
                   createResourceGroup.trim(),
                   newAppName.trim(),
                   newAppLocation.trim() || "westeurope",
                   newAppRuntime.trim() || "NODE:22-lts",
+                  planMode === "existing"
+                    ? { existingPlanName: existingPlanName.trim() }
+                    : { newPlanName: newPlanName.trim(), planSku: planSku.trim() || "F1" },
                 );
                 setNewAppName("");
                 setCreateOpen(false);
@@ -699,7 +974,7 @@ export default function AzureAppServiceView({
             </AlertDialogTitle>
             <AlertDialogDescription>
               This sends a live Azure App Service {pendingAction} request for{" "}
-              {selectedApp?.name ?? "the selected web app"}.
+              {selectedApp?.name ?? "the selected web app"} ({slotLabel} slot).
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -713,6 +988,78 @@ export default function AzureAppServiceView({
               }}
             >
               Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={createSlotOpen} onOpenChange={setCreateSlotOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create deployment slot</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Creates a new deployment slot cloned from production for{" "}
+                  {selectedApp?.name ?? "the selected web app"}.
+                </p>
+                <div>
+                  <div className={fieldLabel}>Slot name</div>
+                  <Input
+                    value={newSlotName}
+                    onChange={(event) => setNewSlotName(event.target.value)}
+                    placeholder="staging"
+                    spellCheck={false}
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!newSlotName.trim()}
+              onClick={() => {
+                if (selectedApp && newSlotName.trim()) {
+                  onCreateSlot(selectedApp.name, newSlotName.trim());
+                  setCreateSlotOpen(false);
+                }
+              }}
+            >
+              Create
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={pendingSwapSlot != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingSwapSlot(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Swap with production?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Swaps the {pendingSwapSlot} slot with production for{" "}
+              {selectedApp?.name ?? "the selected web app"}. Azure warms up the destination slot
+              before routing traffic.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingSwapSlot && selectedApp) {
+                  onSwapSlot(selectedApp.name, pendingSwapSlot);
+                }
+                setPendingSwapSlot(null);
+              }}
+            >
+              Swap
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

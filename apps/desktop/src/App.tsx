@@ -462,7 +462,9 @@ function mergeAzureResourceGroupSelection(
     azureWebApps: normalised.azureWebApps,
     azureAppServicePlans: normalised.azureAppServicePlans,
     azureWebAppSettings: normalised.azureWebAppSettings,
+    azureWebAppDeploymentSlots: normalised.azureWebAppDeploymentSlots,
     selectedAzureWebAppName: normalised.selectedAzureWebAppName,
+    selectedAzureWebAppSlot: normalised.selectedAzureWebAppSlot,
     azureStatusMessage: normalised.azureStatusMessage,
     azureAppServiceStatusMessage: normalised.azureAppServiceStatusMessage,
   });
@@ -675,8 +677,12 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     azureBlobs: normaliseArray(source.azureBlobs).map(normaliseAzureBlob),
     azureBlobMetadata: normaliseDetailFields(source.azureBlobMetadata),
     azureWebApps: normaliseArray(source.azureWebApps).map(normaliseAzureWebApp),
+    azureWebAppActiveDetail: source.azureWebAppActiveDetail
+      ? normaliseAzureWebApp(source.azureWebAppActiveDetail)
+      : undefined,
     azureAppServicePlans: normaliseArray(source.azureAppServicePlans).map(normaliseAzureAppServicePlan),
     azureWebAppSettings: normaliseArray(source.azureWebAppSettings).map(normaliseAzureWebAppSetting),
+    azureWebAppDeploymentSlots: normaliseArray(source.azureWebAppDeploymentSlots),
     azureLogAnalyticsWorkspaces: normaliseArray(source.azureLogAnalyticsWorkspaces),
     azureWafPolicies: normaliseArray(source.azureWafPolicies),
     azureWafRuleFireCounts: normaliseArray(source.azureWafRuleFireCounts),
@@ -780,6 +786,7 @@ const emptyWorkspace: WorkspaceSnapshot = {
   azureWebApps: [],
   azureAppServicePlans: [],
   azureWebAppSettings: [],
+  azureWebAppDeploymentSlots: [],
   azureLogAnalyticsWorkspaces: [],
   azureWafPolicies: [],
   azureWafRuleFireCounts: [],
@@ -1256,6 +1263,37 @@ export default function App() {
     }
   }
 
+  async function selectAzureWebAppSlot(slot: string): Promise<void> {
+    beginAzureInventoryFetch();
+    startTransition(() => {
+      setSession((current) =>
+        normaliseSessionSnapshot({
+          ...current,
+          selectedAzureWebAppSlot: slot,
+        }),
+      );
+      setWorkspace((current) =>
+        normaliseWorkspaceSnapshot({
+          ...current,
+          selectedAzureWebAppSlot: slot,
+        }),
+      );
+    });
+    try {
+      const workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.webApps.selectSlot", {
+        slot,
+      });
+      startTransition(() => {
+        setWorkspace((current) => mergeAzureResourceGroupSelection(current, workspaceResult));
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Deployment slot selection failed";
+      pushNotification("error", "Could not select deployment slot", message);
+    } finally {
+      endAzureInventoryFetch();
+    }
+  }
+
   async function selectAzureWebApp(appName: string): Promise<void> {
     const trimmed = appName.trim();
     if (!trimmed) {
@@ -1267,12 +1305,17 @@ export default function App() {
         normaliseSessionSnapshot({
           ...current,
           selectedAzureWebAppName: trimmed,
+          selectedAzureWebAppSlot: undefined,
         }),
       );
       setWorkspace((current) =>
         normaliseWorkspaceSnapshot({
           ...current,
           selectedAzureWebAppName: trimmed,
+          selectedAzureWebAppSlot: undefined,
+          azureWebAppDeploymentSlots: [],
+          azureWebAppSettings: [],
+          azureWebAppActiveDetail: undefined,
         }),
       );
     });
@@ -2875,13 +2918,25 @@ export default function App() {
       onSelectWebApp={(appName) => {
         void selectAzureWebApp(appName);
       }}
-      onCreateWebApp={(resourceGroup, appName, location, runtime) => {
+      onSelectSlot={(slot) => {
+        void selectAzureWebAppSlot(slot);
+      }}
+      onEditInLogAnalytics={(workspaceName, query, timespan) => {
+        setLogAnalyticsPrefill({ query, timespan });
+        void selectAzureLogAnalyticsWorkspace(workspaceName).finally(() => {
+          setActiveWorkspaceTabId("azure-log-analytics");
+        });
+      }}
+      onCreateWebApp={(resourceGroup, appName, location, runtime, planOptions) => {
         setAzureAppServiceActionStatus(`Creating web app ${appName}...`);
         void backendRequest<WorkspaceSnapshot>("azure.webApps.create", {
           resourceGroup,
           appName,
           location,
           runtime,
+          existingPlanName: planOptions.existingPlanName,
+          newPlanName: planOptions.newPlanName,
+          planSku: planOptions.planSku,
         })
           .then((workspaceResult) => {
             startTransition(() => {
@@ -2939,6 +2994,38 @@ export default function App() {
             workspaceResult.azureAppServiceStatusMessage || `Deleted application setting ${name}.`,
           );
         });
+      }}
+      onCreateSlot={(appName, slotName) => {
+        setAzureAppServiceActionStatus(`Creating deployment slot ${slotName}...`);
+        void backendRequest<WorkspaceSnapshot>("azure.webApps.createSlot", { appName, slotName })
+          .then((workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            });
+            setAzureAppServiceActionStatus(
+              workspaceResult.azureAppServiceStatusMessage ||
+                `Created deployment slot ${slotName}.`,
+            );
+          })
+          .catch((error: unknown) => {
+            setAzureAppServiceActionStatus(error instanceof Error ? error.message : String(error));
+          });
+      }}
+      onSwapSlot={(appName, slotName) => {
+        setAzureAppServiceActionStatus(`Swapping production with ${slotName}...`);
+        void backendRequest<WorkspaceSnapshot>("azure.webApps.swapSlots", { appName, slotName })
+          .then((workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            });
+            setAzureAppServiceActionStatus(
+              workspaceResult.azureAppServiceStatusMessage ||
+                `Swapped production with deployment slot ${slotName}.`,
+            );
+          })
+          .catch((error: unknown) => {
+            setAzureAppServiceActionStatus(error instanceof Error ? error.message : String(error));
+          });
       }}
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-log-analytics" ? (

@@ -31,15 +31,23 @@ func (s *Service) enrichAzureWebAppDetail(workspace *models.WorkspaceSnapshot, s
 		lockWorkspace(mu, func() {
 			workspace.AzureAppServicePlans = nil
 			workspace.AzureWebAppSettings = nil
+			workspace.AzureWebAppDeploymentSlots = nil
+			workspace.AzureWebAppActiveDetail = nil
 		})
 		return
 	}
 
 	profile := *workspace.Profile
 
+	slotsCtx, slotsCancel := s.withAzureTimeout(context.Background())
+	defer slotsCancel()
+	slots, slotsErr := s.azure.ListWebAppDeploymentSlots(slotsCtx, profile, resourceGroup, appName)
+	slotName := selectedAzureWebAppSlot(session, slots)
+
 	detailCtx, detailCancel := s.withAzureTimeout(context.Background())
 	defer detailCancel()
-	detail, detailErr := s.azure.GetWebApp(detailCtx, profile, resourceGroup, appName)
+
+	detail, detailErr := s.azure.GetWebApp(detailCtx, profile, resourceGroup, appName, slotName)
 
 	plansCtx, plansCancel := s.withAzureTimeout(context.Background())
 	defer plansCancel()
@@ -47,7 +55,7 @@ func (s *Service) enrichAzureWebAppDetail(workspace *models.WorkspaceSnapshot, s
 
 	settingsCtx, settingsCancel := s.withAzureTimeout(context.Background())
 	defer settingsCancel()
-	settings, settingsErr := s.azure.ListWebAppSettings(settingsCtx, profile, resourceGroup, appName)
+	settings, settingsErr := s.azure.ListWebAppSettings(settingsCtx, profile, resourceGroup, appName, slotName)
 
 	if detailErr == nil {
 		plans = s.mergeAzureAppServicePlans(plans, detail, profile)
@@ -60,10 +68,12 @@ func (s *Service) enrichAzureWebAppDetail(workspace *models.WorkspaceSnapshot, s
 		}
 	}
 
-	detailStatus := azureWebAppDetailStatusMessage(appName, plans, settings, detailErr, plansErr, settingsErr)
+	detailStatus := azureWebAppDetailStatusMessage(appName, slotName, slots, plans, settings, detailErr, slotsErr, plansErr, settingsErr)
 
 	lockWorkspace(mu, func() {
 		workspace.AzureAppServicePlans = plans
+		workspace.AzureWebAppDeploymentSlots = slots
+		workspace.SelectedAzureWebAppSlot = slotName
 		workspace.AzureWebAppSettings = settings
 		if strings.TrimSpace(workspace.AzureAppServiceStatusMessage) != "" {
 			workspace.AzureAppServiceStatusMessage = strings.TrimSpace(workspace.AzureAppServiceStatusMessage) + " " + detailStatus
@@ -71,12 +81,17 @@ func (s *Service) enrichAzureWebAppDetail(workspace *models.WorkspaceSnapshot, s
 			workspace.AzureAppServiceStatusMessage = detailStatus
 		}
 		if detailErr == nil {
-			for index, app := range workspace.AzureWebApps {
-				if app.Name == appName {
-					workspace.AzureWebApps[index] = detail
-					break
+			workspace.AzureWebAppActiveDetail = &detail
+			if slotName == "" {
+				for index, app := range workspace.AzureWebApps {
+					if app.Name == appName {
+						workspace.AzureWebApps[index] = detail
+						break
+					}
 				}
 			}
+		} else {
+			workspace.AzureWebAppActiveDetail = nil
 		}
 	})
 }
@@ -110,19 +125,44 @@ func (s *Service) mergeAzureAppServicePlans(
 	return append(plans, plan)
 }
 
+func selectedAzureWebAppSlot(session models.SessionSnapshot, slots []models.AzureWebAppDeploymentSlot) string {
+	slotName := strings.TrimSpace(session.SelectedAzureWebAppSlot)
+	if slotName == "" || strings.EqualFold(slotName, "production") {
+		return ""
+	}
+	for _, slot := range slots {
+		if slot.Name == slotName {
+			return slotName
+		}
+	}
+	return ""
+}
+
 func azureWebAppDetailStatusMessage(
 	appName string,
+	slotName string,
+	slots []models.AzureWebAppDeploymentSlot,
 	plans []models.AzureAppServicePlan,
 	settings []models.AzureWebAppSetting,
 	detailErr error,
+	slotsErr error,
 	plansErr error,
 	settingsErr error,
 ) string {
-	parts := make([]string, 0, 4)
+	parts := make([]string, 0, 6)
+	slotLabel := "production"
+	if slotName != "" {
+		slotLabel = slotName
+	}
 	if detailErr != nil {
 		parts = append(parts, fmt.Sprintf("Could not load detail for %s: %v.", appName, detailErr))
 	} else {
-		parts = append(parts, fmt.Sprintf("Loaded detail for %s.", appName))
+		parts = append(parts, fmt.Sprintf("Loaded detail for %s (%s slot).", appName, slotLabel))
+	}
+	if slotsErr != nil {
+		parts = append(parts, fmt.Sprintf("Deployment slots unavailable: %v.", slotsErr))
+	} else {
+		parts = append(parts, fmt.Sprintf("%d deployment slot(s).", len(slots)))
 	}
 	if plansErr != nil {
 		parts = append(parts, fmt.Sprintf("App Service plans unavailable: %v.", plansErr))
@@ -132,7 +172,7 @@ func azureWebAppDetailStatusMessage(
 	if settingsErr != nil {
 		parts = append(parts, fmt.Sprintf("Application settings unavailable: %v.", settingsErr))
 	} else {
-		parts = append(parts, fmt.Sprintf("%d application setting(s).", len(settings)))
+		parts = append(parts, fmt.Sprintf("%d application setting(s) for %s.", len(settings), slotLabel))
 	}
 	return strings.Join(parts, " ")
 }

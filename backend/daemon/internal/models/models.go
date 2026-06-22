@@ -213,6 +213,7 @@ type SessionSnapshot struct {
 	SelectedAzureBlobName             string             `json:"selectedAzureBlobName,omitempty"`
 	AzureBlobPrefixFilter             string             `json:"azureBlobPrefixFilter,omitempty"`
 	SelectedAzureWebAppName           string             `json:"selectedAzureWebAppName,omitempty"`
+	SelectedAzureWebAppSlot           string             `json:"selectedAzureWebAppSlot,omitempty"`
 	SelectedAzureLogWorkspace         string             `json:"selectedAzureLogWorkspace,omitempty"`
 	SelectedAzureWafPolicy            string             `json:"selectedAzureWafPolicy,omitempty"`
 	SelectedAzureFunctionApp          string             `json:"selectedAzureFunctionApp,omitempty"`
@@ -569,6 +570,14 @@ type AzureWebAppSetting struct {
 	SlotSetting bool   `json:"slotSetting,omitempty"`
 }
 
+// AzureWebAppDeploymentSlot is a non-production deployment slot on a web app.
+type AzureWebAppDeploymentSlot struct {
+	Name            string `json:"name"`
+	Status          string `json:"status,omitempty"`
+	DefaultHostName string `json:"defaultHostName,omitempty"`
+	TrafficPercent  int    `json:"trafficPercent,omitempty"`
+}
+
 // AzureLogAnalyticsWorkspace is a Log Analytics (Azure Monitor) workspace. CustomerID
 // is the GUID the query data-plane keys on.
 type AzureLogAnalyticsWorkspace struct {
@@ -918,6 +927,7 @@ type WorkspaceSnapshot struct {
 	SelectedAzureBlobName             string                       `json:"selectedAzureBlobName,omitempty"`
 	AzureBlobPrefixFilter             string                       `json:"azureBlobPrefixFilter,omitempty"`
 	SelectedAzureWebAppName           string                       `json:"selectedAzureWebAppName,omitempty"`
+	SelectedAzureWebAppSlot           string                       `json:"selectedAzureWebAppSlot,omitempty"`
 	SelectedAzureLogWorkspace         string                       `json:"selectedAzureLogWorkspace,omitempty"`
 	SelectedAzureWafPolicy            string                       `json:"selectedAzureWafPolicy,omitempty"`
 	SelectedAzureFunctionApp          string                       `json:"selectedAzureFunctionApp,omitempty"`
@@ -953,6 +963,8 @@ type WorkspaceSnapshot struct {
 	AzureWebApps                      []AzureWebApp                `json:"azureWebApps"`
 	AzureAppServicePlans              []AzureAppServicePlan        `json:"azureAppServicePlans"`
 	AzureWebAppSettings               []AzureWebAppSetting         `json:"azureWebAppSettings"`
+	AzureWebAppDeploymentSlots        []AzureWebAppDeploymentSlot  `json:"azureWebAppDeploymentSlots"`
+	AzureWebAppActiveDetail           *AzureWebApp                 `json:"azureWebAppActiveDetail,omitempty"`
 	AzureLogAnalyticsWorkspaces       []AzureLogAnalyticsWorkspace `json:"azureLogAnalyticsWorkspaces"`
 	AzureWafLogSchema                 *AzureWafLogSchemaProfile    `json:"azureWafLogSchema,omitempty"`
 	AzureWafStatusMessage             string                       `json:"azureWafStatusMessage,omitempty"`
