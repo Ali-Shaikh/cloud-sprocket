@@ -19,6 +19,13 @@ import (
 // logAnalyticsQueryTimeout bounds a KQL run so a slow workspace fails fast.
 const logAnalyticsQueryTimeout = 30 * time.Second
 
+// logAnalyticsTablesListTimeout bounds the schema browser table list end-to-end.
+const logAnalyticsTablesListTimeout = 45 * time.Second
+
+// maxTablesWithColumnSchema limits per-table getschema calls; large workspaces
+// can contain hundreds of tables and serial KQL would appear hung.
+const maxTablesWithColumnSchema = 25
+
 // DefaultLogAnalyticsMaxRows is the row cap applied when the caller omits maxRows.
 const DefaultLogAnalyticsMaxRows = 5000
 
@@ -46,16 +53,26 @@ func (i *Inventory) ListLogAnalyticsWorkspaces(
 }
 
 // ListLogAnalyticsTables returns table names (and optional columns) for a workspace.
+// workspaceQueryID is the customer GUID used for KQL; workspaceName is the ARM
+// name used for az workspace table list on cloud Azure.
 func (i *Inventory) ListLogAnalyticsTables(
 	ctx context.Context,
 	profile models.ProfileSummary,
 	workspaceName string,
+	workspaceQueryID string,
 	resourceGroup string,
 	includeColumns bool,
 ) ([]models.AzureLogAnalyticsTableInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, logAnalyticsTablesListTimeout)
+	defer cancel()
+
 	workspaceName = strings.TrimSpace(workspaceName)
+	workspaceQueryID = strings.TrimSpace(workspaceQueryID)
 	if workspaceName == "" {
 		return nil, fmt.Errorf("a workspace name is required")
+	}
+	if workspaceQueryID == "" {
+		workspaceQueryID = workspaceName
 	}
 	if isLocalFlociProfile(profile) {
 		query := "search * | distinct $table | order by $table asc"
@@ -104,29 +121,30 @@ func (i *Inventory) ListLogAnalyticsTables(
 		return nil, fmt.Errorf("decode log analytics tables: %w", err)
 	}
 	tables := make([]models.AzureLogAnalyticsTableInfo, 0, len(decoded))
-	workspaces, _ := i.ListLogAnalyticsWorkspaces(ctx, profile)
-	workspaceID, err := azureLogAnalyticsQueryWorkspaceLocal(workspaceName, workspaces)
-	if err != nil {
-		return nil, err
-	}
 	for _, item := range decoded {
-		info := models.AzureLogAnalyticsTableInfo{Name: item.Name}
-		if includeColumns {
-			schemaQuery := fmt.Sprintf("%s | getschema", item.Name)
-			schemaResult, schemaErr := i.RunLogAnalyticsQuery(ctx, profile, workspaceID, schemaQuery, "", 500)
-			if schemaErr == nil {
-				columnIndex := indexOfColumn(schemaResult.Columns, "ColumnName")
-				if columnIndex < 0 {
-					columnIndex = indexOfColumn(schemaResult.Columns, "Column")
-				}
-				for _, row := range schemaResult.Rows {
-					if columnIndex >= 0 && columnIndex < len(row) && strings.TrimSpace(row[columnIndex]) != "" {
-						info.Columns = append(info.Columns, row[columnIndex])
-					}
-				}
+		tables = append(tables, models.AzureLogAnalyticsTableInfo{Name: item.Name})
+	}
+	if !includeColumns || len(tables) == 0 {
+		return tables, nil
+	}
+	if len(tables) > maxTablesWithColumnSchema {
+		return tables, nil
+	}
+	for index := range tables {
+		schemaQuery := fmt.Sprintf("%s | getschema", tables[index].Name)
+		schemaResult, schemaErr := i.RunLogAnalyticsQuery(ctx, profile, workspaceQueryID, schemaQuery, "", 500)
+		if schemaErr != nil {
+			continue
+		}
+		columnIndex := indexOfColumn(schemaResult.Columns, "ColumnName")
+		if columnIndex < 0 {
+			columnIndex = indexOfColumn(schemaResult.Columns, "Column")
+		}
+		for _, row := range schemaResult.Rows {
+			if columnIndex >= 0 && columnIndex < len(row) && strings.TrimSpace(row[columnIndex]) != "" {
+				tables[index].Columns = append(tables[index].Columns, row[columnIndex])
 			}
 		}
-		tables = append(tables, info)
 	}
 	return tables, nil
 }

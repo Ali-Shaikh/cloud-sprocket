@@ -267,7 +267,7 @@ func (stubAzureInventory) RunLogAnalyticsQuery(context.Context, models.ProfileSu
 	return models.AzureLogQueryResult{Columns: []string{"Level", "Count"}, Rows: [][]string{{"Info", "1"}}, DurationMs: 12}, nil
 }
 
-func (stubAzureInventory) ListLogAnalyticsTables(context.Context, models.ProfileSummary, string, string, bool) ([]models.AzureLogAnalyticsTableInfo, error) {
+func (stubAzureInventory) ListLogAnalyticsTables(context.Context, models.ProfileSummary, string, string, string, bool) ([]models.AzureLogAnalyticsTableInfo, error) {
 	return []models.AzureLogAnalyticsTableInfo{{Name: "AzureDiagnostics", Columns: []string{"Category", "action_s"}}}, nil
 }
 

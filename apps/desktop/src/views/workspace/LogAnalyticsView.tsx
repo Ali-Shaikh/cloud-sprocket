@@ -112,6 +112,7 @@ export default function LogAnalyticsView({
   const [tables, setTables] = useState<AzureLogAnalyticsTableInfo[]>([]);
   const [schemaOpen, setSchemaOpen] = useState(false);
   const [schemaLoading, setSchemaLoading] = useState(false);
+  const [schemaError, setSchemaError] = useState<string | undefined>();
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
   const runTokenRef = useRef(0);
@@ -183,11 +184,14 @@ export default function LogAnalyticsView({
   async function openSchemaBrowser() {
     setSchemaOpen(true);
     setSchemaLoading(true);
+    setSchemaError(undefined);
     try {
-      const listed = await onListTables(selected, true);
+      // Table names only: column getschema per table can run hundreds of az queries.
+      const listed = await onListTables(selected, false);
       setTables(listed);
-    } catch {
+    } catch (error) {
       setTables([]);
+      setSchemaError(error instanceof Error ? error.message : "Could not load workspace tables.");
     } finally {
       setSchemaLoading(false);
     }
@@ -401,6 +405,8 @@ export default function LogAnalyticsView({
               <Loader2 className="size-4 animate-spin" />
               Loading tables...
             </p>
+          ) : schemaError ? (
+            <p className="text-sm text-destructive">{schemaError}</p>
           ) : tables.length === 0 ? (
             <p className="text-sm text-muted-foreground">No tables returned for this workspace.</p>
           ) : (

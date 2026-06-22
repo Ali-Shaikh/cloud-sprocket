@@ -182,6 +182,9 @@ func (s *Service) handleAzureLogAnalyticsTablesList(ctx context.Context, params 
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+
 	workspaces := s.azureLogAnalyticsWorkspaces(ctx, profile)
 	workspaceName := strings.TrimSpace(request.Workspace)
 	if workspaceName == "" {
@@ -194,5 +197,9 @@ func (s *Service) handleAzureLogAnalyticsTablesList(ctx context.Context, params 
 			break
 		}
 	}
-	return s.azure.ListLogAnalyticsTables(ctx, profile, workspaceName, resourceGroup, request.IncludeColumns)
+	workspaceQueryID, err := azureLogAnalyticsQueryWorkspace(workspaceName, workspaces, !isLocalFlociProfile(profile))
+	if err != nil {
+		return nil, err
+	}
+	return s.azure.ListLogAnalyticsTables(ctx, profile, workspaceName, workspaceQueryID, resourceGroup, request.IncludeColumns)
 }
