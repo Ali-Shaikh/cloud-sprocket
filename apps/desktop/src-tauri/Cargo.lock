@@ -458,7 +458,7 @@ dependencies = [
 
 [[package]]
 name = "cloudsprocket-desktop"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "serde",
  "serde_json",
@@ -519,7 +519,7 @@ dependencies = [
 
 [[package]]
 name = "core-foundation-sys"
-version = "0.8.7"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
