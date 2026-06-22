@@ -605,6 +605,15 @@ const mockAzureWebAppSettings = [
   { name: "APPINSIGHTS_INSTRUMENTATIONKEY", value: "secret-key-value", slotSetting: false },
 ];
 
+const mockAzureWebAppDeploymentSlots = [
+  {
+    name: "staging",
+    status: "Ready",
+    defaultHostName: "demo-app-staging.azurewebsites.net",
+    trafficPercent: 0,
+  },
+];
+
 const mockAzureLogAnalyticsWorkspaces = [
   { name: "law-platform", resourceGroup: "rg-marketing-prod", location: "uaenorth", customerId: "law-guid-1" },
   { name: "law-shared", resourceGroup: "rg-shared", location: "westeurope", customerId: "law-guid-2" },
@@ -1303,12 +1312,19 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     selectedAzureWebAppName: isAzureWorkspace
       ? mockState.session.selectedAzureWebAppName ?? mockAzureWebApps[0]?.name
       : undefined,
+    selectedAzureWebAppSlot: isAzureWorkspace ? mockState.session.selectedAzureWebAppSlot : undefined,
     azureAppServiceStatusMessage: isAzureWorkspace
       ? `Loaded ${mockAzureWebApps.length} App Service web apps from ${selectedAzureResourceGroup}.`
       : undefined,
     azureWebApps: isAzureWorkspace ? mockAzureWebApps : [],
     azureAppServicePlans: isAzureWorkspace ? mockAzureAppServicePlans : [],
     azureWebAppSettings: isAzureWorkspace ? mockAzureWebAppSettings : [],
+    azureWebAppDeploymentSlots:
+      isAzureWorkspace && mockState.session.selectedAzureWebAppName
+        ? mockAzureWebAppDeploymentSlots
+        : isAzureWorkspace
+          ? []
+          : [],
     selectedAzureLogWorkspace: isAzureWorkspace
       ? mockState.session.selectedAzureLogWorkspace ?? mockAzureLogAnalyticsWorkspaces[0]?.name
       : undefined,
@@ -2103,6 +2119,10 @@ function handleMockRequest<T>(
     }
     case "azure.webApps.select":
       mockState.session.selectedAzureWebAppName = String(params.appName ?? "");
+      mockState.session.selectedAzureWebAppSlot = "";
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.webApps.selectSlot":
+      mockState.session.selectedAzureWebAppSlot = String(params.slot ?? "");
       return Promise.resolve(buildMockWorkspace() as T);
     case "azure.webApps.setSetting": {
       if (!mockState.session.azureWriteModeEnabled) {
@@ -2375,6 +2395,10 @@ function handleMockRequest<T>(
       }
       const appName = String(params.appName ?? "").trim();
       const resourceGroup = String(params.resourceGroup ?? "").trim();
+      const existingPlanName = String(params.existingPlanName ?? "").trim();
+      const newPlanName = String(params.newPlanName ?? "").trim();
+      const planSku = String(params.planSku ?? "F1").trim() || "F1";
+      const planName = existingPlanName || newPlanName || `${appName}-plan`;
       mockAzureWebApps.push({
         name: appName,
         resourceGroup,
@@ -2383,8 +2407,8 @@ function handleMockRequest<T>(
         defaultHostName: `${appName}.azurewebsites.net`,
         kind: "app,linux",
         httpsOnly: true,
-        appServicePlan: `${appName}-plan`,
-        planSku: "F1 (Free)",
+        appServicePlan: planName,
+        planSku: existingPlanName ? "Existing plan" : `${planSku} (Linux)`,
         runtime: String(params.runtime ?? "NODE:22-lts"),
         outboundIpAddresses: "",
         identityType: "",

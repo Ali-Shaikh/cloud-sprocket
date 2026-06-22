@@ -66,6 +66,64 @@ func (i *Inventory) ListWebApps(
 	return apps, nil
 }
 
+func appendWebAppDeploymentSlotArg(args []string, slotName string) []string {
+	slotName = strings.TrimSpace(slotName)
+	if slotName == "" || strings.EqualFold(slotName, "production") {
+		return args
+	}
+	return append(args, "--slot", slotName)
+}
+
+func (i *Inventory) ListWebAppDeploymentSlots(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	resourceGroup string,
+	appName string,
+) ([]models.AzureWebAppDeploymentSlot, error) {
+	if isLocalFlociProfile(profile) {
+		return nil, fmt.Errorf("app service deployment slots are not supported on the floci-az local profile")
+	}
+	resourceGroup = strings.TrimSpace(resourceGroup)
+	appName = strings.TrimSpace(appName)
+	if resourceGroup == "" || appName == "" {
+		return []models.AzureWebAppDeploymentSlot{}, nil
+	}
+	args := []string{
+		"webapp", "deployment", "slot", "list",
+		"--subscription", profile.ProfileID,
+		"--resource-group", resourceGroup,
+		"--name", appName,
+		"--output", "json",
+		"--only-show-errors",
+	}
+	payload, err := i.run(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+	var decoded []struct {
+		Name            string `json:"name"`
+		Status          string `json:"status"`
+		DefaultHostName string `json:"defaultHostName"`
+		TrafficPercent  int    `json:"trafficPercent"`
+	}
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		return nil, fmt.Errorf("decode web app deployment slots: %w", err)
+	}
+	slots := make([]models.AzureWebAppDeploymentSlot, 0, len(decoded))
+	for _, item := range decoded {
+		slots = append(slots, models.AzureWebAppDeploymentSlot{
+			Name:            item.Name,
+			Status:          item.Status,
+			DefaultHostName: item.DefaultHostName,
+			TrafficPercent:  item.TrafficPercent,
+		})
+	}
+	sort.Slice(slots, func(left int, right int) bool {
+		return strings.ToLower(slots[left].Name) < strings.ToLower(slots[right].Name)
+	})
+	return slots, nil
+}
+
 func (i *Inventory) CreateWebApp(
 	ctx context.Context,
 	profile models.ProfileSummary,
@@ -73,6 +131,9 @@ func (i *Inventory) CreateWebApp(
 	appName string,
 	location string,
 	runtime string,
+	existingPlanName string,
+	newPlanName string,
+	planSKU string,
 ) (models.AzureWebApp, error) {
 	if isLocalFlociProfile(profile) {
 		return models.AzureWebApp{}, fmt.Errorf("app service create is not supported on the floci-az local profile")
@@ -90,19 +151,29 @@ func (i *Inventory) CreateWebApp(
 	if runtime == "" {
 		runtime = "NODE:22-lts"
 	}
-	planName := appName + "-plan"
-	planArgs := []string{
-		"appservice", "plan", "create",
-		"--subscription", profile.ProfileID,
-		"--resource-group", resourceGroup,
-		"--name", planName,
-		"--location", location,
-		"--sku", "F1",
-		"--is-linux",
-		"--only-show-errors",
-	}
-	if _, err := i.run(ctx, planArgs...); err != nil {
-		return models.AzureWebApp{}, fmt.Errorf("create app service plan: %w", err)
+	planName := strings.TrimSpace(existingPlanName)
+	if planName == "" {
+		planName = strings.TrimSpace(newPlanName)
+		if planName == "" {
+			planName = appName + "-plan"
+		}
+		sku := strings.TrimSpace(planSKU)
+		if sku == "" {
+			sku = "F1"
+		}
+		planArgs := []string{
+			"appservice", "plan", "create",
+			"--subscription", profile.ProfileID,
+			"--resource-group", resourceGroup,
+			"--name", planName,
+			"--location", location,
+			"--sku", sku,
+			"--is-linux",
+			"--only-show-errors",
+		}
+		if _, err := i.run(ctx, planArgs...); err != nil {
+			return models.AzureWebApp{}, fmt.Errorf("create app service plan: %w", err)
+		}
 	}
 	webArgs := []string{
 		"webapp", "create",
@@ -335,6 +406,7 @@ func (i *Inventory) ListWebAppSettings(
 	profile models.ProfileSummary,
 	resourceGroup string,
 	appName string,
+	slotName string,
 ) ([]models.AzureWebAppSetting, error) {
 	if isLocalFlociProfile(profile) {
 		return nil, fmt.Errorf("app service is not emulated by floci-az")
@@ -344,14 +416,14 @@ func (i *Inventory) ListWebAppSettings(
 	if resourceGroup == "" || appName == "" {
 		return nil, fmt.Errorf("resource group and app name are required")
 	}
-	args := []string{
+	args := appendWebAppDeploymentSlotArg([]string{
 		"webapp", "config", "appsettings", "list",
 		"--subscription", profile.ProfileID,
 		"--resource-group", resourceGroup,
 		"--name", appName,
 		"--output", "json",
 		"--only-show-errors",
-	}
+	}, slotName)
 	payload, err := i.run(ctx, args...)
 	if err != nil {
 		return nil, err
@@ -374,6 +446,7 @@ func (i *Inventory) SetWebAppSetting(
 	name string,
 	value string,
 	slotSetting bool,
+	slotName string,
 ) error {
 	if isLocalFlociProfile(profile) {
 		return fmt.Errorf("app service settings are not supported on the floci-az local profile")
@@ -385,14 +458,14 @@ func (i *Inventory) SetWebAppSetting(
 		return fmt.Errorf("resource group, app name, and setting name are required")
 	}
 	settingArg := name + "=" + value
-	args := []string{
+	args := appendWebAppDeploymentSlotArg([]string{
 		"webapp", "config", "appsettings", "set",
 		"--subscription", profile.ProfileID,
 		"--resource-group", resourceGroup,
 		"--name", appName,
 		"--output", "none",
 		"--only-show-errors",
-	}
+	}, slotName)
 	if slotSetting {
 		args = append(args, "--slot-settings", settingArg)
 	} else {
@@ -408,6 +481,7 @@ func (i *Inventory) DeleteWebAppSetting(
 	resourceGroup string,
 	appName string,
 	name string,
+	slotName string,
 ) error {
 	if isLocalFlociProfile(profile) {
 		return fmt.Errorf("app service settings are not supported on the floci-az local profile")
@@ -418,7 +492,7 @@ func (i *Inventory) DeleteWebAppSetting(
 	if resourceGroup == "" || appName == "" || name == "" {
 		return fmt.Errorf("resource group, app name, and setting name are required")
 	}
-	args := []string{
+	args := appendWebAppDeploymentSlotArg([]string{
 		"webapp", "config", "appsettings", "delete",
 		"--subscription", profile.ProfileID,
 		"--resource-group", resourceGroup,
@@ -426,7 +500,7 @@ func (i *Inventory) DeleteWebAppSetting(
 		"--setting-names", name,
 		"--output", "none",
 		"--only-show-errors",
-	}
+	}, slotName)
 	_, err := i.run(ctx, args...)
 	return err
 }
@@ -437,6 +511,7 @@ func (i *Inventory) InvokeWebAppAction(
 	resourceGroup string,
 	appName string,
 	action string,
+	slotName string,
 ) error {
 	if isLocalFlociProfile(profile) {
 		return fmt.Errorf("app service actions are not supported on the floci-az local profile")
@@ -449,13 +524,13 @@ func (i *Inventory) InvokeWebAppAction(
 	default:
 		return fmt.Errorf("unsupported web app action %q", action)
 	}
-	args := []string{
+	args := appendWebAppDeploymentSlotArg([]string{
 		"webapp", action,
 		"--subscription", profile.ProfileID,
 		"--resource-group", resourceGroup,
 		"--name", appName,
 		"--only-show-errors",
-	}
+	}, slotName)
 	_, err := i.run(ctx, args...)
 	return err
 }

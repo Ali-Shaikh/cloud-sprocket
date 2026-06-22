@@ -279,23 +279,27 @@ func (stubAzureInventory) GetAppServicePlan(_ context.Context, _ models.ProfileS
 	}, nil
 }
 
-func (stubAzureInventory) ListWebAppSettings(context.Context, models.ProfileSummary, string, string) ([]models.AzureWebAppSetting, error) {
+func (stubAzureInventory) ListWebAppDeploymentSlots(context.Context, models.ProfileSummary, string, string) ([]models.AzureWebAppDeploymentSlot, error) {
+	return []models.AzureWebAppDeploymentSlot{{Name: "staging", Status: "Ready", DefaultHostName: "demo-staging.azurewebsites.net"}}, nil
+}
+
+func (stubAzureInventory) ListWebAppSettings(context.Context, models.ProfileSummary, string, string, string) ([]models.AzureWebAppSetting, error) {
 	return []models.AzureWebAppSetting{{Name: "WEBSITE_NODE_DEFAULT_VERSION", Value: "~22"}}, nil
 }
 
-func (stubAzureInventory) SetWebAppSetting(context.Context, models.ProfileSummary, string, string, string, string, bool) error {
+func (stubAzureInventory) SetWebAppSetting(context.Context, models.ProfileSummary, string, string, string, string, bool, string) error {
 	return nil
 }
 
-func (stubAzureInventory) DeleteWebAppSetting(context.Context, models.ProfileSummary, string, string, string) error {
+func (stubAzureInventory) DeleteWebAppSetting(context.Context, models.ProfileSummary, string, string, string, string) error {
 	return nil
 }
 
-func (stubAzureInventory) InvokeWebAppAction(context.Context, models.ProfileSummary, string, string, string) error {
+func (stubAzureInventory) InvokeWebAppAction(context.Context, models.ProfileSummary, string, string, string, string) error {
 	return nil
 }
 
-func (stubAzureInventory) CreateWebApp(context.Context, models.ProfileSummary, string, string, string, string) (models.AzureWebApp, error) {
+func (stubAzureInventory) CreateWebApp(context.Context, models.ProfileSummary, string, string, string, string, string, string, string) (models.AzureWebApp, error) {
 	return models.AzureWebApp{Name: "demo-app", ResourceGroup: "demo-rg", State: "Running"}, nil
 }
 

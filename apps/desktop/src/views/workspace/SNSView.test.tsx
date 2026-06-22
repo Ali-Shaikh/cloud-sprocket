@@ -74,6 +74,7 @@ const workspaceFixture: SnsWorkspaceSnapshot = {
       azureWebApps: [],
       azureAppServicePlans: [],
       azureWebAppSettings: [],
+      azureWebAppDeploymentSlots: [],
       azureLogAnalyticsWorkspaces: [],
       azureWafPolicies: [],
       azureWafRuleFireCounts: [],

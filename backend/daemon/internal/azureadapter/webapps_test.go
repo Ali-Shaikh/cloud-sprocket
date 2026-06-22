@@ -77,7 +77,7 @@ func TestListWebAppSettingsSortsByName(t *testing.T) {
 	inv := NewInventory(config.Settings{})
 	inv.runner = fake
 
-	settings, err := inv.ListWebAppSettings(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal")
+	settings, err := inv.ListWebAppSettings(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "")
 	if err != nil {
 		t.Fatalf("ListWebAppSettings: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestInvokeWebAppActionBuildsExpectedArgs(t *testing.T) {
 	inv := NewInventory(config.Settings{})
 	inv.runner = fake
 
-	if err := inv.InvokeWebAppAction(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "restart"); err != nil {
+	if err := inv.InvokeWebAppAction(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "restart", ""); err != nil {
 		t.Fatalf("InvokeWebAppAction: %v", err)
 	}
 	expectCLIArgsContain(t, fake.args, "webapp", "restart", "--resource-group", "rg-prod", "--name", "mkt-portal")
@@ -99,7 +99,7 @@ func TestInvokeWebAppActionBuildsExpectedArgs(t *testing.T) {
 
 func TestInvokeWebAppActionRejectsUnknownAction(t *testing.T) {
 	inv := NewInventory(config.Settings{})
-	err := inv.InvokeWebAppAction(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "scale")
+	err := inv.InvokeWebAppAction(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "scale", "")
 	if err == nil || !strings.Contains(err.Error(), "unsupported web app action") {
 		t.Fatalf("expected unsupported action error, got %v", err)
 	}
@@ -161,7 +161,7 @@ func TestSetWebAppSettingBuildsExpectedArgs(t *testing.T) {
 	inv := NewInventory(config.Settings{})
 	inv.runner = fake
 
-	if err := inv.SetWebAppSetting(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "MY_ENV", "prod", false); err != nil {
+	if err := inv.SetWebAppSetting(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "MY_ENV", "prod", false, ""); err != nil {
 		t.Fatalf("SetWebAppSetting: %v", err)
 	}
 	expectCLIArgsContain(t, fake.args,
@@ -177,10 +177,37 @@ func TestSetWebAppSettingUsesSlotSettingsFlag(t *testing.T) {
 	inv := NewInventory(config.Settings{})
 	inv.runner = fake
 
-	if err := inv.SetWebAppSetting(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "SLOT_ONLY", "1", true); err != nil {
+	if err := inv.SetWebAppSetting(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "SLOT_ONLY", "1", true, "staging"); err != nil {
 		t.Fatalf("SetWebAppSetting: %v", err)
 	}
-	expectCLIArgsContain(t, fake.args, "--slot-settings", "SLOT_ONLY=1")
+	expectCLIArgsContain(t, fake.args, "--slot-settings", "SLOT_ONLY=1", "--slot", "staging")
+}
+
+func TestListWebAppSettingsUsesDeploymentSlotArg(t *testing.T) {
+	fake := &fakeCLI{out: []byte(`[]`)}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	if _, err := inv.ListWebAppSettings(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "staging"); err != nil {
+		t.Fatalf("ListWebAppSettings: %v", err)
+	}
+	expectCLIArgsContain(t, fake.args, "--slot", "staging")
+}
+
+func TestListWebAppDeploymentSlotsDecodesRows(t *testing.T) {
+	fake := &fakeCLI{out: []byte(`[
+		{"name":"staging","status":"Ready","defaultHostName":"app-staging.azurewebsites.net","trafficPercent":0}
+	]`)}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	slots, err := inv.ListWebAppDeploymentSlots(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal")
+	if err != nil {
+		t.Fatalf("ListWebAppDeploymentSlots: %v", err)
+	}
+	if len(slots) != 1 || slots[0].Name != "staging" {
+		t.Fatalf("slots = %+v", slots)
+	}
 }
 
 func TestDeleteWebAppSettingBuildsExpectedArgs(t *testing.T) {
@@ -188,7 +215,7 @@ func TestDeleteWebAppSettingBuildsExpectedArgs(t *testing.T) {
 	inv := NewInventory(config.Settings{})
 	inv.runner = fake
 
-	if err := inv.DeleteWebAppSetting(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "MY_ENV"); err != nil {
+	if err := inv.DeleteWebAppSetting(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "MY_ENV", ""); err != nil {
 		t.Fatalf("DeleteWebAppSetting: %v", err)
 	}
 	expectCLIArgsContain(t, fake.args,

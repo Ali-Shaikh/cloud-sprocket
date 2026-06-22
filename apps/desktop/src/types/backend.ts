@@ -146,6 +146,7 @@ export interface SessionSnapshot {
   selectedAzureBlobName?: string;
   azureBlobPrefixFilter?: string;
   selectedAzureWebAppName?: string;
+  selectedAzureWebAppSlot?: string;
   selectedAzureLogWorkspace?: string;
   selectedAzureWafPolicy?: string;
   selectedAzureFunctionApp?: string;
@@ -464,6 +465,13 @@ export interface AzureWebAppSetting {
   slotSetting?: boolean;
 }
 
+export interface AzureWebAppDeploymentSlot {
+  name: string;
+  status?: string;
+  defaultHostName?: string;
+  trafficPercent?: number;
+}
+
 export type AzureWebAppAction = "start" | "stop" | "restart";
 
 export interface AzureLogAnalyticsWorkspace {
@@ -738,6 +746,7 @@ export interface WorkspaceSnapshot {
   selectedAzureBlobName?: string;
   azureBlobPrefixFilter?: string;
   selectedAzureWebAppName?: string;
+  selectedAzureWebAppSlot?: string;
   selectedAzureLogWorkspace?: string;
   selectedAzureWafPolicy?: string;
   selectedAzureFunctionApp?: string;
@@ -770,6 +779,7 @@ export interface WorkspaceSnapshot {
   azureWebApps: AzureWebApp[];
   azureAppServicePlans: AzureAppServicePlan[];
   azureWebAppSettings: AzureWebAppSetting[];
+  azureWebAppDeploymentSlots: AzureWebAppDeploymentSlot[];
   azureLogAnalyticsWorkspaces: AzureLogAnalyticsWorkspace[];
   azureWafLogSchema?: AzureWafLogSchemaProfile;
   azureWafStatusMessage?: string;

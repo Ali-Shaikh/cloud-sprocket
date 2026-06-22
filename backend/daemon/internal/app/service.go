@@ -199,6 +199,8 @@ func (s *Service) Handle(
 		return s.handleAzureVirtualMachinesInvokeAction(ctx, params, notifier)
 	case "azure.webApps.select":
 		return s.handleAzureSelectWebApp(ctx, params, notifier)
+	case "azure.webApps.selectSlot":
+		return s.handleAzureWebAppsSelectSlot(ctx, params, notifier)
 	case "azure.webApps.create":
 		return s.handleAzureWebAppsCreate(ctx, params, notifier)
 	case "azure.webApps.invokeAction":

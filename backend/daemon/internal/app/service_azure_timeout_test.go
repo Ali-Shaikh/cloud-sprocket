@@ -87,7 +87,7 @@ func (blockingAzure) ListWebApps(ctx context.Context, _ models.ProfileSummary, _
 	return nil, ctx.Err()
 }
 
-func (blockingAzure) CreateWebApp(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ string) (models.AzureWebApp, error) {
+func (blockingAzure) CreateWebApp(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ string, _ string, _ string, _ string) (models.AzureWebApp, error) {
 	<-ctx.Done()
 	return models.AzureWebApp{}, ctx.Err()
 }
@@ -107,22 +107,27 @@ func (blockingAzure) GetAppServicePlan(ctx context.Context, _ models.ProfileSumm
 	return models.AzureAppServicePlan{}, ctx.Err()
 }
 
-func (blockingAzure) ListWebAppSettings(ctx context.Context, _ models.ProfileSummary, _ string, _ string) ([]models.AzureWebAppSetting, error) {
+func (blockingAzure) ListWebAppDeploymentSlots(ctx context.Context, _ models.ProfileSummary, _ string, _ string) ([]models.AzureWebAppDeploymentSlot, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()
 }
 
-func (blockingAzure) SetWebAppSetting(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ string, _ bool) error {
+func (blockingAzure) ListWebAppSettings(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) ([]models.AzureWebAppSetting, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) SetWebAppSetting(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ string, _ bool, _ string) error {
 	<-ctx.Done()
 	return ctx.Err()
 }
 
-func (blockingAzure) DeleteWebAppSetting(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) error {
+func (blockingAzure) DeleteWebAppSetting(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ string) error {
 	<-ctx.Done()
 	return ctx.Err()
 }
 
-func (blockingAzure) InvokeWebAppAction(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) error {
+func (blockingAzure) InvokeWebAppAction(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ string) error {
 	<-ctx.Done()
 	return ctx.Err()
 }

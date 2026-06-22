@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { useState } from "react";
-import { Globe, Plus, RotateCw, Square, Play } from "lucide-react";
+import { ExternalLink, Globe, Plus, RotateCw, Square, Play } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,12 @@ import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
 import { DetailFieldList } from "./detail-fields";
+import {
+  buildAppServiceAppLogsQuery,
+  buildAppServiceConsoleErrorsQuery,
+  buildAppServiceHttpStatusQuery,
+  buildAppServiceRecentHttpQuery,
+} from "@/lib/appservice-kql";
 import type { AzureWebAppAction, WorkspaceSnapshot } from "@/types/backend";
 
 function profileFieldValue(
@@ -90,7 +96,19 @@ export type AzureAppServiceViewProps = {
   actionStatus?: string;
   onSelectResourceGroup: (resourceGroup: string) => void;
   onSelectWebApp: (appName: string) => void;
-  onCreateWebApp: (resourceGroup: string, appName: string, location: string, runtime: string) => void;
+  onSelectSlot: (slot: string) => void;
+  onEditInLogAnalytics: (workspace: string, query: string, timespan: string) => void;
+  onCreateWebApp: (
+    resourceGroup: string,
+    appName: string,
+    location: string,
+    runtime: string,
+    planOptions: {
+      existingPlanName?: string;
+      newPlanName?: string;
+      planSku?: string;
+    },
+  ) => void;
   onInvokeAction: (action: AzureWebAppAction, appName: string) => void;
   onSetSetting: (
     appName: string,
@@ -112,6 +130,8 @@ export default function AzureAppServiceView({
   actionStatus,
   onSelectResourceGroup,
   onSelectWebApp,
+  onSelectSlot,
+  onEditInLogAnalytics,
   onCreateWebApp,
   onInvokeAction,
   onSetSetting,
@@ -135,12 +155,22 @@ export default function AzureAppServiceView({
   const [createResourceGroup, setCreateResourceGroup] = useState(
     workspace.selectedAzureResourceGroup ?? "",
   );
+  const [planMode, setPlanMode] = useState<"new" | "existing">("new");
+  const [existingPlanName, setExistingPlanName] = useState("");
+  const [newPlanName, setNewPlanName] = useState("");
+  const [planSku, setPlanSku] = useState("F1");
+  const [logWorkspace, setLogWorkspace] = useState(
+    workspace.selectedAzureLogWorkspace ?? workspace.azureLogAnalyticsWorkspaces[0]?.name ?? "",
+  );
 
   const selectedApp = workspace.azureWebApps.find(
     (app) => app.name === workspace.selectedAzureWebAppName,
   );
   const plans = workspace.azureAppServicePlans ?? [];
   const settings = workspace.azureWebAppSettings ?? [];
+  const deploymentSlots = workspace.azureWebAppDeploymentSlots ?? [];
+  const activeSlot = workspace.selectedAzureWebAppSlot ?? "";
+  const slotLabel = activeSlot ? activeSlot : "production";
 
   function openAddSettingDialog() {
     setSettingDialogMode("add");
@@ -395,6 +425,149 @@ export default function AzureAppServiceView({
       </section>
 
       <section className={sectionCard}>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-56">
+            <div className={cn(fieldLabel, "mb-1")}>Deployment slot</div>
+            <Select
+              value={activeSlot || "production"}
+              onValueChange={(value) => value && onSelectSlot(value === "production" ? "" : value)}
+              disabled={!selectedApp}
+            >
+              <SelectTrigger aria-label="Select deployment slot">
+                <SelectValue placeholder="Production" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="production">Production</SelectItem>
+                {deploymentSlots.map((slot) => (
+                  <SelectItem key={slot.name} value={slot.name}>
+                    {slot.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {selectedApp ? (
+            <p className="text-sm text-muted-foreground">
+              Viewing settings and actions for the <span className="font-medium">{slotLabel}</span> slot.
+            </p>
+          ) : null}
+        </div>
+        {deploymentSlots.length > 0 ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Slot</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Hostname</TableHead>
+                <TableHead>Traffic %</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {deploymentSlots.map((slot) => (
+                <TableRow
+                  key={slot.name}
+                  data-state={slot.name === activeSlot ? "selected" : undefined}
+                  className="cursor-pointer"
+                  onClick={() => onSelectSlot(slot.name)}
+                >
+                  <TableCell className="font-medium">{slot.name}</TableCell>
+                  <TableCell>{slot.status || "—"}</TableCell>
+                  <TableCell className="font-mono text-xs">{slot.defaultHostName || "—"}</TableCell>
+                  <TableCell>{slot.trafficPercent ?? "—"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : selectedApp ? (
+          <p className="text-sm text-muted-foreground">No deployment slots returned for this web app.</p>
+        ) : null}
+      </section>
+
+      <section className={sectionCard}>
+        <h2 className="text-base font-bold">Diagnostic logs (Log Analytics)</h2>
+        <p className="text-sm text-muted-foreground">
+          Open curated KQL for App Service HTTP, console, and application logs when diagnostics
+          are sent to a workspace.
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-72">
+            <div className={cn(fieldLabel, "mb-1")}>Workspace</div>
+            <Select value={logWorkspace} onValueChange={(value) => value && setLogWorkspace(value)}>
+              <SelectTrigger aria-label="Select Log Analytics workspace">
+                <SelectValue placeholder="Workspace" />
+              </SelectTrigger>
+              <SelectContent>
+                {workspace.azureLogAnalyticsWorkspaces.map((item) => (
+                  <SelectItem key={item.name} value={item.name}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!logWorkspace}
+            onClick={() =>
+              onEditInLogAnalytics(
+                logWorkspace,
+                buildAppServiceRecentHttpQuery(selectedApp?.name),
+                "P1D",
+              )
+            }
+          >
+            <ExternalLink className="h-4 w-4" />
+            Recent HTTP
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!logWorkspace}
+            onClick={() =>
+              onEditInLogAnalytics(
+                logWorkspace,
+                buildAppServiceHttpStatusQuery("AppServiceHTTPLogs", selectedApp?.name),
+                "P1D",
+              )
+            }
+          >
+            HTTP status breakdown
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!logWorkspace}
+            onClick={() =>
+              onEditInLogAnalytics(
+                logWorkspace,
+                buildAppServiceConsoleErrorsQuery(selectedApp?.name),
+                "P1D",
+              )
+            }
+          >
+            Console errors
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!logWorkspace}
+            onClick={() =>
+              onEditInLogAnalytics(
+                logWorkspace,
+                buildAppServiceAppLogsQuery(selectedApp?.name),
+                "P1D",
+              )
+            }
+          >
+            Application logs
+          </Button>
+        </div>
+      </section>
+
+      <section className={sectionCard}>
         <h2 className="text-base font-bold">App Service plans</h2>
         <p className="text-sm text-muted-foreground">
           Plans in the selected resource group (read-only).
@@ -432,11 +605,11 @@ export default function AzureAppServiceView({
       <section className={sectionCard}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold">Application settings</h2>
+            <h2 className="text-base font-bold">Application settings · {slotLabel}</h2>
             <p className="text-sm text-muted-foreground">
               On container web apps these settings are exposed as environment variables. Updates
-              trigger an app recycle. Sensitive names are masked in the table only; values still
-              travel in the workspace payload for this local desktop session.
+              trigger an app recycle for the active slot. Sensitive names are masked in the table
+              only; values still travel in the workspace payload for this local desktop session.
             </p>
           </div>
           {selectedApp && canWrite ? (
@@ -541,19 +714,80 @@ export default function AzureAppServiceView({
                     placeholder="NODE:22-lts"
                   />
                 </div>
+                <div>
+                  <div className={fieldLabel}>App Service plan</div>
+                  <Select value={planMode} onValueChange={(value) => setPlanMode(value as "new" | "existing")}>
+                    <SelectTrigger aria-label="Plan mode">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="new">Create new Linux plan</SelectItem>
+                      <SelectItem value="existing">Use existing plan</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {planMode === "existing" ? (
+                  <div>
+                    <div className={fieldLabel}>Existing plan</div>
+                    <Select value={existingPlanName} onValueChange={setExistingPlanName}>
+                      <SelectTrigger aria-label="Existing App Service plan">
+                        <SelectValue placeholder="Select plan" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {plans.map((plan) => (
+                          <SelectItem key={plan.name} value={plan.name}>
+                            {plan.name} · {plan.sku || "SKU unknown"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <div className={fieldLabel}>New plan name (optional)</div>
+                      <Input
+                        value={newPlanName}
+                        onChange={(event) => setNewPlanName(event.target.value)}
+                        placeholder="Defaults to app-name-plan"
+                      />
+                    </div>
+                    <div>
+                      <div className={fieldLabel}>Plan SKU</div>
+                      <Select value={planSku} onValueChange={setPlanSku}>
+                        <SelectTrigger aria-label="Plan SKU">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="F1">F1 (Free)</SelectItem>
+                          <SelectItem value="B1">B1 (Basic)</SelectItem>
+                          <SelectItem value="S1">S1 (Standard)</SelectItem>
+                          <SelectItem value="P1v3">P1v3 (Premium v3)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={!createResourceGroup.trim() || !newAppName.trim()}
+              disabled={
+                !createResourceGroup.trim() ||
+                !newAppName.trim() ||
+                (planMode === "existing" && !existingPlanName.trim())
+              }
               onClick={() => {
                 onCreateWebApp(
                   createResourceGroup.trim(),
                   newAppName.trim(),
                   newAppLocation.trim() || "westeurope",
                   newAppRuntime.trim() || "NODE:22-lts",
+                  planMode === "existing"
+                    ? { existingPlanName: existingPlanName.trim() }
+                    : { newPlanName: newPlanName.trim(), planSku: planSku.trim() || "F1" },
                 );
                 setNewAppName("");
                 setCreateOpen(false);

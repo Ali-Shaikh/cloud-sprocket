@@ -85,11 +85,12 @@ type AzureInventory interface {
 	GetWebApp(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string) (models.AzureWebApp, error)
 	ListAppServicePlans(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureAppServicePlan, error)
 	GetAppServicePlan(ctx context.Context, profile models.ProfileSummary, resourceGroup string, planName string) (models.AzureAppServicePlan, error)
-	ListWebAppSettings(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string) ([]models.AzureWebAppSetting, error)
-	SetWebAppSetting(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, name string, value string, slotSetting bool) error
-	DeleteWebAppSetting(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, name string) error
-	InvokeWebAppAction(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, action string) error
-	CreateWebApp(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, location string, runtime string) (models.AzureWebApp, error)
+	ListWebAppDeploymentSlots(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string) ([]models.AzureWebAppDeploymentSlot, error)
+	ListWebAppSettings(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, slotName string) ([]models.AzureWebAppSetting, error)
+	SetWebAppSetting(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, name string, value string, slotSetting bool, slotName string) error
+	DeleteWebAppSetting(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, name string, slotName string) error
+	InvokeWebAppAction(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, action string, slotName string) error
+	CreateWebApp(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, location string, runtime string, existingPlanName string, newPlanName string, planSKU string) (models.AzureWebApp, error)
 	ListLogAnalyticsWorkspaces(ctx context.Context, profile models.ProfileSummary) ([]models.AzureLogAnalyticsWorkspace, error)
 	RunLogAnalyticsQuery(ctx context.Context, profile models.ProfileSummary, workspace string, query string, timespan string, maxRows int) (models.AzureLogQueryResult, error)
 	ListLogAnalyticsTables(ctx context.Context, profile models.ProfileSummary, workspaceName string, workspaceQueryID string, resourceGroup string, includeColumns bool) ([]models.AzureLogAnalyticsTableInfo, error)
