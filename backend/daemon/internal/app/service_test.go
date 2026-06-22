@@ -255,6 +255,29 @@ func (stubAzureInventory) ListWebApps(context.Context, models.ProfileSummary, st
 	return []models.AzureWebApp{{Name: "demo-app", ResourceGroup: "demo-rg", State: "Running"}}, nil
 }
 
+func (stubAzureInventory) GetWebApp(_ context.Context, _ models.ProfileSummary, resourceGroup string, appName string) (models.AzureWebApp, error) {
+	return models.AzureWebApp{
+		Name:           appName,
+		ResourceGroup:  resourceGroup,
+		State:          "Running",
+		AppServicePlan: "demo-plan",
+		PlanSKU:        "F1 (Free)",
+		Runtime:        "NODE:22-lts",
+	}, nil
+}
+
+func (stubAzureInventory) ListAppServicePlans(context.Context, models.ProfileSummary, string) ([]models.AzureAppServicePlan, error) {
+	return []models.AzureAppServicePlan{{Name: "demo-plan", SKU: "F1 (Free)", Status: "Ready"}}, nil
+}
+
+func (stubAzureInventory) ListWebAppSettings(context.Context, models.ProfileSummary, string, string) ([]models.AzureWebAppSetting, error) {
+	return []models.AzureWebAppSetting{{Name: "WEBSITE_NODE_DEFAULT_VERSION", Value: "~22"}}, nil
+}
+
+func (stubAzureInventory) InvokeWebAppAction(context.Context, models.ProfileSummary, string, string, string) error {
+	return nil
+}
+
 func (stubAzureInventory) CreateWebApp(context.Context, models.ProfileSummary, string, string, string, string) (models.AzureWebApp, error) {
 	return models.AzureWebApp{Name: "demo-app", ResourceGroup: "demo-rg", State: "Running"}, nil
 }

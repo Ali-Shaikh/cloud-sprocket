@@ -82,6 +82,10 @@ type AzureInventory interface {
 	GetVirtualMachine(ctx context.Context, profile models.ProfileSummary, resourceGroup string, vmName string) (models.AzureVirtualMachine, error)
 	ListBastionHosts(ctx context.Context, profile models.ProfileSummary) ([]models.AzureBastionHost, error)
 	ListWebApps(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureWebApp, error)
+	GetWebApp(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string) (models.AzureWebApp, error)
+	ListAppServicePlans(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureAppServicePlan, error)
+	ListWebAppSettings(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string) ([]models.AzureWebAppSetting, error)
+	InvokeWebAppAction(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, action string) error
 	CreateWebApp(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, location string, runtime string) (models.AzureWebApp, error)
 	ListLogAnalyticsWorkspaces(ctx context.Context, profile models.ProfileSummary) ([]models.AzureLogAnalyticsWorkspace, error)
 	RunLogAnalyticsQuery(ctx context.Context, profile models.ProfileSummary, workspace string, query string, timespan string, maxRows int) (models.AzureLogQueryResult, error)

@@ -201,6 +201,8 @@ func (s *Service) Handle(
 		return s.handleAzureSelectWebApp(ctx, params, notifier)
 	case "azure.webApps.create":
 		return s.handleAzureWebAppsCreate(ctx, params, notifier)
+	case "azure.webApps.invokeAction":
+		return s.handleAzureWebAppsInvokeAction(ctx, params, notifier)
 	case "azure.storage.selectAccount":
 		return s.handleAzureStorageSelectAccount(ctx, params, notifier)
 	case "azure.storage.selectContainer":

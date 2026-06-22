@@ -87,6 +87,150 @@ func (s *Service) enrichAzureAppServiceInventory(workspace *models.WorkspaceSnap
 	})
 }
 
+func (s *Service) enrichAzureWebAppDetail(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot, mu *sync.Mutex) {
+	if workspace.Provider == nil ||
+		workspace.Provider.ProviderID != "azure" ||
+		workspace.Profile == nil ||
+		s.azure == nil {
+		return
+	}
+	appName := strings.TrimSpace(workspace.SelectedAzureWebAppName)
+	if appName == "" {
+		appName = strings.TrimSpace(session.SelectedAzureWebAppName)
+	}
+	resourceGroup := strings.TrimSpace(workspace.SelectedAzureResourceGroup)
+	if resourceGroup == "" {
+		resourceGroup = s.selectedAzureResourceGroup(session, workspace.AzureResourceGroups)
+	}
+	if appName == "" || resourceGroup == "" {
+		lockWorkspace(mu, func() {
+			workspace.AzureAppServicePlans = nil
+			workspace.AzureWebAppSettings = nil
+		})
+		return
+	}
+
+	ctx, cancel := s.withAzureTimeout(context.Background())
+	defer cancel()
+	profile := *workspace.Profile
+
+	plans, _ := s.azure.ListAppServicePlans(ctx, profile, resourceGroup)
+	detail, detailErr := s.azure.GetWebApp(ctx, profile, resourceGroup, appName)
+	if detailErr == nil {
+		for _, plan := range plans {
+			if plan.Name == detail.AppServicePlan {
+				detail.PlanSKU = plan.SKU
+				break
+			}
+		}
+	}
+	settings, _ := s.azure.ListWebAppSettings(ctx, profile, resourceGroup, appName)
+
+	lockWorkspace(mu, func() {
+		workspace.AzureAppServicePlans = plans
+		workspace.AzureWebAppSettings = settings
+		if detailErr == nil {
+			for index, app := range workspace.AzureWebApps {
+				if app.Name == appName {
+					workspace.AzureWebApps[index] = detail
+					break
+				}
+			}
+		}
+	})
+}
+
+func (s *Service) activeAzureWebAppSelection(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	appName string,
+) (models.ProfileSummary, string, models.AzureWebApp, error) {
+	if !session.IsLocked || session.CurrentProviderID != "azure" {
+		return models.ProfileSummary{}, "", models.AzureWebApp{}, errors.New("open an Azure workspace before invoking web app actions")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		return models.ProfileSummary{}, "", models.AzureWebApp{}, errors.New("the workspace's Azure profile is not available")
+	}
+	resourceGroup := session.SelectedAzureResourceGroup
+	if resourceGroup == "" {
+		resourceGroup = s.selectedAzureResourceGroup(session, s.azureResourceGroups(context.Background(), profile))
+	}
+	if resourceGroup == "" {
+		return models.ProfileSummary{}, "", models.AzureWebApp{}, errors.New("select a resource group before invoking web app actions")
+	}
+	targetName := strings.TrimSpace(appName)
+	if targetName == "" {
+		targetName = session.SelectedAzureWebAppName
+	}
+	if targetName == "" {
+		return models.ProfileSummary{}, "", models.AzureWebApp{}, errors.New("select a web app before invoking an action")
+	}
+	for _, app := range s.azureWebApps(context.Background(), profile, resourceGroup) {
+		if app.Name == targetName {
+			return profile, resourceGroup, app, nil
+		}
+	}
+	return models.ProfileSummary{}, "", models.AzureWebApp{}, fmt.Errorf("web app %s was not found in %s", targetName, resourceGroup)
+}
+
+func (s *Service) handleAzureWebAppsInvokeAction(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		Action  string `json:"action"`
+		AppName string `json:"appName"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	action := strings.TrimSpace(request.Action)
+	if action == "" {
+		return nil, errors.New("web app action is required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	profile, resourceGroup, app, err := s.activeAzureWebAppSelection(snapshot, session, request.AppName)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !effectiveAzureWritesEnabled(session, profile, s.azureProviderCommandPath(snapshot)) {
+		s.mu.Unlock()
+		return nil, errors.New("web app actions require write mode to be enabled for this Azure workspace")
+	}
+	s.mu.Unlock()
+
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+	if err := s.azure.InvokeWebAppAction(timeoutCtx, profile, resourceGroup, app.Name, action); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	session.SelectedAzureResourceGroup = resourceGroup
+	session.SelectedAzureWebAppName = app.Name
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.mu.Unlock()
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "webapps",
+	}, "success", fmt.Sprintf("Invoked %s on web app %s.", action, app.Name))
+}
+
 func (s *Service) handleAzureSelectWebApp(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		AppName string `json:"appName"`

@@ -437,7 +437,31 @@ export interface AzureWebApp {
   defaultHostName?: string;
   kind?: string;
   httpsOnly?: boolean;
+  appServicePlan?: string;
+  planSku?: string;
+  runtime?: string;
+  outboundIpAddresses?: string;
+  identityType?: string;
+  identityPrincipalId?: string;
 }
+
+export interface AzureAppServicePlan {
+  name: string;
+  resourceGroup?: string;
+  location?: string;
+  sku?: string;
+  kind?: string;
+  status?: string;
+  numberOfWorkers?: number;
+}
+
+export interface AzureWebAppSetting {
+  name: string;
+  value: string;
+  slotSetting?: boolean;
+}
+
+export type AzureWebAppAction = "start" | "stop" | "restart";
 
 export interface AzureLogAnalyticsWorkspace {
   name: string;
@@ -701,6 +725,8 @@ export interface WorkspaceSnapshot {
   azureBlobs: AzureBlob[];
   azureBlobMetadata: DetailField[];
   azureWebApps: AzureWebApp[];
+  azureAppServicePlans: AzureAppServicePlan[];
+  azureWebAppSettings: AzureWebAppSetting[];
   azureLogAnalyticsWorkspaces: AzureLogAnalyticsWorkspace[];
   azureWafLogSchema?: AzureWafLogSchemaProfile;
   azureWafStatusMessage?: string;

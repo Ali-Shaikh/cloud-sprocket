@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, ExternalLink, Loader2, Play, Save, Shield, Square, Trash2 } from "lucide-react";
+import { BookOpen, ExternalLink, Loader2, Play, Plus, Save, Shield, Square, Trash2 } from "lucide-react";
 
 import { KqlEditor } from "@/components/kql/KqlEditor";
 import { LogQueryResultPanel } from "@/components/log-analytics/LogQueryResultPanel";
@@ -100,6 +100,11 @@ export type AzureWafViewProps = {
     policyName: string,
     exclusion: AzureWafExclusion,
   ) => Promise<void>;
+  onAddExclusion: (
+    resourceGroup: string,
+    policyName: string,
+    exclusion: AzureWafExclusion,
+  ) => Promise<void>;
   onListSaved?: (workspace: string) => Promise<AzureLogAnalyticsSavedQuery[]>;
   onSaveQuery?: (
     workspace: string,
@@ -132,6 +137,7 @@ export default function AzureWafView({
   onSetMode,
   onSetManagedRule,
   onRemoveExclusion,
+  onAddExclusion,
   onListSaved,
   onSaveQuery,
   onDeleteSaved,
@@ -164,6 +170,12 @@ export default function AzureWafView({
     enabled: boolean;
   } | null>(null);
   const [pendingExclusion, setPendingExclusion] = useState<AzureWafExclusion | null>(null);
+  const [addExclusionOpen, setAddExclusionOpen] = useState(false);
+  const [newExclusion, setNewExclusion] = useState<AzureWafExclusion>({
+    matchVariable: "RequestHeaderNames",
+    selectorMatchOperator: "Equals",
+    selector: "",
+  });
   const [saved, setSaved] = useState<AzureLogAnalyticsSavedQuery[]>([]);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
@@ -316,6 +328,37 @@ export default function AzureWafView({
     try {
       await onRemoveExclusion(policyDetail.resourceGroup, policyDetail.name, pendingExclusion);
       setPendingExclusion(null);
+    } catch (caught) {
+      setConfigError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }
+
+  async function confirmExclusionAdd() {
+    if (!policyDetail) return;
+    const matchVariable = newExclusion.matchVariable.trim();
+    const selector = newExclusion.selector?.trim() ?? "";
+    if (!matchVariable || !selector) {
+      setConfigError("Match variable and selector value are required.");
+      return;
+    }
+    setConfigError(null);
+    const ruleSetType =
+      newExclusion.ruleSetType?.trim() ||
+      policyDetail.managedRuleSets[0]?.ruleSetType ||
+      "Microsoft_DefaultRuleSet";
+    try {
+      await onAddExclusion(policyDetail.resourceGroup, policyDetail.name, {
+        ...newExclusion,
+        matchVariable,
+        selector,
+        ruleSetType,
+      });
+      setAddExclusionOpen(false);
+      setNewExclusion({
+        matchVariable: "RequestHeaderNames",
+        selectorMatchOperator: "Equals",
+        selector: "",
+      });
     } catch (caught) {
       setConfigError(caught instanceof Error ? caught.message : String(caught));
     }
@@ -783,7 +826,15 @@ export default function AzureWafView({
               </section>
 
               <section className={sectionCard}>
-                <h2 className="text-base font-bold">Exclusions</h2>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <h2 className="text-base font-bold">Exclusions</h2>
+                  {canWrite ? (
+                    <Button variant="outline" size="sm" onClick={() => setAddExclusionOpen(true)}>
+                      <Plus />
+                      Add exclusion
+                    </Button>
+                  ) : null}
+                </div>
                 {policyDetail.exclusions.length > 0 ? (
                   <Table>
                     <TableHeader>
@@ -901,6 +952,93 @@ export default function AzureWafView({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={addExclusionOpen} onOpenChange={setAddExclusionOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add WAF exclusion</DialogTitle>
+            <DialogDescription>
+              Adds a managed-rule exclusion to policy {policyDetail?.name}. Uses the first managed
+              rule set on the policy when rule set type is not specified.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <div className={cn(fieldLabel, "mb-1")}>Match variable</div>
+              <Select
+                value={newExclusion.matchVariable}
+                onValueChange={(value) => {
+                  if (value) {
+                    setNewExclusion((current) => ({ ...current, matchVariable: value }));
+                  }
+                }}
+              >
+                <SelectTrigger aria-label="WAF exclusion match variable">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[
+                    "RequestHeaderNames",
+                    "RequestCookieNames",
+                    "QueryStringArgNames",
+                    "RequestBodyJsonArgNames",
+                    "RequestBodyPostArgNames",
+                  ].map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <div className={cn(fieldLabel, "mb-1")}>Operator</div>
+              <Select
+                value={newExclusion.selectorMatchOperator}
+                onValueChange={(value) => {
+                  if (value) {
+                    setNewExclusion((current) => ({ ...current, selectorMatchOperator: value }));
+                  }
+                }}
+              >
+                <SelectTrigger aria-label="WAF exclusion operator">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["Equals", "Contains", "StartsWith", "EndsWith"].map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <div className={cn(fieldLabel, "mb-1")}>Selector value</div>
+              <Input
+                value={newExclusion.selector ?? ""}
+                onChange={(event) =>
+                  setNewExclusion((current) => ({ ...current, selector: event.target.value }))
+                }
+                placeholder="User-Agent"
+                spellCheck={false}
+                aria-label="WAF exclusion selector value"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddExclusionOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!newExclusion.matchVariable.trim() || !newExclusion.selector?.trim()}
+              onClick={() => void confirmExclusionAdd()}
+            >
+              Add exclusion
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
         <DialogContent>

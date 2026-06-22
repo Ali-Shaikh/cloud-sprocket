@@ -541,6 +541,28 @@ type AzureWebApp struct {
 	DefaultHostName string `json:"defaultHostName,omitempty"`
 	Kind            string `json:"kind,omitempty"`
 	HTTPSOnly       bool   `json:"httpsOnly,omitempty"`
+	AppServicePlan  string `json:"appServicePlan,omitempty"`
+	PlanSKU         string `json:"planSku,omitempty"`
+	Runtime         string `json:"runtime,omitempty"`
+	OutboundIPs     string `json:"outboundIpAddresses,omitempty"`
+	IdentityType    string `json:"identityType,omitempty"`
+	IdentityPrincipalID string `json:"identityPrincipalId,omitempty"`
+}
+
+type AzureAppServicePlan struct {
+	Name              string `json:"name"`
+	ResourceGroup     string `json:"resourceGroup,omitempty"`
+	Location          string `json:"location,omitempty"`
+	SKU               string `json:"sku,omitempty"`
+	Kind              string `json:"kind,omitempty"`
+	Status            string `json:"status,omitempty"`
+	NumberOfWorkers   int    `json:"numberOfWorkers,omitempty"`
+}
+
+type AzureWebAppSetting struct {
+	Name        string `json:"name"`
+	Value       string `json:"value"`
+	SlotSetting bool   `json:"slotSetting,omitempty"`
 }
 
 // AzureLogAnalyticsWorkspace is a Log Analytics (Azure Monitor) workspace. CustomerID
@@ -877,6 +899,8 @@ type WorkspaceSnapshot struct {
 	AzureBlobs                     []AzureBlob                  `json:"azureBlobs"`
 	AzureBlobMetadata              []DetailField                `json:"azureBlobMetadata"`
 	AzureWebApps                   []AzureWebApp                `json:"azureWebApps"`
+	AzureAppServicePlans           []AzureAppServicePlan        `json:"azureAppServicePlans"`
+	AzureWebAppSettings            []AzureWebAppSetting         `json:"azureWebAppSettings"`
 	AzureLogAnalyticsWorkspaces    []AzureLogAnalyticsWorkspace `json:"azureLogAnalyticsWorkspaces"`
 	AzureWafLogSchema              *AzureWafLogSchemaProfile    `json:"azureWafLogSchema,omitempty"`
 	AzureWafStatusMessage          string                       `json:"azureWafStatusMessage,omitempty"`

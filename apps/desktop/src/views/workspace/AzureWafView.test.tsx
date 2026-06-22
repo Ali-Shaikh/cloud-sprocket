@@ -75,6 +75,7 @@ describe("AzureWafView", () => {
           onSetMode={async () => {}}
           onSetManagedRule={async () => {}}
           onRemoveExclusion={async () => {}}
+          onAddExclusion={async () => {}}
         />
       </ThemeProvider>,
     );
@@ -104,6 +105,7 @@ describe("AzureWafView", () => {
           onSetMode={async () => {}}
           onSetManagedRule={async () => {}}
           onRemoveExclusion={async () => {}}
+          onAddExclusion={async () => {}}
         />
       </ThemeProvider>,
     );
