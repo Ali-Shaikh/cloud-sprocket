@@ -2,12 +2,23 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { useMemo, useState } from "react";
-import { ExternalLink, Globe, Network, Play, Shield } from "lucide-react";
+import { Eraser, ExternalLink, Globe, Network, Play, RotateCw, Shield } from "lucide-react";
 
 import { KqlEditor } from "@/components/kql/KqlEditor";
 import { LogQueryResultPanel } from "@/components/log-analytics/LogQueryResultPanel";
 import { EmptyState } from "@/components/empty-state";
+import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -37,9 +48,18 @@ import type { AzureLogQueryResult, WorkspaceSnapshot } from "@/types/backend";
 
 export type AzureFrontDoorViewProps = {
   workspace: WorkspaceSnapshot;
+  inventoryLoading?: boolean;
+  actionStatus?: string;
+  onRefresh: () => void;
   onSelectProfile: (profile: string) => void;
   onSelectEndpoint: (endpoint: string) => void;
   onSelectOriginGroup: (originGroup: string) => void;
+  onPurgeCache: (
+    profileName: string,
+    endpointName: string,
+    contentPaths: string[],
+    domains: string[],
+  ) => void;
   onOpenWafPolicy: (policyName: string) => void;
   onEditInLogAnalytics: (workspace: string, query: string, timespan: string) => void;
   onRunQuery: (
@@ -66,13 +86,18 @@ function enabledStatus(state?: string): "on" | "off" | "warning" {
 
 export default function AzureFrontDoorView({
   workspace,
+  inventoryLoading = false,
+  actionStatus,
+  onRefresh,
   onSelectProfile,
   onSelectEndpoint,
   onSelectOriginGroup,
+  onPurgeCache,
   onOpenWafPolicy,
   onEditInLogAnalytics,
   onRunQuery,
 }: AzureFrontDoorViewProps) {
+  const canWrite = workspace.azureWritesEnabled;
   const profiles = workspace.azureFrontDoorProfiles ?? [];
   const endpoints = workspace.azureFrontDoorEndpoints ?? [];
   const originGroups = workspace.azureFrontDoorOriginGroups ?? [];
@@ -98,6 +123,9 @@ export default function AzureFrontDoorView({
   const [queryResult, setQueryResult] = useState<AzureLogQueryResult | null>(null);
   const [queryRunning, setQueryRunning] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
+  const [purgeEndpoint, setPurgeEndpoint] = useState<string | null>(null);
+  const [purgePaths, setPurgePaths] = useState("/*");
+  const [purgeDomains, setPurgeDomains] = useState("");
 
   const curatedQueries = useMemo(() => AFD_CURATED_QUERIES, []);
 
@@ -143,7 +171,8 @@ export default function AzureFrontDoorView({
 
         <TabsContent value="topology" className="space-y-6">
           <section className={sectionCard}>
-            <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex flex-wrap items-end gap-3">
               <div className="w-72">
                 <div className={cn(fieldLabel, "mb-1")}>Profile</div>
                 <Select value={profileName} onValueChange={(value) => value && onSelectProfile(value)}>
@@ -170,6 +199,11 @@ export default function AzureFrontDoorView({
                   Open WAF policy · {selectedProfile.wafPolicyName}
                 </Button>
               ) : null}
+              </div>
+              <Button variant="outline" size="sm" disabled={inventoryLoading} onClick={onRefresh}>
+                <RotateCw />
+                Refresh topology
+              </Button>
             </div>
             {selectedProfile ? (
               <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -178,13 +212,31 @@ export default function AzureFrontDoorView({
                 <span>{selectedProfile.location || "Global"}</span>
               </div>
             ) : null}
-            <p className="text-sm text-muted-foreground">{workspace.azureFrontDoorStatusMessage}</p>
+            {inventoryLoading ? (
+              <InventoryLoadingState
+                variant="inline"
+                label={workspace.azureFrontDoorStatusMessage || "Loading Front Door topology..."}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">{workspace.azureFrontDoorStatusMessage}</p>
+            )}
+            {actionStatus ? <p className="text-sm text-muted-foreground">{actionStatus}</p> : null}
           </section>
+
+          {profiles.length === 0 && !inventoryLoading ? (
+            <EmptyState
+              icon={<Network />}
+              title="No Front Door profiles"
+              description="Ensure the Azure CLI front-door extension is installed and this subscription has AFD Standard or Premium profiles."
+            />
+          ) : null}
 
           <section className={sectionCard}>
             <h2 className="text-base font-bold">Endpoints</h2>
             <div className="overflow-hidden rounded-lg border border-border">
-              {endpoints.length === 0 ? (
+              {inventoryLoading && endpoints.length === 0 ? (
+                <InventoryLoadingState label="Loading endpoints..." className="border-0 bg-transparent" />
+              ) : endpoints.length === 0 ? (
                 <EmptyState
                   icon={<Globe />}
                   title="No endpoints"
@@ -198,6 +250,7 @@ export default function AzureFrontDoorView({
                       <TableHead>Name</TableHead>
                       <TableHead>Hostname</TableHead>
                       <TableHead>State</TableHead>
+                      {canWrite ? <TableHead className="w-[120px]">Actions</TableHead> : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -213,6 +266,23 @@ export default function AzureFrontDoorView({
                         <TableCell>
                           <StatusPill status={enabledStatus(item.enabledState)} label={item.enabledState || "Unknown"} />
                         </TableCell>
+                        {canWrite ? (
+                          <TableCell>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setPurgePaths("/*");
+                                setPurgeDomains(item.hostName ?? "");
+                                setPurgeEndpoint(item.name);
+                              }}
+                            >
+                              <Eraser />
+                              Purge cache
+                            </Button>
+                          </TableCell>
+                        ) : null}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -421,6 +491,71 @@ export default function AzureFrontDoorView({
           </section>
         </TabsContent>
       </Tabs>
+
+      <AlertDialog
+        open={purgeEndpoint != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPurgeEndpoint(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Purge Front Door cache?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Purges cached content for endpoint <span className="font-medium">{purgeEndpoint}</span> on
+                  profile <span className="font-medium">{profileName}</span>. Paths are relative to the endpoint
+                  hostname.
+                </p>
+                <div>
+                  <div className={fieldLabel}>Content paths (one per line)</div>
+                  <textarea
+                    className="mt-1 min-h-[88px] w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm"
+                    value={purgePaths}
+                    onChange={(event) => setPurgePaths(event.target.value)}
+                    spellCheck={false}
+                  />
+                </div>
+                <div>
+                  <div className={fieldLabel}>Domains (optional, comma-separated)</div>
+                  <Input
+                    value={purgeDomains}
+                    onChange={(event) => setPurgeDomains(event.target.value)}
+                    placeholder="api.example.com, www.example.com"
+                    spellCheck={false}
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!purgeEndpoint || !profileName}
+              onClick={() => {
+                if (!purgeEndpoint || !profileName) {
+                  return;
+                }
+                const contentPaths = purgePaths
+                  .split(/\r?\n/)
+                  .map((line) => line.trim())
+                  .filter(Boolean);
+                const domains = purgeDomains
+                  .split(",")
+                  .map((part) => part.trim())
+                  .filter(Boolean);
+                onPurgeCache(profileName, purgeEndpoint, contentPaths, domains);
+                setPurgeEndpoint(null);
+              }}
+            >
+              Purge
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

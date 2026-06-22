@@ -381,6 +381,10 @@ func (stubAzureInventory) ListFrontDoorOrigins(context.Context, models.ProfileSu
 	return []models.AzureFrontDoorOrigin{{Name: "origin-app", OriginGroupName: "default", HostName: "app.internal", EnabledState: "Enabled", Priority: 1, Weight: 1000}}, nil
 }
 
+func (stubAzureInventory) PurgeFrontDoorEndpointCache(context.Context, models.ProfileSummary, string, string, string, []string, []string) error {
+	return nil
+}
+
 func (stubAzureInventory) ListFunctionApps(context.Context, models.ProfileSummary) ([]models.AzureFunctionApp, error) {
 	return []models.AzureFunctionApp{{Name: "demo-fn", ResourceGroup: "demo-rg", State: "Running"}}, nil
 }

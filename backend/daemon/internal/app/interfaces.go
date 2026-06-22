@@ -107,6 +107,7 @@ type AzureInventory interface {
 	ListFrontDoorEndpoints(ctx context.Context, profile models.ProfileSummary, resourceGroup string, profileName string) ([]models.AzureFrontDoorEndpoint, error)
 	ListFrontDoorOriginGroups(ctx context.Context, profile models.ProfileSummary, resourceGroup string, profileName string) ([]models.AzureFrontDoorOriginGroup, error)
 	ListFrontDoorOrigins(ctx context.Context, profile models.ProfileSummary, resourceGroup string, profileName string, originGroupName string) ([]models.AzureFrontDoorOrigin, error)
+	PurgeFrontDoorEndpointCache(ctx context.Context, profile models.ProfileSummary, resourceGroup string, profileName string, endpointName string, contentPaths []string, domains []string) error
 	ListFunctionApps(ctx context.Context, profile models.ProfileSummary) ([]models.AzureFunctionApp, error)
 	ListFunctions(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string) ([]models.AzureFunction, error)
 	InvokeFunction(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, functionName string, payload string) (models.AzureFunctionInvokeResult, error)

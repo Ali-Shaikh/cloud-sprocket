@@ -2432,6 +2432,18 @@ function handleMockRequest<T>(
     case "azure.frontDoor.selectOriginGroup":
       mockState.session.selectedAzureFrontDoorOriginGroup = String(params.originGroup ?? "");
       return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.frontDoor.refresh":
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.frontDoor.purgeCache": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(
+          new Error("Front Door cache purge requires write mode to be enabled for this Azure workspace"),
+        );
+      }
+      const endpointName = String(params.endpointName ?? "");
+      appendLog("success", `Purged Front Door cache for ${endpointName} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "azure.queues.selectQueue":
       mockState.session.selectedAzureQueue = String(params.queue ?? "");
       return Promise.resolve(buildMockWorkspace() as T);

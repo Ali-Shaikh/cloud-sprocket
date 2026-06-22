@@ -6,9 +6,12 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
+	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
 )
 
@@ -169,25 +172,6 @@ func (s *Service) enrichAzureFrontDoorInventory(
 		status       string
 	)
 
-	if opts.lightweight {
-		if len(profiles) == 0 {
-			status = "No Azure Front Door profiles found."
-		} else {
-			status = fmt.Sprintf("Loaded %d Front Door profile(s).", len(profiles))
-		}
-		lockWorkspace(mu, func() {
-			workspace.AzureFrontDoorProfiles = profiles
-			workspace.SelectedAzureFrontDoorProfile = profileName
-			workspace.AzureFrontDoorEndpoints = []models.AzureFrontDoorEndpoint{}
-			workspace.SelectedAzureFrontDoorEndpoint = ""
-			workspace.AzureFrontDoorOriginGroups = []models.AzureFrontDoorOriginGroup{}
-			workspace.SelectedAzureFrontDoorOriginGroup = ""
-			workspace.AzureFrontDoorOrigins = []models.AzureFrontDoorOrigin{}
-			workspace.AzureFrontDoorStatusMessage = status
-		})
-		return
-	}
-
 	endpoints = s.azureFrontDoorEndpoints(ctx, profile, resourceGroup, profileName)
 	endpoint = selectedName(session.SelectedAzureFrontDoorEndpoint, frontDoorEndpointNames(endpoints))
 	originGroups = s.azureFrontDoorOriginGroups(ctx, profile, resourceGroup, profileName)
@@ -278,4 +262,117 @@ func (s *Service) handleAzureFrontDoorSelectOriginGroup(ctx context.Context, par
 		skipAwsInventory: true,
 		azureScope:       "frontdoor",
 	}, "", "")
+}
+
+func (s *Service) handleAzureFrontDoorRefresh(ctx context.Context, _ json.RawMessage, notifier Notifier) (any, error) {
+	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before refreshing Front Door topology", nil)
+	if err != nil {
+		return nil, err
+	}
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "frontdoor",
+	}, "", "")
+}
+
+func (s *Service) handleAzureFrontDoorPurgeCache(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		ProfileName  string   `json:"profileName"`
+		EndpointName string   `json:"endpointName"`
+		ContentPaths []string `json:"contentPaths"`
+		Domains      []string `json:"domains"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	endpointName := strings.TrimSpace(request.EndpointName)
+	if endpointName == "" {
+		return nil, errors.New("an endpoint name is required")
+	}
+	contentPaths := make([]string, 0, len(request.ContentPaths))
+	for _, path := range request.ContentPaths {
+		trimmed := strings.TrimSpace(path)
+		if trimmed != "" {
+			contentPaths = append(contentPaths, trimmed)
+		}
+	}
+	if len(contentPaths) == 0 {
+		contentPaths = []string{"/*"}
+	}
+	domains := make([]string, 0, len(request.Domains))
+	for _, domain := range request.Domains {
+		trimmed := strings.TrimSpace(domain)
+		if trimmed != "" {
+			domains = append(domains, trimmed)
+		}
+	}
+
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	profile, resourceGroup, profileName, err := s.activeAzureFrontDoorSelection(snapshot, session, request.ProfileName)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !effectiveAzureWritesEnabled(session, profile, s.azureProviderCommandPath(snapshot)) {
+		s.mu.Unlock()
+		return nil, errors.New("Front Door cache purge requires write mode to be enabled for this Azure workspace")
+	}
+	s.mu.Unlock()
+
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+	if err := s.azure.PurgeFrontDoorEndpointCache(
+		timeoutCtx,
+		profile,
+		resourceGroup,
+		profileName,
+		endpointName,
+		contentPaths,
+		domains,
+	); err != nil {
+		return nil, err
+	}
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "frontdoor",
+	}, "success", fmt.Sprintf("Purged Front Door cache for endpoint %s.", endpointName))
+}
+
+func (s *Service) activeAzureFrontDoorSelection(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	profileName string,
+) (models.ProfileSummary, string, string, error) {
+	if !session.IsLocked || session.CurrentProviderID != "azure" {
+		return models.ProfileSummary{}, "", "", errors.New("open an Azure workspace before invoking Front Door actions")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		return models.ProfileSummary{}, "", "", errors.New("the workspace's Azure profile is not available")
+	}
+	profiles := s.azureFrontDoorProfiles(context.Background(), profile, false)
+	targetProfile := strings.TrimSpace(profileName)
+	if targetProfile == "" {
+		targetProfile = session.SelectedAzureFrontDoorProfile
+	}
+	if targetProfile == "" {
+		targetProfile = selectedName("", frontDoorProfileNames(profiles))
+	}
+	if targetProfile == "" {
+		return models.ProfileSummary{}, "", "", errors.New("select a Front Door profile before invoking an action")
+	}
+	resourceGroup := resourceGroupForFrontDoorProfile(profiles, targetProfile)
+	if resourceGroup == "" {
+		return models.ProfileSummary{}, "", "", fmt.Errorf("Front Door profile %s was not found", targetProfile)
+	}
+	return profile, resourceGroup, targetProfile, nil
 }

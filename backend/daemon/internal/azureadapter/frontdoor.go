@@ -170,13 +170,7 @@ func (i *Inventory) ListFrontDoorEndpoints(
 	if err != nil {
 		return nil, err
 	}
-	var decoded []struct {
-		Name       string `json:"name"`
-		Properties struct {
-			HostName     string `json:"hostName"`
-			EnabledState string `json:"enabledState"`
-		} `json:"properties"`
-	}
+	var decoded []frontDoorEndpointJSON
 	if err := json.Unmarshal(payload, &decoded); err != nil {
 		return nil, fmt.Errorf("decode front door endpoints: %w", err)
 	}
@@ -186,8 +180,8 @@ func (i *Inventory) ListFrontDoorEndpoints(
 			Name:          item.Name,
 			ProfileName:   profileName,
 			ResourceGroup: resourceGroup,
-			HostName:      item.Properties.HostName,
-			EnabledState:  item.Properties.EnabledState,
+			HostName:      item.hostName(),
+			EnabledState:  item.enabledState(),
 		})
 	}
 	sort.Slice(endpoints, func(left, right int) bool {
@@ -221,32 +215,18 @@ func (i *Inventory) ListFrontDoorOriginGroups(
 	if err != nil {
 		return nil, err
 	}
-	var decoded []struct {
-		Name       string `json:"name"`
-		Properties struct {
-			HealthProbeSettings struct {
-				ProbePath string `json:"probePath"`
-			} `json:"healthProbeSettings"`
-			LoadBalancingSettings struct {
-				SampleSize int `json:"sampleSize"`
-			} `json:"loadBalancingSettings"`
-		} `json:"properties"`
-	}
+	var decoded []frontDoorOriginGroupJSON
 	if err := json.Unmarshal(payload, &decoded); err != nil {
 		return nil, fmt.Errorf("decode front door origin groups: %w", err)
 	}
 	groups := make([]models.AzureFrontDoorOriginGroup, 0, len(decoded))
 	for _, item := range decoded {
-		loadBalancing := ""
-		if item.Properties.LoadBalancingSettings.SampleSize > 0 {
-			loadBalancing = fmt.Sprintf("sampleSize=%d", item.Properties.LoadBalancingSettings.SampleSize)
-		}
 		groups = append(groups, models.AzureFrontDoorOriginGroup{
 			Name:          item.Name,
 			ProfileName:   profileName,
 			ResourceGroup: resourceGroup,
-			HealthProbe:   strings.TrimSpace(item.Properties.HealthProbeSettings.ProbePath),
-			LoadBalancing: loadBalancing,
+			HealthProbe:   item.healthProbe(),
+			LoadBalancing: item.loadBalancing(),
 		})
 	}
 	sort.Slice(groups, func(left, right int) bool {
@@ -283,15 +263,7 @@ func (i *Inventory) ListFrontDoorOrigins(
 	if err != nil {
 		return nil, err
 	}
-	var decoded []struct {
-		Name       string `json:"name"`
-		Properties struct {
-			HostName     string `json:"hostName"`
-			EnabledState string `json:"enabledState"`
-			Priority     int    `json:"priority"`
-			Weight       int    `json:"weight"`
-		} `json:"properties"`
-	}
+	var decoded []frontDoorOriginJSON
 	if err := json.Unmarshal(payload, &decoded); err != nil {
 		return nil, fmt.Errorf("decode front door origins: %w", err)
 	}
@@ -302,14 +274,147 @@ func (i *Inventory) ListFrontDoorOrigins(
 			OriginGroupName: originGroupName,
 			ProfileName:     profileName,
 			ResourceGroup:   resourceGroup,
-			HostName:        item.Properties.HostName,
-			EnabledState:    item.Properties.EnabledState,
-			Priority:        item.Properties.Priority,
-			Weight:          item.Properties.Weight,
+			HostName:        item.hostName(),
+			EnabledState:    item.enabledState(),
+			Priority:        item.priority(),
+			Weight:          item.weight(),
 		})
 	}
 	sort.Slice(origins, func(left, right int) bool {
 		return strings.ToLower(origins[left].Name) < strings.ToLower(origins[right].Name)
 	})
 	return origins, nil
+}
+
+// PurgeFrontDoorEndpointCache purges cached content for an AFD Standard/Premium endpoint.
+func (i *Inventory) PurgeFrontDoorEndpointCache(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	resourceGroup string,
+	profileName string,
+	endpointName string,
+	contentPaths []string,
+	domains []string,
+) error {
+	if isLocalFlociProfile(profile) {
+		return errFrontDoorLocalUnsupported
+	}
+	resourceGroup = strings.TrimSpace(resourceGroup)
+	profileName = strings.TrimSpace(profileName)
+	endpointName = strings.TrimSpace(endpointName)
+	if resourceGroup == "" || profileName == "" || endpointName == "" {
+		return fmt.Errorf("resource group, profile name, and endpoint name are required")
+	}
+	if len(contentPaths) == 0 {
+		return fmt.Errorf("at least one content path is required")
+	}
+	args := []string{
+		"afd", "endpoint", "purge",
+		"--subscription", profile.ProfileID,
+		"--resource-group", resourceGroup,
+		"--profile-name", profileName,
+		"--endpoint-name", endpointName,
+	}
+	for _, path := range contentPaths {
+		args = append(args, "--content-paths", path)
+	}
+	for _, domain := range domains {
+		args = append(args, "--domains", domain)
+	}
+	args = append(args, "--output", "none", "--only-show-errors")
+	_, err := i.run(ctx, args...)
+	return err
+}
+
+type frontDoorEndpointJSON struct {
+	Name         string `json:"name"`
+	HostName     string `json:"hostName"`
+	EnabledState string `json:"enabledState"`
+	Properties   struct {
+		HostName     string `json:"hostName"`
+		EnabledState string `json:"enabledState"`
+	} `json:"properties"`
+}
+
+func (item frontDoorEndpointJSON) hostName() string {
+	if strings.TrimSpace(item.Properties.HostName) != "" {
+		return strings.TrimSpace(item.Properties.HostName)
+	}
+	return strings.TrimSpace(item.HostName)
+}
+
+func (item frontDoorEndpointJSON) enabledState() string {
+	if strings.TrimSpace(item.Properties.EnabledState) != "" {
+		return strings.TrimSpace(item.Properties.EnabledState)
+	}
+	return strings.TrimSpace(item.EnabledState)
+}
+
+type frontDoorOriginGroupJSON struct {
+	Name       string `json:"name"`
+	Properties struct {
+		HealthProbeSettings struct {
+			ProbePath string `json:"probePath"`
+		} `json:"healthProbeSettings"`
+		LoadBalancingSettings struct {
+			SampleSize int `json:"sampleSize"`
+		} `json:"loadBalancingSettings"`
+	} `json:"properties"`
+}
+
+func (item frontDoorOriginGroupJSON) healthProbe() string {
+	return strings.TrimSpace(item.Properties.HealthProbeSettings.ProbePath)
+}
+
+func (item frontDoorOriginGroupJSON) loadBalancing() string {
+	if item.Properties.LoadBalancingSettings.SampleSize > 0 {
+		return fmt.Sprintf("sampleSize=%d", item.Properties.LoadBalancingSettings.SampleSize)
+	}
+	return ""
+}
+
+type frontDoorOriginJSON struct {
+	Name         string `json:"name"`
+	HostName     string `json:"hostName"`
+	EnabledState string `json:"enabledState"`
+	Priority     int    `json:"priority"`
+	Weight       int    `json:"weight"`
+	Properties   struct {
+		HostName     string `json:"hostName"`
+		EnabledState string `json:"enabledState"`
+		Priority     int    `json:"priority"`
+		Weight       int    `json:"weight"`
+	} `json:"properties"`
+}
+
+func (item frontDoorOriginJSON) hostName() string {
+	if strings.TrimSpace(item.Properties.HostName) != "" {
+		return strings.TrimSpace(item.Properties.HostName)
+	}
+	return strings.TrimSpace(item.HostName)
+}
+
+func (item frontDoorOriginJSON) enabledState() string {
+	if strings.TrimSpace(item.Properties.EnabledState) != "" {
+		return strings.TrimSpace(item.Properties.EnabledState)
+	}
+	return strings.TrimSpace(item.EnabledState)
+}
+
+func (item frontDoorOriginJSON) usesFlatShape() bool {
+	return strings.TrimSpace(item.HostName) != "" && strings.TrimSpace(item.Properties.HostName) == ""
+}
+
+func (item frontDoorOriginJSON) priority() int {
+	if item.usesFlatShape() {
+		return item.Priority
+	}
+	return item.Properties.Priority
+}
+
+func (item frontDoorOriginJSON) weight() int {
+	if item.usesFlatShape() {
+		return item.Weight
+	}
+	return item.Properties.Weight
 }

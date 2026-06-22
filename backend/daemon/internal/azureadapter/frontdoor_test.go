@@ -86,6 +86,51 @@ func TestWafPolicyIdentityFromARMID(t *testing.T) {
 	}
 }
 
+func TestListFrontDoorEndpointsDecodesFlatHostName(t *testing.T) {
+	fake := &fakeCLI{
+		out: []byte(`[
+			{"name":"api","hostName":"api-afd.azureedge.net","enabledState":"Enabled"}
+		]`),
+	}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	endpoints, err := inv.ListFrontDoorEndpoints(context.Background(), cloudAzureProfile(), "rg-net", "afd-prod")
+	if err != nil {
+		t.Fatalf("ListFrontDoorEndpoints: %v", err)
+	}
+	if len(endpoints) != 1 || endpoints[0].HostName != "api-afd.azureedge.net" {
+		t.Fatalf("unexpected endpoints: %+v", endpoints)
+	}
+}
+
+func TestPurgeFrontDoorEndpointCacheBuildsExpectedArgs(t *testing.T) {
+	fake := &fakeCLI{}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	if err := inv.PurgeFrontDoorEndpointCache(
+		context.Background(),
+		cloudAzureProfile(),
+		"rg-net",
+		"afd-prod",
+		"api",
+		[]string{"/*", "/assets/logo.png"},
+		[]string{"api.example.com"},
+	); err != nil {
+		t.Fatalf("PurgeFrontDoorEndpointCache: %v", err)
+	}
+	expectCLIArgsContain(t, fake.args,
+		"afd", "endpoint", "purge",
+		"--resource-group", "rg-net",
+		"--profile-name", "afd-prod",
+		"--endpoint-name", "api",
+		"--content-paths", "/*",
+		"--content-paths", "/assets/logo.png",
+		"--domains", "api.example.com",
+	)
+}
+
 func TestListFrontDoorEndpointsDecodesHostName(t *testing.T) {
 	fake := &fakeCLI{
 		out: []byte(`[

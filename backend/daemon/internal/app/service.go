@@ -261,6 +261,10 @@ func (s *Service) Handle(
 		return s.handleAzureFrontDoorSelectEndpoint(ctx, params, notifier)
 	case "azure.frontDoor.selectOriginGroup":
 		return s.handleAzureFrontDoorSelectOriginGroup(ctx, params, notifier)
+	case "azure.frontDoor.refresh":
+		return s.handleAzureFrontDoorRefresh(ctx, params, notifier)
+	case "azure.frontDoor.purgeCache":
+		return s.handleAzureFrontDoorPurgeCache(ctx, params, notifier)
 	case "azure.functions.selectApp":
 		return s.handleAzureFunctionsSelectApp(ctx, params, notifier)
 	case "azure.functions.selectFunction":

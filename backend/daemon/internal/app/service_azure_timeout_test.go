@@ -292,6 +292,11 @@ func (blockingAzure) ListFrontDoorOrigins(ctx context.Context, _ models.ProfileS
 	return nil, ctx.Err()
 }
 
+func (blockingAzure) PurgeFrontDoorEndpointCache(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ []string, _ []string) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
 func (blockingAzure) ListBastionHosts(ctx context.Context, _ models.ProfileSummary) ([]models.AzureBastionHost, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()

@@ -876,6 +876,7 @@ export default function App() {
   const [azureActionStatus, setAzureActionStatus] = useState("");
   const [azureStorageActionStatus, setAzureStorageActionStatus] = useState("");
   const [azureAppServiceActionStatus, setAzureAppServiceActionStatus] = useState("");
+  const [azureFrontDoorActionStatus, setAzureFrontDoorActionStatus] = useState("");
   const [writeModeDialogOpen, setWriteModeDialogOpen] = useState(false);
   const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<"enable" | "incapable">("enable");
   const [writeModePending, setWriteModePending] = useState(false);
@@ -1125,6 +1126,17 @@ export default function App() {
       window.clearInterval(interval);
     };
   }, [activeWorkspaceTabId]);
+
+  useEffect(() => {
+    if (!session.isLocked || activeWorkspaceTabId !== "azure-front-door") {
+      return;
+    }
+    void mutateWorkspaceSelection("azure.frontDoor.refresh", {}, {
+      panelLoading: true,
+      merge: mergeAzureFrontDoorSelection,
+      errorTitle: "Could not refresh Front Door topology",
+    });
+  }, [activeWorkspaceTabId, session.isLocked, session.selectedProfileId]);
 
   async function mutateSession(
     method: string,
@@ -3170,6 +3182,42 @@ export default function App() {
   ) : session.isLocked && activeWorkspaceTabId === "azure-front-door" ? (
     <AzureFrontDoorView
       workspace={activeWorkspace}
+      inventoryLoading={azureInventoryLoading}
+      actionStatus={azureFrontDoorActionStatus}
+      onRefresh={() => {
+        setAzureFrontDoorActionStatus("Refreshing Front Door topology...");
+        void mutateWorkspaceSelection("azure.frontDoor.refresh", {}, {
+          panelLoading: true,
+          merge: mergeAzureFrontDoorSelection,
+          errorTitle: "Could not refresh Front Door topology",
+        })
+          .then(() => {
+            setAzureFrontDoorActionStatus("");
+          })
+          .catch((error: unknown) => {
+            setAzureFrontDoorActionStatus(error instanceof Error ? error.message : String(error));
+          });
+      }}
+      onPurgeCache={(profile, endpointName, contentPaths, domains) => {
+        setAzureFrontDoorActionStatus(`Purging cache for ${endpointName}...`);
+        void backendRequest<WorkspaceSnapshot>("azure.frontDoor.purgeCache", {
+          profileName: profile,
+          endpointName,
+          contentPaths,
+          domains,
+        })
+          .then((workspaceResult) => {
+            startTransition(() => {
+              setWorkspace((current) => mergeAzureFrontDoorSelection(current, workspaceResult));
+            });
+            setAzureFrontDoorActionStatus(
+              workspaceResult.azureFrontDoorStatusMessage || `Purged cache for ${endpointName}.`,
+            );
+          })
+          .catch((error: unknown) => {
+            setAzureFrontDoorActionStatus(error instanceof Error ? error.message : String(error));
+          });
+      }}
       onSelectProfile={(profile) => {
         void mutateWorkspaceSelection("azure.frontDoor.selectProfile", { profile }, {
           panelLoading: true,
