@@ -326,7 +326,7 @@ func TestAzureInventoryBoundedByTimeout(t *testing.T) {
 	profile := models.ProfileSummary{ProviderID: "azure", ProfileID: "sub-1"}
 
 	start := time.Now()
-	groups := s.azureResourceGroups(context.Background(), profile)
+	groups, _ := s.azureResourceGroups(context.Background(), profile)
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
 		t.Fatalf("azureResourceGroups did not honour the timeout, took %v", elapsed)
 	}

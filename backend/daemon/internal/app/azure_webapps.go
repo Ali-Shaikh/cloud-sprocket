@@ -101,7 +101,8 @@ func (s *Service) activeAzureWebAppSelection(
 	}
 	resourceGroup := session.SelectedAzureResourceGroup
 	if resourceGroup == "" {
-		resourceGroup = s.selectedAzureResourceGroup(session, s.azureResourceGroups(context.Background(), profile))
+		groups, _ := s.azureResourceGroups(context.Background(), profile)
+		resourceGroup = s.selectedAzureResourceGroup(session, groups)
 	}
 	if resourceGroup == "" {
 		return models.ProfileSummary{}, "", models.AzureWebApp{}, errors.New("select a resource group before invoking web app actions")
@@ -546,7 +547,8 @@ func (s *Service) activeAzureVMSelection(
 	}
 	resourceGroup := session.SelectedAzureResourceGroup
 	if resourceGroup == "" {
-		resourceGroup = s.selectedAzureResourceGroup(session, s.azureResourceGroups(context.Background(), profile))
+		groups, _ := s.azureResourceGroups(context.Background(), profile)
+		resourceGroup = s.selectedAzureResourceGroup(session, groups)
 	}
 	if resourceGroup == "" {
 		return models.ProfileSummary{}, "", models.AzureVirtualMachine{}, errors.New("select a resource group before invoking virtual machine actions")
