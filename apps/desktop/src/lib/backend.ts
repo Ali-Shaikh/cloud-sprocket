@@ -2634,7 +2634,7 @@ function handleMockRequest<T>(
         params.enabled ? "Write mode enabled for this workspace session." : "Write mode disabled for this workspace session.",
       );
       emitStateChanged();
-      return Promise.resolve(buildMockWorkspace() as T);
+      return Promise.resolve(mockState.session as T);
     case "session.lock":
       mockState.session.isLocked = true;
       mockState.session.awsWriteModeEnabled = false;

@@ -65,6 +65,16 @@ type SortDirection = "asc" | "desc" | null;
 /** Virtualize only large result sets; small tables stay DOM-simple for tests and detail panels. */
 const VIRTUALIZE_ROW_THRESHOLD = 200;
 
+function columnGridTemplate(columnCount: number): string {
+  return `repeat(${Math.max(columnCount, 1)}, minmax(8rem, 1fr))`;
+}
+
+const virtualCellClass = (wrapCells: boolean) =>
+  cn(
+    "px-3 py-2 align-middle font-mono text-xs",
+    wrapCells ? "whitespace-pre-wrap break-all" : "truncate",
+  );
+
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
 
@@ -589,11 +599,22 @@ function LogQueryResultPanel({
           )}
         >
           {hasRows && shownColumns.length > 0 ? (
-            <Table>
-              <TableHeader className="sticky top-0 z-10 bg-card">
-                <TableRow>
+            shouldVirtualize ? (
+              <div
+                className="min-w-full"
+                style={{ gridTemplateColumns: columnGridTemplate(shownColumns.length) }}
+              >
+                <div
+                  className="sticky top-0 z-10 grid border-b border-border bg-card"
+                  style={{ gridTemplateColumns: columnGridTemplate(shownColumns.length) }}
+                  role="row"
+                >
                   {shownColumns.map((column) => (
-                    <TableHead key={column} className="whitespace-nowrap bg-card">
+                    <div
+                      key={column}
+                      className="h-10 whitespace-nowrap bg-card px-3 text-left align-middle text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                      role="columnheader"
+                    >
                       <button
                         type="button"
                         className="inline-flex items-center font-semibold hover:text-foreground"
@@ -602,76 +623,95 @@ function LogQueryResultPanel({
                         {column}
                         {sortIcon(column, sortColumn, sortDirection)}
                       </button>
-                    </TableHead>
+                    </div>
                   ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody
-                style={
-                  shouldVirtualize
-                    ? {
-                        height: `${rowVirtualizer.getTotalSize()}px`,
-                        position: "relative",
-                      }
-                    : undefined
-                }
-              >
-                {shouldVirtualize
-                  ? rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                      const rowIndex = virtualRow.index;
-                      const row = displayRows[rowIndex];
-                      return (
-                        <TableRow
-                          key={virtualRow.key}
-                          className={cn(
-                            "absolute left-0 w-full cursor-pointer hover:bg-muted/50",
-                            selectedRowIndex === rowIndex && "bg-primary/10 hover:bg-primary/10",
-                          )}
-                          style={{ transform: `translateY(${virtualRow.start}px)` }}
-                          onClick={() => openRow(rowIndex)}
-                          aria-selected={selectedRowIndex === rowIndex}
-                        >
-                          {projectRow(row, columns, shownColumns).map((cell, cellIndex) => (
-                            <TableCell
-                              key={`${rowIndex}-${cellIndex}`}
-                              title={cell}
-                              className={cn(
-                                "max-w-[320px] font-mono text-xs",
-                                wrapCells ? "whitespace-pre-wrap break-all" : "truncate",
-                              )}
-                            >
-                              {cell}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      );
-                    })
-                  : displayRows.map((row, rowIndex) => (
-                      <TableRow
-                        key={rowIndex}
+                </div>
+                <div
+                  role="rowgroup"
+                  style={{
+                    height: `${rowVirtualizer.getTotalSize()}px`,
+                    position: "relative",
+                  }}
+                >
+                  {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                    const rowIndex = virtualRow.index;
+                    const row = displayRows[rowIndex];
+                    return (
+                      <div
+                        key={virtualRow.key}
+                        role="row"
                         className={cn(
-                          "cursor-pointer hover:bg-muted/50",
+                          "absolute left-0 grid w-full cursor-pointer border-b border-border transition-colors hover:bg-muted/50",
                           selectedRowIndex === rowIndex && "bg-primary/10 hover:bg-primary/10",
                         )}
+                        style={{
+                          gridTemplateColumns: columnGridTemplate(shownColumns.length),
+                          transform: `translateY(${virtualRow.start}px)`,
+                        }}
                         onClick={() => openRow(rowIndex)}
                         aria-selected={selectedRowIndex === rowIndex}
                       >
                         {projectRow(row, columns, shownColumns).map((cell, cellIndex) => (
-                          <TableCell
+                          <div
                             key={`${rowIndex}-${cellIndex}`}
+                            role="cell"
                             title={cell}
-                            className={cn(
-                              "max-w-[320px] font-mono text-xs",
-                              wrapCells ? "whitespace-pre-wrap break-all" : "truncate",
-                            )}
+                            className={virtualCellClass(wrapCells)}
                           >
                             {cell}
-                          </TableCell>
+                          </div>
                         ))}
-                      </TableRow>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-card">
+                  <TableRow>
+                    {shownColumns.map((column) => (
+                      <TableHead key={column} className="whitespace-nowrap bg-card">
+                        <button
+                          type="button"
+                          className="inline-flex items-center font-semibold hover:text-foreground"
+                          onClick={() => toggleSort(column)}
+                        >
+                          {column}
+                          {sortIcon(column, sortColumn, sortDirection)}
+                        </button>
+                      </TableHead>
                     ))}
-              </TableBody>
-            </Table>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {displayRows.map((row, rowIndex) => (
+                    <TableRow
+                      key={rowIndex}
+                      className={cn(
+                        "cursor-pointer hover:bg-muted/50",
+                        selectedRowIndex === rowIndex && "bg-primary/10 hover:bg-primary/10",
+                      )}
+                      onClick={() => openRow(rowIndex)}
+                      aria-selected={selectedRowIndex === rowIndex}
+                    >
+                      {projectRow(row, columns, shownColumns).map((cell, cellIndex) => (
+                        <TableCell
+                          key={`${rowIndex}-${cellIndex}`}
+                          title={cell}
+                          className={cn(
+                            "max-w-[320px] font-mono text-xs",
+                            wrapCells ? "whitespace-pre-wrap break-all" : "truncate",
+                          )}
+                        >
+                          {cell}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )
           ) : (
             <EmptyState
               icon={<Table2 />}

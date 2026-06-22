@@ -1887,34 +1887,17 @@ export default function App() {
   function setWriteMode(enabled: boolean): void {
     const token = ++writeModeRequestRef.current;
     setWriteModePending(true);
-    beginWorkspaceFetch();
-    void backendRequest<WorkspaceSnapshot>("session.setWriteMode", { enabled })
-      .then((workspaceResult) => {
+    void backendRequest<SessionSnapshot>("session.setWriteMode", { enabled })
+      .then((sessionResult) => {
         if (token !== writeModeRequestRef.current) {
           return;
         }
-        const normalised = normaliseWorkspaceSnapshot(workspaceResult);
+        const normalisedSession = normaliseSessionSnapshot(sessionResult);
         startTransition(() => {
-          setSession((current) =>
-            normaliseSessionSnapshot({
-              ...current,
-              azureWriteModeEnabled:
-                current.lockedProviderId === "azure"
-                  ? normalised.azureWriteModeEnabled
-                  : current.azureWriteModeEnabled,
-              awsWriteModeEnabled:
-                current.lockedProviderId === "aws"
-                  ? normalised.awsWriteModeEnabled
-                  : current.awsWriteModeEnabled,
-            }),
+          setSession(normalisedSession);
+          setWorkspace((currentWorkspace) =>
+            applySessionWriteModeToWorkspace(currentWorkspace, normalisedSession),
           );
-          setWorkspace((currentWorkspace) => ({
-            ...currentWorkspace,
-            azureWriteModeEnabled: normalised.azureWriteModeEnabled,
-            azureWritesEnabled: normalised.azureWritesEnabled,
-            awsWriteModeEnabled: normalised.awsWriteModeEnabled,
-            awsWritesEnabled: normalised.awsWritesEnabled,
-          }));
         });
         setWriteModeDialogOpen(false);
       })
@@ -1931,7 +1914,6 @@ export default function App() {
       .finally(() => {
         if (token === writeModeRequestRef.current) {
           setWriteModePending(false);
-          endWorkspaceFetch();
         }
       });
   }
@@ -2246,7 +2228,7 @@ export default function App() {
     ]);
     startTransition(() => {
       setWorkspace((current) => normaliseWorkspaceSnapshot({
-        ...normaliseWorkspaceSnapshot(current),
+        ...current,
         dockerRuntime,
         dockerResources,
         dockerDiagnostics: dockerDiagnosticsFromRuntime(dockerRuntime),
@@ -2272,7 +2254,7 @@ export default function App() {
       startTransition(() => {
         setWorkspace((current) => {
           const nextWorkspace = normaliseWorkspaceSnapshot({
-            ...normaliseWorkspaceSnapshot(current),
+            ...current,
             dockerRuntime: runtimeResult.dockerRuntime,
             dockerResources: runtimeResult.dockerResources,
             emulatorSummaries: runtimeResult.emulatorSummaries,

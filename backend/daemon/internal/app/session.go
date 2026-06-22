@@ -400,13 +400,9 @@ func (s *Service) handleSessionSetWriteMode(ctx context.Context, params json.Raw
 			Timestamp: s.timestamp(),
 		})
 	}
-	// Toggling write mode only flips session flags; do not block on full Azure
-	// enrichment (WAF schema, blob drill-down, etc.) while the dialog waits.
-	opts := workspaceSnapshotOptions{lightweightAzure: true}
-	if session.CurrentProviderID == "aws" {
-		opts.lightweightAWS = true
-	}
-	return s.buildWorkspaceSnapshotOpts(snapshot, session, opts), nil
+	// Write mode only flips session flags. Returning the session avoids a full
+	// workspace rebuild and cloud inventory round-trip while the dialog waits.
+	return session, nil
 }
 
 func (s *Service) handleSessionUnlock(ctx context.Context, notifier Notifier) (any, error) {

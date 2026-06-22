@@ -27,7 +27,10 @@ export default defineConfig({
             return undefined;
           }
           if (id.includes("/src/views/workspace/") && !id.includes("lazy-views")) {
-            return "workspace-views";
+            const viewMatch = id.match(/\/views\/workspace\/([^/]+)\.tsx$/);
+            if (viewMatch?.[1]) {
+              return `view-${viewMatch[1].replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase()}`;
+            }
           }
           return undefined;
         },

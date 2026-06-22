@@ -19,6 +19,7 @@
     "test:desktop": "pnpm --dir apps/desktop test",
     "typecheck:desktop": "pnpm --dir apps/desktop exec tsc --noEmit",
     "test:backend": "go -C backend/daemon test ./...",
+    "test:backend:race": "go -C backend/daemon test -race ./internal/app/...",
     "prepare:sidecar": "pnpm --dir apps/desktop build:sidecar"
   }
 }

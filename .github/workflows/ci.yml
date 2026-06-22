@@ -107,6 +107,10 @@ jobs:
       - name: Run backend tests
         run: pnpm run test:backend
 
+      - name: Run backend race tests
+        if: runner.os == 'Linux'
+        run: pnpm run test:backend:race
+
       - name: Build desktop verification binary
         if: github.event_name != 'push' || github.ref_type != 'tag'
         run: pnpm run build:desktop:exe

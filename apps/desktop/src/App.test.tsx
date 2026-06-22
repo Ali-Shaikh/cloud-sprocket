@@ -562,12 +562,16 @@ vi.mock("./lib/backend", () => ({
           payload: JSON.stringify({ echoed: params?.payload ?? {} }),
         };
       case "session.setWriteMode":
-        workspaceFixture = {
-          ...workspaceFixture,
-          awsWriteModeEnabled: Boolean(params?.enabled),
-          awsWritesEnabled: Boolean(params?.enabled) && workspaceFixture.awsWriteCapable,
+        sessionFixture = {
+          ...sessionFixture,
+          awsWriteModeEnabled:
+            sessionFixture.lockedProviderId === "aws" ? Boolean(params?.enabled) : sessionFixture.awsWriteModeEnabled,
+          azureWriteModeEnabled:
+            sessionFixture.lockedProviderId === "azure"
+              ? Boolean(params?.enabled)
+              : sessionFixture.azureWriteModeEnabled,
         };
-        return workspaceFixture;
+        return sessionFixture;
       case "azure.waf.selectPolicy": {
         const policyName = String(params?.policyName ?? "");
         workspaceFixture = {

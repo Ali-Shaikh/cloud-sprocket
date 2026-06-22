@@ -19,12 +19,24 @@ import (
 
 type countingAzureInventory struct {
 	stubAzureInventory
-	detectSchemaCalls atomic.Int32
-	getPolicyCalls    atomic.Int32
-	listBlobsCalls    atomic.Int32
-	listVMCalls       atomic.Int32
-	lastVMResourceGroup string
-	peekQueueCalls    atomic.Int32
+	detectSchemaCalls       atomic.Int32
+	getPolicyCalls          atomic.Int32
+	listBlobsCalls          atomic.Int32
+	listVMCalls             atomic.Int32
+	listResourceGroupsCalls atomic.Int32
+	listStorageAccountsCalls atomic.Int32
+	lastVMResourceGroup     string
+	peekQueueCalls          atomic.Int32
+}
+
+func (c *countingAzureInventory) ListResourceGroups(ctx context.Context, profile models.ProfileSummary) ([]models.AzureResourceGroup, error) {
+	c.listResourceGroupsCalls.Add(1)
+	return c.stubAzureInventory.ListResourceGroups(ctx, profile)
+}
+
+func (c *countingAzureInventory) ListStorageAccounts(ctx context.Context, profile models.ProfileSummary) ([]models.AzureStorageAccount, error) {
+	c.listStorageAccountsCalls.Add(1)
+	return c.stubAzureInventory.ListStorageAccounts(ctx, profile)
 }
 
 func (c *countingAzureInventory) ListVirtualMachines(_ context.Context, _ models.ProfileSummary, resourceGroup string) ([]models.AzureVirtualMachine, error) {
@@ -307,21 +319,18 @@ func TestSetWriteModeSkipsHeavyAzureDrillDown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("session.setWriteMode: %v", err)
 	}
-	workspace, ok := result.(models.WorkspaceSnapshot)
+	session, ok := result.(models.SessionSnapshot)
 	if !ok {
-		t.Fatalf("expected WorkspaceSnapshot, got %T", result)
+		t.Fatalf("expected SessionSnapshot, got %T", result)
 	}
-	if !workspace.AzureWriteModeEnabled {
+	if !session.AzureWriteModeEnabled {
 		t.Fatal("expected AzureWriteModeEnabled after enabling write mode")
 	}
-	if !workspace.AzureWritesEnabled {
-		t.Fatal("expected AzureWritesEnabled after enabling write mode")
+	if azure.listResourceGroupsCalls.Load() != 0 {
+		t.Fatalf("ListResourceGroups calls = %d, want 0", azure.listResourceGroupsCalls.Load())
 	}
-	if workspace.AzureWafPolicyDetail != nil {
-		t.Fatal("setWriteMode should not load WAF policy detail")
-	}
-	if workspace.AzureWafLogSchema != nil {
-		t.Fatal("setWriteMode should not probe WAF log schema")
+	if azure.listStorageAccountsCalls.Load() != 0 {
+		t.Fatalf("ListStorageAccounts calls = %d, want 0", azure.listStorageAccountsCalls.Load())
 	}
 	if azure.detectSchemaCalls.Load() != 0 {
 		t.Fatalf("DetectWafLogSchema calls = %d, want 0", azure.detectSchemaCalls.Load())
