@@ -75,6 +75,7 @@ import {
 } from "./components/ui/alert-dialog";
 import ConnectView from "./views/ConnectView";
 import OverviewView from "./views/OverviewView";
+import ResourcesView from "./views/ResourcesView";
 import { AzureCLIExtensionsBanner } from "./components/azure-cli-extensions-banner";
 import DeployView from "./views/DeployView";
 import { CommandPalette, type Command } from "./components/command-palette";
@@ -779,7 +780,7 @@ const emptySession: SessionSnapshot = {
 
 // Tabs that do not render provider inventory, so they never show the
 // first-load skeleton (they have their own content regardless of the fetch).
-const NON_INVENTORY_TABS = new Set(["debug", "deploy", "actions", "virtualisation"]);
+const NON_INVENTORY_TABS = new Set(["debug", "deploy", "actions", "resources", "virtualisation"]);
 
 const emptySettings: AppSettingsSnapshot = {
   platformName: "",
@@ -1146,6 +1147,7 @@ export default function App() {
       activeWorkspaceTabId !== "virtualisation" &&
       activeWorkspaceTabId !== "debug" &&
       activeWorkspaceTabId !== "deploy" &&
+      activeWorkspaceTabId !== "resources" &&
       !session.workspaceTabs.some((tab) => tab.tabId === activeWorkspaceTabId)
     ) {
       setActiveWorkspaceTabId(session.workspaceTabs[0].tabId);
@@ -2649,6 +2651,17 @@ export default function App() {
     <DebugView />
   ) : activeWorkspaceTabId === "deploy" ? (
     <DeployView profiles={profiles} />
+  ) : session.isLocked && activeWorkspaceTabId === "resources" ? (
+    <ResourcesView
+      currentScopeId={
+        session.lockedProviderId && session.lockedProfileId
+          ? `${session.lockedProviderId}:${session.lockedProfileId}`
+          : undefined
+      }
+      currentWorkspaceLabel={
+        workspace.profile?.displayName ?? selectedProfile?.displayName ?? "Open workspace"
+      }
+    />
   ) : session.isLocked && activeWorkspaceTabId === "overview" ? (
     <OverviewView
       workspace={activeWorkspace}
@@ -3926,6 +3939,7 @@ export default function App() {
       return item;
     });
     const overviewItems = tabItems.filter((item) => item.id === "overview");
+    overviewItems.push({ id: "resources", label: "Resources", icon: Boxes });
     const serviceItems = tabItems.filter((item) => item.id !== "overview");
     const groups: NavGroup[] = [];
     if (overviewItems.length > 0) {
@@ -4313,6 +4327,7 @@ function authLabel(method?: AuthMethod): string | undefined {
 function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
   const labels: Record<string, string> = {
     overview: "Overview",
+    resources: "Resources",
     virtualisation: "Local Runtime",
     debug: "Debug console",
     s3: "Storage",

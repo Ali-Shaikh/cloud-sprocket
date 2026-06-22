@@ -332,6 +332,54 @@ vi.mock("./lib/backend", () => ({
         };
       case "logs.list":
         return logFixtures;
+      case "inventory.status":
+        return [
+          {
+            runId: "run-1",
+            scopeId: "aws:sandbox",
+            provider: "aws",
+            profileId: "sandbox",
+            startedAt: "2026-06-22T08:00:00Z",
+            completedAt: "2026-06-22T08:00:00Z",
+            status: "completed",
+            resourceCount: 1,
+            edgeCount: 0,
+          },
+        ];
+      case "resources.list":
+        return {
+          resources: [
+            {
+              id: "aws://aws%3Asandbox/us-east-1/ec2/instance/i-123",
+              scopeId: "aws:sandbox",
+              provider: "aws",
+              accountId: "123456789012",
+              region: "us-east-1",
+              service: "ec2",
+              type: "instance",
+              name: "payments-api",
+              status: "running",
+              lastSeenAt: "2026-06-22T08:00:00Z",
+              stale: false,
+              inventoryRunId: "run-1",
+            },
+          ],
+          total: 1,
+          limit: 25,
+          offset: 0,
+        };
+      case "inventory.refresh":
+        return {
+          runId: "run-2",
+          scopeId: "aws:sandbox",
+          provider: "aws",
+          profileId: "sandbox",
+          startedAt: "2026-06-22T09:00:00Z",
+          completedAt: "2026-06-22T09:00:00Z",
+          status: "completed",
+          resourceCount: 1,
+          edgeCount: 0,
+        };
       case "actions.invoke":
         return {
           jobId: "job-1",
@@ -1945,6 +1993,37 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Stop" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Reboot" })).toBeDisabled();
   }, 15000);
+
+  it("opens the global Resources explorer from workspace navigation", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+      ],
+    };
+
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
+
+    const navigation = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
+    fireEvent.click(await navigation.findByRole("button", { name: "Resources" }));
+
+    expect(await screen.findByRole("heading", { name: "Resources" })).toBeInTheDocument();
+    expect(await screen.findByText("payments-api")).toBeInTheDocument();
+    expect(screen.getByText("Search the local resource index across cloud providers and workspaces.")).toBeInTheDocument();
+  });
 
   it("renders the activity tab and refresh action", async () => {
     sessionFixture = {
