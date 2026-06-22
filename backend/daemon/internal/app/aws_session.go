@@ -47,7 +47,20 @@ func (s *Service) finishAWSWorkspace(
 	logMsg string,
 	logOnly bool,
 ) (models.WorkspaceSnapshot, error) {
-	workspace := s.buildWorkspaceSnapshot(snapshot, session)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{}, logLevel, logMsg, logOnly)
+}
+
+func (s *Service) finishAWSWorkspaceOpts(
+	ctx context.Context,
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	notifier Notifier,
+	opts workspaceSnapshotOptions,
+	logLevel string,
+	logMsg string,
+	logOnly bool,
+) (models.WorkspaceSnapshot, error) {
+	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, opts)
 	if logMsg == "" {
 		return workspace, nil
 	}

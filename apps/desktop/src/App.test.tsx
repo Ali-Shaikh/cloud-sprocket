@@ -208,6 +208,13 @@ vi.mock("./lib/backend", () => ({
         };
       case "workspace.get":
         return workspaceFixture;
+      case "runtime.get":
+        return {
+          dockerRuntime: workspaceFixture.dockerRuntime,
+          dockerResources: workspaceFixture.dockerResources,
+          emulatorSummaries: workspaceFixture.emulatorSummaries,
+          dockerDiagnostics: workspaceFixture.dockerDiagnostics,
+        };
       case "docker.runtime.get":
         return workspaceFixture.dockerRuntime;
       case "docker.resources.list":

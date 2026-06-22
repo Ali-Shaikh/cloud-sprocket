@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"cloudsprocket/backend/daemon/internal/discovery"
@@ -48,13 +49,18 @@ func (s *Service) activeEC2Selection(
 func (s *Service) ec2Regions(ctx context.Context, profile models.ProfileSummary) []string {
 	const scope = "aws.ec2.regions"
 	queryHash := profile.ProfileID
+
+	var cached []string
+	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok && len(cached) > 0 {
+		return cached
+	}
+
 	regions, err := s.ec2.ListRegions(ctx, profile)
 	if err == nil && len(regions) > 0 {
-		_ = s.store.SaveResourceCache(ctx, scope, queryHash, regions, s.timestamp())
+		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, regions)
 		return regions
 	}
 
-	var cached []string
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok && len(cached) > 0 {
 		return cached
@@ -101,13 +107,18 @@ func (s *Service) ec2Instances(
 
 	const scope = "aws.ec2.instances"
 	queryHash := profile.ProfileID + "|" + region
+
+	var cached []models.AwsEc2Instance
+	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+		return cached
+	}
+
 	instances, err := s.ec2.ListInstances(ctx, profile, region)
 	if err == nil {
-		_ = s.store.SaveResourceCache(ctx, scope, queryHash, instances, s.timestamp())
+		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, instances)
 		return instances
 	}
 
-	var cached []models.AwsEc2Instance
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
 		return cached
@@ -133,7 +144,12 @@ func (s *Service) selectedEC2InstanceID(
 	return instances[0].InstanceID
 }
 
-func (s *Service) enrichEC2Inventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+func (s *Service) enrichEC2Inventory(
+	workspace *models.WorkspaceSnapshot,
+	session models.SessionSnapshot,
+	opts awsEnrichmentOptions,
+	mu *sync.Mutex,
+) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "aws" ||
 		workspace.Profile == nil ||
@@ -141,24 +157,48 @@ func (s *Service) enrichEC2Inventory(workspace *models.WorkspaceSnapshot, sessio
 		return
 	}
 	timeoutCtx, cancel := s.withAWSTimeout(context.Background())
-	workspace.EC2Regions = s.ec2Regions(timeoutCtx, *workspace.Profile)
+	regions := s.ec2Regions(timeoutCtx, *workspace.Profile)
 	cancel()
-	workspace.SelectedEC2Region = s.selectedEC2Region(session, workspace.EC2Regions, *workspace.Profile)
-	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
-	workspace.EC2Instances = s.ec2Instances(timeoutCtx, *workspace.Profile, workspace.SelectedEC2Region)
-	cancel()
-	workspace.SelectedEC2InstanceID = s.selectedEC2InstanceID(session, workspace.EC2Instances)
-	if workspace.SelectedEC2Region == "" {
-		workspace.EC2StatusMessage = "No EC2 region is available for this AWS workspace."
-	} else if len(workspace.EC2Instances) == 0 {
-		workspace.EC2StatusMessage = fmt.Sprintf("No EC2 instances were returned for %s.", workspace.SelectedEC2Region)
-	} else {
-		workspace.EC2StatusMessage = fmt.Sprintf(
-			"Loaded %d EC2 instances from %s.",
-			len(workspace.EC2Instances),
-			workspace.SelectedEC2Region,
-		)
+	selectedRegion := s.selectedEC2Region(session, regions, *workspace.Profile)
+
+	if opts.lightweight {
+		status := "No EC2 region is available for this AWS workspace."
+		if selectedRegion != "" {
+			status = fmt.Sprintf("Loaded %d region(s). Select %s to browse instances.", len(regions), selectedRegion)
+		} else if len(regions) > 0 {
+			status = fmt.Sprintf("Loaded %d region(s). Select a region to browse instances.", len(regions))
+		}
+		lockWorkspace(mu, func() {
+			workspace.EC2Regions = regions
+			workspace.SelectedEC2Region = selectedRegion
+			workspace.EC2Instances = []models.AwsEc2Instance{}
+			workspace.SelectedEC2InstanceID = ""
+			workspace.EC2StatusMessage = status
+		})
+		return
 	}
+
+	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
+	instances := s.ec2Instances(timeoutCtx, *workspace.Profile, selectedRegion)
+	cancel()
+	selectedInstance := s.selectedEC2InstanceID(session, instances)
+
+	status := "No EC2 region is available for this AWS workspace."
+	if selectedRegion != "" {
+		if len(instances) == 0 {
+			status = fmt.Sprintf("No EC2 instances were returned for %s.", selectedRegion)
+		} else {
+			status = fmt.Sprintf("Loaded %d EC2 instances from %s.", len(instances), selectedRegion)
+		}
+	}
+
+	lockWorkspace(mu, func() {
+		workspace.EC2Regions = regions
+		workspace.SelectedEC2Region = selectedRegion
+		workspace.EC2Instances = instances
+		workspace.SelectedEC2InstanceID = selectedInstance
+		workspace.EC2StatusMessage = status
+	})
 }
 
 // lambdaRegions reuses the EC2 region list for an AWS profile (single source of
@@ -207,6 +247,8 @@ func (s *Service) runEC2Action(
 		})
 		return
 	}
+
+	s.invalidateResourceCache(background, "aws.ec2.instances", profile.ProfileID+"|"+region)
 
 	session.SelectedEC2Region = region
 	session.SelectedEC2InstanceID = instanceID
@@ -308,7 +350,7 @@ func (s *Service) handleAwsEc2SelectRegion(ctx context.Context, params json.RawM
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspace(ctx, snapshot, session, notifier, "info", fmt.Sprintf("Selected EC2 region %s.", request.Region), false)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "ec2", skipAzureInventory: true}, "info", fmt.Sprintf("Selected EC2 region %s.", request.Region), false)
 }
 
 func (s *Service) handleAwsEc2SelectInstance(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -325,7 +367,7 @@ func (s *Service) handleAwsEc2SelectInstance(ctx context.Context, params json.Ra
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspace(ctx, snapshot, session, notifier, "", "", false)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "ec2", skipAzureInventory: true}, "", "", false)
 }
 
 func (s *Service) handleAwsEc2InvokeAction(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

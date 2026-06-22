@@ -1,6 +1,6 @@
 {
   "name": "@cloudsprocket/desktop",
-  "version": "0.8.9",
+  "version": "0.8.10",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "type": "module",
@@ -40,6 +40,7 @@
     "@radix-ui/react-tabs": "^1.1.14",
     "@radix-ui/react-tooltip": "^1.2.9",
     "@tailwindcss/vite": "^4.3.0",
+    "@tanstack/react-virtual": "^3.14.3",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-opener": "^2.5.4",

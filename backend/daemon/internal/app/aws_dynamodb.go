@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
@@ -47,12 +48,17 @@ func (s *Service) dynamodbTables(
 	}
 	const scope = "aws.dynamodb.tables"
 	queryHash := profile.ProfileID + "|" + region
+
+	var cached []models.AwsDynamoDBTable
+	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+		return cached
+	}
+
 	tables, err := s.dynamodb.ListTables(ctx, profile, region)
 	if err == nil {
-		_ = s.store.SaveResourceCache(ctx, scope, queryHash, tables, s.timestamp())
+		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, tables)
 		return tables
 	}
-	var cached []models.AwsDynamoDBTable
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
 		return cached
@@ -77,7 +83,12 @@ func (s *Service) selectedDynamoDBTableName(
 	return tables[0].TableName
 }
 
-func (s *Service) enrichDynamoDBInventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+func (s *Service) enrichDynamoDBInventory(
+	workspace *models.WorkspaceSnapshot,
+	session models.SessionSnapshot,
+	opts awsEnrichmentOptions,
+	mu *sync.Mutex,
+) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "aws" ||
 		workspace.Profile == nil ||
@@ -85,36 +96,60 @@ func (s *Service) enrichDynamoDBInventory(workspace *models.WorkspaceSnapshot, s
 		return
 	}
 	timeoutCtx, cancel := s.withAWSTimeout(context.Background())
-	workspace.DynamoDBRegions = s.dynamodbRegions(timeoutCtx, *workspace.Profile)
+	regions := s.dynamodbRegions(timeoutCtx, *workspace.Profile)
 	cancel()
-	workspace.SelectedDynamoDBRegion = s.selectedDynamoDBRegion(session, workspace.DynamoDBRegions, *workspace.Profile)
-	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
-	workspace.DynamoDBTables = s.dynamodbTables(timeoutCtx, *workspace.Profile, workspace.SelectedDynamoDBRegion)
-	cancel()
-	workspace.SelectedDynamoDBTableName = s.selectedDynamoDBTableName(session, workspace.DynamoDBTables)
-	if workspace.SelectedDynamoDBRegion == "" {
-		workspace.DynamoDBStatusMessage = "No region is available for DynamoDB tables in this AWS workspace."
-	} else if len(workspace.DynamoDBTables) == 0 {
-		workspace.DynamoDBStatusMessage = fmt.Sprintf("No DynamoDB tables were returned for %s.", workspace.SelectedDynamoDBRegion)
-	} else {
-		workspace.DynamoDBStatusMessage = fmt.Sprintf(
-			"Loaded %d DynamoDB tables from %s.",
-			len(workspace.DynamoDBTables),
-			workspace.SelectedDynamoDBRegion,
-		)
+	selectedRegion := s.selectedDynamoDBRegion(session, regions, *workspace.Profile)
+
+	if opts.lightweight {
+		status := "No region is available for DynamoDB tables in this AWS workspace."
+		if selectedRegion != "" {
+			status = fmt.Sprintf("Loaded %d region(s). Select %s to browse tables.", len(regions), selectedRegion)
+		} else if len(regions) > 0 {
+			status = fmt.Sprintf("Loaded %d region(s). Select a region to browse tables.", len(regions))
+		}
+		lockWorkspace(mu, func() {
+			workspace.DynamoDBRegions = regions
+			workspace.SelectedDynamoDBRegion = selectedRegion
+			workspace.DynamoDBTables = []models.AwsDynamoDBTable{}
+			workspace.SelectedDynamoDBTableName = ""
+			workspace.DynamoDBStatusMessage = status
+		})
+		return
 	}
-	if workspace.SelectedDynamoDBTableName != "" && workspace.Profile != nil {
+
+	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
+	tables := s.dynamodbTables(timeoutCtx, *workspace.Profile, selectedRegion)
+	cancel()
+	selectedTable := s.selectedDynamoDBTableName(session, tables)
+	if selectedTable != "" {
 		timeoutCtx, cancel := s.withAWSTimeout(context.Background())
-		if full, err := s.dynamodb.DescribeTable(timeoutCtx, *workspace.Profile, workspace.SelectedDynamoDBRegion, workspace.SelectedDynamoDBTableName); err == nil {
-			for i := range workspace.DynamoDBTables {
-				if workspace.DynamoDBTables[i].TableName == full.TableName {
-					workspace.DynamoDBTables[i] = full
+		if full, err := s.dynamodb.DescribeTable(timeoutCtx, *workspace.Profile, selectedRegion, selectedTable); err == nil {
+			for i := range tables {
+				if tables[i].TableName == full.TableName {
+					tables[i] = full
 					break
 				}
 			}
 		}
 		cancel()
 	}
+
+	status := "No region is available for DynamoDB tables in this AWS workspace."
+	if selectedRegion != "" {
+		if len(tables) == 0 {
+			status = fmt.Sprintf("No DynamoDB tables were returned for %s.", selectedRegion)
+		} else {
+			status = fmt.Sprintf("Loaded %d DynamoDB tables from %s.", len(tables), selectedRegion)
+		}
+	}
+
+	lockWorkspace(mu, func() {
+		workspace.DynamoDBRegions = regions
+		workspace.SelectedDynamoDBRegion = selectedRegion
+		workspace.DynamoDBTables = tables
+		workspace.SelectedDynamoDBTableName = selectedTable
+		workspace.DynamoDBStatusMessage = status
+	})
 }
 
 func (s *Service) handleAwsDynamodbSelectRegion(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -132,7 +167,7 @@ func (s *Service) handleAwsDynamodbSelectRegion(ctx context.Context, params json
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspace(ctx, snapshot, session, notifier, "info", fmt.Sprintf("Selected DynamoDB region %s.", request.Region), true)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "dynamodb", skipAzureInventory: true}, "info", fmt.Sprintf("Selected DynamoDB region %s.", request.Region), true)
 }
 
 func (s *Service) handleAwsDynamodbSelectTable(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -149,5 +184,5 @@ func (s *Service) handleAwsDynamodbSelectTable(ctx context.Context, params json.
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspace(ctx, snapshot, session, notifier, "", "", false)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "dynamodb", skipAzureInventory: true}, "", "", false)
 }

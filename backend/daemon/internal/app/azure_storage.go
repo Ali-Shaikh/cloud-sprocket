@@ -72,12 +72,16 @@ func (s *Service) azureStorageAccounts(
 ) []models.AzureStorageAccount {
 	const scope = "azure.storage.accounts"
 	queryHash := profile.ProfileID
+	var cached []models.AzureStorageAccount
+	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+		return cached
+	}
+
 	accounts, err := s.azure.ListStorageAccounts(ctx, profile)
 	if err == nil {
-		_ = s.store.SaveResourceCache(ctx, scope, queryHash, accounts, s.timestamp())
+		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, accounts)
 		return accounts
 	}
-	var cached []models.AzureStorageAccount
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
 		return cached
@@ -95,12 +99,16 @@ func (s *Service) azureBlobContainers(
 	}
 	const scope = "azure.storage.containers"
 	queryHash := profile.ProfileID + "|" + accountName
+	var cached []models.AzureBlobContainer
+	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+		return cached
+	}
+
 	containers, err := s.azure.ListBlobContainers(ctx, profile, accountName)
 	if err == nil {
-		_ = s.store.SaveResourceCache(ctx, scope, queryHash, containers, s.timestamp())
+		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, containers)
 		return containers
 	}
-	var cached []models.AzureBlobContainer
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
 		return cached
@@ -120,12 +128,16 @@ func (s *Service) azureBlobs(
 	}
 	const scope = "azure.storage.blobs"
 	queryHash := profile.ProfileID + "|" + accountName + "|" + containerName + "|" + prefix
+	var cached []models.AzureBlob
+	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+		return cached
+	}
+
 	blobs, err := s.azure.ListBlobs(ctx, profile, accountName, containerName, prefix)
 	if err == nil {
-		_ = s.store.SaveResourceCache(ctx, scope, queryHash, blobs, s.timestamp())
+		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, blobs)
 		return blobs
 	}
-	var cached []models.AzureBlob
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
 		return cached
@@ -396,6 +408,7 @@ func (s *Service) handleAzureStorageCreateAccount(ctx context.Context, params js
 	if err != nil {
 		return nil, err
 	}
+	s.invalidateResourceCache(ctx, "azure.storage.accounts", profile.ProfileID)
 	s.mu.Lock()
 	session, err = s.currentState(ctx, snapshot)
 	if err != nil {
@@ -450,6 +463,7 @@ func (s *Service) handleAzureStorageCreateContainer(ctx context.Context, params 
 	if err := s.azure.CreateBlobContainer(timeoutCtx, profile, accountName, containerName); err != nil {
 		return nil, err
 	}
+	s.invalidateResourceCache(ctx, "azure.storage.containers", profile.ProfileID+"|"+accountName)
 	s.mu.Lock()
 	session, err = s.currentState(ctx, snapshot)
 	if err != nil {
@@ -506,6 +520,7 @@ func (s *Service) handleAzureStorageUploadBlob(ctx context.Context, params json.
 	if err != nil {
 		return nil, err
 	}
+	s.invalidateResourceCache(ctx, "azure.storage.blobs", profile.ProfileID+"|"+accountName+"|"+containerName+"|"+prefix)
 	s.mu.Lock()
 	session, err = s.currentState(ctx, snapshot)
 	if err != nil {
@@ -575,6 +590,7 @@ func (s *Service) handleAzureStorageDeleteBlob(ctx context.Context, params json.
 	if err := s.azure.DeleteBlob(timeoutCtx, profile, accountName, containerName, blobName); err != nil {
 		return nil, err
 	}
+	s.invalidateResourceCacheScope(ctx, "azure.storage.blobs")
 	s.mu.Lock()
 	session, err = s.currentState(ctx, snapshot)
 	if err != nil {

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowDown,
   ArrowUp,
@@ -60,6 +61,9 @@ export type LogQueryResultPanelProps = {
 };
 
 type SortDirection = "asc" | "desc" | null;
+
+/** Virtualize only large result sets; small tables stay DOM-simple for tests and detail panels. */
+const VIRTUALIZE_ROW_THRESHOLD = 200;
 
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
@@ -416,6 +420,15 @@ function LogQueryResultPanel({
     [columns, rows, sortColumn, sortDirection],
   );
 
+  const shouldVirtualize = displayRows.length > VIRTUALIZE_ROW_THRESHOLD;
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: shouldVirtualize ? displayRows.length : 0,
+    getScrollElement: () => tableScrollRef.current,
+    estimateSize: () => 40,
+    overscan: 10,
+  });
+
   const selectedRow = useMemo(() => {
     if (selectedRowIndex == null || selectedRowIndex < 0 || selectedRowIndex >= displayRows.length) {
       return null;
@@ -569,6 +582,7 @@ function LogQueryResultPanel({
 
       <div className="overflow-hidden rounded-lg border border-border">
         <div
+          ref={tableScrollRef}
           className={cn(
             "overflow-auto",
             detailOpen ? "max-h-[min(45vh,420px)]" : "max-h-[min(70vh,640px)]",
@@ -592,31 +606,70 @@ function LogQueryResultPanel({
                   ))}
                 </TableRow>
               </TableHeader>
-              <TableBody>
-                {displayRows.map((row, rowIndex) => (
-                  <TableRow
-                    key={rowIndex}
-                    className={cn(
-                      "cursor-pointer hover:bg-muted/50",
-                      selectedRowIndex === rowIndex && "bg-primary/10 hover:bg-primary/10",
-                    )}
-                    onClick={() => openRow(rowIndex)}
-                    aria-selected={selectedRowIndex === rowIndex}
-                  >
-                    {projectRow(row, columns, shownColumns).map((cell, cellIndex) => (
-                      <TableCell
-                        key={`${rowIndex}-${cellIndex}`}
-                        title={cell}
+              <TableBody
+                style={
+                  shouldVirtualize
+                    ? {
+                        height: `${rowVirtualizer.getTotalSize()}px`,
+                        position: "relative",
+                      }
+                    : undefined
+                }
+              >
+                {shouldVirtualize
+                  ? rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                      const rowIndex = virtualRow.index;
+                      const row = displayRows[rowIndex];
+                      return (
+                        <TableRow
+                          key={virtualRow.key}
+                          className={cn(
+                            "absolute left-0 w-full cursor-pointer hover:bg-muted/50",
+                            selectedRowIndex === rowIndex && "bg-primary/10 hover:bg-primary/10",
+                          )}
+                          style={{ transform: `translateY(${virtualRow.start}px)` }}
+                          onClick={() => openRow(rowIndex)}
+                          aria-selected={selectedRowIndex === rowIndex}
+                        >
+                          {projectRow(row, columns, shownColumns).map((cell, cellIndex) => (
+                            <TableCell
+                              key={`${rowIndex}-${cellIndex}`}
+                              title={cell}
+                              className={cn(
+                                "max-w-[320px] font-mono text-xs",
+                                wrapCells ? "whitespace-pre-wrap break-all" : "truncate",
+                              )}
+                            >
+                              {cell}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      );
+                    })
+                  : displayRows.map((row, rowIndex) => (
+                      <TableRow
+                        key={rowIndex}
                         className={cn(
-                          "max-w-[320px] font-mono text-xs",
-                          wrapCells ? "whitespace-pre-wrap break-all" : "truncate",
+                          "cursor-pointer hover:bg-muted/50",
+                          selectedRowIndex === rowIndex && "bg-primary/10 hover:bg-primary/10",
                         )}
+                        onClick={() => openRow(rowIndex)}
+                        aria-selected={selectedRowIndex === rowIndex}
                       >
-                        {cell}
-                      </TableCell>
+                        {projectRow(row, columns, shownColumns).map((cell, cellIndex) => (
+                          <TableCell
+                            key={`${rowIndex}-${cellIndex}`}
+                            title={cell}
+                            className={cn(
+                              "max-w-[320px] font-mono text-xs",
+                              wrapCells ? "whitespace-pre-wrap break-all" : "truncate",
+                            )}
+                          >
+                            {cell}
+                          </TableCell>
+                        ))}
+                      </TableRow>
                     ))}
-                  </TableRow>
-                ))}
               </TableBody>
             </Table>
           ) : (

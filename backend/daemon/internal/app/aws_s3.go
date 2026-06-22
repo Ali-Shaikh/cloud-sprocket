@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
@@ -81,10 +82,21 @@ func (s *Service) s3Buckets(
 	const scope = "aws.s3.buckets"
 
 	queryHash := profile.ProfileID
+
+	var cached []models.AwsS3Bucket
+	if fetchedAt, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+		for index := range cached {
+			if cached[index].Summary == "" {
+				cached[index].Summary = "Cached " + fetchedAt
+			}
+		}
+		return cached
+	}
+
 	buckets, err := s.s3.ListBuckets(ctx, profile)
 	if err == nil {
 		fetchedAt := s.timestamp()
-		if saveErr := s.store.SaveResourceCache(ctx, scope, queryHash, buckets, fetchedAt); saveErr == nil {
+		if saveErr := s.saveResourceCacheWithTTL(ctx, scope, queryHash, buckets); saveErr == nil {
 			for index := range buckets {
 				if buckets[index].Summary == "" {
 					buckets[index].Summary = "Fetched " + fetchedAt
@@ -94,7 +106,6 @@ func (s *Service) s3Buckets(
 		return buckets
 	}
 
-	var cached []models.AwsS3Bucket
 	fetchedAt, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
 		for index := range cached {
@@ -120,13 +131,18 @@ func (s *Service) s3Objects(
 
 	const scope = "aws.s3.objects"
 	queryHash := profile.ProfileID + "|" + bucketName + "|" + prefix
+
+	var cached []models.AwsS3Object
+	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+		return cached
+	}
+
 	objects, err := s.s3.ListObjects(ctx, profile, bucketName, prefix)
 	if err == nil {
-		_ = s.store.SaveResourceCache(ctx, scope, queryHash, objects, s.timestamp())
+		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, objects)
 		return objects
 	}
 
-	var cached []models.AwsS3Object
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
 		return cached
@@ -147,13 +163,18 @@ func (s *Service) s3ObjectMetadata(
 
 	const scope = "aws.s3.object-metadata"
 	queryHash := profile.ProfileID + "|" + bucketName + "|" + objectKey
+
+	var cached []models.DetailField
+	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+		return cached
+	}
+
 	fields, err := s.s3.HeadObject(ctx, profile, bucketName, objectKey)
 	if err == nil {
-		_ = s.store.SaveResourceCache(ctx, scope, queryHash, fields, s.timestamp())
+		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, fields)
 		return fields
 	}
 
-	var cached []models.DetailField
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
 		return cached
@@ -183,7 +204,12 @@ func (s *Service) s3ExportSnippets(bucketName string, objectKey string) []models
 	}
 }
 
-func (s *Service) enrichS3Inventory(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot) {
+func (s *Service) enrichS3Inventory(
+	workspace *models.WorkspaceSnapshot,
+	session models.SessionSnapshot,
+	opts awsEnrichmentOptions,
+	mu *sync.Mutex,
+) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "aws" ||
 		workspace.Profile == nil ||
@@ -191,49 +217,77 @@ func (s *Service) enrichS3Inventory(workspace *models.WorkspaceSnapshot, session
 		return
 	}
 	timeoutCtx, cancel := s.withAWSTimeout(context.Background())
-	workspace.S3Buckets = s.s3Buckets(timeoutCtx, *workspace.Profile)
+	buckets := s.s3Buckets(timeoutCtx, *workspace.Profile)
 	cancel()
-	workspace.SelectedS3BucketName = s.selectedS3BucketName(session, workspace.S3Buckets)
+	selectedBucket := s.selectedS3BucketName(session, buckets)
+
+	if opts.lightweight {
+		status := "No buckets are currently available for this AWS workspace."
+		if len(buckets) > 0 {
+			if selectedBucket == "" {
+				status = fmt.Sprintf("Loaded %d bucket(s). Select one to browse objects.", len(buckets))
+			} else {
+				status = fmt.Sprintf("Loaded %d bucket(s). Select %s to browse objects.", len(buckets), selectedBucket)
+			}
+		}
+		lockWorkspace(mu, func() {
+			workspace.S3Buckets = buckets
+			workspace.SelectedS3BucketName = selectedBucket
+			workspace.S3PrefixFilter = session.S3PrefixFilter
+			workspace.S3Objects = []models.AwsS3Object{}
+			workspace.SelectedS3ObjectKey = ""
+			workspace.S3ObjectMetadata = nil
+			workspace.S3ExportSnippets = nil
+			workspace.S3StatusMessage = status
+		})
+		return
+	}
+
 	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
-	workspace.S3Objects = s.s3Objects(
+	objects := s.s3Objects(
 		timeoutCtx,
 		*workspace.Profile,
-		workspace.SelectedS3BucketName,
+		selectedBucket,
 		session.S3PrefixFilter,
 	)
 	cancel()
-	workspace.SelectedS3ObjectKey = s.selectedS3ObjectKey(session, workspace.S3Objects)
+	selectedObject := s.selectedS3ObjectKey(session, objects)
 	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
-	workspace.S3ObjectMetadata = s.s3ObjectMetadata(
+	metadata := s.s3ObjectMetadata(
 		timeoutCtx,
 		*workspace.Profile,
-		workspace.SelectedS3BucketName,
-		workspace.SelectedS3ObjectKey,
+		selectedBucket,
+		selectedObject,
 	)
 	cancel()
-	workspace.S3ExportSnippets = s.s3ExportSnippets(
-		workspace.SelectedS3BucketName,
-		workspace.SelectedS3ObjectKey,
-	)
-	if workspace.SelectedS3BucketName == "" {
-		workspace.S3StatusMessage = "No buckets are currently available for this AWS workspace."
-	} else if len(workspace.S3Objects) == 0 {
-		if session.S3PrefixFilter != "" {
-			workspace.S3StatusMessage = fmt.Sprintf(
-				"No objects matched prefix %q in %s.",
-				session.S3PrefixFilter,
-				workspace.SelectedS3BucketName,
-			)
+	snippets := s.s3ExportSnippets(selectedBucket, selectedObject)
+
+	status := "No buckets are currently available for this AWS workspace."
+	if selectedBucket != "" {
+		if len(objects) == 0 {
+			if session.S3PrefixFilter != "" {
+				status = fmt.Sprintf(
+					"No objects matched prefix %q in %s.",
+					session.S3PrefixFilter,
+					selectedBucket,
+				)
+			} else {
+				status = fmt.Sprintf("No objects were returned for %s.", selectedBucket)
+			}
 		} else {
-			workspace.S3StatusMessage = fmt.Sprintf("No objects were returned for %s.", workspace.SelectedS3BucketName)
+			status = fmt.Sprintf("Loaded %d objects from %s.", len(objects), selectedBucket)
 		}
-	} else {
-		workspace.S3StatusMessage = fmt.Sprintf(
-			"Loaded %d objects from %s.",
-			len(workspace.S3Objects),
-			workspace.SelectedS3BucketName,
-		)
 	}
+
+	lockWorkspace(mu, func() {
+		workspace.S3Buckets = buckets
+		workspace.SelectedS3BucketName = selectedBucket
+		workspace.S3Objects = objects
+		workspace.SelectedS3ObjectKey = selectedObject
+		workspace.S3ObjectMetadata = metadata
+		workspace.S3ExportSnippets = snippets
+		workspace.S3StatusMessage = status
+	})
 }
 
 func (s *Service) handleAwsS3SelectBucket(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -251,7 +305,7 @@ func (s *Service) handleAwsS3SelectBucket(ctx context.Context, params json.RawMe
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspace(ctx, snapshot, session, notifier, "info", fmt.Sprintf("Selected S3 bucket %s.", request.BucketName), false)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "s3", skipAzureInventory: true}, "info", fmt.Sprintf("Selected S3 bucket %s.", request.BucketName), false)
 }
 
 func (s *Service) handleAwsS3SelectObject(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -271,7 +325,7 @@ func (s *Service) handleAwsS3SelectObject(ctx context.Context, params json.RawMe
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspace(ctx, snapshot, session, notifier, "", "", false)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "s3", skipAzureInventory: true}, "", "", false)
 }
 
 func (s *Service) handleAwsS3SetPrefixFilter(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -289,7 +343,7 @@ func (s *Service) handleAwsS3SetPrefixFilter(ctx context.Context, params json.Ra
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspace(ctx, snapshot, session, notifier, "info", fmt.Sprintf("Updated S3 prefix filter to %q.", request.Prefix), false)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "s3", skipAzureInventory: true}, "info", fmt.Sprintf("Updated S3 prefix filter to %q.", request.Prefix), false)
 }
 
 func (s *Service) handleAwsS3UploadObject(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

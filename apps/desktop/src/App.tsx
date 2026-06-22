@@ -81,29 +81,31 @@ import { CommandPalette, type Command } from "./components/command-palette";
 import { InventoryLoadingState } from "./components/inventory-loading-state";
 import { WorkspaceSkeleton } from "./components/workspace-skeleton";
 import DebugView from "./views/DebugView";
-import StorageView from "./views/workspace/StorageView";
-import ComputeView from "./views/workspace/ComputeView";
-import DynamoDBView from "./views/workspace/DynamoDBView";
-import SQSView from "./views/workspace/SQSView";
-import SNSView from "./views/workspace/SNSView";
-import RDSView from "./views/workspace/RDSView";
-import LogsView from "./views/workspace/LogsView";
-import IAMView from "./views/workspace/IAMView";
-import LambdaView from "./views/workspace/LambdaView";
-import AzureView from "./views/workspace/AzureView";
-import AzureStorageView from "./views/workspace/AzureStorageView";
-import AzureAppServiceView from "./views/workspace/AzureAppServiceView";
-import LogAnalyticsView from "./views/workspace/LogAnalyticsView";
-import AzureWafView from "./views/workspace/AzureWafView";
-import AzureFrontDoorView from "./views/workspace/AzureFrontDoorView";
-import AzureFunctionsView from "./views/workspace/AzureFunctionsView";
-import AzureKeyVaultView from "./views/workspace/AzureKeyVaultView";
-import AzureCosmosView from "./views/workspace/AzureCosmosView";
-import AzureQueuesView from "./views/workspace/AzureQueuesView";
-import AzureEntraView from "./views/workspace/AzureEntraView";
-import RuntimeView from "./views/workspace/RuntimeView";
-import PlaceholderView from "./views/workspace/PlaceholderView";
-import ActivityView from "./views/workspace/ActivityView";
+import {
+  ActivityView,
+  AzureAppServiceView,
+  AzureCosmosView,
+  AzureEntraView,
+  AzureFrontDoorView,
+  AzureFunctionsView,
+  AzureKeyVaultView,
+  AzureQueuesView,
+  AzureStorageView,
+  AzureView,
+  AzureWafView,
+  ComputeView,
+  DynamoDBView,
+  IAMView,
+  LambdaView,
+  LogAnalyticsView,
+  LogsView,
+  PlaceholderView,
+  RDSView,
+  RuntimeView,
+  SNSView,
+  SQSView,
+  StorageView,
+} from "./views/workspace/lazy-views";
 import type {
   ActivityLogEntry,
   AppResetResult,
@@ -147,6 +149,7 @@ import type {
   EmulatorActionResult,
   EmulatorLogSnapshot,
   DockerRuntimeSnapshot,
+  RuntimeSnapshot,
   EmulatorSummary,
   JobStatus,
   JobLifecycle,
@@ -2252,8 +2255,8 @@ export default function App() {
   }
 
   async function refreshVirtualisationState(): Promise<WorkspaceSnapshot> {
-    const [workspaceResult, logResult, flociLogResult] = await Promise.all([
-      backendRequest<WorkspaceSnapshot>("workspace.get"),
+    const [runtimeResult, logResult, flociLogResult] = await Promise.all([
+      backendRequest<RuntimeSnapshot>("runtime.get"),
       backendRequest<EmulatorLogSnapshot>("emulators.logs", { emulatorId: "localstack", tail: 200 }).catch((error) => ({
         emulatorId: "localstack",
         lines: [],
@@ -2265,13 +2268,23 @@ export default function App() {
         summary: error instanceof Error ? error.message : "Failed to load floci-az logs.",
       })),
     ]);
-    const normalised = normaliseWorkspaceSnapshot(workspaceResult);
-    startTransition(() => {
-      setWorkspace(normalised);
-      setLocalStackLogs(normaliseEmulatorLogSnapshot(logResult));
-      setFlociAzLogs(normaliseEmulatorLogSnapshot(flociLogResult));
+    return await new Promise<WorkspaceSnapshot>((resolve) => {
+      startTransition(() => {
+        setWorkspace((current) => {
+          const nextWorkspace = normaliseWorkspaceSnapshot({
+            ...normaliseWorkspaceSnapshot(current),
+            dockerRuntime: runtimeResult.dockerRuntime,
+            dockerResources: runtimeResult.dockerResources,
+            emulatorSummaries: runtimeResult.emulatorSummaries,
+            dockerDiagnostics: runtimeResult.dockerDiagnostics,
+          });
+          resolve(nextWorkspace);
+          return nextWorkspace;
+        });
+        setLocalStackLogs(normaliseEmulatorLogSnapshot(logResult));
+        setFlociAzLogs(normaliseEmulatorLogSnapshot(flociLogResult));
+      });
     });
-    return normalised;
   }
 
   async function refreshLocalStackLogs(): Promise<void> {

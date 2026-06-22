@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
@@ -14,6 +15,8 @@ import (
 func (s *Service) enrichSNSInventory(
 	workspace *models.WorkspaceSnapshot,
 	session models.SessionSnapshot,
+	opts awsEnrichmentOptions,
+	mu *sync.Mutex,
 ) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "aws" ||
@@ -22,41 +25,67 @@ func (s *Service) enrichSNSInventory(
 		return
 	}
 	timeoutCtx, cancel := s.withAWSTimeout(context.Background())
-	workspace.SNSRegions = s.snsRegions(timeoutCtx, *workspace.Profile)
+	regions := s.snsRegions(timeoutCtx, *workspace.Profile)
 	cancel()
-	workspace.SelectedSNSRegion = s.selectedSNSRegion(session, workspace.SNSRegions, *workspace.Profile)
-	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
-	workspace.SNSTopics = s.snsTopics(timeoutCtx, *workspace.Profile, workspace.SelectedSNSRegion)
-	cancel()
-	workspace.SelectedSNSTopicArn = s.selectedSNSTopicArn(session, workspace.SNSTopics)
-	if workspace.SelectedSNSRegion == "" {
-		workspace.SNSStatusMessage = "No region is available for SNS topics in this AWS workspace."
-	} else if len(workspace.SNSTopics) == 0 {
-		workspace.SNSStatusMessage = fmt.Sprintf("No SNS topics were returned for %s.", workspace.SelectedSNSRegion)
-	} else {
-		workspace.SNSStatusMessage = fmt.Sprintf(
-			"Loaded %d SNS topics from %s.",
-			len(workspace.SNSTopics),
-			workspace.SelectedSNSRegion,
-		)
+	selectedRegion := s.selectedSNSRegion(session, regions, *workspace.Profile)
+
+	if opts.lightweight {
+		status := "No region is available for SNS topics in this AWS workspace."
+		if selectedRegion != "" {
+			status = fmt.Sprintf("Loaded %d region(s). Select %s to browse topics.", len(regions), selectedRegion)
+		} else if len(regions) > 0 {
+			status = fmt.Sprintf("Loaded %d region(s). Select a region to browse topics.", len(regions))
+		}
+		lockWorkspace(mu, func() {
+			workspace.SNSRegions = regions
+			workspace.SelectedSNSRegion = selectedRegion
+			workspace.SNSTopics = []models.AwsSnsTopic{}
+			workspace.SelectedSNSTopicArn = ""
+			workspace.SNSStatusMessage = status
+		})
+		return
 	}
-	if workspace.SelectedSNSTopicArn != "" {
+
+	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
+	topics := s.snsTopics(timeoutCtx, *workspace.Profile, selectedRegion)
+	cancel()
+	selectedTopic := s.selectedSNSTopicArn(session, topics)
+	if selectedTopic != "" {
 		timeoutCtx, cancel := s.withAWSTimeout(context.Background())
-		if full, err := s.sns.DescribeTopic(timeoutCtx, *workspace.Profile, workspace.SelectedSNSRegion, workspace.SelectedSNSTopicArn); err == nil {
-			for i := range workspace.SNSTopics {
-				if workspace.SNSTopics[i].TopicArn == full.TopicArn {
-					workspace.SNSTopics[i] = full
+		if full, err := s.sns.DescribeTopic(timeoutCtx, *workspace.Profile, selectedRegion, selectedTopic); err == nil {
+			for i := range topics {
+				if topics[i].TopicArn == full.TopicArn {
+					topics[i] = full
 					break
 				}
 			}
 		}
 		cancel()
 	}
+
+	status := "No region is available for SNS topics in this AWS workspace."
+	if selectedRegion != "" {
+		if len(topics) == 0 {
+			status = fmt.Sprintf("No SNS topics were returned for %s.", selectedRegion)
+		} else {
+			status = fmt.Sprintf("Loaded %d SNS topics from %s.", len(topics), selectedRegion)
+		}
+	}
+
+	lockWorkspace(mu, func() {
+		workspace.SNSRegions = regions
+		workspace.SelectedSNSRegion = selectedRegion
+		workspace.SNSTopics = topics
+		workspace.SelectedSNSTopicArn = selectedTopic
+		workspace.SNSStatusMessage = status
+	})
 }
 
 func (s *Service) enrichRDSInventory(
 	workspace *models.WorkspaceSnapshot,
 	session models.SessionSnapshot,
+	opts awsEnrichmentOptions,
+	mu *sync.Mutex,
 ) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "aws" ||
@@ -65,41 +94,67 @@ func (s *Service) enrichRDSInventory(
 		return
 	}
 	timeoutCtx, cancel := s.withAWSTimeout(context.Background())
-	workspace.RDSRegions = s.rdsRegions(timeoutCtx, *workspace.Profile)
+	regions := s.rdsRegions(timeoutCtx, *workspace.Profile)
 	cancel()
-	workspace.SelectedRDSRegion = s.selectedRDSRegion(session, workspace.RDSRegions, *workspace.Profile)
-	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
-	workspace.RDSInstances = s.rdsInstances(timeoutCtx, *workspace.Profile, workspace.SelectedRDSRegion)
-	cancel()
-	workspace.SelectedRDSInstanceID = s.selectedRDSInstanceID(session, workspace.RDSInstances)
-	if workspace.SelectedRDSRegion == "" {
-		workspace.RDSStatusMessage = "No region is available for RDS instances in this AWS workspace."
-	} else if len(workspace.RDSInstances) == 0 {
-		workspace.RDSStatusMessage = fmt.Sprintf("No RDS instances were returned for %s.", workspace.SelectedRDSRegion)
-	} else {
-		workspace.RDSStatusMessage = fmt.Sprintf(
-			"Loaded %d RDS instances from %s.",
-			len(workspace.RDSInstances),
-			workspace.SelectedRDSRegion,
-		)
+	selectedRegion := s.selectedRDSRegion(session, regions, *workspace.Profile)
+
+	if opts.lightweight {
+		status := "No region is available for RDS instances in this AWS workspace."
+		if selectedRegion != "" {
+			status = fmt.Sprintf("Loaded %d region(s). Select %s to browse instances.", len(regions), selectedRegion)
+		} else if len(regions) > 0 {
+			status = fmt.Sprintf("Loaded %d region(s). Select a region to browse instances.", len(regions))
+		}
+		lockWorkspace(mu, func() {
+			workspace.RDSRegions = regions
+			workspace.SelectedRDSRegion = selectedRegion
+			workspace.RDSInstances = []models.AwsRdsInstance{}
+			workspace.SelectedRDSInstanceID = ""
+			workspace.RDSStatusMessage = status
+		})
+		return
 	}
-	if workspace.SelectedRDSInstanceID != "" {
+
+	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
+	instances := s.rdsInstances(timeoutCtx, *workspace.Profile, selectedRegion)
+	cancel()
+	selectedInstance := s.selectedRDSInstanceID(session, instances)
+	if selectedInstance != "" {
 		timeoutCtx, cancel := s.withAWSTimeout(context.Background())
-		if full, err := s.rds.DescribeInstance(timeoutCtx, *workspace.Profile, workspace.SelectedRDSRegion, workspace.SelectedRDSInstanceID); err == nil {
-			for i := range workspace.RDSInstances {
-				if workspace.RDSInstances[i].DBInstanceIdentifier == full.DBInstanceIdentifier {
-					workspace.RDSInstances[i] = full
+		if full, err := s.rds.DescribeInstance(timeoutCtx, *workspace.Profile, selectedRegion, selectedInstance); err == nil {
+			for i := range instances {
+				if instances[i].DBInstanceIdentifier == full.DBInstanceIdentifier {
+					instances[i] = full
 					break
 				}
 			}
 		}
 		cancel()
 	}
+
+	status := "No region is available for RDS instances in this AWS workspace."
+	if selectedRegion != "" {
+		if len(instances) == 0 {
+			status = fmt.Sprintf("No RDS instances were returned for %s.", selectedRegion)
+		} else {
+			status = fmt.Sprintf("Loaded %d RDS instances from %s.", len(instances), selectedRegion)
+		}
+	}
+
+	lockWorkspace(mu, func() {
+		workspace.RDSRegions = regions
+		workspace.SelectedRDSRegion = selectedRegion
+		workspace.RDSInstances = instances
+		workspace.SelectedRDSInstanceID = selectedInstance
+		workspace.RDSStatusMessage = status
+	})
 }
 
 func (s *Service) enrichLogsInventory(
 	workspace *models.WorkspaceSnapshot,
 	session models.SessionSnapshot,
+	opts awsEnrichmentOptions,
+	mu *sync.Mutex,
 ) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "aws" ||
@@ -108,41 +163,67 @@ func (s *Service) enrichLogsInventory(
 		return
 	}
 	timeoutCtx, cancel := s.withAWSTimeout(context.Background())
-	workspace.LogsRegions = s.logsRegions(timeoutCtx, *workspace.Profile)
+	regions := s.logsRegions(timeoutCtx, *workspace.Profile)
 	cancel()
-	workspace.SelectedLogsRegion = s.selectedLogsRegion(session, workspace.LogsRegions, *workspace.Profile)
-	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
-	workspace.LogGroups = s.logGroups(timeoutCtx, *workspace.Profile, workspace.SelectedLogsRegion)
-	cancel()
-	workspace.SelectedLogGroupName = s.selectedLogGroupName(session, workspace.LogGroups)
-	if workspace.SelectedLogsRegion == "" {
-		workspace.LogsStatusMessage = "No region is available for CloudWatch Logs in this AWS workspace."
-	} else if len(workspace.LogGroups) == 0 {
-		workspace.LogsStatusMessage = fmt.Sprintf("No log groups were returned for %s.", workspace.SelectedLogsRegion)
-	} else {
-		workspace.LogsStatusMessage = fmt.Sprintf(
-			"Loaded %d log groups from %s.",
-			len(workspace.LogGroups),
-			workspace.SelectedLogsRegion,
-		)
+	selectedRegion := s.selectedLogsRegion(session, regions, *workspace.Profile)
+
+	if opts.lightweight {
+		status := "No region is available for CloudWatch Logs in this AWS workspace."
+		if selectedRegion != "" {
+			status = fmt.Sprintf("Loaded %d region(s). Select %s to browse log groups.", len(regions), selectedRegion)
+		} else if len(regions) > 0 {
+			status = fmt.Sprintf("Loaded %d region(s). Select a region to browse log groups.", len(regions))
+		}
+		lockWorkspace(mu, func() {
+			workspace.LogsRegions = regions
+			workspace.SelectedLogsRegion = selectedRegion
+			workspace.LogGroups = []models.AwsLogGroup{}
+			workspace.SelectedLogGroupName = ""
+			workspace.LogsStatusMessage = status
+		})
+		return
 	}
-	if workspace.SelectedLogGroupName != "" {
+
+	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
+	groups := s.logGroups(timeoutCtx, *workspace.Profile, selectedRegion)
+	cancel()
+	selectedGroup := s.selectedLogGroupName(session, groups)
+	if selectedGroup != "" {
 		timeoutCtx, cancel := s.withAWSTimeout(context.Background())
-		if full, err := s.logs.DescribeLogGroup(timeoutCtx, *workspace.Profile, workspace.SelectedLogsRegion, workspace.SelectedLogGroupName); err == nil {
-			for i := range workspace.LogGroups {
-				if workspace.LogGroups[i].LogGroupName == full.LogGroupName {
-					workspace.LogGroups[i] = full
+		if full, err := s.logs.DescribeLogGroup(timeoutCtx, *workspace.Profile, selectedRegion, selectedGroup); err == nil {
+			for i := range groups {
+				if groups[i].LogGroupName == full.LogGroupName {
+					groups[i] = full
 					break
 				}
 			}
 		}
 		cancel()
 	}
+
+	status := "No region is available for CloudWatch Logs in this AWS workspace."
+	if selectedRegion != "" {
+		if len(groups) == 0 {
+			status = fmt.Sprintf("No log groups were returned for %s.", selectedRegion)
+		} else {
+			status = fmt.Sprintf("Loaded %d log groups from %s.", len(groups), selectedRegion)
+		}
+	}
+
+	lockWorkspace(mu, func() {
+		workspace.LogsRegions = regions
+		workspace.SelectedLogsRegion = selectedRegion
+		workspace.LogGroups = groups
+		workspace.SelectedLogGroupName = selectedGroup
+		workspace.LogsStatusMessage = status
+	})
 }
 
 func (s *Service) enrichIAMInventory(
 	workspace *models.WorkspaceSnapshot,
 	session models.SessionSnapshot,
+	opts awsEnrichmentOptions,
+	mu *sync.Mutex,
 ) {
 	if workspace.Provider == nil ||
 		workspace.Provider.ProviderID != "aws" ||
@@ -151,32 +232,50 @@ func (s *Service) enrichIAMInventory(
 		return
 	}
 	region := s.selectedIAMRegion(session, *workspace.Profile)
-	timeoutCtx, cancel := s.withAWSTimeout(context.Background())
-	workspace.IAMRoles = s.iamRoles(timeoutCtx, *workspace.Profile, region)
-	workspace.IAMPolicies = s.iamPolicies(timeoutCtx, *workspace.Profile, region)
-	cancel()
-	workspace.SelectedIAMRoleName = s.selectedIAMRoleName(session, workspace.IAMRoles)
-	if len(workspace.IAMRoles) == 0 && len(workspace.IAMPolicies) == 0 {
-		workspace.IAMStatusMessage = "No IAM roles or customer-managed policies were returned for this AWS workspace."
-	} else {
-		workspace.IAMStatusMessage = fmt.Sprintf(
-			"Loaded %d IAM roles and %d customer-managed policies.",
-			len(workspace.IAMRoles),
-			len(workspace.IAMPolicies),
-		)
+
+	if opts.lightweight {
+		lockWorkspace(mu, func() {
+			workspace.IAMRoles = []models.AwsIamRole{}
+			workspace.IAMPolicies = []models.AwsIamPolicy{}
+			workspace.SelectedIAMRoleName = ""
+			workspace.IAMStatusMessage = "Select an IAM role to load roles and policies."
+		})
+		return
 	}
-	if workspace.SelectedIAMRoleName != "" {
+
+	timeoutCtx, cancel := s.withAWSTimeout(context.Background())
+	roles := s.iamRoles(timeoutCtx, *workspace.Profile, region)
+	policies := s.iamPolicies(timeoutCtx, *workspace.Profile, region)
+	cancel()
+	selectedRole := s.selectedIAMRoleName(session, roles)
+	if selectedRole != "" {
 		timeoutCtx, cancel := s.withAWSTimeout(context.Background())
-		if full, err := s.iam.DescribeRole(timeoutCtx, *workspace.Profile, region, workspace.SelectedIAMRoleName); err == nil {
-			for i := range workspace.IAMRoles {
-				if workspace.IAMRoles[i].RoleName == full.RoleName {
-					workspace.IAMRoles[i] = full
+		if full, err := s.iam.DescribeRole(timeoutCtx, *workspace.Profile, region, selectedRole); err == nil {
+			for i := range roles {
+				if roles[i].RoleName == full.RoleName {
+					roles[i] = full
 					break
 				}
 			}
 		}
 		cancel()
 	}
+
+	status := "No IAM roles or customer-managed policies were returned for this AWS workspace."
+	if len(roles) > 0 || len(policies) > 0 {
+		status = fmt.Sprintf(
+			"Loaded %d IAM roles and %d customer-managed policies.",
+			len(roles),
+			len(policies),
+		)
+	}
+
+	lockWorkspace(mu, func() {
+		workspace.IAMRoles = roles
+		workspace.IAMPolicies = policies
+		workspace.SelectedIAMRoleName = selectedRole
+		workspace.IAMStatusMessage = status
+	})
 }
 
 func (s *Service) snsRegions(ctx context.Context, profile models.ProfileSummary) []string {
@@ -208,12 +307,17 @@ func (s *Service) snsTopics(
 	}
 	const scope = "aws.sns.topics"
 	queryHash := profile.ProfileID + "|" + region
+
+	var cached []models.AwsSnsTopic
+	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+		return cached
+	}
+
 	topics, err := s.sns.ListTopics(ctx, profile, region)
 	if err == nil {
-		_ = s.store.SaveResourceCache(ctx, scope, queryHash, topics, s.timestamp())
+		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, topics)
 		return topics
 	}
-	var cached []models.AwsSnsTopic
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
 		return cached
@@ -267,12 +371,17 @@ func (s *Service) rdsInstances(
 	}
 	const scope = "aws.rds.instances"
 	queryHash := profile.ProfileID + "|" + region
+
+	var cached []models.AwsRdsInstance
+	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+		return cached
+	}
+
 	instances, err := s.rds.ListInstances(ctx, profile, region)
 	if err == nil {
-		_ = s.store.SaveResourceCache(ctx, scope, queryHash, instances, s.timestamp())
+		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, instances)
 		return instances
 	}
-	var cached []models.AwsRdsInstance
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
 		return cached
@@ -326,12 +435,17 @@ func (s *Service) logGroups(
 	}
 	const scope = "aws.logs.groups"
 	queryHash := profile.ProfileID + "|" + region
+
+	var cached []models.AwsLogGroup
+	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+		return cached
+	}
+
 	groups, err := s.logs.ListLogGroups(ctx, profile, region)
 	if err == nil {
-		_ = s.store.SaveResourceCache(ctx, scope, queryHash, groups, s.timestamp())
+		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, groups)
 		return groups
 	}
-	var cached []models.AwsLogGroup
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
 		return cached
@@ -373,12 +487,17 @@ func (s *Service) iamRoles(
 ) []models.AwsIamRole {
 	const scope = "aws.iam.roles"
 	queryHash := profile.ProfileID + "|" + region
+
+	var cached []models.AwsIamRole
+	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+		return cached
+	}
+
 	roles, err := s.iam.ListRoles(ctx, profile, region)
 	if err == nil {
-		_ = s.store.SaveResourceCache(ctx, scope, queryHash, roles, s.timestamp())
+		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, roles)
 		return roles
 	}
-	var cached []models.AwsIamRole
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
 		return cached
@@ -393,12 +512,17 @@ func (s *Service) iamPolicies(
 ) []models.AwsIamPolicy {
 	const scope = "aws.iam.policies"
 	queryHash := profile.ProfileID + "|" + region
+
+	var cached []models.AwsIamPolicy
+	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+		return cached
+	}
+
 	policies, err := s.iam.ListPolicies(ctx, profile, region)
 	if err == nil {
-		_ = s.store.SaveResourceCache(ctx, scope, queryHash, policies, s.timestamp())
+		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, policies)
 		return policies
 	}
-	var cached []models.AwsIamPolicy
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
 		return cached
@@ -438,7 +562,7 @@ func (s *Service) handleAwsSnsSelectRegion(ctx context.Context, params json.RawM
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspace(ctx, snapshot, session, notifier, "", "", false)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "sns", skipAzureInventory: true}, "", "", false)
 }
 
 func (s *Service) handleAwsSnsSelectTopic(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -455,7 +579,7 @@ func (s *Service) handleAwsSnsSelectTopic(ctx context.Context, params json.RawMe
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspace(ctx, snapshot, session, notifier, "", "", false)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "sns", skipAzureInventory: true}, "", "", false)
 }
 
 func (s *Service) handleAwsRdsSelectRegion(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -473,7 +597,7 @@ func (s *Service) handleAwsRdsSelectRegion(ctx context.Context, params json.RawM
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspace(ctx, snapshot, session, notifier, "", "", false)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "rds", skipAzureInventory: true}, "", "", false)
 }
 
 func (s *Service) handleAwsRdsSelectInstance(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -490,7 +614,7 @@ func (s *Service) handleAwsRdsSelectInstance(ctx context.Context, params json.Ra
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspace(ctx, snapshot, session, notifier, "", "", false)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "rds", skipAzureInventory: true}, "", "", false)
 }
 
 func (s *Service) handleAwsLogsSelectRegion(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -508,7 +632,7 @@ func (s *Service) handleAwsLogsSelectRegion(ctx context.Context, params json.Raw
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspace(ctx, snapshot, session, notifier, "", "", false)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "logs", skipAzureInventory: true}, "", "", false)
 }
 
 func (s *Service) handleAwsLogsSelectLogGroup(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -525,7 +649,7 @@ func (s *Service) handleAwsLogsSelectLogGroup(ctx context.Context, params json.R
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspace(ctx, snapshot, session, notifier, "", "", false)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "logs", skipAzureInventory: true}, "", "", false)
 }
 
 func (s *Service) handleAwsIamSelectRole(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -542,5 +666,5 @@ func (s *Service) handleAwsIamSelectRole(ctx context.Context, params json.RawMes
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspace(ctx, snapshot, session, notifier, "", "", false)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "iam", skipAzureInventory: true}, "", "", false)
 }

@@ -26,6 +26,14 @@ type workspaceSnapshotOptions struct {
 	// azureScope limits Azure enrichment to one service during selection
 	// handlers (storage, functions, keyvault, cosmos, waf, frontdoor, queues, webapps).
 	azureScope string
+	// lightweightAWS skips expensive AWS drill-down on workspace.get while
+	// selection handlers load detail on demand.
+	lightweightAWS bool
+	// skipAzureInventory avoids reloading Azure inventories during AWS
+	// workspace selection handlers.
+	skipAzureInventory bool
+	// awsScope limits AWS enrichment to one service during selection handlers.
+	awsScope string
 }
 
 func (s *Service) buildWorkspaceSnapshot(
@@ -114,17 +122,15 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 		scope:                  opts.azureScope,
 		resourceGroupSelection: opts.azureResourceGroupSelection,
 	}
-	s.enrichAzureWorkspace(&workspace, session, azureOpts)
+	if !opts.skipAzureInventory {
+		s.enrichAzureWorkspace(&workspace, session, azureOpts)
+	}
 	if !opts.azureResourceGroupSelection && !opts.skipAwsInventory {
-		s.enrichS3Inventory(&workspace, session)
-		s.enrichEC2Inventory(&workspace, session)
-		s.enrichLambdaInventory(&workspace, session)
-		s.enrichDynamoDBInventory(&workspace, session)
-		s.enrichSQSInventory(&workspace, session)
-		s.enrichSNSInventory(&workspace, session)
-		s.enrichRDSInventory(&workspace, session)
-		s.enrichLogsInventory(&workspace, session)
-		s.enrichIAMInventory(&workspace, session)
+		awsOpts := awsEnrichmentOptions{
+			lightweight: opts.lightweightAWS,
+			scope:       opts.awsScope,
+		}
+		s.enrichAwsWorkspace(&workspace, session, awsOpts)
 	}
 
 	return workspace

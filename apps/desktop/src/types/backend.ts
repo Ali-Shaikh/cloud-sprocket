@@ -90,6 +90,14 @@ export interface DockerOwnershipPolicy {
   summary: string;
 }
 
+/** Local Runtime tab payload without a full workspace rebuild. */
+export interface RuntimeSnapshot {
+  dockerRuntime: DockerRuntimeSnapshot;
+  dockerResources: ManagedDockerResource[];
+  emulatorSummaries: EmulatorSummary[];
+  dockerDiagnostics: DockerDiagnostics;
+}
+
 export interface DockerRuntimeSnapshot {
   reachable: boolean;
   host?: string;

@@ -853,6 +853,14 @@ type AzureEntraApp struct {
 	AppID       string `json:"appId,omitempty"`
 }
 
+// RuntimeSnapshot carries Local Runtime tab state without a full workspace rebuild.
+type RuntimeSnapshot struct {
+	DockerRuntime     DockerRuntimeSnapshot   `json:"dockerRuntime"`
+	DockerResources   []ManagedDockerResource `json:"dockerResources"`
+	EmulatorSummaries []EmulatorSummary       `json:"emulatorSummaries"`
+	DockerDiagnostics DockerDiagnostics       `json:"dockerDiagnostics"`
+}
+
 type WorkspaceSnapshot struct {
 	Provider                          *ProviderSummary             `json:"provider,omitempty"`
 	Profile                           *ProfileSummary              `json:"profile,omitempty"`

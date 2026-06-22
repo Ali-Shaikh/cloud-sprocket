@@ -14,14 +14,20 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (!id.includes("node_modules")) {
+          if (id.includes("node_modules")) {
+            if (id.includes("@tauri-apps")) {
+              return "tauri";
+            }
+            if (id.includes("@codemirror") || id.includes("@lezer")) {
+              return "codemirror";
+            }
+            if (id.includes("react-dom") || id.includes("/react/")) {
+              return "react-vendor";
+            }
             return undefined;
           }
-          if (id.includes("@tauri-apps")) {
-            return "tauri";
-          }
-          if (id.includes("react-dom") || id.includes("react")) {
-            return "react-vendor";
+          if (id.includes("/src/views/workspace/") && !id.includes("lazy-views")) {
+            return "workspace-views";
           }
           return undefined;
         },

@@ -133,6 +133,8 @@ func (s *Service) Handle(
 		return s.handleSessionGet(ctx, notifier)
 	case "workspace.get":
 		return s.handleWorkspaceGet(ctx, notifier)
+	case "runtime.get":
+		return s.handleRuntimeGet()
 	case "aws.s3.selectBucket":
 		return s.handleAwsS3SelectBucket(ctx, params, notifier)
 	case "aws.s3.selectObject":

@@ -42,6 +42,26 @@ export type DebugLogEntry = {
 
 const debugLogs: DebugLogEntry[] = [];
 let debugLogListener: ((entry: DebugLogEntry) => void) | null = null;
+const DEBUG_PAYLOAD_MAX_CHARS = 2_000;
+
+function truncateDebugPayload(payload: unknown): unknown {
+  if (payload == null) {
+    return payload;
+  }
+  try {
+    const serialised = JSON.stringify(payload);
+    if (serialised.length <= DEBUG_PAYLOAD_MAX_CHARS) {
+      return payload;
+    }
+    return {
+      truncated: true,
+      originalLength: serialised.length,
+      preview: `${serialised.slice(0, DEBUG_PAYLOAD_MAX_CHARS)}…`,
+    };
+  } catch {
+    return { truncated: true, preview: String(payload).slice(0, DEBUG_PAYLOAD_MAX_CHARS) };
+  }
+}
 
 export function getDebugLogs(): DebugLogEntry[] {
   return [...debugLogs];
@@ -1526,6 +1546,15 @@ function handleMockRequest<T>(
     case "workspace.get":
       rebuildSessionDerivedState();
       return Promise.resolve(buildMockWorkspace() as T);
+    case "runtime.get": {
+      const workspace = buildMockWorkspace();
+      return Promise.resolve({
+        dockerRuntime: workspace.dockerRuntime,
+        dockerResources: workspace.dockerResources,
+        emulatorSummaries: workspace.emulatorSummaries,
+        dockerDiagnostics: workspace.dockerDiagnostics,
+      } as T);
+    }
     case "docker.runtime.get":
       return Promise.resolve(buildMockWorkspace().dockerRuntime as T);
     case "docker.resources.list":
@@ -3110,7 +3139,7 @@ export async function backendRequest<T>(
         timestamp: new Date().toISOString(),
         type: "response",
         method,
-        payload: { requestId, result },
+        payload: { requestId, result: truncateDebugPayload(result) },
       });
       return result;
     } catch (error) {
@@ -3130,7 +3159,7 @@ export async function backendRequest<T>(
       timestamp: new Date().toISOString(),
       type: "response",
       method,
-      payload: { requestId, result },
+      payload: { requestId, result: truncateDebugPayload(result) },
     });
     return result;
   } catch (error) {

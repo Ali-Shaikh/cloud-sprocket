@@ -24,6 +24,7 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 		})
 	}
 
+	s.discovery.Invalidate()
 	snapshot, err := s.discovery.Discover()
 	if err != nil {
 		if notifier != nil {
@@ -105,6 +106,9 @@ func (s *Service) runS3Upload(
 		})
 		return
 	}
+
+	s.invalidateResourceCache(background, "aws.s3.objects", profile.ProfileID+"|"+bucketName+"|"+prefix)
+	s.invalidateResourceCache(background, "aws.s3.object-metadata", profile.ProfileID+"|"+bucketName+"|"+objectKey)
 
 	s.mu.Lock()
 	if prefix == "" || strings.HasPrefix(objectKey, prefix) {

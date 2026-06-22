@@ -192,7 +192,7 @@ func (s *Service) handleWorkspaceGet(ctx context.Context, notifier Notifier) (an
 	return s.buildWorkspaceSnapshotOpts(
 		snapshot,
 		session,
-		workspaceSnapshotOptions{lightweightAzure: true},
+		workspaceSnapshotOptions{lightweightAzure: true, lightweightAWS: true},
 	), nil
 }
 
@@ -402,11 +402,11 @@ func (s *Service) handleSessionSetWriteMode(ctx context.Context, params json.Raw
 	}
 	// Toggling write mode only flips session flags; do not block on full Azure
 	// enrichment (WAF schema, blob drill-down, etc.) while the dialog waits.
-	return s.buildWorkspaceSnapshotOpts(
-		snapshot,
-		session,
-		workspaceSnapshotOptions{lightweightAzure: true},
-	), nil
+	opts := workspaceSnapshotOptions{lightweightAzure: true}
+	if session.CurrentProviderID == "aws" {
+		opts.lightweightAWS = true
+	}
+	return s.buildWorkspaceSnapshotOpts(snapshot, session, opts), nil
 }
 
 func (s *Service) handleSessionUnlock(ctx context.Context, notifier Notifier) (any, error) {

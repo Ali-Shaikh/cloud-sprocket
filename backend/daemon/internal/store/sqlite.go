@@ -217,6 +217,21 @@ func (s *Store) LoadResourceCache(
 	return fetchedAt, true, nil
 }
 
+func (s *Store) InvalidateResourceCache(ctx context.Context, scope string, queryHash string) error {
+	_, err := s.db.ExecContext(
+		ctx,
+		`DELETE FROM resource_cache WHERE scope = ? AND query_hash = ?`,
+		scope,
+		queryHash,
+	)
+	return err
+}
+
+func (s *Store) InvalidateResourceCacheScope(ctx context.Context, scope string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM resource_cache WHERE scope = ?`, scope)
+	return err
+}
+
 // SaveDeployment upserts a deployment record stored as a JSON payload keyed by
 // id. createdAt is preserved on update; updatedAt always advances.
 func (s *Store) SaveDeployment(ctx context.Context, id string, value any, timestamp string) error {

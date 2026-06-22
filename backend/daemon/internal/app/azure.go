@@ -22,13 +22,17 @@ func (s *Service) azureResourceGroups(
 	queryHash := profile.ProfileID
 	ctx, cancel := s.withAzureTimeout(ctx)
 	defer cancel()
+	var cached []models.AzureResourceGroup
+	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+		return cached
+	}
+
 	groups, err := s.azure.ListResourceGroups(ctx, profile)
 	if err == nil {
-		_ = s.store.SaveResourceCache(ctx, scope, queryHash, groups, s.timestamp())
+		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, groups)
 		return groups
 	}
 
-	var cached []models.AzureResourceGroup
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
 		return cached
@@ -279,6 +283,7 @@ func (s *Service) handleAzureResourceGroupsCreate(ctx context.Context, params js
 	if err != nil {
 		return nil, err
 	}
+	s.invalidateResourceCache(ctx, "azure.resource-groups", profile.ProfileID)
 	s.mu.Lock()
 	session, err = s.currentState(ctx, snapshot)
 	if err != nil {
@@ -336,6 +341,7 @@ func (s *Service) handleAzureResourceGroupsDelete(ctx context.Context, params js
 	if err := s.azure.DeleteResourceGroup(timeoutCtx, profile, name); err != nil {
 		return nil, err
 	}
+	s.invalidateResourceCache(ctx, "azure.resource-groups", profile.ProfileID)
 	s.mu.Lock()
 	session, err = s.currentState(ctx, snapshot)
 	if err != nil {

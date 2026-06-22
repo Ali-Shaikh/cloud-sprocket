@@ -630,14 +630,14 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	if workspace.SelectedS3BucketName != "cloudsprocket-artifacts" {
 		t.Fatalf("expected workspace to select the first bucket, got %q", workspace.SelectedS3BucketName)
 	}
-	if len(workspace.S3Objects) != 2 || workspace.S3Objects[0].Key != "reports/daily.json" {
-		t.Fatalf("expected workspace objects to come from the s3 inventory, got %+v", workspace.S3Objects)
+	if len(workspace.S3Objects) != 0 {
+		t.Fatalf("expected lightweight workspace.get to defer S3 object listings, got %+v", workspace.S3Objects)
 	}
-	if workspace.SelectedS3ObjectKey != "reports/daily.json" {
-		t.Fatalf("expected workspace to select the first object, got %q", workspace.SelectedS3ObjectKey)
+	if workspace.SelectedS3ObjectKey != "" {
+		t.Fatalf("expected lightweight workspace.get to defer object selection, got %q", workspace.SelectedS3ObjectKey)
 	}
-	if len(workspace.S3ObjectMetadata) == 0 {
-		t.Fatalf("expected workspace metadata to be populated for the selected object")
+	if len(workspace.S3ObjectMetadata) != 0 {
+		t.Fatalf("expected lightweight workspace.get to defer object metadata, got %+v", workspace.S3ObjectMetadata)
 	}
 	if workspace.RuntimeSettings.DatabasePath == "" {
 		t.Fatalf("expected workspace runtime settings to include a database path")
@@ -673,8 +673,20 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 	if len(workspace.LocalConfigArtifacts) != 3 {
 		t.Fatalf("expected local config artifacts, got %+v", workspace.LocalConfigArtifacts)
 	}
-	if workspace.SelectedEC2Region != "us-east-1" || len(workspace.EC2Instances) != 1 {
-		t.Fatalf("expected EC2 inventory for default region, got region=%q instances=%+v", workspace.SelectedEC2Region, workspace.EC2Instances)
+	if workspace.SelectedEC2Region != "us-east-1" || len(workspace.EC2Instances) != 0 {
+		t.Fatalf("expected lightweight workspace.get to load EC2 regions only, got region=%q instances=%+v", workspace.SelectedEC2Region, workspace.EC2Instances)
+	}
+
+	runtimeResult, err := service.Handle(ctx, "runtime.get", nil, nil)
+	if err != nil {
+		t.Fatalf("expected runtime.get to succeed, got %v", err)
+	}
+	runtimeSnapshot := runtimeResult.(models.RuntimeSnapshot)
+	if !runtimeSnapshot.DockerRuntime.Reachable || runtimeSnapshot.DockerRuntime.ServerVersion != "28.5.1" {
+		t.Fatalf("expected runtime.get docker snapshot, got %+v", runtimeSnapshot.DockerRuntime)
+	}
+	if len(runtimeSnapshot.DockerResources) != 1 || len(runtimeSnapshot.EmulatorSummaries) != 2 {
+		t.Fatalf("expected runtime.get resources and emulators, got resources=%+v emulators=%+v", runtimeSnapshot.DockerResources, runtimeSnapshot.EmulatorSummaries)
 	}
 
 	dockerRuntimeResult, err := service.Handle(ctx, "docker.runtime.get", nil, nil)
@@ -1191,8 +1203,8 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 	if workspace.SelectedS3BucketName != "cloudsprocket-artifacts" || workspace.S3PrefixFilter != "reports/" {
 		t.Fatalf("expected restored S3 workspace state, got bucket=%q prefix=%q", workspace.SelectedS3BucketName, workspace.S3PrefixFilter)
 	}
-	if workspace.SelectedEC2Region != "eu-west-2" || len(workspace.EC2Instances) != 1 {
-		t.Fatalf("expected restored EC2 workspace state, got region=%q instances=%+v", workspace.SelectedEC2Region, workspace.EC2Instances)
+	if workspace.SelectedEC2Region != "eu-west-2" || len(workspace.EC2Instances) != 0 {
+		t.Fatalf("expected lightweight workspace.get to restore EC2 region without instances, got region=%q instances=%+v", workspace.SelectedEC2Region, workspace.EC2Instances)
 	}
 }
 

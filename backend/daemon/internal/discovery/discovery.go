@@ -8,10 +8,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/models"
@@ -36,9 +39,22 @@ var (
 
 type LookPathFunc func(string) (string, error)
 
+const defaultDiscoverCacheTTL = 3 * time.Second
+
 type Service struct {
 	Settings config.Settings
 	LookPath LookPathFunc
+
+	cacheMu  sync.RWMutex
+	cache    *discoverCacheEntry
+	cacheTTL time.Duration
+	now      func() time.Time
+}
+
+type discoverCacheEntry struct {
+	snapshot Snapshot
+	key      string
+	cachedAt time.Time
 }
 
 type Snapshot struct {
@@ -67,10 +83,85 @@ func New(settings config.Settings, lookPath LookPathFunc) *Service {
 	return &Service{
 		Settings: settings,
 		LookPath: lookPath,
+		cacheTTL: defaultDiscoverCacheTTL,
+		now:      func() time.Time { return time.Now().UTC() },
 	}
 }
 
+func (s *Service) discoverNow() time.Time {
+	if s.now != nil {
+		return s.now()
+	}
+	return time.Now().UTC()
+}
+
+func (s *Service) discoverCacheTTL() time.Duration {
+	if s.cacheTTL > 0 {
+		return s.cacheTTL
+	}
+	return defaultDiscoverCacheTTL
+}
+
+// Invalidate clears the in-process discovery cache so the next Discover() rescans
+// provider config files.
+func (s *Service) Invalidate() {
+	s.cacheMu.Lock()
+	s.cache = nil
+	s.cacheMu.Unlock()
+}
+
+func (s *Service) configCacheKey() string {
+	paths := []string{
+		s.Settings.AWSConfigPath,
+		s.Settings.AWSCredentialsPath,
+		s.Settings.AzureProfilePath(),
+		s.Settings.GCloudConfigDir(),
+	}
+	parts := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if strings.TrimSpace(path) == "" {
+			continue
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			parts = append(parts, path+":missing")
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s:%d", path, info.ModTime().UnixNano()))
+	}
+	return strings.Join(parts, "|")
+}
+
 func (s *Service) Discover() (Snapshot, error) {
+	key := s.configCacheKey()
+	now := s.discoverNow()
+
+	s.cacheMu.RLock()
+	if s.cache != nil &&
+		s.cache.key == key &&
+		now.Sub(s.cache.cachedAt) < s.discoverCacheTTL() {
+		snapshot := s.cache.snapshot
+		s.cacheMu.RUnlock()
+		return snapshot, nil
+	}
+	s.cacheMu.RUnlock()
+
+	snapshot, err := s.discoverUncached()
+	if err != nil {
+		return Snapshot{}, err
+	}
+
+	s.cacheMu.Lock()
+	s.cache = &discoverCacheEntry{
+		snapshot: snapshot,
+		key:      key,
+		cachedAt: now,
+	}
+	s.cacheMu.Unlock()
+	return snapshot, nil
+}
+
+func (s *Service) discoverUncached() (Snapshot, error) {
 	lookPath := s.LookPath
 	if lookPath == nil {
 		lookPath = func(string) (string, error) { return "", errors.New("command lookup unavailable") }
