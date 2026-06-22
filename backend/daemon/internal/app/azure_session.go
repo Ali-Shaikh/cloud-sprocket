@@ -29,11 +29,13 @@ func (s *Service) withLockedAzureWorkspace(
 	if !session.IsLocked || session.CurrentProviderID != "azure" {
 		return discovery.Snapshot{}, models.SessionSnapshot{}, errors.New(guardMsg)
 	}
-	if err := mutate(&session); err != nil {
-		return discovery.Snapshot{}, models.SessionSnapshot{}, err
-	}
-	if err := s.store.SaveSession(ctx, session); err != nil {
-		return discovery.Snapshot{}, models.SessionSnapshot{}, err
+	if mutate != nil {
+		if err := mutate(&session); err != nil {
+			return discovery.Snapshot{}, models.SessionSnapshot{}, err
+		}
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			return discovery.Snapshot{}, models.SessionSnapshot{}, err
+		}
 	}
 	return snapshot, session, nil
 }

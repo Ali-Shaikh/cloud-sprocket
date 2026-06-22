@@ -555,6 +555,51 @@ function mergeAzureFrontDoorSelection(
   });
 }
 
+function formatBackendError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const marker = "Backend RPC error:";
+  if (!message.includes(marker)) {
+    return message;
+  }
+  const payload = message.slice(message.indexOf(marker) + marker.length).trim();
+  try {
+    const parsed = JSON.parse(payload) as { message?: string };
+    if (parsed.message) {
+      return parsed.message;
+    }
+  } catch {
+    // Use the raw message when the RPC wrapper is not JSON.
+  }
+  return message;
+}
+
+function frontDoorTopologyLoaded(
+  workspace: WorkspaceSnapshot,
+  sessionProfileId: string,
+): boolean {
+  if (!sessionProfileId || workspace.profile?.profileId !== sessionProfileId) {
+    return false;
+  }
+  const profileName =
+    workspace.selectedAzureFrontDoorProfile?.trim() ||
+    workspace.azureFrontDoorProfiles?.[0]?.name?.trim() ||
+    "";
+  if (!profileName || (workspace.azureFrontDoorProfiles?.length ?? 0) === 0) {
+    return false;
+  }
+  const endpoints = workspace.azureFrontDoorEndpoints ?? [];
+  if (endpoints.length > 0) {
+    return endpoints.some(
+      (endpoint) => !endpoint.profileName || endpoint.profileName === profileName,
+    );
+  }
+  const status = workspace.azureFrontDoorStatusMessage ?? "";
+  return (
+    status.includes("Loaded") ||
+    status.includes("No Azure Front Door profiles found")
+  );
+}
+
 function mergeAzureWafSelection(
   current: WorkspaceSnapshot,
   incoming: WorkspaceSnapshot,
@@ -878,6 +923,9 @@ export default function App() {
   const [azureAppServiceActionStatus, setAzureAppServiceActionStatus] = useState("");
   const [azureFrontDoorActionStatus, setAzureFrontDoorActionStatus] = useState("");
   const [azureFrontDoorTopologyLoading, setAzureFrontDoorTopologyLoading] = useState(false);
+  const [azureWafConfigLoading, setAzureWafConfigLoading] = useState(false);
+  const frontDoorRefreshInFlightRef = useRef(false);
+  const wafRefreshInFlightRef = useRef(false);
   const [writeModeDialogOpen, setWriteModeDialogOpen] = useState(false);
   const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<"enable" | "incapable">("enable");
   const [writeModePending, setWriteModePending] = useState(false);
@@ -1128,21 +1176,6 @@ export default function App() {
     };
   }, [activeWorkspaceTabId]);
 
-  useEffect(() => {
-    if (!session.isLocked || activeWorkspaceTabId !== "azure-front-door") {
-      setAzureFrontDoorTopologyLoading(false);
-      return;
-    }
-    setAzureFrontDoorTopologyLoading(true);
-    void mutateWorkspaceSelection("azure.frontDoor.refresh", {}, {
-      panelLoading: true,
-      merge: mergeAzureFrontDoorSelection,
-      errorTitle: "Could not refresh Front Door topology",
-    }).finally(() => {
-      setAzureFrontDoorTopologyLoading(false);
-    });
-  }, [activeWorkspaceTabId, session.isLocked, session.selectedProfileId]);
-
   async function mutateSession(
     method: string,
     params: Record<string, unknown> = {},
@@ -1271,8 +1304,11 @@ export default function App() {
         });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Workspace selection failed";
-      pushNotification("error", errorTitle ?? `Failed to execute ${method}`, message);
+      pushNotification(
+        "error",
+        errorTitle ?? `Failed to execute ${method}`,
+        formatBackendError(error),
+      );
     } finally {
       if (panelLoading) {
         endAzureInventoryFetch();
@@ -1434,6 +1470,113 @@ export default function App() {
     }
   }
 
+  async function refreshAzureFrontDoorTopology(
+    current: WorkspaceSnapshot,
+    sessionProfileId: string,
+    options: { force?: boolean } = {},
+  ): Promise<void> {
+    if (frontDoorRefreshInFlightRef.current) {
+      return;
+    }
+    if (!options.force && frontDoorTopologyLoaded(current, sessionProfileId)) {
+      setAzureFrontDoorTopologyLoading(false);
+      return;
+    }
+
+    frontDoorRefreshInFlightRef.current = true;
+    beginAzureInventoryFetch();
+    setAzureFrontDoorTopologyLoading(true);
+    try {
+      const workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.frontDoor.refresh", {});
+      startTransition(() => {
+        setWorkspace((prev) => mergeAzureFrontDoorSelection(prev, workspaceResult));
+      });
+      setAzureFrontDoorActionStatus("");
+    } catch (error) {
+      pushNotification(
+        "error",
+        "Could not refresh Front Door topology",
+        formatBackendError(error),
+      );
+      setAzureFrontDoorActionStatus(formatBackendError(error));
+    } finally {
+      frontDoorRefreshInFlightRef.current = false;
+      endAzureInventoryFetch();
+      setAzureFrontDoorTopologyLoading(false);
+    }
+  }
+
+  async function refreshAzureWafPolicyConfig(
+    current: WorkspaceSnapshot,
+    sessionProfileId: string,
+  ): Promise<void> {
+    if (wafRefreshInFlightRef.current) {
+      return;
+    }
+    const selected =
+      current.selectedAzureWafPolicy?.trim() ||
+      current.azureWafPolicies?.[0]?.name?.trim() ||
+      "";
+    if (
+      selected &&
+      current.azureWafPolicyDetail?.name === selected &&
+      current.profile?.profileId === sessionProfileId
+    ) {
+      setAzureWafConfigLoading(false);
+      return;
+    }
+
+    wafRefreshInFlightRef.current = true;
+    beginAzureInventoryFetch();
+    setAzureWafConfigLoading(true);
+    try {
+      let workspaceResult: WorkspaceSnapshot;
+      try {
+        workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.waf.refresh", {});
+      } catch (error) {
+        const message = formatBackendError(error);
+        const missingRefresh =
+          message.includes("unknown backend method") &&
+          message.includes("azure.waf.refresh");
+        if (!missingRefresh || !selected) {
+          throw error;
+        }
+        workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.waf.selectPolicy", {
+          policyName: selected,
+        });
+      }
+      startTransition(() => {
+        setWorkspace((prev) => mergeAzureWafSelection(prev, workspaceResult));
+      });
+    } catch (error) {
+      pushNotification(
+        "error",
+        "Could not refresh WAF policy config",
+        formatBackendError(error),
+      );
+    } finally {
+      wafRefreshInFlightRef.current = false;
+      endAzureInventoryFetch();
+      setAzureWafConfigLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!session.isLocked || activeWorkspaceTabId !== "azure-front-door") {
+      setAzureFrontDoorTopologyLoading(false);
+      return;
+    }
+    void refreshAzureFrontDoorTopology(workspace, session.selectedProfileId ?? "");
+  }, [activeWorkspaceTabId, session.isLocked, session.selectedProfileId]);
+
+  useEffect(() => {
+    if (!session.isLocked || activeWorkspaceTabId !== "azure-waf") {
+      setAzureWafConfigLoading(false);
+      return;
+    }
+    void refreshAzureWafPolicyConfig(workspace, session.selectedProfileId ?? "");
+  }, [activeWorkspaceTabId, session.isLocked, session.selectedProfileId]);
+
   async function selectAzureWafPolicy(policyName: string): Promise<void> {
     const trimmed = policyName.trim();
     if (!trimmed) {
@@ -1464,8 +1607,7 @@ export default function App() {
       });
     } catch (error) {
       setWorkspace((current) => ({ ...current, selectedAzureWafPolicy: previousPolicy }));
-      const message = error instanceof Error ? error.message : "WAF policy selection failed";
-      pushNotification("error", "Could not select WAF policy", message);
+      pushNotification("error", "Could not select WAF policy", formatBackendError(error));
     } finally {
       endAzureInventoryFetch();
     }
@@ -2180,8 +2322,11 @@ export default function App() {
 
       if (options.refreshWorkspace !== false) {
         void loadWorkspace(normalisedSession).catch((error) => {
-          const message = error instanceof Error ? error.message : "Workspace refresh failed";
-          pushNotification("error", "Could not refresh the workspace", message);
+          pushNotification(
+            "error",
+            "Could not refresh the workspace",
+            formatBackendError(error),
+          );
         });
       }
     } finally {
@@ -3088,6 +3233,7 @@ export default function App() {
     <AzureWafView
       workspace={activeWorkspace}
       workspaceSelectionLoading={azureLogWorkspaceSelectionLoading}
+      configLoading={azureWafConfigLoading || azureInventoryLoading}
       onSelectWorkspace={(ws) => {
         void selectAzureLogAnalyticsWorkspace(ws);
       }}
@@ -3190,22 +3336,8 @@ export default function App() {
       inventoryLoading={azureInventoryLoading || azureFrontDoorTopologyLoading}
       actionStatus={azureFrontDoorActionStatus}
       onRefresh={() => {
-        setAzureFrontDoorTopologyLoading(true);
         setAzureFrontDoorActionStatus("Refreshing Front Door topology...");
-        void mutateWorkspaceSelection("azure.frontDoor.refresh", {}, {
-          panelLoading: true,
-          merge: mergeAzureFrontDoorSelection,
-          errorTitle: "Could not refresh Front Door topology",
-        })
-          .then(() => {
-            setAzureFrontDoorActionStatus("");
-          })
-          .catch((error: unknown) => {
-            setAzureFrontDoorActionStatus(error instanceof Error ? error.message : String(error));
-          })
-          .finally(() => {
-            setAzureFrontDoorTopologyLoading(false);
-          });
+        void refreshAzureFrontDoorTopology(workspace, session.selectedProfileId ?? "", { force: true });
       }}
       onPurgeCache={(profile, endpointName, contentPaths, domains) => {
         setAzureFrontDoorActionStatus(`Purging cache for ${endpointName}...`);
@@ -3224,7 +3356,7 @@ export default function App() {
             );
           })
           .catch((error: unknown) => {
-            setAzureFrontDoorActionStatus(error instanceof Error ? error.message : String(error));
+            setAzureFrontDoorActionStatus(formatBackendError(error));
           });
       }}
       onSelectProfile={(profile) => {

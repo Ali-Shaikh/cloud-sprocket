@@ -254,6 +254,17 @@ func (s *Service) handleAzureWafLogsSchema(ctx context.Context, params json.RawM
 	return s.azure.DetectWafLogSchema(ctx, profile, workspace, request.Timespan)
 }
 
+func (s *Service) handleAzureWafRefresh(ctx context.Context, _ json.RawMessage, notifier Notifier) (any, error) {
+	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before refreshing WAF policy config", nil)
+	if err != nil {
+		return nil, err
+	}
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "waf",
+	}, "", "")
+}
+
 func (s *Service) handleAzureWafSelectPolicy(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		PolicyName string `json:"policyName"`

@@ -77,6 +77,8 @@ func (i *Inventory) ListWafPolicies(
 	return policies, nil
 }
 
+const cdnWafPolicyResourceType = "Microsoft.Cdn/cdnWebApplicationFirewallPolicies"
+
 // GetWafPolicy returns the full read-only config for a WAF policy.
 func (i *Inventory) GetWafPolicy(
 	ctx context.Context,
@@ -92,17 +94,45 @@ func (i *Inventory) GetWafPolicy(
 	if resourceGroup == "" || policyName == "" {
 		return models.AzureWafPolicyDetail{}, fmt.Errorf("a resource group and policy name are required")
 	}
-	payload, err := i.run(ctx,
+	payload, err := i.showClassicFrontDoorWafPolicy(ctx, resourceGroup, policyName)
+	if err != nil {
+		payload, err = i.showCdnWafPolicy(ctx, profile, resourceGroup, policyName)
+		if err != nil {
+			return models.AzureWafPolicyDetail{}, err
+		}
+	}
+	return decodeWafPolicyDetail(payload, resourceGroup)
+}
+
+func (i *Inventory) showClassicFrontDoorWafPolicy(
+	ctx context.Context,
+	resourceGroup string,
+	policyName string,
+) ([]byte, error) {
+	return i.run(ctx,
 		"network", "front-door", "waf-policy", "show",
 		"--resource-group", resourceGroup,
 		"--policy-name", policyName,
 		"--output", "json",
 		"--only-show-errors",
 	)
-	if err != nil {
-		return models.AzureWafPolicyDetail{}, err
-	}
-	return decodeWafPolicyDetail(payload, resourceGroup)
+}
+
+func (i *Inventory) showCdnWafPolicy(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	resourceGroup string,
+	policyName string,
+) ([]byte, error) {
+	return i.run(ctx,
+		"resource", "show",
+		"--subscription", profile.ProfileID,
+		"--resource-group", resourceGroup,
+		"--name", policyName,
+		"--resource-type", cdnWafPolicyResourceType,
+		"--output", "json",
+		"--only-show-errors",
+	)
 }
 
 // UpdateWafPolicyMode toggles a policy between Prevention and Detection.

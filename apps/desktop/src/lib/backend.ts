@@ -2307,6 +2307,8 @@ function handleMockRequest<T>(
       ] as T);
     case "azure.waf.logs.schema":
       return Promise.resolve(mockAzureWafLogSchema as T);
+    case "azure.waf.refresh":
+      return Promise.resolve(buildMockWorkspace() as T);
     case "azure.waf.selectPolicy":
       mockState.session.selectedAzureWafPolicy = String(params.policyName ?? "");
       return Promise.resolve(buildMockWorkspace() as T);

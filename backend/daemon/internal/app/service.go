@@ -245,6 +245,8 @@ func (s *Service) Handle(
 		return s.handleAzureLogAnalyticsTablesList(ctx, params, notifier)
 	case "azure.waf.logs.schema":
 		return s.handleAzureWafLogsSchema(ctx, params, notifier)
+	case "azure.waf.refresh":
+		return s.handleAzureWafRefresh(ctx, params, notifier)
 	case "azure.waf.selectPolicy":
 		return s.handleAzureWafSelectPolicy(ctx, params, notifier)
 	case "azure.waf.config.setMode":

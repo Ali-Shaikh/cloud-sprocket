@@ -65,6 +65,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { StatusPill } from "@/components/status-pill";
 import type {
   AzureLogAnalyticsSavedQuery,
@@ -77,6 +78,7 @@ import type {
 export type AzureWafViewProps = {
   workspace: WorkspaceSnapshot;
   workspaceSelectionLoading?: boolean;
+  configLoading?: boolean;
   onSelectWorkspace: (workspace: string) => void;
   onSelectPolicy: (policyName: string) => void;
   onRunQuery: (
@@ -130,6 +132,7 @@ const TIMESPAN_OPTIONS = [
 export default function AzureWafView({
   workspace,
   workspaceSelectionLoading = false,
+  configLoading = false,
   onSelectWorkspace,
   onSelectPolicy,
   onRunQuery,
@@ -669,7 +672,13 @@ export default function AzureWafView({
         </TabsContent>
 
         <TabsContent value="config" className="mt-4 space-y-4">
-          <section className={sectionCard}>
+          {configLoading ? (
+            <InventoryLoadingState
+              variant="banner"
+              label="Loading WAF policy config from Azure..."
+            />
+          ) : null}
+          <section className={cn(sectionCard, configLoading ? "opacity-60" : undefined)}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="w-72">
                 <div className={cn(fieldLabel, "mb-1")}>Policy</div>
@@ -736,6 +745,11 @@ export default function AzureWafView({
                   <dd className="mt-1 font-mono text-xs">{policyDetail.resourceGroup}</dd>
                 </div>
               </dl>
+            ) : configLoading ? (
+              <InventoryLoadingState
+                variant="inline"
+                label="Loading policy detail, managed rules, and exclusions..."
+              />
             ) : (
               <p className="text-sm text-muted-foreground">
                 No policy detail loaded. WAF config is cloud-only on real Azure profiles.

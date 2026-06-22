@@ -5,6 +5,7 @@ package azureadapter
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -32,6 +33,38 @@ func TestListWafPoliciesSkipsShowWhenDetailDisabled(t *testing.T) {
 	}
 	if !strings.Contains(joined, "resource list") {
 		t.Fatalf("expected resource list call, got %q", joined)
+	}
+}
+
+func TestGetWafPolicyFallsBackToCdnResourceShow(t *testing.T) {
+	showOut := []byte(`{
+		"name":"shared-waf",
+		"location":"westeurope",
+		"sku":{"name":"Premium_AzureFrontDoor"},
+		"properties":{"policySettings":{"mode":"Prevention","enabledState":"Enabled"}}
+	}`)
+	fake := &recordingCLI{
+		responses: map[string][]byte{
+			"waf-policy show": nil,
+			"resource show":   showOut,
+		},
+		failShow: true,
+	}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	detail, err := inv.GetWafPolicy(context.Background(), cloudAzureProfile(), "rg-waf", "shared-waf")
+	if err != nil {
+		t.Fatalf("GetWafPolicy: %v", err)
+	}
+	if detail.Name != "shared-waf" || detail.Mode != "Prevention" {
+		t.Fatalf("unexpected detail: %+v", detail)
+	}
+	if fake.showCalls != 1 {
+		t.Fatalf("classic show calls = %d, want 1", fake.showCalls)
+	}
+	if fake.resourceShowCalls != 1 {
+		t.Fatalf("resource show calls = %d, want 1", fake.resourceShowCalls)
 	}
 }
 
@@ -235,8 +268,10 @@ func TestAddWafExclusionBuildsExpectedArgs(t *testing.T) {
 }
 
 type recordingCLI struct {
-	responses map[string][]byte
-	showCalls int
+	responses         map[string][]byte
+	showCalls         int
+	resourceShowCalls int
+	failShow          bool
 }
 
 func (r *recordingCLI) CommandContext(_ context.Context, _ string, args ...string) ([]byte, error) {
@@ -244,7 +279,13 @@ func (r *recordingCLI) CommandContext(_ context.Context, _ string, args ...strin
 	switch {
 	case strings.Contains(joined, "waf-policy show"):
 		r.showCalls++
+		if r.failShow {
+			return nil, fmt.Errorf("classic front door waf-policy show not found")
+		}
 		return r.responses["waf-policy show"], nil
+	case strings.Contains(joined, "resource show"):
+		r.resourceShowCalls++
+		return r.responses["resource show"], nil
 	default:
 		return r.responses["resource list"], nil
 	}
