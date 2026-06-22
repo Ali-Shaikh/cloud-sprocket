@@ -72,6 +72,8 @@ const workspaceFixture: RdsWorkspaceSnapshot = {
   azureBlobs: [],
   azureBlobMetadata: [],
       azureWebApps: [],
+      azureAppServicePlans: [],
+      azureWebAppSettings: [],
       azureLogAnalyticsWorkspaces: [],
       azureWafPolicies: [],
       azureWafRuleFireCounts: [],

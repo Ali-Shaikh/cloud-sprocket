@@ -72,6 +72,8 @@ const workspaceFixture: LogsWorkspaceSnapshot = {
   azureBlobs: [],
   azureBlobMetadata: [],
       azureWebApps: [],
+      azureAppServicePlans: [],
+      azureWebAppSettings: [],
       azureLogAnalyticsWorkspaces: [],
       azureWafPolicies: [],
       azureWafRuleFireCounts: [],

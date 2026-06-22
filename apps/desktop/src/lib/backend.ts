@@ -579,7 +579,30 @@ const mockAzureWebApps = [
     defaultHostName: "mkt-portal.azurewebsites.net",
     kind: "app,linux",
     httpsOnly: true,
+    appServicePlan: "mkt-portal-plan",
+    planSku: "P1v3 (PremiumV3)",
+    runtime: "NODE|22-lts",
+    outboundIpAddresses: "20.0.0.1,20.0.0.2",
+    identityType: "SystemAssigned",
+    identityPrincipalId: "principal-guid-1",
   },
+];
+
+const mockAzureAppServicePlans = [
+  {
+    name: "mkt-portal-plan",
+    resourceGroup: "rg-marketing-prod",
+    location: "uaenorth",
+    sku: "P1v3 (PremiumV3)",
+    kind: "linux",
+    status: "Ready",
+    numberOfWorkers: 1,
+  },
+];
+
+const mockAzureWebAppSettings = [
+  { name: "WEBSITE_NODE_DEFAULT_VERSION", value: "~22", slotSetting: false },
+  { name: "APPINSIGHTS_INSTRUMENTATIONKEY", value: "secret-key-value", slotSetting: false },
 ];
 
 const mockAzureLogAnalyticsWorkspaces = [
@@ -1240,6 +1263,8 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       ? `Loaded ${mockAzureWebApps.length} App Service web apps from ${selectedAzureResourceGroup}.`
       : undefined,
     azureWebApps: isAzureWorkspace ? mockAzureWebApps : [],
+    azureAppServicePlans: isAzureWorkspace ? mockAzureAppServicePlans : [],
+    azureWebAppSettings: isAzureWorkspace ? mockAzureWebAppSettings : [],
     selectedAzureLogWorkspace: isAzureWorkspace
       ? mockState.session.selectedAzureLogWorkspace ?? mockAzureLogAnalyticsWorkspaces[0]?.name
       : undefined,
@@ -2014,6 +2039,59 @@ function handleMockRequest<T>(
     case "azure.webApps.select":
       mockState.session.selectedAzureWebAppName = String(params.appName ?? "");
       return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.webApps.setSetting": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(
+          new Error("updating app settings requires write mode to be enabled for this Azure workspace"),
+        );
+      }
+      const name = String(params.name ?? "").trim();
+      const value = String(params.value ?? "");
+      const slotSetting = Boolean(params.slotSetting);
+      const existing = mockAzureWebAppSettings.find((entry) => entry.name === name);
+      if (existing) {
+        existing.value = value;
+        existing.slotSetting = slotSetting;
+      } else {
+        mockAzureWebAppSettings.push({ name, value, slotSetting });
+      }
+      mockAzureWebAppSettings.sort((left, right) => left.name.localeCompare(right.name));
+      appendLog("success", `Set application setting ${name} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.webApps.deleteSetting": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(
+          new Error("deleting app settings requires write mode to be enabled for this Azure workspace"),
+        );
+      }
+      const name = String(params.name ?? "").trim();
+      const index = mockAzureWebAppSettings.findIndex((entry) => entry.name === name);
+      if (index >= 0) {
+        mockAzureWebAppSettings.splice(index, 1);
+      }
+      appendLog("success", `Deleted application setting ${name} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.webApps.invokeAction": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(
+          new Error("web app actions require write mode to be enabled for this Azure workspace"),
+        );
+      }
+      const action = String(params.action ?? "");
+      const appName = String(params.appName ?? mockState.session.selectedAzureWebAppName ?? "");
+      const app = mockAzureWebApps.find((entry) => entry.name === appName);
+      if (app) {
+        if (action === "start") {
+          app.state = "Running";
+        } else if (action === "stop") {
+          app.state = "Stopped";
+        }
+      }
+      appendLog("success", `Invoked ${action} on App Service web app ${appName} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "azure.logAnalytics.selectWorkspace":
       mockState.session.selectedAzureLogWorkspace = String(params.workspace ?? "");
       return Promise.resolve({ workspace: mockState.session.selectedAzureLogWorkspace } as T);
@@ -2229,6 +2307,12 @@ function handleMockRequest<T>(
         defaultHostName: `${appName}.azurewebsites.net`,
         kind: "app,linux",
         httpsOnly: true,
+        appServicePlan: `${appName}-plan`,
+        planSku: "F1 (Free)",
+        runtime: String(params.runtime ?? "NODE:22-lts"),
+        outboundIpAddresses: "",
+        identityType: "",
+        identityPrincipalId: "",
       });
       mockState.session.selectedAzureResourceGroup = resourceGroup;
       mockState.session.selectedAzureWebAppName = appName;

@@ -134,6 +134,8 @@ import type {
   AzureStorageAccount,
   AzureVirtualMachine,
   AzureWebApp,
+  AzureAppServicePlan,
+  AzureWebAppSetting,
   AzureLogAnalyticsHistoryEntry,
   AzureLogAnalyticsSavedQuery,
   AzureLogAnalyticsSelectionResult,
@@ -334,6 +336,14 @@ function normaliseAzureWebApp(app: AzureWebApp): AzureWebApp {
   return { ...app, name: app.name ?? "" };
 }
 
+function normaliseAzureAppServicePlan(plan: AzureAppServicePlan): AzureAppServicePlan {
+  return { ...plan, name: plan.name ?? "" };
+}
+
+function normaliseAzureWebAppSetting(setting: AzureWebAppSetting): AzureWebAppSetting {
+  return { ...setting, name: setting.name ?? "", value: setting.value ?? "" };
+}
+
 function normaliseAzureVirtualMachine(vm: AzureVirtualMachine): AzureVirtualMachine {
   return {
     ...vm,
@@ -449,6 +459,8 @@ function mergeAzureResourceGroupSelection(
     azureResourceGroups: normalised.azureResourceGroups,
     azureVirtualMachines: normalised.azureVirtualMachines,
     azureWebApps: normalised.azureWebApps,
+    azureAppServicePlans: normalised.azureAppServicePlans,
+    azureWebAppSettings: normalised.azureWebAppSettings,
     selectedAzureWebAppName: normalised.selectedAzureWebAppName,
     azureStatusMessage: normalised.azureStatusMessage,
     azureAppServiceStatusMessage: normalised.azureAppServiceStatusMessage,
@@ -644,6 +656,8 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     azureBlobs: normaliseArray(source.azureBlobs).map(normaliseAzureBlob),
     azureBlobMetadata: normaliseDetailFields(source.azureBlobMetadata),
     azureWebApps: normaliseArray(source.azureWebApps).map(normaliseAzureWebApp),
+    azureAppServicePlans: normaliseArray(source.azureAppServicePlans).map(normaliseAzureAppServicePlan),
+    azureWebAppSettings: normaliseArray(source.azureWebAppSettings).map(normaliseAzureWebAppSetting),
     azureLogAnalyticsWorkspaces: normaliseArray(source.azureLogAnalyticsWorkspaces),
     azureWafPolicies: normaliseArray(source.azureWafPolicies),
     azureWafRuleFireCounts: normaliseArray(source.azureWafRuleFireCounts),
@@ -741,6 +755,8 @@ const emptyWorkspace: WorkspaceSnapshot = {
   azureBlobs: [],
   azureBlobMetadata: [],
   azureWebApps: [],
+  azureAppServicePlans: [],
+  azureWebAppSettings: [],
   azureLogAnalyticsWorkspaces: [],
   azureWafPolicies: [],
   azureWafRuleFireCounts: [],
@@ -1298,6 +1314,8 @@ export default function App() {
           selectedAzureVmId: undefined,
           azureVirtualMachines: [],
           azureWebApps: [],
+          azureAppServicePlans: [],
+          azureWebAppSettings: [],
           selectedAzureWebAppName: undefined,
           azureStatusMessage: `Loading virtual machines from ${trimmed}...`,
           azureAppServiceStatusMessage: `Loading App Service web apps from ${trimmed}...`,
@@ -2842,6 +2860,51 @@ export default function App() {
             setAzureAppServiceActionStatus(error instanceof Error ? error.message : String(error));
           });
       }}
+      onInvokeAction={(action, appName) => {
+        setAzureAppServiceActionStatus(`Invoking ${action} on web app...`);
+        void backendRequest<WorkspaceSnapshot>("azure.webApps.invokeAction", { action, appName })
+          .then((workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            });
+            setAzureAppServiceActionStatus(
+              workspaceResult.azureAppServiceStatusMessage || `Invoked ${action} on web app.`,
+            );
+          })
+          .catch((error: unknown) => {
+            setAzureAppServiceActionStatus(error instanceof Error ? error.message : String(error));
+          });
+      }}
+      onSetSetting={(appName, name, value, slotSetting) => {
+        setAzureAppServiceActionStatus(`Setting ${name}...`);
+        return backendRequest<WorkspaceSnapshot>("azure.webApps.setSetting", {
+          appName,
+          name,
+          value,
+          slotSetting,
+        }).then((workspaceResult) => {
+          startTransition(() => {
+            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          });
+          setAzureAppServiceActionStatus(
+            workspaceResult.azureAppServiceStatusMessage || `Set application setting ${name}.`,
+          );
+        });
+      }}
+      onDeleteSetting={(appName, name) => {
+        setAzureAppServiceActionStatus(`Deleting ${name}...`);
+        return backendRequest<WorkspaceSnapshot>("azure.webApps.deleteSetting", {
+          appName,
+          name,
+        }).then((workspaceResult) => {
+          startTransition(() => {
+            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          });
+          setAzureAppServiceActionStatus(
+            workspaceResult.azureAppServiceStatusMessage || `Deleted application setting ${name}.`,
+          );
+        });
+      }}
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-log-analytics" ? (
     <LogAnalyticsView
@@ -2943,6 +3006,18 @@ export default function App() {
       }
       onRemoveExclusion={(resourceGroup, policyName, exclusion) =>
         backendRequest<WorkspaceSnapshot>("azure.waf.config.removeExclusion", {
+          resourceGroup,
+          policyName,
+          exclusion,
+          confirm: true,
+        }).then((workspaceResult) => {
+          startTransition(() => {
+            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          });
+        })
+      }
+      onAddExclusion={(resourceGroup, policyName, exclusion) =>
+        backendRequest<WorkspaceSnapshot>("azure.waf.config.addExclusion", {
           resourceGroup,
           policyName,
           exclusion,

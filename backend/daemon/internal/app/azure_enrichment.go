@@ -101,6 +101,7 @@ func (s *Service) enrichAzureScoped(
 	case "webapps":
 		s.enrichAzureInventory(workspace, session, nil)
 		s.enrichAzureAppServiceInventory(workspace, session, nil)
+		s.enrichAzureWebAppDetail(workspace, session, nil)
 	}
 }
 
