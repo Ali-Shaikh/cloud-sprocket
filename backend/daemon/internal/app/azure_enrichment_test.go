@@ -398,13 +398,14 @@ func TestAzurePhaseOneEnrichmentRunsInParallel(t *testing.T) {
 		SelectedProfileID: "sub-001",
 		IsLocked:          true,
 	}
+	const enricherDelay = 80 * time.Millisecond
 	service := &Service{
 		store: dataStore,
 		azure: delayedAzureInventory{
 			stubAzureInventory: stubAzureInventory{
 				resourceGroups: []models.AzureResourceGroup{{Name: "demo-rg"}},
 			},
-			delay: 50 * time.Millisecond,
+			delay: enricherDelay,
 		},
 		now: func() time.Time { return time.Now().UTC() },
 	}
@@ -416,11 +417,7 @@ func TestAzurePhaseOneEnrichmentRunsInParallel(t *testing.T) {
 		}
 	}
 
-	parallelWorkspace := newWorkspace()
-	parallelStart := time.Now()
-	service.enrichAzureWorkspace(parallelWorkspace, session, azureEnrichmentOptions{lightweight: true})
-	parallelElapsed := time.Since(parallelStart)
-
+	// Measure serial first so the parallel pass is not compared against a warm cache.
 	serialWorkspace := newWorkspace()
 	serialStart := time.Now()
 	service.enrichAzureWorkspace(serialWorkspace, session, azureEnrichmentOptions{
@@ -429,13 +426,26 @@ func TestAzurePhaseOneEnrichmentRunsInParallel(t *testing.T) {
 	})
 	serialElapsed := time.Since(serialStart)
 
+	parallelWorkspace := newWorkspace()
+	parallelStart := time.Now()
+	service.enrichAzureWorkspace(parallelWorkspace, session, azureEnrichmentOptions{lightweight: true})
+	parallelElapsed := time.Since(parallelStart)
+
 	// Compare against a serial baseline on the same runner so Windows CI variance
-	// does not flake absolute timing thresholds.
-	if parallelElapsed >= serialElapsed {
+	// does not flake absolute timing thresholds. Require a meaningful serial budget
+	// before comparing; allow modest scheduler overhead on the parallel path.
+	const phaseOneEnrichers = 7
+	minSerialBaseline := time.Duration(phaseOneEnrichers/2) * enricherDelay
+	if serialElapsed < minSerialBaseline {
+		t.Fatalf("serial baseline too short (%v); need at least %v to compare parallelism", serialElapsed, minSerialBaseline)
+	}
+	parallelBudget := serialElapsed - serialElapsed/5
+	if parallelElapsed >= parallelBudget {
 		t.Fatalf(
-			"parallel enrichment took %v; expected faster than serial baseline %v",
+			"parallel enrichment took %v; expected faster than serial baseline %v (budget %v)",
 			parallelElapsed,
 			serialElapsed,
+			parallelBudget,
 		)
 	}
 	if len(parallelWorkspace.AzureResourceGroups) == 0 {
