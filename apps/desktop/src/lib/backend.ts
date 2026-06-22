@@ -13,6 +13,10 @@ import type {
   DeploymentJob,
   DeploymentLogEvent,
   EmulatorStatus,
+  IndexedResource,
+  IndexedResourceFilter,
+  IndexedResourceList,
+  InventoryRun,
   JobStatus,
   ProfileSummary,
   ProviderSummary,
@@ -30,6 +34,7 @@ export type BackendEventName =
   | "state.changed"
   | "job.updated"
   | "log.appended"
+  | "inventory.updated"
   | "deployment.log"
   | "deployment.changed";
 
@@ -72,6 +77,7 @@ type BackendEventMap = {
   "state.changed": StateChangedPayload;
   "job.updated": JobStatus;
   "log.appended": ActivityLogEntry;
+  "inventory.updated": InventoryRun;
   "deployment.log": DeploymentLogEvent;
   "deployment.changed": Deployment;
 };
@@ -2641,6 +2647,38 @@ function handleMockRequest<T>(
       return Promise.resolve(
         mockState.logs.slice(0, Number(params.limit ?? 50)) as T,
       );
+    case "inventory.refresh":
+      return Promise.resolve(mockInventoryRun() as T);
+    case "inventory.status":
+      return Promise.resolve([mockInventoryRun()] as T);
+    case "resources.list": {
+      const resources = mockIndexedResources();
+      const offset = Math.max(0, Number(params.offset ?? 0));
+      const limit = Math.min(500, Math.max(1, Number(params.limit ?? 100)));
+      const query = String(params.query ?? "").toLowerCase();
+      const filtered = resources.filter(
+        (resource) =>
+          (!params.provider || resource.provider === params.provider) &&
+          (!params.service || resource.service === params.service) &&
+          (!query || resource.name.toLowerCase().includes(query)),
+      );
+      const page = filtered.slice(offset, offset + limit);
+      return Promise.resolve({
+        resources: page,
+        total: filtered.length,
+        limit,
+        offset,
+        nextOffset: offset + page.length < filtered.length ? offset + page.length : undefined,
+      } as T);
+    }
+    case "resources.get": {
+      const resource = mockIndexedResources().find(
+        (entry) => entry.scopeId === params.scopeId && entry.id === params.resourceId,
+      );
+      return resource
+        ? Promise.resolve(resource as T)
+        : Promise.reject(new Error("resource not found"));
+    }
     case "app.settings.get":
       return Promise.resolve(mockState.settings as T);
     case "app.reset":
@@ -2724,6 +2762,77 @@ function handleMockRequest<T>(
     default:
       return Promise.reject(new Error(`Mock backend method not implemented: ${method}`));
   }
+}
+
+export async function refreshIndexedInventory(): Promise<InventoryRun> {
+  return backendRequest<InventoryRun>("inventory.refresh");
+}
+
+export async function listInventoryStatus(): Promise<InventoryRun[]> {
+  return backendRequest<InventoryRun[]>("inventory.status");
+}
+
+export async function listIndexedResources(
+  filter: IndexedResourceFilter = {},
+): Promise<IndexedResourceList> {
+  return backendRequest<IndexedResourceList>("resources.list", { ...filter });
+}
+
+export async function getIndexedResource(
+  scopeId: string,
+  resourceId: string,
+): Promise<IndexedResource> {
+  return backendRequest<IndexedResource>("resources.get", { scopeId, resourceId });
+}
+
+function mockInventoryRun(): InventoryRun {
+  return {
+    runId: "mock-inventory-run",
+    scopeId: `${mockState.session.lockedProviderId ?? "aws"}:${mockState.session.lockedProfileId ?? "sandbox"}`,
+    provider: mockState.session.lockedProviderId ?? "aws",
+    profileId: mockState.session.lockedProfileId ?? "sandbox",
+    startedAt: "2026-06-22T06:00:00Z",
+    completedAt: "2026-06-22T06:00:00Z",
+    status: "completed",
+    resourceCount: mockIndexedResources().length,
+    edgeCount: 0,
+  };
+}
+
+function mockIndexedResources(): IndexedResource[] {
+  const provider = mockState.session.lockedProviderId ?? "aws";
+  const profileId = mockState.session.lockedProfileId ?? "sandbox";
+  const scopeId = `${provider}:${profileId}`;
+  const seenAt = "2026-06-22T06:00:00Z";
+  if (provider === "azure") {
+    return mockAzureResourceGroups.map((group) => ({
+      id: `azure://${scopeId}/${group.location ?? "global"}/resources/resource-group/${group.name}`,
+      scopeId,
+      provider,
+      accountId: profileId,
+      region: group.location,
+      service: "resources",
+      type: "resource-group",
+      name: group.name,
+      status: group.provisioningState,
+      lastSeenAt: seenAt,
+      stale: false,
+      inventoryRunId: "mock-inventory-run",
+    }));
+  }
+  return mockWorkspaceBuckets.map((bucket) => ({
+    id: `aws://${scopeId}/global/s3/bucket/${bucket.name}`,
+    scopeId,
+    provider,
+    accountId: profileId,
+    service: "s3",
+    type: "bucket",
+    name: bucket.name,
+    sourceRef: `arn:aws:s3:::${bucket.name}`,
+    lastSeenAt: seenAt,
+    stale: false,
+    inventoryRunId: "mock-inventory-run",
+  }));
 }
 
 // --- IaC recipes & deployments: client wrappers + browser mock --------------

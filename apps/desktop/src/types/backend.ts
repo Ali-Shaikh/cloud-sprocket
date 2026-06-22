@@ -853,6 +853,57 @@ export interface WorkspaceSnapshot {
   iamPolicies: AwsIamPolicy[];
 }
 
+export interface InventoryRun {
+  runId: string;
+  scopeId: string;
+  provider: string;
+  profileId: string;
+  startedAt: string;
+  completedAt?: string;
+  status: string;
+  resourceCount: number;
+  edgeCount: number;
+  errorMessage?: string;
+}
+
+export interface IndexedResource {
+  id: string;
+  scopeId: string;
+  provider: string;
+  accountId: string;
+  region?: string;
+  service: string;
+  type: string;
+  name: string;
+  status?: string;
+  tags?: Record<string, string>;
+  attributes?: Record<string, string>;
+  sourceRef?: string;
+  lastSeenAt: string;
+  stale: boolean;
+  inventoryRunId: string;
+}
+
+export interface IndexedResourceFilter {
+  scopeId?: string;
+  provider?: string;
+  service?: string;
+  type?: string;
+  status?: string;
+  query?: string;
+  includeStale?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface IndexedResourceList {
+  resources: IndexedResource[];
+  total: number;
+  limit: number;
+  offset: number;
+  nextOffset?: number;
+}
+
 export interface JobStatus {
   jobId: string;
   label: string;

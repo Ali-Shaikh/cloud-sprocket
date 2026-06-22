@@ -285,6 +285,9 @@ func (s *Store) ResetAppData(ctx context.Context) error {
 		`DELETE FROM session_state`,
 		`DELETE FROM app_settings`,
 		`DELETE FROM resource_cache`,
+		`DELETE FROM resource_edges`,
+		`DELETE FROM resources`,
+		`DELETE FROM inventory_runs`,
 		`DELETE FROM activity_log`,
 		`DELETE FROM deployments`,
 		`DELETE FROM sqlite_sequence WHERE name = 'activity_log'`,
@@ -359,6 +362,55 @@ func (s *Store) migrate(ctx context.Context) error {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS inventory_runs (
+			run_id TEXT PRIMARY KEY,
+			scope_id TEXT NOT NULL,
+			provider TEXT NOT NULL,
+			profile_id TEXT NOT NULL,
+			started_at TEXT NOT NULL,
+			completed_at TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL,
+			resource_count INTEGER NOT NULL DEFAULT 0,
+			edge_count INTEGER NOT NULL DEFAULT 0,
+			error_message TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE INDEX IF NOT EXISTS inventory_runs_scope_started
+		 ON inventory_runs(scope_id, started_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS resources (
+			scope_id TEXT NOT NULL,
+			resource_id TEXT NOT NULL,
+			provider TEXT NOT NULL,
+			account_id TEXT NOT NULL,
+			region TEXT NOT NULL DEFAULT '',
+			service TEXT NOT NULL,
+			resource_type TEXT NOT NULL,
+			name TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT '',
+			tags_json TEXT NOT NULL DEFAULT '{}',
+			attributes_json TEXT NOT NULL DEFAULT '{}',
+			source_ref TEXT NOT NULL DEFAULT '',
+			inventory_run_id TEXT NOT NULL,
+			last_seen_at TEXT NOT NULL,
+			stale INTEGER NOT NULL DEFAULT 0 CHECK (stale IN (0, 1)),
+			PRIMARY KEY(scope_id, resource_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS resources_scope_service_name
+		 ON resources(scope_id, service, name)`,
+		`CREATE INDEX IF NOT EXISTS resources_provider_type
+		 ON resources(provider, resource_type)`,
+		`CREATE TABLE IF NOT EXISTS resource_edges (
+			scope_id TEXT NOT NULL,
+			source_id TEXT NOT NULL,
+			target_id TEXT NOT NULL,
+			kind TEXT NOT NULL,
+			confidence TEXT NOT NULL,
+			evidence TEXT NOT NULL DEFAULT '',
+			inventory_run_id TEXT NOT NULL,
+			last_seen_at TEXT NOT NULL,
+			PRIMARY KEY(scope_id, source_id, target_id, kind)
+		)`,
+		`CREATE INDEX IF NOT EXISTS resource_edges_target
+		 ON resource_edges(scope_id, target_id)`,
 	}
 
 	for _, statement := range statements {
