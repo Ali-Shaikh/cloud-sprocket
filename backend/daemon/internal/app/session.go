@@ -189,11 +189,11 @@ func (s *Service) handleWorkspaceGet(ctx context.Context, notifier Notifier) (an
 	if err != nil {
 		return nil, err
 	}
-	return s.buildWorkspaceSnapshotOpts(
-		snapshot,
-		session,
-		workspaceSnapshotOptions{lightweightAzure: true, lightweightAWS: true},
-	), nil
+	opts := workspaceSnapshotOptions{lightweightAzure: true, lightweightAWS: true}
+	if session.CurrentProviderID == "azure" {
+		opts.azureDeferredInventory = true
+	}
+	return s.buildWorkspaceSnapshotOpts(snapshot, session, opts), nil
 }
 
 func (s *Service) handleSessionSelectProvider(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

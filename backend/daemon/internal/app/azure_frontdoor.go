@@ -172,22 +172,30 @@ func (s *Service) enrichAzureFrontDoorInventory(
 		status       string
 	)
 
-	endpoints = s.azureFrontDoorEndpoints(ctx, profile, resourceGroup, profileName)
-	endpoint = selectedName(session.SelectedAzureFrontDoorEndpoint, frontDoorEndpointNames(endpoints))
-	originGroups = s.azureFrontDoorOriginGroups(ctx, profile, resourceGroup, profileName)
-	originGroup = selectedName(session.SelectedAzureFrontDoorOriginGroup, frontDoorOriginGroupNames(originGroups))
-	origins = s.azureFrontDoorOrigins(ctx, profile, resourceGroup, profileName, originGroup)
-
-	if len(profiles) == 0 {
-		status = "No Azure Front Door profiles found."
+	if opts.lightweight {
+		if len(profiles) == 0 {
+			status = "No Azure Front Door profiles found."
+		} else {
+			status = fmt.Sprintf("Loaded %d Front Door profile(s). Open topology refresh for endpoints and origins.", len(profiles))
+		}
 	} else {
-		status = fmt.Sprintf(
-			"Loaded %d profile(s), %d endpoint(s), %d origin group(s), %d origin(s).",
-			len(profiles),
-			len(endpoints),
-			len(originGroups),
-			len(origins),
-		)
+		endpoints = s.azureFrontDoorEndpoints(ctx, profile, resourceGroup, profileName)
+		endpoint = selectedName(session.SelectedAzureFrontDoorEndpoint, frontDoorEndpointNames(endpoints))
+		originGroups = s.azureFrontDoorOriginGroups(ctx, profile, resourceGroup, profileName)
+		originGroup = selectedName(session.SelectedAzureFrontDoorOriginGroup, frontDoorOriginGroupNames(originGroups))
+		origins = s.azureFrontDoorOrigins(ctx, profile, resourceGroup, profileName, originGroup)
+
+		if len(profiles) == 0 {
+			status = "No Azure Front Door profiles found."
+		} else {
+			status = fmt.Sprintf(
+				"Loaded %d profile(s), %d endpoint(s), %d origin group(s), %d origin(s).",
+				len(profiles),
+				len(endpoints),
+				len(originGroups),
+				len(origins),
+			)
+		}
 	}
 
 	lockWorkspace(mu, func() {

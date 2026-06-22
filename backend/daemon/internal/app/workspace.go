@@ -7,6 +7,7 @@ import (
 	"context"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"cloudsprocket/backend/daemon/internal/discovery"
@@ -34,6 +35,9 @@ type workspaceSnapshotOptions struct {
 	skipAzureInventory bool
 	// awsScope limits AWS enrichment to one service during selection handlers.
 	awsScope string
+	// azureDeferredInventory loads only resource groups and VMs on workspace.get.
+	// Other Azure services load on demand via azure.inventory.get per tab scope.
+	azureDeferredInventory bool
 }
 
 func (s *Service) buildWorkspaceSnapshot(
@@ -123,7 +127,12 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 		resourceGroupSelection: opts.azureResourceGroupSelection,
 	}
 	if !opts.skipAzureInventory {
-		s.enrichAzureWorkspace(&workspace, session, azureOpts)
+		if opts.azureDeferredInventory {
+			var mu sync.Mutex
+			s.enrichAzureInventory(&workspace, session, &mu)
+		} else {
+			s.enrichAzureWorkspace(&workspace, session, azureOpts)
+		}
 	}
 	if !opts.azureResourceGroupSelection && !opts.skipAwsInventory {
 		awsOpts := awsEnrichmentOptions{

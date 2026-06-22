@@ -48,7 +48,10 @@ func (s *Service) finishAzureWorkspace(
 	logLevel string,
 	logMsg string,
 ) (models.WorkspaceSnapshot, error) {
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{}, logLevel, logMsg)
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		lightweightAzure: true,
+		skipAwsInventory: true,
+	}, logLevel, logMsg)
 }
 
 func (s *Service) finishAzureWorkspaceOpts(

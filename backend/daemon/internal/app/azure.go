@@ -71,13 +71,17 @@ func (s *Service) azureVirtualMachines(
 	queryHash := profile.ProfileID + "|" + resourceGroup
 	ctx, cancel := s.withAzureTimeout(ctx)
 	defer cancel()
+	var cached []models.AzureVirtualMachine
+	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+		return cached
+	}
+
 	vms, err := s.azure.ListVirtualMachines(ctx, profile, resourceGroup)
 	if err == nil {
-		_ = s.store.SaveResourceCache(ctx, scope, queryHash, vms, s.timestamp())
+		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, vms)
 		return vms
 	}
 
-	var cached []models.AzureVirtualMachine
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
 		return cached
@@ -114,22 +118,16 @@ func (s *Service) enrichAzureInventory(workspace *models.WorkspaceSnapshot, sess
 	ctx, cancel := s.withAzureTimeout(context.Background())
 	defer cancel()
 
-	liveGroups, liveErr := s.azure.ListResourceGroups(ctx, profile)
-	groups := liveGroups
-	if liveErr == nil {
-		const scope = "azure.resource-groups"
-		_ = s.store.SaveResourceCache(ctx, scope, profile.ProfileID, groups, s.timestamp())
-	} else {
-		var cached []models.AzureResourceGroup
-		if _, ok, cacheErr := s.store.LoadResourceCache(ctx, "azure.resource-groups", profile.ProfileID, &cached); cacheErr == nil && ok {
-			groups = cached
-		}
+	groups := s.azureResourceGroups(ctx, profile)
+	var listErr error
+	if len(groups) == 0 {
+		_, listErr = s.azure.ListResourceGroups(ctx, profile)
 	}
 
 	selectedRG := s.selectedAzureResourceGroup(session, groups)
-	vms := s.azureVirtualMachines(context.Background(), profile, selectedRG)
+	vms := s.azureVirtualMachines(ctx, profile, selectedRG)
 	selectedVM := s.selectedAzureVMID(session, vms)
-	status := s.azureWorkspaceStatus(liveErr, workspace.Provider, session, groups, selectedRG, vms)
+	status := s.azureWorkspaceStatus(listErr, workspace.Provider, session, groups, selectedRG, vms)
 
 	lockWorkspace(mu, func() {
 		workspace.AzureResourceGroups = groups
