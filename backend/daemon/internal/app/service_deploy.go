@@ -344,7 +344,10 @@ func (s *Service) setDeploymentStatus(ctx context.Context, deployment *deploy.De
 	deployment.UpdatedAt = s.timestamp()
 	_ = s.store.SaveDeployment(ctx, deployment.ID, s.sealForStore(deployment), deployment.UpdatedAt)
 	if notifier != nil {
-		_ = notifier.Notify("deployment.changed", deployment)
+		// Notify a snapshot so listeners cannot race with later status updates on
+		// the shared deployment pointer (see TestDeploymentCancelStopsRunningPlan).
+		snapshot := *deployment
+		_ = notifier.Notify("deployment.changed", &snapshot)
 	}
 }
 
