@@ -28,14 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+
 import { EmptyState } from "@/components/empty-state";
 import type { AzureLogQueryResult, AzureWafLogColumnMap } from "@/types/backend";
 import { decodeWafRow, isTuningCandidate } from "@/lib/waf-decode";
@@ -431,6 +424,10 @@ function LogQueryResultPanel({
   );
 
   const shouldVirtualize = displayRows.length > VIRTUALIZE_ROW_THRESHOLD;
+  const columnTemplate = useMemo(
+    () => columnGridTemplate(shownColumns.length),
+    [shownColumns.length],
+  );
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
     count: shouldVirtualize ? displayRows.length : 0,
@@ -599,33 +596,30 @@ function LogQueryResultPanel({
           )}
         >
           {hasRows && shownColumns.length > 0 ? (
-            shouldVirtualize ? (
+            <div className="min-w-full">
               <div
-                className="min-w-full"
-                style={{ gridTemplateColumns: columnGridTemplate(shownColumns.length) }}
+                className="sticky top-0 z-10 grid border-b border-border bg-card"
+                style={{ gridTemplateColumns: columnTemplate }}
+                role="row"
               >
-                <div
-                  className="sticky top-0 z-10 grid border-b border-border bg-card"
-                  style={{ gridTemplateColumns: columnGridTemplate(shownColumns.length) }}
-                  role="row"
-                >
-                  {shownColumns.map((column) => (
-                    <div
-                      key={column}
-                      className="h-10 whitespace-nowrap bg-card px-3 text-left align-middle text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-                      role="columnheader"
+                {shownColumns.map((column) => (
+                  <div
+                    key={column}
+                    className="h-10 whitespace-nowrap bg-card px-3 text-left align-middle text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    role="columnheader"
+                  >
+                    <button
+                      type="button"
+                      className="inline-flex items-center font-semibold hover:text-foreground"
+                      onClick={() => toggleSort(column)}
                     >
-                      <button
-                        type="button"
-                        className="inline-flex items-center font-semibold hover:text-foreground"
-                        onClick={() => toggleSort(column)}
-                      >
-                        {column}
-                        {sortIcon(column, sortColumn, sortDirection)}
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                      {column}
+                      {sortIcon(column, sortColumn, sortDirection)}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {shouldVirtualize ? (
                 <div
                   role="rowgroup"
                   style={{
@@ -645,7 +639,7 @@ function LogQueryResultPanel({
                           selectedRowIndex === rowIndex && "bg-primary/10 hover:bg-primary/10",
                         )}
                         style={{
-                          gridTemplateColumns: columnGridTemplate(shownColumns.length),
+                          gridTemplateColumns: columnTemplate,
                           transform: `translateY(${virtualRow.start}px)`,
                         }}
                         onClick={() => openRow(rowIndex)}
@@ -665,53 +659,35 @@ function LogQueryResultPanel({
                     );
                   })}
                 </div>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader className="sticky top-0 z-10 bg-card">
-                  <TableRow>
-                    {shownColumns.map((column) => (
-                      <TableHead key={column} className="whitespace-nowrap bg-card">
-                        <button
-                          type="button"
-                          className="inline-flex items-center font-semibold hover:text-foreground"
-                          onClick={() => toggleSort(column)}
-                        >
-                          {column}
-                          {sortIcon(column, sortColumn, sortDirection)}
-                        </button>
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              ) : (
+                <div role="rowgroup">
                   {displayRows.map((row, rowIndex) => (
-                    <TableRow
+                    <div
                       key={rowIndex}
+                      role="row"
                       className={cn(
-                        "cursor-pointer hover:bg-muted/50",
+                        "grid w-full cursor-pointer border-b border-border transition-colors hover:bg-muted/50",
                         selectedRowIndex === rowIndex && "bg-primary/10 hover:bg-primary/10",
                       )}
+                      style={{ gridTemplateColumns: columnTemplate }}
                       onClick={() => openRow(rowIndex)}
                       aria-selected={selectedRowIndex === rowIndex}
                     >
                       {projectRow(row, columns, shownColumns).map((cell, cellIndex) => (
-                        <TableCell
+                        <div
                           key={`${rowIndex}-${cellIndex}`}
+                          role="cell"
                           title={cell}
-                          className={cn(
-                            "max-w-[320px] font-mono text-xs",
-                            wrapCells ? "whitespace-pre-wrap break-all" : "truncate",
-                          )}
+                          className={virtualCellClass(wrapCells)}
                         >
                           {cell}
-                        </TableCell>
+                        </div>
                       ))}
-                    </TableRow>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
-            )
+                </div>
+              )}
+            </div>
           ) : (
             <EmptyState
               icon={<Table2 />}
