@@ -90,6 +90,13 @@ export type AzureAppServiceViewProps = {
   onSelectWebApp: (appName: string) => void;
   onCreateWebApp: (resourceGroup: string, appName: string, location: string, runtime: string) => void;
   onInvokeAction: (action: AzureWebAppAction, appName: string) => void;
+  onSetSetting: (
+    appName: string,
+    name: string,
+    value: string,
+    slotSetting: boolean,
+  ) => Promise<void>;
+  onDeleteSetting: (appName: string, name: string) => Promise<void>;
 };
 
 const fieldLabel =
@@ -105,10 +112,19 @@ export default function AzureAppServiceView({
   onSelectWebApp,
   onCreateWebApp,
   onInvokeAction,
+  onSetSetting,
+  onDeleteSetting,
 }: AzureAppServiceViewProps) {
   const localProfile = isLocalFlociProfile(workspace);
   const canWrite = workspace.azureWritesEnabled && !localProfile;
   const [createOpen, setCreateOpen] = useState(false);
+  const [settingDialogOpen, setSettingDialogOpen] = useState(false);
+  const [settingDialogMode, setSettingDialogMode] = useState<"add" | "edit">("add");
+  const [settingName, setSettingName] = useState("");
+  const [settingValue, setSettingValue] = useState("");
+  const [settingSlotSetting, setSettingSlotSetting] = useState(false);
+  const [settingError, setSettingError] = useState<string | null>(null);
+  const [pendingDeleteSetting, setPendingDeleteSetting] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<AzureWebAppAction | null>(null);
   const [newAppName, setNewAppName] = useState("");
   const [newAppLocation, setNewAppLocation] = useState("westeurope");
@@ -122,6 +138,40 @@ export default function AzureAppServiceView({
   );
   const plans = workspace.azureAppServicePlans ?? [];
   const settings = workspace.azureWebAppSettings ?? [];
+
+  function openAddSettingDialog() {
+    setSettingDialogMode("add");
+    setSettingName("");
+    setSettingValue("");
+    setSettingSlotSetting(false);
+    setSettingError(null);
+    setSettingDialogOpen(true);
+  }
+
+  function openEditSettingDialog(name: string, slotSetting: boolean) {
+    setSettingDialogMode("edit");
+    setSettingName(name);
+    setSettingValue("");
+    setSettingSlotSetting(slotSetting);
+    setSettingError(null);
+    setSettingDialogOpen(true);
+  }
+
+  async function confirmSetSetting() {
+    if (!selectedApp) return;
+    const name = settingName.trim();
+    if (!name) {
+      setSettingError("Setting name is required.");
+      return;
+    }
+    setSettingError(null);
+    try {
+      await onSetSetting(selectedApp.name, name, settingValue, settingSlotSetting);
+      setSettingDialogOpen(false);
+    } catch (caught) {
+      setSettingError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }
 
   if (localProfile) {
     return (
@@ -359,10 +409,22 @@ export default function AzureAppServiceView({
       </section>
 
       <section className={sectionCard}>
-        <h2 className="text-base font-bold">Application settings</h2>
-        <p className="text-sm text-muted-foreground">
-          Read-only view of app settings for the selected web app. Sensitive names are masked.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold">Application settings</h2>
+            <p className="text-sm text-muted-foreground">
+              On container web apps these settings are exposed as environment variables. Updates
+              trigger an app recycle. Sensitive names are masked in the table.
+            </p>
+          </div>
+          {selectedApp && canWrite ? (
+            <Button variant="outline" size="sm" onClick={openAddSettingDialog}>
+              <Plus />
+              Add setting
+            </Button>
+          ) : null}
+        </div>
+        {settingError ? <p className="text-sm text-destructive">{settingError}</p> : null}
         {inventoryLoading ? (
           <InventoryLoadingState variant="inline" label="Loading application settings..." />
         ) : !selectedApp ? (
@@ -374,6 +436,7 @@ export default function AzureAppServiceView({
                 <TableHead>Name</TableHead>
                 <TableHead>Value</TableHead>
                 <TableHead>Slot setting</TableHead>
+                {canWrite ? <TableHead /> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -384,6 +447,24 @@ export default function AzureAppServiceView({
                     {maskSettingValue(setting.name, setting.value)}
                   </TableCell>
                   <TableCell>{setting.slotSetting ? "Yes" : "No"}</TableCell>
+                  {canWrite ? (
+                    <TableCell className="space-x-2 text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openEditSettingDialog(setting.name, setting.slotSetting ?? false)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPendingDeleteSetting(setting.name)}
+                      >
+                        Delete
+                      </Button>
+                    </TableCell>
+                  ) : null}
                 </TableRow>
               ))}
             </TableBody>
@@ -457,6 +538,93 @@ export default function AzureAppServiceView({
               }}
             >
               Create
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={settingDialogOpen} onOpenChange={setSettingDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {settingDialogMode === "add" ? "Add application setting" : "Update application setting"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Applies to {selectedApp?.name ?? "the selected web app"}. Container apps receive
+                  these as environment variables.
+                </p>
+                <div>
+                  <div className={fieldLabel}>Name</div>
+                  <Input
+                    value={settingName}
+                    onChange={(event) => setSettingName(event.target.value)}
+                    placeholder="MY_ENV_VAR"
+                    disabled={settingDialogMode === "edit"}
+                    spellCheck={false}
+                  />
+                </div>
+                <div>
+                  <div className={fieldLabel}>Value</div>
+                  <Input
+                    value={settingValue}
+                    onChange={(event) => setSettingValue(event.target.value)}
+                    placeholder={settingDialogMode === "edit" ? "Enter new value" : "value"}
+                    spellCheck={false}
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={settingSlotSetting}
+                    onChange={(event) => setSettingSlotSetting(event.target.checked)}
+                  />
+                  Deployment slot setting (sticky per slot)
+                </label>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!settingName.trim()}
+              onClick={() => void confirmSetSetting()}
+            >
+              {settingDialogMode === "add" ? "Add" : "Update"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={pendingDeleteSetting != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDeleteSetting(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete application setting?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove {pendingDeleteSetting} from {selectedApp?.name}. This triggers an app recycle.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingDeleteSetting && selectedApp) {
+                  void onDeleteSetting(selectedApp.name, pendingDeleteSetting).catch((caught: unknown) => {
+                    setSettingError(caught instanceof Error ? caught.message : String(caught));
+                  });
+                }
+                setPendingDeleteSetting(null);
+              }}
+            >
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

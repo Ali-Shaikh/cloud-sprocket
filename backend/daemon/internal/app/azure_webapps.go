@@ -231,6 +231,122 @@ func (s *Service) handleAzureWebAppsInvokeAction(ctx context.Context, params jso
 	}, "success", fmt.Sprintf("Invoked %s on web app %s.", action, app.Name))
 }
 
+func (s *Service) handleAzureWebAppsSetSetting(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		AppName     string `json:"appName"`
+		Name        string `json:"name"`
+		Value       string `json:"value"`
+		SlotSetting bool   `json:"slotSetting"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	settingName := strings.TrimSpace(request.Name)
+	if settingName == "" {
+		return nil, errors.New("a setting name is required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	profile, resourceGroup, app, err := s.activeAzureWebAppSelection(snapshot, session, request.AppName)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !effectiveAzureWritesEnabled(session, profile, s.azureProviderCommandPath(snapshot)) {
+		s.mu.Unlock()
+		return nil, errors.New("updating app settings requires write mode to be enabled for this Azure workspace")
+	}
+	s.mu.Unlock()
+
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+	if err := s.azure.SetWebAppSetting(timeoutCtx, profile, resourceGroup, app.Name, settingName, request.Value, request.SlotSetting); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	session.SelectedAzureResourceGroup = resourceGroup
+	session.SelectedAzureWebAppName = app.Name
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.mu.Unlock()
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "webapps",
+	}, "success", fmt.Sprintf("Set application setting %s on web app %s.", settingName, app.Name))
+}
+
+func (s *Service) handleAzureWebAppsDeleteSetting(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		AppName string `json:"appName"`
+		Name    string `json:"name"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	settingName := strings.TrimSpace(request.Name)
+	if settingName == "" {
+		return nil, errors.New("a setting name is required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	profile, resourceGroup, app, err := s.activeAzureWebAppSelection(snapshot, session, request.AppName)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !effectiveAzureWritesEnabled(session, profile, s.azureProviderCommandPath(snapshot)) {
+		s.mu.Unlock()
+		return nil, errors.New("deleting app settings requires write mode to be enabled for this Azure workspace")
+	}
+	s.mu.Unlock()
+
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+	if err := s.azure.DeleteWebAppSetting(timeoutCtx, profile, resourceGroup, app.Name, settingName); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	session.SelectedAzureResourceGroup = resourceGroup
+	session.SelectedAzureWebAppName = app.Name
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.mu.Unlock()
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "webapps",
+	}, "success", fmt.Sprintf("Deleted application setting %s from web app %s.", settingName, app.Name))
+}
+
 func (s *Service) handleAzureSelectWebApp(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		AppName string `json:"appName"`

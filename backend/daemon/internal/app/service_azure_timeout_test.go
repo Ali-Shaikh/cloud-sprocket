@@ -107,6 +107,16 @@ func (blockingAzure) ListWebAppSettings(ctx context.Context, _ models.ProfileSum
 	return nil, ctx.Err()
 }
 
+func (blockingAzure) SetWebAppSetting(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ string, _ bool) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (blockingAzure) DeleteWebAppSetting(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
 func (blockingAzure) InvokeWebAppAction(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) error {
 	<-ctx.Done()
 	return ctx.Err()

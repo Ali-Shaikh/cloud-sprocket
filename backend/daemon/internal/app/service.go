@@ -203,6 +203,10 @@ func (s *Service) Handle(
 		return s.handleAzureWebAppsCreate(ctx, params, notifier)
 	case "azure.webApps.invokeAction":
 		return s.handleAzureWebAppsInvokeAction(ctx, params, notifier)
+	case "azure.webApps.setSetting":
+		return s.handleAzureWebAppsSetSetting(ctx, params, notifier)
+	case "azure.webApps.deleteSetting":
+		return s.handleAzureWebAppsDeleteSetting(ctx, params, notifier)
 	case "azure.storage.selectAccount":
 		return s.handleAzureStorageSelectAccount(ctx, params, notifier)
 	case "azure.storage.selectContainer":

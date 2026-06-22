@@ -274,6 +274,14 @@ func (stubAzureInventory) ListWebAppSettings(context.Context, models.ProfileSumm
 	return []models.AzureWebAppSetting{{Name: "WEBSITE_NODE_DEFAULT_VERSION", Value: "~22"}}, nil
 }
 
+func (stubAzureInventory) SetWebAppSetting(context.Context, models.ProfileSummary, string, string, string, string, bool) error {
+	return nil
+}
+
+func (stubAzureInventory) DeleteWebAppSetting(context.Context, models.ProfileSummary, string, string, string) error {
+	return nil
+}
+
 func (stubAzureInventory) InvokeWebAppAction(context.Context, models.ProfileSummary, string, string, string) error {
 	return nil
 }

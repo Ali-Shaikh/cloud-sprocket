@@ -2875,6 +2875,36 @@ export default function App() {
             setAzureAppServiceActionStatus(error instanceof Error ? error.message : String(error));
           });
       }}
+      onSetSetting={(appName, name, value, slotSetting) => {
+        setAzureAppServiceActionStatus(`Setting ${name}...`);
+        return backendRequest<WorkspaceSnapshot>("azure.webApps.setSetting", {
+          appName,
+          name,
+          value,
+          slotSetting,
+        }).then((workspaceResult) => {
+          startTransition(() => {
+            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          });
+          setAzureAppServiceActionStatus(
+            workspaceResult.azureAppServiceStatusMessage || `Set application setting ${name}.`,
+          );
+        });
+      }}
+      onDeleteSetting={(appName, name) => {
+        setAzureAppServiceActionStatus(`Deleting ${name}...`);
+        return backendRequest<WorkspaceSnapshot>("azure.webApps.deleteSetting", {
+          appName,
+          name,
+        }).then((workspaceResult) => {
+          startTransition(() => {
+            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          });
+          setAzureAppServiceActionStatus(
+            workspaceResult.azureAppServiceStatusMessage || `Deleted application setting ${name}.`,
+          );
+        });
+      }}
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-log-analytics" ? (
     <LogAnalyticsView

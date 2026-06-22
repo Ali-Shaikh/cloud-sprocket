@@ -316,6 +316,71 @@ func (i *Inventory) ListWebAppSettings(
 	return settings, nil
 }
 
+func (i *Inventory) SetWebAppSetting(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	resourceGroup string,
+	appName string,
+	name string,
+	value string,
+	slotSetting bool,
+) error {
+	if isLocalFlociProfile(profile) {
+		return fmt.Errorf("app service settings are not supported on the floci-az local profile")
+	}
+	resourceGroup = strings.TrimSpace(resourceGroup)
+	appName = strings.TrimSpace(appName)
+	name = strings.TrimSpace(name)
+	if resourceGroup == "" || appName == "" || name == "" {
+		return fmt.Errorf("resource group, app name, and setting name are required")
+	}
+	settingArg := name + "=" + value
+	args := []string{
+		"webapp", "config", "appsettings", "set",
+		"--subscription", profile.ProfileID,
+		"--resource-group", resourceGroup,
+		"--name", appName,
+		"--output", "none",
+		"--only-show-errors",
+	}
+	if slotSetting {
+		args = append(args, "--slot-settings", settingArg)
+	} else {
+		args = append(args, "--settings", settingArg)
+	}
+	_, err := i.run(ctx, args...)
+	return err
+}
+
+func (i *Inventory) DeleteWebAppSetting(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	resourceGroup string,
+	appName string,
+	name string,
+) error {
+	if isLocalFlociProfile(profile) {
+		return fmt.Errorf("app service settings are not supported on the floci-az local profile")
+	}
+	resourceGroup = strings.TrimSpace(resourceGroup)
+	appName = strings.TrimSpace(appName)
+	name = strings.TrimSpace(name)
+	if resourceGroup == "" || appName == "" || name == "" {
+		return fmt.Errorf("resource group, app name, and setting name are required")
+	}
+	args := []string{
+		"webapp", "config", "appsettings", "delete",
+		"--subscription", profile.ProfileID,
+		"--resource-group", resourceGroup,
+		"--name", appName,
+		"--setting-names", name,
+		"--output", "none",
+		"--only-show-errors",
+	}
+	_, err := i.run(ctx, args...)
+	return err
+}
+
 func (i *Inventory) InvokeWebAppAction(
 	ctx context.Context,
 	profile models.ProfileSummary,

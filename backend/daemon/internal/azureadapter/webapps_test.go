@@ -114,6 +114,47 @@ func TestPlanNameFromServerFarmID(t *testing.T) {
 	}
 }
 
+func TestSetWebAppSettingBuildsExpectedArgs(t *testing.T) {
+	fake := &fakeCLI{}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	if err := inv.SetWebAppSetting(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "MY_ENV", "prod", false); err != nil {
+		t.Fatalf("SetWebAppSetting: %v", err)
+	}
+	expectCLIArgsContain(t, fake.args,
+		"webapp", "config", "appsettings", "set",
+		"--resource-group", "rg-prod",
+		"--name", "mkt-portal",
+		"--settings", "MY_ENV=prod",
+	)
+}
+
+func TestSetWebAppSettingUsesSlotSettingsFlag(t *testing.T) {
+	fake := &fakeCLI{}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	if err := inv.SetWebAppSetting(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "SLOT_ONLY", "1", true); err != nil {
+		t.Fatalf("SetWebAppSetting: %v", err)
+	}
+	expectCLIArgsContain(t, fake.args, "--slot-settings", "SLOT_ONLY=1")
+}
+
+func TestDeleteWebAppSettingBuildsExpectedArgs(t *testing.T) {
+	fake := &fakeCLI{}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	if err := inv.DeleteWebAppSetting(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "MY_ENV"); err != nil {
+		t.Fatalf("DeleteWebAppSetting: %v", err)
+	}
+	expectCLIArgsContain(t, fake.args,
+		"webapp", "config", "appsettings", "delete",
+		"--setting-names", "MY_ENV",
+	)
+}
+
 func TestListWebAppsLocalFlociRejected(t *testing.T) {
 	inv := NewInventory(config.Settings{})
 	if _, err := inv.ListWebApps(context.Background(), localFlociProfile(), "rg-prod"); err == nil {

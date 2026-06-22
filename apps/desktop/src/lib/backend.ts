@@ -2039,6 +2039,40 @@ function handleMockRequest<T>(
     case "azure.webApps.select":
       mockState.session.selectedAzureWebAppName = String(params.appName ?? "");
       return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.webApps.setSetting": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(
+          new Error("updating app settings requires write mode to be enabled for this Azure workspace"),
+        );
+      }
+      const name = String(params.name ?? "").trim();
+      const value = String(params.value ?? "");
+      const slotSetting = Boolean(params.slotSetting);
+      const existing = mockAzureWebAppSettings.find((entry) => entry.name === name);
+      if (existing) {
+        existing.value = value;
+        existing.slotSetting = slotSetting;
+      } else {
+        mockAzureWebAppSettings.push({ name, value, slotSetting });
+      }
+      mockAzureWebAppSettings.sort((left, right) => left.name.localeCompare(right.name));
+      appendLog("success", `Set application setting ${name} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.webApps.deleteSetting": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(
+          new Error("deleting app settings requires write mode to be enabled for this Azure workspace"),
+        );
+      }
+      const name = String(params.name ?? "").trim();
+      const index = mockAzureWebAppSettings.findIndex((entry) => entry.name === name);
+      if (index >= 0) {
+        mockAzureWebAppSettings.splice(index, 1);
+      }
+      appendLog("success", `Deleted application setting ${name} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "azure.webApps.invokeAction": {
       if (!mockState.session.azureWriteModeEnabled) {
         return Promise.reject(
