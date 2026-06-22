@@ -877,6 +877,7 @@ export default function App() {
   const [azureStorageActionStatus, setAzureStorageActionStatus] = useState("");
   const [azureAppServiceActionStatus, setAzureAppServiceActionStatus] = useState("");
   const [azureFrontDoorActionStatus, setAzureFrontDoorActionStatus] = useState("");
+  const [azureFrontDoorTopologyLoading, setAzureFrontDoorTopologyLoading] = useState(false);
   const [writeModeDialogOpen, setWriteModeDialogOpen] = useState(false);
   const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<"enable" | "incapable">("enable");
   const [writeModePending, setWriteModePending] = useState(false);
@@ -1129,12 +1130,16 @@ export default function App() {
 
   useEffect(() => {
     if (!session.isLocked || activeWorkspaceTabId !== "azure-front-door") {
+      setAzureFrontDoorTopologyLoading(false);
       return;
     }
+    setAzureFrontDoorTopologyLoading(true);
     void mutateWorkspaceSelection("azure.frontDoor.refresh", {}, {
       panelLoading: true,
       merge: mergeAzureFrontDoorSelection,
       errorTitle: "Could not refresh Front Door topology",
+    }).finally(() => {
+      setAzureFrontDoorTopologyLoading(false);
     });
   }, [activeWorkspaceTabId, session.isLocked, session.selectedProfileId]);
 
@@ -3182,9 +3187,10 @@ export default function App() {
   ) : session.isLocked && activeWorkspaceTabId === "azure-front-door" ? (
     <AzureFrontDoorView
       workspace={activeWorkspace}
-      inventoryLoading={azureInventoryLoading}
+      inventoryLoading={azureInventoryLoading || azureFrontDoorTopologyLoading}
       actionStatus={azureFrontDoorActionStatus}
       onRefresh={() => {
+        setAzureFrontDoorTopologyLoading(true);
         setAzureFrontDoorActionStatus("Refreshing Front Door topology...");
         void mutateWorkspaceSelection("azure.frontDoor.refresh", {}, {
           panelLoading: true,
@@ -3196,6 +3202,9 @@ export default function App() {
           })
           .catch((error: unknown) => {
             setAzureFrontDoorActionStatus(error instanceof Error ? error.message : String(error));
+          })
+          .finally(() => {
+            setAzureFrontDoorTopologyLoading(false);
           });
       }}
       onPurgeCache={(profile, endpointName, contentPaths, domains) => {

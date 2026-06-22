@@ -129,6 +129,13 @@ export default function AzureFrontDoorView({
 
   const curatedQueries = useMemo(() => AFD_CURATED_QUERIES, []);
 
+  const topologyLoadingLabel =
+    inventoryLoading && profiles.length > 0
+      ? "Refreshing Front Door topology..."
+      : workspace.azureFrontDoorStatusMessage || "Loading Front Door topology...";
+  const showFullTopologyLoader =
+    inventoryLoading && endpoints.length === 0 && originGroups.length === 0;
+
   async function runQuery(nextQuery = query): Promise<void> {
     const workspaceName = logWorkspace.trim();
     if (!workspaceName) {
@@ -170,12 +177,20 @@ export default function AzureFrontDoorView({
         </TabsList>
 
         <TabsContent value="topology" className="space-y-6">
+          {inventoryLoading ? (
+            <InventoryLoadingState variant="banner" label={topologyLoadingLabel} />
+          ) : null}
+
           <section className={sectionCard}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex flex-wrap items-end gap-3">
               <div className="w-72">
                 <div className={cn(fieldLabel, "mb-1")}>Profile</div>
-                <Select value={profileName} onValueChange={(value) => value && onSelectProfile(value)}>
+                <Select
+                  value={profileName}
+                  disabled={inventoryLoading}
+                  onValueChange={(value) => value && onSelectProfile(value)}
+                >
                   <SelectTrigger aria-label="Select Front Door profile">
                     <SelectValue placeholder="Select profile" />
                   </SelectTrigger>
@@ -212,14 +227,9 @@ export default function AzureFrontDoorView({
                 <span>{selectedProfile.location || "Global"}</span>
               </div>
             ) : null}
-            {inventoryLoading ? (
-              <InventoryLoadingState
-                variant="inline"
-                label={workspace.azureFrontDoorStatusMessage || "Loading Front Door topology..."}
-              />
-            ) : (
+            {!inventoryLoading ? (
               <p className="text-sm text-muted-foreground">{workspace.azureFrontDoorStatusMessage}</p>
-            )}
+            ) : null}
             {actionStatus ? <p className="text-sm text-muted-foreground">{actionStatus}</p> : null}
           </section>
 
@@ -231,12 +241,19 @@ export default function AzureFrontDoorView({
             />
           ) : null}
 
-          <section className={sectionCard}>
+          {showFullTopologyLoader ? (
+            <section className={sectionCard}>
+              <InventoryLoadingState
+                variant="panel"
+                label={`${topologyLoadingLabel} This can take a few seconds while endpoints, origin groups, and origins are loaded from Azure.`}
+              />
+            </section>
+          ) : (
+            <>
+          <section className={cn(sectionCard, inventoryLoading ? "opacity-60" : undefined)}>
             <h2 className="text-base font-bold">Endpoints</h2>
             <div className="overflow-hidden rounded-lg border border-border">
-              {inventoryLoading && endpoints.length === 0 ? (
-                <InventoryLoadingState label="Loading endpoints..." className="border-0 bg-transparent" />
-              ) : endpoints.length === 0 ? (
+              {endpoints.length === 0 ? (
                 <EmptyState
                   icon={<Globe />}
                   title="No endpoints"
@@ -271,6 +288,7 @@ export default function AzureFrontDoorView({
                             <Button
                               variant="outline"
                               size="sm"
+                              disabled={inventoryLoading}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setPurgePaths("/*");
@@ -291,7 +309,7 @@ export default function AzureFrontDoorView({
             </div>
           </section>
 
-          <section className={sectionCard}>
+          <section className={cn(sectionCard, inventoryLoading ? "opacity-60" : undefined)}>
             <div className="flex flex-wrap items-end gap-3">
               <h2 className="text-base font-bold">Origin groups</h2>
             </div>
@@ -331,7 +349,7 @@ export default function AzureFrontDoorView({
             </div>
           </section>
 
-          <section className={sectionCard}>
+          <section className={cn(sectionCard, inventoryLoading ? "opacity-60" : undefined)}>
             <h2 className="text-base font-bold">
               Origins{originGroupName ? ` · ${originGroupName}` : ""}
             </h2>
@@ -369,6 +387,8 @@ export default function AzureFrontDoorView({
               </Table>
             )}
           </section>
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="access-logs" className="space-y-6">
