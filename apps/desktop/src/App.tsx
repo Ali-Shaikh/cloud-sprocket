@@ -1668,6 +1668,9 @@ export default function App() {
       .finally(() => {
         endAzureInventoryFetch();
       });
+    // workspace is read for azureInventoryLoaded only; azureInventoryFetchedScopesRef
+    // is the primary guard against duplicate fetches (exhaustive-deps).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scope ref + tab id drive fetches
   }, [
     activeWorkspaceTabId,
     session.isLocked,

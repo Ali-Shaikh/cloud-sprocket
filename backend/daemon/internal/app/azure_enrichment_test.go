@@ -19,14 +19,14 @@ import (
 
 type countingAzureInventory struct {
 	stubAzureInventory
-	detectSchemaCalls       atomic.Int32
-	getPolicyCalls          atomic.Int32
-	listBlobsCalls          atomic.Int32
-	listVMCalls             atomic.Int32
-	listResourceGroupsCalls atomic.Int32
+	detectSchemaCalls        atomic.Int32
+	getPolicyCalls           atomic.Int32
+	listBlobsCalls           atomic.Int32
+	listVMCalls              atomic.Int32
+	listResourceGroupsCalls  atomic.Int32
 	listStorageAccountsCalls atomic.Int32
-	lastVMResourceGroup     string
-	peekQueueCalls          atomic.Int32
+	lastVMResourceGroup      string
+	peekQueueCalls           atomic.Int32
 }
 
 func (c *countingAzureInventory) ListResourceGroups(ctx context.Context, profile models.ProfileSummary) ([]models.AzureResourceGroup, error) {
@@ -498,6 +498,26 @@ func (p *parallelismProbeAzureInventory) ListEntraAppRegistrations(ctx context.C
 	return p.stubAzureInventory.ListEntraAppRegistrations(ctx, profile)
 }
 
+func (p *parallelismProbeAzureInventory) ListWebApps(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureWebApp, error) {
+	p.track()
+	return p.stubAzureInventory.ListWebApps(ctx, profile, resourceGroup)
+}
+
+func (p *parallelismProbeAzureInventory) ListStorageQueues(ctx context.Context, profile models.ProfileSummary, accountName string) ([]models.AzureStorageQueue, error) {
+	p.track()
+	return p.stubAzureInventory.ListStorageQueues(ctx, profile, accountName)
+}
+
+func (p *parallelismProbeAzureInventory) ListWafPolicies(ctx context.Context, profile models.ProfileSummary, withDetail bool) ([]models.AzureWafPolicySummary, error) {
+	p.track()
+	return p.stubAzureInventory.ListWafPolicies(ctx, profile, withDetail)
+}
+
+func (p *parallelismProbeAzureInventory) ListFrontDoorProfiles(ctx context.Context, profile models.ProfileSummary, withWafLink bool) ([]models.AzureFrontDoorProfile, error) {
+	p.track()
+	return p.stubAzureInventory.ListFrontDoorProfiles(ctx, profile, withWafLink)
+}
+
 func TestAzurePhaseOneEnrichmentRunsInParallel(t *testing.T) {
 	dataStore, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -534,6 +554,7 @@ func TestAzurePhaseOneEnrichmentRunsInParallel(t *testing.T) {
 	service.enrichAzureWorkspace(serialWorkspace, session, azureEnrichmentOptions{
 		lightweight:    true,
 		serialPhaseOne: true,
+		serialPhaseTwo: true,
 	})
 	serialOverlap := probe.maxConcurrent
 
@@ -560,6 +581,77 @@ func TestAzurePhaseOneEnrichmentRunsInParallel(t *testing.T) {
 	}
 	if len(parallelWorkspace.AzureEntraUsers) == 0 {
 		t.Fatal("expected Entra users after parallel enrichment")
+	}
+}
+
+func TestAzurePhaseTwoEnrichmentRunsInParallel(t *testing.T) {
+	dataStore, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer dataStore.Close()
+
+	session := models.SessionSnapshot{
+		CurrentProviderID: "azure",
+		SelectedProfileID: "sub-001",
+		IsLocked:          true,
+	}
+	probe := &parallelismProbeAzureInventory{
+		stubAzureInventory: stubAzureInventory{
+			resourceGroups: []models.AzureResourceGroup{{Name: "demo-rg"}},
+		},
+		hold: 40 * time.Millisecond,
+	}
+	service := &Service{
+		store: dataStore,
+		azure: probe,
+		now:   func() time.Time { return time.Now().UTC() },
+	}
+
+	newWorkspace := func() *models.WorkspaceSnapshot {
+		return &models.WorkspaceSnapshot{
+			Provider: &models.ProviderSummary{ProviderID: "azure"},
+			Profile:  &models.ProfileSummary{ProviderID: "azure", ProfileID: "sub-001"},
+		}
+	}
+
+	probe.resetProbe()
+	serialWorkspace := newWorkspace()
+	service.enrichAzureWorkspace(serialWorkspace, session, azureEnrichmentOptions{
+		lightweight:    true,
+		serialPhaseOne: true,
+		serialPhaseTwo: true,
+	})
+	serialOverlap := probe.maxConcurrent
+
+	probe.resetProbe()
+	parallelWorkspace := newWorkspace()
+	service.enrichAzureWorkspace(parallelWorkspace, session, azureEnrichmentOptions{
+		lightweight:    true,
+		serialPhaseOne: true,
+	})
+	parallelOverlap := probe.maxConcurrent
+
+	// Phase one stays serial; Entra still fans out internally.
+	const entraInternalParallelism = 3
+	if serialOverlap < 1 || serialOverlap > entraInternalParallelism {
+		t.Fatalf("unexpected serial overlap %d; want 1..%d", serialOverlap, entraInternalParallelism)
+	}
+	if parallelOverlap <= serialOverlap {
+		t.Fatalf(
+			"phase-two parallel overlap %d did not exceed serial overlap %d",
+			parallelOverlap,
+			serialOverlap,
+		)
+	}
+	if len(parallelWorkspace.AzureWebApps) == 0 {
+		t.Fatal("expected web apps after parallel phase-two enrichment")
+	}
+	if len(parallelWorkspace.AzureWafPolicies) == 0 {
+		t.Fatal("expected WAF policies after parallel phase-two enrichment")
+	}
+	if len(parallelWorkspace.AzureFrontDoorProfiles) == 0 {
+		t.Fatal("expected Front Door profiles after parallel phase-two enrichment")
 	}
 }
 

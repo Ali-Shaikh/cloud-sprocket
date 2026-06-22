@@ -17,28 +17,29 @@ import (
 func (s *Service) azureResourceGroups(
 	ctx context.Context,
 	profile models.ProfileSummary,
-) []models.AzureResourceGroup {
+) ([]models.AzureResourceGroup, error) {
 	const scope = "azure.resource-groups"
 	queryHash := profile.ProfileID
 	ctx, cancel := s.withAzureTimeout(ctx)
 	defer cancel()
 	var cached []models.AzureResourceGroup
 	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
-		return cached
+		return cached, nil
 	}
 
 	groups, err := s.azure.ListResourceGroups(ctx, profile)
 	if err == nil {
 		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, groups)
-		return groups
+		return groups, nil
 	}
 
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
-		return cached
+		// SWR: serve stale cache without surfacing the live error.
+		return cached, nil
 	}
 
-	return []models.AzureResourceGroup{}
+	return []models.AzureResourceGroup{}, err
 }
 
 func (s *Service) selectedAzureResourceGroup(
@@ -118,11 +119,7 @@ func (s *Service) enrichAzureInventory(workspace *models.WorkspaceSnapshot, sess
 	ctx, cancel := s.withAzureTimeout(context.Background())
 	defer cancel()
 
-	groups := s.azureResourceGroups(ctx, profile)
-	var listErr error
-	if len(groups) == 0 {
-		_, listErr = s.azure.ListResourceGroups(ctx, profile)
-	}
+	groups, listErr := s.azureResourceGroups(ctx, profile)
 
 	selectedRG := s.selectedAzureResourceGroup(session, groups)
 	vms := s.azureVirtualMachines(ctx, profile, selectedRG)
