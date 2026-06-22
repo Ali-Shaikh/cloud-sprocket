@@ -371,6 +371,10 @@ func (stubAzureInventory) ListEntraAppRegistrations(context.Context, models.Prof
 	return []models.AzureEntraApp{{DisplayName: "my-api", AppID: "app-1"}}, nil
 }
 
+func (stubAzureInventory) CheckCLIExtensions(context.Context) []models.AzureCLIExtensionStatus {
+	return nil
+}
+
 func (stubAzureInventory) ListBastionHosts(context.Context, models.ProfileSummary) ([]models.AzureBastionHost, error) {
 	return []models.AzureBastionHost{
 		{Name: "bastion-hub", ResourceGroup: "rg-network", Location: "westeurope", SKU: "Standard"},

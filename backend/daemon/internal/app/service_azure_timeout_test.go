@@ -227,6 +227,10 @@ func (blockingAzure) ListBastionHosts(ctx context.Context, _ models.ProfileSumma
 	return nil, ctx.Err()
 }
 
+func (blockingAzure) CheckCLIExtensions(context.Context) []models.AzureCLIExtensionStatus {
+	return nil
+}
+
 // TestAzureInventoryBoundedByTimeout proves a stalled Azure inventory call is
 // cut off by the configured timeout (and falls back to empty) instead of
 // hanging the workspace snapshot.

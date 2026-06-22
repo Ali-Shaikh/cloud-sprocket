@@ -50,6 +50,15 @@ type DetailField struct {
 	Sensitive bool   `json:"sensitive,omitempty"`
 }
 
+// AzureCLIExtensionStatus reports whether a required Azure CLI extension is
+// installed for cloud profile workbenches.
+type AzureCLIExtensionStatus struct {
+	Name           string `json:"name"`
+	Summary        string `json:"summary"`
+	Installed      bool   `json:"installed"`
+	InstallCommand string `json:"installCommand"`
+}
+
 type AuthMethodStatus struct {
 	Method    AuthMethod `json:"method"`
 	Label     string     `json:"label"`
@@ -832,6 +841,7 @@ type WorkspaceSnapshot struct {
 	IAMRoles                       []AwsIamRole                 `json:"iamRoles"`
 	IAMPolicies                    []AwsIamPolicy               `json:"iamPolicies"`
 	AzureEndpointURL               string                       `json:"azureEndpointUrl,omitempty"`
+	AzureCLIExtensions             []AzureCLIExtensionStatus    `json:"azureCliExtensions,omitempty"`
 	AzureWriteCapable              bool                         `json:"azureWriteCapable"`
 	AzureWriteModeEnabled          bool                         `json:"azureWriteModeEnabled"`
 	AzureWritesEnabled             bool                         `json:"azureWritesEnabled"`

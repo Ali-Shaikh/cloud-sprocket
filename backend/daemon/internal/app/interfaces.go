@@ -109,6 +109,7 @@ type AzureInventory interface {
 	ListEntraUsers(ctx context.Context, profile models.ProfileSummary) ([]models.AzureEntraUser, error)
 	ListEntraGroups(ctx context.Context, profile models.ProfileSummary) ([]models.AzureEntraGroup, error)
 	ListEntraAppRegistrations(ctx context.Context, profile models.ProfileSummary) ([]models.AzureEntraApp, error)
+	CheckCLIExtensions(ctx context.Context) []models.AzureCLIExtensionStatus
 }
 
 type DockerRuntime interface {

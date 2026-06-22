@@ -4,7 +4,10 @@
 package app
 
 import (
+	"context"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
@@ -85,6 +88,9 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 	profiles := filterProfiles(snapshot.Profiles, session.CurrentProviderID)
 	if profile, ok := findProfile(profiles, session.SelectedProfileID); ok {
 		workspace.Profile = &profile
+		if session.CurrentProviderID == "azure" {
+			workspace.AzureCLIExtensions = s.azureCLIExtensionChecks(snapshot, profile)
+		}
 		if session.CurrentProviderID == "aws" {
 			workspace.AWSEndpointURL = profileEndpointURL(profile)
 			workspace.AWSWriteCapable = profileAllowsAWSWrites(profile)
@@ -122,6 +128,19 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 	}
 
 	return workspace
+}
+
+func (s *Service) azureCLIExtensionChecks(snapshot discovery.Snapshot, profile models.ProfileSummary) []models.AzureCLIExtensionStatus {
+	if s.azure == nil || isLocalFlociProfile(profile) {
+		return nil
+	}
+	provider, ok := findProvider(snapshot.Providers, "azure")
+	if !ok || strings.TrimSpace(provider.CommandPath) == "" {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return s.azure.CheckCLIExtensions(ctx)
 }
 
 func (s *Service) environmentDiagnostics(snapshot discovery.Snapshot, session models.SessionSnapshot) []models.DetailField {

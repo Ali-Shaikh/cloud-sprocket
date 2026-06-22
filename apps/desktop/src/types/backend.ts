@@ -641,6 +641,13 @@ export interface AzureEntraApp {
   appId?: string;
 }
 
+export interface AzureCLIExtensionStatus {
+  name: string;
+  summary: string;
+  installed: boolean;
+  installCommand: string;
+}
+
 export interface WorkspaceSnapshot {
   provider?: ProviderSummary;
   profile?: ProfileSummary;
@@ -657,6 +664,7 @@ export interface WorkspaceSnapshot {
   awsWriteModeEnabled: boolean;
   awsWritesEnabled: boolean;
   azureEndpointUrl?: string;
+  azureCliExtensions?: AzureCLIExtensionStatus[];
   azureWriteCapable: boolean;
   azureWriteModeEnabled: boolean;
   azureWritesEnabled: boolean;

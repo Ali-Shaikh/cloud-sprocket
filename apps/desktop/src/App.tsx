@@ -75,6 +75,7 @@ import {
 } from "./components/ui/alert-dialog";
 import ConnectView from "./views/ConnectView";
 import OverviewView from "./views/OverviewView";
+import { AzureCLIExtensionsBanner } from "./components/azure-cli-extensions-banner";
 import DeployView from "./views/DeployView";
 import { CommandPalette, type Command } from "./components/command-palette";
 import { InventoryLoadingState } from "./components/inventory-loading-state";
@@ -612,6 +613,7 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
       ...(source.runtimeSettings ?? {}),
     },
     environmentDiagnostics: normaliseArray(source.environmentDiagnostics),
+    azureCliExtensions: normaliseArray(source.azureCliExtensions),
     dockerDiagnostics: {
       ...emptyWorkspace.dockerDiagnostics,
       ...dockerDiagnostics,
@@ -731,6 +733,7 @@ const emptyWorkspace: WorkspaceSnapshot = {
   azureWriteCapable: false,
   azureWriteModeEnabled: false,
   azureWritesEnabled: false,
+  azureCliExtensions: [],
   azureResourceGroups: [],
   azureVirtualMachines: [],
   azureStorageAccounts: [],
@@ -3710,6 +3713,15 @@ export default function App() {
                     <InventoryLoadingState
                       variant="banner"
                       label="Refreshing inventory..."
+                      className="mb-4"
+                    />
+                  ) : null}
+                  {session.isLocked &&
+                  session.lockedProviderId === "azure" &&
+                  activeWorkspace.azureCliExtensions &&
+                  activeWorkspace.azureCliExtensions.some((extension) => !extension.installed) ? (
+                    <AzureCLIExtensionsBanner
+                      extensions={activeWorkspace.azureCliExtensions}
                       className="mb-4"
                     />
                   ) : null}
