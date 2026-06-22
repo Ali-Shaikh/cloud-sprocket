@@ -904,6 +904,21 @@ export interface IndexedResourceList {
   nextOffset?: number;
 }
 
+export interface OverviewDimension {
+  key: string;
+  count: number;
+}
+
+export interface CloudOverview {
+  resourceCount: number;
+  staleResourceCount: number;
+  workspaceCount: number;
+  providers: OverviewDimension[];
+  services: OverviewDimension[];
+  regions: OverviewDimension[];
+  inventoryRuns: InventoryRun[];
+}
+
 export interface JobStatus {
   jobId: string;
   label: string;

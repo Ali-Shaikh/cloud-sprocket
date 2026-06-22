@@ -9,6 +9,7 @@ import type {
   ActivityLogEntry,
   AppSettingsSnapshot,
   AuthMethod,
+  CloudOverview,
   Deployment,
   DeploymentJob,
   DeploymentLogEvent,
@@ -2651,6 +2652,22 @@ function handleMockRequest<T>(
       return Promise.resolve(mockInventoryRun() as T);
     case "inventory.status":
       return Promise.resolve([mockInventoryRun()] as T);
+    case "overview.get": {
+      const resources = mockIndexedResources().filter((resource) => !resource.stale);
+      const dimensions = (values: string[]) =>
+        [...values.reduce((counts, value) => counts.set(value, (counts.get(value) ?? 0) + 1), new Map<string, number>())]
+          .map(([key, count]) => ({ key, count }))
+          .sort((left, right) => right.count - left.count || left.key.localeCompare(right.key));
+      return Promise.resolve({
+        resourceCount: resources.length,
+        staleResourceCount: mockIndexedResources().filter((resource) => resource.stale).length,
+        workspaceCount: new Set(resources.map((resource) => resource.scopeId)).size,
+        providers: dimensions(resources.map((resource) => resource.provider)),
+        services: dimensions(resources.map((resource) => resource.service)),
+        regions: dimensions(resources.map((resource) => resource.region || "global")),
+        inventoryRuns: [mockInventoryRun()],
+      } as T);
+    }
     case "resources.list": {
       const resources = mockIndexedResources();
       const offset = Math.max(0, Number(params.offset ?? 0));
@@ -2783,6 +2800,10 @@ export async function getIndexedResource(
   resourceId: string,
 ): Promise<IndexedResource> {
   return backendRequest<IndexedResource>("resources.get", { scopeId, resourceId });
+}
+
+export async function getCloudOverview(): Promise<CloudOverview> {
+  return backendRequest<CloudOverview>("overview.get");
 }
 
 function mockInventoryRun(): InventoryRun {
