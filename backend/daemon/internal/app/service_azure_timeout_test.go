@@ -257,6 +257,26 @@ func (blockingAzure) RemoveWafExclusion(ctx context.Context, _ models.ProfileSum
 	return ctx.Err()
 }
 
+func (blockingAzure) ListFrontDoorProfiles(ctx context.Context, _ models.ProfileSummary, _ bool) ([]models.AzureFrontDoorProfile, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) ListFrontDoorEndpoints(ctx context.Context, _ models.ProfileSummary, _ string, _ string) ([]models.AzureFrontDoorEndpoint, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) ListFrontDoorOriginGroups(ctx context.Context, _ models.ProfileSummary, _ string, _ string) ([]models.AzureFrontDoorOriginGroup, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) ListFrontDoorOrigins(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) ([]models.AzureFrontDoorOrigin, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
 func (blockingAzure) ListBastionHosts(ctx context.Context, _ models.ProfileSummary) ([]models.AzureBastionHost, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()

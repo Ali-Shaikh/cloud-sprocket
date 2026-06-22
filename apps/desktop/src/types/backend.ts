@@ -155,6 +155,9 @@ export interface SessionSnapshot {
   selectedAzureCosmosAccount?: string;
   selectedAzureCosmosDatabase?: string;
   selectedAzureCosmosContainer?: string;
+  selectedAzureFrontDoorProfile?: string;
+  selectedAzureFrontDoorEndpoint?: string;
+  selectedAzureFrontDoorOriginGroup?: string;
   selectedAzureQueue?: string;
   lockedProviderId?: string;
   lockedProfileId?: string;
@@ -585,6 +588,42 @@ export interface AzureWafRuleFireCount {
   action?: string;
 }
 
+export interface AzureFrontDoorProfile {
+  name: string;
+  resourceGroup?: string;
+  location?: string;
+  sku?: string;
+  wafPolicyName?: string;
+  wafPolicyResourceGroup?: string;
+}
+
+export interface AzureFrontDoorEndpoint {
+  name: string;
+  profileName?: string;
+  resourceGroup?: string;
+  hostName?: string;
+  enabledState?: string;
+}
+
+export interface AzureFrontDoorOriginGroup {
+  name: string;
+  profileName?: string;
+  resourceGroup?: string;
+  healthProbe?: string;
+  loadBalancing?: string;
+}
+
+export interface AzureFrontDoorOrigin {
+  name: string;
+  originGroupName?: string;
+  profileName?: string;
+  resourceGroup?: string;
+  hostName?: string;
+  enabledState?: string;
+  priority?: number;
+  weight?: number;
+}
+
 export interface AzureFunctionApp {
   name: string;
   resourceGroup?: string;
@@ -708,6 +747,9 @@ export interface WorkspaceSnapshot {
   selectedAzureCosmosAccount?: string;
   selectedAzureCosmosDatabase?: string;
   selectedAzureCosmosContainer?: string;
+  selectedAzureFrontDoorProfile?: string;
+  selectedAzureFrontDoorEndpoint?: string;
+  selectedAzureFrontDoorOriginGroup?: string;
   selectedAzureQueue?: string;
   azureStatusMessage?: string;
   azureStorageStatusMessage?: string;
@@ -716,6 +758,7 @@ export interface WorkspaceSnapshot {
   azureFunctionsStatusMessage?: string;
   azureKeyVaultStatusMessage?: string;
   azureCosmosStatusMessage?: string;
+  azureFrontDoorStatusMessage?: string;
   azureQueuesStatusMessage?: string;
   azureEntraStatusMessage?: string;
   azureResourceGroups: AzureResourceGroup[];
@@ -741,6 +784,10 @@ export interface WorkspaceSnapshot {
   azureCosmosDatabases: AzureCosmosDatabase[];
   azureCosmosContainers: AzureCosmosContainer[];
   azureCosmosItems: AzureCosmosItem[];
+  azureFrontDoorProfiles: AzureFrontDoorProfile[];
+  azureFrontDoorEndpoints: AzureFrontDoorEndpoint[];
+  azureFrontDoorOriginGroups: AzureFrontDoorOriginGroup[];
+  azureFrontDoorOrigins: AzureFrontDoorOrigin[];
   azureStorageQueues: AzureStorageQueue[];
   azureQueueMessages: AzureQueueMessage[];
   azureEntraUsers: AzureEntraUser[];

@@ -80,6 +80,7 @@ func (s *Service) enrichAzureWorkspace(
 	}
 	s.enrichAzureQueuesInventory(workspace, session, opts, nil)
 	s.enrichAzureWafInventory(workspace, session, opts, nil)
+	s.enrichAzureFrontDoorInventory(workspace, session, opts, nil)
 }
 
 func (s *Service) enrichAzureScoped(
@@ -107,6 +108,8 @@ func (s *Service) enrichAzureScoped(
 		s.enrichAzureInventory(workspace, session, nil)
 		s.enrichAzureAppServiceInventory(workspace, session, nil)
 		s.enrichAzureWebAppDetail(workspace, session, nil)
+	case "frontdoor":
+		s.enrichAzureFrontDoorInventory(workspace, session, scopeOpts, nil)
 	}
 }
 

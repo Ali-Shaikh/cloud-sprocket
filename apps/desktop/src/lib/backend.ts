@@ -717,6 +717,50 @@ const mockAzureCosmosItems = [
   { id: "order-2", json: '{"id":"order-2","customerId":"c-3","total":17}' },
 ];
 
+const mockAzureFrontDoorProfiles = [
+  {
+    name: "demo-afd",
+    resourceGroup: "demo-rg",
+    location: "Global",
+    sku: "Standard_AzureFrontDoor",
+    wafPolicyName: "demo-waf",
+    wafPolicyResourceGroup: "demo-rg",
+  },
+];
+
+const mockAzureFrontDoorEndpoints = [
+  {
+    name: "api",
+    profileName: "demo-afd",
+    resourceGroup: "demo-rg",
+    hostName: "api.azureedge.net",
+    enabledState: "Enabled",
+  },
+];
+
+const mockAzureFrontDoorOriginGroups = [
+  {
+    name: "default",
+    profileName: "demo-afd",
+    resourceGroup: "demo-rg",
+    healthProbe: "/health",
+    loadBalancing: "sampleSize=4",
+  },
+];
+
+const mockAzureFrontDoorOrigins = [
+  {
+    name: "origin-app",
+    originGroupName: "default",
+    profileName: "demo-afd",
+    resourceGroup: "demo-rg",
+    hostName: "app.internal",
+    enabledState: "Enabled",
+    priority: 1,
+    weight: 1000,
+  },
+];
+
 const mockAzureStorageQueues = [{ name: "jobs" }, { name: "events" }];
 
 const mockAzureQueueMessages = [
@@ -1314,6 +1358,27 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     azureCosmosDatabases: isAzureWorkspace ? mockAzureCosmosDatabases : [],
     azureCosmosContainers: isAzureWorkspace ? mockAzureCosmosContainers : [],
     azureCosmosItems: isAzureWorkspace ? mockAzureCosmosItems : [],
+    selectedAzureFrontDoorProfile: isAzureWorkspace
+      ? mockState.session.selectedAzureFrontDoorProfile ?? mockAzureFrontDoorProfiles[0]?.name
+      : undefined,
+    selectedAzureFrontDoorEndpoint: isAzureWorkspace
+      ? mockState.session.selectedAzureFrontDoorEndpoint
+      : undefined,
+    selectedAzureFrontDoorOriginGroup: isAzureWorkspace
+      ? mockState.session.selectedAzureFrontDoorOriginGroup
+      : undefined,
+    azureFrontDoorStatusMessage: isAzureWorkspace
+      ? `Loaded ${mockAzureFrontDoorProfiles.length} Front Door profile(s).`
+      : undefined,
+    azureFrontDoorProfiles: isAzureWorkspace ? mockAzureFrontDoorProfiles : [],
+    azureFrontDoorEndpoints: isAzureWorkspace ? mockAzureFrontDoorEndpoints : [],
+    azureFrontDoorOriginGroups: isAzureWorkspace ? mockAzureFrontDoorOriginGroups : [],
+    azureFrontDoorOrigins: isAzureWorkspace
+      && mockState.session.selectedAzureFrontDoorOriginGroup
+      ? mockAzureFrontDoorOrigins
+      : isAzureWorkspace
+        ? []
+        : [],
     selectedAzureQueue: isAzureWorkspace ? mockState.session.selectedAzureQueue : undefined,
     azureQueuesStatusMessage: isAzureWorkspace
       ? `Loaded ${mockAzureStorageQueues.length} queue(s).`
@@ -2289,6 +2354,17 @@ function handleMockRequest<T>(
       return Promise.resolve(buildMockWorkspace() as T);
     case "azure.cosmos.selectContainer":
       mockState.session.selectedAzureCosmosContainer = String(params.container ?? "");
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.frontDoor.selectProfile":
+      mockState.session.selectedAzureFrontDoorProfile = String(params.profile ?? "");
+      mockState.session.selectedAzureFrontDoorEndpoint = "";
+      mockState.session.selectedAzureFrontDoorOriginGroup = "";
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.frontDoor.selectEndpoint":
+      mockState.session.selectedAzureFrontDoorEndpoint = String(params.endpoint ?? "");
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.frontDoor.selectOriginGroup":
+      mockState.session.selectedAzureFrontDoorOriginGroup = String(params.originGroup ?? "");
       return Promise.resolve(buildMockWorkspace() as T);
     case "azure.queues.selectQueue":
       mockState.session.selectedAzureQueue = String(params.queue ?? "");

@@ -100,6 +100,10 @@ type AzureInventory interface {
 	SetWafManagedRuleOverride(ctx context.Context, profile models.ProfileSummary, resourceGroup string, policyName string, ruleSetType string, ruleSetVersion string, ruleGroupName string, ruleID string, enabled bool) error
 	AddWafExclusion(ctx context.Context, profile models.ProfileSummary, resourceGroup string, policyName string, exclusion models.AzureWafExclusion) error
 	RemoveWafExclusion(ctx context.Context, profile models.ProfileSummary, resourceGroup string, policyName string, exclusion models.AzureWafExclusion) error
+	ListFrontDoorProfiles(ctx context.Context, profile models.ProfileSummary, withWafLink bool) ([]models.AzureFrontDoorProfile, error)
+	ListFrontDoorEndpoints(ctx context.Context, profile models.ProfileSummary, resourceGroup string, profileName string) ([]models.AzureFrontDoorEndpoint, error)
+	ListFrontDoorOriginGroups(ctx context.Context, profile models.ProfileSummary, resourceGroup string, profileName string) ([]models.AzureFrontDoorOriginGroup, error)
+	ListFrontDoorOrigins(ctx context.Context, profile models.ProfileSummary, resourceGroup string, profileName string, originGroupName string) ([]models.AzureFrontDoorOrigin, error)
 	ListFunctionApps(ctx context.Context, profile models.ProfileSummary) ([]models.AzureFunctionApp, error)
 	ListFunctions(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string) ([]models.AzureFunction, error)
 	InvokeFunction(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, functionName string, payload string) (models.AzureFunctionInvokeResult, error)

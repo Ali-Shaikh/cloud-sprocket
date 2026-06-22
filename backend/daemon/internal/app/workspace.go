@@ -24,7 +24,7 @@ type workspaceSnapshotOptions struct {
 	// workspace selection handlers.
 	skipAwsInventory bool
 	// azureScope limits Azure enrichment to one service during selection
-	// handlers (storage, functions, keyvault, cosmos, waf, queues, webapps).
+	// handlers (storage, functions, keyvault, cosmos, waf, frontdoor, queues, webapps).
 	azureScope string
 }
 

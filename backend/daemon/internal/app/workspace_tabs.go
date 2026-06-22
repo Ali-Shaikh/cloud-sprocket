@@ -72,6 +72,12 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 				Detail:  "Track requests by X-Azure-Ref, explore WAF logs with schema-aware KQL, and inspect policy config.",
 			},
 			{
+				TabID:   "azure-front-door",
+				Label:   "Front Door",
+				Summary: "Azure Front Door profile topology and access logs.",
+				Detail:  "Browse profiles, endpoints, and origins read-only, jump to linked WAF policies, and run access-log KQL presets.",
+			},
+			{
 				TabID:   "azure-functions",
 				Label:   "Functions",
 				Summary: "Browse and invoke Azure Functions.",

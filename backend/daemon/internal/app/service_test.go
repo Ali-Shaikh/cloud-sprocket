@@ -313,9 +313,9 @@ func (stubAzureInventory) ListLogAnalyticsTables(context.Context, models.Profile
 
 func (stubAzureInventory) DetectWafLogSchema(context.Context, models.ProfileSummary, string, string) (models.AzureWafLogSchemaProfile, error) {
 	return models.AzureWafLogSchemaProfile{
-		Mode:      "azureDiagnostics",
-		TableName: "AzureDiagnostics",
-		Detected:  true,
+		Mode:       "azureDiagnostics",
+		TableName:  "AzureDiagnostics",
+		Detected:   true,
 		Categories: []string{"FrontDoorWebApplicationFirewallLog"},
 		Columns: models.AzureWafLogColumnMap{
 			Action: "action_s", RuleName: "ruleName_s", TrackingReference: "trackingReference_s",
@@ -345,6 +345,28 @@ func (stubAzureInventory) AddWafExclusion(context.Context, models.ProfileSummary
 
 func (stubAzureInventory) RemoveWafExclusion(context.Context, models.ProfileSummary, string, string, models.AzureWafExclusion) error {
 	return nil
+}
+
+func (stubAzureInventory) ListFrontDoorProfiles(context.Context, models.ProfileSummary, bool) ([]models.AzureFrontDoorProfile, error) {
+	return []models.AzureFrontDoorProfile{{
+		Name:                   "demo-afd",
+		ResourceGroup:          "demo-rg",
+		SKU:                    "Standard_AzureFrontDoor",
+		WafPolicyName:          "demo-waf",
+		WafPolicyResourceGroup: "demo-rg",
+	}}, nil
+}
+
+func (stubAzureInventory) ListFrontDoorEndpoints(context.Context, models.ProfileSummary, string, string) ([]models.AzureFrontDoorEndpoint, error) {
+	return []models.AzureFrontDoorEndpoint{{Name: "api", ProfileName: "demo-afd", ResourceGroup: "demo-rg", HostName: "api.azureedge.net", EnabledState: "Enabled"}}, nil
+}
+
+func (stubAzureInventory) ListFrontDoorOriginGroups(context.Context, models.ProfileSummary, string, string) ([]models.AzureFrontDoorOriginGroup, error) {
+	return []models.AzureFrontDoorOriginGroup{{Name: "default", ProfileName: "demo-afd", ResourceGroup: "demo-rg", HealthProbe: "/health"}}, nil
+}
+
+func (stubAzureInventory) ListFrontDoorOrigins(context.Context, models.ProfileSummary, string, string, string) ([]models.AzureFrontDoorOrigin, error) {
+	return []models.AzureFrontDoorOrigin{{Name: "origin-app", OriginGroupName: "default", HostName: "app.internal", EnabledState: "Enabled", Priority: 1, Weight: 1000}}, nil
 }
 
 func (stubAzureInventory) ListFunctionApps(context.Context, models.ProfileSummary) ([]models.AzureFunctionApp, error) {

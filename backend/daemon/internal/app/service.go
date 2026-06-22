@@ -23,25 +23,25 @@ import (
 )
 
 type Service struct {
-	settings      config.Settings
-	store         *store.Store
-	discovery     *discovery.Service
-	s3            S3Inventory
-	ec2           EC2Inventory
-	lambda        LambdaInventory
-	dynamodb      DynamoDBInventory
-	sqs           SQSInventory
-	sns           SNSInventory
-	rds           RDSInventory
-	logs          LogsInventory
-	iam           IAMInventory
-	azure         AzureInventory
-	docker        DockerRuntime
-	localstackMgr LocalStackManager
-	azureRuntime  AzureRuntimeManager
-	recipes       *recipes.Loader
-	deployer      Deployer
-	cipher        *secrets.Cipher
+	settings              config.Settings
+	store                 *store.Store
+	discovery             *discovery.Service
+	s3                    S3Inventory
+	ec2                   EC2Inventory
+	lambda                LambdaInventory
+	dynamodb              DynamoDBInventory
+	sqs                   SQSInventory
+	sns                   SNSInventory
+	rds                   RDSInventory
+	logs                  LogsInventory
+	iam                   IAMInventory
+	azure                 AzureInventory
+	docker                DockerRuntime
+	localstackMgr         LocalStackManager
+	azureRuntime          AzureRuntimeManager
+	recipes               *recipes.Loader
+	deployer              Deployer
+	cipher                *secrets.Cipher
 	azureInventoryTimeout time.Duration
 	dockerSnapshotMu      sync.Mutex
 	dockerSnapshotValue   *models.DockerRuntimeSnapshot
@@ -249,6 +249,12 @@ func (s *Service) Handle(
 		return s.handleAzureWafConfigAddExclusion(ctx, params, notifier)
 	case "azure.waf.config.removeExclusion":
 		return s.handleAzureWafConfigRemoveExclusion(ctx, params, notifier)
+	case "azure.frontDoor.selectProfile":
+		return s.handleAzureFrontDoorSelectProfile(ctx, params, notifier)
+	case "azure.frontDoor.selectEndpoint":
+		return s.handleAzureFrontDoorSelectEndpoint(ctx, params, notifier)
+	case "azure.frontDoor.selectOriginGroup":
+		return s.handleAzureFrontDoorSelectOriginGroup(ctx, params, notifier)
 	case "azure.functions.selectApp":
 		return s.handleAzureFunctionsSelectApp(ctx, params, notifier)
 	case "azure.functions.selectFunction":

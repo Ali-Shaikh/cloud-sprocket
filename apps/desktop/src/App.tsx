@@ -95,6 +95,7 @@ import AzureStorageView from "./views/workspace/AzureStorageView";
 import AzureAppServiceView from "./views/workspace/AzureAppServiceView";
 import LogAnalyticsView from "./views/workspace/LogAnalyticsView";
 import AzureWafView from "./views/workspace/AzureWafView";
+import AzureFrontDoorView from "./views/workspace/AzureFrontDoorView";
 import AzureFunctionsView from "./views/workspace/AzureFunctionsView";
 import AzureKeyVaultView from "./views/workspace/AzureKeyVaultView";
 import AzureCosmosView from "./views/workspace/AzureCosmosView";
@@ -534,6 +535,24 @@ function mergeAzureCosmosSelection(
   });
 }
 
+function mergeAzureFrontDoorSelection(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  return normaliseWorkspaceSnapshot({
+    ...current,
+    selectedAzureFrontDoorProfile: normalised.selectedAzureFrontDoorProfile,
+    selectedAzureFrontDoorEndpoint: normalised.selectedAzureFrontDoorEndpoint,
+    selectedAzureFrontDoorOriginGroup: normalised.selectedAzureFrontDoorOriginGroup,
+    azureFrontDoorProfiles: normalised.azureFrontDoorProfiles,
+    azureFrontDoorEndpoints: normalised.azureFrontDoorEndpoints,
+    azureFrontDoorOriginGroups: normalised.azureFrontDoorOriginGroups,
+    azureFrontDoorOrigins: normalised.azureFrontDoorOrigins,
+    azureFrontDoorStatusMessage: normalised.azureFrontDoorStatusMessage,
+  });
+}
+
 function mergeAzureWafSelection(
   current: WorkspaceSnapshot,
   incoming: WorkspaceSnapshot,
@@ -669,6 +688,10 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     azureCosmosDatabases: normaliseArray(source.azureCosmosDatabases),
     azureCosmosContainers: normaliseArray(source.azureCosmosContainers),
     azureCosmosItems: normaliseArray(source.azureCosmosItems),
+    azureFrontDoorProfiles: normaliseArray(source.azureFrontDoorProfiles),
+    azureFrontDoorEndpoints: normaliseArray(source.azureFrontDoorEndpoints),
+    azureFrontDoorOriginGroups: normaliseArray(source.azureFrontDoorOriginGroups),
+    azureFrontDoorOrigins: normaliseArray(source.azureFrontDoorOrigins),
     azureStorageQueues: normaliseArray(source.azureStorageQueues),
     azureQueueMessages: normaliseArray(source.azureQueueMessages),
     azureEntraUsers: normaliseArray(source.azureEntraUsers),
@@ -768,6 +791,10 @@ const emptyWorkspace: WorkspaceSnapshot = {
   azureCosmosDatabases: [],
   azureCosmosContainers: [],
   azureCosmosItems: [],
+  azureFrontDoorProfiles: [],
+  azureFrontDoorEndpoints: [],
+  azureFrontDoorOriginGroups: [],
+  azureFrontDoorOrigins: [],
   azureStorageQueues: [],
   azureQueueMessages: [],
   azureEntraUsers: [],
@@ -3053,6 +3080,99 @@ export default function App() {
         }).then(() => undefined)
       }
     />
+  ) : session.isLocked && activeWorkspaceTabId === "azure-front-door" ? (
+    <AzureFrontDoorView
+      workspace={activeWorkspace}
+      onSelectProfile={(profile) => {
+        void mutateWorkspaceSelection("azure.frontDoor.selectProfile", { profile }, {
+          panelLoading: true,
+          merge: mergeAzureFrontDoorSelection,
+          onOptimistic: () => {
+            setSession((current) =>
+              normaliseSessionSnapshot({
+                ...current,
+                selectedAzureFrontDoorProfile: profile,
+                selectedAzureFrontDoorEndpoint: undefined,
+                selectedAzureFrontDoorOriginGroup: undefined,
+              }),
+            );
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedAzureFrontDoorProfile: profile,
+                selectedAzureFrontDoorEndpoint: undefined,
+                selectedAzureFrontDoorOriginGroup: undefined,
+                azureFrontDoorEndpoints: [],
+                azureFrontDoorOriginGroups: [],
+                azureFrontDoorOrigins: [],
+              }),
+            );
+          },
+          errorTitle: "Could not select Front Door profile",
+        });
+      }}
+      onSelectEndpoint={(endpoint) => {
+        void mutateWorkspaceSelection("azure.frontDoor.selectEndpoint", { endpoint }, {
+          panelLoading: true,
+          merge: mergeAzureFrontDoorSelection,
+          onOptimistic: () => {
+            setSession((current) =>
+              normaliseSessionSnapshot({
+                ...current,
+                selectedAzureFrontDoorEndpoint: endpoint,
+              }),
+            );
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedAzureFrontDoorEndpoint: endpoint,
+              }),
+            );
+          },
+          errorTitle: "Could not select Front Door endpoint",
+        });
+      }}
+      onSelectOriginGroup={(originGroup) => {
+        void mutateWorkspaceSelection("azure.frontDoor.selectOriginGroup", { originGroup }, {
+          panelLoading: true,
+          merge: mergeAzureFrontDoorSelection,
+          onOptimistic: () => {
+            setSession((current) =>
+              normaliseSessionSnapshot({
+                ...current,
+                selectedAzureFrontDoorOriginGroup: originGroup,
+              }),
+            );
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedAzureFrontDoorOriginGroup: originGroup,
+                azureFrontDoorOrigins: [],
+              }),
+            );
+          },
+          errorTitle: "Could not select Front Door origin group",
+        });
+      }}
+      onOpenWafPolicy={(policyName) => {
+        void selectAzureWafPolicy(policyName).finally(() => {
+          setActiveWorkspaceTabId("azure-waf");
+        });
+      }}
+      onEditInLogAnalytics={(ws, query, timespan) => {
+        setLogAnalyticsPrefill({ query, timespan });
+        void selectAzureLogAnalyticsWorkspace(ws).finally(() => {
+          setActiveWorkspaceTabId("azure-log-analytics");
+        });
+      }}
+      onRunQuery={(ws, query, timespan) =>
+        backendRequest<AzureLogQueryResult>("azure.logAnalytics.query", {
+          workspace: ws,
+          query,
+          timespan,
+        })
+      }
+    />
   ) : session.isLocked && activeWorkspaceTabId === "azure-functions" ? (
     <AzureFunctionsView
       workspace={activeWorkspace}
@@ -3935,6 +4055,7 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     "azure-app-service": "App Service",
     "azure-log-analytics": "Log Analytics",
     "azure-waf": "WAF",
+    "azure-front-door": "Front Door",
     "azure-functions": "Functions",
     "azure-key-vault": "Key Vault",
     "azure-cosmos": "Cosmos DB",
@@ -3982,6 +4103,8 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
       return { ...base, iconUrl: azureLogAnalyticsIconUrl, count: workspace.azureLogAnalyticsWorkspaces.length };
     case "azure-waf":
       return { ...base, iconUrl: azureWafIconUrl, count: workspace.azureWafPolicies.length };
+    case "azure-front-door":
+      return { ...base, iconUrl: azureWafIconUrl, count: workspace.azureFrontDoorProfiles.length };
     case "azure-functions":
       return { ...base, iconUrl: azureFunctionsIconUrl, count: workspace.azureFunctionApps.length };
     case "azure-key-vault":
