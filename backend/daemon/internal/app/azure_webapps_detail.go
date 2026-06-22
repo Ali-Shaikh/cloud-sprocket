@@ -31,24 +31,27 @@ func (s *Service) enrichAzureWebAppDetail(workspace *models.WorkspaceSnapshot, s
 		lockWorkspace(mu, func() {
 			workspace.AzureAppServicePlans = nil
 			workspace.AzureWebAppSettings = nil
+			workspace.AzureWebAppDeploymentSlots = nil
+			workspace.AzureWebAppActiveDetail = nil
 		})
 		return
 	}
 
 	profile := *workspace.Profile
 
-	detailCtx, detailCancel := s.withAzureTimeout(context.Background())
-	defer detailCancel()
-	detail, detailErr := s.azure.GetWebApp(detailCtx, profile, resourceGroup, appName)
-
-	plansCtx, plansCancel := s.withAzureTimeout(context.Background())
-	defer plansCancel()
-	plans, plansErr := s.azure.ListAppServicePlans(plansCtx, profile, resourceGroup)
-
 	slotsCtx, slotsCancel := s.withAzureTimeout(context.Background())
 	defer slotsCancel()
 	slots, slotsErr := s.azure.ListWebAppDeploymentSlots(slotsCtx, profile, resourceGroup, appName)
 	slotName := selectedAzureWebAppSlot(session, slots)
+
+	detailCtx, detailCancel := s.withAzureTimeout(context.Background())
+	defer detailCancel()
+
+	detail, detailErr := s.azure.GetWebApp(detailCtx, profile, resourceGroup, appName, slotName)
+
+	plansCtx, plansCancel := s.withAzureTimeout(context.Background())
+	defer plansCancel()
+	plans, plansErr := s.azure.ListAppServicePlans(plansCtx, profile, resourceGroup)
 
 	settingsCtx, settingsCancel := s.withAzureTimeout(context.Background())
 	defer settingsCancel()
@@ -78,12 +81,17 @@ func (s *Service) enrichAzureWebAppDetail(workspace *models.WorkspaceSnapshot, s
 			workspace.AzureAppServiceStatusMessage = detailStatus
 		}
 		if detailErr == nil {
-			for index, app := range workspace.AzureWebApps {
-				if app.Name == appName {
-					workspace.AzureWebApps[index] = detail
-					break
+			workspace.AzureWebAppActiveDetail = &detail
+			if slotName == "" {
+				for index, app := range workspace.AzureWebApps {
+					if app.Name == appName {
+						workspace.AzureWebApps[index] = detail
+						break
+					}
 				}
 			}
+		} else {
+			workspace.AzureWebAppActiveDetail = nil
 		}
 	})
 }

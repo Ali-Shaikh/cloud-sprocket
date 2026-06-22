@@ -677,6 +677,9 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     azureBlobs: normaliseArray(source.azureBlobs).map(normaliseAzureBlob),
     azureBlobMetadata: normaliseDetailFields(source.azureBlobMetadata),
     azureWebApps: normaliseArray(source.azureWebApps).map(normaliseAzureWebApp),
+    azureWebAppActiveDetail: source.azureWebAppActiveDetail
+      ? normaliseAzureWebApp(source.azureWebAppActiveDetail)
+      : undefined,
     azureAppServicePlans: normaliseArray(source.azureAppServicePlans).map(normaliseAzureAppServicePlan),
     azureWebAppSettings: normaliseArray(source.azureWebAppSettings).map(normaliseAzureWebAppSetting),
     azureWebAppDeploymentSlots: normaliseArray(source.azureWebAppDeploymentSlots),
@@ -1312,6 +1315,7 @@ export default function App() {
           selectedAzureWebAppSlot: undefined,
           azureWebAppDeploymentSlots: [],
           azureWebAppSettings: [],
+          azureWebAppActiveDetail: undefined,
         }),
       );
     });
@@ -2990,6 +2994,38 @@ export default function App() {
             workspaceResult.azureAppServiceStatusMessage || `Deleted application setting ${name}.`,
           );
         });
+      }}
+      onCreateSlot={(appName, slotName) => {
+        setAzureAppServiceActionStatus(`Creating deployment slot ${slotName}...`);
+        void backendRequest<WorkspaceSnapshot>("azure.webApps.createSlot", { appName, slotName })
+          .then((workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            });
+            setAzureAppServiceActionStatus(
+              workspaceResult.azureAppServiceStatusMessage ||
+                `Created deployment slot ${slotName}.`,
+            );
+          })
+          .catch((error: unknown) => {
+            setAzureAppServiceActionStatus(error instanceof Error ? error.message : String(error));
+          });
+      }}
+      onSwapSlot={(appName, slotName) => {
+        setAzureAppServiceActionStatus(`Swapping production with ${slotName}...`);
+        void backendRequest<WorkspaceSnapshot>("azure.webApps.swapSlots", { appName, slotName })
+          .then((workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            });
+            setAzureAppServiceActionStatus(
+              workspaceResult.azureAppServiceStatusMessage ||
+                `Swapped production with deployment slot ${slotName}.`,
+            );
+          })
+          .catch((error: unknown) => {
+            setAzureAppServiceActionStatus(error instanceof Error ? error.message : String(error));
+          });
       }}
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-log-analytics" ? (

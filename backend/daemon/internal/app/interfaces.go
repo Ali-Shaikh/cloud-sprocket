@@ -82,7 +82,9 @@ type AzureInventory interface {
 	GetVirtualMachine(ctx context.Context, profile models.ProfileSummary, resourceGroup string, vmName string) (models.AzureVirtualMachine, error)
 	ListBastionHosts(ctx context.Context, profile models.ProfileSummary) ([]models.AzureBastionHost, error)
 	ListWebApps(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureWebApp, error)
-	GetWebApp(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string) (models.AzureWebApp, error)
+	GetWebApp(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, slotName string) (models.AzureWebApp, error)
+	CreateWebAppDeploymentSlot(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, slotName string) error
+	SwapWebAppDeploymentSlots(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, slotName string) error
 	ListAppServicePlans(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureAppServicePlan, error)
 	GetAppServicePlan(ctx context.Context, profile models.ProfileSummary, resourceGroup string, planName string) (models.AzureAppServicePlan, error)
 	ListWebAppDeploymentSlots(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string) ([]models.AzureWebAppDeploymentSlot, error)

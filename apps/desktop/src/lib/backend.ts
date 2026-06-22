@@ -1317,6 +1317,16 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       ? `Loaded ${mockAzureWebApps.length} App Service web apps from ${selectedAzureResourceGroup}.`
       : undefined,
     azureWebApps: isAzureWorkspace ? mockAzureWebApps : [],
+    azureWebAppActiveDetail:
+      isAzureWorkspace && mockState.session.selectedAzureWebAppSlot
+        ? {
+            ...mockAzureWebApps[0],
+            defaultHostName: `demo-app-${mockState.session.selectedAzureWebAppSlot}.azurewebsites.net`,
+            state: "Running",
+          }
+        : isAzureWorkspace
+          ? mockAzureWebApps[0]
+          : undefined,
     azureAppServicePlans: isAzureWorkspace ? mockAzureAppServicePlans : [],
     azureWebAppSettings: isAzureWorkspace ? mockAzureWebAppSettings : [],
     azureWebAppDeploymentSlots:
@@ -2124,6 +2134,42 @@ function handleMockRequest<T>(
     case "azure.webApps.selectSlot":
       mockState.session.selectedAzureWebAppSlot = String(params.slot ?? "");
       return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.webApps.createSlot": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(
+          new Error("deployment slot create requires write mode to be enabled for this Azure workspace"),
+        );
+      }
+      const slotName = String(params.slotName ?? "").trim();
+      if (!slotName) {
+        return Promise.reject(new Error("a deployment slot name is required"));
+      }
+      if (!mockAzureWebAppDeploymentSlots.some((slot) => slot.name === slotName)) {
+        mockAzureWebAppDeploymentSlots.push({
+          name: slotName,
+          status: "Ready",
+          defaultHostName: `demo-app-${slotName}.azurewebsites.net`,
+          trafficPercent: 0,
+        });
+      }
+      mockState.session.selectedAzureWebAppSlot = slotName;
+      appendLog("success", `Created deployment slot ${slotName} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.webApps.swapSlots": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(
+          new Error("deployment slot swap requires write mode to be enabled for this Azure workspace"),
+        );
+      }
+      const slotName = String(params.slotName ?? "").trim();
+      if (!slotName) {
+        return Promise.reject(new Error("select a non-production deployment slot before swapping"));
+      }
+      mockState.session.selectedAzureWebAppSlot = "";
+      appendLog("success", `Swapped production with deployment slot ${slotName} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "azure.webApps.setSetting": {
       if (!mockState.session.azureWriteModeEnabled) {
         return Promise.reject(

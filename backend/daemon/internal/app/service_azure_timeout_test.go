@@ -92,9 +92,19 @@ func (blockingAzure) CreateWebApp(ctx context.Context, _ models.ProfileSummary, 
 	return models.AzureWebApp{}, ctx.Err()
 }
 
-func (blockingAzure) GetWebApp(ctx context.Context, _ models.ProfileSummary, _ string, _ string) (models.AzureWebApp, error) {
+func (blockingAzure) GetWebApp(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) (models.AzureWebApp, error) {
 	<-ctx.Done()
 	return models.AzureWebApp{}, ctx.Err()
+}
+
+func (blockingAzure) CreateWebAppDeploymentSlot(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (blockingAzure) SwapWebAppDeploymentSlots(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) error {
+	<-ctx.Done()
+	return ctx.Err()
 }
 
 func (blockingAzure) ListAppServicePlans(ctx context.Context, _ models.ProfileSummary, _ string) ([]models.AzureAppServicePlan, error) {

@@ -212,11 +212,70 @@ func (i *Inventory) CreateWebApp(
 	}, nil
 }
 
+func (i *Inventory) CreateWebAppDeploymentSlot(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	resourceGroup string,
+	appName string,
+	slotName string,
+) error {
+	if isLocalFlociProfile(profile) {
+		return fmt.Errorf("deployment slot create is not supported on the floci-az local profile")
+	}
+	resourceGroup = strings.TrimSpace(resourceGroup)
+	appName = strings.TrimSpace(appName)
+	slotName = strings.TrimSpace(slotName)
+	if resourceGroup == "" || appName == "" || slotName == "" {
+		return fmt.Errorf("resource group, app name, and slot name are required")
+	}
+	args := []string{
+		"webapp", "deployment", "slot", "create",
+		"--subscription", profile.ProfileID,
+		"--resource-group", resourceGroup,
+		"--name", appName,
+		"--slot", slotName,
+		"--output", "none",
+		"--only-show-errors",
+	}
+	_, err := i.run(ctx, args...)
+	return err
+}
+
+func (i *Inventory) SwapWebAppDeploymentSlots(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	resourceGroup string,
+	appName string,
+	slotName string,
+) error {
+	if isLocalFlociProfile(profile) {
+		return fmt.Errorf("deployment slot swap is not supported on the floci-az local profile")
+	}
+	resourceGroup = strings.TrimSpace(resourceGroup)
+	appName = strings.TrimSpace(appName)
+	slotName = strings.TrimSpace(slotName)
+	if resourceGroup == "" || appName == "" || slotName == "" {
+		return fmt.Errorf("resource group, app name, and slot name are required")
+	}
+	args := []string{
+		"webapp", "deployment", "slot", "swap",
+		"--subscription", profile.ProfileID,
+		"--resource-group", resourceGroup,
+		"--name", appName,
+		"--slot", slotName,
+		"--output", "none",
+		"--only-show-errors",
+	}
+	_, err := i.run(ctx, args...)
+	return err
+}
+
 func (i *Inventory) GetWebApp(
 	ctx context.Context,
 	profile models.ProfileSummary,
 	resourceGroup string,
 	appName string,
+	slotName string,
 ) (models.AzureWebApp, error) {
 	if isLocalFlociProfile(profile) {
 		return models.AzureWebApp{}, fmt.Errorf("app service is not emulated by floci-az")
@@ -226,14 +285,14 @@ func (i *Inventory) GetWebApp(
 	if resourceGroup == "" || appName == "" {
 		return models.AzureWebApp{}, fmt.Errorf("resource group and app name are required")
 	}
-	args := []string{
+	args := appendWebAppDeploymentSlotArg([]string{
 		"webapp", "show",
 		"--subscription", profile.ProfileID,
 		"--resource-group", resourceGroup,
 		"--name", appName,
 		"--output", "json",
 		"--only-show-errors",
-	}
+	}, slotName)
 	payload, err := i.run(ctx, args...)
 	if err != nil {
 		return models.AzureWebApp{}, err

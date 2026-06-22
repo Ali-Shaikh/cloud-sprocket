@@ -777,6 +777,7 @@ export interface WorkspaceSnapshot {
   azureBlobs: AzureBlob[];
   azureBlobMetadata: DetailField[];
   azureWebApps: AzureWebApp[];
+  azureWebAppActiveDetail?: AzureWebApp;
   azureAppServicePlans: AzureAppServicePlan[];
   azureWebAppSettings: AzureWebAppSetting[];
   azureWebAppDeploymentSlots: AzureWebAppDeploymentSlot[];

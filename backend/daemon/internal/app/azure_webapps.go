@@ -338,6 +338,125 @@ func (s *Service) handleAzureWebAppsSelectSlot(ctx context.Context, params json.
 	}, "", "")
 }
 
+func (s *Service) handleAzureWebAppsCreateSlot(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		AppName  string `json:"appName"`
+		SlotName string `json:"slotName"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	slotName := strings.TrimSpace(request.SlotName)
+	if slotName == "" {
+		return nil, errors.New("a deployment slot name is required")
+	}
+	if strings.EqualFold(slotName, "production") {
+		return nil, errors.New("production is not a valid deployment slot name")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	profile, resourceGroup, app, err := s.activeAzureWebAppSelection(snapshot, session, request.AppName)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !effectiveAzureWritesEnabled(session, profile, s.azureProviderCommandPath(snapshot)) {
+		s.mu.Unlock()
+		return nil, errors.New("deployment slot create requires write mode to be enabled for this Azure workspace")
+	}
+	s.mu.Unlock()
+
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+	if err := s.azure.CreateWebAppDeploymentSlot(timeoutCtx, profile, resourceGroup, app.Name, slotName); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	session.SelectedAzureResourceGroup = resourceGroup
+	session.SelectedAzureWebAppName = app.Name
+	session.SelectedAzureWebAppSlot = slotName
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.mu.Unlock()
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "webapps",
+	}, "success", fmt.Sprintf("Created deployment slot %s on web app %s.", slotName, app.Name))
+}
+
+func (s *Service) handleAzureWebAppsSwapSlots(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		AppName  string `json:"appName"`
+		SlotName string `json:"slotName"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	slotName := strings.TrimSpace(request.SlotName)
+	if slotName == "" || strings.EqualFold(slotName, "production") {
+		return nil, errors.New("select a non-production deployment slot before swapping")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	profile, resourceGroup, app, err := s.activeAzureWebAppSelection(snapshot, session, request.AppName)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !effectiveAzureWritesEnabled(session, profile, s.azureProviderCommandPath(snapshot)) {
+		s.mu.Unlock()
+		return nil, errors.New("deployment slot swap requires write mode to be enabled for this Azure workspace")
+	}
+	s.mu.Unlock()
+
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+	if err := s.azure.SwapWebAppDeploymentSlots(timeoutCtx, profile, resourceGroup, app.Name, slotName); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	session.SelectedAzureResourceGroup = resourceGroup
+	session.SelectedAzureWebAppName = app.Name
+	session.SelectedAzureWebAppSlot = ""
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.mu.Unlock()
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "webapps",
+	}, "success", fmt.Sprintf("Swapped production with deployment slot %s on web app %s.", slotName, app.Name))
+}
+
 func (s *Service) handleAzureWebAppsCreate(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		ResourceGroup    string `json:"resourceGroup"`

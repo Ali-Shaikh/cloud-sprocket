@@ -964,6 +964,7 @@ type WorkspaceSnapshot struct {
 	AzureAppServicePlans              []AzureAppServicePlan        `json:"azureAppServicePlans"`
 	AzureWebAppSettings               []AzureWebAppSetting         `json:"azureWebAppSettings"`
 	AzureWebAppDeploymentSlots        []AzureWebAppDeploymentSlot  `json:"azureWebAppDeploymentSlots"`
+	AzureWebAppActiveDetail           *AzureWebApp                 `json:"azureWebAppActiveDetail,omitempty"`
 	AzureLogAnalyticsWorkspaces       []AzureLogAnalyticsWorkspace `json:"azureLogAnalyticsWorkspaces"`
 	AzureWafLogSchema                 *AzureWafLogSchemaProfile    `json:"azureWafLogSchema,omitempty"`
 	AzureWafStatusMessage             string                       `json:"azureWafStatusMessage,omitempty"`

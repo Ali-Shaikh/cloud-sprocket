@@ -29,7 +29,7 @@ func TestGetWebAppDecodesDetailFields(t *testing.T) {
 	inv := NewInventory(config.Settings{})
 	inv.runner = fake
 
-	app, err := inv.GetWebApp(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal")
+	app, err := inv.GetWebApp(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "")
 	if err != nil {
 		t.Fatalf("GetWebApp: %v", err)
 	}
@@ -221,6 +221,50 @@ func TestDeleteWebAppSettingBuildsExpectedArgs(t *testing.T) {
 	expectCLIArgsContain(t, fake.args,
 		"webapp", "config", "appsettings", "delete",
 		"--setting-names", "MY_ENV",
+	)
+}
+
+func TestGetWebAppUsesDeploymentSlotArg(t *testing.T) {
+	showOut := []byte(`{"name":"mkt-portal","resourceGroup":"rg-prod","state":"Running"}`)
+	fake := &fakeCLI{out: showOut}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	if _, err := inv.GetWebApp(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "staging"); err != nil {
+		t.Fatalf("GetWebApp: %v", err)
+	}
+	expectCLIArgsContain(t, fake.args, "webapp", "show", "--slot", "staging")
+}
+
+func TestCreateWebAppDeploymentSlotBuildsExpectedArgs(t *testing.T) {
+	fake := &fakeCLI{}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	if err := inv.CreateWebAppDeploymentSlot(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "staging"); err != nil {
+		t.Fatalf("CreateWebAppDeploymentSlot: %v", err)
+	}
+	expectCLIArgsContain(t, fake.args,
+		"webapp", "deployment", "slot", "create",
+		"--resource-group", "rg-prod",
+		"--name", "mkt-portal",
+		"--slot", "staging",
+	)
+}
+
+func TestSwapWebAppDeploymentSlotsBuildsExpectedArgs(t *testing.T) {
+	fake := &fakeCLI{}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	if err := inv.SwapWebAppDeploymentSlots(context.Background(), cloudAzureProfile(), "rg-prod", "mkt-portal", "staging"); err != nil {
+		t.Fatalf("SwapWebAppDeploymentSlots: %v", err)
+	}
+	expectCLIArgsContain(t, fake.args,
+		"webapp", "deployment", "slot", "swap",
+		"--resource-group", "rg-prod",
+		"--name", "mkt-portal",
+		"--slot", "staging",
 	)
 }
 

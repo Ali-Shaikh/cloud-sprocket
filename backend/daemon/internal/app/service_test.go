@@ -255,7 +255,7 @@ func (stubAzureInventory) ListWebApps(context.Context, models.ProfileSummary, st
 	return []models.AzureWebApp{{Name: "demo-app", ResourceGroup: "demo-rg", State: "Running"}}, nil
 }
 
-func (stubAzureInventory) GetWebApp(_ context.Context, _ models.ProfileSummary, resourceGroup string, appName string) (models.AzureWebApp, error) {
+func (stubAzureInventory) GetWebApp(_ context.Context, _ models.ProfileSummary, resourceGroup string, appName string, _ string) (models.AzureWebApp, error) {
 	return models.AzureWebApp{
 		Name:           appName,
 		ResourceGroup:  resourceGroup,
@@ -264,6 +264,14 @@ func (stubAzureInventory) GetWebApp(_ context.Context, _ models.ProfileSummary, 
 		PlanSKU:        "F1 (Free)",
 		Runtime:        "NODE:22-lts",
 	}, nil
+}
+
+func (stubAzureInventory) CreateWebAppDeploymentSlot(context.Context, models.ProfileSummary, string, string, string) error {
+	return nil
+}
+
+func (stubAzureInventory) SwapWebAppDeploymentSlots(context.Context, models.ProfileSummary, string, string, string) error {
+	return nil
 }
 
 func (stubAzureInventory) ListAppServicePlans(context.Context, models.ProfileSummary, string) ([]models.AzureAppServicePlan, error) {
