@@ -16,6 +16,7 @@ import {
   ArrowLeftRight,
   Boxes,
   Bug,
+  Cloud,
   LayoutGrid,
   Rocket,
   Server,
@@ -74,6 +75,7 @@ import {
   AlertDialogTitle,
 } from "./components/ui/alert-dialog";
 import ConnectView from "./views/ConnectView";
+import CloudOverviewView from "./views/CloudOverviewView";
 import OverviewView from "./views/OverviewView";
 import ResourcesView from "./views/ResourcesView";
 import { AzureCLIExtensionsBanner } from "./components/azure-cli-extensions-banner";
@@ -780,7 +782,7 @@ const emptySession: SessionSnapshot = {
 
 // Tabs that do not render provider inventory, so they never show the
 // first-load skeleton (they have their own content regardless of the fetch).
-const NON_INVENTORY_TABS = new Set(["debug", "deploy", "actions", "resources", "virtualisation"]);
+const NON_INVENTORY_TABS = new Set(["cloud-overview", "debug", "deploy", "actions", "resources", "virtualisation"]);
 
 const emptySettings: AppSettingsSnapshot = {
   platformName: "",
@@ -1148,6 +1150,7 @@ export default function App() {
       activeWorkspaceTabId !== "debug" &&
       activeWorkspaceTabId !== "deploy" &&
       activeWorkspaceTabId !== "resources" &&
+      activeWorkspaceTabId !== "cloud-overview" &&
       !session.workspaceTabs.some((tab) => tab.tabId === activeWorkspaceTabId)
     ) {
       setActiveWorkspaceTabId(session.workspaceTabs[0].tabId);
@@ -2651,6 +2654,11 @@ export default function App() {
     <DebugView />
   ) : activeWorkspaceTabId === "deploy" ? (
     <DeployView profiles={profiles} />
+  ) : session.isLocked && activeWorkspaceTabId === "cloud-overview" ? (
+    <CloudOverviewView
+      canIndexCurrentWorkspace={Boolean(session.lockedProviderId && session.lockedProfileId)}
+      onOpenResources={() => setActiveWorkspaceTabId("resources")}
+    />
   ) : session.isLocked && activeWorkspaceTabId === "resources" ? (
     <ResourcesView
       currentScopeId={
@@ -3939,6 +3947,7 @@ export default function App() {
       return item;
     });
     const overviewItems = tabItems.filter((item) => item.id === "overview");
+    overviewItems.unshift({ id: "cloud-overview", label: "Cloud overview", icon: Cloud });
     overviewItems.push({ id: "resources", label: "Resources", icon: Boxes });
     const serviceItems = tabItems.filter((item) => item.id !== "overview");
     const groups: NavGroup[] = [];
@@ -4327,6 +4336,7 @@ function authLabel(method?: AuthMethod): string | undefined {
 function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
   const labels: Record<string, string> = {
     overview: "Overview",
+    "cloud-overview": "Cloud overview",
     resources: "Resources",
     virtualisation: "Local Runtime",
     debug: "Debug console",

@@ -346,6 +346,28 @@ vi.mock("./lib/backend", () => ({
             edgeCount: 0,
           },
         ];
+      case "overview.get":
+        return {
+          resourceCount: 3,
+          staleResourceCount: 1,
+          workspaceCount: 2,
+          providers: [{ key: "aws", count: 2 }, { key: "azure", count: 1 }],
+          services: [{ key: "ec2", count: 2 }, { key: "storage", count: 1 }],
+          regions: [{ key: "us-east-1", count: 2 }, { key: "global", count: 1 }],
+          inventoryRuns: [
+            {
+              runId: "run-1",
+              scopeId: "aws:sandbox",
+              provider: "aws",
+              profileId: "sandbox",
+              startedAt: new Date().toISOString(),
+              completedAt: new Date().toISOString(),
+              status: "completed",
+              resourceCount: 2,
+              edgeCount: 0,
+            },
+          ],
+        };
       case "resources.list":
         return {
           resources: [
@@ -1993,6 +2015,38 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Stop" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Reboot" })).toBeDisabled();
   }, 15000);
+
+  it("opens the cross-cloud overview and drills into Resources", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+      ],
+    };
+
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
+
+    const navigation = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
+    fireEvent.click(await navigation.findByRole("button", { name: "Cloud overview" }));
+
+    expect(await screen.findByRole("heading", { name: "Cloud overview" })).toBeInTheDocument();
+    expect(await screen.findByText("Provider footprint")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Explore resources" }));
+    expect(await screen.findByRole("heading", { name: "Resources" })).toBeInTheDocument();
+  });
 
   it("opens the global Resources explorer from workspace navigation", async () => {
     sessionFixture = {
