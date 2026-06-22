@@ -534,29 +534,29 @@ type AzureBlobUploadResult struct {
 }
 
 type AzureWebApp struct {
-	Name            string `json:"name"`
-	ResourceGroup   string `json:"resourceGroup,omitempty"`
-	Location        string `json:"location,omitempty"`
-	State           string `json:"state,omitempty"`
-	DefaultHostName string `json:"defaultHostName,omitempty"`
-	Kind            string `json:"kind,omitempty"`
-	HTTPSOnly       bool   `json:"httpsOnly,omitempty"`
-	AppServicePlan  string `json:"appServicePlan,omitempty"`
-	PlanSKU         string `json:"planSku,omitempty"`
-	Runtime         string `json:"runtime,omitempty"`
-	OutboundIPs     string `json:"outboundIpAddresses,omitempty"`
-	IdentityType    string `json:"identityType,omitempty"`
+	Name                string `json:"name"`
+	ResourceGroup       string `json:"resourceGroup,omitempty"`
+	Location            string `json:"location,omitempty"`
+	State               string `json:"state,omitempty"`
+	DefaultHostName     string `json:"defaultHostName,omitempty"`
+	Kind                string `json:"kind,omitempty"`
+	HTTPSOnly           bool   `json:"httpsOnly,omitempty"`
+	AppServicePlan      string `json:"appServicePlan,omitempty"`
+	PlanSKU             string `json:"planSku,omitempty"`
+	Runtime             string `json:"runtime,omitempty"`
+	OutboundIPs         string `json:"outboundIpAddresses,omitempty"`
+	IdentityType        string `json:"identityType,omitempty"`
 	IdentityPrincipalID string `json:"identityPrincipalId,omitempty"`
 }
 
 type AzureAppServicePlan struct {
-	Name              string `json:"name"`
-	ResourceGroup     string `json:"resourceGroup,omitempty"`
-	Location          string `json:"location,omitempty"`
-	SKU               string `json:"sku,omitempty"`
-	Kind              string `json:"kind,omitempty"`
-	Status            string `json:"status,omitempty"`
-	NumberOfWorkers   int    `json:"numberOfWorkers,omitempty"`
+	Name            string `json:"name"`
+	ResourceGroup   string `json:"resourceGroup,omitempty"`
+	Location        string `json:"location,omitempty"`
+	SKU             string `json:"sku,omitempty"`
+	Kind            string `json:"kind,omitempty"`
+	Status          string `json:"status,omitempty"`
+	NumberOfWorkers int    `json:"numberOfWorkers,omitempty"`
 }
 
 type AzureWebAppSetting struct {
@@ -589,17 +589,17 @@ type AzureLogAnalyticsSelectionResult struct {
 
 // AzureLogAnalyticsHistoryEntry is one successful query remembered locally.
 type AzureLogAnalyticsHistoryEntry struct {
-	Query     string `json:"query"`
-	Timespan  string `json:"timespan,omitempty"`
-	RanAt     string `json:"ranAt"`
+	Query    string `json:"query"`
+	Timespan string `json:"timespan,omitempty"`
+	RanAt    string `json:"ranAt"`
 }
 
 // AzureLogAnalyticsSavedQuery is a user-named query stored locally (cloud sync later).
 type AzureLogAnalyticsSavedQuery struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Query     string `json:"query"`
-	Timespan  string `json:"timespan,omitempty"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Query    string `json:"query"`
+	Timespan string `json:"timespan,omitempty"`
 }
 
 // AzureLogAnalyticsTableInfo describes a workspace table for the schema browser.
@@ -610,20 +610,20 @@ type AzureLogAnalyticsTableInfo struct {
 
 // AzureWafLogColumnMap maps logical WAF fields to workspace-specific column names.
 type AzureWafLogColumnMap struct {
-	TimeGenerated      string `json:"timeGenerated"`
-	Category           string `json:"category,omitempty"`
-	Action             string `json:"action"`
-	RuleName           string `json:"ruleName"`
-	RequestUri         string `json:"requestUri"`
-	ClientIP           string `json:"clientIP"`
-	Host               string `json:"host"`
-	PolicyName         string `json:"policyName"`
-	PolicyMode         string `json:"policyMode"`
-	TrackingReference  string `json:"trackingReference"`
-	DetailsMatches     string `json:"detailsMatches"`
-	DetailsMessage     string `json:"detailsMessage"`
-	DetailsData        string `json:"detailsData,omitempty"`
-	AdditionalFields   string `json:"additionalFields,omitempty"`
+	TimeGenerated     string `json:"timeGenerated"`
+	Category          string `json:"category,omitempty"`
+	Action            string `json:"action"`
+	RuleName          string `json:"ruleName"`
+	RequestUri        string `json:"requestUri"`
+	ClientIP          string `json:"clientIP"`
+	Host              string `json:"host"`
+	PolicyName        string `json:"policyName"`
+	PolicyMode        string `json:"policyMode"`
+	TrackingReference string `json:"trackingReference"`
+	DetailsMatches    string `json:"detailsMatches"`
+	DetailsMessage    string `json:"detailsMessage"`
+	DetailsData       string `json:"detailsData,omitempty"`
+	AdditionalFields  string `json:"additionalFields,omitempty"`
 }
 
 // AzureWafLogSchemaProfile describes how WAF logs are stored in a workspace.
@@ -683,19 +683,19 @@ type AzureWafCustomRule struct {
 
 // AzureWafPolicyDetail is the full read-only config for a selected policy.
 type AzureWafPolicyDetail struct {
-	Name                   string                        `json:"name"`
-	ResourceGroup          string                        `json:"resourceGroup"`
-	Location               string                        `json:"location,omitempty"`
-	SKU                    string                        `json:"sku,omitempty"`
-	Mode                   string                        `json:"mode"`
-	Enabled                bool                          `json:"enabled"`
-	RequestBodyCheck       string                        `json:"requestBodyCheck,omitempty"`
-	ManagedRuleSets        []AzureWafManagedRuleGroup    `json:"managedRuleSets"`
-	ManagedRuleOverrides   []AzureWafManagedRuleOverride `json:"managedRuleOverrides"`
-	Exclusions             []AzureWafExclusion           `json:"exclusions"`
-	CustomRules            []AzureWafCustomRule          `json:"customRules"`
-	RedirectURL            string                        `json:"redirectUrl,omitempty"`
-	CustomBlockStatusCode  int                           `json:"customBlockStatusCode,omitempty"`
+	Name                  string                        `json:"name"`
+	ResourceGroup         string                        `json:"resourceGroup"`
+	Location              string                        `json:"location,omitempty"`
+	SKU                   string                        `json:"sku,omitempty"`
+	Mode                  string                        `json:"mode"`
+	Enabled               bool                          `json:"enabled"`
+	RequestBodyCheck      string                        `json:"requestBodyCheck,omitempty"`
+	ManagedRuleSets       []AzureWafManagedRuleGroup    `json:"managedRuleSets"`
+	ManagedRuleOverrides  []AzureWafManagedRuleOverride `json:"managedRuleOverrides"`
+	Exclusions            []AzureWafExclusion           `json:"exclusions"`
+	CustomRules           []AzureWafCustomRule          `json:"customRules"`
+	RedirectURL           string                        `json:"redirectUrl,omitempty"`
+	CustomBlockStatusCode int                           `json:"customBlockStatusCode,omitempty"`
 }
 
 // AzureWafRuleFireCount correlates a managed rule with recent log volume.

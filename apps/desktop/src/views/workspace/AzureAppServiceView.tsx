@@ -75,6 +75,8 @@ function isSensitiveSettingName(name: string): boolean {
   );
 }
 
+// Presentation-only masking: full values are still present in the workspace snapshot
+// serialised over IPC and held in React state.
 function maskSettingValue(name: string, value: string): string {
   if (!value || !isSensitiveSettingName(name)) {
     return value || "—";
@@ -123,6 +125,7 @@ export default function AzureAppServiceView({
   const [settingName, setSettingName] = useState("");
   const [settingValue, setSettingValue] = useState("");
   const [settingSlotSetting, setSettingSlotSetting] = useState(false);
+  const [settingClearValue, setSettingClearValue] = useState(false);
   const [settingError, setSettingError] = useState<string | null>(null);
   const [pendingDeleteSetting, setPendingDeleteSetting] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<AzureWebAppAction | null>(null);
@@ -144,6 +147,7 @@ export default function AzureAppServiceView({
     setSettingName("");
     setSettingValue("");
     setSettingSlotSetting(false);
+    setSettingClearValue(false);
     setSettingError(null);
     setSettingDialogOpen(true);
   }
@@ -153,8 +157,19 @@ export default function AzureAppServiceView({
     setSettingName(name);
     setSettingValue("");
     setSettingSlotSetting(slotSetting);
+    setSettingClearValue(false);
     setSettingError(null);
     setSettingDialogOpen(true);
+  }
+
+  function canSubmitSetting(): boolean {
+    if (!settingName.trim()) {
+      return false;
+    }
+    if (settingDialogMode === "edit" && !settingValue.trim() && !settingClearValue) {
+      return false;
+    }
+    return true;
   }
 
   async function confirmSetSetting() {
@@ -162,6 +177,12 @@ export default function AzureAppServiceView({
     const name = settingName.trim();
     if (!name) {
       setSettingError("Setting name is required.");
+      return;
+    }
+    if (settingDialogMode === "edit" && !settingValue.trim() && !settingClearValue) {
+      setSettingError(
+        "Re-enter the value. The current value is not shown, so an empty update would wipe the live setting.",
+      );
       return;
     }
     setSettingError(null);
@@ -414,7 +435,8 @@ export default function AzureAppServiceView({
             <h2 className="text-base font-bold">Application settings</h2>
             <p className="text-sm text-muted-foreground">
               On container web apps these settings are exposed as environment variables. Updates
-              trigger an app recycle. Sensitive names are masked in the table.
+              trigger an app recycle. Sensitive names are masked in the table only; values still
+              travel in the workspace payload for this local desktop session.
             </p>
           </div>
           {selectedApp && canWrite ? (
@@ -569,11 +591,38 @@ export default function AzureAppServiceView({
                   <div className={fieldLabel}>Value</div>
                   <Input
                     value={settingValue}
-                    onChange={(event) => setSettingValue(event.target.value)}
-                    placeholder={settingDialogMode === "edit" ? "Enter new value" : "value"}
+                    onChange={(event) => {
+                      setSettingValue(event.target.value);
+                      if (event.target.value.trim()) {
+                        setSettingClearValue(false);
+                      }
+                    }}
+                    placeholder={settingDialogMode === "edit" ? "Re-enter the new value" : "value"}
+                    disabled={settingDialogMode === "edit" && settingClearValue}
                     spellCheck={false}
                   />
+                  {settingDialogMode === "edit" ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      The existing value is not shown. You must re-enter a value or explicitly clear
+                      it below.
+                    </p>
+                  ) : null}
                 </div>
+                {settingDialogMode === "edit" ? (
+                  <label className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+                    <input
+                      type="checkbox"
+                      checked={settingClearValue}
+                      onChange={(event) => {
+                        setSettingClearValue(event.target.checked);
+                        if (event.target.checked) {
+                          setSettingValue("");
+                        }
+                      }}
+                    />
+                    Set value to empty (overwrites the live setting with a blank value)
+                  </label>
+                ) : null}
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
@@ -588,10 +637,10 @@ export default function AzureAppServiceView({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={!settingName.trim()}
+              disabled={!canSubmitSetting()}
               onClick={() => void confirmSetSetting()}
             >
-              {settingDialogMode === "add" ? "Add" : "Update"}
+              {settingDialogMode === "add" ? "Add" : settingClearValue ? "Clear value" : "Update"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

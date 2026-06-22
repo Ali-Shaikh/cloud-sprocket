@@ -36,13 +36,13 @@ func (i *Inventory) ListWebApps(
 		return nil, err
 	}
 	var decoded []struct {
-		Name          string `json:"name"`
-		ResourceGroup string `json:"resourceGroup"`
-		Location      string `json:"location"`
-		State         string `json:"state"`
+		Name            string `json:"name"`
+		ResourceGroup   string `json:"resourceGroup"`
+		Location        string `json:"location"`
+		State           string `json:"state"`
 		DefaultHostName string `json:"defaultHostName"`
-		Kind          string `json:"kind"`
-		HTTPSOnly     bool   `json:"httpsOnly"`
+		Kind            string `json:"kind"`
+		HTTPSOnly       bool   `json:"httpsOnly"`
 	}
 	if err := json.Unmarshal(payload, &decoded); err != nil {
 		return nil, fmt.Errorf("decode azure web apps: %w", err)
