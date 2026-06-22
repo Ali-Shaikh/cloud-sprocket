@@ -85,7 +85,13 @@ func TestWorkspaceGetSkipsHeavyAzureDrillDown(t *testing.T) {
 	}
 	defer dataStore.Close()
 
-	azure := &countingAzureInventory{}
+	azure := &countingAzureInventory{
+		stubAzureInventory: stubAzureInventory{
+			resourceGroups: []models.AzureResourceGroup{
+				{Name: "rg-primary", Location: "westeurope"},
+			},
+		},
+	}
 	service := New(
 		settings,
 		dataStore,
@@ -131,26 +137,44 @@ func TestWorkspaceGetSkipsHeavyAzureDrillDown(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected WorkspaceSnapshot, got %T", result)
 	}
-	if len(workspace.AzureWafPolicies) == 0 {
-		t.Fatal("expected WAF policy list on lightweight workspace.get")
+	if len(workspace.AzureResourceGroups) == 0 {
+		t.Fatal("expected resource groups on deferred workspace.get")
 	}
-	if workspace.AzureWafPolicyDetail != nil {
-		t.Fatal("lightweight workspace.get should not load WAF policy detail")
+	if len(workspace.AzureWafPolicies) != 0 {
+		t.Fatal("deferred workspace.get should not load WAF policies")
 	}
-	if workspace.AzureWafLogSchema != nil {
-		t.Fatal("lightweight workspace.get should not probe WAF log schema")
-	}
-	if azure.detectSchemaCalls.Load() != 0 {
-		t.Fatalf("DetectWafLogSchema calls = %d, want 0", azure.detectSchemaCalls.Load())
-	}
-	if azure.getPolicyCalls.Load() != 0 {
-		t.Fatalf("GetWafPolicy calls = %d, want 0", azure.getPolicyCalls.Load())
+	if len(workspace.AzureStorageAccounts) != 0 {
+		t.Fatal("deferred workspace.get should not load storage accounts")
 	}
 	if azure.listBlobsCalls.Load() != 0 {
 		t.Fatalf("ListBlobs calls = %d, want 0", azure.listBlobsCalls.Load())
 	}
 	if azure.peekQueueCalls.Load() != 0 {
 		t.Fatalf("PeekQueueMessages calls = %d, want 0", azure.peekQueueCalls.Load())
+	}
+
+	wafResult, err := service.Handle(ctx, "azure.inventory.get", []byte(`{"scope":"waf"}`), nil)
+	if err != nil {
+		t.Fatalf("azure.inventory.get: %v", err)
+	}
+	wafWorkspace, ok := wafResult.(models.WorkspaceSnapshot)
+	if !ok {
+		t.Fatalf("expected WorkspaceSnapshot, got %T", wafResult)
+	}
+	if len(wafWorkspace.AzureWafPolicies) == 0 {
+		t.Fatal("expected WAF policy list on scoped azure.inventory.get")
+	}
+	if wafWorkspace.AzureWafPolicyDetail != nil {
+		t.Fatal("lightweight scoped fetch should not load WAF policy detail")
+	}
+	if wafWorkspace.AzureWafLogSchema != nil {
+		t.Fatal("lightweight scoped fetch should not probe WAF log schema")
+	}
+	if azure.detectSchemaCalls.Load() != 0 {
+		t.Fatalf("DetectWafLogSchema calls = %d, want 0", azure.detectSchemaCalls.Load())
+	}
+	if azure.getPolicyCalls.Load() != 0 {
+		t.Fatalf("GetWafPolicy calls = %d, want 0", azure.getPolicyCalls.Load())
 	}
 }
 
@@ -536,5 +560,101 @@ func TestAzurePhaseOneEnrichmentRunsInParallel(t *testing.T) {
 	}
 	if len(parallelWorkspace.AzureEntraUsers) == 0 {
 		t.Fatal("expected Entra users after parallel enrichment")
+	}
+}
+
+func TestAzureInventoryGetRejectsUnknownScope(t *testing.T) {
+	dataStore, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer dataStore.Close()
+
+	service := &Service{store: dataStore}
+	ctx := context.Background()
+	_, err = service.Handle(ctx, "azure.inventory.get", []byte(`{"scope":"unknown"}`), nil)
+	if err == nil {
+		t.Fatal("expected error for unknown scope")
+	}
+}
+
+func TestAzureInventoryGetScopedStorage(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+	mustWriteFile(
+		t,
+		filepath.Join(home, ".azure", "azureProfile.json"),
+		`{"subscriptions":[{"id":"sub-001","name":"Marketing","tenantId":"tenant-123","user":{"name":"ali@example.com"}}]}`,
+	)
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("EnsureRuntimeDirs: %v", err)
+	}
+
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer dataStore.Close()
+
+	azure := &countingAzureInventory{
+		stubAzureInventory: stubAzureInventory{
+			resourceGroups: []models.AzureResourceGroup{{Name: "rg-primary", Location: "westeurope"}},
+		},
+	}
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(command string) (string, error) {
+			if command == "az" {
+				return "/usr/bin/az", nil
+			}
+			return "", nil
+		}),
+		&stubS3Inventory{},
+		&stubEC2Inventory{},
+		stubLambdaInventory{},
+		stubDynamoDBInventory{},
+		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{},
+		azure,
+		stubDockerRuntime{},
+	)
+
+	ctx := context.Background()
+	for _, step := range []struct {
+		method string
+		params []byte
+	}{
+		{"session.selectProvider", []byte(`{"providerId":"azure"}`)},
+		{"session.selectProfile", []byte(`{"providerId":"azure","profileId":"sub-001"}`)},
+		{"session.selectAuthMethod", []byte(`{"authMethod":"cli"}`)},
+		{"session.lock", nil},
+	} {
+		if _, err := service.Handle(ctx, step.method, step.params, nil); err != nil {
+			t.Fatalf("%s: %v", step.method, err)
+		}
+	}
+
+	result, err := service.Handle(ctx, "azure.inventory.get", []byte(`{"scope":"storage"}`), nil)
+	if err != nil {
+		t.Fatalf("azure.inventory.get: %v", err)
+	}
+	workspace, ok := result.(models.WorkspaceSnapshot)
+	if !ok {
+		t.Fatalf("expected WorkspaceSnapshot, got %T", result)
+	}
+	if azure.listResourceGroupsCalls.Load() != 0 {
+		t.Fatalf("storage scope should not list resource groups, got %d calls", azure.listResourceGroupsCalls.Load())
+	}
+	if azure.listStorageAccountsCalls.Load() != 1 {
+		t.Fatalf("storage scope list calls = %d, want 1", azure.listStorageAccountsCalls.Load())
+	}
+	if len(workspace.AzureStorageAccounts) == 0 {
+		t.Fatal("expected storage accounts from scoped inventory fetch")
 	}
 }

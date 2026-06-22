@@ -4,8 +4,10 @@
 package app
 
 import (
+	"log"
 	"strings"
 	"sync"
+	"time"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
@@ -19,6 +21,8 @@ type azureEnrichmentOptions struct {
 	scope                  string
 	// serialPhaseOne runs phase-one enrichers sequentially. Test-only.
 	serialPhaseOne bool
+	// serialPhaseTwo runs phase-two enrichers sequentially. Test-only.
+	serialPhaseTwo bool
 }
 
 func (s *Service) enrichAzureWorkspace(
@@ -36,7 +40,7 @@ func (s *Service) enrichAzureWorkspace(
 	if opts.resourceGroupSelection {
 		var mu sync.Mutex
 		s.enrichAzureInventory(workspace, session, &mu)
-		s.enrichAzureAppServiceInventory(workspace, session, nil)
+		s.enrichAzureAppServiceInventory(workspace, session, &mu)
 		return
 	}
 
@@ -45,42 +49,106 @@ func (s *Service) enrichAzureWorkspace(
 		return
 	}
 
-	phaseOne := []func(*sync.Mutex){
-		func(mu *sync.Mutex) { s.enrichAzureInventory(workspace, session, mu) },
-		func(mu *sync.Mutex) { s.enrichAzureStorageInventory(workspace, session, opts, mu) },
-		func(mu *sync.Mutex) { s.enrichAzureLogAnalyticsInventory(workspace, session, mu) },
-		func(mu *sync.Mutex) { s.enrichAzureFunctionsInventory(workspace, session, opts, mu) },
-		func(mu *sync.Mutex) { s.enrichAzureKeyVaultInventory(workspace, session, opts, mu) },
-		func(mu *sync.Mutex) { s.enrichAzureCosmosInventory(workspace, session, opts, mu) },
-		func(mu *sync.Mutex) { s.enrichAzureEntraInventory(workspace, session, mu) },
+	phaseOne := []struct {
+		name string
+		fn   func(*sync.Mutex)
+	}{
+		{"inventory", func(mu *sync.Mutex) { s.enrichAzureInventory(workspace, session, mu) }},
+		{"storage", func(mu *sync.Mutex) { s.enrichAzureStorageInventory(workspace, session, opts, mu) }},
+		{"log-analytics", func(mu *sync.Mutex) { s.enrichAzureLogAnalyticsInventory(workspace, session, mu) }},
+		{"functions", func(mu *sync.Mutex) { s.enrichAzureFunctionsInventory(workspace, session, opts, mu) }},
+		{"keyvault", func(mu *sync.Mutex) { s.enrichAzureKeyVaultInventory(workspace, session, opts, mu) }},
+		{"cosmos", func(mu *sync.Mutex) { s.enrichAzureCosmosInventory(workspace, session, opts, mu) }},
+		{"entra", func(mu *sync.Mutex) { s.enrichAzureEntraInventory(workspace, session, mu) }},
 	}
 
 	var mu sync.Mutex
 	if opts.serialPhaseOne {
 		for _, enrich := range phaseOne {
-			enrich(&mu)
+			s.runAzureEnricher(enrich.name, func() { enrich.fn(&mu) })
 		}
 	} else {
 		var wg sync.WaitGroup
 		for _, enrich := range phaseOne {
 			wg.Add(1)
-			go func(fn func(*sync.Mutex)) {
+			go func(item struct {
+				name string
+				fn   func(*sync.Mutex)
+			}) {
 				defer wg.Done()
-				fn(&mu)
+				s.runAzureEnricher(item.name, func() { item.fn(&mu) })
 			}(enrich)
 		}
 		wg.Wait()
 	}
 
-	// Phase 2: depends on phase 1 fields (resource groups, storage accounts, LA workspaces).
-	s.enrichAzureAppServiceInventory(workspace, session, nil)
-	if strings.TrimSpace(workspace.SelectedAzureWebAppName) != "" ||
-		strings.TrimSpace(session.SelectedAzureWebAppName) != "" {
-		s.enrichAzureWebAppDetail(workspace, session, nil)
+	s.enrichAzurePhaseTwo(workspace, session, opts)
+}
+
+func (s *Service) enrichAzurePhaseTwo(
+	workspace *models.WorkspaceSnapshot,
+	session models.SessionSnapshot,
+	opts azureEnrichmentOptions,
+) {
+	phaseTwo := []struct {
+		name string
+		fn   func(*sync.Mutex)
+	}{
+		{
+			name: "app-service",
+			fn: func(mu *sync.Mutex) {
+				s.enrichAzureAppServiceInventory(workspace, session, mu)
+				if !opts.lightweight &&
+					(strings.TrimSpace(workspace.SelectedAzureWebAppName) != "" ||
+						strings.TrimSpace(session.SelectedAzureWebAppName) != "") {
+					s.enrichAzureWebAppDetail(workspace, session, mu)
+				}
+			},
+		},
+		{
+			name: "queues",
+			fn:   func(mu *sync.Mutex) { s.enrichAzureQueuesInventory(workspace, session, opts, mu) },
+		},
+		{
+			name: "waf",
+			fn:   func(mu *sync.Mutex) { s.enrichAzureWafInventory(workspace, session, opts, mu) },
+		},
+		{
+			name: "frontdoor",
+			fn:   func(mu *sync.Mutex) { s.enrichAzureFrontDoorInventory(workspace, session, opts, mu) },
+		},
 	}
-	s.enrichAzureQueuesInventory(workspace, session, opts, nil)
-	s.enrichAzureWafInventory(workspace, session, opts, nil)
-	s.enrichAzureFrontDoorInventory(workspace, session, opts, nil)
+
+	var mu sync.Mutex
+	if opts.serialPhaseTwo {
+		for _, enrich := range phaseTwo {
+			s.runAzureEnricher(enrich.name, func() { enrich.fn(&mu) })
+		}
+		return
+	}
+
+	var wg sync.WaitGroup
+	for _, enrich := range phaseTwo {
+		wg.Add(1)
+		go func(item struct {
+			name string
+			fn   func(*sync.Mutex)
+		}) {
+			defer wg.Done()
+			s.runAzureEnricher(item.name, func() { item.fn(&mu) })
+		}(enrich)
+	}
+	wg.Wait()
+}
+
+func (s *Service) runAzureEnricher(name string, fn func()) {
+	if !azureInventoryProfilingEnabled() {
+		fn()
+		return
+	}
+	start := time.Now()
+	fn()
+	log.Printf("azure enricher %s took %dms", name, time.Since(start).Milliseconds())
 }
 
 func (s *Service) enrichAzureScoped(
@@ -98,6 +166,10 @@ func (s *Service) enrichAzureScoped(
 		s.enrichAzureKeyVaultInventory(workspace, session, scopeOpts, nil)
 	case "cosmos":
 		s.enrichAzureCosmosInventory(workspace, session, scopeOpts, nil)
+	case "loganalytics":
+		s.enrichAzureLogAnalyticsInventory(workspace, session, nil)
+	case "entra":
+		s.enrichAzureEntraInventory(workspace, session, nil)
 	case "waf":
 		s.enrichAzureLogAnalyticsInventory(workspace, session, nil)
 		s.enrichAzureWafInventory(workspace, session, scopeOpts, nil)
@@ -107,7 +179,9 @@ func (s *Service) enrichAzureScoped(
 	case "webapps":
 		s.enrichAzureInventory(workspace, session, nil)
 		s.enrichAzureAppServiceInventory(workspace, session, nil)
-		s.enrichAzureWebAppDetail(workspace, session, nil)
+		if !opts.lightweight {
+			s.enrichAzureWebAppDetail(workspace, session, nil)
+		}
 	case "frontdoor":
 		s.enrichAzureFrontDoorInventory(workspace, session, scopeOpts, nil)
 	}

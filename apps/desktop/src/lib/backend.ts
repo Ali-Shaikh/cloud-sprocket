@@ -1546,6 +1546,9 @@ function handleMockRequest<T>(
     case "workspace.get":
       rebuildSessionDerivedState();
       return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.inventory.get":
+      rebuildSessionDerivedState();
+      return Promise.resolve(buildMockWorkspace() as T);
     case "runtime.get": {
       const workspace = buildMockWorkspace();
       return Promise.resolve({

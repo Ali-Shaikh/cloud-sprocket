@@ -45,6 +45,7 @@ import azureCosmosIconUrl from "./assets/cloud-icons/azure-cosmos.svg";
 import azureQueuesIconUrl from "./assets/cloud-icons/azure-queues.svg";
 import azureEntraIconUrl from "./assets/cloud-icons/azure-entra.svg";
 import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
+import { azureInventoryLoaded, azureInventoryScopeForTab } from "./lib/azure-inventory";
 import { notify, notifyJob, useNotifications, type NotificationTone } from "./lib/notify";
 import { useTheme } from "./lib/theme";
 import {
@@ -620,6 +621,64 @@ function mergeAzureWafSelection(
   });
 }
 
+function mergeAzureLogAnalyticsInventory(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  return normaliseWorkspaceSnapshot({
+    ...current,
+    selectedAzureLogWorkspace: normalised.selectedAzureLogWorkspace,
+    azureLogAnalyticsWorkspaces: normalised.azureLogAnalyticsWorkspaces,
+    azureLogAnalyticsStatusMessage: normalised.azureLogAnalyticsStatusMessage,
+  });
+}
+
+function mergeAzureEntraInventory(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  return normaliseWorkspaceSnapshot({
+    ...current,
+    azureEntraUsers: normalised.azureEntraUsers,
+    azureEntraGroups: normalised.azureEntraGroups,
+    azureEntraApps: normalised.azureEntraApps,
+    azureEntraStatusMessage: normalised.azureEntraStatusMessage,
+  });
+}
+
+function mergeAzureInventoryScope(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+  scope: string,
+): WorkspaceSnapshot {
+  switch (scope) {
+    case "storage":
+      return mergeAzureStorageSelection(current, incoming);
+    case "webapps":
+      return mergeAzureResourceGroupSelection(current, incoming);
+    case "functions":
+      return mergeAzureFunctionsSelection(current, incoming);
+    case "keyvault":
+      return mergeAzureKeyVaultSelection(current, incoming);
+    case "cosmos":
+      return mergeAzureCosmosSelection(current, incoming);
+    case "waf":
+      return mergeAzureWafSelection(current, incoming);
+    case "frontdoor":
+      return mergeAzureFrontDoorSelection(current, incoming);
+    case "queues":
+      return mergeAzureQueuesSelection(current, incoming);
+    case "loganalytics":
+      return mergeAzureLogAnalyticsInventory(current, incoming);
+    case "entra":
+      return mergeAzureEntraInventory(current, incoming);
+    default:
+      return normaliseWorkspaceSnapshot(incoming);
+  }
+}
+
 function mergeAzureQueuesSelection(
   current: WorkspaceSnapshot,
   incoming: WorkspaceSnapshot,
@@ -929,6 +988,7 @@ export default function App() {
   const [azureWafConfigLoading, setAzureWafConfigLoading] = useState(false);
   const frontDoorRefreshInFlightRef = useRef(false);
   const wafRefreshInFlightRef = useRef(false);
+  const azureInventoryFetchedScopesRef = useRef(new Set<string>());
   const [writeModeDialogOpen, setWriteModeDialogOpen] = useState(false);
   const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<"enable" | "incapable">("enable");
   const [writeModePending, setWriteModePending] = useState(false);
@@ -1189,6 +1249,7 @@ export default function App() {
       startTransition(() => {
         setSession(normalisedSession);
         if (method === "session.unlock") {
+          azureInventoryFetchedScopesRef.current.clear();
           setActiveWorkspaceTabId("overview");
           setLambdaInvokeResult(null);
           setLambdaInvokeInFlight(false);
@@ -1563,6 +1624,57 @@ export default function App() {
       setAzureWafConfigLoading(false);
     }
   }
+
+  useEffect(() => {
+    azureInventoryFetchedScopesRef.current.clear();
+  }, [session.lockedProfileId, session.selectedProfileId, session.isLocked]);
+
+  useEffect(() => {
+    if (
+      !session.isLocked ||
+      session.lockedProviderId !== "azure" ||
+      !workspaceLoaded
+    ) {
+      return;
+    }
+    const scope = azureInventoryScopeForTab(activeWorkspaceTabId);
+    if (!scope) {
+      return;
+    }
+    if (
+      azureInventoryFetchedScopesRef.current.has(scope) ||
+      azureInventoryLoaded(workspace, scope)
+    ) {
+      return;
+    }
+    azureInventoryFetchedScopesRef.current.add(scope);
+    beginAzureInventoryFetch();
+    void backendRequest<WorkspaceSnapshot>("azure.inventory.get", { scope })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace((current) =>
+            mergeAzureInventoryScope(current, workspaceResult, scope),
+          );
+        });
+      })
+      .catch((error: unknown) => {
+        azureInventoryFetchedScopesRef.current.delete(scope);
+        pushNotification(
+          "error",
+          "Could not load Azure service inventory",
+          formatBackendError(error),
+        );
+      })
+      .finally(() => {
+        endAzureInventoryFetch();
+      });
+  }, [
+    activeWorkspaceTabId,
+    session.isLocked,
+    session.lockedProviderId,
+    session.selectedProfileId,
+    workspaceLoaded,
+  ]);
 
   useEffect(() => {
     if (!session.isLocked || activeWorkspaceTabId !== "azure-front-door") {
@@ -2336,6 +2448,7 @@ export default function App() {
       resetWorkspaceFetch();
       return;
     }
+    azureInventoryFetchedScopesRef.current.clear();
     beginWorkspaceFetch();
     try {
       const workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
@@ -4367,7 +4480,14 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
     case "azure-vms":
       return { ...base, iconUrl: azureVmIconUrl, count: workspace.azureVirtualMachines.length };
     case "azure-storage":
-      return { ...base, iconUrl: azureStorageIconUrl, count: workspace.azureBlobContainers.length };
+      return {
+        ...base,
+        iconUrl: azureStorageIconUrl,
+        count:
+          workspace.azureBlobContainers.length > 0
+            ? workspace.azureBlobContainers.length
+            : workspace.azureStorageAccounts.length,
+      };
     case "azure-app-service":
       return { ...base, iconUrl: azureAppServiceIconUrl, count: workspace.azureWebApps.length };
     case "azure-log-analytics":
