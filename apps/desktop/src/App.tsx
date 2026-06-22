@@ -1234,6 +1234,7 @@ export default function App() {
     if (!trimmed) {
       return;
     }
+    beginAzureInventoryFetch();
     startTransition(() => {
       setSession((current) =>
         normaliseSessionSnapshot({
@@ -1249,10 +1250,17 @@ export default function App() {
       );
     });
     try {
-      await backendRequest("azure.webApps.select", { appName: trimmed });
+      const workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.webApps.select", {
+        appName: trimmed,
+      });
+      startTransition(() => {
+        setWorkspace((current) => mergeAzureResourceGroupSelection(current, workspaceResult));
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "App Service selection failed";
       pushNotification("error", "Could not select web app", message);
+    } finally {
+      endAzureInventoryFetch();
     }
   }
 

@@ -102,6 +102,11 @@ func (blockingAzure) ListAppServicePlans(ctx context.Context, _ models.ProfileSu
 	return nil, ctx.Err()
 }
 
+func (blockingAzure) GetAppServicePlan(ctx context.Context, _ models.ProfileSummary, _ string, _ string) (models.AzureAppServicePlan, error) {
+	<-ctx.Done()
+	return models.AzureAppServicePlan{}, ctx.Err()
+}
+
 func (blockingAzure) ListWebAppSettings(ctx context.Context, _ models.ProfileSummary, _ string, _ string) ([]models.AzureWebAppSetting, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()

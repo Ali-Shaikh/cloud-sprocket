@@ -534,19 +534,20 @@ type AzureBlobUploadResult struct {
 }
 
 type AzureWebApp struct {
-	Name                string `json:"name"`
-	ResourceGroup       string `json:"resourceGroup,omitempty"`
-	Location            string `json:"location,omitempty"`
-	State               string `json:"state,omitempty"`
-	DefaultHostName     string `json:"defaultHostName,omitempty"`
-	Kind                string `json:"kind,omitempty"`
-	HTTPSOnly           bool   `json:"httpsOnly,omitempty"`
-	AppServicePlan      string `json:"appServicePlan,omitempty"`
-	PlanSKU             string `json:"planSku,omitempty"`
-	Runtime             string `json:"runtime,omitempty"`
-	OutboundIPs         string `json:"outboundIpAddresses,omitempty"`
-	IdentityType        string `json:"identityType,omitempty"`
-	IdentityPrincipalID string `json:"identityPrincipalId,omitempty"`
+	Name                        string `json:"name"`
+	ResourceGroup               string `json:"resourceGroup,omitempty"`
+	Location                    string `json:"location,omitempty"`
+	State                       string `json:"state,omitempty"`
+	DefaultHostName             string `json:"defaultHostName,omitempty"`
+	Kind                        string `json:"kind,omitempty"`
+	HTTPSOnly                   bool   `json:"httpsOnly,omitempty"`
+	AppServicePlan              string `json:"appServicePlan,omitempty"`
+	AppServicePlanResourceGroup string `json:"appServicePlanResourceGroup,omitempty"`
+	PlanSKU                     string `json:"planSku,omitempty"`
+	Runtime                     string `json:"runtime,omitempty"`
+	OutboundIPs                 string `json:"outboundIpAddresses,omitempty"`
+	IdentityType                string `json:"identityType,omitempty"`
+	IdentityPrincipalID         string `json:"identityPrincipalId,omitempty"`
 }
 
 type AzureAppServicePlan struct {

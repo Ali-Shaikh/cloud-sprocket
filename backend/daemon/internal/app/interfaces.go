@@ -84,6 +84,7 @@ type AzureInventory interface {
 	ListWebApps(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureWebApp, error)
 	GetWebApp(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string) (models.AzureWebApp, error)
 	ListAppServicePlans(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureAppServicePlan, error)
+	GetAppServicePlan(ctx context.Context, profile models.ProfileSummary, resourceGroup string, planName string) (models.AzureAppServicePlan, error)
 	ListWebAppSettings(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string) ([]models.AzureWebAppSetting, error)
 	SetWebAppSetting(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, name string, value string, slotSetting bool) error
 	DeleteWebAppSetting(ctx context.Context, profile models.ProfileSummary, resourceGroup string, appName string, name string) error

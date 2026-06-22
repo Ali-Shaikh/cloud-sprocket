@@ -114,6 +114,48 @@ func TestPlanNameFromServerFarmID(t *testing.T) {
 	}
 }
 
+func TestPlanIdentityFromServerFarmID(t *testing.T) {
+	rg, name := planIdentityFromServerFarmID(
+		"/subscriptions/sub/resourceGroups/shared-rg/providers/Microsoft.Web/serverfarms/my-plan",
+	)
+	if rg != "shared-rg" || name != "my-plan" {
+		t.Fatalf("planIdentityFromServerFarmID = (%q, %q)", rg, name)
+	}
+}
+
+func TestDecodeWebAppSettingsKeyedObject(t *testing.T) {
+	settings, err := decodeWebAppSettings([]byte(`{"MY_ENV":"prod","OTHER":"1"}`))
+	if err != nil {
+		t.Fatalf("decodeWebAppSettings: %v", err)
+	}
+	if len(settings) != 2 {
+		t.Fatalf("settings = %+v", settings)
+	}
+}
+
+func TestGetAppServicePlanDecodesSKU(t *testing.T) {
+	showOut := []byte(`{
+		"name":"shared-plan",
+		"resourceGroup":"shared-rg",
+		"location":"westeurope",
+		"kind":"linux",
+		"status":"Ready",
+		"numberOfWorkers":1,
+		"sku":{"name":"P1v3","tier":"PremiumV3"}
+	}`)
+	fake := &fakeCLI{out: showOut}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	plan, err := inv.GetAppServicePlan(context.Background(), cloudAzureProfile(), "shared-rg", "shared-plan")
+	if err != nil {
+		t.Fatalf("GetAppServicePlan: %v", err)
+	}
+	if plan.SKU != "P1v3 (PremiumV3)" {
+		t.Fatalf("plan SKU = %q", plan.SKU)
+	}
+}
+
 func TestSetWebAppSettingBuildsExpectedArgs(t *testing.T) {
 	fake := &fakeCLI{}
 	inv := NewInventory(config.Settings{})

@@ -270,6 +270,15 @@ func (stubAzureInventory) ListAppServicePlans(context.Context, models.ProfileSum
 	return []models.AzureAppServicePlan{{Name: "demo-plan", SKU: "F1 (Free)", Status: "Ready"}}, nil
 }
 
+func (stubAzureInventory) GetAppServicePlan(_ context.Context, _ models.ProfileSummary, resourceGroup string, planName string) (models.AzureAppServicePlan, error) {
+	return models.AzureAppServicePlan{
+		Name:          planName,
+		ResourceGroup: resourceGroup,
+		SKU:           "P1v3 (PremiumV3)",
+		Status:        "Ready",
+	}, nil
+}
+
 func (stubAzureInventory) ListWebAppSettings(context.Context, models.ProfileSummary, string, string) ([]models.AzureWebAppSetting, error) {
 	return []models.AzureWebAppSetting{{Name: "WEBSITE_NODE_DEFAULT_VERSION", Value: "~22"}}, nil
 }

@@ -4,6 +4,7 @@
 package app
 
 import (
+	"strings"
 	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
@@ -73,6 +74,10 @@ func (s *Service) enrichAzureWorkspace(
 
 	// Phase 2: depends on phase 1 fields (resource groups, storage accounts, LA workspaces).
 	s.enrichAzureAppServiceInventory(workspace, session, nil)
+	if strings.TrimSpace(workspace.SelectedAzureWebAppName) != "" ||
+		strings.TrimSpace(session.SelectedAzureWebAppName) != "" {
+		s.enrichAzureWebAppDetail(workspace, session, nil)
+	}
 	s.enrichAzureQueuesInventory(workspace, session, opts, nil)
 	s.enrichAzureWafInventory(workspace, session, opts, nil)
 }

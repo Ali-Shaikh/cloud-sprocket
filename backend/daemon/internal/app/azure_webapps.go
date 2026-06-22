@@ -87,59 +87,6 @@ func (s *Service) enrichAzureAppServiceInventory(workspace *models.WorkspaceSnap
 	})
 }
 
-func (s *Service) enrichAzureWebAppDetail(workspace *models.WorkspaceSnapshot, session models.SessionSnapshot, mu *sync.Mutex) {
-	if workspace.Provider == nil ||
-		workspace.Provider.ProviderID != "azure" ||
-		workspace.Profile == nil ||
-		s.azure == nil {
-		return
-	}
-	appName := strings.TrimSpace(workspace.SelectedAzureWebAppName)
-	if appName == "" {
-		appName = strings.TrimSpace(session.SelectedAzureWebAppName)
-	}
-	resourceGroup := strings.TrimSpace(workspace.SelectedAzureResourceGroup)
-	if resourceGroup == "" {
-		resourceGroup = s.selectedAzureResourceGroup(session, workspace.AzureResourceGroups)
-	}
-	if appName == "" || resourceGroup == "" {
-		lockWorkspace(mu, func() {
-			workspace.AzureAppServicePlans = nil
-			workspace.AzureWebAppSettings = nil
-		})
-		return
-	}
-
-	ctx, cancel := s.withAzureTimeout(context.Background())
-	defer cancel()
-	profile := *workspace.Profile
-
-	plans, _ := s.azure.ListAppServicePlans(ctx, profile, resourceGroup)
-	detail, detailErr := s.azure.GetWebApp(ctx, profile, resourceGroup, appName)
-	if detailErr == nil {
-		for _, plan := range plans {
-			if plan.Name == detail.AppServicePlan {
-				detail.PlanSKU = plan.SKU
-				break
-			}
-		}
-	}
-	settings, _ := s.azure.ListWebAppSettings(ctx, profile, resourceGroup, appName)
-
-	lockWorkspace(mu, func() {
-		workspace.AzureAppServicePlans = plans
-		workspace.AzureWebAppSettings = settings
-		if detailErr == nil {
-			for index, app := range workspace.AzureWebApps {
-				if app.Name == appName {
-					workspace.AzureWebApps[index] = detail
-					break
-				}
-			}
-		}
-	})
-}
-
 func (s *Service) activeAzureWebAppSelection(
 	snapshot discovery.Snapshot,
 	session models.SessionSnapshot,

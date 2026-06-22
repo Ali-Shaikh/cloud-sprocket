@@ -4,6 +4,7 @@
 package azureadapter
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -189,20 +190,21 @@ func (i *Inventory) GetWebApp(
 		return models.AzureWebApp{}, fmt.Errorf("decode azure web app show: %w", err)
 	}
 	runtime := firstNonEmpty(decoded.SiteConfig.LinuxFxVersion, decoded.SiteConfig.WindowsFxVersion)
-	planName := planNameFromServerFarmID(decoded.ServerFarmID)
+	planResourceGroup, planName := planIdentityFromServerFarmID(decoded.ServerFarmID)
 	return models.AzureWebApp{
-		Name:                decoded.Name,
-		ResourceGroup:       decoded.ResourceGroup,
-		Location:            decoded.Location,
-		State:               decoded.State,
-		DefaultHostName:     decoded.DefaultHostName,
-		Kind:                decoded.Kind,
-		HTTPSOnly:           decoded.HTTPSOnly,
-		AppServicePlan:      planName,
-		Runtime:             runtime,
-		OutboundIPs:         decoded.OutboundIPAddresses,
-		IdentityType:        decoded.Identity.Type,
-		IdentityPrincipalID: decoded.Identity.PrincipalID,
+		Name:                        decoded.Name,
+		ResourceGroup:               decoded.ResourceGroup,
+		Location:                    decoded.Location,
+		State:                       decoded.State,
+		DefaultHostName:             decoded.DefaultHostName,
+		Kind:                        decoded.Kind,
+		HTTPSOnly:                   decoded.HTTPSOnly,
+		AppServicePlan:              planName,
+		AppServicePlanResourceGroup: planResourceGroup,
+		Runtime:                     runtime,
+		OutboundIPs:                 decoded.OutboundIPAddresses,
+		IdentityType:                decoded.Identity.Type,
+		IdentityPrincipalID:         decoded.Identity.PrincipalID,
 	}, nil
 }
 
@@ -268,6 +270,66 @@ func (i *Inventory) ListAppServicePlans(
 	return plans, nil
 }
 
+func (i *Inventory) GetAppServicePlan(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	resourceGroup string,
+	planName string,
+) (models.AzureAppServicePlan, error) {
+	if isLocalFlociProfile(profile) {
+		return models.AzureAppServicePlan{}, fmt.Errorf("app service is not emulated by floci-az")
+	}
+	resourceGroup = strings.TrimSpace(resourceGroup)
+	planName = strings.TrimSpace(planName)
+	if resourceGroup == "" || planName == "" {
+		return models.AzureAppServicePlan{}, fmt.Errorf("resource group and plan name are required")
+	}
+	args := []string{
+		"appservice", "plan", "show",
+		"--subscription", profile.ProfileID,
+		"--resource-group", resourceGroup,
+		"--name", planName,
+		"--output", "json",
+		"--only-show-errors",
+	}
+	payload, err := i.run(ctx, args...)
+	if err != nil {
+		return models.AzureAppServicePlan{}, err
+	}
+	var decoded struct {
+		Name            string `json:"name"`
+		ResourceGroup   string `json:"resourceGroup"`
+		Location        string `json:"location"`
+		Kind            string `json:"kind"`
+		Status          string `json:"status"`
+		NumberOfWorkers int    `json:"numberOfWorkers"`
+		SKU             struct {
+			Name string `json:"name"`
+			Tier string `json:"tier"`
+		} `json:"sku"`
+	}
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		return models.AzureAppServicePlan{}, fmt.Errorf("decode app service plan show: %w", err)
+	}
+	sku := strings.TrimSpace(decoded.SKU.Tier)
+	if skuName := strings.TrimSpace(decoded.SKU.Name); skuName != "" {
+		if sku != "" {
+			sku = skuName + " (" + sku + ")"
+		} else {
+			sku = skuName
+		}
+	}
+	return models.AzureAppServicePlan{
+		Name:            decoded.Name,
+		ResourceGroup:   decoded.ResourceGroup,
+		Location:        decoded.Location,
+		SKU:             sku,
+		Kind:            decoded.Kind,
+		Status:          decoded.Status,
+		NumberOfWorkers: decoded.NumberOfWorkers,
+	}, nil
+}
+
 func (i *Inventory) ListWebAppSettings(
 	ctx context.Context,
 	profile models.ProfileSummary,
@@ -294,21 +356,9 @@ func (i *Inventory) ListWebAppSettings(
 	if err != nil {
 		return nil, err
 	}
-	var decoded []struct {
-		Name        string `json:"name"`
-		Value       string `json:"value"`
-		SlotSetting bool   `json:"slotSetting"`
-	}
-	if err := json.Unmarshal(payload, &decoded); err != nil {
-		return nil, fmt.Errorf("decode web app settings: %w", err)
-	}
-	settings := make([]models.AzureWebAppSetting, 0, len(decoded))
-	for _, item := range decoded {
-		settings = append(settings, models.AzureWebAppSetting{
-			Name:        item.Name,
-			Value:       item.Value,
-			SlotSetting: item.SlotSetting,
-		})
+	settings, err := decodeWebAppSettings(payload)
+	if err != nil {
+		return nil, err
 	}
 	sort.Slice(settings, func(left int, right int) bool {
 		return strings.ToLower(settings[left].Name) < strings.ToLower(settings[right].Name)
@@ -410,6 +460,21 @@ func (i *Inventory) InvokeWebAppAction(
 	return err
 }
 
+func planIdentityFromServerFarmID(serverFarmID string) (resourceGroup string, planName string) {
+	serverFarmID = strings.TrimSpace(serverFarmID)
+	if serverFarmID == "" {
+		return "", ""
+	}
+	parts := strings.Split(serverFarmID, "/")
+	for index := 0; index < len(parts)-1; index++ {
+		if strings.EqualFold(strings.TrimSpace(parts[index]), "resourceGroups") {
+			resourceGroup = strings.TrimSpace(parts[index+1])
+			break
+		}
+	}
+	return resourceGroup, planNameFromServerFarmID(serverFarmID)
+}
+
 func planNameFromServerFarmID(serverFarmID string) string {
 	serverFarmID = strings.TrimSpace(serverFarmID)
 	if serverFarmID == "" {
@@ -422,6 +487,45 @@ func planNameFromServerFarmID(serverFarmID string) string {
 		}
 	}
 	return serverFarmID
+}
+
+func decodeWebAppSettings(payload []byte) ([]models.AzureWebAppSetting, error) {
+	payload = bytes.TrimSpace(payload)
+	if len(payload) == 0 || string(payload) == "null" {
+		return []models.AzureWebAppSetting{}, nil
+	}
+	type settingRow struct {
+		Name        string `json:"name"`
+		Value       string `json:"value"`
+		SlotSetting bool   `json:"slotSetting"`
+	}
+	var decoded []settingRow
+	if err := json.Unmarshal(payload, &decoded); err == nil {
+		settings := make([]models.AzureWebAppSetting, 0, len(decoded))
+		for _, item := range decoded {
+			settings = append(settings, models.AzureWebAppSetting{
+				Name:        item.Name,
+				Value:       item.Value,
+				SlotSetting: item.SlotSetting,
+			})
+		}
+		return settings, nil
+	}
+	var keyed map[string]string
+	if err := json.Unmarshal(payload, &keyed); err == nil && len(keyed) > 0 {
+		settings := make([]models.AzureWebAppSetting, 0, len(keyed))
+		for name, value := range keyed {
+			settings = append(settings, models.AzureWebAppSetting{
+				Name:  name,
+				Value: value,
+			})
+		}
+		sort.Slice(settings, func(left int, right int) bool {
+			return strings.ToLower(settings[left].Name) < strings.ToLower(settings[right].Name)
+		})
+		return settings, nil
+	}
+	return nil, fmt.Errorf("decode web app settings: unsupported payload")
 }
 
 func firstNonEmpty(values ...string) string {
