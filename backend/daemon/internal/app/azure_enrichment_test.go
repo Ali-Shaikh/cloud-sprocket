@@ -6,6 +6,7 @@ package app
 import (
 	"context"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -386,6 +387,84 @@ func (d delayedAzureInventory) ListEntraAppRegistrations(ctx context.Context, pr
 	return d.stubAzureInventory.ListEntraAppRegistrations(ctx, profile)
 }
 
+type parallelismProbeAzureInventory struct {
+	stubAzureInventory
+	hold time.Duration
+
+	mu            sync.Mutex
+	inFlight      int
+	maxConcurrent int
+}
+
+func (p *parallelismProbeAzureInventory) resetProbe() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.inFlight = 0
+	p.maxConcurrent = 0
+}
+
+func (p *parallelismProbeAzureInventory) track() {
+	p.mu.Lock()
+	p.inFlight++
+	if p.inFlight > p.maxConcurrent {
+		p.maxConcurrent = p.inFlight
+	}
+	p.mu.Unlock()
+
+	if p.hold > 0 {
+		time.Sleep(p.hold)
+	}
+
+	p.mu.Lock()
+	p.inFlight--
+	p.mu.Unlock()
+}
+
+func (p *parallelismProbeAzureInventory) ListResourceGroups(ctx context.Context, profile models.ProfileSummary) ([]models.AzureResourceGroup, error) {
+	p.track()
+	return p.stubAzureInventory.ListResourceGroups(ctx, profile)
+}
+
+func (p *parallelismProbeAzureInventory) ListStorageAccounts(ctx context.Context, profile models.ProfileSummary) ([]models.AzureStorageAccount, error) {
+	p.track()
+	return p.stubAzureInventory.ListStorageAccounts(ctx, profile)
+}
+
+func (p *parallelismProbeAzureInventory) ListLogAnalyticsWorkspaces(ctx context.Context, profile models.ProfileSummary) ([]models.AzureLogAnalyticsWorkspace, error) {
+	p.track()
+	return p.stubAzureInventory.ListLogAnalyticsWorkspaces(ctx, profile)
+}
+
+func (p *parallelismProbeAzureInventory) ListFunctionApps(ctx context.Context, profile models.ProfileSummary) ([]models.AzureFunctionApp, error) {
+	p.track()
+	return p.stubAzureInventory.ListFunctionApps(ctx, profile)
+}
+
+func (p *parallelismProbeAzureInventory) ListKeyVaults(ctx context.Context, profile models.ProfileSummary) ([]models.AzureKeyVault, error) {
+	p.track()
+	return p.stubAzureInventory.ListKeyVaults(ctx, profile)
+}
+
+func (p *parallelismProbeAzureInventory) ListCosmosAccounts(ctx context.Context, profile models.ProfileSummary) ([]models.AzureCosmosAccount, error) {
+	p.track()
+	return p.stubAzureInventory.ListCosmosAccounts(ctx, profile)
+}
+
+func (p *parallelismProbeAzureInventory) ListEntraUsers(ctx context.Context, profile models.ProfileSummary) ([]models.AzureEntraUser, error) {
+	p.track()
+	return p.stubAzureInventory.ListEntraUsers(ctx, profile)
+}
+
+func (p *parallelismProbeAzureInventory) ListEntraGroups(ctx context.Context, profile models.ProfileSummary) ([]models.AzureEntraGroup, error) {
+	p.track()
+	return p.stubAzureInventory.ListEntraGroups(ctx, profile)
+}
+
+func (p *parallelismProbeAzureInventory) ListEntraAppRegistrations(ctx context.Context, profile models.ProfileSummary) ([]models.AzureEntraApp, error) {
+	p.track()
+	return p.stubAzureInventory.ListEntraAppRegistrations(ctx, profile)
+}
+
 func TestAzurePhaseOneEnrichmentRunsInParallel(t *testing.T) {
 	dataStore, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -398,16 +477,16 @@ func TestAzurePhaseOneEnrichmentRunsInParallel(t *testing.T) {
 		SelectedProfileID: "sub-001",
 		IsLocked:          true,
 	}
-	const enricherDelay = 80 * time.Millisecond
+	probe := &parallelismProbeAzureInventory{
+		stubAzureInventory: stubAzureInventory{
+			resourceGroups: []models.AzureResourceGroup{{Name: "demo-rg"}},
+		},
+		hold: 40 * time.Millisecond,
+	}
 	service := &Service{
 		store: dataStore,
-		azure: delayedAzureInventory{
-			stubAzureInventory: stubAzureInventory{
-				resourceGroups: []models.AzureResourceGroup{{Name: "demo-rg"}},
-			},
-			delay: enricherDelay,
-		},
-		now: func() time.Time { return time.Now().UTC() },
+		azure: probe,
+		now:   func() time.Time { return time.Now().UTC() },
 	}
 
 	newWorkspace := func() *models.WorkspaceSnapshot {
@@ -417,35 +496,30 @@ func TestAzurePhaseOneEnrichmentRunsInParallel(t *testing.T) {
 		}
 	}
 
-	// Measure serial first so the parallel pass is not compared against a warm cache.
+	probe.resetProbe()
 	serialWorkspace := newWorkspace()
-	serialStart := time.Now()
 	service.enrichAzureWorkspace(serialWorkspace, session, azureEnrichmentOptions{
 		lightweight:    true,
 		serialPhaseOne: true,
 	})
-	serialElapsed := time.Since(serialStart)
+	serialOverlap := probe.maxConcurrent
 
+	probe.resetProbe()
 	parallelWorkspace := newWorkspace()
-	parallelStart := time.Now()
 	service.enrichAzureWorkspace(parallelWorkspace, session, azureEnrichmentOptions{lightweight: true})
-	parallelElapsed := time.Since(parallelStart)
+	parallelOverlap := probe.maxConcurrent
 
-	// Compare against a serial baseline on the same runner so Windows CI variance
-	// does not flake absolute timing thresholds. Require a meaningful serial budget
-	// before comparing; allow modest scheduler overhead on the parallel path.
-	const phaseOneEnrichers = 7
-	minSerialBaseline := time.Duration(phaseOneEnrichers/2) * enricherDelay
-	if serialElapsed < minSerialBaseline {
-		t.Fatalf("serial baseline too short (%v); need at least %v to compare parallelism", serialElapsed, minSerialBaseline)
+	// Entra enrichment fans out to three internal calls even in serial phase one, so
+	// compare overlap counts instead of wall-clock timings (flaky on Windows CI).
+	const entraInternalParallelism = 3
+	if serialOverlap < 1 || serialOverlap > entraInternalParallelism {
+		t.Fatalf("unexpected serial overlap %d; want 1..%d", serialOverlap, entraInternalParallelism)
 	}
-	parallelBudget := serialElapsed - serialElapsed/5
-	if parallelElapsed >= parallelBudget {
+	if parallelOverlap <= serialOverlap {
 		t.Fatalf(
-			"parallel enrichment took %v; expected faster than serial baseline %v (budget %v)",
-			parallelElapsed,
-			serialElapsed,
-			parallelBudget,
+			"parallel enrichment overlap %d did not exceed serial overlap %d",
+			parallelOverlap,
+			serialOverlap,
 		)
 	}
 	if len(parallelWorkspace.AzureResourceGroups) == 0 {
