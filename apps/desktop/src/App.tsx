@@ -1134,7 +1134,12 @@ export default function App() {
         await backendRequest<SessionSnapshot>("session.selectProfile", { providerId, profileId }),
       );
       const usable = usableAuthMethods(profileSnapshot);
-      if (usable.length === 1) {
+      const cliMissing = profileSnapshot.availableAuthMethods.some(
+        (method) => method.method === "cli" && !method.available,
+      );
+      const onlyLocalFilesWithoutCLI =
+        usable.length === 1 && usable[0].method === "local-files" && cliMissing;
+      if (usable.length === 1 && !onlyLocalFilesWithoutCLI) {
         await chooseAuthAndOpen(usable[0].method);
         return;
       }

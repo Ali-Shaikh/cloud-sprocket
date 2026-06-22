@@ -17,9 +17,11 @@ import (
 	"cloudsprocket/backend/daemon/internal/dockerruntime"
 	"cloudsprocket/backend/daemon/internal/rpc"
 	"cloudsprocket/backend/daemon/internal/store"
+	"cloudsprocket/backend/daemon/internal/sysenv"
 )
 
 func main() {
+	sysenv.EnsureDeveloperPath()
 	settings := config.Default()
 	if err := settings.EnsureRuntimeDirs(); err != nil {
 		log.Fatalf("failed to prepare runtime directories: %v", err)

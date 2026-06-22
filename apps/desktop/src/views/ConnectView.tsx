@@ -86,6 +86,10 @@ export default function ConnectView({
   const noUsableAuth = Boolean(
     selectedProfile && authMethods.length > 0 && usableAuthMethods.length === 0,
   );
+  const cliUnavailable = Boolean(
+    selectedProfile && authMethods.some((method) => method.method === "cli" && !method.available),
+  );
+  const showAuthMethods = needsAuthChoice || noUsableAuth || cliUnavailable;
   const opening = Boolean(openingProfileId);
 
   return (
@@ -237,7 +241,7 @@ export default function ConnectView({
             )}
           </div>
 
-          {needsAuthChoice || noUsableAuth ? (
+          {showAuthMethods ? (
             <div className="mt-5">
               <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                 Authentication
@@ -245,7 +249,9 @@ export default function ConnectView({
               <p className="mb-2 text-xs text-muted-foreground">
                 {needsAuthChoice
                   ? "This profile has more than one sign-in path. Pick one to open the workspace."
-                  : "No usable sign-in path was detected for this profile. Hover a method for details."}
+                  : noUsableAuth
+                    ? "No usable sign-in path was detected for this profile. Hover a method for details."
+                    : "Azure CLI was not detected in this app session. Install az and sign in, or open with Local Files for read-only profile data."}
               </p>
               <div className="flex flex-wrap gap-2">
                 {authMethods.map((method) => (

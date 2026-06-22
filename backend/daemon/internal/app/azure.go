@@ -107,22 +107,25 @@ func (s *Service) enrichAzureInventory(workspace *models.WorkspaceSnapshot, sess
 		return
 	}
 	profile := *workspace.Profile
-	groups := s.azureResourceGroups(context.Background(), profile)
+	ctx, cancel := s.withAzureTimeout(context.Background())
+	defer cancel()
+
+	liveGroups, liveErr := s.azure.ListResourceGroups(ctx, profile)
+	groups := liveGroups
+	if liveErr == nil {
+		const scope = "azure.resource-groups"
+		_ = s.store.SaveResourceCache(ctx, scope, profile.ProfileID, groups, s.timestamp())
+	} else {
+		var cached []models.AzureResourceGroup
+		if _, ok, cacheErr := s.store.LoadResourceCache(ctx, "azure.resource-groups", profile.ProfileID, &cached); cacheErr == nil && ok {
+			groups = cached
+		}
+	}
+
 	selectedRG := s.selectedAzureResourceGroup(session, groups)
 	vms := s.azureVirtualMachines(context.Background(), profile, selectedRG)
 	selectedVM := s.selectedAzureVMID(session, vms)
-
-	var status string
-	switch {
-	case len(groups) == 0:
-		status = "No Azure resource groups are currently available for this workspace."
-	case selectedRG == "":
-		status = "Select an Azure resource group to inspect its virtual machines."
-	case len(vms) == 0:
-		status = fmt.Sprintf("No Azure virtual machines were returned for %s.", selectedRG)
-	default:
-		status = fmt.Sprintf("Loaded %d Azure virtual machines from %s.", len(vms), selectedRG)
-	}
+	status := s.azureWorkspaceStatus(liveErr, workspace.Provider, session, groups, selectedRG, vms)
 
 	lockWorkspace(mu, func() {
 		workspace.AzureResourceGroups = groups
@@ -131,6 +134,41 @@ func (s *Service) enrichAzureInventory(workspace *models.WorkspaceSnapshot, sess
 		workspace.SelectedAzureVMID = selectedVM
 		workspace.AzureStatusMessage = status
 	})
+}
+
+func (s *Service) azureWorkspaceStatus(
+	listErr error,
+	provider *models.ProviderSummary,
+	session models.SessionSnapshot,
+	groups []models.AzureResourceGroup,
+	selectedRG string,
+	vms []models.AzureVirtualMachine,
+) string {
+	if listErr != nil && len(groups) == 0 {
+		if provider != nil && strings.TrimSpace(provider.CommandPath) == "" {
+			return "Azure CLI was not detected. Install az, sign in with az login, then use Refresh on the Connect screen."
+		}
+		if session.LockedAuthMethod == models.AuthMethodLocalFiles {
+			return "Live Azure inventory needs the Azure CLI. Sign in with az login, reopen the profile, and choose CLI."
+		}
+		lower := strings.ToLower(listErr.Error())
+		switch {
+		case strings.Contains(lower, "not logged in"), strings.Contains(lower, "login"), strings.Contains(lower, "authentication"):
+			return "Azure CLI is installed but not signed in. Run az login, then reopen the workspace."
+		default:
+			return fmt.Sprintf("Azure inventory failed: %s", strings.TrimSpace(listErr.Error()))
+		}
+	}
+	switch {
+	case len(groups) == 0:
+		return "No Azure resource groups are currently available for this workspace."
+	case selectedRG == "":
+		return "Select an Azure resource group to inspect its virtual machines."
+	case len(vms) == 0:
+		return fmt.Sprintf("No Azure virtual machines were returned for %s.", selectedRG)
+	default:
+		return fmt.Sprintf("Loaded %d Azure virtual machines from %s.", len(vms), selectedRG)
+	}
 }
 
 func (s *Service) handleAzureSelectResourceGroup(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
