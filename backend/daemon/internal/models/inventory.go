@@ -73,3 +73,20 @@ type ResourceListResult struct {
 	Offset     int              `json:"offset"`
 	NextOffset *int             `json:"nextOffset,omitempty"`
 }
+
+type OverviewDimension struct {
+	Key   string `json:"key"`
+	Count int    `json:"count"`
+}
+
+// CloudOverview is a provider-neutral summary derived from the local resource
+// index. It never triggers provider discovery or reads secret-bearing detail.
+type CloudOverview struct {
+	ResourceCount      int                 `json:"resourceCount"`
+	StaleResourceCount int                 `json:"staleResourceCount"`
+	WorkspaceCount     int                 `json:"workspaceCount"`
+	Providers          []OverviewDimension `json:"providers"`
+	Services           []OverviewDimension `json:"services"`
+	Regions            []OverviewDimension `json:"regions"`
+	InventoryRuns      []InventoryRun      `json:"inventoryRuns"`
+}

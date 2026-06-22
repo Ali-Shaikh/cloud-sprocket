@@ -256,6 +256,70 @@ func (s *Store) ListLatestInventoryRuns(ctx context.Context) ([]models.Inventory
 	return runs, rows.Err()
 }
 
+func (s *Store) GetCloudOverview(ctx context.Context) (models.CloudOverview, error) {
+	overview := models.CloudOverview{
+		Providers: []models.OverviewDimension{},
+		Services:  []models.OverviewDimension{},
+		Regions:   []models.OverviewDimension{},
+	}
+	if err := s.db.QueryRowContext(
+		ctx,
+		`SELECT
+			COALESCE(SUM(CASE WHEN stale = 0 THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN stale = 1 THEN 1 ELSE 0 END), 0),
+			COUNT(DISTINCT CASE WHEN stale = 0 THEN scope_id END)
+		 FROM resources`,
+	).Scan(&overview.ResourceCount, &overview.StaleResourceCount, &overview.WorkspaceCount); err != nil {
+		return models.CloudOverview{}, err
+	}
+
+	var err error
+	if overview.Providers, err = s.listOverviewDimensions(
+		ctx,
+		`SELECT provider, COUNT(*) FROM resources WHERE stale = 0 GROUP BY provider ORDER BY COUNT(*) DESC, provider`,
+	); err != nil {
+		return models.CloudOverview{}, err
+	}
+	if overview.Services, err = s.listOverviewDimensions(
+		ctx,
+		`SELECT service, COUNT(*) FROM resources WHERE stale = 0 GROUP BY service ORDER BY COUNT(*) DESC, service`,
+	); err != nil {
+		return models.CloudOverview{}, err
+	}
+	if overview.Regions, err = s.listOverviewDimensions(
+		ctx,
+		`SELECT COALESCE(NULLIF(region, ''), 'global'), COUNT(*)
+		 FROM resources WHERE stale = 0
+		 GROUP BY COALESCE(NULLIF(region, ''), 'global')
+		 ORDER BY COUNT(*) DESC, COALESCE(NULLIF(region, ''), 'global')`,
+	); err != nil {
+		return models.CloudOverview{}, err
+	}
+	overview.InventoryRuns, err = s.ListLatestInventoryRuns(ctx)
+	if err != nil {
+		return models.CloudOverview{}, err
+	}
+	return overview, nil
+}
+
+func (s *Store) listOverviewDimensions(ctx context.Context, query string) ([]models.OverviewDimension, error) {
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	dimensions := []models.OverviewDimension{}
+	for rows.Next() {
+		var dimension models.OverviewDimension
+		if err := rows.Scan(&dimension.Key, &dimension.Count); err != nil {
+			return nil, err
+		}
+		dimensions = append(dimensions, dimension)
+	}
+	return dimensions, rows.Err()
+}
+
 type resourceScanner interface {
 	Scan(dest ...any) error
 }

@@ -47,6 +47,10 @@ func (s *Service) handleInventoryStatus(ctx context.Context) (any, error) {
 	return s.store.ListLatestInventoryRuns(ctx)
 }
 
+func (s *Service) handleCloudOverview(ctx context.Context) (any, error) {
+	return s.store.GetCloudOverview(ctx)
+}
+
 func (s *Service) handleInventoryRefresh(ctx context.Context, notifier Notifier) (any, error) {
 	snapshot, err := s.discovery.Discover()
 	if err != nil {

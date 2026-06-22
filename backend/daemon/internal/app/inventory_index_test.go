@@ -152,6 +152,15 @@ func TestResourceRPCsReturnIndexedInventory(t *testing.T) {
 	if !ok || len(runs) != 1 || runs[0].ResourceCount != 1 {
 		t.Fatalf("unexpected inventory status: %#v", statusResult)
 	}
+
+	overviewResult, err := service.Handle(context.Background(), "overview.get", nil, nil)
+	if err != nil {
+		t.Fatalf("overview.get: %v", err)
+	}
+	overview, ok := overviewResult.(models.CloudOverview)
+	if !ok || overview.ResourceCount != 1 || overview.WorkspaceCount != 1 || len(overview.Services) != 1 {
+		t.Fatalf("unexpected cloud overview: %#v", overviewResult)
+	}
 }
 
 func findIndexedResource(resources []models.ResourceRecord, service string, name string) *models.ResourceRecord {

@@ -120,6 +120,54 @@ func TestResetAppDataClearsInventoryIndex(t *testing.T) {
 	}
 }
 
+func TestCloudOverviewAggregatesCurrentResourcesAndFreshness(t *testing.T) {
+	dataStore, err := Open(filepath.Join(t.TempDir(), "inventory-overview.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer dataStore.Close()
+
+	ctx := context.Background()
+	awsRun := inventoryTestRun("aws-run", "2026-06-22T08:00:00Z")
+	awsResources := []models.ResourceRecord{
+		inventoryTestResource("bucket-1", "assets", "s3", "", awsRun),
+		inventoryTestResource("instance-1", "api", "ec2", "running", awsRun),
+	}
+	awsResources[1].Region = "eu-west-1"
+	if err := dataStore.ReplaceInventory(ctx, awsRun, awsResources, nil); err != nil {
+		t.Fatalf("replace AWS inventory: %v", err)
+	}
+
+	azureRun := inventoryTestRun("azure-run", "2026-06-22T09:00:00Z")
+	azureRun.ScopeID = "azure:sub-1"
+	azureRun.Provider = "azure"
+	azureRun.ProfileID = "sub-1"
+	azureResource := inventoryTestResource("vm-1", "worker", "compute", "running", azureRun)
+	azureResource.Region = "uaenorth"
+	if err := dataStore.ReplaceInventory(ctx, azureRun, []models.ResourceRecord{azureResource}, nil); err != nil {
+		t.Fatalf("replace Azure inventory: %v", err)
+	}
+
+	refreshRun := inventoryTestRun("aws-run-2", "2026-06-22T10:00:00Z")
+	if err := dataStore.ReplaceInventory(ctx, refreshRun, awsResources[:1], nil); err != nil {
+		t.Fatalf("refresh AWS inventory: %v", err)
+	}
+
+	overview, err := dataStore.GetCloudOverview(ctx)
+	if err != nil {
+		t.Fatalf("get cloud overview: %v", err)
+	}
+	if overview.ResourceCount != 2 || overview.StaleResourceCount != 1 || overview.WorkspaceCount != 2 {
+		t.Fatalf("unexpected overview totals: %+v", overview)
+	}
+	if len(overview.Providers) != 2 || overview.Providers[0].Count != 1 || overview.Providers[1].Count != 1 {
+		t.Fatalf("unexpected provider counts: %+v", overview.Providers)
+	}
+	if len(overview.Services) != 2 || len(overview.Regions) != 2 || len(overview.InventoryRuns) != 2 {
+		t.Fatalf("unexpected overview dimensions: %+v", overview)
+	}
+}
+
 func inventoryTestRun(id string, timestamp string) models.InventoryRun {
 	return models.InventoryRun{
 		RunID:       id,

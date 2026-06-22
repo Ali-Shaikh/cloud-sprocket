@@ -141,6 +141,8 @@ func (s *Service) Handle(
 		return s.handleResourcesList(ctx, params)
 	case "resources.get":
 		return s.handleResourcesGet(ctx, params)
+	case "overview.get":
+		return s.handleCloudOverview(ctx)
 	case "aws.s3.selectBucket":
 		return s.handleAwsS3SelectBucket(ctx, params, notifier)
 	case "aws.s3.selectObject":
