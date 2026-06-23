@@ -202,7 +202,7 @@ func (e *Engine) Prepare(deployment *Deployment) error {
 	if err := writeTfvars(dir, deployment.Variables); err != nil {
 		return fmt.Errorf("write tfvars: %w", err)
 	}
-	if deployment.ProviderID == "aws" {
+	if deployment.ProviderID == "aws" || deployment.ProviderID == "azure" {
 		target, err := e.registry.Resolve(deployment)
 		if err != nil {
 			return err
@@ -414,7 +414,9 @@ func (w *buildLineWriter) flush() {
 
 // env builds the provider environment via the resolved deployment target.
 func (e *Engine) env(deployment *Deployment) []string {
-	if deployment.ProviderID != "aws" {
+	switch deployment.ProviderID {
+	case "aws", "azure":
+	default:
 		return nil
 	}
 	target, err := e.registry.Resolve(deployment)
@@ -426,7 +428,9 @@ func (e *Engine) env(deployment *Deployment) []string {
 
 // TargetLabel names a deployment's target for log lines.
 func (e *Engine) TargetLabel(deployment *Deployment) string {
-	if deployment.ProviderID != "aws" {
+	switch deployment.ProviderID {
+	case "aws", "azure":
+	default:
 		if deployment.Local {
 			return "local emulator"
 		}

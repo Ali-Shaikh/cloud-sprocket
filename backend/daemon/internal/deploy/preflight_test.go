@@ -85,6 +85,43 @@ func TestPreflightAzureSubscriptionConfigured(t *testing.T) {
 	}
 }
 
+func TestPreflightAzureRejectsFlociProfileOnCloudTarget(t *testing.T) {
+	e := NewEngine(tofu.NewRunner("tofu"), config.Settings{}, recipes.Bundled())
+	err := e.Preflight(context.Background(), &Deployment{
+		ProviderID: "azure",
+		ProfileID:  localAzureProfileName,
+	})
+	if err == nil {
+		t.Fatal("expected floci profile on cloud target to fail preflight")
+	}
+	if !strings.Contains(err.Error(), "floci-az") {
+		t.Fatalf("expected actionable floci message, got %q", err)
+	}
+}
+
+func TestPreflightRejectsMagentoAzureOnFlociLocal(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	e := NewEngine(tofu.NewRunner("tofu"), config.Settings{}, recipes.Bundled())
+	e.registry.SetOptions(TargetOptions{FlociAzEndpoint: server.URL})
+
+	err := e.Preflight(context.Background(), &Deployment{
+		ProviderID: "azure",
+		RecipeID:   "magento-commerce-azure",
+		Local:      true,
+		RuntimeID:  "floci-az",
+	})
+	if err == nil {
+		t.Fatal("expected magento-commerce-azure on floci-az to fail preflight")
+	}
+	if !strings.Contains(err.Error(), "does not support a local floci-az dry-run") {
+		t.Fatalf("expected recipe compat message, got %q", err)
+	}
+}
+
 func TestPreflightAWSProfileFromConfigFile(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config")

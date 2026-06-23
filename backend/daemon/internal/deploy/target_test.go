@@ -21,6 +21,7 @@ func TestResolveRuntimeIDDefaults(t *testing.T) {
 		want string
 	}{
 		{"local aws defaults localstack", Deployment{ProviderID: "aws", Local: true}, "localstack"},
+		{"local azure defaults floci-az", Deployment{ProviderID: "azure", Local: true}, "floci-az"},
 		{"cloud aws defaults aws-cloud", Deployment{ProviderID: "aws", ProfileID: "prod"}, "aws-cloud"},
 		{"cloud azure defaults azure-cloud", Deployment{ProviderID: "azure", ProfileID: "sub-001"}, "azure-cloud"},
 		{"explicit runtime", Deployment{ProviderID: "aws", Local: true, RuntimeID: "docker-compose"}, "docker-compose"},
@@ -46,6 +47,7 @@ func TestRegistryResolvesBuiltInTargets(t *testing.T) {
 		{"azure-cloud", Deployment{ProviderID: "azure", ProfileID: "sub-001"}, "azure-cloud"},
 		{"docker-compose", Deployment{ProviderID: "aws", Local: true, RuntimeID: "docker-compose"}, "docker-compose"},
 		{"magento-compose", Deployment{ProviderID: "aws", Local: true, RuntimeID: "magento-compose"}, "magento-compose"},
+		{"floci-az", Deployment{ProviderID: "azure", Local: true, RuntimeID: "floci-az"}, "floci-az"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

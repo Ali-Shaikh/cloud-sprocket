@@ -27,6 +27,7 @@ type Target interface {
 // TargetOptions carries per-run overrides (mainly for tests).
 type TargetOptions struct {
 	LocalStackEndpoint string
+	FlociAzEndpoint    string
 }
 
 // DefaultLocalStackEndpoint is the gateway URL used when none is configured.
@@ -70,6 +71,9 @@ func NewRegistry(settings config.Settings, opts TargetOptions) *Registry {
 	r.RegisterFactory("magento-compose", func(settings config.Settings, opts TargetOptions) Target {
 		return newMagentoComposeTarget(settings, opts)
 	})
+	r.RegisterFactory("floci-az", func(settings config.Settings, opts TargetOptions) Target {
+		return newFlociAzTarget(opts)
+	})
 	return r
 }
 
@@ -87,6 +91,9 @@ func (r *Registry) Register(runtimeID string, target Target) {
 func (r *Registry) SetOptions(opts TargetOptions) {
 	if strings.TrimSpace(opts.LocalStackEndpoint) != "" {
 		r.opts.LocalStackEndpoint = opts.LocalStackEndpoint
+	}
+	if strings.TrimSpace(opts.FlociAzEndpoint) != "" {
+		r.opts.FlociAzEndpoint = opts.FlociAzEndpoint
 	}
 }
 
@@ -108,6 +115,9 @@ func resolveRuntimeID(deployment *Deployment) string {
 		return id
 	}
 	if deployment.Local {
+		if deployment.ProviderID == "azure" {
+			return "floci-az"
+		}
 		return "localstack"
 	}
 	if deployment.ProviderID == "aws" {

@@ -23,6 +23,9 @@ func (e *Engine) Preflight(ctx context.Context, deployment *Deployment) error {
 	default:
 		return nil
 	}
+	if err := e.checkRecipeTargetCompat(deployment); err != nil {
+		return err
+	}
 	target, err := e.registry.Resolve(deployment)
 	if err != nil {
 		return err

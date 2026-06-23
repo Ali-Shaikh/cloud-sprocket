@@ -37,6 +37,7 @@ import { runtimeDisplayName } from "./deployOutputLinks";
 import { RecipeCard } from "./deployRecipeCard";
 import {
   coerceValues,
+  isFlociAzureProfile,
   SCENARIO_TAGS,
   seedValues,
   StatusBadge,
@@ -105,13 +106,17 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
           : [{ id: "localstack" }];
 
     const options: TargetOption[] = [];
-    if (providers.has("aws")) {
+    const cloudOnlyAzure = providers.has("azure") && declaredRuntimes.length === 0;
+    for (const providerId of providers) {
+      if (providerId !== "aws" && providerId !== "azure") continue;
       for (const runtime of runtimes) {
+        if (providerId === "aws" && runtime.id === "floci-az") continue;
+        if (providerId === "azure" && runtime.id === "localstack") continue;
         const proSuffix = runtime.requiresPro ? " · Pro" : "";
         options.push({
           id: `local:${runtime.id}`,
           label: `Local emulator (${runtimeDisplayName(runtime.id)})${proSuffix}`,
-          providerId: "aws",
+          providerId,
           profileId: "",
           local: true,
           runtimeId: runtime.id,
@@ -119,15 +124,15 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
       }
     }
     for (const profile of profiles) {
-      if (providers.has(profile.providerId)) {
-        options.push({
-          id: `profile:${profile.profileId}`,
-          label: `${profile.providerId.toUpperCase()} · ${profile.displayName}`,
-          providerId: profile.providerId,
-          profileId: profile.profileId,
-          local: false,
-        });
-      }
+      if (!providers.has(profile.providerId)) continue;
+      if (cloudOnlyAzure && profile.providerId === "azure" && isFlociAzureProfile(profile)) continue;
+      options.push({
+        id: `profile:${profile.profileId}`,
+        label: `${profile.providerId.toUpperCase()} · ${profile.displayName}`,
+        providerId: profile.providerId,
+        profileId: profile.profileId,
+        local: false,
+      });
     }
     return options;
   }, [profiles, recipe]);
@@ -167,10 +172,16 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
             : providers.includes("aws")
               ? [{ id: "localstack" }]
               : [];
-      if (providers.includes("aws") && localRuntimes.length > 0) {
-        setTarget(`local:${localRuntimes[0]?.id ?? "localstack"}`);
+      if (localRuntimes.length > 0) {
+        const defaultRuntime =
+          providers.includes("aws") ? (localRuntimes[0]?.id ?? "localstack") : (localRuntimes[0]?.id ?? "floci-az");
+        setTarget(`local:${defaultRuntime}`);
       } else {
-        const profile = profiles.find((candidate) => providers.includes(candidate.providerId));
+        const profile = profiles.find(
+          (candidate) =>
+            providers.includes(candidate.providerId) &&
+            !(providers.includes("azure") && isFlociAzureProfile(candidate)),
+        );
         setTarget(profile ? `profile:${profile.profileId}` : "");
       }
       setMode("configure");

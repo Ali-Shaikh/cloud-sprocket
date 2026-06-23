@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { SectionHeader } from "@/components/section-header";
 import type { Recipe, RecipeVariable } from "@/types/backend";
 
-import { groupVariables, manifestRequiresPro, type TargetOption } from "./deployShared";
+import { groupVariables, manifestCloudOnlyAzure, manifestRequiresPro, type TargetOption } from "./deployShared";
 
 export function ConfigureRecipe({
   recipe,
@@ -60,6 +60,14 @@ export function ConfigureRecipe({
         </Card>
       )}
 
+      {manifestCloudOnlyAzure(recipe.manifest) && (
+        <Card className="flex items-center gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-400">
+          <Crown className="size-4 shrink-0" />
+          Cloud Azure subscription required. floci-az cannot dry-run this recipe; pick a subscription where your
+          account can create resource groups.
+        </Card>
+      )}
+
       {recipe.manifest.imageBuild && (
         <Card className="border-sky-500/30 bg-sky-500/5 p-3 text-sm text-muted-foreground">
           Set <span className="font-medium text-foreground">dockerfile_dir</span> to build from your Dockerfile before
@@ -82,7 +90,8 @@ export function ConfigureRecipe({
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          Pick a local runtime to dry-run the recipe, or switch to a cloud profile to deploy to real AWS unchanged.
+          Pick a local runtime to dry-run the recipe, or switch to a cloud profile to deploy to real infrastructure
+          unchanged.
         </p>
       </Card>
 

@@ -102,6 +102,7 @@ func TestEnvLocalVsReal(t *testing.T) {
 	e := NewEngine(tofu.NewRunner("tofu"), config.Settings{
 		AWSConfigPath:      "/home/u/.aws/config",
 		AWSCredentialsPath: "/home/u/.aws/credentials",
+		AzureDir:           "/home/u/.azure",
 	}, recipes.Bundled())
 
 	local := e.env(&Deployment{ProviderID: "aws", Local: true})
@@ -111,6 +112,51 @@ func TestEnvLocalVsReal(t *testing.T) {
 	real := e.env(&Deployment{ProviderID: "aws", ProfileID: "prod"})
 	if !contains(real, "AWS_PROFILE=prod") || !contains(real, "AWS_CONFIG_FILE=/home/u/.aws/config") {
 		t.Fatalf("real env = %v", real)
+	}
+	azureCloud := e.env(&Deployment{ProviderID: "azure", ProfileID: "sub-001"})
+	if !contains(azureCloud, "ARM_SUBSCRIPTION_ID=sub-001") || !contains(azureCloud, "ARM_USE_CLI=true") {
+		t.Fatalf("azure cloud env = %v", azureCloud)
+	}
+	flociLocal := e.env(&Deployment{ProviderID: "azure", Local: true, RuntimeID: "floci-az"})
+	if !contains(flociLocal, "ARM_SUBSCRIPTION_ID="+localFlociSubscriptionID) || !contains(flociLocal, "ARM_USE_CLI=false") {
+		t.Fatalf("floci local env = %v", flociLocal)
+	}
+}
+
+func TestFlociAzOverrideContent(t *testing.T) {
+	out := flociAzOverride("http://localhost:4577")
+	for _, want := range []string{
+		`provider "azurerm"`,
+		`resource_provider_registrations = "none"`,
+		`use_cli                         = false`,
+		localFlociSubscriptionID,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("override missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+func TestPrepareWritesFlociAzOverride(t *testing.T) {
+	settings := config.Settings{DeploymentsDir: t.TempDir()}
+	e := NewEngine(tofu.NewRunner("tofu"), settings, recipes.Bundled())
+	deployment := &Deployment{
+		ID:         "dep-floci",
+		RecipeID:   "magento-commerce-azure",
+		ProviderID: "azure",
+		Local:      true,
+		RuntimeID:  "floci-az",
+		Variables:  map[string]any{"app_name": "demo"},
+	}
+	if err := e.Prepare(deployment); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	dir := e.WorkspaceDir("dep-floci")
+	if _, err := os.Stat(filepath.Join(dir, flociAzOverrideFile)); err != nil {
+		t.Fatalf("expected floci override in workspace: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, overrideFile)); err == nil {
+		t.Fatal("floci deployment should not write a LocalStack override file")
 	}
 }
 

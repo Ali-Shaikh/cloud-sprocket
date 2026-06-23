@@ -5,7 +5,7 @@ import { Check, Copy, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 
 import { cn } from "@/lib/utils";
-import type { Deployment, RecipeManifest, RecipeVariable } from "@/types/backend";
+import type { Deployment, ProfileSummary, RecipeManifest, RecipeVariable } from "@/types/backend";
 
 export type DeployMode = "list" | "configure" | "deployment";
 export type GallerySection = "app-deploy" | "service-lab";
@@ -44,6 +44,16 @@ export function StatusBadge({ status }: { status: Deployment["status"] }) {
 export function manifestRequiresPro(manifest: RecipeManifest): boolean {
   if (manifest.local?.requiresPro) return true;
   return (manifest.local?.runtimes ?? []).some((runtime) => runtime.requiresPro);
+}
+
+export function isFlociAzureProfile(profile: ProfileSummary): boolean {
+  return profile.attributes.some(
+    (field) => field.label === "Tenant ID" && field.value === "cloudsprocket-local",
+  );
+}
+
+export function manifestCloudOnlyAzure(manifest: RecipeManifest): boolean {
+  return (manifest.providers ?? []).includes("azure") && (manifest.local?.runtimes ?? []).length === 0;
 }
 
 export function CopyButton({ value }: { value: string }) {

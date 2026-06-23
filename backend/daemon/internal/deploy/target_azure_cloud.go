@@ -27,6 +27,7 @@ func (t *azureCloudTarget) Label(deployment *Deployment) string {
 func (t *azureCloudTarget) Env(deployment *Deployment, settings config.Settings) []string {
 	env := []string{
 		"ARM_SUBSCRIPTION_ID=" + deployment.ProfileID,
+		"ARM_USE_CLI=true",
 	}
 	if dir := strings.TrimSpace(settings.AzureDir); dir != "" {
 		env = append(env, "AZURE_CONFIG_DIR="+dir)
@@ -35,6 +36,12 @@ func (t *azureCloudTarget) Env(deployment *Deployment, settings config.Settings)
 }
 
 func (t *azureCloudTarget) Preflight(_ context.Context, deployment *Deployment, settings config.Settings, _ TargetOptions) error {
+	if isLocalFlociProfileID(deployment.ProfileID) {
+		return fmt.Errorf(
+			"profile %q targets the local floci-az emulator. Pick Local emulator (floci-az) as the deploy target instead of a cloud subscription profile",
+			deployment.ProfileID,
+		)
+	}
 	return checkAzureSubscription(settings, deployment.ProfileID)
 }
 
