@@ -5,8 +5,8 @@ version: 0.1.0
 name: Magento commerce (Docker Compose)
 summary: Magento 2 on your machine with MariaDB, Redis, and Docker Compose.
 description: |
-  Runs a local Magento stack using Docker Compose: Bitnami MariaDB, Redis, and
-  the Magento 2 container on http://localhost:8080. OpenTofu records deployment
+  Runs a local Magento stack using Docker Compose: MariaDB 11.4, Redis 7.4, and
+  a Magento 2.4.7 container on http://localhost:8080. OpenTofu records deployment
   metadata only; containers start in a post-apply step after apply succeeds.
 
   Requires Docker Desktop (or another Docker engine) with the Compose plugin.

@@ -290,7 +290,7 @@ func TestLoadMagentoAWSRecipe(t *testing.T) {
 	if got := byName["mysql_admin_password"]; !got.Sensitive || got.Widget != "password" {
 		t.Fatalf("mysql_admin_password should be sensitive/password: %+v", got)
 	}
-	if got := byName["magento_image"]; got.Default != "bitnamilegacy/magento:2.4.6" {
+	if got := byName["magento_image"]; got.Default != "bitnamilegacy/magento-archived:2.4.7" {
 		t.Fatalf("magento_image default = %+v", got.Default)
 	}
 	if got := byName["redis_node_type"]; got.Default != "cache.t3.micro" {
@@ -356,9 +356,9 @@ func TestLoadMagentoComposeRecipe(t *testing.T) {
 		t.Fatalf("read compose file: %v", err)
 	}
 	for _, want := range []string{
-		"bitnami/mariadb",
-		"bitnami/redis",
-		"bitnamilegacy/magento:2.4.6",
+		"mariadb:11.4",
+		"redis:7.4-alpine",
+		"bitnamilegacy/magento-archived:2.4.7",
 		"127.0.0.1:8080:8080",
 	} {
 		if !strings.Contains(composeYAML, want) {

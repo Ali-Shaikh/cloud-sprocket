@@ -25,7 +25,7 @@ variable "magento_base_url" {
 variable "magento_image" {
   type        = string
   description = "Docker image for the Magento ECS task."
-  default     = "bitnamilegacy/magento:2.4.6"
+  default     = "bitnamilegacy/magento-archived:2.4.7"
 }
 
 variable "desired_count" {

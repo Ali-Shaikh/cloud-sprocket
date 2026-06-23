@@ -1,37 +1,43 @@
 services:
   mariadb:
-    image: docker.io/bitnami/mariadb:latest
+    image: docker.io/library/mariadb:11.4
     environment:
-      - MARIADB_ROOT_PASSWORD=root-secret
-      - MARIADB_DATABASE=magento
-      - MARIADB_USER=magento
-      - MARIADB_PASSWORD=magento-secret
+      MYSQL_ROOT_PASSWORD: root-secret
+      MYSQL_DATABASE: magento
+      MYSQL_USER: magento
+      MYSQL_PASSWORD: magento-secret
     volumes:
-      - mariadb-data:/bitnami/mariadb
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   redis:
-    image: docker.io/bitnami/redis:latest
-    environment:
-      - ALLOW_EMPTY_PASSWORD=yes
+    image: docker.io/library/redis:7.4-alpine
     volumes:
-      - redis-data:/bitnami/redis
+      - redis-data:/data
 
   magento:
-    image: docker.io/bitnamilegacy/magento:2.4.6
+    image: docker.io/bitnamilegacy/magento-archived:2.4.7
     ports:
       - "127.0.0.1:8080:8080"
     environment:
-      - MAGENTO_BASE_URL=http://localhost:8080
-      - MAGENTO_DATABASE_HOST=mariadb
-      - MAGENTO_DATABASE_PORT_NUMBER=3306
-      - MAGENTO_DATABASE_USER=magento
-      - MAGENTO_DATABASE_PASSWORD=magento-secret
-      - MAGENTO_DATABASE_NAME=magento
-      - MAGENTO_REDIS_HOST=redis
-      - MAGENTO_REDIS_PORT_NUMBER=6379
+      MAGENTO_BASE_URL: http://localhost:8080
+      MAGENTO_DATABASE_HOST: mariadb
+      MAGENTO_DATABASE_PORT_NUMBER: "3306"
+      MAGENTO_DATABASE_USER: magento
+      MAGENTO_DATABASE_PASSWORD: magento-secret
+      MAGENTO_DATABASE_NAME: magento
+      MAGENTO_REDIS_HOST: redis
+      MAGENTO_REDIS_PORT_NUMBER: "6379"
     depends_on:
-      - mariadb
-      - redis
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
 volumes:
   mariadb-data:

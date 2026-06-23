@@ -15,8 +15,9 @@ description: |
   installer using the database and Redis connection details from the deployment
   outputs.
 
-  Point `magento_image` at another maintained Magento 2 container if you prefer
-  a different distribution.
+  The default `magento_image` uses the current Bitnami catalogue image on Docker
+  Hub (`bitnamilegacy/magento-archived:2.4.7`). Point it at another maintained
+  Magento 2 container if you prefer a different distribution.
 providers:
   - aws
 tags:
