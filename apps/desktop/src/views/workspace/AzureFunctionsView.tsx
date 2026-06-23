@@ -21,12 +21,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { InventoryLoadingState } from "@/components/inventory-loading-state";
+import { azureInventoryLoadingLabel } from "@/lib/azure-inventory";
 import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import type { AzureFunctionInvokeResult, WorkspaceSnapshot } from "@/types/backend";
 
 export type AzureFunctionsViewProps = {
   workspace: WorkspaceSnapshot;
+  inventoryLoading?: boolean;
   onSelectApp: (appName: string) => void;
   onSelectFunction: (functionName: string) => void;
   onInvoke: (appName: string, functionName: string, payload: string) => Promise<AzureFunctionInvokeResult>;
@@ -38,6 +41,7 @@ const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] 
 
 export default function AzureFunctionsView({
   workspace,
+  inventoryLoading = false,
   onSelectApp,
   onSelectFunction,
   onInvoke,
@@ -78,7 +82,14 @@ export default function AzureFunctionsView({
         </p>
       </header>
 
-      <section className={sectionCard}>
+      {inventoryLoading ? (
+        <InventoryLoadingState
+          variant="banner"
+          label={azureInventoryLoadingLabel(workspace, "functions")}
+        />
+      ) : null}
+
+      <section className={cn(sectionCard, inventoryLoading ? "opacity-60" : undefined)}>
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-72">
             <div className={cn(fieldLabel, "mb-1")}>Function app</div>
@@ -107,7 +118,12 @@ export default function AzureFunctionsView({
         </div>
         <p className="text-sm text-muted-foreground">{workspace.azureFunctionsStatusMessage}</p>
         <div className="overflow-hidden rounded-lg border border-border">
-          {functions.length === 0 ? (
+          {inventoryLoading && apps.length === 0 ? (
+            <InventoryLoadingState
+              label={azureInventoryLoadingLabel(workspace, "functions")}
+              className="border-0 bg-transparent"
+            />
+          ) : functions.length === 0 ? (
             <EmptyState
               icon={<Zap />}
               title="No functions"

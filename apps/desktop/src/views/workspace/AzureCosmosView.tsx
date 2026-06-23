@@ -19,11 +19,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { InventoryLoadingState } from "@/components/inventory-loading-state";
+import { azureInventoryLoadingLabel } from "@/lib/azure-inventory";
 import { EmptyState } from "@/components/empty-state";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
 export type AzureCosmosViewProps = {
   workspace: WorkspaceSnapshot;
+  inventoryLoading?: boolean;
   onSelectAccount: (account: string) => void;
   onSelectDatabase: (database: string) => void;
   onSelectContainer: (container: string) => void;
@@ -35,6 +38,7 @@ const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] 
 
 export default function AzureCosmosView({
   workspace,
+  inventoryLoading = false,
   onSelectAccount,
   onSelectDatabase,
   onSelectContainer,
@@ -56,7 +60,14 @@ export default function AzureCosmosView({
         </p>
       </header>
 
-      <section className={sectionCard}>
+      {inventoryLoading ? (
+        <InventoryLoadingState
+          variant="banner"
+          label={azureInventoryLoadingLabel(workspace, "cosmos")}
+        />
+      ) : null}
+
+      <section className={cn(sectionCard, inventoryLoading ? "opacity-60" : undefined)}>
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-60">
             <div className={cn(fieldLabel, "mb-1")}>Account</div>

@@ -34,6 +34,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { InventoryLoadingState } from "@/components/inventory-loading-state";
+import { azureInventoryLoadingLabel } from "@/lib/azure-inventory";
 import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import { DetailFieldList } from "./detail-fields";
@@ -45,6 +47,7 @@ export type AzureStorageViewProps = {
   workspace: WorkspaceSnapshot;
   activePageId: string;
   actionStatus: string;
+  inventoryLoading?: boolean;
   onSelectAccount: (accountName: string) => void;
   onSelectContainer: (containerName: string) => void;
   onSelectBlob: (blobName: string) => void;
@@ -71,6 +74,7 @@ export default function AzureStorageView({
   workspace,
   activePageId,
   actionStatus,
+  inventoryLoading = false,
   onSelectAccount,
   onSelectContainer,
   onSelectBlob,
@@ -82,6 +86,7 @@ export default function AzureStorageView({
 }: AzureStorageViewProps) {
   const page = normalisePageId(activePageId);
   const canWrite = workspace.azureWritesEnabled;
+  const inventoryLoadingLabel = azureInventoryLoadingLabel(workspace, "storage");
   const [prefixInput, setPrefixInput] = useState(workspace.azureBlobPrefixFilter ?? "");
   const [createAccountOpen, setCreateAccountOpen] = useState(false);
   const [newAccountName, setNewAccountName] = useState("");
@@ -119,9 +124,18 @@ export default function AzureStorageView({
           </Button>
         ) : null}
       </div>
-      <p className="text-sm text-muted-foreground">{workspace.azureStorageStatusMessage}</p>
+      {inventoryLoading ? (
+        <InventoryLoadingState variant="inline" label={inventoryLoadingLabel} />
+      ) : (
+        <p className="text-sm text-muted-foreground">{workspace.azureStorageStatusMessage}</p>
+      )}
       <div className="overflow-hidden rounded-lg border border-border">
-        {workspace.azureStorageAccounts.length === 0 ? (
+        {inventoryLoading && workspace.azureStorageAccounts.length === 0 ? (
+          <InventoryLoadingState
+            label={inventoryLoadingLabel}
+            className="border-0 bg-transparent"
+          />
+        ) : workspace.azureStorageAccounts.length === 0 ? (
           <EmptyState
             icon={<Database />}
             title="No storage accounts"

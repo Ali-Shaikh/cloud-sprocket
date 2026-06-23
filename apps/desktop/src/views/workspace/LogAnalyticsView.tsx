@@ -32,6 +32,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  InventoryLoadingState,
+  InventorySelectLoadingHint,
+} from "@/components/inventory-loading-state";
+import { azureInventoryLoadingLabel } from "@/lib/azure-inventory";
 import { StatusPill } from "@/components/status-pill";
 import type {
   AzureLogAnalyticsHistoryEntry,
@@ -44,6 +49,7 @@ import type {
 export type LogAnalyticsViewProps = {
   workspace: WorkspaceSnapshot;
   workspaceSelectionLoading?: boolean;
+  inventoryLoading?: boolean;
   initialQuery?: string;
   initialTimespan?: string;
   onSelectWorkspace: (workspace: string) => void;
@@ -88,6 +94,7 @@ function timespanValueFor(timespan: string): string {
 export default function LogAnalyticsView({
   workspace,
   workspaceSelectionLoading = false,
+  inventoryLoading = false,
   initialQuery,
   initialTimespan,
   onSelectWorkspace,
@@ -100,6 +107,8 @@ export default function LogAnalyticsView({
 }: LogAnalyticsViewProps) {
   const workspaces = workspace.azureLogAnalyticsWorkspaces ?? [];
   const selected = workspace.selectedAzureLogWorkspace ?? workspaces[0]?.name ?? "";
+  const inventoryLoadingLabel = azureInventoryLoadingLabel(workspace, "loganalytics");
+  const workspaceControlsBusy = inventoryLoading || workspaceSelectionLoading;
   const [query, setQuery] = useState(initialQuery ?? SAMPLE_QUERY);
   const [timespanValue, setTimespanValue] = useState<string>(
     initialTimespan != null ? timespanValueFor(initialTimespan) : TIMESPAN_OPTIONS[0].value,
@@ -224,19 +233,29 @@ export default function LogAnalyticsView({
         </p>
       </header>
 
-      <section className={sectionCard}>
+      {inventoryLoading ? (
+        <InventoryLoadingState variant="banner" label={inventoryLoadingLabel} />
+      ) : null}
+      <section className={cn(sectionCard, inventoryLoading ? "opacity-60" : undefined)}>
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-72">
             <div className={cn(fieldLabel, "mb-1")}>Workspace</div>
             <Select
               value={selected}
-              disabled={workspaceSelectionLoading}
+              disabled={workspaceControlsBusy}
               onValueChange={(value) => {
                 if (value) onSelectWorkspace(value);
               }}
             >
               <SelectTrigger aria-label="Select Log Analytics workspace">
-                <SelectValue placeholder="Select workspace" />
+                {inventoryLoading && workspaces.length === 0 ? (
+                  <span className="flex items-center gap-2 text-muted-foreground">
+                    <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+                    Loading workspaces...
+                  </span>
+                ) : (
+                  <SelectValue placeholder="Select workspace" />
+                )}
               </SelectTrigger>
               <SelectContent>
                 {workspaces.map((ws) => (
@@ -246,12 +265,14 @@ export default function LogAnalyticsView({
                 ))}
               </SelectContent>
             </Select>
-            {workspaceSelectionLoading ? (
-              <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground" role="status">
-                <Loader2 className="size-3.5 animate-spin" />
-                Switching workspace...
-              </p>
-            ) : null}
+            <InventorySelectLoadingHint
+              loading={inventoryLoading && workspaces.length === 0}
+              label={inventoryLoadingLabel}
+            />
+            <InventorySelectLoadingHint
+              loading={workspaceSelectionLoading}
+              label="Switching workspace..."
+            />
           </div>
           <div className="w-48">
             <div className={cn(fieldLabel, "mb-1")}>Time range</div>

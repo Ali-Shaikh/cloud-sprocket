@@ -19,11 +19,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { InventoryLoadingState } from "@/components/inventory-loading-state";
+import { azureInventoryLoadingLabel } from "@/lib/azure-inventory";
 import { EmptyState } from "@/components/empty-state";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
 export type AzureQueuesViewProps = {
   workspace: WorkspaceSnapshot;
+  inventoryLoading?: boolean;
   onSelectAccount: (account: string) => void;
   onSelectQueue: (queue: string) => void;
 };
@@ -34,6 +37,7 @@ const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] 
 
 export default function AzureQueuesView({
   workspace,
+  inventoryLoading = false,
   onSelectAccount,
   onSelectQueue,
 }: AzureQueuesViewProps) {
@@ -52,7 +56,14 @@ export default function AzureQueuesView({
         </p>
       </header>
 
-      <section className={sectionCard}>
+      {inventoryLoading ? (
+        <InventoryLoadingState
+          variant="banner"
+          label={azureInventoryLoadingLabel(workspace, "queues")}
+        />
+      ) : null}
+
+      <section className={cn(sectionCard, inventoryLoading ? "opacity-60" : undefined)}>
         <div className="w-72">
           <div className={cn(fieldLabel, "mb-1")}>Storage account</div>
           <Select value={account} onValueChange={(value) => value && onSelectAccount(value)}>

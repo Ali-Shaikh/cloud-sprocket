@@ -65,7 +65,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { InventoryLoadingState } from "@/components/inventory-loading-state";
+import {
+  InventoryLoadingState,
+  InventorySelectLoadingHint,
+} from "@/components/inventory-loading-state";
+import { azureInventoryLoadingLabel } from "@/lib/azure-inventory";
 import { StatusPill } from "@/components/status-pill";
 import type {
   AzureLogAnalyticsSavedQuery,
@@ -78,6 +82,7 @@ import type {
 export type AzureWafViewProps = {
   workspace: WorkspaceSnapshot;
   workspaceSelectionLoading?: boolean;
+  inventoryLoading?: boolean;
   configLoading?: boolean;
   onSelectWorkspace: (workspace: string) => void;
   onSelectPolicy: (policyName: string) => void;
@@ -132,6 +137,7 @@ const TIMESPAN_OPTIONS = [
 export default function AzureWafView({
   workspace,
   workspaceSelectionLoading = false,
+  inventoryLoading = false,
   configLoading = false,
   onSelectWorkspace,
   onSelectPolicy,
@@ -157,6 +163,8 @@ export default function AzureWafView({
   const policyDetail = workspace.azureWafPolicyDetail;
   const fireCounts = workspace.azureWafRuleFireCounts ?? [];
   const canWrite = workspace.azureWritesEnabled;
+  const inventoryLoadingLabel = azureInventoryLoadingLabel(workspace, "waf");
+  const inventoryControlsBusy = inventoryLoading || workspaceSelectionLoading;
 
   const [query, setQuery] = useState("");
   const [timespanValue, setTimespanValue] = useState<string>(TIMESPAN_OPTIONS[0].value);
@@ -398,19 +406,29 @@ export default function AzureWafView({
         </TabsList>
 
         <TabsContent value="logs" className="mt-4 space-y-4">
-          <section className={sectionCard}>
+          {inventoryLoading ? (
+            <InventoryLoadingState variant="banner" label={inventoryLoadingLabel} />
+          ) : null}
+          <section className={cn(sectionCard, inventoryLoading ? "opacity-60" : undefined)}>
             <div className="flex flex-wrap items-end gap-3">
               <div className="w-72">
                 <div className={cn(fieldLabel, "mb-1")}>Workspace</div>
                 <Select
                   value={selectedWorkspace}
-                  disabled={workspaceSelectionLoading}
+                  disabled={inventoryControlsBusy}
                   onValueChange={(value) => {
                     if (value) onSelectWorkspace(value);
                   }}
                 >
                   <SelectTrigger aria-label="Select Log Analytics workspace">
-                    <SelectValue placeholder="Select workspace" />
+                    {inventoryLoading && workspaces.length === 0 ? (
+                      <span className="flex items-center gap-2 text-muted-foreground">
+                        <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+                        Loading workspaces...
+                      </span>
+                    ) : (
+                      <SelectValue placeholder="Select workspace" />
+                    )}
                   </SelectTrigger>
                   <SelectContent>
                     {workspaces.map((ws) => (
@@ -420,6 +438,14 @@ export default function AzureWafView({
                     ))}
                   </SelectContent>
                 </Select>
+                <InventorySelectLoadingHint
+                  loading={inventoryLoading && workspaces.length === 0}
+                  label={inventoryLoadingLabel}
+                />
+                <InventorySelectLoadingHint
+                  loading={workspaceSelectionLoading}
+                  label="Switching workspace..."
+                />
               </div>
               <div className="w-48">
                 <div className={cn(fieldLabel, "mb-1")}>Time range</div>
@@ -440,12 +466,20 @@ export default function AzureWafView({
                 <div className={cn(fieldLabel, "mb-1")}>WAF policy</div>
                 <Select
                   value={selectedPolicy}
+                  disabled={inventoryControlsBusy}
                   onValueChange={(value) => {
                     if (value) onSelectPolicy(value);
                   }}
                 >
                   <SelectTrigger aria-label="Select WAF policy">
-                    <SelectValue placeholder="Select policy" />
+                    {inventoryLoading && policies.length === 0 ? (
+                      <span className="flex items-center gap-2 text-muted-foreground">
+                        <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+                        Loading policies...
+                      </span>
+                    ) : (
+                      <SelectValue placeholder="Select policy" />
+                    )}
                   </SelectTrigger>
                   <SelectContent>
                     {policies.map((policy) => (
@@ -672,24 +706,40 @@ export default function AzureWafView({
         </TabsContent>
 
         <TabsContent value="config" className="mt-4 space-y-4">
+          {inventoryLoading ? (
+            <InventoryLoadingState variant="banner" label={inventoryLoadingLabel} />
+          ) : null}
           {configLoading ? (
             <InventoryLoadingState
               variant="banner"
               label="Loading WAF policy config from Azure..."
             />
           ) : null}
-          <section className={cn(sectionCard, configLoading ? "opacity-60" : undefined)}>
+          <section
+            className={cn(
+              sectionCard,
+              inventoryLoading || configLoading ? "opacity-60" : undefined,
+            )}
+          >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="w-72">
                 <div className={cn(fieldLabel, "mb-1")}>Policy</div>
                 <Select
                   value={selectedPolicy}
+                  disabled={inventoryLoading || configLoading}
                   onValueChange={(value) => {
                     if (value) onSelectPolicy(value);
                   }}
                 >
                   <SelectTrigger aria-label="Select WAF policy for config">
-                    <SelectValue placeholder="Select policy" />
+                    {inventoryLoading && policies.length === 0 ? (
+                      <span className="flex items-center gap-2 text-muted-foreground">
+                        <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+                        Loading policies...
+                      </span>
+                    ) : (
+                      <SelectValue placeholder="Select policy" />
+                    )}
                   </SelectTrigger>
                   <SelectContent>
                     {policies.map((policy) => (

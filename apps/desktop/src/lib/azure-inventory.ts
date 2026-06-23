@@ -32,6 +32,60 @@ export function azureInventoryScopeForTab(tabId: string): AzureInventoryScope | 
   return TAB_SCOPE_MAP[tabId];
 }
 
+export function azureInventoryStatusMessage(
+  workspace: WorkspaceSnapshot,
+  scope: AzureInventoryScope,
+): string | undefined {
+  switch (scope) {
+    case "storage":
+      return workspace.azureStorageStatusMessage;
+    case "webapps":
+      return workspace.azureAppServiceStatusMessage;
+    case "loganalytics":
+      return workspace.azureLogAnalyticsStatusMessage;
+    case "waf":
+      return workspace.azureWafStatusMessage;
+    case "frontdoor":
+      return workspace.azureFrontDoorStatusMessage;
+    case "functions":
+      return workspace.azureFunctionsStatusMessage;
+    case "keyvault":
+      return workspace.azureKeyVaultStatusMessage;
+    case "cosmos":
+      return workspace.azureCosmosStatusMessage;
+    case "queues":
+      return workspace.azureQueuesStatusMessage;
+    case "entra":
+      return workspace.azureEntraStatusMessage;
+    default:
+      return undefined;
+  }
+}
+
+const DEFAULT_INVENTORY_LOADING_LABELS: Record<AzureInventoryScope, string> = {
+  storage: "Loading storage accounts...",
+  webapps: "Loading App Service web apps...",
+  loganalytics: "Loading Log Analytics workspaces...",
+  waf: "Loading WAF policies and Log Analytics workspaces...",
+  frontdoor: "Loading Azure Front Door profiles...",
+  functions: "Loading Function Apps...",
+  keyvault: "Loading Key Vaults...",
+  cosmos: "Loading Cosmos DB accounts...",
+  queues: "Loading storage queues...",
+  entra: "Loading Entra ID directory data...",
+};
+
+export function azureInventoryLoadingLabel(
+  workspace: WorkspaceSnapshot,
+  scope: AzureInventoryScope,
+): string {
+  const status = azureInventoryStatusMessage(workspace, scope)?.trim();
+  if (status) {
+    return status;
+  }
+  return DEFAULT_INVENTORY_LOADING_LABELS[scope];
+}
+
 export function azureInventoryLoaded(
   workspace: WorkspaceSnapshot,
   scope: AzureInventoryScope,

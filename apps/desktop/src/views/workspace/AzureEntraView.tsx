@@ -11,11 +11,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { InventoryLoadingState } from "@/components/inventory-loading-state";
+import { azureInventoryLoadingLabel } from "@/lib/azure-inventory";
 import { EmptyState } from "@/components/empty-state";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
 export type AzureEntraViewProps = {
   workspace: WorkspaceSnapshot;
+  inventoryLoading?: boolean;
 };
 
 const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] shadow-sm";
@@ -28,7 +31,10 @@ function isLocalFlociProfile(workspace: WorkspaceSnapshot): boolean {
   return profileFieldValue(workspace.profile, "Tenant ID") === "cloudsprocket-local";
 }
 
-export default function AzureEntraView({ workspace }: AzureEntraViewProps) {
+export default function AzureEntraView({
+  workspace,
+  inventoryLoading = false,
+}: AzureEntraViewProps) {
   const users = workspace.azureEntraUsers ?? [];
   const groups = workspace.azureEntraGroups ?? [];
   const apps = workspace.azureEntraApps ?? [];
@@ -60,7 +66,14 @@ export default function AzureEntraView({ workspace }: AzureEntraViewProps) {
         </p>
       </header>
 
-      <p className="text-sm text-muted-foreground">{workspace.azureEntraStatusMessage}</p>
+      {inventoryLoading ? (
+        <InventoryLoadingState
+          variant="banner"
+          label={azureInventoryLoadingLabel(workspace, "entra")}
+        />
+      ) : (
+        <p className="text-sm text-muted-foreground">{workspace.azureEntraStatusMessage}</p>
+      )}
 
       <section className={sectionCard}>
         <h2 className="text-base font-bold">Users</h2>

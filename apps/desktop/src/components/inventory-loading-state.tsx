@@ -60,4 +60,33 @@ function InventoryLoadingState({
   );
 }
 
-export { InventoryLoadingState };
+type InventorySelectLoadingHintProps = {
+  loading: boolean;
+  label: string;
+  className?: string;
+};
+
+function InventorySelectLoadingHint({
+  loading,
+  label,
+  className,
+}: InventorySelectLoadingHintProps) {
+  if (!loading) {
+    return null;
+  }
+  return (
+    <p
+      className={cn(
+        "mt-2 flex items-center gap-2 text-xs text-muted-foreground",
+        className,
+      )}
+      role="status"
+      aria-live="polite"
+    >
+      <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" aria-hidden />
+      <span>{label}</span>
+    </p>
+  );
+}
+
+export { InventoryLoadingState, InventorySelectLoadingHint };

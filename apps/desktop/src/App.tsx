@@ -2009,6 +2009,9 @@ export default function App() {
     () => applySessionWriteModeToWorkspace(workspace, session),
     [workspace, session],
   );
+  const azureServiceInventoryLoading =
+    session.lockedProviderId === "azure" &&
+    (azureInventoryLoading || workspaceFetching || !workspaceLoaded);
   const writeModeEnabled =
     session.lockedProviderId === "azure"
       ? activeWorkspace.azureWriteModeEnabled
@@ -3082,7 +3085,7 @@ export default function App() {
     ["azure-overview", "azure-resource-groups", "azure-vms"].includes(activeWorkspaceTabId) ? (
     <AzureView
       workspace={activeWorkspace}
-      inventoryLoading={azureInventoryLoading}
+      inventoryLoading={azureServiceInventoryLoading}
       activePageId={
         activeWorkspaceTabId === "azure-resource-groups"
           ? "resource-groups"
@@ -3149,6 +3152,7 @@ export default function App() {
       workspace={activeWorkspace}
       activePageId={activeAzureStoragePageId}
       actionStatus={azureStorageActionStatus}
+      inventoryLoading={azureServiceInventoryLoading}
       onSelectAccount={(accountName) => {
         void mutateWorkspaceSelection("azure.storage.selectAccount", { accountName }, {
           panelLoading: true,
@@ -3311,7 +3315,7 @@ export default function App() {
   ) : session.isLocked && activeWorkspaceTabId === "azure-app-service" ? (
     <AzureAppServiceView
       workspace={activeWorkspace}
-      inventoryLoading={azureInventoryLoading}
+      inventoryLoading={azureServiceInventoryLoading}
       actionStatus={azureAppServiceActionStatus}
       onSelectResourceGroup={(resourceGroup) => {
         void selectAzureResourceGroup(resourceGroup);
@@ -3433,6 +3437,7 @@ export default function App() {
     <LogAnalyticsView
       workspace={activeWorkspace}
       workspaceSelectionLoading={azureLogWorkspaceSelectionLoading}
+      inventoryLoading={azureServiceInventoryLoading}
       initialQuery={logAnalyticsPrefill?.query}
       initialTimespan={logAnalyticsPrefill?.timespan}
       onSelectWorkspace={(ws) => {
@@ -3472,7 +3477,8 @@ export default function App() {
     <AzureWafView
       workspace={activeWorkspace}
       workspaceSelectionLoading={azureLogWorkspaceSelectionLoading}
-      configLoading={azureWafConfigLoading || azureInventoryLoading}
+      inventoryLoading={azureServiceInventoryLoading}
+      configLoading={azureWafConfigLoading}
       onSelectWorkspace={(ws) => {
         void selectAzureLogAnalyticsWorkspace(ws);
       }}
@@ -3572,7 +3578,7 @@ export default function App() {
   ) : session.isLocked && activeWorkspaceTabId === "azure-front-door" ? (
     <AzureFrontDoorView
       workspace={activeWorkspace}
-      inventoryLoading={azureInventoryLoading || azureFrontDoorTopologyLoading}
+      inventoryLoading={azureServiceInventoryLoading || azureFrontDoorTopologyLoading}
       actionStatus={azureFrontDoorActionStatus}
       onRefresh={() => {
         setAzureFrontDoorActionStatus("Refreshing Front Door topology...");
@@ -3691,6 +3697,7 @@ export default function App() {
   ) : session.isLocked && activeWorkspaceTabId === "azure-functions" ? (
     <AzureFunctionsView
       workspace={activeWorkspace}
+      inventoryLoading={azureServiceInventoryLoading}
       onSelectApp={(appName) => {
         void mutateWorkspaceSelection("azure.functions.selectApp", { appName }, {
           panelLoading: true,
@@ -3746,6 +3753,7 @@ export default function App() {
   ) : session.isLocked && activeWorkspaceTabId === "azure-key-vault" ? (
     <AzureKeyVaultView
       workspace={activeWorkspace}
+      inventoryLoading={azureServiceInventoryLoading}
       onSelectVault={(vaultName) => {
         void mutateWorkspaceSelection("azure.keyVault.selectVault", { vaultName }, {
           panelLoading: true,
@@ -3788,6 +3796,7 @@ export default function App() {
   ) : session.isLocked && activeWorkspaceTabId === "azure-cosmos" ? (
     <AzureCosmosView
       workspace={activeWorkspace}
+      inventoryLoading={azureServiceInventoryLoading}
       onSelectAccount={(account) => {
         void mutateWorkspaceSelection("azure.cosmos.selectAccount", { account }, {
           panelLoading: true,
@@ -3867,6 +3876,7 @@ export default function App() {
   ) : session.isLocked && activeWorkspaceTabId === "azure-queues" ? (
     <AzureQueuesView
       workspace={activeWorkspace}
+      inventoryLoading={azureServiceInventoryLoading}
       onSelectAccount={(account) => {
         void mutateWorkspaceSelection("azure.storage.selectAccount", { accountName: account }, {
           panelLoading: true,
@@ -3915,7 +3925,10 @@ export default function App() {
       }}
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-entra" ? (
-    <AzureEntraView workspace={activeWorkspace} />
+    <AzureEntraView
+      workspace={activeWorkspace}
+      inventoryLoading={azureServiceInventoryLoading}
+    />
   ) : activeWorkspaceTabId === "virtualisation" ? (
     <RuntimeView
       workspace={activeWorkspace}

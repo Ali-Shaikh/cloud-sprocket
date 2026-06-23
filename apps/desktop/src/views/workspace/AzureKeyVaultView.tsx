@@ -32,12 +32,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { InventoryLoadingState } from "@/components/inventory-loading-state";
+import { azureInventoryLoadingLabel } from "@/lib/azure-inventory";
 import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
 export type AzureKeyVaultViewProps = {
   workspace: WorkspaceSnapshot;
+  inventoryLoading?: boolean;
   onSelectVault: (vaultName: string) => void;
   onReveal: (vaultName: string, secretName: string) => Promise<string>;
   onSetSecret: (vaultName: string, secretName: string, value: string) => Promise<void>;
@@ -49,6 +52,7 @@ const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] 
 
 export default function AzureKeyVaultView({
   workspace,
+  inventoryLoading = false,
   onSelectVault,
   onReveal,
   onSetSecret,
@@ -91,7 +95,14 @@ export default function AzureKeyVaultView({
         </p>
       </header>
 
-      <section className={sectionCard}>
+      {inventoryLoading ? (
+        <InventoryLoadingState
+          variant="banner"
+          label={azureInventoryLoadingLabel(workspace, "keyvault")}
+        />
+      ) : null}
+
+      <section className={cn(sectionCard, inventoryLoading ? "opacity-60" : undefined)}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="w-72">
             <div className={cn(fieldLabel, "mb-1")}>Vault</div>
