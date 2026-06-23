@@ -22,6 +22,7 @@ func TestResolveRuntimeIDDefaults(t *testing.T) {
 	}{
 		{"local aws defaults localstack", Deployment{ProviderID: "aws", Local: true}, "localstack"},
 		{"cloud aws defaults aws-cloud", Deployment{ProviderID: "aws", ProfileID: "prod"}, "aws-cloud"},
+		{"cloud azure defaults azure-cloud", Deployment{ProviderID: "azure", ProfileID: "sub-001"}, "azure-cloud"},
 		{"explicit runtime", Deployment{ProviderID: "aws", Local: true, RuntimeID: "docker-compose"}, "docker-compose"},
 	}
 	for _, tc := range cases {
@@ -42,6 +43,7 @@ func TestRegistryResolvesBuiltInTargets(t *testing.T) {
 	}{
 		{"localstack", Deployment{ProviderID: "aws", Local: true}, "localstack"},
 		{"aws-cloud", Deployment{ProviderID: "aws", ProfileID: "prod"}, "aws-cloud"},
+		{"azure-cloud", Deployment{ProviderID: "azure", ProfileID: "sub-001"}, "azure-cloud"},
 		{"docker-compose", Deployment{ProviderID: "aws", Local: true, RuntimeID: "docker-compose"}, "docker-compose"},
 	}
 	for _, tc := range cases {

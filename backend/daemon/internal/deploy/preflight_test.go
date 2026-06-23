@@ -64,6 +64,27 @@ func TestPreflightAWSProfileConfigured(t *testing.T) {
 	}
 }
 
+func TestPreflightAzureSubscriptionConfigured(t *testing.T) {
+	dir := t.TempDir()
+	azureDir := filepath.Join(dir, "azure")
+	if err := os.MkdirAll(azureDir, 0o755); err != nil {
+		t.Fatalf("mkdir azure: %v", err)
+	}
+	profilePath := filepath.Join(azureDir, "azureProfile.json")
+	if err := os.WriteFile(profilePath, []byte(`{"subscriptions":[{"id":"sub-001","name":"Marketing"}]}`), 0o600); err != nil {
+		t.Fatalf("write azure profile: %v", err)
+	}
+	settings := config.Settings{AzureDir: azureDir}
+	e := NewEngine(tofu.NewRunner("tofu"), settings, recipes.Bundled())
+
+	if err := e.Preflight(context.Background(), &Deployment{ProviderID: "azure", ProfileID: "sub-001"}); err != nil {
+		t.Fatalf("expected a configured subscription to pass, got %v", err)
+	}
+	if err := e.Preflight(context.Background(), &Deployment{ProviderID: "azure", ProfileID: "missing"}); err == nil {
+		t.Fatal("expected an unknown subscription to fail preflight")
+	}
+}
+
 func TestPreflightAWSProfileFromConfigFile(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config")

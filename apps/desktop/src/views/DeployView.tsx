@@ -156,8 +156,23 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
       const loaded = await getRecipe(id);
       setRecipe(loaded);
       setValues(seedValues(loaded.variables));
-      const firstRuntime = loaded.manifest.local?.runtimes?.[0]?.id ?? loaded.manifest.local?.emulator ?? "localstack";
-      setTarget(`local:${firstRuntime}`);
+      const providers = loaded.manifest.providers ?? ["aws"];
+      const declaredRuntimes = loaded.manifest.local?.runtimes ?? [];
+      const legacyEmulator = loaded.manifest.local?.emulator;
+      const localRuntimes =
+        declaredRuntimes.length > 0
+          ? declaredRuntimes
+          : legacyEmulator
+            ? [{ id: legacyEmulator }]
+            : providers.includes("aws")
+              ? [{ id: "localstack" }]
+              : [];
+      if (providers.includes("aws") && localRuntimes.length > 0) {
+        setTarget(`local:${localRuntimes[0]?.id ?? "localstack"}`);
+      } else {
+        const profile = profiles.find((candidate) => providers.includes(candidate.providerId));
+        setTarget(profile ? `profile:${profile.profileId}` : "");
+      }
       setMode("configure");
       setGallerySection(loaded.manifest.kind === "service-lab" ? "service-lab" : "app-deploy");
     } catch {

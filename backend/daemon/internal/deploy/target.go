@@ -61,6 +61,9 @@ func NewRegistry(settings config.Settings, opts TargetOptions) *Registry {
 	r.RegisterFactory("aws-cloud", func(settings config.Settings, opts TargetOptions) Target {
 		return &awsCloudTarget{}
 	})
+	r.RegisterFactory("azure-cloud", func(settings config.Settings, opts TargetOptions) Target {
+		return &azureCloudTarget{}
+	})
 	r.RegisterFactory("docker-compose", func(settings config.Settings, opts TargetOptions) Target {
 		return newDockerComposeTarget(settings, opts)
 	})
@@ -106,6 +109,9 @@ func resolveRuntimeID(deployment *Deployment) string {
 	}
 	if deployment.ProviderID == "aws" {
 		return "aws-cloud"
+	}
+	if deployment.ProviderID == "azure" {
+		return "azure-cloud"
 	}
 	return ""
 }

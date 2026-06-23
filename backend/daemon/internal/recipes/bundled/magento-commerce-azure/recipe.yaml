@@ -1,0 +1,82 @@
+apiVersion: cloudsprocket.recipe/v1
+id: magento-commerce-azure
+kind: app-deploy
+version: 0.1.0
+name: Magento commerce (Azure)
+summary: Magento 2 on Linux App Service with Azure Database for MySQL, Redis, and blob storage for media.
+description: |
+  Provisions a Magento-ready Azure stack: a Linux App Service running the Magento
+  Docker image, Azure Database for MySQL Flexible Server, Azure Cache for Redis,
+  and a storage account for media and static assets.
+
+  This recipe targets real Azure subscriptions (cloud profile). floci-az does not
+  emulate App Service or MySQL, so there is no local dry-run target. After apply,
+  open the storefront URL and complete the Magento web installer using the
+  database and Redis connection details from the deployment outputs.
+
+  Point `magento_image` at another maintained Magento 2 container if you prefer
+  a different distribution.
+providers:
+  - azure
+tags:
+  - magento
+  - commerce
+  - ecommerce
+  - azure
+  - app-service
+  - mysql
+  - redis
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes: []
+superpowers:
+  iamPolicyStream: false
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: azure_location
+        widget: text
+        help: Azure region (for example westeurope or eastus).
+  - title: Magento storefront
+    variables:
+      - name: magento_base_url
+        widget: text
+        help: Public HTTPS URL for the shop (for example https://shop.example.com). Used in app settings.
+      - name: magento_image
+        widget: text
+        help: Docker image for the Linux Web App. Default is a Magento 2 image from Docker Hub.
+      - name: app_service_sku
+        widget: text
+        help: App Service plan SKU (B1 for dev, P1v3 for production workloads).
+  - title: Database
+    variables:
+      - name: mysql_admin_username
+        widget: text
+      - name: mysql_admin_password
+        widget: password
+      - name: mysql_sku_name
+        widget: text
+        help: MySQL Flexible Server SKU (for example B_Standard_B1ms).
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object.
+outputs:
+  - name: storefront_url
+    primary: true
+  - name: resource_group_name
+  - name: mysql_host
+    primary: true
+  - name: mysql_database_name
+  - name: redis_hostname
+  - name: storage_account_name
+  - name: app_service_name

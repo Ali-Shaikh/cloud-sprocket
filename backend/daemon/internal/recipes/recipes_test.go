@@ -272,6 +272,33 @@ func TestBundledListHasBothRecipes(t *testing.T) {
 	}
 }
 
+func TestLoadMagentoAzureRecipe(t *testing.T) {
+	recipe, err := Bundled().Load("magento-commerce-azure")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(recipe.Manifest.Providers) != 1 || recipe.Manifest.Providers[0] != "azure" {
+		t.Fatalf("providers = %+v, want [azure]", recipe.Manifest.Providers)
+	}
+	if len(recipe.Manifest.Local.Runtimes) != 0 {
+		t.Fatalf("expected cloud-only recipe, runtimes = %+v", recipe.Manifest.Local.Runtimes)
+	}
+	byName := map[string]Variable{}
+	for _, v := range recipe.Variables {
+		byName[v.Name] = v
+	}
+	if got := byName["mysql_admin_password"]; !got.Sensitive || got.Widget != "password" {
+		t.Fatalf("mysql_admin_password should be sensitive/password: %+v", got)
+	}
+	primary := map[string]bool{}
+	for _, output := range recipe.Outputs {
+		primary[output.Name] = output.Primary
+	}
+	if !primary["storefront_url"] || !primary["mysql_host"] {
+		t.Fatalf("expected primary storefront_url and mysql_host outputs, got %+v", primary)
+	}
+}
+
 func TestMaterialiseCopiesFiles(t *testing.T) {
 	dest := t.TempDir()
 	if err := Bundled().Materialise("serverless-fullstack-aws", dest); err != nil {
