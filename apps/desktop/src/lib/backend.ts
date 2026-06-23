@@ -1957,6 +1957,13 @@ function handleMockRequest<T>(
       mockWorkspaceSQSQueues.push({
         queueName,
         queueUrl: `http://localhost:4566/000000000000/${queueName}`,
+        approximateNumberOfMessages: 0,
+        approximateNumberOfMessagesNotVisible: 0,
+        approximateNumberOfMessagesDelayed: 0,
+        visibilityTimeout: 30,
+        createdTimestamp: Math.floor(Date.now() / 1000),
+        queueArn: `arn:aws:sqs:us-east-1:000000000000:${queueName}`,
+        receiveMessageWaitTimeSeconds: 0,
       });
       mockState.session.selectedSqsQueueUrl = `http://localhost:4566/000000000000/${queueName}`;
       appendLog("success", `Created SQS queue ${queueName}.`);
@@ -1980,7 +1987,14 @@ function handleMockRequest<T>(
     case "aws.sns.createTopic": {
       const topicName = String(params.topicName ?? "new-topic");
       const topicArn = `arn:aws:sns:eu-west-1:000000000000:${topicName}`;
-      mockWorkspaceSNSTopics.push({ topicArn, topicName });
+      mockWorkspaceSNSTopics.push({
+        topicArn,
+        topicName,
+        displayName: topicName,
+        subscriptionsConfirmed: "0",
+        subscriptionsPending: "0",
+        subscriptions: [],
+      });
       mockState.session.selectedSnsTopicArn = topicArn;
       appendLog("success", `Created SNS topic ${topicName}.`);
       return Promise.resolve(buildMockWorkspace() as T);

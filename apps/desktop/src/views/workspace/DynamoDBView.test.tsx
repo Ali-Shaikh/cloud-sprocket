@@ -159,6 +159,8 @@ function renderDynamoDBView() {
         onRefresh={onRefresh}
         onSelectRegion={onSelectRegion}
         onSelectTable={onSelectTable}
+        onPutItem={vi.fn()}
+        onDeleteItem={vi.fn()}
       />
     </ThemeProvider>,
   );
@@ -204,6 +206,8 @@ describe("DynamoDBView", () => {
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
           onSelectTable={vi.fn()}
+          onPutItem={vi.fn()}
+          onDeleteItem={vi.fn()}
         />
       </ThemeProvider>,
     );

@@ -152,6 +152,8 @@ function renderSNSView() {
         onRefresh={onRefresh}
         onSelectRegion={onSelectRegion}
         onSelectEntity={onSelectEntity}
+        onPublish={vi.fn()}
+        onCreateTopic={vi.fn()}
       />
     </ThemeProvider>,
   );
@@ -198,6 +200,8 @@ describe("SNSView", () => {
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
           onSelectEntity={vi.fn()}
+          onPublish={vi.fn()}
+          onCreateTopic={vi.fn()}
         />
       </ThemeProvider>,
     );
