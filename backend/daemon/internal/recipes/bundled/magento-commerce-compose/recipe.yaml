@@ -1,0 +1,54 @@
+apiVersion: cloudsprocket.recipe/v1
+id: magento-commerce-compose
+kind: app-deploy
+version: 0.1.0
+name: Magento commerce (Docker Compose)
+summary: Magento 2 on your machine with MariaDB, Redis, and Docker Compose.
+description: |
+  Runs a local Magento stack using Docker Compose: Bitnami MariaDB, Redis, and
+  the Magento 2 container on http://localhost:8080. OpenTofu records deployment
+  metadata only; containers start in a post-apply step after apply succeeds.
+
+  Requires Docker Desktop (or another Docker engine) with the Compose plugin.
+  First boot can take several minutes whilst Magento initialises the database.
+providers:
+  - aws
+tags:
+  - magento
+  - commerce
+  - ecommerce
+  - docker-compose
+  - mysql
+  - redis
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: magento-compose
+postApply:
+  - name: Start Magento stack
+    dirVar: compose_dir
+    requires: docker-compose.yml
+    command: ["docker", "compose", "up", "-d"]
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix recorded in deployment outputs.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+  - title: Magento storefront
+    variables:
+      - name: magento_base_url
+        widget: text
+        help: Public base URL for the shop. Defaults to the local Compose port.
+      - name: compose_dir
+        widget: text
+        help: Folder under the deployment workspace containing docker-compose.yml.
+outputs:
+  - name: storefront_url
+    primary: true
+  - name: compose_project

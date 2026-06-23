@@ -25,6 +25,7 @@ const RUNTIME_LABELS: Record<string, string> = {
   localstack: "LocalStack",
   "floci-az": "floci-az",
   "docker-compose": "Docker Compose",
+  "magento-compose": "Magento (Docker Compose)",
 };
 
 export function runtimeDisplayName(runtimeId?: string): string {
@@ -90,13 +91,16 @@ export function logCommandsForDeployment(deployment: Deployment): LogCommand[] {
       ];
     case "container-fullstack-aws":
     case "api-postgres-containers-aws":
+    case "magento-commerce-aws":
       return [
         cloudWatchTailCommand(
           deployment,
           region,
           `/ecs/${stackName}`,
-          "ECS container service",
-          "Container STDOUT and STDERR from the awslogs log driver.",
+          deployment.recipeId === "magento-commerce-aws" ? "Magento ECS service" : "ECS container service",
+          deployment.recipeId === "magento-commerce-aws"
+            ? "Magento container STDOUT and STDERR from the awslogs log driver."
+            : "Container STDOUT and STDERR from the awslogs log driver.",
         ),
       ];
     case "api-postgres-serverless-aws":
@@ -335,6 +339,21 @@ export function deploymentOutputLink(
     const runtimeId = deploymentRuntimeId(deployment);
     if (runtimeId === "localstack") {
       return localStackDeploymentOutputLink(deployment, output);
+    }
+    if (runtimeId === "magento-compose" && output.name === "storefront_url") {
+      const value = String(output.value ?? "").trim();
+      if (!value) return null;
+      const withProtocol = /^https?:\/\//i.test(value) ? value : `http://${value}`;
+      try {
+        const url = new URL(withProtocol);
+        return {
+          url: url.toString(),
+          label: "Open storefront",
+          title: "Open the local Magento storefront served by Docker Compose.",
+        };
+      } catch {
+        return null;
+      }
     }
     return null;
   }

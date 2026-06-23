@@ -10,7 +10,7 @@ import type { Deployment, RecipeManifest, RecipeVariable } from "@/types/backend
 export type DeployMode = "list" | "configure" | "deployment";
 export type GallerySection = "app-deploy" | "service-lab";
 
-export const SCENARIO_TAGS = ["webhooks", "saas", "marketing", "async", "internal-tool", "staging", "ci"] as const;
+export const SCENARIO_TAGS = ["webhooks", "saas", "marketing", "async", "internal-tool", "staging", "ci", "ecommerce"] as const;
 
 export interface TargetOption {
   id: string;

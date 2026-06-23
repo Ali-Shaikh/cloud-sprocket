@@ -67,6 +67,9 @@ func NewRegistry(settings config.Settings, opts TargetOptions) *Registry {
 	r.RegisterFactory("docker-compose", func(settings config.Settings, opts TargetOptions) Target {
 		return newDockerComposeTarget(settings, opts)
 	})
+	r.RegisterFactory("magento-compose", func(settings config.Settings, opts TargetOptions) Target {
+		return newMagentoComposeTarget(settings, opts)
+	})
 	return r
 }
 

@@ -272,6 +272,98 @@ func TestBundledListHasBothRecipes(t *testing.T) {
 	}
 }
 
+func TestLoadMagentoAWSRecipe(t *testing.T) {
+	recipe, err := Bundled().Load("magento-commerce-aws")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(recipe.Manifest.Providers) != 1 || recipe.Manifest.Providers[0] != "aws" {
+		t.Fatalf("providers = %+v, want [aws]", recipe.Manifest.Providers)
+	}
+	if len(recipe.Manifest.Local.Runtimes) != 0 {
+		t.Fatalf("expected cloud-only recipe, runtimes = %+v", recipe.Manifest.Local.Runtimes)
+	}
+	byName := map[string]Variable{}
+	for _, v := range recipe.Variables {
+		byName[v.Name] = v
+	}
+	if got := byName["mysql_admin_password"]; !got.Sensitive || got.Widget != "password" {
+		t.Fatalf("mysql_admin_password should be sensitive/password: %+v", got)
+	}
+	if got := byName["magento_image"]; got.Default != "bitnamilegacy/magento:2.4.6" {
+		t.Fatalf("magento_image default = %+v", got.Default)
+	}
+	primary := map[string]bool{}
+	for _, output := range recipe.Outputs {
+		primary[output.Name] = output.Primary
+	}
+	if !primary["storefront_url"] || !primary["mysql_host"] {
+		t.Fatalf("expected primary storefront_url and mysql_host outputs, got %+v", primary)
+	}
+
+	mainTF, err := fsReadRecipeFile("magento-commerce-aws", "main.tf")
+	if err != nil {
+		t.Fatalf("read magento-commerce-aws main.tf: %v", err)
+	}
+	for _, want := range []string{
+		`engine                 = "mysql"`,
+		`resource "aws_elasticache_cluster" "main"`,
+		`resource "random_id" "media_bucket_suffix"`,
+		`cpu                      = "1024"`,
+		`memory                   = "2048"`,
+		`MAGENTO_MEDIA_STORAGE_BUCKET`,
+	} {
+		if !strings.Contains(mainTF, want) {
+			t.Fatalf("magento-commerce-aws recipe missing %q", want)
+		}
+	}
+}
+
+func TestLoadMagentoComposeRecipe(t *testing.T) {
+	recipe, err := Bundled().Load("magento-commerce-compose")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(recipe.Manifest.Local.Runtimes) != 1 || recipe.Manifest.Local.Runtimes[0].ID != "magento-compose" {
+		t.Fatalf("runtimes = %+v, want magento-compose", recipe.Manifest.Local.Runtimes)
+	}
+	if len(recipe.Manifest.PostApply) != 1 {
+		t.Fatalf("expected one postApply step, got %+v", recipe.Manifest.PostApply)
+	}
+	if got := recipe.Manifest.PostApply[0]; got.DirVar != "compose_dir" || got.Requires != "docker-compose.yml" {
+		t.Fatalf("postApply step = %+v", got)
+	}
+	byName := map[string]Variable{}
+	for _, v := range recipe.Variables {
+		byName[v.Name] = v
+	}
+	if got := byName["compose_dir"]; got.Default != "compose" {
+		t.Fatalf("compose_dir default = %+v", got.Default)
+	}
+	primary := map[string]bool{}
+	for _, output := range recipe.Outputs {
+		primary[output.Name] = output.Primary
+	}
+	if !primary["storefront_url"] {
+		t.Fatalf("expected primary storefront_url output, got %+v", primary)
+	}
+
+	composeYAML, err := fsReadRecipeFile("magento-commerce-compose", filepath.Join("compose", "docker-compose.yml"))
+	if err != nil {
+		t.Fatalf("read compose file: %v", err)
+	}
+	for _, want := range []string{
+		"bitnami/mariadb",
+		"bitnami/redis",
+		"bitnamilegacy/magento:2.4.6",
+		"127.0.0.1:8080:8080",
+	} {
+		if !strings.Contains(composeYAML, want) {
+			t.Fatalf("compose file missing %q", want)
+		}
+	}
+}
+
 func TestLoadMagentoAzureRecipe(t *testing.T) {
 	recipe, err := Bundled().Load("magento-commerce-azure")
 	if err != nil {

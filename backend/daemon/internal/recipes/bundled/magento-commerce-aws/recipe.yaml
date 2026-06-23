@@ -1,0 +1,83 @@
+apiVersion: cloudsprocket.recipe/v1
+id: magento-commerce-aws
+kind: app-deploy
+version: 0.1.0
+name: Magento commerce (AWS)
+summary: Magento 2 on ECS Fargate with RDS MySQL, ElastiCache Redis, and S3 media storage.
+description: |
+  Provisions a Magento-ready AWS stack: an ECS Fargate service running the Magento
+  Docker image behind an Application Load Balancer, Amazon RDS for MySQL,
+  Amazon ElastiCache for Redis, and an S3 bucket for media assets.
+
+  This recipe targets real AWS accounts (cloud profile). LocalStack does not
+  reliably emulate the full Magento data plane, so there is no local dry-run
+  target. After apply, open the storefront URL and complete the Magento web
+  installer using the database and Redis connection details from the deployment
+  outputs.
+
+  Point `magento_image` at another maintained Magento 2 container if you prefer
+  a different distribution.
+providers:
+  - aws
+tags:
+  - magento
+  - commerce
+  - ecommerce
+  - aws
+  - ecs
+  - mysql
+  - redis
+  - s3
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes: []
+superpowers:
+  iamPolicyStream: false
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+        help: AWS region (for example us-east-1 or eu-west-1).
+  - title: Magento storefront
+    variables:
+      - name: magento_base_url
+        widget: text
+        help: Public base URL for the shop (for example http://my-alb.elb.amazonaws.com). Used in container environment variables.
+      - name: magento_image
+        widget: text
+        help: Docker image for the ECS task. Default is a Magento 2 image from Docker Hub.
+      - name: desired_count
+        widget: number
+        help: Number of Fargate tasks to run behind the load balancer.
+  - title: Database
+    variables:
+      - name: mysql_admin_username
+        widget: text
+      - name: mysql_admin_password
+        widget: password
+      - name: db_instance_class
+        widget: text
+        help: RDS instance class (for example db.t3.micro).
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object.
+outputs:
+  - name: storefront_url
+    primary: true
+  - name: mysql_host
+    primary: true
+  - name: mysql_database_name
+  - name: redis_hostname
+  - name: media_bucket_name
+  - name: ecs_cluster

@@ -1,0 +1,38 @@
+services:
+  mariadb:
+    image: docker.io/bitnami/mariadb:latest
+    environment:
+      - MARIADB_ROOT_PASSWORD=root-secret
+      - MARIADB_DATABASE=magento
+      - MARIADB_USER=magento
+      - MARIADB_PASSWORD=magento-secret
+    volumes:
+      - mariadb-data:/bitnami/mariadb
+
+  redis:
+    image: docker.io/bitnami/redis:latest
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    volumes:
+      - redis-data:/bitnami/redis
+
+  magento:
+    image: docker.io/bitnamilegacy/magento:2.4.6
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      - MAGENTO_BASE_URL=http://localhost:8080
+      - MAGENTO_DATABASE_HOST=mariadb
+      - MAGENTO_DATABASE_PORT_NUMBER=3306
+      - MAGENTO_DATABASE_USER=magento
+      - MAGENTO_DATABASE_PASSWORD=magento-secret
+      - MAGENTO_DATABASE_NAME=magento
+      - MAGENTO_REDIS_HOST=redis
+      - MAGENTO_REDIS_PORT_NUMBER=6379
+    depends_on:
+      - mariadb
+      - redis
+
+volumes:
+  mariadb-data:
+  redis-data:
