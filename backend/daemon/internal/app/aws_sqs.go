@@ -238,3 +238,102 @@ func (s *Service) handleAwsSqsPeek(ctx context.Context, params json.RawMessage, 
 	s.mu.Unlock()
 	return s.sqs.PeekMessages(ctx, profile, region, queueURL)
 }
+
+func (s *Service) handleAwsSqsSendMessage(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		QueueURL    string `json:"queueUrl"`
+		MessageBody string `json:"messageBody"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	profile, region, queueURL, err := s.activeSQSSelection(snapshot, session, request.QueueURL)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !effectiveAWSWritesEnabled(session, profile) {
+		s.mu.Unlock()
+		return nil, errors.New("SQS send requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true")
+	}
+	s.mu.Unlock()
+	return s.sqs.SendMessage(ctx, profile, region, queueURL, request.MessageBody)
+}
+
+func (s *Service) handleAwsSqsCreateQueue(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		QueueName string `json:"queueName"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	queueName := strings.TrimSpace(request.QueueName)
+	if queueName == "" {
+		return nil, errors.New("queue name is required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !session.IsLocked || session.CurrentProviderID != "aws" {
+		s.mu.Unlock()
+		return nil, errors.New("open an AWS workspace before creating an SQS queue")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		s.mu.Unlock()
+		return nil, errors.New("the workspace's AWS profile is not available")
+	}
+	if !effectiveAWSWritesEnabled(session, profile) {
+		s.mu.Unlock()
+		return nil, errors.New("SQS create requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true")
+	}
+	region := session.SelectedSQSRegion
+	if region == "" {
+		region = profileRegionHint(profile)
+	}
+	s.mu.Unlock()
+
+	created, err := s.sqs.CreateQueue(ctx, profile, region, queueName)
+	if err != nil {
+		return nil, err
+	}
+	s.invalidateResourceCache(ctx, "aws.sqs.queues", profile.ProfileID+"|"+region)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		return nil, err
+	}
+	session.SelectedSQSQueueURL = created.QueueURL
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		return nil, err
+	}
+	return s.finishAWSWorkspaceOpts(
+		ctx,
+		snapshot,
+		session,
+		notifier,
+		workspaceSnapshotOptions{awsScope: "sqs", skipAzureInventory: true},
+		"success",
+		fmt.Sprintf("Created SQS queue %s in %s.", created.QueueName, region),
+		false,
+	)
+}

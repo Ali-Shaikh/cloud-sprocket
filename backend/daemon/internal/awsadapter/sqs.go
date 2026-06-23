@@ -141,9 +141,80 @@ func (q *SQSInventory) PeekMessages(
 		messages = append(messages, sqsMessageSummary(message))
 	}
 	return models.AwsSqsPeekResult{
+		QueueURL: queueURL,
+		Messages: messages,
+		Summary:  fmt.Sprintf("Peeked %d messages without deleting them.", len(messages)),
+	}, nil
+}
+
+func (q *SQSInventory) SendMessage(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	queueURL string,
+	messageBody string,
+) (models.AwsSqsSendResult, error) {
+	queueURL = strings.TrimSpace(queueURL)
+	messageBody = strings.TrimSpace(messageBody)
+	if queueURL == "" {
+		return models.AwsSqsSendResult{}, fmt.Errorf("queue URL is required")
+	}
+	if messageBody == "" {
+		return models.AwsSqsSendResult{}, fmt.Errorf("message body is required")
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := q.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsSqsSendResult{}, err
+	}
+
+	client := sqsClient(cfg, profile)
+	res, err := client.SendMessage(ctx, &sqs.SendMessageInput{
+		QueueUrl:    aws.String(queueURL),
+		MessageBody: aws.String(messageBody),
+	})
+	if err != nil {
+		return models.AwsSqsSendResult{}, err
+	}
+	messageID := awsString(res.MessageId)
+	return models.AwsSqsSendResult{
 		QueueURL:  queueURL,
-		Messages:  messages,
-		Summary:   fmt.Sprintf("Peeked %d messages without deleting them.", len(messages)),
+		MessageID: messageID,
+		Summary:   fmt.Sprintf("Sent message %s to the queue.", messageID),
+	}, nil
+}
+
+func (q *SQSInventory) CreateQueue(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	queueName string,
+) (models.AwsSqsCreateQueueResult, error) {
+	queueName = strings.TrimSpace(queueName)
+	if queueName == "" {
+		return models.AwsSqsCreateQueueResult{}, fmt.Errorf("queue name is required")
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := q.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsSqsCreateQueueResult{}, err
+	}
+
+	client := sqsClient(cfg, profile)
+	res, err := client.CreateQueue(ctx, &sqs.CreateQueueInput{
+		QueueName: aws.String(queueName),
+	})
+	if err != nil {
+		return models.AwsSqsCreateQueueResult{}, err
+	}
+	queueURL := awsString(res.QueueUrl)
+	return models.AwsSqsCreateQueueResult{
+		QueueName: queueName,
+		QueueURL:  queueURL,
 	}, nil
 }
 

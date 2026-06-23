@@ -395,6 +395,38 @@ type AwsSqsPeekResult struct {
 	Summary  string          `json:"summary"`
 }
 
+// AwsSqsSendResult is the result of sending a message to a queue.
+type AwsSqsSendResult struct {
+	QueueURL  string `json:"queueUrl"`
+	MessageID string `json:"messageId"`
+	Summary   string `json:"summary"`
+}
+
+// AwsSqsCreateQueueResult is the result of creating a new queue.
+type AwsSqsCreateQueueResult struct {
+	QueueName string `json:"queueName"`
+	QueueURL  string `json:"queueUrl"`
+}
+
+// AwsSnsPublishResult is the result of publishing to an SNS topic.
+type AwsSnsPublishResult struct {
+	TopicArn  string `json:"topicArn"`
+	MessageID string `json:"messageId"`
+	Summary   string `json:"summary"`
+}
+
+// AwsSnsCreateTopicResult is the result of creating an SNS topic.
+type AwsSnsCreateTopicResult struct {
+	TopicName string `json:"topicName"`
+	TopicArn  string `json:"topicArn"`
+}
+
+// AwsDynamoDBWriteResult is the result of a DynamoDB put or delete action.
+type AwsDynamoDBWriteResult struct {
+	TableName string `json:"tableName"`
+	Summary   string `json:"summary"`
+}
+
 // AwsSnsSubscription models an SNS topic subscription.
 type AwsSnsSubscription struct {
 	SubscriptionArn string `json:"subscriptionArn"`

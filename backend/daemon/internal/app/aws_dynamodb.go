@@ -6,9 +6,12 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
+	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
 )
 
@@ -185,4 +188,152 @@ func (s *Service) handleAwsDynamodbSelectTable(ctx context.Context, params json.
 		return nil, err
 	}
 	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "dynamodb", skipAzureInventory: true}, "", "", false)
+}
+
+func (s *Service) activeDynamoDBSelection(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	requestTableName string,
+) (models.ProfileSummary, string, string, error) {
+	if !session.IsLocked || session.CurrentProviderID != "aws" {
+		return models.ProfileSummary{}, "", "", errors.New("open an AWS workspace before using DynamoDB actions")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		return models.ProfileSummary{}, "", "", errors.New("the workspace's AWS profile is not available")
+	}
+	region := session.SelectedDynamoDBRegion
+	if region == "" {
+		region = profileRegionHint(profile)
+	}
+	tableName := strings.TrimSpace(requestTableName)
+	if tableName == "" {
+		tableName = session.SelectedDynamoDBTableName
+	}
+	if tableName == "" {
+		return models.ProfileSummary{}, "", "", errors.New("select a DynamoDB table before using this action")
+	}
+	return profile, region, tableName, nil
+}
+
+func (s *Service) handleAwsDynamodbPutItem(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		TableName string `json:"tableName"`
+		ItemJSON  string `json:"itemJson"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	profile, region, tableName, err := s.activeDynamoDBSelection(snapshot, session, request.TableName)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !effectiveAWSWritesEnabled(session, profile) {
+		s.mu.Unlock()
+		return nil, errors.New("DynamoDB put requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true")
+	}
+	s.mu.Unlock()
+
+	result, err := s.dynamodb.PutItem(ctx, profile, region, tableName, request.ItemJSON)
+	if err != nil {
+		return nil, err
+	}
+	s.invalidateResourceCache(ctx, "aws.dynamodb.tables", profile.ProfileID+"|"+region)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		return nil, err
+	}
+	session.SelectedDynamoDBTableName = tableName
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		return nil, err
+	}
+	workspace, err := s.finishAWSWorkspaceOpts(
+		ctx,
+		snapshot,
+		session,
+		notifier,
+		workspaceSnapshotOptions{awsScope: "dynamodb", skipAzureInventory: true},
+		"success",
+		result.Summary,
+		false,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return workspace, nil
+}
+
+func (s *Service) handleAwsDynamodbDeleteItem(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		TableName string `json:"tableName"`
+		KeyJSON   string `json:"keyJson"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	profile, region, tableName, err := s.activeDynamoDBSelection(snapshot, session, request.TableName)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !effectiveAWSWritesEnabled(session, profile) {
+		s.mu.Unlock()
+		return nil, errors.New("DynamoDB delete requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true")
+	}
+	s.mu.Unlock()
+
+	result, err := s.dynamodb.DeleteItem(ctx, profile, region, tableName, request.KeyJSON)
+	if err != nil {
+		return nil, err
+	}
+	s.invalidateResourceCache(ctx, "aws.dynamodb.tables", profile.ProfileID+"|"+region)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		return nil, err
+	}
+	session.SelectedDynamoDBTableName = tableName
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		return nil, err
+	}
+	workspace, err := s.finishAWSWorkspaceOpts(
+		ctx,
+		snapshot,
+		session,
+		notifier,
+		workspaceSnapshotOptions{awsScope: "dynamodb", skipAzureInventory: true},
+		"success",
+		result.Summary,
+		false,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return workspace, nil
 }

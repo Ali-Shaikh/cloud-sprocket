@@ -1946,6 +1946,22 @@ function handleMockRequest<T>(
         ],
       } as T);
     }
+    case "aws.sqs.sendMessage":
+      return Promise.resolve({
+        queueUrl: String(params.queueUrl ?? ""),
+        messageId: "mock-sent-001",
+        summary: "Sent message mock-sent-001 to the queue.",
+      } as T);
+    case "aws.sqs.createQueue": {
+      const queueName = String(params.queueName ?? "new-queue");
+      mockWorkspaceSQSQueues.push({
+        queueName,
+        queueUrl: `http://localhost:4566/000000000000/${queueName}`,
+      });
+      mockState.session.selectedSqsQueueUrl = `http://localhost:4566/000000000000/${queueName}`;
+      appendLog("success", `Created SQS queue ${queueName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "aws.sns.selectRegion":
       mockState.session.selectedSnsRegion = String(params.region ?? "");
       mockState.session.selectedSnsTopicArn = undefined;
@@ -1954,6 +1970,24 @@ function handleMockRequest<T>(
     case "aws.sns.selectTopic":
       mockState.session.selectedSnsTopicArn = String(params.topicArn ?? "");
       appendLog("info", `Selected SNS topic ${params.topicArn}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.sns.publish":
+      return Promise.resolve({
+        topicArn: String(params.topicArn ?? ""),
+        messageId: "mock-publish-001",
+        summary: "Published message mock-publish-001 to the topic.",
+      } as T);
+    case "aws.sns.createTopic": {
+      const topicName = String(params.topicName ?? "new-topic");
+      const topicArn = `arn:aws:sns:eu-west-1:000000000000:${topicName}`;
+      mockWorkspaceSNSTopics.push({ topicArn, topicName });
+      mockState.session.selectedSnsTopicArn = topicArn;
+      appendLog("success", `Created SNS topic ${topicName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "aws.dynamodb.putItem":
+    case "aws.dynamodb.deleteItem":
+      appendLog("success", String(params.tableName ?? "table") + " updated.");
       return Promise.resolve(buildMockWorkspace() as T);
     case "aws.rds.selectRegion":
       mockState.session.selectedRdsRegion = String(params.region ?? "");

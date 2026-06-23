@@ -107,6 +107,77 @@ func (s *SNSInventory) DescribeTopic(
 	return topic, nil
 }
 
+func (s *SNSInventory) Publish(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	topicArn string,
+	message string,
+) (models.AwsSnsPublishResult, error) {
+	topicArn = strings.TrimSpace(topicArn)
+	message = strings.TrimSpace(message)
+	if topicArn == "" {
+		return models.AwsSnsPublishResult{}, fmt.Errorf("topic ARN is required")
+	}
+	if message == "" {
+		return models.AwsSnsPublishResult{}, fmt.Errorf("message is required")
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := s.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsSnsPublishResult{}, err
+	}
+
+	client := snsClient(cfg, profile)
+	res, err := client.Publish(ctx, &sns.PublishInput{
+		TopicArn: aws.String(topicArn),
+		Message:  aws.String(message),
+	})
+	if err != nil {
+		return models.AwsSnsPublishResult{}, err
+	}
+	messageID := awsString(res.MessageId)
+	return models.AwsSnsPublishResult{
+		TopicArn:  topicArn,
+		MessageID: messageID,
+		Summary:   fmt.Sprintf("Published message %s to the topic.", messageID),
+	}, nil
+}
+
+func (s *SNSInventory) CreateTopic(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	topicName string,
+) (models.AwsSnsCreateTopicResult, error) {
+	topicName = strings.TrimSpace(topicName)
+	if topicName == "" {
+		return models.AwsSnsCreateTopicResult{}, fmt.Errorf("topic name is required")
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := s.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsSnsCreateTopicResult{}, err
+	}
+
+	client := snsClient(cfg, profile)
+	res, err := client.CreateTopic(ctx, &sns.CreateTopicInput{
+		Name: aws.String(topicName),
+	})
+	if err != nil {
+		return models.AwsSnsCreateTopicResult{}, err
+	}
+	topicArn := awsString(res.TopicArn)
+	return models.AwsSnsCreateTopicResult{
+		TopicName: topicName,
+		TopicArn:  topicArn,
+	}, nil
+}
+
 func (s *SNSInventory) loadConfig(
 	ctx context.Context,
 	profile models.ProfileSummary,

@@ -124,6 +124,94 @@ func (d *DynamoDBInventory) scanSampleItems(
 	return items, nil
 }
 
+func (d *DynamoDBInventory) PutItem(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	tableName string,
+	itemJSON string,
+) (models.AwsDynamoDBWriteResult, error) {
+	tableName = strings.TrimSpace(tableName)
+	itemJSON = strings.TrimSpace(itemJSON)
+	if tableName == "" {
+		return models.AwsDynamoDBWriteResult{}, fmt.Errorf("table name is required")
+	}
+	if itemJSON == "" {
+		return models.AwsDynamoDBWriteResult{}, fmt.Errorf("item JSON is required")
+	}
+	var native map[string]any
+	if err := json.Unmarshal([]byte(itemJSON), &native); err != nil {
+		return models.AwsDynamoDBWriteResult{}, fmt.Errorf("item JSON must be a valid object: %w", err)
+	}
+	item, err := attributevalue.MarshalMap(native)
+	if err != nil {
+		return models.AwsDynamoDBWriteResult{}, err
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := d.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsDynamoDBWriteResult{}, err
+	}
+
+	client := dynamodbClient(cfg, profile)
+	if _, err := client.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(tableName),
+		Item:      item,
+	}); err != nil {
+		return models.AwsDynamoDBWriteResult{}, err
+	}
+	return models.AwsDynamoDBWriteResult{
+		TableName: tableName,
+		Summary:   fmt.Sprintf("Put item into table %s.", tableName),
+	}, nil
+}
+
+func (d *DynamoDBInventory) DeleteItem(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	tableName string,
+	keyJSON string,
+) (models.AwsDynamoDBWriteResult, error) {
+	tableName = strings.TrimSpace(tableName)
+	keyJSON = strings.TrimSpace(keyJSON)
+	if tableName == "" {
+		return models.AwsDynamoDBWriteResult{}, fmt.Errorf("table name is required")
+	}
+	if keyJSON == "" {
+		return models.AwsDynamoDBWriteResult{}, fmt.Errorf("key JSON is required")
+	}
+	var native map[string]any
+	if err := json.Unmarshal([]byte(keyJSON), &native); err != nil {
+		return models.AwsDynamoDBWriteResult{}, fmt.Errorf("key JSON must be a valid object: %w", err)
+	}
+	key, err := attributevalue.MarshalMap(native)
+	if err != nil {
+		return models.AwsDynamoDBWriteResult{}, err
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := d.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsDynamoDBWriteResult{}, err
+	}
+
+	client := dynamodbClient(cfg, profile)
+	if _, err := client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName: aws.String(tableName),
+		Key:       key,
+	}); err != nil {
+		return models.AwsDynamoDBWriteResult{}, err
+	}
+	return models.AwsDynamoDBWriteResult{
+		TableName: tableName,
+		Summary:   fmt.Sprintf("Deleted item from table %s.", tableName),
+	}, nil
+}
+
 func (d *DynamoDBInventory) loadConfig(
 	ctx context.Context,
 	profile models.ProfileSummary,
