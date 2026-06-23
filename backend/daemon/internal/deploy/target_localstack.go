@@ -20,7 +20,7 @@ import (
 // other recipes work without editing this list.
 var localStackServices = []string{
 	"apigateway", "apigatewayv2", "cloudformation", "cloudfront", "cloudwatch",
-	"dynamodb", "ec2", "ecr", "ecs", "elbv2", "events", "iam", "kinesis", "kms",
+	"dynamodb", "ec2", "ecr", "ecs", "elasticache", "elbv2", "events", "iam", "kinesis", "kms",
 	"lambda", "logs", "rds", "route53", "s3", "secretsmanager", "sns", "sqs",
 	"ssm", "sts",
 }

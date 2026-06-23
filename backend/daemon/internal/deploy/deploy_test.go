@@ -44,6 +44,7 @@ func TestLocalStackOverrideContent(t *testing.T) {
 		`dynamodb        = "http://localhost:4566"`,
 		`lambda          = "http://localhost:4566"`,
 		`apigatewayv2    = "http://localhost:4566"`,
+		`elasticache     = "http://localhost:4566"`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("override missing %q in:\n%s", want, out)
@@ -112,6 +113,11 @@ func TestEnvLocalVsReal(t *testing.T) {
 	real := e.env(&Deployment{ProviderID: "aws", ProfileID: "prod"})
 	if !contains(real, "AWS_PROFILE=prod") || !contains(real, "AWS_CONFIG_FILE=/home/u/.aws/config") {
 		t.Fatalf("real env = %v", real)
+	}
+	for _, key := range []string{"AWS_ACCESS_KEY_ID=", "AWS_SECRET_ACCESS_KEY=", "AWS_SESSION_TOKEN="} {
+		if !contains(real, key) {
+			t.Fatalf("expected cloud env to clear %q, got %v", key, real)
+		}
 	}
 	azureCloud := e.env(&Deployment{ProviderID: "azure", ProfileID: "sub-001"})
 	if !contains(azureCloud, "ARM_SUBSCRIPTION_ID=sub-001") || !contains(azureCloud, "ARM_USE_CLI=true") {

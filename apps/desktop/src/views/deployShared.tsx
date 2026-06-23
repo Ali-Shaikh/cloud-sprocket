@@ -52,8 +52,18 @@ export function isFlociAzureProfile(profile: ProfileSummary): boolean {
   );
 }
 
+export function manifestCloudOnly(manifest: RecipeManifest, providerId: string): boolean {
+  if (!(manifest.providers ?? []).includes(providerId)) return false;
+  if ((manifest.local?.runtimes ?? []).length > 0) return false;
+  return !manifest.local?.emulator;
+}
+
 export function manifestCloudOnlyAzure(manifest: RecipeManifest): boolean {
-  return (manifest.providers ?? []).includes("azure") && (manifest.local?.runtimes ?? []).length === 0;
+  return manifestCloudOnly(manifest, "azure");
+}
+
+export function manifestCloudOnlyAWS(manifest: RecipeManifest): boolean {
+  return manifestCloudOnly(manifest, "aws");
 }
 
 export function CopyButton({ value }: { value: string }) {

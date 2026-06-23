@@ -38,6 +38,7 @@ import { RecipeCard } from "./deployRecipeCard";
 import {
   coerceValues,
   isFlociAzureProfile,
+  manifestCloudOnlyAzure,
   SCENARIO_TAGS,
   seedValues,
   StatusBadge,
@@ -103,10 +104,10 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
         ? declaredRuntimes
         : legacyEmulator
           ? [{ id: legacyEmulator, requiresPro: recipe?.manifest.local?.requiresPro }]
-          : [{ id: "localstack" }];
+          : [];
 
     const options: TargetOption[] = [];
-    const cloudOnlyAzure = providers.has("azure") && declaredRuntimes.length === 0;
+    const cloudOnlyAzure = recipe ? manifestCloudOnlyAzure(recipe.manifest) : false;
     for (const providerId of providers) {
       if (providerId !== "aws" && providerId !== "azure") continue;
       for (const runtime of runtimes) {
@@ -169,13 +170,9 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
           ? declaredRuntimes
           : legacyEmulator
             ? [{ id: legacyEmulator }]
-            : providers.includes("aws")
-              ? [{ id: "localstack" }]
-              : [];
+            : [];
       if (localRuntimes.length > 0) {
-        const defaultRuntime =
-          providers.includes("aws") ? (localRuntimes[0]?.id ?? "localstack") : (localRuntimes[0]?.id ?? "floci-az");
-        setTarget(`local:${defaultRuntime}`);
+        setTarget(`local:${localRuntimes[0]?.id ?? "localstack"}`);
       } else {
         const profile = profiles.find(
           (candidate) =>

@@ -122,6 +122,29 @@ func TestPreflightRejectsMagentoAzureOnFlociLocal(t *testing.T) {
 	}
 }
 
+func TestPreflightRejectsMagentoAWSOnLocalStack(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	e := NewEngine(tofu.NewRunner("tofu"), config.Settings{}, recipes.Bundled())
+	e.registry.SetOptions(TargetOptions{LocalStackEndpoint: server.URL})
+
+	err := e.Preflight(context.Background(), &Deployment{
+		ProviderID: "aws",
+		RecipeID:   "magento-commerce-aws",
+		Local:      true,
+		RuntimeID:  "localstack",
+	})
+	if err == nil {
+		t.Fatal("expected magento-commerce-aws on localstack to fail preflight")
+	}
+	if !strings.Contains(err.Error(), "does not support a local LocalStack dry-run") {
+		t.Fatalf("expected recipe compat message, got %q", err)
+	}
+}
+
 func TestPreflightAWSProfileFromConfigFile(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config")

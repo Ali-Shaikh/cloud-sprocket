@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ProfileSummary, RecipeManifest } from "@/types/backend";
 
-import { isFlociAzureProfile, manifestCloudOnlyAzure } from "./deployShared";
+import { isFlociAzureProfile, manifestCloudOnlyAWS, manifestCloudOnlyAzure } from "./deployShared";
 
 describe("deployShared helpers", () => {
   it("detects the floci-az local Azure profile", () => {
@@ -32,5 +32,18 @@ describe("deployShared helpers", () => {
       providers: ["azure"],
     };
     expect(manifestCloudOnlyAzure(manifest)).toBe(true);
+  });
+
+  it("treats cloud-only AWS recipes as requiring a real AWS profile", () => {
+    const manifest: RecipeManifest = {
+      apiVersion: "cloudsprocket.recipe/v1",
+      id: "magento-commerce-aws",
+      version: "0.1.0",
+      name: "Magento commerce (AWS)",
+      engine: { type: "opentofu", minVersion: "1.6.0" },
+      local: { runtimes: [] },
+      providers: ["aws"],
+    };
+    expect(manifestCloudOnlyAWS(manifest)).toBe(true);
   });
 });

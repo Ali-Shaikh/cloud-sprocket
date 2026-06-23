@@ -82,7 +82,12 @@ func TestStubTargetRegistersWithoutEngineEdits(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, overrideFile)); err == nil {
 		t.Fatal("stub target should not write a LocalStack override file")
 	}
-	if err := engine.Preflight(context.Background(), deployment); err != nil {
+	// Recipe compat is tested elsewhere; here we only verify a registered stub target preflights.
+	if err := engine.Preflight(context.Background(), &Deployment{
+		ProviderID: deployment.ProviderID,
+		Local:      deployment.Local,
+		RuntimeID:  deployment.RuntimeID,
+	}); err != nil {
 		t.Fatalf("stub preflight should be no-op: %v", err)
 	}
 	if label := engine.TargetLabel(deployment); label != "Docker Compose" {

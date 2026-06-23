@@ -25,10 +25,15 @@ func (t *awsCloudTarget) Label(deployment *Deployment) string {
 }
 
 func (t *awsCloudTarget) Env(deployment *Deployment, settings config.Settings) []string {
+	// Clear static session env vars so the selected profile wins over any shell
+	// credentials left over from a LocalStack dry-run.
 	return []string{
 		"AWS_PROFILE=" + deployment.ProfileID,
 		"AWS_CONFIG_FILE=" + settings.AWSConfigPath,
 		"AWS_SHARED_CREDENTIALS_FILE=" + settings.AWSCredentialsPath,
+		"AWS_ACCESS_KEY_ID=",
+		"AWS_SECRET_ACCESS_KEY=",
+		"AWS_SESSION_TOKEN=",
 	}
 }
 

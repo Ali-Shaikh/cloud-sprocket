@@ -20,7 +20,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { SectionHeader } from "@/components/section-header";
 import type { Recipe, RecipeVariable } from "@/types/backend";
 
-import { groupVariables, manifestCloudOnlyAzure, manifestRequiresPro, type TargetOption } from "./deployShared";
+import {
+  groupVariables,
+  manifestCloudOnlyAWS,
+  manifestCloudOnlyAzure,
+  manifestRequiresPro,
+  type TargetOption,
+} from "./deployShared";
 
 export function ConfigureRecipe({
   recipe,
@@ -65,6 +71,14 @@ export function ConfigureRecipe({
           <Crown className="size-4 shrink-0" />
           Cloud Azure subscription required. floci-az cannot dry-run this recipe; pick a subscription where your
           account can create resource groups.
+        </Card>
+      )}
+
+      {manifestCloudOnlyAWS(recipe.manifest) && (
+        <Card className="flex items-center gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-400">
+          <Crown className="size-4 shrink-0" />
+          Real AWS account required. LocalStack cannot dry-run ECS, RDS, and ElastiCache for this recipe; pick an AWS
+          profile with permissions to create VPC, ECS, RDS, and ElastiCache resources.
         </Card>
       )}
 
