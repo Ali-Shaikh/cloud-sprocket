@@ -67,6 +67,9 @@ variableGroups:
       - name: db_instance_class
         widget: text
         help: RDS instance class (for example db.t3.micro).
+      - name: redis_node_type
+        widget: text
+        help: ElastiCache node type (for example cache.t3.micro).
   - title: Advanced
     variables:
       - name: tags

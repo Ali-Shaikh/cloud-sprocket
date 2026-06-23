@@ -293,6 +293,9 @@ func TestLoadMagentoAWSRecipe(t *testing.T) {
 	if got := byName["magento_image"]; got.Default != "bitnamilegacy/magento:2.4.6" {
 		t.Fatalf("magento_image default = %+v", got.Default)
 	}
+	if got := byName["redis_node_type"]; got.Default != "cache.t3.micro" {
+		t.Fatalf("redis_node_type default = %+v", got.Default)
+	}
 	primary := map[string]bool{}
 	for _, output := range recipe.Outputs {
 		primary[output.Name] = output.Primary

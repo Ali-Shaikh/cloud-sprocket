@@ -53,6 +53,12 @@ variable "db_instance_class" {
   default     = "db.t3.micro"
 }
 
+variable "redis_node_type" {
+  type        = string
+  description = "ElastiCache node type for Redis."
+  default     = "cache.t3.micro"
+}
+
 variable "tags" {
   type        = map(string)
   description = "Extra tags applied to every resource."

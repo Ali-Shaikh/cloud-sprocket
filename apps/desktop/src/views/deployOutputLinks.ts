@@ -57,6 +57,9 @@ function recipeDefaultAppName(recipeId: string): string {
     case "python-api-postgres-serverless-aws":
     case "api-dynamodb-serverless-aws":
       return "myapi";
+    case "magento-commerce-aws":
+    case "magento-commerce-compose":
+      return "magento";
     default:
       return "myapp";
   }
