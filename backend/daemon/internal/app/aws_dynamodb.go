@@ -251,16 +251,21 @@ func (s *Service) handleAwsDynamodbPutItem(ctx context.Context, params json.RawM
 	}
 	s.invalidateResourceCache(ctx, "aws.dynamodb.tables", profile.ProfileID+"|"+region)
 
+	// Reconcile the session under the lock, then release it before building the
+	// workspace snapshot: that build runs slow AWS/Docker probes that must not
+	// block session polling (the same contract as handleWorkspaceGet).
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	session, err = s.currentState(ctx, snapshot)
 	if err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
 	session.SelectedDynamoDBTableName = tableName
 	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
+	s.mu.Unlock()
 	workspace, err := s.finishAWSWorkspaceOpts(
 		ctx,
 		snapshot,
@@ -312,16 +317,21 @@ func (s *Service) handleAwsDynamodbDeleteItem(ctx context.Context, params json.R
 	}
 	s.invalidateResourceCache(ctx, "aws.dynamodb.tables", profile.ProfileID+"|"+region)
 
+	// Reconcile the session under the lock, then release it before building the
+	// workspace snapshot: that build runs slow AWS/Docker probes that must not
+	// block session polling (the same contract as handleWorkspaceGet).
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	session, err = s.currentState(ctx, snapshot)
 	if err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
 	session.SelectedDynamoDBTableName = tableName
 	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
+	s.mu.Unlock()
 	workspace, err := s.finishAWSWorkspaceOpts(
 		ctx,
 		snapshot,

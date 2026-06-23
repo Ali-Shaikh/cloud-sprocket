@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
@@ -178,6 +178,54 @@ describe("SQSView", () => {
     expect(onSelectQueue).toHaveBeenCalledWith(
       "http://localhost:4566/000000000000/cloudsprocket-events",
     );
+  });
+
+  it("sends a message to the selected queue through the send dialog", () => {
+    const { onSendMessage } = renderSQSView();
+
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Send message" }));
+
+    expect(onSendMessage).toHaveBeenCalledWith(
+      "http://localhost:4566/000000000000/process-order",
+      expect.stringContaining("event"),
+    );
+  });
+
+  it("creates a queue through the create dialog", () => {
+    const { onCreateQueue } = renderSQSView();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create queue" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.change(within(dialog).getByPlaceholderText("queue-name"), {
+      target: { value: "new-orders" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create queue" }));
+
+    expect(onCreateQueue).toHaveBeenCalledWith("new-orders");
+  });
+
+  it("hides write actions when write mode is off", () => {
+    render(
+      <ThemeProvider>
+        <SQSView
+          workspace={{ ...workspaceFixture, awsWritesEnabled: false }}
+          actionStatus=""
+          peekResult={null}
+          peekInFlight={false}
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectQueue={vi.fn()}
+          onPeek={vi.fn()}
+          onSendMessage={vi.fn()}
+          onCreateQueue={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    expect(screen.queryByRole("button", { name: "Send message" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create queue" })).not.toBeInTheDocument();
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {

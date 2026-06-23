@@ -316,16 +316,21 @@ func (s *Service) handleAwsSqsCreateQueue(ctx context.Context, params json.RawMe
 	}
 	s.invalidateResourceCache(ctx, "aws.sqs.queues", profile.ProfileID+"|"+region)
 
+	// Reconcile the session under the lock, then release it before building the
+	// workspace snapshot: that build runs slow AWS/Docker probes that must not
+	// block session polling (the same contract as handleWorkspaceGet).
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	session, err = s.currentState(ctx, snapshot)
 	if err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
 	session.SelectedSQSQueueURL = created.QueueURL
 	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
+	s.mu.Unlock()
 	return s.finishAWSWorkspaceOpts(
 		ctx,
 		snapshot,

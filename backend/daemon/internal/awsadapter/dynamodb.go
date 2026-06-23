@@ -251,11 +251,11 @@ func dynamoTableSummary(table *types.TableDescription) models.AwsDynamoDBTable {
 	if table.TableSizeBytes != nil {
 		summary.TableSizeBytes = *table.TableSizeBytes
 	}
-	hashKey, rangeKey := keyNamesFromSchema(table.KeySchema, table.AttributeDefinitions)
+	hashKey, rangeKey := keyNamesFromSchema(table.KeySchema)
 	summary.HashKey = hashKey
 	summary.RangeKey = rangeKey
 	for _, gsi := range table.GlobalSecondaryIndexes {
-		gsiHash, gsiRange := keyNamesFromSchema(gsi.KeySchema, table.AttributeDefinitions)
+		gsiHash, gsiRange := keyNamesFromSchema(gsi.KeySchema)
 		summary.GlobalSecondaryIndexes = append(summary.GlobalSecondaryIndexes, models.AwsDynamoDBGlobalSecondaryIndex{
 			IndexName: awsString(gsi.IndexName),
 			HashKey:   gsiHash,
@@ -269,14 +269,7 @@ func dynamoTableSummary(table *types.TableDescription) models.AwsDynamoDBTable {
 	return summary
 }
 
-func keyNamesFromSchema(
-	keySchema []types.KeySchemaElement,
-	attributeDefinitions []types.AttributeDefinition,
-) (string, string) {
-	attrNames := map[string]string{}
-	for _, attr := range attributeDefinitions {
-		attrNames[awsString(attr.AttributeName)] = awsString(attr.AttributeName)
-	}
+func keyNamesFromSchema(keySchema []types.KeySchemaElement) (string, string) {
 	var hashKey string
 	var rangeKey string
 	for _, key := range keySchema {
@@ -287,7 +280,6 @@ func keyNamesFromSchema(
 		if key.KeyType == types.KeyTypeRange {
 			rangeKey = name
 		}
-		_ = attrNames
 	}
 	return hashKey, rangeKey
 }
