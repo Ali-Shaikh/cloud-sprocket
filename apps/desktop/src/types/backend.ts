@@ -981,6 +981,11 @@ export interface RecipeManifest {
   imageBuild?: RecipeImageBuild;
 }
 
+export interface RecipeVisibleWhen {
+  variable: string;
+  equals: string;
+}
+
 export interface RecipeVariable {
   name: string;
   type: string;
@@ -992,6 +997,7 @@ export interface RecipeVariable {
   widget: string;
   options?: string[];
   help?: string;
+  visibleWhen?: RecipeVisibleWhen;
 }
 
 export interface RecipeOutputSpec {

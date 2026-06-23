@@ -141,6 +141,7 @@ func mergeVariables(module *tfconfig.Module, manifest Manifest) []Variable {
 		if hint, ok := hints[name]; ok {
 			variable.Options = hint.Options
 			variable.Help = hint.Help
+			variable.VisibleWhen = hint.VisibleWhen
 			if hint.Widget != "" {
 				variable.Widget = hint.Widget
 			}

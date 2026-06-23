@@ -72,12 +72,19 @@ type BuildStep struct {
 	ContinueOnError bool `yaml:"continueOnError" json:"continueOnError,omitempty"`
 }
 
+// VisibleWhen gates a form field until another variable equals a value.
+type VisibleWhen struct {
+	Variable string `yaml:"variable" json:"variable"`
+	Equals   string `yaml:"equals" json:"equals"`
+}
+
 // VariableHint layers UI metadata over a Terraform variable block.
 type VariableHint struct {
-	Name    string   `yaml:"name" json:"name"`
-	Widget  string   `yaml:"widget" json:"widget,omitempty"`
-	Options []string `yaml:"options" json:"options,omitempty"`
-	Help    string   `yaml:"help" json:"help,omitempty"`
+	Name        string       `yaml:"name" json:"name"`
+	Widget      string       `yaml:"widget" json:"widget,omitempty"`
+	Options     []string     `yaml:"options" json:"options,omitempty"`
+	Help        string       `yaml:"help" json:"help,omitempty"`
+	VisibleWhen *VisibleWhen `yaml:"visibleWhen" json:"visibleWhen,omitempty"`
 }
 
 // VariableGroup groups and orders variables for the generated form.
@@ -142,8 +149,9 @@ type Variable struct {
 	Sensitive   bool     `json:"sensitive,omitempty"`
 	Group       string   `json:"group"`
 	Widget      string   `json:"widget"`
-	Options     []string `json:"options,omitempty"`
-	Help        string   `json:"help,omitempty"`
+	Options     []string     `json:"options,omitempty"`
+	Help        string       `json:"help,omitempty"`
+	VisibleWhen *VisibleWhen `json:"visibleWhen,omitempty"`
 }
 
 // Output is a recipe output merged with its manifest hint.

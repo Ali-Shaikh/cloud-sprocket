@@ -327,21 +327,36 @@ func TestLoadMagentoComposeRecipe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
+	if recipe.Manifest.Version != "0.2.0" {
+		t.Fatalf("version = %q, want 0.2.0", recipe.Manifest.Version)
+	}
 	if len(recipe.Manifest.Local.Runtimes) != 1 || recipe.Manifest.Local.Runtimes[0].ID != "magento-compose" {
 		t.Fatalf("runtimes = %+v, want magento-compose", recipe.Manifest.Local.Runtimes)
 	}
-	if len(recipe.Manifest.PostApply) != 1 {
-		t.Fatalf("expected one postApply step, got %+v", recipe.Manifest.PostApply)
+	if len(recipe.Manifest.PostApply) != 2 {
+		t.Fatalf("expected two postApply steps, got %+v", recipe.Manifest.PostApply)
 	}
 	if got := recipe.Manifest.PostApply[0]; got.DirVar != "compose_dir" || got.Requires != "docker-compose.yml" {
-		t.Fatalf("postApply step = %+v", got)
+		t.Fatalf("postApply start step = %+v", got)
+	}
+	if got := recipe.Manifest.PostApply[1]; got.Requires != "scripts/setup-official.sh" {
+		t.Fatalf("postApply install step = %+v", got)
 	}
 	byName := map[string]Variable{}
 	for _, v := range recipe.Variables {
 		byName[v.Name] = v
 	}
-	if got := byName["compose_dir"]; got.Default != "compose" {
+	if got := byName["compose_dir"]; got.Default != "compose/simple" {
 		t.Fatalf("compose_dir default = %+v", got.Default)
+	}
+	if got := byName["stack_profile"]; got.Default != "simple" || len(got.Options) != 2 {
+		t.Fatalf("stack_profile = %+v", got)
+	}
+	if got := byName["magento_public_key"]; got.VisibleWhen == nil || got.VisibleWhen.Equals != "official" {
+		t.Fatalf("magento_public_key visibleWhen = %+v", got.VisibleWhen)
+	}
+	if got := byName["magento_image_channel"]; got.VisibleWhen == nil || got.VisibleWhen.Equals != "simple" {
+		t.Fatalf("magento_image_channel visibleWhen = %+v", got.VisibleWhen)
 	}
 	primary := map[string]bool{}
 	for _, output := range recipe.Outputs {
@@ -351,18 +366,33 @@ func TestLoadMagentoComposeRecipe(t *testing.T) {
 		t.Fatalf("expected primary storefront_url output, got %+v", primary)
 	}
 
-	composeYAML, err := fsReadRecipeFile("magento-commerce-compose", filepath.Join("compose", "docker-compose.yml"))
+	simpleYAML, err := fsReadRecipeFile("magento-commerce-compose", filepath.Join("compose", "simple", "docker-compose.yml"))
 	if err != nil {
-		t.Fatalf("read compose file: %v", err)
+		t.Fatalf("read simple compose file: %v", err)
 	}
 	for _, want := range []string{
 		"mariadb:11.4",
 		"redis:7.4-alpine",
-		"bitnamilegacy/magento-archived:2.4.7",
-		"127.0.0.1:8080:8080",
+		"shinsenter/magento:${MAGENTO_IMAGE_TAG",
+		"127.0.0.1:8080:80",
 	} {
-		if !strings.Contains(composeYAML, want) {
-			t.Fatalf("compose file missing %q", want)
+		if !strings.Contains(simpleYAML, want) {
+			t.Fatalf("simple compose file missing %q", want)
+		}
+	}
+
+	officialYAML, err := fsReadRecipeFile("magento-commerce-compose", filepath.Join("compose", "official", "docker-compose.yml"))
+	if err != nil {
+		t.Fatalf("read official compose file: %v", err)
+	}
+	for _, want := range []string{
+		"markoshust/magento-nginx",
+		"markoshust/magento-php",
+		"markoshust/magento-opensearch",
+		"markoshust/magento-rabbitmq",
+	} {
+		if !strings.Contains(officialYAML, want) {
+			t.Fatalf("official compose file missing %q", want)
 		}
 	}
 }

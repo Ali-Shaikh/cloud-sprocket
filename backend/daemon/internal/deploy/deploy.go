@@ -211,6 +211,11 @@ func (e *Engine) Prepare(deployment *Deployment) error {
 			return fmt.Errorf("write provider overrides: %w", err)
 		}
 	}
+	if deployment.RecipeID == magentoComposeRecipeID {
+		if err := renderMagentoComposeWorkspace(dir, deployment.Variables); err != nil {
+			return fmt.Errorf("render magento compose workspace: %w", err)
+		}
+	}
 	return nil
 }
 

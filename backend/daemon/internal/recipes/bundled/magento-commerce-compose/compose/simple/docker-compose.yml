@@ -21,18 +21,20 @@ services:
       - redis-data:/data
 
   magento:
-    image: docker.io/bitnamilegacy/magento-archived:2.4.7
+    image: docker.io/shinsenter/magento:${MAGENTO_IMAGE_TAG:-latest}
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8080:80"
     environment:
-      MAGENTO_BASE_URL: http://localhost:8080
-      MAGENTO_DATABASE_HOST: mariadb
-      MAGENTO_DATABASE_PORT_NUMBER: "3306"
-      MAGENTO_DATABASE_USER: magento
-      MAGENTO_DATABASE_PASSWORD: magento-secret
-      MAGENTO_DATABASE_NAME: magento
-      MAGENTO_REDIS_HOST: redis
-      MAGENTO_REDIS_PORT_NUMBER: "6379"
+      APP_URL: ${MAGENTO_BASE_URL:-http://localhost:8080}
+      DB_HOST: mariadb
+      DB_PORT: "3306"
+      DB_DATABASE: magento
+      DB_USER: magento
+      DB_PASSWORD: magento-secret
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    volumes:
+      - magento-data:/var/www/html
     depends_on:
       mariadb:
         condition: service_healthy
@@ -42,3 +44,4 @@ services:
 volumes:
   mariadb-data:
   redis-data:
+  magento-data:

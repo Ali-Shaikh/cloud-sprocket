@@ -7,3 +7,8 @@ output "compose_project" {
   description = "Logical Compose project name recorded for this deployment."
   value       = local.name
 }
+
+output "stack_profile" {
+  description = "Selected Magento Compose stack profile."
+  value       = var.stack_profile
+}

@@ -1,16 +1,17 @@
 apiVersion: cloudsprocket.recipe/v1
 id: magento-commerce-compose
 kind: app-deploy
-version: 0.1.0
+version: 0.2.0
 name: Magento commerce (Docker Compose)
-summary: Magento 2 on your machine with MariaDB, Redis, and Docker Compose.
+summary: Magento 2 locally with a simple shinsenter stack or a full official Adobe OSS stack.
 description: |
-  Runs a local Magento stack using Docker Compose: MariaDB 11.4, Redis 7.4, and
-  a Magento 2.4.7 container on http://localhost:8080. OpenTofu records deployment
-  metadata only; containers start in a post-apply step after apply succeeds.
+  Runs Magento on your machine with Docker Compose. Pick a stack profile:
 
+  - **Simple** — shinsenter/magento with MariaDB and Redis (~5–10 minutes first boot, ~4 GB Docker RAM).
+  - **Official** — Mark Shust-style Adobe Magento Open Source via Composer with OpenSearch and RabbitMQ (~15–25 minutes first boot, ~6 GB Docker RAM, Adobe Marketplace keys required).
+
+  OpenTofu records deployment metadata only; containers start in post-apply steps after apply succeeds.
   Requires Docker Desktop (or another Docker engine) with the Compose plugin.
-  First boot can take several minutes whilst Magento initialises the database.
 providers:
   - aws
 tags:
@@ -31,6 +32,10 @@ postApply:
     dirVar: compose_dir
     requires: docker-compose.yml
     command: ["docker", "compose", "up", "-d"]
+  - name: Install Magento (official)
+    dirVar: compose_dir
+    requires: scripts/setup-official.sh
+    command: ["bash", "scripts/setup-official.sh"]
 variableGroups:
   - title: Application
     variables:
@@ -40,15 +45,65 @@ variableGroups:
       - name: environment
         widget: select
         options: [dev, staging, prod]
-  - title: Magento storefront
+  - title: Stack profile
     variables:
+      - name: stack_profile
+        widget: select
+        options: [simple, official]
+        help: Simple uses the shinsenter auto-installer. Official installs Adobe Magento Open Source via Composer.
+      - name: magento_image_channel
+        widget: select
+        options: [latest, stable]
+        visibleWhen:
+          variable: stack_profile
+          equals: simple
+        help: |
+          latest — newest upstream shinsenter build (may change daily).
+          stable — pinned tag you control: docker pull shinsenter/magento:latest && docker tag shinsenter/magento:latest shinsenter/magento:stable
       - name: magento_base_url
         widget: text
         help: Public base URL for the shop. Defaults to the local Compose port.
-      - name: compose_dir
+  - title: Adobe Marketplace
+    variables:
+      - name: magento_public_key
         widget: text
-        help: Folder under the deployment workspace containing docker-compose.yml.
+        visibleWhen:
+          variable: stack_profile
+          equals: official
+        help: Public key from Adobe Marketplace → Access Keys.
+      - name: magento_private_key
+        widget: password
+        visibleWhen:
+          variable: stack_profile
+          equals: official
+        help: Private key from Adobe Marketplace → Access Keys.
+  - title: Store admin
+    variables:
+      - name: magento_admin_user
+        widget: text
+        visibleWhen:
+          variable: stack_profile
+          equals: official
+      - name: magento_admin_password
+        widget: password
+        visibleWhen:
+          variable: stack_profile
+          equals: official
+      - name: magento_admin_email
+        widget: text
+        visibleWhen:
+          variable: stack_profile
+          equals: official
+  - title: Developer options
+    variables:
+      - name: expose_debug_ports
+        widget: switch
+        visibleWhen:
+          variable: stack_profile
+          equals: official
+        help: Expose MariaDB (3306), OpenSearch (9200), and RabbitMQ UI (15672) on 127.0.0.1. Off by default.
 outputs:
   - name: storefront_url
     primary: true
   - name: compose_project
+  - name: stack_profile

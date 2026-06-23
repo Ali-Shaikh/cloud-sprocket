@@ -25,8 +25,23 @@ func (t *magentoComposeTarget) Label(_ *Deployment) string { return "Magento (Do
 
 func (t *magentoComposeTarget) Env(_ *Deployment, _ config.Settings) []string { return nil }
 
-func (t *magentoComposeTarget) Preflight(ctx context.Context, _ *Deployment, _ config.Settings, _ TargetOptions) error {
-	return t.runner.ComposeVersion(ctx)
+func (t *magentoComposeTarget) Preflight(ctx context.Context, deployment *Deployment, _ config.Settings, _ TargetOptions) error {
+	if err := t.runner.ComposeVersion(ctx); err != nil {
+		return err
+	}
+	if deployment == nil {
+		return nil
+	}
+	profile := magentoStringVar(deployment.Variables, "stack_profile", "simple")
+	if profile == "official" {
+		publicKey := magentoStringVar(deployment.Variables, "magento_public_key", "")
+		privateKey := magentoStringVar(deployment.Variables, "magento_private_key", "")
+		if publicKey == "" || privateKey == "" {
+			// Install step fails with a clear message; preflight stays non-blocking so keys can be added later.
+			return nil
+		}
+	}
+	return nil
 }
 
 func (t *magentoComposeTarget) WriteOverrides(_ string, _ *Deployment, _ TargetOptions) error {

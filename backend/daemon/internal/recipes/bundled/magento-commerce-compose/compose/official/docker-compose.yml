@@ -1,0 +1,55 @@
+services:
+  app:
+    image: markoshust/magento-nginx:1.28-0
+    ports:
+      - "127.0.0.1:8080:8000"
+      - "127.0.0.1:8443:8443"
+    volumes: &appvolumes
+      - appdata:/var/www/html
+      - sockdata:/sock
+      - ssldata:/etc/nginx/certs
+
+  phpfpm:
+    image: markoshust/magento-php:8.4-fpm-2
+    volumes: *appvolumes
+    env_file: env/phpfpm.env
+
+  db:
+    image: mariadb:11.4
+    command:
+      --max_allowed_packet=64M
+      --optimizer_use_condition_selectivity=1
+      --optimizer_switch="rowid_filter=off"
+      --log_bin_trust_function_creators=1
+    env_file: env/db.env
+    volumes:
+      - dbdata:/var/lib/mysql
+
+  redis:
+    image: valkey/valkey:8.1-alpine
+
+  opensearch:
+    image: markoshust/magento-opensearch:3-0
+    env_file: env/opensearch.env
+    environment:
+      - discovery.type=single-node
+      - cluster.routing.allocation.disk.threshold_enabled=false
+      - index.blocks.read_only_allow_delete
+
+  rabbitmq:
+    image: markoshust/magento-rabbitmq:4.2-0
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    env_file: env/rabbitmq.env
+
+  mailcatcher:
+    image: sj26/mailcatcher:v0.10.0
+    ports:
+      - "127.0.0.1:1080:1080"
+
+volumes:
+  appdata:
+  dbdata:
+  rabbitmqdata:
+  sockdata:
+  ssldata:

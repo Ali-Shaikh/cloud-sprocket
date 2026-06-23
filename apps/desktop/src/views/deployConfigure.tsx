@@ -22,6 +22,8 @@ import type { Recipe, RecipeVariable } from "@/types/backend";
 
 import {
   groupVariables,
+  MAGENTO_COMPOSE_RECIPE_ID,
+  magentoComposePlanWarnings,
   manifestCloudOnlyAWS,
   manifestCloudOnlyAzure,
   manifestRequiresPro,
@@ -49,7 +51,11 @@ export function ConfigureRecipe({
   onBack: () => void;
   onPlan: () => void;
 }) {
-  const groups = useMemo(() => groupVariables(recipe.variables), [recipe.variables]);
+  const groups = useMemo(() => groupVariables(recipe.variables, values), [recipe.variables, values]);
+  const planWarnings = useMemo(
+    () => magentoComposePlanWarnings(recipe.manifest.id, values),
+    [recipe.manifest.id, values],
+  );
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
@@ -86,6 +92,33 @@ export function ConfigureRecipe({
         <Card className="border-sky-500/30 bg-sky-500/5 p-3 text-sm text-muted-foreground">
           Set <span className="font-medium text-foreground">dockerfile_dir</span> to build from your Dockerfile before
           plan. On real AWS the image is pushed to ECR automatically; locally the built tag is used for ECS.
+        </Card>
+      )}
+
+      {recipe.manifest.id === MAGENTO_COMPOSE_RECIPE_ID && values.stack_profile === "simple" && (
+        <Card className="border-sky-500/30 bg-sky-500/5 p-3 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Simple stack</span> — shinsenter auto-installs Magento into a
+          Docker volume on first boot (~5–10 minutes, ~4 GB Docker RAM). Use{" "}
+          <span className="font-medium text-foreground">latest</span> for the newest build, or{" "}
+          <span className="font-medium text-foreground">stable</span> after tagging a pinned image locally.
+        </Card>
+      )}
+
+      {recipe.manifest.id === MAGENTO_COMPOSE_RECIPE_ID && values.stack_profile === "official" && (
+        <Card className="border-sky-500/30 bg-sky-500/5 p-3 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Official stack</span> — installs Adobe Magento Open Source via
+          Composer using markshust/docker-magento defaults (community / 2.4.9). First boot ~15–25 minutes, ~6 GB Docker
+          RAM. Adobe Marketplace keys are required.
+        </Card>
+      )}
+
+      {planWarnings.length > 0 && (
+        <Card className="border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-800 dark:text-amber-300">
+          <ul className="list-disc space-y-1 pl-5">
+            {planWarnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
         </Card>
       )}
 

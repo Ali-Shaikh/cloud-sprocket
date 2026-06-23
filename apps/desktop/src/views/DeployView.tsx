@@ -38,7 +38,10 @@ import { RecipeCard } from "./deployRecipeCard";
 import {
   coerceValues,
   isFlociAzureProfile,
+  MAGENTO_COMPOSE_RECIPE_ID,
+  magentoComposeDir,
   manifestCloudOnlyAzure,
+  normaliseMagentoComposeValues,
   SCENARIO_TAGS,
   seedValues,
   StatusBadge,
@@ -161,7 +164,10 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
     try {
       const loaded = await getRecipe(id);
       setRecipe(loaded);
-      setValues(seedValues(loaded.variables));
+      const seeded = seedValues(loaded.variables);
+      setValues(
+        loaded.manifest.id === MAGENTO_COMPOSE_RECIPE_ID ? normaliseMagentoComposeValues(seeded) : seeded,
+      );
       const providers = loaded.manifest.providers ?? ["aws"];
       const declaredRuntimes = loaded.manifest.local?.runtimes ?? [];
       const legacyEmulator = loaded.manifest.local?.emulator;
@@ -306,7 +312,15 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
       <ConfigureRecipe
         recipe={recipe}
         values={values}
-        onChange={(name, value) => setValues((current) => ({ ...current, [name]: value }))}
+        onChange={(name, value) =>
+          setValues((current) => {
+            const next = { ...current, [name]: value };
+            if (recipe.manifest.id === MAGENTO_COMPOSE_RECIPE_ID && name === "stack_profile") {
+              next.compose_dir = magentoComposeDir(value);
+            }
+            return next;
+          })
+        }
         target={target}
         targetOptions={targetOptions}
         onTargetChange={setTarget}

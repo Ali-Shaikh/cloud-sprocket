@@ -5,7 +5,18 @@ import { describe, expect, it } from "vitest";
 
 import type { ProfileSummary, RecipeManifest } from "@/types/backend";
 
-import { isFlociAzureProfile, manifestCloudOnlyAWS, manifestCloudOnlyAzure } from "./deployShared";
+import type { RecipeVariable } from "@/types/backend";
+
+import {
+  groupVariables,
+  isFlociAzureProfile,
+  isVariableVisible,
+  magentoComposeDir,
+  magentoComposePlanWarnings,
+  manifestCloudOnlyAWS,
+  manifestCloudOnlyAzure,
+  normaliseMagentoComposeValues,
+} from "./deployShared";
 
 describe("deployShared helpers", () => {
   it("detects the floci-az local Azure profile", () => {
@@ -45,5 +56,46 @@ describe("deployShared helpers", () => {
       providers: ["aws"],
     };
     expect(manifestCloudOnlyAWS(manifest)).toBe(true);
+  });
+
+  it("filters variables with visibleWhen", () => {
+    const variables: RecipeVariable[] = [
+      {
+        name: "stack_profile",
+        type: "string",
+        required: false,
+        group: "Stack",
+        widget: "select",
+        options: ["simple", "official"],
+      },
+      {
+        name: "magento_public_key",
+        type: "string",
+        required: false,
+        group: "Keys",
+        widget: "text",
+        visibleWhen: { variable: "stack_profile", equals: "official" },
+      },
+    ];
+    expect(isVariableVisible(variables[1], { stack_profile: "simple" })).toBe(false);
+    expect(isVariableVisible(variables[1], { stack_profile: "official" })).toBe(true);
+    expect(groupVariables(variables, { stack_profile: "simple" }).map((g) => g.variables.map((v) => v.name))).toEqual([
+      ["stack_profile"],
+    ]);
+  });
+
+  it("derives magento compose_dir from stack profile", () => {
+    expect(magentoComposeDir("simple")).toBe("compose/simple");
+    expect(magentoComposeDir("official")).toBe("compose/official");
+    expect(normaliseMagentoComposeValues({ stack_profile: "official" }).compose_dir).toBe("compose/official");
+  });
+
+  it("warns when official magento keys are missing", () => {
+    const warnings = magentoComposePlanWarnings("magento-commerce-compose", {
+      stack_profile: "official",
+      magento_public_key: "",
+      magento_private_key: "",
+    });
+    expect(warnings.some((warning) => warning.includes("Adobe Marketplace keys"))).toBe(true);
   });
 });
