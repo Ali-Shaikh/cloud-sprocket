@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -46,6 +47,8 @@ export type SQSViewProps = {
   onSelectRegion: (region: string) => void;
   onSelectQueue: (queueUrl: string) => void;
   onPeek: (queueUrl: string) => void;
+  onSendMessage: (queueUrl: string, messageBody: string) => void;
+  onCreateQueue: (queueName: string) => void;
 };
 
 const fieldLabel =
@@ -87,9 +90,15 @@ export default function SQSView({
   onSelectRegion,
   onSelectQueue,
   onPeek,
+  onSendMessage,
+  onCreateQueue,
 }: SQSViewProps) {
   const [filterText, setFilterText] = useState("");
   const [peekDialogOpen, setPeekDialogOpen] = useState(false);
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [sendBody, setSendBody] = useState('{"event":"test"}');
+  const [newQueueName, setNewQueueName] = useState("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   const regions =
     workspace.sqsRegions.length > 0
@@ -251,6 +260,17 @@ export default function SQSView({
             <RefreshCw />
             Refresh queues
           </Button>
+          {workspace.awsWritesEnabled ? (
+            <Button
+              variant="outline"
+              disabled={!workspace.selectedSqsRegion || peekInFlight}
+              onClick={() => {
+                setCreateDialogOpen(true);
+              }}
+            >
+              Create queue
+            </Button>
+          ) : null}
           <div className="min-w-56 flex-1">
             <div className={cn(fieldLabel, "mb-1")}>Filter</div>
             <Input
@@ -377,15 +397,26 @@ export default function SQSView({
                     Enable write mode from the top bar to peek messages on a local endpoint profile.
                   </p>
                 ) : (
-                  <Button
-                    variant="outline"
-                    disabled={!canPeek}
-                    onClick={() => {
-                      setPeekDialogOpen(true);
-                    }}
-                  >
-                    Peek messages
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      disabled={!canPeek}
+                      onClick={() => {
+                        setPeekDialogOpen(true);
+                      }}
+                    >
+                      Peek messages
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={!canPeek}
+                      onClick={() => {
+                        setSendDialogOpen(true);
+                      }}
+                    >
+                      Send message
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -463,6 +494,74 @@ export default function SQSView({
           )}
         </section>
       </div>
+
+      <AlertDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create SQS queue?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Creates a new queue in {workspace.selectedSqsRegion || "the selected region"} on your
+              local endpoint.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={newQueueName}
+            placeholder="queue-name"
+            onChange={(event) => {
+              setNewQueueName(event.target.value);
+            }}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const name = newQueueName.trim();
+                if (name) {
+                  onCreateQueue(name);
+                  setNewQueueName("");
+                }
+                setCreateDialogOpen(false);
+              }}
+            >
+              Create queue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send message?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Sends a message to{" "}
+              <span className="font-mono">{selectedQueue?.queueName}</span>. The message stays on
+              the queue for consumers.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            value={sendBody}
+            rows={5}
+            className="font-mono text-xs"
+            onChange={(event) => {
+              setSendBody(event.target.value);
+            }}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (selectedQueue?.queueUrl && sendBody.trim()) {
+                  onSendMessage(selectedQueue.queueUrl, sendBody);
+                }
+                setSendDialogOpen(false);
+              }}
+            >
+              Send message
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={peekDialogOpen} onOpenChange={setPeekDialogOpen}>
         <AlertDialogContent>

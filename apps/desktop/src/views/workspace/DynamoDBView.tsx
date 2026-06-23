@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
@@ -35,6 +46,8 @@ export type DynamoDBViewProps = {
   onRefresh: () => void;
   onSelectRegion: (region: string) => void;
   onSelectTable: (tableName: string) => void;
+  onPutItem: (tableName: string, itemJson: string) => void;
+  onDeleteItem: (tableName: string, keyJson: string) => void;
 };
 
 const fieldLabel =
@@ -84,8 +97,8 @@ function copyToClipboard(value: string, label = "Copied to clipboard"): void {
 }
 
 /**
- * v0.6 DynamoDB panel: regional table inventory, describe keys/GSIs, and a
- * read-only sample item scan. Mirrors the Lambda layout without write actions.
+ * DynamoDB panel: regional table inventory, describe keys/GSIs, sample scan,
+ * and write-gated put/delete on local endpoints.
  */
 export default function DynamoDBView({
   workspace,
@@ -93,8 +106,14 @@ export default function DynamoDBView({
   onRefresh,
   onSelectRegion,
   onSelectTable,
+  onPutItem,
+  onDeleteItem,
 }: DynamoDBViewProps) {
   const [filterText, setFilterText] = useState("");
+  const [putDialogOpen, setPutDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [itemJson, setItemJson] = useState('{\n  "id": "item-001",\n  "payload": "hello"\n}');
+  const [keyJson, setKeyJson] = useState('{\n  "id": "item-001"\n}');
 
   const regions =
     workspace.dynamodbRegions.length > 0
@@ -395,6 +414,37 @@ export default function DynamoDBView({
                   No sample items were returned for this table.
                 </p>
               )}
+
+              <div>
+                <div className={fieldLabel}>Write actions</div>
+                {!workspace.awsWritesEnabled ? (
+                  <p className="text-sm text-muted-foreground">
+                    Enable write mode from the top bar to put or delete items on a local endpoint
+                    profile.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      disabled={!selectedTable?.tableName}
+                      onClick={() => {
+                        setPutDialogOpen(true);
+                      }}
+                    >
+                      Put item
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={!selectedTable?.tableName}
+                      onClick={() => {
+                        setDeleteDialogOpen(true);
+                      }}
+                    >
+                      Delete item
+                    </Button>
+                  </div>
+                )}
+              </div>
             </>
           ) : (
             <p className="text-sm text-muted-foreground">No DynamoDB table selected.</p>
@@ -436,6 +486,74 @@ export default function DynamoDBView({
           )}
         </section>
       </div>
+
+      <AlertDialog open={putDialogOpen} onOpenChange={setPutDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Put item?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Inserts or replaces an item in{" "}
+              <span className="font-mono">{selectedTable?.tableName}</span>. JSON must be a plain
+              object (not DynamoDB typed attributes).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            value={itemJson}
+            rows={8}
+            className="font-mono text-xs"
+            onChange={(event) => {
+              setItemJson(event.target.value);
+            }}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (selectedTable?.tableName && itemJson.trim()) {
+                  onPutItem(selectedTable.tableName, itemJson);
+                }
+                setPutDialogOpen(false);
+              }}
+            >
+              Put item
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete item?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently deletes an item from{" "}
+              <span className="font-mono">{selectedTable?.tableName}</span>. Provide the primary
+              key as a plain JSON object.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            value={keyJson}
+            rows={5}
+            className="font-mono text-xs"
+            onChange={(event) => {
+              setKeyJson(event.target.value);
+            }}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (selectedTable?.tableName && keyJson.trim()) {
+                  onDeleteItem(selectedTable.tableName, keyJson);
+                }
+                setDeleteDialogOpen(false);
+              }}
+            >
+              Delete item
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -2114,6 +2114,35 @@ export default function App() {
       .finally(() => setSqsPeekInFlight(false));
   }
 
+  function sendSQSMessage(queueUrl: string, messageBody: string): void {
+    setSqsPeekInFlight(true);
+    setSqsActionStatus("Sending message to the queue.");
+    void backendRequest<{ summary: string }>("aws.sqs.sendMessage", { queueUrl, messageBody })
+      .then((result) => {
+        setSqsActionStatus(result.summary || "Message sent.");
+      })
+      .catch((error: unknown) => {
+        setSqsActionStatus(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => setSqsPeekInFlight(false));
+  }
+
+  function createSQSQueue(queueName: string): void {
+    setSqsActionStatus(`Creating SQS queue ${queueName}.`);
+    void backendRequest<WorkspaceSnapshot>("aws.sqs.createQueue", { queueName })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setSqsActionStatus(
+          workspaceResult.sqsStatusMessage || `Created SQS queue ${queueName}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setSqsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
   function refreshSNSInventory(): void {
     const region = workspace.selectedSnsRegion;
     if (!region) {
@@ -2149,6 +2178,65 @@ export default function App() {
       })
       .catch((error: unknown) => {
         setSnsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function publishSNSTopic(topicArn: string, message: string): void {
+    setSnsActionStatus("Publishing message to the topic.");
+    void backendRequest<{ summary: string }>("aws.sns.publish", { topicArn, message })
+      .then((result) => {
+        setSnsActionStatus(result.summary || "Message published.");
+      })
+      .catch((error: unknown) => {
+        setSnsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function createSNSTopic(topicName: string): void {
+    setSnsActionStatus(`Creating SNS topic ${topicName}.`);
+    void backendRequest<WorkspaceSnapshot>("aws.sns.createTopic", { topicName })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setSnsActionStatus(
+          workspaceResult.snsStatusMessage || `Created SNS topic ${topicName}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setSnsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function putDynamoDBItem(tableName: string, itemJson: string): void {
+    setDynamodbActionStatus(`Putting item into ${tableName}.`);
+    void backendRequest<WorkspaceSnapshot>("aws.dynamodb.putItem", { tableName, itemJson })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setDynamodbActionStatus(
+          workspaceResult.dynamodbStatusMessage || `Put item into ${tableName}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setDynamodbActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function deleteDynamoDBItem(tableName: string, keyJson: string): void {
+    setDynamodbActionStatus(`Deleting item from ${tableName}.`);
+    void backendRequest<WorkspaceSnapshot>("aws.dynamodb.deleteItem", { tableName, keyJson })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        });
+        setDynamodbActionStatus(
+          workspaceResult.dynamodbStatusMessage || `Deleted item from ${tableName}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setDynamodbActionStatus(error instanceof Error ? error.message : String(error));
       });
   }
 
@@ -2906,6 +2994,8 @@ export default function App() {
       onRefresh={refreshDynamoDBInventory}
       onSelectRegion={selectDynamoDBRegion}
       onSelectTable={selectDynamoDBTable}
+      onPutItem={putDynamoDBItem}
+      onDeleteItem={deleteDynamoDBItem}
     />
   ) : session.isLocked && activeWorkspaceTabId === "sqs" ? (
     <SQSView
@@ -2917,6 +3007,8 @@ export default function App() {
       onSelectRegion={selectSQSRegion}
       onSelectQueue={selectSQSQueue}
       onPeek={peekSQSQueue}
+      onSendMessage={sendSQSMessage}
+      onCreateQueue={createSQSQueue}
     />
   ) : session.isLocked && activeWorkspaceTabId === "sns" ? (
     <SNSView
@@ -2925,6 +3017,8 @@ export default function App() {
       onRefresh={refreshSNSInventory}
       onSelectRegion={selectSNSRegion}
       onSelectEntity={selectSNSTopic}
+      onPublish={publishSNSTopic}
+      onCreateTopic={createSNSTopic}
     />
   ) : session.isLocked && activeWorkspaceTabId === "rds" ? (
     <RDSView

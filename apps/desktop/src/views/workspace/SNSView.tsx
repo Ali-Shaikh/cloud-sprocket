@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { DetailFieldList } from "./detail-fields";
 import type { WorkspaceSnapshot } from "@/types/backend";
@@ -58,6 +69,8 @@ export type SNSViewProps = {
   onRefresh: () => void;
   onSelectRegion: (region: string) => void;
   onSelectEntity: (topicArn: string) => void;
+  onPublish: (topicArn: string, message: string) => void;
+  onCreateTopic: (topicName: string) => void;
 };
 
 const fieldLabel =
@@ -88,8 +101,14 @@ export default function SNSView({
   onRefresh,
   onSelectRegion,
   onSelectEntity,
+  onPublish,
+  onCreateTopic,
 }: SNSViewProps) {
   const [filterText, setFilterText] = useState("");
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [publishBody, setPublishBody] = useState('{"event":"test"}');
+  const [newTopicName, setNewTopicName] = useState("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   const regions =
     workspace.snsRegions.length > 0
@@ -241,6 +260,17 @@ export default function SNSView({
             <RefreshCw />
             Refresh topics
           </Button>
+          {workspace.awsWritesEnabled ? (
+            <Button
+              variant="outline"
+              disabled={!workspace.selectedSnsRegion}
+              onClick={() => {
+                setCreateDialogOpen(true);
+              }}
+            >
+              Create topic
+            </Button>
+          ) : null}
           <div className="min-w-56 flex-1">
             <div className={cn(fieldLabel, "mb-1")}>Filter</div>
             <Input
@@ -358,6 +388,25 @@ export default function SNSView({
               ) : (
                 <p className="text-sm text-muted-foreground">No subscriptions were returned for this topic.</p>
               )}
+
+              <div>
+                <div className={fieldLabel}>Publish message (write action)</div>
+                {!workspace.awsWritesEnabled ? (
+                  <p className="text-sm text-muted-foreground">
+                    Enable write mode from the top bar to publish on a local endpoint profile.
+                  </p>
+                ) : (
+                  <Button
+                    variant="outline"
+                    disabled={!selectedTopic?.topicArn}
+                    onClick={() => {
+                      setPublishDialogOpen(true);
+                    }}
+                  >
+                    Publish message
+                  </Button>
+                )}
+              </div>
             </>
           ) : (
             <p className="text-sm text-muted-foreground">No SNS topic selected.</p>
@@ -399,6 +448,73 @@ export default function SNSView({
           )}
         </section>
       </div>
+
+      <AlertDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create SNS topic?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Creates a new topic in {workspace.selectedSnsRegion || "the selected region"} on your
+              local endpoint.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={newTopicName}
+            placeholder="topic-name"
+            onChange={(event) => {
+              setNewTopicName(event.target.value);
+            }}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const name = newTopicName.trim();
+                if (name) {
+                  onCreateTopic(name);
+                  setNewTopicName("");
+                }
+                setCreateDialogOpen(false);
+              }}
+            >
+              Create topic
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Publish message?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Publishes to <span className="font-mono">{selectedTopic?.topicName}</span>. All
+              subscribers will receive the message.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            value={publishBody}
+            rows={5}
+            className="font-mono text-xs"
+            onChange={(event) => {
+              setPublishBody(event.target.value);
+            }}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (selectedTopic?.topicArn && publishBody.trim()) {
+                  onPublish(selectedTopic.topicArn, publishBody);
+                }
+                setPublishDialogOpen(false);
+              }}
+            >
+              Publish
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

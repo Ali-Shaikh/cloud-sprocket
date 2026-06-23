@@ -321,6 +321,33 @@ export interface AwsSqsPeekResult {
   summary: string;
 }
 
+export interface AwsSqsSendResult {
+  queueUrl: string;
+  messageId: string;
+  summary: string;
+}
+
+export interface AwsSqsCreateQueueResult {
+  queueName: string;
+  queueUrl: string;
+}
+
+export interface AwsSnsPublishResult {
+  topicArn: string;
+  messageId: string;
+  summary: string;
+}
+
+export interface AwsSnsCreateTopicResult {
+  topicName: string;
+  topicArn: string;
+}
+
+export interface AwsDynamoDBWriteResult {
+  tableName: string;
+  summary: string;
+}
+
 export interface AwsSnsSubscription {
   subscriptionArn: string;
   protocol?: string;

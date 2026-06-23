@@ -163,16 +163,28 @@ func (s *Service) Handle(
 		return s.handleAwsDynamodbSelectRegion(ctx, params, notifier)
 	case "aws.dynamodb.selectTable":
 		return s.handleAwsDynamodbSelectTable(ctx, params, notifier)
+	case "aws.dynamodb.putItem":
+		return s.handleAwsDynamodbPutItem(ctx, params, notifier)
+	case "aws.dynamodb.deleteItem":
+		return s.handleAwsDynamodbDeleteItem(ctx, params, notifier)
 	case "aws.sqs.selectRegion":
 		return s.handleAwsSqsSelectRegion(ctx, params, notifier)
 	case "aws.sqs.selectQueue":
 		return s.handleAwsSqsSelectQueue(ctx, params, notifier)
 	case "aws.sqs.peek":
 		return s.handleAwsSqsPeek(ctx, params, notifier)
+	case "aws.sqs.sendMessage":
+		return s.handleAwsSqsSendMessage(ctx, params, notifier)
+	case "aws.sqs.createQueue":
+		return s.handleAwsSqsCreateQueue(ctx, params, notifier)
 	case "aws.sns.selectRegion":
 		return s.handleAwsSnsSelectRegion(ctx, params, notifier)
 	case "aws.sns.selectTopic":
 		return s.handleAwsSnsSelectTopic(ctx, params, notifier)
+	case "aws.sns.publish":
+		return s.handleAwsSnsPublish(ctx, params, notifier)
+	case "aws.sns.createTopic":
+		return s.handleAwsSnsCreateTopic(ctx, params, notifier)
 	case "aws.rds.selectRegion":
 		return s.handleAwsRdsSelectRegion(ctx, params, notifier)
 	case "aws.rds.selectInstance":

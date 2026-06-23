@@ -1,6 +1,6 @@
 # AWS Services Expansion Plan
 
-**Status:** Planned for v0.8.12+  
+**Status:** Planned for v0.8.13+ (inventory expansion); write ops in `docs/aws-write-operations-plan.md`  
 **Date:** 23 June 2026  
 **Scope:** Add high-value AWS services to match Azure breadth, reusing v0.8.10 AWS performance patterns.
 

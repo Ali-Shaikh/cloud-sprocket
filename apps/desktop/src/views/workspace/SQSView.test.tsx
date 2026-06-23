@@ -139,6 +139,8 @@ function renderSQSView() {
   const onSelectQueue = vi.fn();
   const onRefresh = vi.fn();
   const onPeek = vi.fn();
+  const onSendMessage = vi.fn();
+  const onCreateQueue = vi.fn();
   render(
     <ThemeProvider>
       <SQSView
@@ -150,10 +152,12 @@ function renderSQSView() {
         onSelectRegion={onSelectRegion}
         onSelectQueue={onSelectQueue}
         onPeek={onPeek}
+        onSendMessage={onSendMessage}
+        onCreateQueue={onCreateQueue}
       />
     </ThemeProvider>,
   );
-  return { onSelectRegion, onSelectQueue, onRefresh, onPeek };
+  return { onSelectRegion, onSelectQueue, onRefresh, onPeek, onSendMessage, onCreateQueue };
 }
 
 describe("SQSView", () => {
@@ -198,6 +202,8 @@ describe("SQSView", () => {
           onSelectRegion={vi.fn()}
           onSelectQueue={vi.fn()}
           onPeek={vi.fn()}
+          onSendMessage={vi.fn()}
+          onCreateQueue={vi.fn()}
         />
       </ThemeProvider>,
     );

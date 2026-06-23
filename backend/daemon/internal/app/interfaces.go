@@ -37,17 +37,23 @@ type LambdaInventory interface {
 type DynamoDBInventory interface {
 	ListTables(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsDynamoDBTable, error)
 	DescribeTable(ctx context.Context, profile models.ProfileSummary, region string, tableName string) (models.AwsDynamoDBTable, error)
+	PutItem(ctx context.Context, profile models.ProfileSummary, region string, tableName string, itemJSON string) (models.AwsDynamoDBWriteResult, error)
+	DeleteItem(ctx context.Context, profile models.ProfileSummary, region string, tableName string, keyJSON string) (models.AwsDynamoDBWriteResult, error)
 }
 
 type SQSInventory interface {
 	ListQueues(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsSqsQueue, error)
 	DescribeQueue(ctx context.Context, profile models.ProfileSummary, region string, queueURL string) (models.AwsSqsQueue, error)
 	PeekMessages(ctx context.Context, profile models.ProfileSummary, region string, queueURL string) (models.AwsSqsPeekResult, error)
+	SendMessage(ctx context.Context, profile models.ProfileSummary, region string, queueURL string, messageBody string) (models.AwsSqsSendResult, error)
+	CreateQueue(ctx context.Context, profile models.ProfileSummary, region string, queueName string) (models.AwsSqsCreateQueueResult, error)
 }
 
 type SNSInventory interface {
 	ListTopics(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsSnsTopic, error)
 	DescribeTopic(ctx context.Context, profile models.ProfileSummary, region string, topicArn string) (models.AwsSnsTopic, error)
+	Publish(ctx context.Context, profile models.ProfileSummary, region string, topicArn string, message string) (models.AwsSnsPublishResult, error)
+	CreateTopic(ctx context.Context, profile models.ProfileSummary, region string, topicName string) (models.AwsSnsCreateTopicResult, error)
 }
 
 type RDSInventory interface {

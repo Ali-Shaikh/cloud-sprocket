@@ -72,6 +72,14 @@ func (stubDynamoDBInventory) DescribeTable(context.Context, models.ProfileSummar
 	return models.AwsDynamoDBTable{}, nil
 }
 
+func (stubDynamoDBInventory) PutItem(context.Context, models.ProfileSummary, string, string, string) (models.AwsDynamoDBWriteResult, error) {
+	return models.AwsDynamoDBWriteResult{}, nil
+}
+
+func (stubDynamoDBInventory) DeleteItem(context.Context, models.ProfileSummary, string, string, string) (models.AwsDynamoDBWriteResult, error) {
+	return models.AwsDynamoDBWriteResult{}, nil
+}
+
 type stubSQSInventory struct{}
 
 func (stubSQSInventory) ListQueues(context.Context, models.ProfileSummary, string) ([]models.AwsSqsQueue, error) {
@@ -86,6 +94,14 @@ func (stubSQSInventory) PeekMessages(context.Context, models.ProfileSummary, str
 	return models.AwsSqsPeekResult{}, nil
 }
 
+func (stubSQSInventory) SendMessage(context.Context, models.ProfileSummary, string, string, string) (models.AwsSqsSendResult, error) {
+	return models.AwsSqsSendResult{}, nil
+}
+
+func (stubSQSInventory) CreateQueue(context.Context, models.ProfileSummary, string, string) (models.AwsSqsCreateQueueResult, error) {
+	return models.AwsSqsCreateQueueResult{}, nil
+}
+
 type stubSNSInventory struct{}
 
 func (stubSNSInventory) ListTopics(context.Context, models.ProfileSummary, string) ([]models.AwsSnsTopic, error) {
@@ -94,6 +110,14 @@ func (stubSNSInventory) ListTopics(context.Context, models.ProfileSummary, strin
 
 func (stubSNSInventory) DescribeTopic(context.Context, models.ProfileSummary, string, string) (models.AwsSnsTopic, error) {
 	return models.AwsSnsTopic{}, nil
+}
+
+func (stubSNSInventory) Publish(context.Context, models.ProfileSummary, string, string, string) (models.AwsSnsPublishResult, error) {
+	return models.AwsSnsPublishResult{}, nil
+}
+
+func (stubSNSInventory) CreateTopic(context.Context, models.ProfileSummary, string, string) (models.AwsSnsCreateTopicResult, error) {
+	return models.AwsSnsCreateTopicResult{}, nil
 }
 
 type stubRDSInventory struct{}
