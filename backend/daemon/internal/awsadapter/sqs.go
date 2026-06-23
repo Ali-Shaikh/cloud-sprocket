@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awscfg "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 
@@ -223,13 +222,7 @@ func (q *SQSInventory) loadConfig(
 	profile models.ProfileSummary,
 	region string,
 ) (aws.Config, error) {
-	return awscfg.LoadDefaultConfig(
-		ctx,
-		awscfg.WithSharedConfigProfile(profile.ProfileID),
-		awscfg.WithSharedConfigFiles([]string{q.settings.AWSConfigPath}),
-		awscfg.WithSharedCredentialsFiles([]string{q.settings.AWSCredentialsPath}),
-		awscfg.WithRegion(region),
-	)
+	return loadAWSConfig(ctx, q.settings, profile, region)
 }
 
 func sqsClient(cfg aws.Config, profile models.ProfileSummary) *sqs.Client {

@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awscfg "github.com/aws/aws-sdk-go-v2/config"
 	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/dustin/go-humanize"
@@ -393,13 +392,7 @@ func (s *S3Inventory) loadConfig(
 	profile models.ProfileSummary,
 	region string,
 ) (aws.Config, error) {
-	return awscfg.LoadDefaultConfig(
-		ctx,
-		awscfg.WithSharedConfigProfile(profile.ProfileID),
-		awscfg.WithSharedConfigFiles([]string{s.settings.AWSConfigPath}),
-		awscfg.WithSharedCredentialsFiles([]string{s.settings.AWSCredentialsPath}),
-		awscfg.WithRegion(region),
-	)
+	return loadAWSConfig(ctx, s.settings, profile, region)
 }
 
 func s3Client(cfg aws.Config, profile models.ProfileSummary) *s3.Client {

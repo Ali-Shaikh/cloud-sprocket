@@ -228,58 +228,30 @@ func (s *Service) handleAwsDynamodbPutItem(ctx context.Context, params json.RawM
 	if err != nil {
 		return nil, err
 	}
-	s.mu.Lock()
-	session, err := s.currentState(ctx, snapshot)
+	profile, region, tableName, err := s.authorizeAWSWriteSelection(
+		ctx, snapshot,
+		"DynamoDB put requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true",
+		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
+			return s.activeDynamoDBSelection(snap, session, request.TableName)
+		},
+	)
 	if err != nil {
-		s.mu.Unlock()
 		return nil, err
 	}
-	profile, region, tableName, err := s.activeDynamoDBSelection(snapshot, session, request.TableName)
-	if err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-	if !effectiveAWSWritesEnabled(session, profile) {
-		s.mu.Unlock()
-		return nil, errors.New("DynamoDB put requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true")
-	}
-	s.mu.Unlock()
 
-	result, err := s.dynamodb.PutItem(ctx, profile, region, tableName, request.ItemJSON)
+	actionCtx, cancel := s.withAWSTimeout(ctx)
+	result, err := s.dynamodb.PutItem(actionCtx, profile, region, tableName, request.ItemJSON)
+	cancel()
 	if err != nil {
 		return nil, err
 	}
 	s.invalidateResourceCache(ctx, "aws.dynamodb.tables", profile.ProfileID+"|"+region)
 
-	// Reconcile the session under the lock, then release it before building the
-	// workspace snapshot: that build runs slow AWS/Docker probes that must not
-	// block session polling (the same contract as handleWorkspaceGet).
-	s.mu.Lock()
-	session, err = s.currentState(ctx, snapshot)
-	if err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-	session.SelectedDynamoDBTableName = tableName
-	if err := s.store.SaveSession(ctx, session); err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-	s.mu.Unlock()
-	workspace, err := s.finishAWSWorkspaceOpts(
-		ctx,
-		snapshot,
-		session,
-		notifier,
-		workspaceSnapshotOptions{awsScope: "dynamodb", skipAzureInventory: true},
-		"success",
+	return s.finishAWSWriteAction(
+		ctx, snapshot, notifier, "dynamodb",
 		result.Summary,
-		false,
+		func(session *models.SessionSnapshot) { session.SelectedDynamoDBTableName = tableName },
 	)
-	if err != nil {
-		return nil, err
-	}
-	return workspace, nil
 }
 
 func (s *Service) handleAwsDynamodbDeleteItem(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -294,56 +266,28 @@ func (s *Service) handleAwsDynamodbDeleteItem(ctx context.Context, params json.R
 	if err != nil {
 		return nil, err
 	}
-	s.mu.Lock()
-	session, err := s.currentState(ctx, snapshot)
+	profile, region, tableName, err := s.authorizeAWSWriteSelection(
+		ctx, snapshot,
+		"DynamoDB delete requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true",
+		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
+			return s.activeDynamoDBSelection(snap, session, request.TableName)
+		},
+	)
 	if err != nil {
-		s.mu.Unlock()
 		return nil, err
 	}
-	profile, region, tableName, err := s.activeDynamoDBSelection(snapshot, session, request.TableName)
-	if err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-	if !effectiveAWSWritesEnabled(session, profile) {
-		s.mu.Unlock()
-		return nil, errors.New("DynamoDB delete requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true")
-	}
-	s.mu.Unlock()
 
-	result, err := s.dynamodb.DeleteItem(ctx, profile, region, tableName, request.KeyJSON)
+	actionCtx, cancel := s.withAWSTimeout(ctx)
+	result, err := s.dynamodb.DeleteItem(actionCtx, profile, region, tableName, request.KeyJSON)
+	cancel()
 	if err != nil {
 		return nil, err
 	}
 	s.invalidateResourceCache(ctx, "aws.dynamodb.tables", profile.ProfileID+"|"+region)
 
-	// Reconcile the session under the lock, then release it before building the
-	// workspace snapshot: that build runs slow AWS/Docker probes that must not
-	// block session polling (the same contract as handleWorkspaceGet).
-	s.mu.Lock()
-	session, err = s.currentState(ctx, snapshot)
-	if err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-	session.SelectedDynamoDBTableName = tableName
-	if err := s.store.SaveSession(ctx, session); err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-	s.mu.Unlock()
-	workspace, err := s.finishAWSWorkspaceOpts(
-		ctx,
-		snapshot,
-		session,
-		notifier,
-		workspaceSnapshotOptions{awsScope: "dynamodb", skipAzureInventory: true},
-		"success",
+	return s.finishAWSWriteAction(
+		ctx, snapshot, notifier, "dynamodb",
 		result.Summary,
-		false,
+		func(session *models.SessionSnapshot) { session.SelectedDynamoDBTableName = tableName },
 	)
-	if err != nil {
-		return nil, err
-	}
-	return workspace, nil
 }

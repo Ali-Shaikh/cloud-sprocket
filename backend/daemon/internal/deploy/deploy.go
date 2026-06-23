@@ -202,11 +202,11 @@ func (e *Engine) Prepare(deployment *Deployment) error {
 	if err := writeTfvars(dir, deployment.Variables); err != nil {
 		return fmt.Errorf("write tfvars: %w", err)
 	}
-	if deployment.ProviderID == "aws" || deployment.ProviderID == "azure" {
-		target, err := e.registry.Resolve(deployment)
-		if err != nil {
-			return err
-		}
+	target, err := e.registry.ResolveTarget(deployment)
+	if err != nil {
+		return err
+	}
+	if target != nil {
 		if err := target.WriteOverrides(dir, deployment, e.registry.opts); err != nil {
 			return fmt.Errorf("write provider overrides: %w", err)
 		}
@@ -418,14 +418,10 @@ func (w *buildLineWriter) flush() {
 }
 
 // env builds the provider environment via the resolved deployment target.
+// Target-less deployments (no runtime) contribute no environment.
 func (e *Engine) env(deployment *Deployment) []string {
-	switch deployment.ProviderID {
-	case "aws", "azure":
-	default:
-		return nil
-	}
-	target, err := e.registry.Resolve(deployment)
-	if err != nil {
+	target, err := e.registry.ResolveTarget(deployment)
+	if err != nil || target == nil {
 		return nil
 	}
 	return target.Env(deployment, e.settings)
@@ -433,27 +429,25 @@ func (e *Engine) env(deployment *Deployment) []string {
 
 // TargetLabel names a deployment's target for log lines.
 func (e *Engine) TargetLabel(deployment *Deployment) string {
-	switch deployment.ProviderID {
-	case "aws", "azure":
-	default:
-		if deployment.Local {
-			return "local emulator"
-		}
-		return strings.ToUpper(deployment.ProviderID)
-	}
-	target, err := e.registry.Resolve(deployment)
-	if err != nil {
+	target, err := e.registry.ResolveTarget(deployment)
+	if err != nil || target == nil {
 		return fallbackTargetLabel(deployment)
 	}
 	return target.Label(deployment)
 }
 
+// fallbackTargetLabel names a deployment when no concrete target resolves (a
+// target-less provider or an unknown runtime). It avoids guessing a specific
+// emulator so the log line cannot mislabel, say, a non-AWS local run "LocalStack".
 func fallbackTargetLabel(deployment *Deployment) string {
 	if deployment.Local {
-		return "LocalStack"
+		return "local emulator"
 	}
 	if profile := strings.TrimSpace(deployment.ProfileID); profile != "" {
 		return strings.ToUpper(deployment.ProviderID) + " profile " + profile
+	}
+	if strings.TrimSpace(deployment.ProviderID) == "" {
+		return "deployment target"
 	}
 	return strings.ToUpper(deployment.ProviderID)
 }

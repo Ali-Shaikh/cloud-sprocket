@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awscfg "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -217,13 +216,7 @@ func (d *DynamoDBInventory) loadConfig(
 	profile models.ProfileSummary,
 	region string,
 ) (aws.Config, error) {
-	return awscfg.LoadDefaultConfig(
-		ctx,
-		awscfg.WithSharedConfigProfile(profile.ProfileID),
-		awscfg.WithSharedConfigFiles([]string{d.settings.AWSConfigPath}),
-		awscfg.WithSharedCredentialsFiles([]string{d.settings.AWSCredentialsPath}),
-		awscfg.WithRegion(region),
-	)
+	return loadAWSConfig(ctx, d.settings, profile, region)
 }
 
 func dynamodbClient(cfg aws.Config, profile models.ProfileSummary) *dynamodb.Client {
