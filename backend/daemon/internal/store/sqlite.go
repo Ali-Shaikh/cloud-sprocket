@@ -232,6 +232,11 @@ func (s *Store) InvalidateResourceCacheScope(ctx context.Context, scope string) 
 	return err
 }
 
+func (s *Store) InvalidateResourceCacheLike(ctx context.Context, pattern string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM resource_cache WHERE scope LIKE ?`, pattern)
+	return err
+}
+
 // SaveDeployment upserts a deployment record stored as a JSON payload keyed by
 // id. createdAt is preserved on update; updatedAt always advances.
 func (s *Store) SaveDeployment(ctx context.Context, id string, value any, timestamp string) error {

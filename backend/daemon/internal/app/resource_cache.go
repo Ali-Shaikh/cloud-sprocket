@@ -70,3 +70,8 @@ func (s *Service) invalidateResourceCache(ctx context.Context, scope string, que
 func (s *Service) invalidateResourceCacheScope(ctx context.Context, scope string) {
 	_ = s.store.InvalidateResourceCacheScope(ctx, scope)
 }
+
+func (s *Service) invalidateCloudResourceCaches(ctx context.Context) {
+	_ = s.store.InvalidateResourceCacheLike(ctx, "azure.%")
+	_ = s.store.InvalidateResourceCacheLike(ctx, "aws.%")
+}

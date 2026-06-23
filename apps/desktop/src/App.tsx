@@ -989,6 +989,10 @@ export default function App() {
   const frontDoorRefreshInFlightRef = useRef(false);
   const wafRefreshInFlightRef = useRef(false);
   const azureInventoryFetchedScopesRef = useRef(new Set<string>());
+  const [azureInventoryRefreshToken, setAzureInventoryRefreshToken] = useState(0);
+  const discoveryRefreshJobIdRef = useRef<string | undefined>(undefined);
+  const sessionSnapshotRef = useRef(session);
+  const loadWorkspaceRef = useRef<(snapshot: SessionSnapshot) => Promise<void>>(async () => undefined);
   const [writeModeDialogOpen, setWriteModeDialogOpen] = useState(false);
   const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<"enable" | "incapable">("enable");
   const [writeModePending, setWriteModePending] = useState(false);
@@ -1166,6 +1170,10 @@ export default function App() {
       );
       unsubs.push(
         await subscribeToBackendEvent("job.updated", (job: JobStatus) => {
+          const isDiscoveryRefresh =
+            job.label === "Refresh Discovery" ||
+            job.jobId === discoveryRefreshJobIdRef.current;
+
           if (isWorkspaceSnapshot(job.result)) {
             const workspaceResult = normaliseWorkspaceSnapshot(job.result);
             startTransition(() => {
@@ -1173,6 +1181,26 @@ export default function App() {
               setWorkspaceLoaded(true);
             });
             resetWorkspaceFetch();
+            if (isDiscoveryRefresh) {
+              discoveryRefreshJobIdRef.current = undefined;
+              azureInventoryFetchedScopesRef.current.clear();
+              setAzureInventoryRefreshToken((token) => token + 1);
+            }
+          } else if (
+            isDiscoveryRefresh &&
+            (job.status === "completed" || job.status === "failed")
+          ) {
+            discoveryRefreshJobIdRef.current = undefined;
+            if (job.status === "failed") {
+              resetWorkspaceFetch();
+            } else if (sessionSnapshotRef.current.isLocked) {
+              resetWorkspaceFetch();
+              azureInventoryFetchedScopesRef.current.clear();
+              setAzureInventoryRefreshToken((token) => token + 1);
+              void loadWorkspaceRef.current(sessionSnapshotRef.current);
+            } else {
+              resetWorkspaceFetch();
+            }
           }
           if (job.label.toLowerCase().includes("ec2")) {
             setEC2ActionStatus(job.message);
@@ -1677,6 +1705,7 @@ export default function App() {
     session.lockedProviderId,
     session.selectedProfileId,
     workspaceLoaded,
+    azureInventoryRefreshToken,
   ]);
 
   useEffect(() => {
@@ -1773,15 +1802,17 @@ export default function App() {
   );
 
   async function refreshDiscovery(): Promise<void> {
-    // The refresh runs as a backend job; the new workspace arrives via a
-    // "job.updated" event, which clears workspace loading. Show the indicator
-    // straight away, and clear it if the job fails to even start.
+    // The refresh runs as a backend job; the deferred workspace snapshot arrives
+    // via job.updated when the job completes. Show the indicator straight away,
+    // and clear it if the job fails to even start.
     beginWorkspaceFetch();
     try {
-      await backendRequest<JobStatus>("actions.invoke", {
+      const job = await backendRequest<JobStatus>("actions.invoke", {
         actionId: "refresh",
       });
+      discoveryRefreshJobIdRef.current = job.jobId;
     } catch (error) {
+      discoveryRefreshJobIdRef.current = undefined;
       endWorkspaceFetch();
       throw error;
     }
@@ -2573,6 +2604,9 @@ export default function App() {
       endWorkspaceFetch();
     }
   }
+
+  sessionSnapshotRef.current = session;
+  loadWorkspaceRef.current = loadWorkspace;
 
   // Re-run discovery and refresh the provider/profile lists without touching the
   // workspace, so a newly created local emulator profile appears in setup

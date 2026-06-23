@@ -25,6 +25,8 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 	}
 
 	s.discovery.Invalidate()
+	s.invalidateCloudResourceCaches(background)
+
 	snapshot, err := s.discovery.Discover()
 	if err != nil {
 		if notifier != nil {
@@ -39,9 +41,8 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	session, err := s.currentState(background, snapshot)
+	s.mu.Unlock()
 	if err != nil {
 		if notifier != nil {
 			_ = notifier.Notify("job.updated", models.JobStatus{
@@ -54,7 +55,10 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 		return
 	}
 
-	if err := s.notifyStateAndLog(background, snapshot, session, notifier, "success", "Discovery refresh completed."); err != nil {
+	s.mu.Lock()
+	err = s.notifyStateAndLog(background, snapshot, session, notifier, "success", "Discovery refresh completed.")
+	s.mu.Unlock()
+	if err != nil {
 		if notifier != nil {
 			_ = notifier.Notify("job.updated", models.JobStatus{
 				JobID:   job.JobID,
@@ -66,6 +70,15 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 		return
 	}
 
+	opts := workspaceSnapshotOptions{
+		lightweightAzure: true,
+		lightweightAWS:   true,
+	}
+	if session.CurrentProviderID == "azure" {
+		opts.azureDeferredInventory = true
+	}
+	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, opts)
+
 	if notifier != nil {
 		_ = notifier.Notify("job.updated", models.JobStatus{
 			JobID:       job.JobID,
@@ -73,6 +86,7 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 			Status:      "completed",
 			Message:     "Refresh completed.",
 			CompletedAt: s.timestamp(),
+			Result:      workspace,
 		})
 	}
 }

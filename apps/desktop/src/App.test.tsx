@@ -208,6 +208,19 @@ vi.mock("./lib/backend", () => ({
         };
       case "workspace.get":
         return workspaceFixture;
+      case "azure.inventory.get":
+        return {
+          ...workspaceFixture,
+          azureStorageAccounts: [
+            {
+              name: "refreshed-store",
+              kind: "StorageV2",
+              location: "uaenorth",
+              blobEndpoint: "https://refreshed.blob.core.windows.net/",
+            },
+          ],
+          azureStorageStatusMessage: "Loaded 1 storage account after refresh.",
+        };
       case "runtime.get":
         return {
           dockerRuntime: workspaceFixture.dockerRuntime,
@@ -2165,4 +2178,121 @@ describe("App", () => {
     expect((await screen.findAllByText("mkt-api-01")).length).toBeGreaterThan(0);
     expect((await screen.findAllByText("Standard_D2s_v5")).length).toBeGreaterThan(0);
   });
+
+  it("reloads Azure scoped inventory after Refresh Discovery completes", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      currentProviderId: "azure",
+      selectedProfileId: "sub-001",
+      selectedAuthMethod: "cli",
+      isLocked: true,
+      lockedProviderId: "azure",
+      lockedProfileId: "sub-001",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+        {
+          tabId: "azure-overview",
+          label: "Azure",
+          summary: "Azure summary",
+          detail: "Azure panel",
+        },
+        {
+          tabId: "azure-resource-groups",
+          label: "Resource Groups",
+          summary: "Azure groups",
+          detail: "Resource groups panel",
+        },
+        {
+          tabId: "azure-storage",
+          label: "Storage",
+          summary: "Azure storage",
+          detail: "Storage panel",
+        },
+        {
+          tabId: "actions",
+          label: "Activity",
+          summary: "Activity summary",
+          detail: "Activity panel",
+        },
+      ],
+    };
+    workspaceFixture = {
+      ...workspaceFixture,
+      provider: providerFixtures[1],
+      profile: profileFixtures[1],
+      authMethod: "cli",
+      azureEndpointUrl: "http://localhost:4577",
+      azureResourceGroups: [
+        {
+          name: "rg-marketing-prod",
+          location: "uaenorth",
+          provisioningState: "Succeeded",
+          tags: [{ label: "Environment", value: "prod" }],
+        },
+      ],
+      azureStorageAccounts: [
+        {
+          name: "devstoreaccount1",
+          kind: "StorageV2",
+          location: "local",
+          blobEndpoint: "http://localhost:4577/devstoreaccount1",
+        },
+      ],
+      azureStorageStatusMessage: "Loaded 1 storage account.",
+    };
+
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
+
+    expect(await screen.findByText("Resource groups")).toBeInTheDocument();
+    const azureNav = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
+    await act(async () => {
+      fireEvent.click(azureNav.getByRole("button", { name: /Storage/ }));
+    });
+    expect(await screen.findByRole("heading", { name: "Azure Storage" })).toBeInTheDocument();
+
+    const inventoryCallsBefore = vi
+      .mocked(backendRequest)
+      .mock.calls.filter(([method]) => method === "azure.inventory.get").length;
+
+    fireEvent.click(await screen.findByRole("button", { name: "Activity" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Refresh Discovery" }));
+
+    await act(async () => {
+      backendEventHandlers["job.updated"]?.({
+        jobId: "job-1",
+        label: "Refresh Discovery",
+        status: "completed",
+        message: "Refresh completed.",
+        result: {
+          ...workspaceFixture,
+          azureStorageAccounts: [],
+          azureBlobContainers: [],
+          azureBlobs: [],
+          azureStorageStatusMessage: undefined,
+        },
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(azureNav.getByRole("button", { name: /Storage/ }));
+    });
+
+    await waitFor(() => {
+      const inventoryCalls = vi
+        .mocked(backendRequest)
+        .mock.calls.filter(([method]) => method === "azure.inventory.get");
+      expect(inventoryCalls.length).toBeGreaterThan(inventoryCallsBefore);
+      expect(inventoryCalls.at(-1)?.[1]).toEqual({ scope: "storage" });
+    });
+  }, 15000);
 });
