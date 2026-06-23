@@ -25,6 +25,11 @@ func TestResolveRuntimeIDDefaults(t *testing.T) {
 		{"cloud aws defaults aws-cloud", Deployment{ProviderID: "aws", ProfileID: "prod"}, "aws-cloud"},
 		{"cloud azure defaults azure-cloud", Deployment{ProviderID: "azure", ProfileID: "sub-001"}, "azure-cloud"},
 		{"explicit runtime", Deployment{ProviderID: "aws", Local: true, RuntimeID: "docker-compose"}, "docker-compose"},
+		// A non-cloud provider without an explicit runtime is target-less: it must
+		// not fall through to LocalStack and silently redirect the deployment.
+		{"local non-cloud has no default", Deployment{ProviderID: "fly", Local: true}, ""},
+		{"cloud non-cloud has no default", Deployment{ProviderID: "fly", ProfileID: "p"}, ""},
+		{"unset provider has no default", Deployment{}, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -32,6 +37,47 @@ func TestResolveRuntimeIDDefaults(t *testing.T) {
 				t.Fatalf("resolveRuntimeID() = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestResolveTarget(t *testing.T) {
+	registry := NewRegistry(config.Settings{}, TargetOptions{})
+
+	// A target-less deployment resolves to (nil, nil), not an error.
+	target, err := registry.ResolveTarget(&Deployment{ProviderID: "fly", Local: true})
+	if err != nil {
+		t.Fatalf("target-less ResolveTarget should not error, got %v", err)
+	}
+	if target != nil {
+		t.Fatalf("target-less ResolveTarget should be nil, got %q", target.ID())
+	}
+
+	// An explicit but unknown runtime is an error callers must surface.
+	if _, err := registry.ResolveTarget(&Deployment{ProviderID: "aws", Local: true, RuntimeID: "nope"}); err == nil {
+		t.Fatal("expected an unknown runtime to error")
+	}
+
+	// A cloud default still resolves a concrete target.
+	target, err = registry.ResolveTarget(&Deployment{ProviderID: "aws", Local: true})
+	if err != nil || target == nil || target.ID() != "localstack" {
+		t.Fatalf("aws local ResolveTarget = (%v, %v), want localstack", target, err)
+	}
+}
+
+func TestEngineSkipsTargetlessDeployment(t *testing.T) {
+	settings := config.Settings{DeploymentsDir: t.TempDir()}
+	engine := NewEngine(tofu.NewRunner("tofu"), settings, recipes.Bundled())
+	deployment := &Deployment{ID: "dep-targetless", ProviderID: "fly", Local: true}
+
+	// Preflight, env, and label all degrade gracefully without a target.
+	if err := engine.Preflight(context.Background(), deployment); err != nil {
+		t.Fatalf("target-less Preflight should be a no-op, got %v", err)
+	}
+	if env := engine.env(deployment); env != nil {
+		t.Fatalf("target-less env should be nil, got %v", env)
+	}
+	if label := engine.TargetLabel(deployment); label != "local emulator" {
+		t.Fatalf("target-less TargetLabel = %q, want local emulator", label)
 	}
 }
 

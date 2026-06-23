@@ -97,6 +97,17 @@ func (r *Registry) SetOptions(opts TargetOptions) {
 	}
 }
 
+// ResolveTarget returns the deployment's target, or (nil, nil) when the
+// deployment is target-less (a provider with no default runtime and no explicit
+// RuntimeID). A non-nil error means a runtime was expected but is unknown, which
+// callers must surface rather than silently proceeding without provider wiring.
+func (r *Registry) ResolveTarget(deployment *Deployment) (Target, error) {
+	if resolveRuntimeID(deployment) == "" {
+		return nil, nil
+	}
+	return r.Resolve(deployment)
+}
+
 // Resolve picks the target for a deployment.
 func (r *Registry) Resolve(deployment *Deployment) (Target, error) {
 	runtimeID := resolveRuntimeID(deployment)
@@ -110,20 +121,25 @@ func (r *Registry) Resolve(deployment *Deployment) (Target, error) {
 	return factory(r.settings, r.opts), nil
 }
 
+// resolveRuntimeID maps a deployment to its runtime id. An explicit RuntimeID
+// always wins; otherwise only the cloud providers (aws, azure) fall back to a
+// default emulator/cloud runtime. Any other provider without an explicit runtime
+// has no target, so the engine treats it as target-less rather than guessing
+// LocalStack (which would silently redirect a non-AWS deployment).
 func resolveRuntimeID(deployment *Deployment) string {
 	if id := strings.TrimSpace(deployment.RuntimeID); id != "" {
 		return id
 	}
-	if deployment.Local {
-		if deployment.ProviderID == "azure" {
+	switch deployment.ProviderID {
+	case "aws":
+		if deployment.Local {
+			return "localstack"
+		}
+		return "aws-cloud"
+	case "azure":
+		if deployment.Local {
 			return "floci-az"
 		}
-		return "localstack"
-	}
-	if deployment.ProviderID == "aws" {
-		return "aws-cloud"
-	}
-	if deployment.ProviderID == "azure" {
 		return "azure-cloud"
 	}
 	return ""

@@ -18,16 +18,15 @@ const preflightTimeout = 3 * time.Second
 // tofu, pointed at an unreachable endpoint, retries silently for a long time;
 // catching it here turns that into an immediate, actionable error.
 func (e *Engine) Preflight(ctx context.Context, deployment *Deployment) error {
-	switch deployment.ProviderID {
-	case "aws", "azure":
-	default:
+	target, err := e.registry.ResolveTarget(deployment)
+	if err != nil {
+		return err
+	}
+	if target == nil {
+		// Target-less deployment (no runtime): nothing to probe.
 		return nil
 	}
 	if err := e.checkRecipeTargetCompat(deployment); err != nil {
-		return err
-	}
-	target, err := e.registry.Resolve(deployment)
-	if err != nil {
 		return err
 	}
 	return target.Preflight(ctx, deployment, e.settings, e.registry.opts)

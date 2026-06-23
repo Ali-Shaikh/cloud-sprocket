@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
@@ -185,6 +185,58 @@ describe("DynamoDBView", () => {
     fireEvent.click(screen.getByText("cloudsprocket-sessions"));
 
     expect(onSelectTable).toHaveBeenCalledWith("cloudsprocket-sessions");
+  });
+
+  function renderWritableDynamoDBView() {
+    const onPutItem = vi.fn();
+    const onDeleteItem = vi.fn();
+    render(
+      <ThemeProvider>
+        <DynamoDBView
+          workspace={{ ...workspaceFixture, awsWritesEnabled: true }}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectTable={vi.fn()}
+          onPutItem={onPutItem}
+          onDeleteItem={onDeleteItem}
+        />
+      </ThemeProvider>,
+    );
+    return { onPutItem, onDeleteItem };
+  }
+
+  it("puts an item into the selected table through the put dialog", () => {
+    const { onPutItem } = renderWritableDynamoDBView();
+
+    fireEvent.click(screen.getByRole("button", { name: "Put item" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Put item" }));
+
+    expect(onPutItem).toHaveBeenCalledWith(
+      "cloudsprocket-orders",
+      expect.stringContaining("item-001"),
+    );
+  });
+
+  it("deletes an item from the selected table through the delete dialog", () => {
+    const { onDeleteItem } = renderWritableDynamoDBView();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete item" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete item" }));
+
+    expect(onDeleteItem).toHaveBeenCalledWith(
+      "cloudsprocket-orders",
+      expect.stringContaining("item-001"),
+    );
+  });
+
+  it("hides write actions when write mode is off", () => {
+    renderDynamoDBView();
+
+    expect(screen.queryByRole("button", { name: "Put item" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete item" })).not.toBeInTheDocument();
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {

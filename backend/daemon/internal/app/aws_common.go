@@ -15,9 +15,12 @@ import (
 	"cloudsprocket/backend/daemon/internal/models"
 )
 
+// withAWSTimeout bounds AWS (S3, EC2, Lambda, ...) inventory and action calls.
+// Mirrors the Azure pattern for production resilience: a stalled real-AWS or
+// LocalStack response cannot hang workspace snapshots or user actions. It reuses
+// the same 30s default as Azure for consistency; a non-positive timeout (test
+// constructs) is a no-op.
 func (s *Service) withAWSTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
-	// Reuse the same 30s default as Azure for consistency across cloud providers.
-	// If a dedicated awsInventoryTimeout is added later it can be split.
 	if s.azureInventoryTimeout <= 0 {
 		return ctx, func() {}
 	}
@@ -30,11 +33,6 @@ func (s *Service) withAzureTimeout(ctx context.Context) (context.Context, contex
 	}
 	return context.WithTimeout(ctx, s.azureInventoryTimeout)
 }
-
-// withAWSTimeout bounds AWS (S3, EC2, Lambda, ...) inventory and action calls.
-// Mirrors the Azure pattern for production resilience: a stalled real-AWS or
-// LocalStack response cannot hang workspace snapshots or user actions.
-// Non-positive (test constructs) is a no-op.
 
 func profileEndpointURL(profile models.ProfileSummary) string {
 	for _, field := range profile.Attributes {

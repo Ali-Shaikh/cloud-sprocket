@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awscfg "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 
@@ -143,13 +142,7 @@ func ec2Client(cfg aws.Config, profile models.ProfileSummary) *ec2.Client {
 }
 
 func (e *EC2Inventory) loadConfig(ctx context.Context, profile models.ProfileSummary, region string) (aws.Config, error) {
-	return awscfg.LoadDefaultConfig(
-		ctx,
-		awscfg.WithSharedConfigProfile(profile.ProfileID),
-		awscfg.WithSharedConfigFiles([]string{e.settings.AWSConfigPath}),
-		awscfg.WithSharedCredentialsFiles([]string{e.settings.AWSCredentialsPath}),
-		awscfg.WithRegion(region),
-	)
+	return loadAWSConfig(ctx, e.settings, profile, region)
 }
 
 func ec2InstanceSummary(instance types.Instance) models.AwsEc2Instance {

@@ -71,6 +71,8 @@ func (s *Service) invalidateResourceCacheScope(ctx context.Context, scope string
 	_ = s.store.InvalidateResourceCacheScope(ctx, scope)
 }
 
+// invalidateCloudResourceCaches drops every cached AWS and Azure inventory so a
+// discovery refresh re-fetches live data instead of serving stale rows.
 func (s *Service) invalidateCloudResourceCaches(ctx context.Context) {
 	_ = s.store.InvalidateResourceCacheLike(ctx, "azure.%")
 	_ = s.store.InvalidateResourceCacheLike(ctx, "aws.%")

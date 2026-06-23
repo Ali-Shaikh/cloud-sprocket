@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awscfg "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
 
@@ -133,13 +132,7 @@ func (i *IAMInventory) loadConfig(
 	if region == "" {
 		region = awsRegionHint(profile)
 	}
-	return awscfg.LoadDefaultConfig(
-		ctx,
-		awscfg.WithSharedConfigProfile(profile.ProfileID),
-		awscfg.WithSharedConfigFiles([]string{i.settings.AWSConfigPath}),
-		awscfg.WithSharedCredentialsFiles([]string{i.settings.AWSCredentialsPath}),
-		awscfg.WithRegion(region),
-	)
+	return loadAWSConfig(ctx, i.settings, profile, region)
 }
 
 func iamRoleSummary(role types.Role) models.AwsIamRole {

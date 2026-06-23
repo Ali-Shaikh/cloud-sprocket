@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awscfg "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	cwtypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -228,13 +227,7 @@ func (l *LambdaInventory) loadConfig(
 	profile models.ProfileSummary,
 	region string,
 ) (aws.Config, error) {
-	return awscfg.LoadDefaultConfig(
-		ctx,
-		awscfg.WithSharedConfigProfile(profile.ProfileID),
-		awscfg.WithSharedConfigFiles([]string{l.settings.AWSConfigPath}),
-		awscfg.WithSharedCredentialsFiles([]string{l.settings.AWSCredentialsPath}),
-		awscfg.WithRegion(region),
-	)
+	return loadAWSConfig(ctx, l.settings, profile, region)
 }
 
 func lambdaClient(cfg aws.Config, profile models.ProfileSummary) *lambda.Client {

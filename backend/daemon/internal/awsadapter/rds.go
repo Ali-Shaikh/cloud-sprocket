@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awscfg "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
 
@@ -94,13 +93,7 @@ func (r *RDSInventory) loadConfig(
 	profile models.ProfileSummary,
 	region string,
 ) (aws.Config, error) {
-	return awscfg.LoadDefaultConfig(
-		ctx,
-		awscfg.WithSharedConfigProfile(profile.ProfileID),
-		awscfg.WithSharedConfigFiles([]string{r.settings.AWSConfigPath}),
-		awscfg.WithSharedCredentialsFiles([]string{r.settings.AWSCredentialsPath}),
-		awscfg.WithRegion(region),
-	)
+	return loadAWSConfig(ctx, r.settings, profile, region)
 }
 
 func rdsClient(cfg aws.Config, profile models.ProfileSummary) *rds.Client {

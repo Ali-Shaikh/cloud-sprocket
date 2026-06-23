@@ -38,6 +38,104 @@ func (s *Service) withLockedAWSWorkspace(
 	return snapshot, session, nil
 }
 
+// awsWriteSelection resolves the profile, region, and target resource id for a
+// write/peek action from the current session and request. Each service supplies
+// one (activeSQSSelection, activeSNSSelection, activeDynamoDBSelection).
+type awsWriteSelection func(discovery.Snapshot, models.SessionSnapshot) (models.ProfileSummary, string, string, error)
+
+// authorizeAWSWriteSelection holds the service lock once to read the session,
+// resolve the action's target via selection, and enforce the write gate, then
+// releases the lock and returns the resolved (profile, region, resourceID). It
+// removes the repeated lock/unlock-on-every-return boilerplate from the
+// selection-based action handlers (peek, send, publish, put, delete).
+func (s *Service) authorizeAWSWriteSelection(
+	ctx context.Context,
+	snapshot discovery.Snapshot,
+	gateMsg string,
+	selection awsWriteSelection,
+) (models.ProfileSummary, string, string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		return models.ProfileSummary{}, "", "", err
+	}
+	profile, region, resourceID, err := selection(snapshot, session)
+	if err != nil {
+		return models.ProfileSummary{}, "", "", err
+	}
+	if !effectiveAWSWritesEnabled(session, profile) {
+		return models.ProfileSummary{}, "", "", errors.New(gateMsg)
+	}
+	return profile, region, resourceID, nil
+}
+
+// authorizeAWSWrite holds the service lock once to verify an AWS workspace is
+// open with write mode enabled for the active profile, then releases it and
+// returns the session and profile. Used by create handlers that derive their
+// region from a service-specific session field after authorisation.
+func (s *Service) authorizeAWSWrite(
+	ctx context.Context,
+	snapshot discovery.Snapshot,
+	openMsg string,
+	gateMsg string,
+) (models.SessionSnapshot, models.ProfileSummary, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		return models.SessionSnapshot{}, models.ProfileSummary{}, err
+	}
+	if !session.IsLocked || session.CurrentProviderID != "aws" {
+		return models.SessionSnapshot{}, models.ProfileSummary{}, errors.New(openMsg)
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		return models.SessionSnapshot{}, models.ProfileSummary{}, errors.New("the workspace's AWS profile is not available")
+	}
+	if !effectiveAWSWritesEnabled(session, profile) {
+		return models.SessionSnapshot{}, models.ProfileSummary{}, errors.New(gateMsg)
+	}
+	return session, profile, nil
+}
+
+// finishAWSWriteAction reconciles the session after a successful write (applying
+// mutate, e.g. selecting the newly created resource), persists it, and returns a
+// fresh workspace snapshot scoped to one service. The lock is held only for the
+// session reconcile, then released before the slow snapshot build (the same
+// contract as handleWorkspaceGet).
+func (s *Service) finishAWSWriteAction(
+	ctx context.Context,
+	snapshot discovery.Snapshot,
+	notifier Notifier,
+	scope string,
+	successMsg string,
+	mutate func(*models.SessionSnapshot),
+) (models.WorkspaceSnapshot, error) {
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return models.WorkspaceSnapshot{}, err
+	}
+	mutate(&session)
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return models.WorkspaceSnapshot{}, err
+	}
+	s.mu.Unlock()
+	return s.finishAWSWorkspaceOpts(
+		ctx,
+		snapshot,
+		session,
+		notifier,
+		workspaceSnapshotOptions{awsScope: scope, skipAzureInventory: true},
+		"success",
+		successMsg,
+		false,
+	)
+}
+
 func (s *Service) finishAWSWorkspace(
 	ctx context.Context,
 	snapshot discovery.Snapshot,

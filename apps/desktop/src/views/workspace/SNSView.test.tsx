@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
@@ -179,6 +179,58 @@ describe("SNSView", () => {
     expect(onSelectEntity).toHaveBeenCalledWith(
       "arn:aws:sns:us-east-1:000000000000:cloudsprocket-alerts",
     );
+  });
+
+  function renderWritableSNSView() {
+    const onPublish = vi.fn();
+    const onCreateTopic = vi.fn();
+    render(
+      <ThemeProvider>
+        <SNSView
+          workspace={{ ...workspaceFixture, awsWritesEnabled: true }}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectEntity={vi.fn()}
+          onPublish={onPublish}
+          onCreateTopic={onCreateTopic}
+        />
+      </ThemeProvider>,
+    );
+    return { onPublish, onCreateTopic };
+  }
+
+  it("publishes a message to the selected topic through the publish dialog", () => {
+    const { onPublish } = renderWritableSNSView();
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish message" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Publish" }));
+
+    expect(onPublish).toHaveBeenCalledWith(
+      "arn:aws:sns:us-east-1:000000000000:order-events",
+      expect.stringContaining("event"),
+    );
+  });
+
+  it("creates a topic through the create dialog", () => {
+    const { onCreateTopic } = renderWritableSNSView();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create topic" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.change(within(dialog).getByPlaceholderText("topic-name"), {
+      target: { value: "new-events" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create topic" }));
+
+    expect(onCreateTopic).toHaveBeenCalledWith("new-events");
+  });
+
+  it("hides write actions when write mode is off", () => {
+    renderSNSView();
+
+    expect(screen.queryByRole("button", { name: "Publish message" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create topic" })).not.toBeInTheDocument();
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {

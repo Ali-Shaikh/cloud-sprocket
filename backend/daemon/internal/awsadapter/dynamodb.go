@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awscfg "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -217,13 +216,7 @@ func (d *DynamoDBInventory) loadConfig(
 	profile models.ProfileSummary,
 	region string,
 ) (aws.Config, error) {
-	return awscfg.LoadDefaultConfig(
-		ctx,
-		awscfg.WithSharedConfigProfile(profile.ProfileID),
-		awscfg.WithSharedConfigFiles([]string{d.settings.AWSConfigPath}),
-		awscfg.WithSharedCredentialsFiles([]string{d.settings.AWSCredentialsPath}),
-		awscfg.WithRegion(region),
-	)
+	return loadAWSConfig(ctx, d.settings, profile, region)
 }
 
 func dynamodbClient(cfg aws.Config, profile models.ProfileSummary) *dynamodb.Client {
@@ -251,11 +244,11 @@ func dynamoTableSummary(table *types.TableDescription) models.AwsDynamoDBTable {
 	if table.TableSizeBytes != nil {
 		summary.TableSizeBytes = *table.TableSizeBytes
 	}
-	hashKey, rangeKey := keyNamesFromSchema(table.KeySchema, table.AttributeDefinitions)
+	hashKey, rangeKey := keyNamesFromSchema(table.KeySchema)
 	summary.HashKey = hashKey
 	summary.RangeKey = rangeKey
 	for _, gsi := range table.GlobalSecondaryIndexes {
-		gsiHash, gsiRange := keyNamesFromSchema(gsi.KeySchema, table.AttributeDefinitions)
+		gsiHash, gsiRange := keyNamesFromSchema(gsi.KeySchema)
 		summary.GlobalSecondaryIndexes = append(summary.GlobalSecondaryIndexes, models.AwsDynamoDBGlobalSecondaryIndex{
 			IndexName: awsString(gsi.IndexName),
 			HashKey:   gsiHash,
@@ -269,14 +262,7 @@ func dynamoTableSummary(table *types.TableDescription) models.AwsDynamoDBTable {
 	return summary
 }
 
-func keyNamesFromSchema(
-	keySchema []types.KeySchemaElement,
-	attributeDefinitions []types.AttributeDefinition,
-) (string, string) {
-	attrNames := map[string]string{}
-	for _, attr := range attributeDefinitions {
-		attrNames[awsString(attr.AttributeName)] = awsString(attr.AttributeName)
-	}
+func keyNamesFromSchema(keySchema []types.KeySchemaElement) (string, string) {
 	var hashKey string
 	var rangeKey string
 	for _, key := range keySchema {
@@ -287,7 +273,6 @@ func keyNamesFromSchema(
 		if key.KeyType == types.KeyTypeRange {
 			rangeKey = name
 		}
-		_ = attrNames
 	}
 	return hashKey, rangeKey
 }

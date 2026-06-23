@@ -42,9 +42,8 @@ if docker compose exec -T phpfpm test -f /var/www/html/app/etc/env.php 2>/dev/nu
   exit 0
 fi
 
-docker compose cp "$ROOT/auth.json" phpfpm:/var/www/.composer/auth.json
 docker compose exec -T phpfpm mkdir -p /var/www/.composer
-docker compose exec -T phpfpm cp /var/www/.composer/auth.json /var/www/.composer/auth.json 2>/dev/null || true
+docker compose cp "$ROOT/auth.json" phpfpm:/var/www/.composer/auth.json
 
 echo "Downloading Magento source via Composer..."
 docker compose exec -T phpfpm bash -lc "
