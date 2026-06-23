@@ -1,6 +1,6 @@
 # AWS Write Operations Plan
 
-**Status:** Phase 1 in progress (v0.8.13)  
+**Status:** Phase 1 shipped (v0.8.13)  
 **Date:** 23 June 2026  
 **Scope:** Expand write-gated creation and mutation on existing AWS service tabs (LocalStack / local endpoints only).
 
