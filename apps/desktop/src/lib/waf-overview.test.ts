@@ -15,11 +15,17 @@ const schema = normaliseWafSchema({
   tableName: "AzureDiagnostics",
   categories: ["FrontDoorWebApplicationFirewallLog"],
   columns: {
+    timeGenerated: "TimeGenerated",
     action: "action_s",
     ruleName: "ruleName_s",
+    requestUri: "requestUri_s",
     clientIP: "clientIP_s",
+    host: "host_s",
     policyName: "policy_s",
+    policyMode: "policyMode_s",
+    trackingReference: "trackingReference_s",
   },
+  detected: true,
 });
 
 describe("waf-overview", () => {

@@ -27,6 +27,7 @@ const schema = normaliseWafSchema({
     trackingReference: "trackingReference_s",
     detailsMatches: "details_matches_s",
   },
+  detected: true,
 });
 
 const baseQuery = `AzureDiagnostics

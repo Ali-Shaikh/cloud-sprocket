@@ -97,7 +97,7 @@ export function buildWafInvestigationBundle(input: WafInvestigationExportInput):
   if (input.decodedRows && input.decodedRows.length > 0) {
     summaryLines.push("", "## Decoded rows");
     input.decodedRows.forEach((row, index) => {
-      summaryLines.push(
+      const rowLines = [
         "",
         `### Row ${index + 1}`,
         row.trackingReference ? `- Tracking ref: ${row.trackingReference}` : undefined,
@@ -109,7 +109,8 @@ export function buildWafInvestigationBundle(input: WafInvestigationExportInput):
         row.matches.length > 0
           ? `- Matches: ${row.matches.map((match) => `${match.matchVariableName}=${match.matchVariableValue}`).join("; ")}`
           : undefined,
-      );
+      ].filter((line): line is string => line != null);
+      summaryLines.push(...rowLines);
     });
     summaryLines.push("");
   }
