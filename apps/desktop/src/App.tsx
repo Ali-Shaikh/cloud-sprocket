@@ -615,6 +615,7 @@ function mergeAzureWafSelection(
   return normaliseWorkspaceSnapshot({
     ...current,
     selectedAzureWafPolicy: normalised.selectedAzureWafPolicy,
+    selectedAzureLogWorkspace: normalised.selectedAzureLogWorkspace ?? current.selectedAzureLogWorkspace,
     azureLogAnalyticsWorkspaces: normalised.azureLogAnalyticsWorkspaces,
     azureWafLogSchema: normalised.azureWafLogSchema,
     azureWafPolicies: normalised.azureWafPolicies,

@@ -37,6 +37,19 @@ import {
   wafQueryHasNextPage,
   type WafGroupByField,
 } from "@/lib/waf-query-execution";
+import {
+  timespanDurationFor,
+  timespanLabelFor,
+  timespanValueFor,
+  WAF_DEFAULT_TIMESPAN_VALUE,
+  WAF_TIMESPAN_OPTIONS,
+} from "@/lib/kql-timespan-options";
+import {
+  resolveWafPolicySelection,
+  resolveWafWorkspaceSelection,
+  WAF_ALL_POLICIES_VALUE,
+  wafPolicyQueryFilter,
+} from "@/lib/waf-selection";
 import { getCachedWafLogSchema, setCachedWafLogSchema } from "@/lib/waf-schema-cache";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -152,13 +165,6 @@ const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
 const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] shadow-sm";
 
-const TIMESPAN_OPTIONS = [
-  { label: "Last 24 hours", value: "P1D", timespan: "P1D" },
-  { label: "Last 7 days", value: "P7D", timespan: "P7D" },
-  { label: "Last 30 days", value: "P30D", timespan: "P30D" },
-  { label: "All time", value: "all", timespan: "" },
-] as const;
-
 export default function AzureWafView({
   workspace,
   workspaceSelectionLoading = false,
@@ -180,9 +186,19 @@ export default function AzureWafView({
 }: AzureWafViewProps) {
   const workspaces = workspace.azureLogAnalyticsWorkspaces ?? [];
   const policies = workspace.azureWafPolicies ?? [];
-  const selectedWorkspace = workspace.selectedAzureLogWorkspace ?? workspaces[0]?.name ?? "";
-  const selectedPolicy = workspace.selectedAzureWafPolicy ?? policies[0]?.name ?? "";
+  const resolvedWorkspace = useMemo(
+    () => resolveWafWorkspaceSelection(workspaces, workspace.selectedAzureLogWorkspace),
+    [workspaces, workspace.selectedAzureLogWorkspace],
+  );
+  const resolvedPolicy = useMemo(
+    () => resolveWafPolicySelection(policies, workspace.selectedAzureWafPolicy, true),
+    [policies, workspace.selectedAzureWafPolicy],
+  );
+  const selectedWorkspace = resolvedWorkspace.workspace;
+  const configPolicy = resolvedPolicy.configPolicy;
+  const [queryPolicyValue, setQueryPolicyValue] = useState(WAF_ALL_POLICIES_VALUE);
   const [activeTab, setActiveTab] = useState("logs");
+  const selectionSyncRef = useRef({ workspace: "", policy: "" });
   const [schemaRevision, setSchemaRevision] = useState(0);
   const [schemaProbeHint, setSchemaProbeHint] = useState<string | null>(null);
   const schemaProbeTokenRef = useRef(0);
@@ -204,7 +220,7 @@ export default function AzureWafView({
   const inventoryControlsBusy = inventoryLoading || workspaceSelectionLoading;
 
   const [query, setQuery] = useState("");
-  const [timespanValue, setTimespanValue] = useState<string>(TIMESPAN_OPTIONS[0].value);
+  const [timespanValue, setTimespanValue] = useState<string>(WAF_DEFAULT_TIMESPAN_VALUE);
   const [trackingRef, setTrackingRef] = useState("");
   const [filters, setFilters] = useState<WafLogFilters>({});
   const [running, setRunning] = useState(false);
@@ -235,6 +251,60 @@ export default function AzureWafView({
   const curatedByCategory = useMemo(() => curatedQueriesByCategory(), []);
   const groupByOptions = useMemo(() => wafGroupByOptions(schema), [schema]);
   const groupedResults = groupByFields.length > 0;
+
+  const inventoryReady = !inventoryLoading && workspaces.length > 0;
+  const overviewReady =
+    inventoryReady && selectedWorkspace.trim() !== "" && !workspaceSelectionLoading;
+
+  const queryPolicy = wafPolicyQueryFilter(queryPolicyValue);
+
+  useEffect(() => {
+    if (inventoryLoading) {
+      return;
+    }
+    if (policies.length === 1) {
+      setQueryPolicyValue(policies[0]!.name);
+      return;
+    }
+    if (policies.length > 1) {
+      setQueryPolicyValue((current) => {
+        if (current === WAF_ALL_POLICIES_VALUE) {
+          return current;
+        }
+        return policies.some((policy) => policy.name === current)
+          ? current
+          : WAF_ALL_POLICIES_VALUE;
+      });
+    }
+  }, [inventoryLoading, policies]);
+
+  useEffect(() => {
+    if (!overviewReady || !resolvedWorkspace.needsSync) {
+      return;
+    }
+    if (selectionSyncRef.current.workspace === selectedWorkspace) {
+      return;
+    }
+    selectionSyncRef.current.workspace = selectedWorkspace;
+    onSelectWorkspace(selectedWorkspace);
+  }, [overviewReady, resolvedWorkspace.needsSync, selectedWorkspace, onSelectWorkspace]);
+
+  useEffect(() => {
+    if (inventoryLoading || policies.length === 0 || !resolvedPolicy.needsSync) {
+      return;
+    }
+    if (!configPolicy || selectionSyncRef.current.policy === configPolicy) {
+      return;
+    }
+    selectionSyncRef.current.policy = configPolicy;
+    onSelectPolicy(configPolicy);
+  }, [
+    inventoryLoading,
+    policies.length,
+    resolvedPolicy.needsSync,
+    configPolicy,
+    onSelectPolicy,
+  ]);
 
   useEffect(() => {
     if (!selectedWorkspace || !onListSaved) {
@@ -290,18 +360,17 @@ export default function AzureWafView({
   }, [activeTab, onProbeLogSchema, selectedWorkspace]);
 
   const timeRangeLabel = useMemo(
-    () => TIMESPAN_OPTIONS.find((option) => option.value === timespanValue)?.label ?? "Last 24 hours",
+    () => timespanLabelFor(timespanValue, WAF_TIMESPAN_OPTIONS),
     [timespanValue],
   );
-  const timespan =
-    TIMESPAN_OPTIONS.find((option) => option.value === timespanValue)?.timespan ?? "P1D";
+  const timespan = timespanDurationFor(timespanValue, WAF_TIMESPAN_OPTIONS);
 
   const baseFilters = useMemo<WafLogFilters>(
     () => ({
       ...filters,
-      policy: filters.policy ?? selectedPolicy,
+      policy: filters.policy ?? queryPolicy,
     }),
-    [filters, selectedPolicy],
+    [filters, queryPolicy],
   );
 
   const canRun = selectedWorkspace.trim() !== "" && query.trim() !== "" && !running;
@@ -309,7 +378,7 @@ export default function AzureWafView({
   useEffect(() => {
     setPage(1);
     setHasNextPage(false);
-  }, [query, timespanValue, pageSize, groupByFields, filters, selectedPolicy]);
+  }, [query, timespanValue, pageSize, groupByFields, filters, queryPolicy]);
 
   async function run(activeQuery = query, nextPage = page) {
     if (!selectedWorkspace.trim() || !activeQuery.trim() || running) return;
@@ -365,7 +434,7 @@ export default function AzureWafView({
       query,
       timespan,
       timeRangeLabel,
-      policyName: selectedPolicy,
+      policyName: queryPolicy ?? configPolicy,
       schemaProfile: schema,
       result,
       decodedRows,
@@ -414,11 +483,8 @@ export default function AzureWafView({
 
   function loadSavedEntry(entry: AzureLogAnalyticsSavedQuery) {
     setQuery(entry.query);
-    if (entry.timespan) {
-      const match = TIMESPAN_OPTIONS.find((option) => option.timespan === entry.timespan);
-      if (match) {
-        setTimespanValue(match.value);
-      }
+    if (entry.timespan != null) {
+      setTimespanValue(timespanValueFor(entry.timespan, WAF_TIMESPAN_OPTIONS));
     }
     setError(null);
   }
@@ -578,11 +644,12 @@ export default function AzureWafView({
           ) : null}
           <WafOverviewPanel
             workspace={selectedWorkspace}
-            policy={selectedPolicy}
+            policy={queryPolicy ?? ""}
             schema={schema}
             timespan={timespan}
             timeRangeLabel={timeRangeLabel}
             disabled={inventoryControlsBusy || !selectedWorkspace.trim()}
+            ready={overviewReady}
             onRunQuery={onRunQuery}
             onOpenBlocked={() => {
               const nextQuery = buildBlockedRequestsDetailQuery(schema, baseFilters);
@@ -608,7 +675,16 @@ export default function AzureWafView({
                   value={selectedWorkspace}
                   disabled={inventoryControlsBusy}
                   onValueChange={(value) => {
-                    if (value) onSelectWorkspace(value);
+                    if (!value) {
+                      return;
+                    }
+                    selectionSyncRef.current.workspace = value;
+                    setQueryPolicyValue(
+                      policies.length === 1 ? policies[0]!.name : WAF_ALL_POLICIES_VALUE,
+                    );
+                    setResult(null);
+                    setError(null);
+                    onSelectWorkspace(value);
                   }}
                 >
                   <SelectTrigger aria-label="Select Log Analytics workspace">
@@ -645,7 +721,7 @@ export default function AzureWafView({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {TIMESPAN_OPTIONS.map((option) => (
+                    {WAF_TIMESPAN_OPTIONS.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>
@@ -656,10 +732,17 @@ export default function AzureWafView({
               <div className="w-72">
                 <div className={cn(fieldLabel, "mb-1")}>WAF policy</div>
                 <Select
-                  value={selectedPolicy}
-                  disabled={inventoryControlsBusy}
+                  value={queryPolicyValue}
+                  disabled={inventoryControlsBusy || policies.length === 0}
                   onValueChange={(value) => {
-                    if (value) onSelectPolicy(value);
+                    if (!value) {
+                      return;
+                    }
+                    setQueryPolicyValue(value);
+                    if (value !== WAF_ALL_POLICIES_VALUE) {
+                      selectionSyncRef.current.policy = value;
+                      onSelectPolicy(value);
+                    }
                   }}
                 >
                   <SelectTrigger aria-label="Select WAF policy">
@@ -673,6 +756,9 @@ export default function AzureWafView({
                     )}
                   </SelectTrigger>
                   <SelectContent>
+                    {policies.length > 1 ? (
+                      <SelectItem value={WAF_ALL_POLICIES_VALUE}>All policies</SelectItem>
+                    ) : null}
                     {policies.map((policy) => (
                       <SelectItem key={policy.name} value={policy.name}>
                         {policy.name}
@@ -973,10 +1059,15 @@ export default function AzureWafView({
               <div className="w-72">
                 <div className={cn(fieldLabel, "mb-1")}>Policy</div>
                 <Select
-                  value={selectedPolicy}
-                  disabled={inventoryLoading || configLoading}
+                  value={configPolicy}
+                  disabled={inventoryLoading || configLoading || policies.length === 0}
                   onValueChange={(value) => {
-                    if (value) onSelectPolicy(value);
+                    if (!value) {
+                      return;
+                    }
+                    selectionSyncRef.current.policy = value;
+                    setQueryPolicyValue(value);
+                    onSelectPolicy(value);
                   }}
                 >
                   <SelectTrigger aria-label="Select WAF policy for config">

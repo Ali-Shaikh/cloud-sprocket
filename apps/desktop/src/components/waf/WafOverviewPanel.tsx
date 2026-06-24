@@ -28,6 +28,8 @@ export type WafOverviewPanelProps = {
   timespan: string;
   timeRangeLabel: string;
   disabled?: boolean;
+  /** When false, overview queries are deferred until workspace/policy inventory is coherent. */
+  ready?: boolean;
   onRunQuery: (
     workspace: string,
     query: string,
@@ -51,6 +53,7 @@ export function WafOverviewPanel({
   timespan,
   timeRangeLabel,
   disabled = false,
+  ready = true,
   onRunQuery,
   onOpenBlocked,
   onOpenRule,
@@ -69,7 +72,7 @@ export function WafOverviewPanel({
   );
 
   async function refresh() {
-    if (!workspace.trim() || disabled) {
+    if (!workspace.trim() || disabled || !ready) {
       return;
     }
     const token = ++refreshTokenRef.current;
@@ -106,7 +109,7 @@ export function WafOverviewPanel({
     return () => {
       refreshTokenRef.current += 1;
     };
-  }, [workspace, policy, timespan, queries.actions, queries.topRules, queries.topBlockedIPs, queries.blockedTotal, disabled]);
+  }, [workspace, policy, timespan, queries.actions, queries.topRules, queries.topBlockedIPs, queries.blockedTotal, disabled, ready]);
 
   const actionHighlights = overview?.actions.slice(0, 4) ?? [];
 
@@ -117,7 +120,7 @@ export function WafOverviewPanel({
           <h2 className="text-base font-bold">Security overview</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             {timeRangeLabel}
-            {policy.trim() ? ` · policy ${policy}` : ""}
+            {policy.trim() ? ` · policy ${policy}` : " · all policies"}
             {overview ? ` · ${overview.durationMs} ms` : ""}
           </p>
         </div>
