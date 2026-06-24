@@ -3,6 +3,8 @@
 
 import type { AzureWafLogSchemaProfile } from "@/types/backend";
 
+import { wafClientIpColumn, wafHostColumn } from "./waf-kql";
+
 export type WafGroupByField =
   | "action"
   | "ruleName"
@@ -36,17 +38,46 @@ const GROUP_BY_LABELS: Record<WafGroupByField, string> = {
   requestUri: "URI",
 };
 
+function wafGroupByColumn(schema: AzureWafLogSchemaProfile, field: WafGroupByField): string | undefined {
+  const columns = schema.columns;
+  switch (field) {
+    case "clientIP":
+      return wafClientIpColumn(schema);
+    case "host":
+      return wafHostColumn(schema);
+    case "action":
+      return columns.action;
+    case "ruleName":
+      return columns.ruleName;
+    case "policyName":
+      return columns.policyName;
+    case "requestUri":
+      return columns.requestUri;
+    default:
+      return undefined;
+  }
+}
+
+/** Strip project/summarize/order clauses so a new summarize can run on raw columns. */
+export function stripAggregateIncompatibleClauses(query: string): string {
+  const match = query.match(/\n\|\s*(project|summarize|order\s+by)\b/i);
+  if (!match || match.index == null) {
+    return query.trim();
+  }
+  return query.slice(0, match.index).trim();
+}
+
 /** Logical WAF fields that can be used in a summarize group-by clause. */
 export function wafGroupByOptions(schema: AzureWafLogSchemaProfile): WafGroupByOption[] {
-  const columns = schema.columns;
-  const entries: Array<[WafGroupByField, string | undefined]> = [
-    ["action", columns.action],
-    ["ruleName", columns.ruleName],
-    ["clientIP", columns.clientIP],
-    ["host", columns.host],
-    ["policyName", columns.policyName],
-    ["requestUri", columns.requestUri],
+  const fields: WafGroupByField[] = [
+    "action",
+    "ruleName",
+    "clientIP",
+    "host",
+    "policyName",
+    "requestUri",
   ];
+  const entries = fields.map((field) => [field, wafGroupByColumn(schema, field)] as const);
   return entries
     .filter(([, column]) => Boolean(column?.trim()))
     .map(([field, column]) => ({
@@ -131,6 +162,7 @@ export function buildExecutableWafQuery(
   let query = trimmed;
   const grouped = groupColumns.length > 0;
   if (grouped) {
+    query = stripAggregateIncompatibleClauses(query);
     query = `${query}\n${buildSummarizeClause(
       groupColumns,
       options.aggregateMode ?? "count",
