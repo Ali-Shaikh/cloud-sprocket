@@ -3485,11 +3485,12 @@ export default function App() {
       onSelectPolicy={(policyName) => {
         void selectAzureWafPolicy(policyName);
       }}
-      onRunQuery={(ws, query, timespan) =>
+      onRunQuery={(ws, query, timespan, maxRows) =>
         backendRequest<AzureLogQueryResult>("azure.logAnalytics.query", {
           workspace: ws,
           query,
           timespan,
+          maxRows,
         })
       }
       onEditInLogAnalytics={(ws, query, timespan) => {

@@ -2,7 +2,18 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, ExternalLink, Loader2, Play, Plus, Save, Shield, Square, Trash2 } from "lucide-react";
+import {
+  BookOpen,
+  ExternalLink,
+  Layers,
+  Loader2,
+  Play,
+  Plus,
+  Save,
+  Shield,
+  Square,
+  Trash2,
+} from "lucide-react";
 
 import { KqlEditor } from "@/components/kql/KqlEditor";
 import { LogQueryResultPanel } from "@/components/log-analytics/LogQueryResultPanel";
@@ -21,6 +32,14 @@ import {
   type WafCuratedQueryCategory,
 } from "@/lib/waf-curated-queries";
 import { isTuningCandidate } from "@/lib/waf-decode";
+import {
+  buildExecutableWafQuery,
+  trimWafQueryPageRows,
+  WAF_PAGE_SIZE_OPTIONS,
+  wafGroupByOptions,
+  wafQueryHasNextPage,
+  type WafGroupByField,
+} from "@/lib/waf-query-execution";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -51,6 +70,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -90,6 +110,7 @@ export type AzureWafViewProps = {
     workspace: string,
     query: string,
     timespan: string,
+    maxRows?: number,
   ) => Promise<AzureLogQueryResult>;
   onEditInLogAnalytics: (workspace: string, query: string, timespan: string) => void;
   onSetMode: (resourceGroup: string, policyName: string, mode: string) => Promise<void>;
@@ -190,8 +211,14 @@ export default function AzureWafView({
   const [saved, setSaved] = useState<AzureLogAnalyticsSavedQuery[]>([]);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
+  const [pageSize, setPageSize] = useState<number>(WAF_PAGE_SIZE_OPTIONS[2]);
+  const [page, setPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const [groupByFields, setGroupByFields] = useState<WafGroupByField[]>([]);
   const runTokenRef = useRef(0);
   const curatedByCategory = useMemo(() => curatedQueriesByCategory(), []);
+  const groupByOptions = useMemo(() => wafGroupByOptions(schema), [schema]);
+  const groupedResults = groupByFields.length > 0;
 
   useEffect(() => {
     if (!selectedWorkspace || !onListSaved) {
@@ -218,24 +245,59 @@ export default function AzureWafView({
 
   const canRun = selectedWorkspace.trim() !== "" && query.trim() !== "" && !running;
 
-  async function run(activeQuery = query) {
+  useEffect(() => {
+    setPage(1);
+    setHasNextPage(false);
+  }, [query, timespanValue, pageSize, groupByFields, filters, selectedPolicy]);
+
+  async function run(activeQuery = query, nextPage = page) {
     if (!selectedWorkspace.trim() || !activeQuery.trim() || running) return;
     const token = ++runTokenRef.current;
     setRunning(true);
     setError(null);
     try {
-      const queryResult = await onRunQuery(selectedWorkspace, activeQuery, timespan);
+      const built = buildExecutableWafQuery(activeQuery, schema, {
+        groupByFields,
+        page: nextPage,
+        pageSize,
+      });
+      const queryResult = await onRunQuery(
+        selectedWorkspace,
+        built.query,
+        timespan,
+        built.maxRows,
+      );
       if (token !== runTokenRef.current) return;
-      setResult(queryResult);
+      const trimmedRows = trimWafQueryPageRows(queryResult.rows, built.pageSize);
+      setResult({ ...queryResult, rows: trimmedRows });
+      setHasNextPage(wafQueryHasNextPage(queryResult.rows.length, built.pageSize));
+      setPage(nextPage);
     } catch (caught) {
       if (token !== runTokenRef.current) return;
       setError(caught instanceof Error ? caught.message : String(caught));
       setResult(null);
+      setHasNextPage(false);
     } finally {
       if (token === runTokenRef.current) {
         setRunning(false);
       }
     }
+  }
+
+  function changePage(nextPage: number) {
+    if (nextPage < 1 || running || !query.trim()) {
+      return;
+    }
+    void run(query, nextPage);
+  }
+
+  function toggleGroupByField(field: WafGroupByField, enabled: boolean) {
+    setGroupByFields((current) => {
+      if (enabled) {
+        return current.includes(field) ? current : [...current, field];
+      }
+      return current.filter((entry) => entry !== field);
+    });
   }
 
   function cancelRun() {
@@ -251,12 +313,13 @@ export default function AzureWafView({
         ? buildTrackingReferenceSearchQuery(schema, trimmed)
         : buildTrackingReferenceExtendQuery(schema, trimmed);
     setQuery(nextQuery);
-    void run(nextQuery);
+    void run(nextQuery, 1);
   }
 
   function loadCurated(build: (schema: AzureWafLogSchemaProfile, filters?: WafLogFilters) => string) {
     setQuery(build(schema, baseFilters));
     setError(null);
+    setPage(1);
   }
 
   function loadSavedEntry(entry: AzureLogAnalyticsSavedQuery) {
@@ -298,7 +361,7 @@ export default function AzureWafView({
   function applyFilteredQuery() {
     const nextQuery = buildWafFilteredQuery(schema, baseFilters);
     setQuery(nextQuery);
-    void run(nextQuery);
+    void run(nextQuery, 1);
   }
 
   async function confirmModeChange() {
@@ -568,6 +631,66 @@ export default function AzureWafView({
               </div>
             </div>
 
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="w-36">
+                <div className={cn(fieldLabel, "mb-1")}>Row limit</div>
+                <Select
+                  value={String(pageSize)}
+                  disabled={running}
+                  onValueChange={(value) => {
+                    const parsed = Number.parseInt(value, 10);
+                    if (!Number.isNaN(parsed)) {
+                      setPageSize(parsed);
+                    }
+                  }}
+                >
+                  <SelectTrigger aria-label="Select row limit per page">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WAF_PAGE_SIZE_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={String(option)}>
+                        {option} rows
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <div className={cn(fieldLabel, "mb-1")}>Group by</div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      aria-label="Group by dimensions"
+                      disabled={running || groupByOptions.length === 0}
+                    >
+                      <Layers />
+                      {groupByFields.length > 0
+                        ? `${groupByFields.length} selected`
+                        : "None"}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                    <DropdownMenuLabel>Aggregate dimensions</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {groupByOptions.map((option) => (
+                      <DropdownMenuCheckboxItem
+                        key={option.field}
+                        checked={groupByFields.includes(option.field)}
+                        onCheckedChange={(checked) =>
+                          toggleGroupByField(option.field, Boolean(checked))
+                        }
+                      >
+                        {option.label}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
             <div className="flex flex-wrap items-center gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -669,11 +792,11 @@ export default function AzureWafView({
 
             <div>
               <div className={cn(fieldLabel, "mb-1")}>KQL query</div>
-              <KqlEditor value={query} onChange={setQuery} onRun={() => void run()} disabled={running} />
+              <KqlEditor value={query} onChange={setQuery} onRun={() => void run(query, 1)} disabled={running} />
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={() => void run()} disabled={!canRun}>
+              <Button onClick={() => void run(query, 1)} disabled={!canRun}>
                 {running ? <Loader2 className="animate-spin" /> : <Play />}
                 {running ? "Running…" : "Run query"}
               </Button>
@@ -701,7 +824,14 @@ export default function AzureWafView({
             timeRangeLabel={timeRangeLabel}
             emptyTitle="No WAF log results yet"
             emptyDescription="Look up a tracking reference or run a curated WAF query."
-            wafColumnMap={schema.columns}
+            wafColumnMap={groupedResults ? undefined : schema.columns}
+            pagination={{
+              page,
+              pageSize,
+              hasNextPage,
+              onPageChange: changePage,
+              disabled: running || !query.trim(),
+            }}
           />
         </TabsContent>
 

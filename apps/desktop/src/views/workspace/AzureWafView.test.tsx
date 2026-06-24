@@ -87,8 +87,47 @@ describe("AzureWafView", () => {
 
     await waitFor(() => expect(onRunQuery).toHaveBeenCalled());
     expect(onRunQuery.mock.calls[0]?.[1]).toContain("trackingReference_s ==");
+    expect(onRunQuery.mock.calls[0]?.[1]).toContain("| take 101");
+    expect(onRunQuery.mock.calls[0]?.[3]).toBe(101);
     expect(onRunQuery.mock.calls[0]?.[1]).not.toContain("AdditionalFields");
     expect(await screen.findByText("20260619T211623Z-abc123")).toBeTruthy();
+  });
+
+  it("appends group-by summarize when dimensions are selected", async () => {
+    const user = userEvent.setup();
+    const onRunQuery = vi.fn().mockResolvedValue({
+      columns: ["action_s", "Count"],
+      rows: [["Block", "5"]],
+      durationMs: 12,
+    });
+    render(
+      <ThemeProvider>
+        <AzureWafView
+          workspace={workspace}
+          onSelectWorkspace={noop}
+          onSelectPolicy={noop}
+          onRunQuery={onRunQuery}
+          onEditInLogAnalytics={noop}
+          onSetMode={async () => {}}
+          onSetManagedRule={async () => {}}
+          onRemoveExclusion={async () => {}}
+          onAddExclusion={async () => {}}
+        />
+      </ThemeProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /curated queries/i }));
+    await user.click(
+      screen.getByRole("menuitem", { name: /Blocked requests.*All blocked WAF actions/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /group by dimensions/i }));
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "Action" }));
+    await user.click(screen.getByRole("button", { name: /run query/i }));
+
+    await waitFor(() => expect(onRunQuery).toHaveBeenCalled());
+    expect(onRunQuery.mock.calls[0]?.[1]).toContain(
+      "| summarize Count=count() by action_s",
+    );
   });
 
   it("routes Edit in Log Analytics with the current query", async () => {

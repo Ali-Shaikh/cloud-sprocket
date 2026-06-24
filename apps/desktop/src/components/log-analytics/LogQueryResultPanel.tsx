@@ -44,6 +44,14 @@ import {
   visibleColumns,
 } from "./log-query-utils";
 
+export type LogQueryPagination = {
+  page: number;
+  pageSize: number;
+  hasNextPage: boolean;
+  onPageChange: (page: number) => void;
+  disabled?: boolean;
+};
+
 export type LogQueryResultPanelProps = {
   result: AzureLogQueryResult | null;
   error?: string | null;
@@ -51,6 +59,7 @@ export type LogQueryResultPanelProps = {
   emptyTitle?: string;
   emptyDescription?: string;
   wafColumnMap?: AzureWafLogColumnMap;
+  pagination?: LogQueryPagination;
 };
 
 type SortDirection = "asc" | "desc" | null;
@@ -386,6 +395,7 @@ function LogQueryResultPanel({
   emptyTitle = "No results yet",
   emptyDescription = "Run a KQL query to see results here.",
   wafColumnMap,
+  pagination,
 }: LogQueryResultPanelProps) {
   const [wrapCells, setWrapCells] = useState(false);
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => new Set());
@@ -714,6 +724,35 @@ function LogQueryResultPanel({
           />
         ) : null}
       </div>
+
+      {pagination ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            Page {pagination.page}
+            {pagination.hasNextPage ? " · more results available" : ""}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pagination.disabled || pagination.page <= 1}
+              onClick={() => pagination.onPageChange(pagination.page - 1)}
+            >
+              <ChevronLeft />
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pagination.disabled || !pagination.hasNextPage}
+              onClick={() => pagination.onPageChange(pagination.page + 1)}
+            >
+              Next
+              <ChevronRight />
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {hasRows ? (
         <p className="text-xs text-muted-foreground">
