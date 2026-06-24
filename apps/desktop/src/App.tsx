@@ -145,6 +145,7 @@ import type {
   AzureLogAnalyticsSelectionResult,
   AzureLogAnalyticsTableInfo,
   AzureLogQueryResult,
+  AzureWafLogSchemaProfile,
   AzureFunctionInvokeResult,
   DetailField,
   EmulatorActionResult,
@@ -3485,6 +3486,12 @@ export default function App() {
       onSelectPolicy={(policyName) => {
         void selectAzureWafPolicy(policyName);
       }}
+      onProbeLogSchema={(ws, timespan) =>
+        backendRequest<AzureWafLogSchemaProfile>("azure.waf.logs.schema", {
+          workspace: ws,
+          timespan,
+        })
+      }
       onRunQuery={(ws, query, timespan, maxRows) =>
         backendRequest<AzureLogQueryResult>("azure.logAnalytics.query", {
           workspace: ws,

@@ -31,18 +31,76 @@ function baseWafTable(schema: AzureWafLogSchemaProfile): string {
   return schema.tableName;
 }
 
-function trackingReferenceProjectColumns(schema: AzureWafLogSchemaProfile, includeTrackingRef = false): string {
-  const columns = schema.columns;
-  const fields = [
-    columns.timeGenerated,
-    columns.action,
-    columns.ruleName,
-    columns.requestUri,
-    columns.detailsMatches,
-    columns.detailsMessage,
-    columns.clientIP,
-    columns.host,
+/** Resolve a WAF column from detected schema, or fall back only when schema was not probed. */
+export function wafResolvedColumn(
+  schema: AzureWafLogSchemaProfile,
+  field: keyof AzureWafLogColumnMap,
+  undetectedFallback: string,
+): string {
+  const value = schema.columns[field]?.trim();
+  if (value) {
+    return value;
+  }
+  return schema.detected ? "" : undetectedFallback;
+}
+
+/** BlockingRule extend clause using only columns present in the workspace. */
+export function buildBlockingRuleExtendClause(schema: AzureWafLogSchemaProfile): string {
+  const ruleName = wafResolvedColumn(schema, "ruleName", "ruleName_s");
+  const extras = [
+    wafResolvedColumn(schema, "detailsMessage", ""),
+    wafResolvedColumn(schema, "detailsMatches", "details_matches_s"),
   ].filter(Boolean);
+  if (extras.length === 0) {
+    return `| extend BlockingRule = ${ruleName}`;
+  }
+  return `| extend BlockingRule = coalesce(${ruleName}, ${extras.join(", ")})`;
+}
+
+/** Project list for blocked/anomaly detail queries. */
+export function wafDetailProjectColumns(schema: AzureWafLogSchemaProfile): string[] {
+  const leading: Array<[keyof AzureWafLogColumnMap, string]> = [
+    ["timeGenerated", "TimeGenerated"],
+    ["policyName", "policy_s"],
+    ["host", "host_s"],
+    ["clientIP", "clientIP_s"],
+    ["requestUri", "requestUri_s"],
+    ["action", "action_s"],
+  ];
+  const trailing: Array<[keyof AzureWafLogColumnMap, string]> = [
+    ["ruleName", "ruleName_s"],
+    ["detailsMessage", ""],
+    ["detailsData", ""],
+    ["detailsMatches", "details_matches_s"],
+    ["trackingReference", "trackingReference_s"],
+    ["policyMode", "policyMode_s"],
+  ];
+  return [
+    ...leading.map(([field, fallback]) => wafResolvedColumn(schema, field, fallback)).filter(Boolean),
+    "BlockingRule",
+    ...trailing.map(([field, fallback]) => wafResolvedColumn(schema, field, fallback)).filter(Boolean),
+  ];
+}
+
+function wafInvestigationProjectColumns(schema: AzureWafLogSchemaProfile): string[] {
+  const fields: Array<[keyof AzureWafLogColumnMap, string]> = [
+    ["timeGenerated", "TimeGenerated"],
+    ["action", "action_s"],
+    ["ruleName", "ruleName_s"],
+    ["requestUri", "requestUri_s"],
+    ["detailsMatches", "details_matches_s"],
+    ["detailsMessage", ""],
+    ["clientIP", "clientIP_s"],
+    ["host", "host_s"],
+    ["policyName", "policy_s"],
+    ["policyMode", "policyMode_s"],
+    ["trackingReference", "trackingReference_s"],
+  ];
+  return fields.map(([field, fallback]) => wafResolvedColumn(schema, field, fallback)).filter(Boolean);
+}
+
+function trackingReferenceProjectColumns(schema: AzureWafLogSchemaProfile, includeTrackingRef = false): string {
+  const fields = wafInvestigationProjectColumns(schema);
   if (includeTrackingRef) {
     fields.push("trackingRef");
   }
@@ -265,8 +323,6 @@ export function normaliseWafSchema(schema?: AzureWafLogSchemaProfile | null): Az
     policyMode: "policyMode_s",
     trackingReference: "trackingReference_s",
     detailsMatches: "details_matches_s",
-    detailsMessage: "details_msg_s",
-    detailsData: "details_data_s",
     additionalFields: "AdditionalFields",
   };
   return {
@@ -275,6 +331,6 @@ export function normaliseWafSchema(schema?: AzureWafLogSchemaProfile | null): Az
     categories: ["FrontDoorWebApplicationFirewallLog", "FrontdoorWebApplicationFirewallLog"],
     columns,
     detected: false,
-    message: "Using default AzureDiagnostics schema.",
+    message: "Using default Front Door customer-log columns until the workspace is probed.",
   };
 }

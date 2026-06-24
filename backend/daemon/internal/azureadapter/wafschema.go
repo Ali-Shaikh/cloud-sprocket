@@ -138,6 +138,10 @@ func pickColumn(columns []string, candidates ...string) string {
 			return candidate
 		}
 	}
+	// No match in a probed column list: do not invent columns that are not in the table.
+	if len(columns) > 0 {
+		return ""
+	}
 	if len(candidates) > 0 {
 		return candidates[0]
 	}

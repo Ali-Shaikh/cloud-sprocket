@@ -111,7 +111,15 @@ function wafDefaultVisibleColumns(
       visible.add(name);
     }
   });
-  ["TimeGenerated", "Category", "Resource", "ResourceGroup"].forEach((name) => {
+  [
+    "TimeGenerated",
+    "Category",
+    "Resource",
+    "ResourceGroup",
+    "clientPort_s",
+    "socketIP_s",
+    "onbehalfServiceId_s",
+  ].forEach((name) => {
     if (columns.includes(name)) {
       visible.add(name);
     }
@@ -523,8 +531,37 @@ function LogQueryResultPanel({
           ) : null}
         </div>
 
-        {hasRows && hasColumns ? (
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {pagination ? (
+            <div className="flex items-center gap-2 rounded-lg border border-border px-2 py-1">
+              <span className="text-xs tabular-nums text-muted-foreground">
+                Page {pagination.page}
+                {pagination.hasNextPage ? "+" : ""}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-7"
+                aria-label="Previous page"
+                disabled={pagination.disabled || pagination.page <= 1}
+                onClick={() => pagination.onPageChange(pagination.page - 1)}
+              >
+                <ChevronLeft />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-7"
+                aria-label="Next page"
+                disabled={pagination.disabled || !pagination.hasNextPage}
+                onClick={() => pagination.onPageChange(pagination.page + 1)}
+              >
+                <ChevronRight />
+              </Button>
+            </div>
+          ) : null}
+          {hasRows && hasColumns ? (
+            <>
             <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5">
               <Switch
                 id="log-query-wrap"
@@ -593,8 +630,9 @@ function LogQueryResultPanel({
               <Download />
               Download CSV
             </Button>
-          </div>
-        ) : null}
+            </>
+          ) : null}
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-lg border border-border">
@@ -724,35 +762,6 @@ function LogQueryResultPanel({
           />
         ) : null}
       </div>
-
-      {pagination ? (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-muted-foreground">
-            Page {pagination.page}
-            {pagination.hasNextPage ? " · more results available" : ""}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pagination.disabled || pagination.page <= 1}
-              onClick={() => pagination.onPageChange(pagination.page - 1)}
-            >
-              <ChevronLeft />
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pagination.disabled || !pagination.hasNextPage}
-              onClick={() => pagination.onPageChange(pagination.page + 1)}
-            >
-              Next
-              <ChevronRight />
-            </Button>
-          </div>
-        </div>
-      ) : null}
 
       {hasRows ? (
         <p className="text-xs text-muted-foreground">

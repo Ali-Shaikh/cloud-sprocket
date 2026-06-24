@@ -6,12 +6,15 @@ import type { AzureWafLogSchemaProfile } from "@/types/backend";
 import {
   buildActionBreakdownQuery,
   buildBlockedRequestsQuery,
+  buildBlockingRuleExtendClause,
   buildJsChallengeQuery,
   buildTopClientIPsQuery,
   buildTopHostsQuery,
   buildTopRulesQuery,
   buildTopUrisQuery,
   buildTrackingReferenceExtendQuery,
+  wafDetailProjectColumns,
+  wafResolvedColumn,
   type WafLogFilters,
 } from "./waf-kql";
 
@@ -37,15 +40,6 @@ function diagnosticsTable(schema: AzureWafLogSchemaProfile): string {
   return schema.mode === "azureDiagnostics" ? schema.tableName : schema.tableName;
 }
 
-/** Use schema-detected column names (see AzureDiagnostics table reference). */
-function hostColumn(schema: AzureWafLogSchemaProfile): string {
-  return schema.columns.host || "host_s";
-}
-
-function clientIpColumn(schema: AzureWafLogSchemaProfile): string {
-  return schema.columns.clientIP || "clientIP_s";
-}
-
 function appendPolicyFilter(
   query: string,
   schema: AzureWafLogSchemaProfile,
@@ -59,6 +53,35 @@ function appendPolicyFilter(
   return `${query}\n| where ${column} == "${escapeKql(policy)}"`;
 }
 
+function buildWafDetailQuery(
+  schema: AzureWafLogSchemaProfile,
+  filters: WafLogFilters,
+  actionFilter: string,
+): string {
+  const action = wafResolvedColumn(schema, "action", "action_s");
+  const timeGenerated = wafResolvedColumn(schema, "timeGenerated", "TimeGenerated");
+  const projectColumns = wafDetailProjectColumns(schema).join(",\n    ");
+
+  let query: string;
+  if (schema.mode === "azureDiagnostics") {
+    const category = primaryWafCategory(schema);
+    query = `${schema.tableName}
+| where Category =~ "${escapeKql(category)}"
+| where ${action} =~ "${escapeKql(actionFilter)}"`;
+  } else {
+    query = `${schema.tableName}
+| where ${action} =~ "${escapeKql(actionFilter)}"`;
+  }
+
+  query = appendPolicyFilter(query, schema, filters);
+  query = `${query}
+${buildBlockingRuleExtendClause(schema)}
+| project
+    ${projectColumns}
+| order by ${timeGenerated} desc`;
+  return query;
+}
+
 /**
  * Detailed anomaly-scoring investigation query with BlockingRule coalesce and a
  * rich project list. Matches the operational pattern used in production WAF triage.
@@ -67,46 +90,7 @@ export function buildAnomalyScoringDetailQuery(
   schema: AzureWafLogSchemaProfile,
   filters: WafLogFilters = {},
 ): string {
-  const columns = schema.columns;
-  const action = columns.action || "action_s";
-  const ruleName = columns.ruleName || "ruleName_s";
-  const detailsMessage = columns.detailsMessage || "details_msg_s";
-  const detailsData = columns.detailsData || "details_data_s";
-  const trackingReference = columns.trackingReference || "trackingReference_s";
-  const requestUri = columns.requestUri || "requestUri_s";
-  const policyName = columns.policyName || "policy_s";
-  const timeGenerated = columns.timeGenerated || "TimeGenerated";
-  const host = hostColumn(schema);
-  const clientIp = clientIpColumn(schema);
-
-  let query: string;
-  if (schema.mode === "azureDiagnostics") {
-    const category = primaryWafCategory(schema);
-    query = `${schema.tableName}
-| where Category =~ "${escapeKql(category)}"
-| where ${action} =~ "AnomalyScoring"`;
-  } else {
-    query = `${schema.tableName}
-| where ${action} =~ "AnomalyScoring"`;
-  }
-
-  query = appendPolicyFilter(query, schema, filters);
-  query = `${query}
-| extend BlockingRule = coalesce(${ruleName}, ${detailsMessage})
-| project
-    ${timeGenerated},
-    ${policyName},
-    ${host},
-    ${clientIp},
-    ${requestUri},
-    ${action},
-    BlockingRule,
-    ${ruleName},
-    ${detailsMessage},
-    ${detailsData},
-    ${trackingReference}
-| order by ${timeGenerated} desc`;
-  return query;
+  return buildWafDetailQuery(schema, filters, "AnomalyScoring");
 }
 
 /** Blocked requests with BlockingRule for triage (same shape as anomaly detail). */
@@ -114,46 +98,7 @@ export function buildBlockedRequestsDetailQuery(
   schema: AzureWafLogSchemaProfile,
   filters: WafLogFilters = {},
 ): string {
-  const columns = schema.columns;
-  const action = columns.action || "action_s";
-  const ruleName = columns.ruleName || "ruleName_s";
-  const detailsMessage = columns.detailsMessage || "details_msg_s";
-  const detailsData = columns.detailsData || "details_data_s";
-  const trackingReference = columns.trackingReference || "trackingReference_s";
-  const requestUri = columns.requestUri || "requestUri_s";
-  const policyName = columns.policyName || "policy_s";
-  const timeGenerated = columns.timeGenerated || "TimeGenerated";
-  const host = hostColumn(schema);
-  const clientIp = clientIpColumn(schema);
-
-  let query: string;
-  if (schema.mode === "azureDiagnostics") {
-    const category = primaryWafCategory(schema);
-    query = `${diagnosticsTable(schema)}
-| where Category =~ "${escapeKql(category)}"
-| where ${action} =~ "Block"`;
-  } else {
-    query = `${schema.tableName}
-| where ${action} =~ "Block"`;
-  }
-
-  query = appendPolicyFilter(query, schema, filters);
-  query = `${query}
-| extend BlockingRule = coalesce(${ruleName}, ${detailsMessage})
-| project
-    ${timeGenerated},
-    ${policyName},
-    ${host},
-    ${clientIp},
-    ${requestUri},
-    ${action},
-    BlockingRule,
-    ${ruleName},
-    ${detailsMessage},
-    ${detailsData},
-    ${trackingReference}
-| order by ${timeGenerated} desc`;
-  return query;
+  return buildWafDetailQuery(schema, filters, "Block");
 }
 
 export const WAF_CURATED_QUERY_CATEGORIES: Record<WafCuratedQueryCategory, string> = {

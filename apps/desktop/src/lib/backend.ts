@@ -663,7 +663,6 @@ const mockAzureWafLogSchema = {
     policyMode: "policyMode_s",
     trackingReference: "trackingReference_s",
     detailsMatches: "details_matches_s",
-    detailsMessage: "details_msg_s",
   },
   detected: true,
   message: "AzureDiagnostics WAF rows detected (mock).",

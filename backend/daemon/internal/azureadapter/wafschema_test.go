@@ -26,3 +26,33 @@ func TestPickColumnPrefersExistingColumn(t *testing.T) {
 	}
 }
 
+func TestPickColumnReturnsEmptyWhenColumnAbsent(t *testing.T) {
+	got := pickColumn([]string{"action_s", "details_matches_s"}, "details_msg_s")
+	if got != "" {
+		t.Fatalf("pickColumn = %q, want empty when column is not in workspace", got)
+	}
+}
+
+func TestDiagnosticsSchemaProfileMatchesFrontDoorCustomerLogs(t *testing.T) {
+	profile := diagnosticsSchemaProfile([]string{
+		"TimeGenerated", "Category", "action_s", "clientIP_s", "clientPort_s",
+		"details_matches_s", "host_s", "policyMode_s", "policy_s", "requestUri_s",
+		"ruleName_s", "socketIP_s", "trackingReference_s",
+	})
+	if profile.Columns.ClientIP != "clientIP_s" {
+		t.Fatalf("client IP column = %q", profile.Columns.ClientIP)
+	}
+	if profile.Columns.Host != "host_s" {
+		t.Fatalf("host column = %q", profile.Columns.Host)
+	}
+	if profile.Columns.DetailsMatches != "details_matches_s" {
+		t.Fatalf("details matches column = %q", profile.Columns.DetailsMatches)
+	}
+	if profile.Columns.DetailsMessage != "" {
+		t.Fatalf("details message column = %q, want empty when absent", profile.Columns.DetailsMessage)
+	}
+	if profile.Columns.DetailsData != "" {
+		t.Fatalf("details data column = %q, want empty when absent", profile.Columns.DetailsData)
+	}
+}
+

@@ -50,6 +50,25 @@ const resourceSpecificSchema = normaliseWafSchema({
   detected: true,
 });
 
+const erwProdSchema = normaliseWafSchema({
+  mode: "azureDiagnostics",
+  tableName: "AzureDiagnostics",
+  categories: ["FrontDoorWebApplicationFirewallLog"],
+  columns: {
+    timeGenerated: "TimeGenerated",
+    action: "action_s",
+    ruleName: "ruleName_s",
+    requestUri: "requestUri_s",
+    clientIP: "clientIP_s",
+    host: "host_s",
+    policyName: "policy_s",
+    policyMode: "policyMode_s",
+    trackingReference: "trackingReference_s",
+    detailsMatches: "details_matches_s",
+  },
+  detected: true,
+});
+
 const trackingRef = "20260619T211623Z-157c4db97d7z2jghhC1DXBy14000000002pg000000006z97";
 
 describe("waf-kql tracking reference", () => {
@@ -90,5 +109,14 @@ describe("waf-kql tracking reference", () => {
     expect(description.modeKey).toBe("azureDiagnostics");
     expect(description.modeLabel).toContain("AzureDiagnostics");
     expect(description.trackingLookup).toContain("trackingReference_s");
+  });
+
+  it("projects only detected columns for ERW-PROD tracking lookup", () => {
+    const query = buildTrackingReferenceExtendQuery(erwProdSchema, trackingRef);
+    expect(query).toContain("clientIP_s");
+    expect(query).toContain("host_s");
+    expect(query).toContain("policy_s");
+    expect(query).toContain("details_matches_s");
+    expect(query).not.toContain("details_msg_s");
   });
 });

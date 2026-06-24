@@ -19,9 +19,13 @@ const schema = normaliseWafSchema({
     timeGenerated: "TimeGenerated",
     action: "action_s",
     ruleName: "ruleName_s",
+    requestUri: "requestUri_s",
     clientIP: "clientIP_s",
     host: "host_s",
     policyName: "policy_s",
+    policyMode: "policyMode_s",
+    trackingReference: "trackingReference_s",
+    detailsMatches: "details_matches_s",
   },
 });
 
@@ -74,7 +78,7 @@ describe("waf-query-execution", () => {
 | where Category =~ "FrontDoorWebApplicationFirewallLog"
 | where action_s =~ "Block"
 | where policy_s == "prodCMS"
-| extend BlockingRule = coalesce(ruleName_s, details_msg_s)
+| extend BlockingRule = coalesce(ruleName_s, details_matches_s)
 | project
     TimeGenerated,
     clientIP_s,

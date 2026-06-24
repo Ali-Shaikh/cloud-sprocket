@@ -60,8 +60,8 @@ export function decodeWafRow(
   columnMap: AzureWafLogColumnMap,
 ): DecodedWafRow {
   const record = rowToRecord(columns, row);
-  const matchesColumn = columnMap.detailsMatches;
-  const rawMatches = record[matchesColumn] ?? "";
+  const matchesColumn = columnMap.detailsMatches?.trim();
+  const rawMatches = matchesColumn ? (record[matchesColumn] ?? "") : "";
   const formatted = formatCellValue(rawMatches);
   const matches =
     formatted.kind === "json" ? parseMatchesPayload(formatted.display) : parseMatchesPayload(rawMatches);
@@ -76,7 +76,9 @@ export function decodeWafRow(
     policyName: record[columnMap.policyName],
     action: record[columnMap.action],
     trackingReference: record[columnMap.trackingReference],
-    detailsMessage: record[columnMap.detailsMessage],
+    detailsMessage: columnMap.detailsMessage?.trim()
+      ? record[columnMap.detailsMessage]
+      : undefined,
     matches,
   };
 }

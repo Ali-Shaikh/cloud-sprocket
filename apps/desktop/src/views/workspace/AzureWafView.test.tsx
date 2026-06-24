@@ -6,8 +6,9 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
+import { clearWafLogSchemaCache } from "@/lib/waf-schema-cache";
 import AzureWafView from "./AzureWafView";
-import type { WorkspaceSnapshot } from "@/types/backend";
+import type { AzureWafLogSchemaProfile, WorkspaceSnapshot } from "@/types/backend";
 
 const workspace = {
   profile: { displayName: "Marketing Subscription" },
@@ -57,7 +58,86 @@ const workspace = {
 
 const noop = () => {};
 
+const erwProdSchema: AzureWafLogSchemaProfile = {
+  mode: "azureDiagnostics",
+  tableName: "AzureDiagnostics",
+  categories: ["FrontDoorWebApplicationFirewallLog"],
+  columns: {
+    timeGenerated: "TimeGenerated",
+    action: "action_s",
+    ruleName: "ruleName_s",
+    requestUri: "requestUri_s",
+    clientIP: "clientIP_s",
+    host: "host_s",
+    policyName: "policy_s",
+    policyMode: "policyMode_s",
+    trackingReference: "trackingReference_s",
+    detailsMatches: "details_matches_s",
+  },
+  detected: true,
+  message: "WAF logs detected in AzureDiagnostics.",
+};
+
+afterEach(() => {
+  clearWafLogSchemaCache();
+});
+
 describe("AzureWafView", () => {
+  it("probes log schema once per workspace in the background", async () => {
+    const onProbeLogSchema = vi.fn().mockResolvedValue(erwProdSchema);
+    const workspaceWithoutSchema = {
+      ...workspace,
+      azureWafLogSchema: undefined,
+    } as unknown as WorkspaceSnapshot;
+    render(
+      <ThemeProvider>
+        <AzureWafView
+          workspace={workspaceWithoutSchema}
+          onSelectWorkspace={noop}
+          onSelectPolicy={noop}
+          onRunQuery={vi.fn()}
+          onEditInLogAnalytics={noop}
+          onSetMode={async () => {}}
+          onSetManagedRule={async () => {}}
+          onRemoveExclusion={async () => {}}
+          onAddExclusion={async () => {}}
+          onProbeLogSchema={onProbeLogSchema}
+        />
+      </ThemeProvider>,
+    );
+
+    await waitFor(() => expect(onProbeLogSchema).toHaveBeenCalledTimes(1));
+    expect(onProbeLogSchema.mock.calls[0]?.[0]).toBe("law-platform");
+    expect(onProbeLogSchema.mock.calls[0]?.[1]).toBe("P1D");
+    expect(await screen.findByText("Schema detected")).toBeTruthy();
+  });
+
+  it("does not probe schema while the config tab is active", async () => {
+    const onProbeLogSchema = vi.fn().mockResolvedValue(erwProdSchema);
+    const workspaceWithoutSchema = {
+      ...workspace,
+      azureWafLogSchema: undefined,
+    } as unknown as WorkspaceSnapshot;
+    render(
+      <ThemeProvider>
+        <AzureWafView
+          workspace={workspaceWithoutSchema}
+          onSelectWorkspace={noop}
+          onSelectPolicy={noop}
+          onRunQuery={vi.fn()}
+          onEditInLogAnalytics={noop}
+          onSetMode={async () => {}}
+          onSetManagedRule={async () => {}}
+          onRemoveExclusion={async () => {}}
+          onAddExclusion={async () => {}}
+          onProbeLogSchema={onProbeLogSchema}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: /config/i }));
+    await waitFor(() => expect(onProbeLogSchema).not.toHaveBeenCalled());
+  });
   it("looks up a tracking reference and renders WAF results", async () => {
     const onRunQuery = vi.fn().mockResolvedValue({
       columns: ["action_s", "trackingReference_s"],
@@ -120,8 +200,7 @@ describe("AzureWafView", () => {
     await user.click(
       screen.getByRole("menuitem", { name: /Blocked requests.*All blocked WAF actions/i }),
     );
-    await user.click(screen.getByRole("button", { name: /group by dimensions/i }));
-    await user.click(screen.getByRole("menuitemcheckbox", { name: "Action" }));
+    await user.click(screen.getByRole("button", { name: /group by action/i }));
     await user.click(screen.getByRole("button", { name: /run query/i }));
 
     await waitFor(() => expect(onRunQuery).toHaveBeenCalled());

@@ -2,21 +2,11 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  BookOpen,
-  ExternalLink,
-  Layers,
-  Loader2,
-  Play,
-  Plus,
-  Save,
-  Shield,
-  Square,
-  Trash2,
-} from "lucide-react";
+import { BookOpen, Loader2, Plus, Save, Shield, Trash2 } from "lucide-react";
 
 import { KqlEditor } from "@/components/kql/KqlEditor";
 import { LogQueryResultPanel } from "@/components/log-analytics/LogQueryResultPanel";
+import { WafQueryGroupByBar, WafQueryRunControls } from "@/components/waf/WafQueryExecutionBar";
 import { cn } from "@/lib/utils";
 import {
   buildTrackingReferenceExtendQuery,
@@ -40,6 +30,7 @@ import {
   wafQueryHasNextPage,
   type WafGroupByField,
 } from "@/lib/waf-query-execution";
+import { getCachedWafLogSchema, setCachedWafLogSchema } from "@/lib/waf-schema-cache";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -70,7 +61,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -98,6 +88,9 @@ import type {
   AzureWafLogSchemaProfile,
   WorkspaceSnapshot,
 } from "@/types/backend";
+
+/** Fixed probe window: column names do not depend on the query time range. */
+const WAF_SCHEMA_PROBE_TIMESPAN = "P1D";
 
 export type AzureWafViewProps = {
   workspace: WorkspaceSnapshot;
@@ -142,6 +135,8 @@ export type AzureWafViewProps = {
     id?: string,
   ) => Promise<AzureLogAnalyticsSavedQuery>;
   onDeleteSaved?: (workspace: string, id: string) => Promise<void>;
+  /** Background probe for workspace log columns. Called at most once per workspace per session. */
+  onProbeLogSchema?: (workspace: string, timespan: string) => Promise<AzureWafLogSchemaProfile>;
 };
 
 const fieldLabel =
@@ -171,15 +166,26 @@ export default function AzureWafView({
   onListSaved,
   onSaveQuery,
   onDeleteSaved,
+  onProbeLogSchema,
 }: AzureWafViewProps) {
   const workspaces = workspace.azureLogAnalyticsWorkspaces ?? [];
   const policies = workspace.azureWafPolicies ?? [];
   const selectedWorkspace = workspace.selectedAzureLogWorkspace ?? workspaces[0]?.name ?? "";
   const selectedPolicy = workspace.selectedAzureWafPolicy ?? policies[0]?.name ?? "";
-  const schema = useMemo(
-    () => normaliseWafSchema(workspace.azureWafLogSchema),
-    [workspace.azureWafLogSchema],
-  );
+  const [activeTab, setActiveTab] = useState("logs");
+  const [schemaRevision, setSchemaRevision] = useState(0);
+  const [schemaProbeHint, setSchemaProbeHint] = useState<string | null>(null);
+  const schemaProbeTokenRef = useRef(0);
+
+  const schema = useMemo(() => {
+    const cached = getCachedWafLogSchema(selectedWorkspace);
+    if (cached) {
+      return normaliseWafSchema(cached);
+    }
+    return normaliseWafSchema(workspace.azureWafLogSchema);
+    // schemaRevision bumps when a background probe completes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- revision tracks cache writes
+  }, [selectedWorkspace, workspace.azureWafLogSchema, schemaRevision]);
   const schemaDescription = useMemo(() => describeWafLogSchema(schema), [schema]);
   const policyDetail = workspace.azureWafPolicyDetail;
   const fireCounts = workspace.azureWafRuleFireCounts ?? [];
@@ -227,6 +233,51 @@ export default function AzureWafView({
     }
     void onListSaved(selectedWorkspace).then(setSaved).catch(() => setSaved([]));
   }, [selectedWorkspace, onListSaved]);
+
+  useEffect(() => {
+    if (!selectedWorkspace.trim() || !workspace.azureWafLogSchema?.detected) {
+      return;
+    }
+    if (getCachedWafLogSchema(selectedWorkspace)) {
+      return;
+    }
+    setCachedWafLogSchema(selectedWorkspace, workspace.azureWafLogSchema);
+    setSchemaRevision((current) => current + 1);
+  }, [selectedWorkspace, workspace.azureWafLogSchema]);
+
+  useEffect(() => {
+    if (activeTab !== "logs" || !selectedWorkspace.trim() || !onProbeLogSchema) {
+      return;
+    }
+    if (getCachedWafLogSchema(selectedWorkspace)) {
+      return;
+    }
+
+    const token = ++schemaProbeTokenRef.current;
+    const deferId = window.setTimeout(() => {
+      setSchemaProbeHint("Checking log columns…");
+      void onProbeLogSchema(selectedWorkspace, WAF_SCHEMA_PROBE_TIMESPAN)
+        .then((probed) => {
+          if (token !== schemaProbeTokenRef.current) {
+            return;
+          }
+          setCachedWafLogSchema(selectedWorkspace, probed);
+          setSchemaRevision((current) => current + 1);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (token === schemaProbeTokenRef.current) {
+            setSchemaProbeHint(null);
+          }
+        });
+    }, 0);
+
+    return () => {
+      window.clearTimeout(deferId);
+      schemaProbeTokenRef.current += 1;
+      setSchemaProbeHint(null);
+    };
+  }, [activeTab, onProbeLogSchema, selectedWorkspace]);
 
   const timeRangeLabel = useMemo(
     () => TIMESPAN_OPTIONS.find((option) => option.value === timespanValue)?.label ?? "Last 24 hours",
@@ -298,6 +349,10 @@ export default function AzureWafView({
       }
       return current.filter((entry) => entry !== field);
     });
+  }
+
+  function clearGroupByFields() {
+    setGroupByFields([]);
   }
 
   function cancelRun() {
@@ -462,7 +517,7 @@ export default function AzureWafView({
         </div>
       </header>
 
-      <Tabs defaultValue="logs">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="logs">Logs</TabsTrigger>
           <TabsTrigger value="config">Config</TabsTrigger>
@@ -565,129 +620,99 @@ export default function AzureWafView({
                 Tracking ref lookup: {schemaDescription.trackingLookup}
               </div>
               {schemaDescription.message ? <div className="mt-1">{schemaDescription.message}</div> : null}
+              {schemaProbeHint ? (
+                <div className="mt-1 text-muted-foreground">{schemaProbeHint}</div>
+              ) : null}
             </div>
 
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="min-w-[280px] flex-1">
-                <div className={cn(fieldLabel, "mb-1")}>Tracking reference (X-Azure-Ref)</div>
-                <Input
-                  value={trackingRef}
-                  onChange={(event) => setTrackingRef(event.target.value)}
-                  placeholder="20260619T211623Z-abc123"
-                  spellCheck={false}
-                  aria-label="WAF tracking reference"
-                />
-              </div>
-              <Button
-                variant="secondary"
-                onClick={() => applyTrackingLookup("extend")}
-                disabled={!trackingRef.trim() || running}
-              >
-                Look up ref
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => applyTrackingLookup("search")}
-                disabled={!trackingRef.trim() || running}
-              >
-                Search table
-              </Button>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-lg border border-border bg-muted/10 p-4 space-y-3">
               <div>
-                <div className={cn(fieldLabel, "mb-1")}>Client IP</div>
-                <Input
-                  value={filters.clientIP ?? ""}
-                  onChange={(event) => setFilters((current) => ({ ...current, clientIP: event.target.value }))}
-                  placeholder="Optional filter"
-                />
+                <h3 className="text-sm font-semibold">Track a request</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Paste an X-Azure-Ref from a response header or support ticket.
+                </p>
               </div>
-              <div>
-                <div className={cn(fieldLabel, "mb-1")}>Host</div>
-                <Input
-                  value={filters.host ?? ""}
-                  onChange={(event) => setFilters((current) => ({ ...current, host: event.target.value }))}
-                  placeholder="Optional filter"
-                />
-              </div>
-              <div>
-                <div className={cn(fieldLabel, "mb-1")}>Rule name</div>
-                <Input
-                  value={filters.ruleName ?? ""}
-                  onChange={(event) => setFilters((current) => ({ ...current, ruleName: event.target.value }))}
-                  placeholder="Optional filter"
-                />
-              </div>
-              <div>
-                <div className={cn(fieldLabel, "mb-1")}>URI contains</div>
-                <Input
-                  value={filters.uriContains ?? ""}
-                  onChange={(event) =>
-                    setFilters((current) => ({ ...current, uriContains: event.target.value }))
-                  }
-                  placeholder="Optional filter"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="w-36">
-                <div className={cn(fieldLabel, "mb-1")}>Row limit</div>
-                <Select
-                  value={String(pageSize)}
-                  disabled={running}
-                  onValueChange={(value) => {
-                    const parsed = Number.parseInt(value, 10);
-                    if (!Number.isNaN(parsed)) {
-                      setPageSize(parsed);
-                    }
-                  }}
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-[280px] flex-1">
+                  <div className={cn(fieldLabel, "mb-1")}>Tracking reference</div>
+                  <Input
+                    value={trackingRef}
+                    onChange={(event) => setTrackingRef(event.target.value)}
+                    placeholder="20260619T211623Z-abc123"
+                    spellCheck={false}
+                    aria-label="WAF tracking reference"
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => applyTrackingLookup("extend")}
+                  disabled={!trackingRef.trim() || running}
                 >
-                  <SelectTrigger aria-label="Select row limit per page">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {WAF_PAGE_SIZE_OPTIONS.map((option) => (
-                      <SelectItem key={option} value={String(option)}>
-                        {option} rows
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  Look up ref
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => applyTrackingLookup("search")}
+                  disabled={!trackingRef.trim() || running}
+                >
+                  Search table
+                </Button>
               </div>
-              <div>
-                <div className={cn(fieldLabel, "mb-1")}>Group by</div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      aria-label="Group by dimensions"
-                      disabled={running || groupByOptions.length === 0}
-                    >
-                      <Layers />
-                      {groupByFields.length > 0
-                        ? `${groupByFields.length} selected`
-                        : "None"}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-56">
-                    <DropdownMenuLabel>Aggregate dimensions</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {groupByOptions.map((option) => (
-                      <DropdownMenuCheckboxItem
-                        key={option.field}
-                        checked={groupByFields.includes(option.field)}
-                        onCheckedChange={(checked) =>
-                          toggleGroupByField(option.field, Boolean(checked))
-                        }
-                      >
-                        {option.label}
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+            </div>
+
+            <div className="rounded-lg border border-border bg-muted/10 p-4 space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold">Filter logs</h3>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Narrow the query before you run it. Policy filter uses the selection above.
+                  </p>
+                </div>
+                <Button variant="secondary" size="sm" disabled={running} onClick={applyFilteredQuery}>
+                  Apply filters to query
+                </Button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <div className={cn(fieldLabel, "mb-1")}>Client IP</div>
+                  <Input
+                    value={filters.clientIP ?? ""}
+                    onChange={(event) =>
+                      setFilters((current) => ({ ...current, clientIP: event.target.value }))
+                    }
+                    placeholder="e.g. 203.0.113.10"
+                  />
+                </div>
+                <div>
+                  <div className={cn(fieldLabel, "mb-1")}>Host</div>
+                  <Input
+                    value={filters.host ?? ""}
+                    onChange={(event) => setFilters((current) => ({ ...current, host: event.target.value }))}
+                    placeholder="e.g. api.example.com"
+                  />
+                </div>
+                <div>
+                  <div className={cn(fieldLabel, "mb-1")}>Rule name</div>
+                  <Input
+                    value={filters.ruleName ?? ""}
+                    onChange={(event) =>
+                      setFilters((current) => ({ ...current, ruleName: event.target.value }))
+                    }
+                    placeholder="e.g. 942100"
+                  />
+                </div>
+                <div>
+                  <div className={cn(fieldLabel, "mb-1")}>URI contains</div>
+                  <Input
+                    value={filters.uriContains ?? ""}
+                    onChange={(event) =>
+                      setFilters((current) => ({ ...current, uriContains: event.target.value }))
+                    }
+                    placeholder="e.g. /api/login"
+                  />
+                </div>
               </div>
             </div>
 
@@ -785,37 +810,45 @@ export default function AzureWafView({
                   Save query
                 </Button>
               ) : null}
-              <Button variant="outline" size="sm" disabled={running} onClick={applyFilteredQuery}>
-                Apply filters
-              </Button>
             </div>
 
-            <div>
-              <div className={cn(fieldLabel, "mb-1")}>KQL query</div>
-              <KqlEditor value={query} onChange={setQuery} onRun={() => void run(query, 1)} disabled={running} />
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className={fieldLabel}>KQL query</div>
+                <WafQueryRunControls
+                  running={running}
+                  canRun={canRun}
+                  pageSize={pageSize}
+                  onRun={() => void run(query, 1)}
+                  onCancel={cancelRun}
+                  onPageSizeChange={setPageSize}
+                  onEditInLogAnalytics={() =>
+                    onEditInLogAnalytics(selectedWorkspace, query, timespan)
+                  }
+                  editDisabled={!query.trim()}
+                />
+              </div>
+              <div className="overflow-hidden rounded-lg border border-border bg-background">
+                <KqlEditor
+                  value={query}
+                  onChange={setQuery}
+                  onRun={() => void run(query, 1)}
+                  disabled={running}
+                  className="rounded-none border-0 focus-within:ring-0"
+                />
+                <WafQueryGroupByBar
+                  running={running}
+                  groupByFields={groupByFields}
+                  groupByOptions={groupByOptions}
+                  onToggleGroupBy={toggleGroupByField}
+                  onClearGroupBy={clearGroupByFields}
+                />
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={() => void run(query, 1)} disabled={!canRun}>
-                {running ? <Loader2 className="animate-spin" /> : <Play />}
-                {running ? "Running…" : "Run query"}
-              </Button>
-              {running ? (
-                <Button variant="outline" onClick={cancelRun}>
-                  <Square />
-                  Cancel
-                </Button>
-              ) : null}
-              <Button
-                variant="outline"
-                disabled={!query.trim()}
-                onClick={() => onEditInLogAnalytics(selectedWorkspace, query, timespan)}
-              >
-                <ExternalLink />
-                Edit in Log Analytics
-              </Button>
+            {workspace.azureWafStatusMessage ? (
               <p className="text-sm text-muted-foreground">{workspace.azureWafStatusMessage}</p>
-            </div>
+            ) : null}
           </section>
 
           <LogQueryResultPanel
@@ -825,13 +858,17 @@ export default function AzureWafView({
             emptyTitle="No WAF log results yet"
             emptyDescription="Look up a tracking reference or run a curated WAF query."
             wafColumnMap={groupedResults ? undefined : schema.columns}
-            pagination={{
-              page,
-              pageSize,
-              hasNextPage,
-              onPageChange: changePage,
-              disabled: running || !query.trim(),
-            }}
+            pagination={
+              result
+                ? {
+                    page,
+                    pageSize,
+                    hasNextPage,
+                    onPageChange: changePage,
+                    disabled: running,
+                  }
+                : undefined
+            }
           />
         </TabsContent>
 

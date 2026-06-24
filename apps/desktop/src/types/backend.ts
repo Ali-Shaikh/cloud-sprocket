@@ -556,8 +556,8 @@ export interface AzureWafLogColumnMap {
   policyName: string;
   policyMode: string;
   trackingReference: string;
-  detailsMatches: string;
-  detailsMessage: string;
+  detailsMatches?: string;
+  detailsMessage?: string;
   detailsData?: string;
   additionalFields?: string;
 }
