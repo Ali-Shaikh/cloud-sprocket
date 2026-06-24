@@ -35,19 +35,20 @@ func (s *Service) enrichAzureWafInventory(
 	if len(workspaces) == 0 {
 		workspaces = s.azureLogAnalyticsWorkspaces(ctx, profile)
 	}
-	workspaceID := s.selectedAzureLogWorkspace(session, workspaces)
-	if workspaceID == "" && len(workspaces) > 0 {
-		workspaceID = workspaces[0].Name
+	selectedWorkspace := s.selectedAzureLogWorkspace(session, workspaces)
+	if selectedWorkspace == "" && len(workspaces) > 0 {
+		selectedWorkspace = workspaces[0].Name
 	}
-	if workspaceID != "" {
-		if resolvedID, err := azureLogAnalyticsQueryWorkspace(workspaceID, workspaces, !isLocalFlociProfile(profile)); err == nil {
-			workspaceID = resolvedID
+	queryWorkspace := selectedWorkspace
+	if selectedWorkspace != "" {
+		if resolvedID, err := azureLogAnalyticsQueryWorkspace(selectedWorkspace, workspaces, !isLocalFlociProfile(profile)); err == nil {
+			queryWorkspace = resolvedID
 		}
 	}
 
 	var schema *models.AzureWafLogSchemaProfile
-	if !opts.lightweight && workspaceID != "" {
-		if detected, err := s.azure.DetectWafLogSchema(ctx, profile, workspaceID, "P1D"); err == nil {
+	if !opts.lightweight && queryWorkspace != "" {
+		if detected, err := s.azure.DetectWafLogSchema(ctx, profile, queryWorkspace, "P1D"); err == nil {
 			schema = &detected
 		}
 	}
@@ -70,6 +71,18 @@ func (s *Service) enrichAzureWafInventory(
 	}
 
 	selected := strings.TrimSpace(session.SelectedAzureWafPolicy)
+	if selected != "" {
+		found := false
+		for _, policy := range policies {
+			if policy.Name == selected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			selected = ""
+		}
+	}
 	if selected == "" && len(policies) > 0 {
 		selected = policies[0].Name
 	}
@@ -90,7 +103,7 @@ func (s *Service) enrichAzureWafInventory(
 		if resourceGroup != "" {
 			if policyDetail, detailErr := s.azure.GetWafPolicy(ctx, profile, resourceGroup, selected); detailErr == nil {
 				detail = &policyDetail
-				fireCounts = s.wafRuleFireCounts(ctx, profile, workspaceID, schema, policyDetail.Name)
+				fireCounts = s.wafRuleFireCounts(ctx, profile, queryWorkspace, schema, policyDetail.Name)
 			}
 		}
 	}
@@ -100,6 +113,10 @@ func (s *Service) enrichAzureWafInventory(
 			workspace.AzureWafLogSchema = schema
 		} else if opts.lightweight {
 			workspace.AzureWafLogSchema = nil
+		}
+		workspace.AzureLogAnalyticsWorkspaces = workspaces
+		if selectedWorkspace != "" {
+			workspace.SelectedAzureLogWorkspace = selectedWorkspace
 		}
 		workspace.AzureWafPolicies = policies
 		workspace.AzureWafStatusMessage = status

@@ -87,10 +87,11 @@ type ProfileSummary struct {
 }
 
 type WorkspaceTab struct {
-	TabID   string `json:"tabId"`
-	Label   string `json:"label"`
-	Summary string `json:"summary"`
-	Detail  string `json:"detail"`
+	TabID    string `json:"tabId"`
+	Label    string `json:"label"`
+	Summary  string `json:"summary"`
+	Detail   string `json:"detail"`
+	Category string `json:"category,omitempty"`
 }
 
 type DockerDiagnostics struct {

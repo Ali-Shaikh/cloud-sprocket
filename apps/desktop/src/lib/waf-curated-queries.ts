@@ -7,6 +7,7 @@ import {
   buildActionBreakdownQuery,
   buildBlockedRequestsQuery,
   buildBlockingRuleExtendClause,
+  wafBlockedActions,
   buildJsChallengeQuery,
   buildTopClientIPsQuery,
   buildTopHostsQuery,
@@ -98,7 +99,7 @@ export function buildBlockedRequestsDetailQuery(
   schema: AzureWafLogSchemaProfile,
   filters: WafLogFilters = {},
 ): string {
-  return buildWafDetailQuery(schema, filters, "Block");
+  return buildWafDetailQuery(schema, filters, wafBlockedActions(schema)[0] ?? "Block");
 }
 
 export const WAF_CURATED_QUERY_CATEGORIES: Record<WafCuratedQueryCategory, string> = {

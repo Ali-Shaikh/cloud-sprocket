@@ -21,6 +21,7 @@ import {
   Server,
   Trash2,
   TriangleAlert,
+  Wrench,
 } from "lucide-react";
 import { Toaster } from "sonner";
 import awsEc2IconUrl from "./assets/cloud-icons/aws-ec2.svg";
@@ -99,6 +100,7 @@ import {
   IAMView,
   LambdaView,
   LogAnalyticsView,
+  ToolsHubView,
   LogsView,
   PlaceholderView,
   RDSView,
@@ -613,6 +615,7 @@ function mergeAzureWafSelection(
   return normaliseWorkspaceSnapshot({
     ...current,
     selectedAzureWafPolicy: normalised.selectedAzureWafPolicy,
+    selectedAzureLogWorkspace: normalised.selectedAzureLogWorkspace ?? current.selectedAzureLogWorkspace,
     azureLogAnalyticsWorkspaces: normalised.azureLogAnalyticsWorkspaces,
     azureWafLogSchema: normalised.azureWafLogSchema,
     azureWafPolicies: normalised.azureWafPolicies,
@@ -1067,6 +1070,11 @@ export default function App() {
   const [flociAzActionStatus, setFlociAzActionStatus] = useState("No floci-az action has run yet.");
   const [flociAzActionInFlight, setFlociAzActionInFlight] = useState(false);
   const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState("overview");
+  const [frontDoorAccessPrefill, setFrontDoorAccessPrefill] = useState<{
+    trackingReference: string;
+    workspace?: string;
+    timespan?: string;
+  } | null>(null);
   const [logAnalyticsPrefill, setLogAnalyticsPrefill] = useState<{
     query?: string;
     timespan?: string;
@@ -1610,10 +1618,11 @@ export default function App() {
       current.selectedAzureWafPolicy?.trim() ||
       current.azureWafPolicies?.[0]?.name?.trim() ||
       "";
+    const inventoryReady =
+      azureInventoryLoaded(current, "waf") && current.profile?.profileId === sessionProfileId;
     if (
-      selected &&
-      current.azureWafPolicyDetail?.name === selected &&
-      current.profile?.profileId === sessionProfileId
+      inventoryReady &&
+      (!selected || current.azureWafPolicyDetail?.name === selected)
     ) {
       setAzureWafConfigLoading(false);
       return;
@@ -3434,6 +3443,16 @@ export default function App() {
           });
       }}
     />
+  ) : session.isLocked && activeWorkspaceTabId === "azure-tools" ? (
+    <ToolsHubView
+      workspace={activeWorkspace}
+      providerLabel={workspace.provider?.label ?? selectedProvider?.label ?? "Azure"}
+      profileLabel={activeWorkspace.profile?.displayName ?? selectedProfile?.displayName}
+      workspaceTabs={session.workspaceTabs}
+      onNavigate={(tabId) => {
+        setActiveWorkspaceTabId(tabId);
+      }}
+    />
   ) : session.isLocked && activeWorkspaceTabId === "azure-log-analytics" ? (
     <LogAnalyticsView
       workspace={activeWorkspace}
@@ -3444,11 +3463,12 @@ export default function App() {
       onSelectWorkspace={(ws) => {
         void selectAzureLogAnalyticsWorkspace(ws);
       }}
-      onRunQuery={(ws, query, timespan) =>
+      onRunQuery={(ws, query, timespan, maxRows) =>
         backendRequest<AzureLogQueryResult>("azure.logAnalytics.query", {
           workspace: ws,
           query,
           timespan,
+          maxRows,
         })
       }
       onListHistory={listLogAnalyticsHistory}
@@ -3492,6 +3512,10 @@ export default function App() {
           timespan,
         })
       }
+      onCorrelateTrackingRef={(trackingReference, ws, timespan) => {
+        setFrontDoorAccessPrefill({ trackingReference, workspace: ws, timespan });
+        setActiveWorkspaceTabId("azure-front-door");
+      }}
       onRunQuery={(ws, query, timespan, maxRows) =>
         backendRequest<AzureLogQueryResult>("azure.logAnalytics.query", {
           workspace: ws,
@@ -3586,6 +3610,9 @@ export default function App() {
   ) : session.isLocked && activeWorkspaceTabId === "azure-front-door" ? (
     <AzureFrontDoorView
       workspace={activeWorkspace}
+      initialTrackingReference={frontDoorAccessPrefill?.trackingReference}
+      initialLogWorkspace={frontDoorAccessPrefill?.workspace}
+      initialTimespan={frontDoorAccessPrefill?.timespan}
       inventoryLoading={azureServiceInventoryLoading || azureFrontDoorTopologyLoading}
       actionStatus={azureFrontDoorActionStatus}
       onRefresh={() => {
@@ -4178,18 +4205,41 @@ export default function App() {
     // is in flight, swap count badges for a spinner so empty counts do not read
     // as "zero resources".
     const countsPending = workspaceFetching || (workspaceLoading && !workspaceLoaded);
-    const tabItems = session.workspaceTabs.map((tab) => {
-      const item = navItemForTab(tab, workspace);
-      if (countsPending && item.count != null) {
-        return { ...item, count: undefined, countLoading: true };
+    const tabCategory = (tab: WorkspaceTab): "workspace" | "service" | "tool" => {
+      if (tab.category === "workspace" || tab.category === "service" || tab.category === "tool") {
+        return tab.category;
       }
-      return item;
+      if (tab.tabId === "overview" || tab.tabId === "virtualisation" || tab.tabId === "actions") {
+        return "workspace";
+      }
+      if (
+        tab.tabId === "azure-tools" ||
+        tab.tabId === "azure-waf" ||
+        tab.tabId === "azure-log-analytics" ||
+        tab.tabId === "azure-front-door" ||
+        tab.tabId === "logs"
+      ) {
+        return "tool";
+      }
+      return "service";
+    };
+    const entries = session.workspaceTabs.map((tab) => {
+      const item = navItemForTab(tab, workspace);
+      const navItem =
+        countsPending && item.count != null
+          ? { ...item, count: undefined, countLoading: true }
+          : item;
+      return { item: navItem, category: tabCategory(tab) };
     });
-    const overviewItems = tabItems.filter((item) => item.id === "overview");
-    const serviceItems = tabItems.filter((item) => item.id !== "overview");
+    const workspaceItems = entries.filter((entry) => entry.category === "workspace").map((entry) => entry.item);
+    const toolItems = entries.filter((entry) => entry.category === "tool").map((entry) => entry.item);
+    const serviceItems = entries.filter((entry) => entry.category === "service").map((entry) => entry.item);
     const groups: NavGroup[] = [];
-    if (overviewItems.length > 0) {
-      groups.push({ label: "Workspace", items: overviewItems });
+    if (workspaceItems.length > 0) {
+      groups.push({ label: "Workspace", items: workspaceItems });
+    }
+    if (toolItems.length > 0) {
+      groups.push({ label: "Tools", items: toolItems });
     }
     if (serviceItems.length > 0) {
       groups.push({ label: "Services", items: serviceItems });
@@ -4216,7 +4266,7 @@ export default function App() {
         ],
       });
     }
-    groups.push({ label: "Tools", items: [{ id: "debug", label: "Debug console", icon: Bug }] });
+    groups.push({ label: "Developer", items: [{ id: "debug", label: "Debug console", icon: Bug }] });
     return groups;
   }
 
@@ -4589,8 +4639,9 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     "azure-vms": "Virtual machines",
     "azure-storage": "Storage",
     "azure-app-service": "App Service",
+    "azure-tools": "Tools",
     "azure-log-analytics": "Log Analytics",
-    "azure-waf": "WAF",
+    "azure-waf": "WAF Security",
     "azure-front-door": "Front Door",
     "azure-functions": "Functions",
     "azure-key-vault": "Key Vault",
@@ -4642,6 +4693,8 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
       };
     case "azure-app-service":
       return { ...base, iconUrl: azureAppServiceIconUrl, count: workspace.azureWebApps.length };
+    case "azure-tools":
+      return { ...base, icon: Wrench };
     case "azure-log-analytics":
       return { ...base, iconUrl: azureLogAnalyticsIconUrl, count: workspace.azureLogAnalyticsWorkspaces.length };
     case "azure-waf":

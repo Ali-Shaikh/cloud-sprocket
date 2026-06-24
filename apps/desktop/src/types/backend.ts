@@ -52,6 +52,7 @@ export interface WorkspaceTab {
   label: string;
   summary: string;
   detail: string;
+  category?: "workspace" | "service" | "tool";
 }
 
 export interface DockerDiagnostics {
@@ -563,7 +564,7 @@ export interface AzureWafLogColumnMap {
 }
 
 export interface AzureWafLogSchemaProfile {
-  mode: "azureDiagnostics" | "resourceSpecific" | string;
+  mode: "azureDiagnostics" | "resourceSpecific" | "applicationGateway" | string;
   tableName: string;
   categories?: string[];
   columns: AzureWafLogColumnMap;

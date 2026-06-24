@@ -12,11 +12,13 @@ import (
 )
 
 const (
-	wafSchemaModeDiagnostics       = "azureDiagnostics"
-	wafSchemaModeResourceSpecific  = "resourceSpecific"
-	wafDiagnosticsTable            = "AzureDiagnostics"
-	wafDiagnosticsCategoryStandard = "FrontDoorWebApplicationFirewallLog"
-	wafDiagnosticsCategoryClassic  = "FrontdoorWebApplicationFirewallLog"
+	wafSchemaModeDiagnostics        = "azureDiagnostics"
+	wafSchemaModeResourceSpecific   = "resourceSpecific"
+	wafSchemaModeApplicationGateway = "applicationGateway"
+	wafDiagnosticsTable             = "AzureDiagnostics"
+	wafApplicationGatewayTable      = "AGWFirewallLogs"
+	wafDiagnosticsCategoryStandard  = "FrontDoorWebApplicationFirewallLog"
+	wafDiagnosticsCategoryClassic   = "FrontdoorWebApplicationFirewallLog"
 )
 
 // Front Door Standard/Premium resource-specific WAF table. Classic-cased Category
@@ -65,10 +67,41 @@ func (i *Inventory) DetectWafLogSchema(
 		}
 	}
 
+	agwQuery := fmt.Sprintf("%s | take 1", wafApplicationGatewayTable)
+	agwResult, agwErr := i.RunLogAnalyticsQuery(ctx, profile, workspace, agwQuery, timespan, 1)
+	if agwErr == nil && len(agwResult.Rows) > 0 {
+		schema := applicationGatewaySchemaProfile(agwResult.Columns)
+		schema.Detected = true
+		schema.Message = "WAF logs detected in AGWFirewallLogs (Application Gateway)."
+		return schema, nil
+	}
+
 	schema := diagnosticsSchemaProfile(nil)
 	schema.Detected = false
-	schema.Message = "No WAF log rows found in the last day. Diagnostics schema assumed; enable Front Door WAF logging or widen the time range."
+	schema.Message = "No WAF log rows found in the last day. Front Door diagnostics schema assumed; enable WAF logging or widen the time range."
 	return schema, nil
+}
+
+func applicationGatewaySchemaProfile(columns []string) models.AzureWafLogSchemaProfile {
+	columnMap := models.AzureWafLogColumnMap{
+		TimeGenerated:     pickColumn(columns, "TimeGenerated"),
+		Action:            pickColumn(columns, "Action"),
+		RuleName:          pickColumn(columns, "RuleId"),
+		RequestUri:        pickColumn(columns, "RequestUri"),
+		ClientIP:          pickColumn(columns, "ClientIp", "ClientIP"),
+		Host:              pickColumn(columns, "Hostname", "Host"),
+		PolicyName:        pickColumn(columns, "PolicyScopeName", "PolicyId"),
+		PolicyMode:        pickColumn(columns, "PolicyScope"),
+		TrackingReference: pickColumn(columns, "TransactionId"),
+		DetailsMatches:    pickColumn(columns, "DetailedData"),
+		DetailsMessage:    pickColumn(columns, "DetailedMessage", "Message"),
+		DetailsData:       pickColumn(columns, "FileDetails", "LineDetails"),
+	}
+	return models.AzureWafLogSchemaProfile{
+		Mode:      wafSchemaModeApplicationGateway,
+		TableName: wafApplicationGatewayTable,
+		Columns:   columnMap,
+	}
 }
 
 func diagnosticsSchemaProfile(columns []string) models.AzureWafLogSchemaProfile {

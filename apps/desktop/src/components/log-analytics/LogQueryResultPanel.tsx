@@ -12,6 +12,7 @@ import {
   Columns3,
   Copy,
   Download,
+  FileArchive,
   Table2,
   X,
 } from "lucide-react";
@@ -30,8 +31,9 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { EmptyState } from "@/components/empty-state";
-import type { AzureLogQueryResult, AzureWafLogColumnMap } from "@/types/backend";
+import type { AzureLogQueryResult, AzureWafExclusion, AzureWafLogColumnMap } from "@/types/backend";
 import { decodeWafRow, isTuningCandidate } from "@/lib/waf-decode";
+import { suggestExclusionsFromMatches } from "@/lib/waf-exclusion-suggestions";
 import {
   downloadTextFile,
   formatCellValue,
@@ -60,6 +62,9 @@ export type LogQueryResultPanelProps = {
   emptyDescription?: string;
   wafColumnMap?: AzureWafLogColumnMap;
   pagination?: LogQueryPagination;
+  onCorrelateTrackingRef?: (trackingReference: string) => void;
+  onSuggestExclusion?: (exclusion: AzureWafExclusion) => void;
+  onExportInvestigation?: () => void;
 };
 
 type SortDirection = "asc" | "desc" | null;
@@ -127,7 +132,19 @@ function wafDefaultVisibleColumns(
   return visible;
 }
 
-function WafSummaryCard({ decoded }: { decoded: ReturnType<typeof decodeWafRow> }) {
+function WafSummaryCard({
+  decoded,
+  onCorrelateTrackingRef,
+  onSuggestExclusion,
+}: {
+  decoded: ReturnType<typeof decodeWafRow>;
+  onCorrelateTrackingRef?: (trackingReference: string) => void;
+  onSuggestExclusion?: (exclusion: AzureWafExclusion) => void;
+}) {
+  const exclusionSuggestions = useMemo(
+    () => suggestExclusionsFromMatches(decoded.matches),
+    [decoded.matches],
+  );
   const facts: Array<{ label: string; value: string; mono?: boolean }> = [
     { label: "Time", value: decoded.timeGenerated ?? "" },
     { label: "Action", value: decoded.action ?? "", mono: true },
@@ -194,6 +211,29 @@ function WafSummaryCard({ decoded }: { decoded: ReturnType<typeof decodeWafRow> 
           </table>
         </div>
       ) : null}
+      <div className="flex flex-wrap gap-2">
+        {decoded.trackingReference?.trim() && onCorrelateTrackingRef ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onCorrelateTrackingRef(decoded.trackingReference!.trim())}
+          >
+            View Front Door access logs
+          </Button>
+        ) : null}
+        {onSuggestExclusion
+          ? exclusionSuggestions.map((suggestion) => (
+              <Button
+                key={`${suggestion.exclusion.matchVariable}-${suggestion.exclusion.selector}`}
+                variant="secondary"
+                size="sm"
+                onClick={() => onSuggestExclusion(suggestion.exclusion)}
+              >
+                {suggestion.label}
+              </Button>
+            ))
+          : null}
+      </div>
     </div>
   );
 }
@@ -204,6 +244,8 @@ function LogQueryRowDetailPanel({
   rowIndex,
   rowCount,
   wafColumnMap,
+  onCorrelateTrackingRef,
+  onSuggestExclusion,
   onClose,
   onSelectRowIndex,
 }: {
@@ -212,6 +254,8 @@ function LogQueryRowDetailPanel({
   rowIndex: number;
   rowCount: number;
   wafColumnMap?: AzureWafLogColumnMap;
+  onCorrelateTrackingRef?: (trackingReference: string) => void;
+  onSuggestExclusion?: (exclusion: AzureWafExclusion) => void;
   onClose: () => void;
   onSelectRowIndex: (index: number) => void;
 }) {
@@ -323,7 +367,11 @@ function LogQueryRowDetailPanel({
 
         <TabsContent value="summary" className="mt-0 max-h-72 overflow-y-auto px-4 py-3">
           {decodedWaf ? (
-            <WafSummaryCard decoded={decodedWaf} />
+            <WafSummaryCard
+              decoded={decodedWaf}
+              onCorrelateTrackingRef={onCorrelateTrackingRef}
+              onSuggestExclusion={onSuggestExclusion}
+            />
           ) : populated.length > 0 ? (
             <dl className="grid gap-3 sm:grid-cols-2">
               {populated.slice(0, 12).map(({ column, value }) => (
@@ -404,6 +452,9 @@ function LogQueryResultPanel({
   emptyDescription = "Run a KQL query to see results here.",
   wafColumnMap,
   pagination,
+  onCorrelateTrackingRef,
+  onSuggestExclusion,
+  onExportInvestigation,
 }: LogQueryResultPanelProps) {
   const [wrapCells, setWrapCells] = useState(false);
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => new Set());
@@ -592,6 +643,12 @@ function LogQueryResultPanel({
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+            {onExportInvestigation ? (
+              <Button variant="outline" size="sm" onClick={onExportInvestigation}>
+                <FileArchive />
+                SOC bundle
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               size="sm"
@@ -757,6 +814,8 @@ function LogQueryResultPanel({
             rowIndex={selectedRowIndex}
             rowCount={displayRows.length}
             wafColumnMap={wafColumnMap}
+            onCorrelateTrackingRef={onCorrelateTrackingRef}
+            onSuggestExclusion={onSuggestExclusion}
             onClose={() => setSelectedRowIndex(null)}
             onSelectRowIndex={setSelectedRowIndex}
           />

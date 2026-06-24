@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Eraser, ExternalLink, Globe, Network, Play, RotateCw, Shield } from "lucide-react";
 
 import { KqlEditor } from "@/components/kql/KqlEditor";
@@ -41,6 +41,7 @@ import { cn } from "@/lib/utils";
 import { AFD_CURATED_QUERIES } from "@/lib/afd-curated-queries";
 import {
   buildAfdAccessFilteredQuery,
+  buildAfdTrackingReferenceSearchQuery,
   type AfdAccessLogFilters,
   type AfdAccessLogMode,
 } from "@/lib/afd-kql";
@@ -67,6 +68,9 @@ export type AzureFrontDoorViewProps = {
     query: string,
     timespan: string,
   ) => Promise<AzureLogQueryResult>;
+  initialTrackingReference?: string;
+  initialLogWorkspace?: string;
+  initialTimespan?: string;
 };
 
 const fieldLabel =
@@ -96,6 +100,9 @@ export default function AzureFrontDoorView({
   onOpenWafPolicy,
   onEditInLogAnalytics,
   onRunQuery,
+  initialTrackingReference,
+  initialLogWorkspace,
+  initialTimespan,
 }: AzureFrontDoorViewProps) {
   const canWrite = workspace.azureWritesEnabled;
   const profiles = workspace.azureFrontDoorProfiles ?? [];
@@ -126,8 +133,48 @@ export default function AzureFrontDoorView({
   const [purgeEndpoint, setPurgeEndpoint] = useState<string | null>(null);
   const [purgePaths, setPurgePaths] = useState("/*");
   const [purgeDomains, setPurgeDomains] = useState("");
+  const [activeTab, setActiveTab] = useState("topology");
+  const prefillTokenRef = useRef(0);
 
   const curatedQueries = useMemo(() => AFD_CURATED_QUERIES, []);
+
+  useEffect(() => {
+    const trackingReference = initialTrackingReference?.trim();
+    if (!trackingReference) {
+      return;
+    }
+    const token = ++prefillTokenRef.current;
+    setActiveTab("access-logs");
+    if (initialLogWorkspace?.trim()) {
+      setLogWorkspace(initialLogWorkspace.trim());
+    }
+    if (initialTimespan?.trim()) {
+      setTimespan(initialTimespan.trim());
+    }
+    const nextFilters: AfdAccessLogFilters = { trackingReference };
+    setFilters(nextFilters);
+    const nextQuery = buildAfdTrackingReferenceSearchQuery(logMode, logTable, trackingReference);
+    setQuery(nextQuery);
+    const workspaceName = (initialLogWorkspace?.trim() || logWorkspace).trim();
+    if (!workspaceName) {
+      return;
+    }
+    void onRunQuery(workspaceName, nextQuery, initialTimespan?.trim() || timespan)
+      .then((result) => {
+        if (token !== prefillTokenRef.current) {
+          return;
+        }
+        setQueryResult(result);
+        setQueryError(null);
+      })
+      .catch((error) => {
+        if (token !== prefillTokenRef.current) {
+          return;
+        }
+        setQueryError(error instanceof Error ? error.message : "Query failed.");
+        setQueryResult(null);
+      });
+  }, [initialTrackingReference, initialLogWorkspace, initialTimespan]);
 
   const topologyLoadingLabel =
     inventoryLoading && profiles.length > 0
@@ -170,7 +217,7 @@ export default function AzureFrontDoorView({
         </p>
       </header>
 
-      <Tabs defaultValue="topology">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="topology">Topology</TabsTrigger>
           <TabsTrigger value="access-logs">Access logs</TabsTrigger>

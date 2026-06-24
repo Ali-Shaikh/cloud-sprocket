@@ -24,6 +24,14 @@ function wafCategoryList(schema: AzureWafLogSchemaProfile): string {
   return categories.map((category) => `"${category}"`).join(",");
 }
 
+/** Blocked-action values for the active WAF log schema. */
+export function wafBlockedActions(schema: AzureWafLogSchemaProfile): string[] {
+  if (schema.mode === "applicationGateway") {
+    return ["Blocked", "Detected and Blocked"];
+  }
+  return ["Block", "block"];
+}
+
 function baseWafTable(schema: AzureWafLogSchemaProfile): string {
   if (schema.mode === "azureDiagnostics") {
     return `${schema.tableName} | where Category in (${wafCategoryList(schema)})`;
@@ -184,6 +192,13 @@ export function buildTrackingReferenceExtendQuery(
 | project ${trackingReferenceProjectColumns(schema, true)}
 | order by ${columns.timeGenerated} desc`;
   }
+  if (schema.mode === "applicationGateway" && columns.trackingReference) {
+    let query = `${schema.tableName}
+| where ${columns.trackingReference} == "${escapeKql(trimmed)}"`;
+    return `${query}
+| project ${trackingReferenceProjectColumns(schema)}
+| order by ${columns.timeGenerated} desc`;
+  }
   return buildTrackingReferenceColumnQuery(schema, trimmed);
 }
 
@@ -216,13 +231,17 @@ export function buildTrackingReferenceQuery(schema: AzureWafLogSchemaProfile, tr
 }
 
 export function buildBlockedRequestsQuery(schema: AzureWafLogSchemaProfile, filters: WafLogFilters = {}): string {
-  return buildWafFilteredQuery(schema, { ...filters, actions: ["Block", "block"] });
+  return buildWafFilteredQuery(schema, { ...filters, actions: wafBlockedActions(schema) });
+}
+
+function stripTrailingOrderBy(query: string): string {
+  return query.replace(/\n\| order by [^\n]+$/i, "");
 }
 
 export function buildActionBreakdownQuery(schema: AzureWafLogSchemaProfile, filters: WafLogFilters = {}): string {
   const columns = schema.columns;
-  let query = baseWafTable(schema);
-  query = appendActionsFilter(query, columns.action, filters.actions);
+  const { actions: _ignoredActions, ...scopedFilters } = filters;
+  const query = stripTrailingOrderBy(buildWafFilteredQuery(schema, scopedFilters));
   return `${query}\n| summarize Count=count() by ${columns.action}\n| order by Count desc`;
 }
 
@@ -271,7 +290,7 @@ export function buildJsChallengeQuery(schema: AzureWafLogSchemaProfile, filters:
 }
 
 export type WafSchemaDescription = {
-  modeKey: "azureDiagnostics" | "resourceSpecific" | "unknown";
+  modeKey: "azureDiagnostics" | "resourceSpecific" | "applicationGateway" | "unknown";
   modeLabel: string;
   tableLabel: string;
   trackingLookup: string;
@@ -286,17 +305,25 @@ export function describeWafLogSchema(schema: AzureWafLogSchemaProfile): WafSchem
       ? "azureDiagnostics"
       : schema.mode === "resourceSpecific"
         ? "resourceSpecific"
-        : "unknown";
+        : schema.mode === "applicationGateway"
+          ? "applicationGateway"
+          : "unknown";
   const modeLabel =
     modeKey === "azureDiagnostics"
       ? "AzureDiagnostics (classic diagnostic logs)"
       : modeKey === "resourceSpecific"
         ? "Resource-specific WAF table"
-        : "Unknown schema mode";
+        : modeKey === "applicationGateway"
+          ? "Application Gateway (AGWFirewallLogs)"
+          : "Unknown schema mode";
   const trackingLookup =
     modeKey === "azureDiagnostics"
       ? `${schema.columns.trackingReference || "trackingReference_s"} column`
-      : "AdditionalFields.trackingReference (use Look up ref)";
+      : modeKey === "applicationGateway"
+        ? `${schema.columns.trackingReference || "TransactionId"} column (transaction ID)`
+        : modeKey === "resourceSpecific"
+          ? "AdditionalFields.trackingReference (use Look up ref)"
+          : "Tracking column from detected schema";
   return {
     modeKey,
     modeLabel,
