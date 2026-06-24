@@ -39,8 +39,8 @@ describe("waf-curated-queries", () => {
     expect(query).toContain('action_s =~ "AnomalyScoring"');
     expect(query).toContain('policy_s == "prod"');
     expect(query).toContain("extend BlockingRule = coalesce(ruleName_s, details_msg_s)");
-    expect(query).toContain("hostName_s");
-    expect(query).toContain("clientIp_s");
+    expect(query).toContain("host_s");
+    expect(query).toContain("clientIP_s");
     expect(query).toContain("trackingReference_s");
     expect(query).toContain("order by TimeGenerated desc");
   });

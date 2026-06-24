@@ -69,7 +69,7 @@ describe("waf-query-execution", () => {
     expect(trimWafQueryPageRows(["a", "b", "c"], 2)).toEqual(["a", "b"]);
   });
 
-  it("uses diagnostics clientIp_s and strips project before group-by", () => {
+  it("strips project before group-by and uses schema clientIP_s", () => {
     const detailQuery = `AzureDiagnostics
 | where Category =~ "FrontDoorWebApplicationFirewallLog"
 | where action_s =~ "Block"
@@ -77,7 +77,7 @@ describe("waf-query-execution", () => {
 | extend BlockingRule = coalesce(ruleName_s, details_msg_s)
 | project
     TimeGenerated,
-    clientIp_s,
+    clientIP_s,
     action_s
 | order by TimeGenerated desc`;
     const built = buildExecutableWafQuery(detailQuery, schema, {
@@ -85,8 +85,7 @@ describe("waf-query-execution", () => {
       page: 1,
       pageSize: 500,
     });
-    expect(built.query).toContain("| summarize Count=count() by clientIp_s");
+    expect(built.query).toContain("| summarize Count=count() by clientIP_s");
     expect(built.query).not.toContain("| project");
-    expect(built.query).not.toContain("clientIP_s");
   });
 });

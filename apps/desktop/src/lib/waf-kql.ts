@@ -17,30 +17,6 @@ function escapeKql(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-/** AzureDiagnostics Front Door WAF logs use clientIp_s, not clientIP_s. */
-export function wafClientIpColumn(schema: AzureWafLogSchemaProfile): string {
-  if (schema.mode === "azureDiagnostics") {
-    const mapped = schema.columns.clientIP?.trim();
-    if (mapped && /clientip/i.test(mapped)) {
-      return mapped;
-    }
-    return "clientIp_s";
-  }
-  return schema.columns.clientIP?.trim() || "ClientIP";
-}
-
-/** AzureDiagnostics Front Door WAF logs use hostName_s for the request host. */
-export function wafHostColumn(schema: AzureWafLogSchemaProfile): string {
-  if (schema.mode === "azureDiagnostics") {
-    const mapped = schema.columns.host?.trim();
-    if (mapped && /host/i.test(mapped)) {
-      return mapped;
-    }
-    return "hostName_s";
-  }
-  return schema.columns.host?.trim() || "Host";
-}
-
 function wafCategoryList(schema: AzureWafLogSchemaProfile): string {
   const categories = schema.categories?.length
     ? schema.categories
@@ -106,8 +82,8 @@ export function buildWafFilteredQuery(
   let query = baseWafTable(schema);
   query = appendActionsFilter(query, columns.action, filters.actions);
   query = appendEqualsFilter(query, columns.ruleName, filters.ruleName);
-  query = appendEqualsFilter(query, wafClientIpColumn(schema), filters.clientIP);
-  query = appendEqualsFilter(query, wafHostColumn(schema), filters.host);
+  query = appendEqualsFilter(query, columns.clientIP, filters.clientIP);
+  query = appendEqualsFilter(query, columns.host, filters.host);
   query = appendEqualsFilter(query, columns.policyName, filters.policy);
   query = appendContainsFilter(query, columns.requestUri, filters.uriContains);
   query = appendEqualsFilter(query, columns.trackingReference, filters.trackingReference);
@@ -199,13 +175,15 @@ export function buildTopRulesQuery(schema: AzureWafLogSchemaProfile, filters: Wa
 }
 
 export function buildTopClientIPsQuery(schema: AzureWafLogSchemaProfile, filters: WafLogFilters = {}): string {
+  const columns = schema.columns;
   let query = buildWafFilteredQuery(schema, filters);
-  return `${query}\n| summarize Count=count() by ${wafClientIpColumn(schema)}\n| top 50 by Count desc`;
+  return `${query}\n| summarize Count=count() by ${columns.clientIP}\n| top 50 by Count desc`;
 }
 
 export function buildTopHostsQuery(schema: AzureWafLogSchemaProfile, filters: WafLogFilters = {}): string {
+  const columns = schema.columns;
   let query = buildWafFilteredQuery(schema, filters);
-  return `${query}\n| summarize Count=count() by ${wafHostColumn(schema)}\n| top 50 by Count desc`;
+  return `${query}\n| summarize Count=count() by ${columns.host}\n| top 50 by Count desc`;
 }
 
 export function buildTopUrisQuery(schema: AzureWafLogSchemaProfile, filters: WafLogFilters = {}): string {
@@ -281,8 +259,8 @@ export function normaliseWafSchema(schema?: AzureWafLogSchemaProfile | null): Az
     action: "action_s",
     ruleName: "ruleName_s",
     requestUri: "requestUri_s",
-    clientIP: "clientIp_s",
-    host: "hostName_s",
+    clientIP: "clientIP_s",
+    host: "host_s",
     policyName: "policy_s",
     policyMode: "policyMode_s",
     trackingReference: "trackingReference_s",

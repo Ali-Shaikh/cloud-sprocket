@@ -37,19 +37,13 @@ function diagnosticsTable(schema: AzureWafLogSchemaProfile): string {
   return schema.mode === "azureDiagnostics" ? schema.tableName : schema.tableName;
 }
 
-/** Prefer AzureDiagnostics host/client column names when present in schema maps. */
+/** Use schema-detected column names (see AzureDiagnostics table reference). */
 function hostColumn(schema: AzureWafLogSchemaProfile): string {
-  if (schema.mode === "azureDiagnostics") {
-    return "hostName_s";
-  }
-  return schema.columns.host || "Host";
+  return schema.columns.host || "host_s";
 }
 
 function clientIpColumn(schema: AzureWafLogSchemaProfile): string {
-  if (schema.mode === "azureDiagnostics") {
-    return "clientIp_s";
-  }
-  return schema.columns.clientIP || "ClientIP";
+  return schema.columns.clientIP || "clientIP_s";
 }
 
 function appendPolicyFilter(
