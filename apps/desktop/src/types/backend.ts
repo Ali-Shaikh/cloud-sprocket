@@ -52,6 +52,7 @@ export interface WorkspaceTab {
   label: string;
   summary: string;
   detail: string;
+  category?: "workspace" | "service" | "tool";
 }
 
 export interface DockerDiagnostics {

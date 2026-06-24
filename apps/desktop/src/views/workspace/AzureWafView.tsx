@@ -6,6 +6,7 @@ import { BookOpen, Loader2, Plus, Save, Shield, Trash2 } from "lucide-react";
 
 import { KqlEditor } from "@/components/kql/KqlEditor";
 import { LogQueryResultPanel } from "@/components/log-analytics/LogQueryResultPanel";
+import { WafOverviewPanel } from "@/components/waf/WafOverviewPanel";
 import { WafQueryGroupByBar, WafQueryRunControls } from "@/components/waf/WafQueryExecutionBar";
 import { cn } from "@/lib/utils";
 import {
@@ -17,6 +18,7 @@ import {
   type WafLogFilters,
 } from "@/lib/waf-kql";
 import {
+  buildBlockedRequestsDetailQuery,
   curatedQueriesByCategory,
   WAF_CURATED_QUERY_CATEGORIES,
   type WafCuratedQueryCategory,
@@ -498,10 +500,10 @@ export default function AzureWafView({
       <header>
         <h1 className="flex items-center gap-2 text-[1.375rem] font-[750] tracking-[-0.015em]">
           <Shield className="size-6 text-muted-foreground" />
-          WAF
+          WAF Security
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {workspace.profile?.displayName || "Subscription"} · Front Door WAF logs and policy
+          {workspace.profile?.displayName || "Subscription"} · Front Door WAF investigation and policy
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <StatusPill
@@ -527,6 +529,30 @@ export default function AzureWafView({
           {inventoryLoading ? (
             <InventoryLoadingState variant="banner" label={inventoryLoadingLabel} />
           ) : null}
+          <WafOverviewPanel
+            workspace={selectedWorkspace}
+            policy={selectedPolicy}
+            schema={schema}
+            timespan={timespan}
+            timeRangeLabel={timeRangeLabel}
+            disabled={inventoryControlsBusy || !selectedWorkspace.trim()}
+            onRunQuery={onRunQuery}
+            onOpenBlocked={() => {
+              const nextQuery = buildBlockedRequestsDetailQuery(schema, baseFilters);
+              setQuery(nextQuery);
+              setFilters((current) => ({ ...current, actions: ["Block", "block"] }));
+              void run(nextQuery);
+            }}
+            onOpenRule={(ruleName) => {
+              setFilters((current) => ({ ...current, ruleName }));
+              const nextQuery = buildWafFilteredQuery(schema, {
+                ...baseFilters,
+                ruleName,
+              });
+              setQuery(nextQuery);
+              void run(nextQuery);
+            }}
+          />
           <section className={cn(sectionCard, inventoryLoading ? "opacity-60" : undefined)}>
             <div className="flex flex-wrap items-end gap-3">
               <div className="w-72">

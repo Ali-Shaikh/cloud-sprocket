@@ -219,10 +219,14 @@ export function buildBlockedRequestsQuery(schema: AzureWafLogSchemaProfile, filt
   return buildWafFilteredQuery(schema, { ...filters, actions: ["Block", "block"] });
 }
 
+function stripTrailingOrderBy(query: string): string {
+  return query.replace(/\n\| order by [^\n]+$/i, "");
+}
+
 export function buildActionBreakdownQuery(schema: AzureWafLogSchemaProfile, filters: WafLogFilters = {}): string {
   const columns = schema.columns;
-  let query = baseWafTable(schema);
-  query = appendActionsFilter(query, columns.action, filters.actions);
+  const { actions: _ignoredActions, ...scopedFilters } = filters;
+  const query = stripTrailingOrderBy(buildWafFilteredQuery(schema, scopedFilters));
   return `${query}\n| summarize Count=count() by ${columns.action}\n| order by Count desc`;
 }
 

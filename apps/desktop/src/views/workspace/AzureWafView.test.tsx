@@ -165,11 +165,16 @@ describe("AzureWafView", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /look up ref/i }));
 
-    await waitFor(() => expect(onRunQuery).toHaveBeenCalled());
-    expect(onRunQuery.mock.calls[0]?.[1]).toContain("trackingReference_s ==");
-    expect(onRunQuery.mock.calls[0]?.[1]).toContain("| take 101");
-    expect(onRunQuery.mock.calls[0]?.[3]).toBe(101);
-    expect(onRunQuery.mock.calls[0]?.[1]).not.toContain("AdditionalFields");
+    await waitFor(() => {
+      const queries = onRunQuery.mock.calls.map((call) => String(call[1] ?? ""));
+      expect(queries.some((entry) => entry.includes("trackingReference_s =="))).toBe(true);
+    });
+    const trackingCall = onRunQuery.mock.calls.find((call) =>
+      String(call[1] ?? "").includes("trackingReference_s =="),
+    );
+    expect(trackingCall?.[1]).toContain("| take 101");
+    expect(trackingCall?.[3]).toBe(101);
+    expect(trackingCall?.[1]).not.toContain("AdditionalFields");
     expect(await screen.findByText("20260619T211623Z-abc123")).toBeTruthy();
   });
 

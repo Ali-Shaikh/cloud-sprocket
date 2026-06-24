@@ -4178,18 +4178,40 @@ export default function App() {
     // is in flight, swap count badges for a spinner so empty counts do not read
     // as "zero resources".
     const countsPending = workspaceFetching || (workspaceLoading && !workspaceLoaded);
-    const tabItems = session.workspaceTabs.map((tab) => {
-      const item = navItemForTab(tab, workspace);
-      if (countsPending && item.count != null) {
-        return { ...item, count: undefined, countLoading: true };
+    const tabCategory = (tab: WorkspaceTab): "workspace" | "service" | "tool" => {
+      if (tab.category === "workspace" || tab.category === "service" || tab.category === "tool") {
+        return tab.category;
       }
-      return item;
+      if (tab.tabId === "overview" || tab.tabId === "virtualisation" || tab.tabId === "actions") {
+        return "workspace";
+      }
+      if (
+        tab.tabId === "azure-waf" ||
+        tab.tabId === "azure-log-analytics" ||
+        tab.tabId === "azure-front-door" ||
+        tab.tabId === "logs"
+      ) {
+        return "tool";
+      }
+      return "service";
+    };
+    const entries = session.workspaceTabs.map((tab) => {
+      const item = navItemForTab(tab, workspace);
+      const navItem =
+        countsPending && item.count != null
+          ? { ...item, count: undefined, countLoading: true }
+          : item;
+      return { item: navItem, category: tabCategory(tab) };
     });
-    const overviewItems = tabItems.filter((item) => item.id === "overview");
-    const serviceItems = tabItems.filter((item) => item.id !== "overview");
+    const workspaceItems = entries.filter((entry) => entry.category === "workspace").map((entry) => entry.item);
+    const toolItems = entries.filter((entry) => entry.category === "tool").map((entry) => entry.item);
+    const serviceItems = entries.filter((entry) => entry.category === "service").map((entry) => entry.item);
     const groups: NavGroup[] = [];
-    if (overviewItems.length > 0) {
-      groups.push({ label: "Workspace", items: overviewItems });
+    if (workspaceItems.length > 0) {
+      groups.push({ label: "Workspace", items: workspaceItems });
+    }
+    if (toolItems.length > 0) {
+      groups.push({ label: "Tools", items: toolItems });
     }
     if (serviceItems.length > 0) {
       groups.push({ label: "Services", items: serviceItems });
@@ -4216,7 +4238,7 @@ export default function App() {
         ],
       });
     }
-    groups.push({ label: "Tools", items: [{ id: "debug", label: "Debug console", icon: Bug }] });
+    groups.push({ label: "Developer", items: [{ id: "debug", label: "Debug console", icon: Bug }] });
     return groups;
   }
 
@@ -4590,7 +4612,7 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     "azure-storage": "Storage",
     "azure-app-service": "App Service",
     "azure-log-analytics": "Log Analytics",
-    "azure-waf": "WAF",
+    "azure-waf": "WAF Security",
     "azure-front-door": "Front Door",
     "azure-functions": "Functions",
     "azure-key-vault": "Key Vault",
