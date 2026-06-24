@@ -1067,6 +1067,11 @@ export default function App() {
   const [flociAzActionStatus, setFlociAzActionStatus] = useState("No floci-az action has run yet.");
   const [flociAzActionInFlight, setFlociAzActionInFlight] = useState(false);
   const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState("overview");
+  const [frontDoorAccessPrefill, setFrontDoorAccessPrefill] = useState<{
+    trackingReference: string;
+    workspace?: string;
+    timespan?: string;
+  } | null>(null);
   const [logAnalyticsPrefill, setLogAnalyticsPrefill] = useState<{
     query?: string;
     timespan?: string;
@@ -3492,6 +3497,10 @@ export default function App() {
           timespan,
         })
       }
+      onCorrelateTrackingRef={(trackingReference, ws, timespan) => {
+        setFrontDoorAccessPrefill({ trackingReference, workspace: ws, timespan });
+        setActiveWorkspaceTabId("azure-front-door");
+      }}
       onRunQuery={(ws, query, timespan, maxRows) =>
         backendRequest<AzureLogQueryResult>("azure.logAnalytics.query", {
           workspace: ws,
@@ -3586,6 +3595,9 @@ export default function App() {
   ) : session.isLocked && activeWorkspaceTabId === "azure-front-door" ? (
     <AzureFrontDoorView
       workspace={activeWorkspace}
+      initialTrackingReference={frontDoorAccessPrefill?.trackingReference}
+      initialLogWorkspace={frontDoorAccessPrefill?.workspace}
+      initialTimespan={frontDoorAccessPrefill?.timespan}
       inventoryLoading={azureServiceInventoryLoading || azureFrontDoorTopologyLoading}
       actionStatus={azureFrontDoorActionStatus}
       onRefresh={() => {

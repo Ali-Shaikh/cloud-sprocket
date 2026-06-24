@@ -42,6 +42,7 @@ describe("waf-query-execution", () => {
       "host",
       "policyName",
       "requestUri",
+      "trackingReference",
     ]);
   });
 

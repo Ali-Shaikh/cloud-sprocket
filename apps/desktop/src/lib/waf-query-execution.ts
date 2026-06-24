@@ -9,7 +9,8 @@ export type WafGroupByField =
   | "clientIP"
   | "host"
   | "policyName"
-  | "requestUri";
+  | "requestUri"
+  | "trackingReference";
 
 export type WafAggregateMode = "count" | "dcount";
 
@@ -34,6 +35,7 @@ const GROUP_BY_LABELS: Record<WafGroupByField, string> = {
   host: "Host",
   policyName: "Policy",
   requestUri: "URI",
+  trackingReference: "Tracking ref",
 };
 
 /** Strip project/summarize/order clauses so a new summarize can run on raw columns. */
@@ -55,6 +57,7 @@ export function wafGroupByOptions(schema: AzureWafLogSchemaProfile): WafGroupByO
     ["host", columns.host],
     ["policyName", columns.policyName],
     ["requestUri", columns.requestUri],
+    ["trackingReference", columns.trackingReference],
   ];
   return entries
     .filter(([, column]) => Boolean(column?.trim()))

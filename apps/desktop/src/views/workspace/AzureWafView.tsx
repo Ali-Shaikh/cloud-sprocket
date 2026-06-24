@@ -139,6 +139,8 @@ export type AzureWafViewProps = {
   onDeleteSaved?: (workspace: string, id: string) => Promise<void>;
   /** Background probe for workspace log columns. Called at most once per workspace per session. */
   onProbeLogSchema?: (workspace: string, timespan: string) => Promise<AzureWafLogSchemaProfile>;
+  /** Jump to Front Door access logs for the same tracking reference. */
+  onCorrelateTrackingRef?: (trackingReference: string, workspace: string, timespan: string) => void;
 };
 
 const fieldLabel =
@@ -169,6 +171,7 @@ export default function AzureWafView({
   onSaveQuery,
   onDeleteSaved,
   onProbeLogSchema,
+  onCorrelateTrackingRef,
 }: AzureWafViewProps) {
   const workspaces = workspace.azureLogAnalyticsWorkspaces ?? [];
   const policies = workspace.azureWafPolicies ?? [];
@@ -893,6 +896,12 @@ export default function AzureWafView({
                     onPageChange: changePage,
                     disabled: running,
                   }
+                : undefined
+            }
+            onCorrelateTrackingRef={
+              onCorrelateTrackingRef
+                ? (trackingReference) =>
+                    onCorrelateTrackingRef(trackingReference, selectedWorkspace, timespan)
                 : undefined
             }
           />

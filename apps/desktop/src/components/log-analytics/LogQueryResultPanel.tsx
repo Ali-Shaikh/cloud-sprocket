@@ -60,6 +60,7 @@ export type LogQueryResultPanelProps = {
   emptyDescription?: string;
   wafColumnMap?: AzureWafLogColumnMap;
   pagination?: LogQueryPagination;
+  onCorrelateTrackingRef?: (trackingReference: string) => void;
 };
 
 type SortDirection = "asc" | "desc" | null;
@@ -127,7 +128,13 @@ function wafDefaultVisibleColumns(
   return visible;
 }
 
-function WafSummaryCard({ decoded }: { decoded: ReturnType<typeof decodeWafRow> }) {
+function WafSummaryCard({
+  decoded,
+  onCorrelateTrackingRef,
+}: {
+  decoded: ReturnType<typeof decodeWafRow>;
+  onCorrelateTrackingRef?: (trackingReference: string) => void;
+}) {
   const facts: Array<{ label: string; value: string; mono?: boolean }> = [
     { label: "Time", value: decoded.timeGenerated ?? "" },
     { label: "Action", value: decoded.action ?? "", mono: true },
@@ -194,6 +201,15 @@ function WafSummaryCard({ decoded }: { decoded: ReturnType<typeof decodeWafRow> 
           </table>
         </div>
       ) : null}
+      {decoded.trackingReference?.trim() && onCorrelateTrackingRef ? (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onCorrelateTrackingRef(decoded.trackingReference!.trim())}
+        >
+          View Front Door access logs
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -204,6 +220,7 @@ function LogQueryRowDetailPanel({
   rowIndex,
   rowCount,
   wafColumnMap,
+  onCorrelateTrackingRef,
   onClose,
   onSelectRowIndex,
 }: {
@@ -212,6 +229,7 @@ function LogQueryRowDetailPanel({
   rowIndex: number;
   rowCount: number;
   wafColumnMap?: AzureWafLogColumnMap;
+  onCorrelateTrackingRef?: (trackingReference: string) => void;
   onClose: () => void;
   onSelectRowIndex: (index: number) => void;
 }) {
@@ -323,7 +341,10 @@ function LogQueryRowDetailPanel({
 
         <TabsContent value="summary" className="mt-0 max-h-72 overflow-y-auto px-4 py-3">
           {decodedWaf ? (
-            <WafSummaryCard decoded={decodedWaf} />
+            <WafSummaryCard
+              decoded={decodedWaf}
+              onCorrelateTrackingRef={onCorrelateTrackingRef}
+            />
           ) : populated.length > 0 ? (
             <dl className="grid gap-3 sm:grid-cols-2">
               {populated.slice(0, 12).map(({ column, value }) => (
@@ -404,6 +425,7 @@ function LogQueryResultPanel({
   emptyDescription = "Run a KQL query to see results here.",
   wafColumnMap,
   pagination,
+  onCorrelateTrackingRef,
 }: LogQueryResultPanelProps) {
   const [wrapCells, setWrapCells] = useState(false);
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => new Set());
@@ -757,6 +779,7 @@ function LogQueryResultPanel({
             rowIndex={selectedRowIndex}
             rowCount={displayRows.length}
             wafColumnMap={wafColumnMap}
+            onCorrelateTrackingRef={onCorrelateTrackingRef}
             onClose={() => setSelectedRowIndex(null)}
             onSelectRowIndex={setSelectedRowIndex}
           />
