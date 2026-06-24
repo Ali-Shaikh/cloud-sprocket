@@ -1618,10 +1618,11 @@ export default function App() {
       current.selectedAzureWafPolicy?.trim() ||
       current.azureWafPolicies?.[0]?.name?.trim() ||
       "";
+    const inventoryReady =
+      azureInventoryLoaded(current, "waf") && current.profile?.profileId === sessionProfileId;
     if (
-      selected &&
-      current.azureWafPolicyDetail?.name === selected &&
-      current.profile?.profileId === sessionProfileId
+      inventoryReady &&
+      (!selected || current.azureWafPolicyDetail?.name === selected)
     ) {
       setAzureWafConfigLoading(false);
       return;

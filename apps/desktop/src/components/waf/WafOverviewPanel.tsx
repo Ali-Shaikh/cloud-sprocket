@@ -30,6 +30,8 @@ export type WafOverviewPanelProps = {
   disabled?: boolean;
   /** When false, overview queries are deferred until workspace/policy inventory is coherent. */
   ready?: boolean;
+  /** Bumped when workspace, policy, timespan, or schema identity changes (debounced upstream). */
+  refreshKey?: string;
   onRunQuery: (
     workspace: string,
     query: string,
@@ -54,6 +56,7 @@ export function WafOverviewPanel({
   timeRangeLabel,
   disabled = false,
   ready = true,
+  refreshKey = "",
   onRunQuery,
   onOpenBlocked,
   onOpenRule,
@@ -78,6 +81,7 @@ export function WafOverviewPanel({
     const token = ++refreshTokenRef.current;
     setLoading(true);
     setError(null);
+    const hadOverview = overview != null;
     try {
       const [actions, topRules, topBlockedIPs, blockedTotal] = await Promise.all([
         onRunQuery(workspace, queries.actions, timespan, OVERVIEW_MAX_ROWS),
@@ -95,7 +99,9 @@ export function WafOverviewPanel({
       if (token !== refreshTokenRef.current) {
         return;
       }
-      setOverview(null);
+      if (!hadOverview) {
+        setOverview(null);
+      }
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       if (token === refreshTokenRef.current) {
@@ -109,7 +115,7 @@ export function WafOverviewPanel({
     return () => {
       refreshTokenRef.current += 1;
     };
-  }, [workspace, policy, timespan, queries.actions, queries.topRules, queries.topBlockedIPs, queries.blockedTotal, disabled, ready]);
+  }, [refreshKey, disabled, ready, queries, workspace, timespan, onRunQuery, schema]);
 
   const actionHighlights = overview?.actions.slice(0, 4) ?? [];
 

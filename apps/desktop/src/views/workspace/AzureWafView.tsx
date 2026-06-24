@@ -50,6 +50,7 @@ import {
   WAF_ALL_POLICIES_VALUE,
   wafPolicyQueryFilter,
 } from "@/lib/waf-selection";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { getCachedWafLogSchema, setCachedWafLogSchema } from "@/lib/waf-schema-cache";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -254,9 +255,27 @@ export default function AzureWafView({
 
   const inventoryReady = !inventoryLoading && workspaces.length > 0;
   const overviewReady =
-    inventoryReady && selectedWorkspace.trim() !== "" && !workspaceSelectionLoading;
+    inventoryReady &&
+    selectedWorkspace.trim() !== "" &&
+    !workspaceSelectionLoading &&
+    !configLoading &&
+    !schemaProbeHint;
 
   const queryPolicy = wafPolicyQueryFilter(queryPolicyValue);
+
+  const overviewRefreshKey = useMemo(
+    () =>
+      [
+        selectedWorkspace,
+        queryPolicy ?? "",
+        timespanDurationFor(timespanValue, WAF_TIMESPAN_OPTIONS),
+        schema.detected ? "1" : "0",
+        schema.mode,
+        schema.tableName,
+      ].join("|"),
+    [selectedWorkspace, queryPolicy, timespanValue, schema.detected, schema.mode, schema.tableName],
+  );
+  const debouncedOverviewKey = useDebouncedValue(overviewRefreshKey, 300);
 
   useEffect(() => {
     if (inventoryLoading) {
@@ -279,7 +298,12 @@ export default function AzureWafView({
   }, [inventoryLoading, policies]);
 
   useEffect(() => {
-    if (!overviewReady || !resolvedWorkspace.needsSync) {
+    if (!overviewReady || !selectedWorkspace) {
+      return;
+    }
+    const persisted = workspace.selectedAzureLogWorkspace?.trim();
+    if (persisted === selectedWorkspace) {
+      selectionSyncRef.current.workspace = selectedWorkspace;
       return;
     }
     if (selectionSyncRef.current.workspace === selectedWorkspace) {
@@ -287,22 +311,36 @@ export default function AzureWafView({
     }
     selectionSyncRef.current.workspace = selectedWorkspace;
     onSelectWorkspace(selectedWorkspace);
-  }, [overviewReady, resolvedWorkspace.needsSync, selectedWorkspace, onSelectWorkspace]);
+  }, [
+    overviewReady,
+    selectedWorkspace,
+    workspace.selectedAzureLogWorkspace,
+    onSelectWorkspace,
+  ]);
 
   useEffect(() => {
-    if (inventoryLoading || policies.length === 0 || !resolvedPolicy.needsSync) {
+    if (inventoryLoading || !configPolicy) {
       return;
     }
-    if (!configPolicy || selectionSyncRef.current.policy === configPolicy) {
+    const sessionPolicy = workspace.selectedAzureWafPolicy?.trim();
+    if (
+      sessionPolicy === configPolicy &&
+      policyDetail?.name === configPolicy
+    ) {
+      selectionSyncRef.current.policy = configPolicy;
+      return;
+    }
+    if (!resolvedPolicy.needsSync || selectionSyncRef.current.policy === configPolicy) {
       return;
     }
     selectionSyncRef.current.policy = configPolicy;
     onSelectPolicy(configPolicy);
   }, [
     inventoryLoading,
-    policies.length,
-    resolvedPolicy.needsSync,
     configPolicy,
+    workspace.selectedAzureWafPolicy,
+    policyDetail?.name,
+    resolvedPolicy.needsSync,
     onSelectPolicy,
   ]);
 
@@ -650,6 +688,7 @@ export default function AzureWafView({
             timeRangeLabel={timeRangeLabel}
             disabled={inventoryControlsBusy || !selectedWorkspace.trim()}
             ready={overviewReady}
+            refreshKey={debouncedOverviewKey}
             onRunQuery={onRunQuery}
             onOpenBlocked={() => {
               const nextQuery = buildBlockedRequestsDetailQuery(schema, baseFilters);
