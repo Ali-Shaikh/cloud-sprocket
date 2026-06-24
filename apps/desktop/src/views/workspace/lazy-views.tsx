@@ -16,6 +16,7 @@ export const AzureView = lazy(() => import("./AzureView"));
 export const AzureStorageView = lazy(() => import("./AzureStorageView"));
 export const AzureAppServiceView = lazy(() => import("./AzureAppServiceView"));
 export const LogAnalyticsView = lazy(() => import("./LogAnalyticsView"));
+export const ToolsHubView = lazy(() => import("./ToolsHubView"));
 export const AzureWafView = lazy(() => import("./AzureWafView"));
 export const AzureFrontDoorView = lazy(() => import("./AzureFrontDoorView"));
 export const AzureFunctionsView = lazy(() => import("./AzureFunctionsView"));

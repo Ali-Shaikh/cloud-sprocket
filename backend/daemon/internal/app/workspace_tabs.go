@@ -39,6 +39,13 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 			overviewTab,
 			virtualisationTab,
 			{
+				TabID:    "azure-tools",
+				Label:    "Tools",
+				Summary:  "Operational workflows for Azure investigation and triage.",
+				Detail:   "Launch WAF Security, Log Analytics, and Front Door tools from one place.",
+				Category: workspaceTabCategoryTool,
+			},
+			{
 				TabID:    "azure-waf",
 				Label:    "WAF Security",
 				Summary:  "Front Door WAF investigation and policy workbench.",

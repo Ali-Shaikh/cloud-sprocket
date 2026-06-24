@@ -2,10 +2,17 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Clock, Loader2, Play, Save, Square, Trash2 } from "lucide-react";
+import { BookOpen, Clock, Loader2, Save, Trash2 } from "lucide-react";
 
 import { KqlEditor } from "@/components/kql/KqlEditor";
+import { KqlQueryRunControls } from "@/components/kql/KqlQueryRunControls";
 import { LogQueryResultPanel } from "@/components/log-analytics/LogQueryResultPanel";
+import {
+  buildExecutableKqlQuery,
+  KQL_PAGE_SIZE_OPTIONS,
+  kqlQueryHasNextPage,
+  trimKqlQueryPageRows,
+} from "@/lib/log-query-execution";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +64,7 @@ export type LogAnalyticsViewProps = {
     workspace: string,
     query: string,
     timespan: string,
+    maxRows?: number,
   ) => Promise<AzureLogQueryResult>;
   onListHistory: (workspace: string) => Promise<AzureLogAnalyticsHistoryEntry[]>;
   onListSaved: (workspace: string) => Promise<AzureLogAnalyticsSavedQuery[]>;
@@ -116,6 +124,9 @@ export default function LogAnalyticsView({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AzureLogQueryResult | null>(null);
+  const [pageSize, setPageSize] = useState<number>(KQL_PAGE_SIZE_OPTIONS[2]);
+  const [page, setPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
   const [history, setHistory] = useState<AzureLogAnalyticsHistoryEntry[]>([]);
   const [saved, setSaved] = useState<AzureLogAnalyticsSavedQuery[]>([]);
   const [tables, setTables] = useState<AzureLogAnalyticsTableInfo[]>([]);
@@ -148,22 +159,32 @@ export default function LogAnalyticsView({
 
   const canRun = selected.trim() !== "" && query.trim() !== "" && !running;
 
-  async function run() {
-    if (!canRun) return;
+  useEffect(() => {
+    setPage(1);
+    setHasNextPage(false);
+  }, [query, timespanValue, pageSize]);
+
+  async function run(nextPage = page) {
+    if (!selected.trim() || !query.trim() || running) return;
     const token = ++runTokenRef.current;
     setRunning(true);
     setError(null);
     try {
       const timespan =
         TIMESPAN_OPTIONS.find((option) => option.value === timespanValue)?.timespan ?? "";
-      const queryResult = await onRunQuery(selected, query, timespan);
+      const built = buildExecutableKqlQuery(query, { page: nextPage, pageSize });
+      const queryResult = await onRunQuery(selected, built.query, timespan, built.maxRows);
       if (token !== runTokenRef.current) return;
-      setResult(queryResult);
+      const trimmedRows = trimKqlQueryPageRows(queryResult.rows, built.pageSize);
+      setResult({ ...queryResult, rows: trimmedRows });
+      setHasNextPage(kqlQueryHasNextPage(queryResult.rows.length, built.pageSize));
+      setPage(nextPage);
       void onListHistory(selected).then(setHistory).catch(() => undefined);
     } catch (caught) {
       if (token !== runTokenRef.current) return;
       setError(caught instanceof Error ? caught.message : String(caught));
       setResult(null);
+      setHasNextPage(false);
     } finally {
       if (token === runTokenRef.current) {
         setRunning(false);
@@ -174,6 +195,13 @@ export default function LogAnalyticsView({
   function cancelRun() {
     runTokenRef.current += 1;
     setRunning(false);
+  }
+
+  function changePage(nextPage: number) {
+    if (nextPage < 1 || running || !query.trim()) {
+      return;
+    }
+    void run(nextPage);
   }
 
   function loadHistoryEntry(entry: AzureLogAnalyticsHistoryEntry) {
@@ -289,16 +317,6 @@ export default function LogAnalyticsView({
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={() => void run()} disabled={!canRun}>
-            {running ? <Loader2 className="animate-spin" /> : <Play />}
-            {running ? "Running…" : "Run query"}
-          </Button>
-          {running ? (
-            <Button variant="outline" onClick={cancelRun}>
-              <Square />
-              Cancel
-            </Button>
-          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" disabled={!selected}>
@@ -375,9 +393,19 @@ export default function LogAnalyticsView({
           </Button>
         </div>
 
-        <div>
-          <div className={cn(fieldLabel, "mb-1")}>KQL query</div>
-          <KqlEditor value={query} onChange={setQuery} onRun={() => void run()} disabled={running} />
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className={fieldLabel}>KQL query</div>
+            <KqlQueryRunControls
+              running={running}
+              canRun={canRun}
+              pageSize={pageSize}
+              onRun={() => void run(1)}
+              onCancel={cancelRun}
+              onPageSizeChange={setPageSize}
+            />
+          </div>
+          <KqlEditor value={query} onChange={setQuery} onRun={() => void run(1)} disabled={running} />
         </div>
 
         <div className="flex items-center justify-between gap-3">
@@ -386,7 +414,22 @@ export default function LogAnalyticsView({
         </div>
       </section>
 
-      <LogQueryResultPanel result={result} error={error} timeRangeLabel={timeRangeLabel} />
+      <LogQueryResultPanel
+        result={result}
+        error={error}
+        timeRangeLabel={timeRangeLabel}
+        pagination={
+          result
+            ? {
+                page,
+                pageSize,
+                hasNextPage,
+                onPageChange: changePage,
+                disabled: running,
+              }
+            : undefined
+        }
+      />
 
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
         <DialogContent>

@@ -21,6 +21,7 @@ import {
   Server,
   Trash2,
   TriangleAlert,
+  Wrench,
 } from "lucide-react";
 import { Toaster } from "sonner";
 import awsEc2IconUrl from "./assets/cloud-icons/aws-ec2.svg";
@@ -99,6 +100,7 @@ import {
   IAMView,
   LambdaView,
   LogAnalyticsView,
+  ToolsHubView,
   LogsView,
   PlaceholderView,
   RDSView,
@@ -3439,6 +3441,16 @@ export default function App() {
           });
       }}
     />
+  ) : session.isLocked && activeWorkspaceTabId === "azure-tools" ? (
+    <ToolsHubView
+      workspace={activeWorkspace}
+      providerLabel={workspace.provider?.label ?? selectedProvider?.label ?? "Azure"}
+      profileLabel={activeWorkspace.profile?.displayName ?? selectedProfile?.displayName}
+      workspaceTabs={session.workspaceTabs}
+      onNavigate={(tabId) => {
+        setActiveWorkspaceTabId(tabId);
+      }}
+    />
   ) : session.isLocked && activeWorkspaceTabId === "azure-log-analytics" ? (
     <LogAnalyticsView
       workspace={activeWorkspace}
@@ -3449,11 +3461,12 @@ export default function App() {
       onSelectWorkspace={(ws) => {
         void selectAzureLogAnalyticsWorkspace(ws);
       }}
-      onRunQuery={(ws, query, timespan) =>
+      onRunQuery={(ws, query, timespan, maxRows) =>
         backendRequest<AzureLogQueryResult>("azure.logAnalytics.query", {
           workspace: ws,
           query,
           timespan,
+          maxRows,
         })
       }
       onListHistory={listLogAnalyticsHistory}
@@ -4198,6 +4211,7 @@ export default function App() {
         return "workspace";
       }
       if (
+        tab.tabId === "azure-tools" ||
         tab.tabId === "azure-waf" ||
         tab.tabId === "azure-log-analytics" ||
         tab.tabId === "azure-front-door" ||
@@ -4623,6 +4637,7 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     "azure-vms": "Virtual machines",
     "azure-storage": "Storage",
     "azure-app-service": "App Service",
+    "azure-tools": "Tools",
     "azure-log-analytics": "Log Analytics",
     "azure-waf": "WAF Security",
     "azure-front-door": "Front Door",
@@ -4676,6 +4691,8 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
       };
     case "azure-app-service":
       return { ...base, iconUrl: azureAppServiceIconUrl, count: workspace.azureWebApps.length };
+    case "azure-tools":
+      return { ...base, icon: Wrench };
     case "azure-log-analytics":
       return { ...base, iconUrl: azureLogAnalyticsIconUrl, count: workspace.azureLogAnalyticsWorkspaces.length };
     case "azure-waf":

@@ -56,7 +56,12 @@ describe("LogAnalyticsView", () => {
     fireEvent.click(screen.getByRole("button", { name: /run query/i }));
 
     await waitFor(() =>
-      expect(onRunQuery).toHaveBeenCalledWith("law-platform", expect.any(String), expect.any(String)),
+      expect(onRunQuery).toHaveBeenCalledWith(
+        "law-platform",
+        expect.stringContaining("| take 101"),
+        expect.any(String),
+        101,
+      ),
     );
     expect(await screen.findByText("hello-from-kql")).toBeTruthy();
     expect(screen.getByText("Message")).toBeTruthy();

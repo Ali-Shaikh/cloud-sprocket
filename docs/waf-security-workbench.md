@@ -49,19 +49,19 @@ Front Door WAF diagnostic logs in Log Analytics:
 3. **Policy context** (existing)
    - Policy config read, rule fire counts, exclusions, guarded writes
 
-### Phase 2 (in progress)
+### Phase 2 (shipped)
 
-- Request correlation: group rows by `trackingReference` / `TransactionId` (shipped)
-- WAF + Front Door access-log jump for the same ref (shipped)
-- Application Gateway WAF (`AGWFirewallLogs` schema) (shipped in schema probe + KQL)
-- False-positive playbook: match → suggested exclusion → confirm (shipped when write mode on)
+- Request correlation: group rows by `trackingReference` / `TransactionId`
+- WAF + Front Door access-log jump for the same ref
+- Application Gateway WAF (`AGWFirewallLogs` schema) in schema probe + KQL
+- False-positive playbook: match → suggested exclusion → confirm (when write mode on)
 - Optional Azure Monitor metrics tiles (block rate trends) (planned)
 
-### Phase 3 (planned)
+### Phase 3 (shipped)
 
-- Dedicated **Tools** hub page listing available workflows per provider
-- Shared query execution layer (group-by, limits, pagination) across Log Analytics tools
-- Export bundles for tickets / SOC handoff
+- Dedicated **Tools** hub page (`azure-tools`) listing Azure operational workflows
+- Shared KQL query execution layer (`log-query-execution.ts`): row limits and server-side pagination in Log Analytics and WAF
+- SOC investigation export bundle (query, schema, decoded rows, CSV/JSON attachments) from WAF results
 
 ## Hard limits (transparent)
 

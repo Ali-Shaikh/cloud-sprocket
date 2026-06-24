@@ -23,7 +23,12 @@ import {
   WAF_CURATED_QUERY_CATEGORIES,
   type WafCuratedQueryCategory,
 } from "@/lib/waf-curated-queries";
-import { isTuningCandidate } from "@/lib/waf-decode";
+import { decodeWafRow, isTuningCandidate } from "@/lib/waf-decode";
+import {
+  buildWafInvestigationBundle,
+  downloadWafInvestigationBundle,
+} from "@/lib/waf-investigation-export";
+import { notify } from "@/lib/notify";
 import {
   buildExecutableWafQuery,
   trimWafQueryPageRows,
@@ -345,6 +350,31 @@ export default function AzureWafView({
       return;
     }
     void run(query, nextPage);
+  }
+
+  function exportInvestigationBundle() {
+    if (!result) {
+      return;
+    }
+    const decodedRows = groupedResults
+      ? undefined
+      : result.rows.map((row) => decodeWafRow(result.columns, row, schema.columns));
+    const bundle = buildWafInvestigationBundle({
+      subscription: workspace.profile?.displayName,
+      workspace: selectedWorkspace,
+      query,
+      timespan,
+      timeRangeLabel,
+      policyName: selectedPolicy,
+      schemaProfile: schema,
+      result,
+      decodedRows,
+      page,
+      pageSize,
+      grouped: groupedResults,
+    });
+    downloadWafInvestigationBundle(bundle);
+    notify("success", "SOC investigation bundle downloaded");
   }
 
   function toggleGroupByField(field: WafGroupByField, enabled: boolean) {
@@ -919,6 +949,7 @@ export default function AzureWafView({
                 : undefined
             }
             onSuggestExclusion={canWrite ? applyExclusionSuggestion : undefined}
+            onExportInvestigation={result ? exportInvestigationBundle : undefined}
           />
         </TabsContent>
 

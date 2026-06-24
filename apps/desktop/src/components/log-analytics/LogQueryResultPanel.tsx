@@ -12,6 +12,7 @@ import {
   Columns3,
   Copy,
   Download,
+  FileArchive,
   Table2,
   X,
 } from "lucide-react";
@@ -63,6 +64,7 @@ export type LogQueryResultPanelProps = {
   pagination?: LogQueryPagination;
   onCorrelateTrackingRef?: (trackingReference: string) => void;
   onSuggestExclusion?: (exclusion: AzureWafExclusion) => void;
+  onExportInvestigation?: () => void;
 };
 
 type SortDirection = "asc" | "desc" | null;
@@ -452,6 +454,7 @@ function LogQueryResultPanel({
   pagination,
   onCorrelateTrackingRef,
   onSuggestExclusion,
+  onExportInvestigation,
 }: LogQueryResultPanelProps) {
   const [wrapCells, setWrapCells] = useState(false);
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => new Set());
@@ -640,6 +643,12 @@ function LogQueryResultPanel({
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+            {onExportInvestigation ? (
+              <Button variant="outline" size="sm" onClick={onExportInvestigation}>
+                <FileArchive />
+                SOC bundle
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               size="sm"
