@@ -111,6 +111,31 @@ describe("waf-kql tracking reference", () => {
     expect(description.trackingLookup).toContain("trackingReference_s");
   });
 
+  it("builds Application Gateway tracking lookup on TransactionId", () => {
+    const agwSchema = normaliseWafSchema({
+      mode: "applicationGateway",
+      tableName: "AGWFirewallLogs",
+      columns: {
+        timeGenerated: "TimeGenerated",
+        action: "Action",
+        ruleName: "RuleId",
+        requestUri: "RequestUri",
+        clientIP: "ClientIp",
+        host: "Hostname",
+        policyName: "PolicyScopeName",
+        policyMode: "PolicyScope",
+        trackingReference: "TransactionId",
+        detailsMatches: "DetailedData",
+        detailsMessage: "DetailedMessage",
+      },
+      detected: true,
+    });
+    const query = buildTrackingReferenceExtendQuery(agwSchema, trackingRef);
+    expect(query).toContain("AGWFirewallLogs");
+    expect(query).toContain(`TransactionId == "${trackingRef}"`);
+    expect(query).not.toContain("Category in");
+  });
+
   it("projects only detected columns for ERW-PROD tracking lookup", () => {
     const query = buildTrackingReferenceExtendQuery(erwProdSchema, trackingRef);
     expect(query).toContain("clientIP_s");

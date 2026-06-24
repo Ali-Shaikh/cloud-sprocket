@@ -564,7 +564,7 @@ export interface AzureWafLogColumnMap {
 }
 
 export interface AzureWafLogSchemaProfile {
-  mode: "azureDiagnostics" | "resourceSpecific" | string;
+  mode: "azureDiagnostics" | "resourceSpecific" | "applicationGateway" | string;
   tableName: string;
   categories?: string[];
   columns: AzureWafLogColumnMap;

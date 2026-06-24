@@ -467,6 +467,20 @@ export default function AzureWafView({
     }
   }
 
+  function applyExclusionSuggestion(exclusion: AzureWafExclusion) {
+    if (!canWrite) {
+      return;
+    }
+    setNewExclusion({
+      matchVariable: exclusion.matchVariable,
+      selectorMatchOperator: exclusion.selectorMatchOperator,
+      selector: exclusion.selector ?? "",
+      ruleSetType: exclusion.ruleSetType,
+    });
+    setActiveTab("config");
+    setAddExclusionOpen(true);
+  }
+
   async function confirmExclusionAdd() {
     if (!policyDetail) return;
     const matchVariable = newExclusion.matchVariable.trim();
@@ -899,11 +913,12 @@ export default function AzureWafView({
                 : undefined
             }
             onCorrelateTrackingRef={
-              onCorrelateTrackingRef
+              onCorrelateTrackingRef && schema.mode !== "applicationGateway"
                 ? (trackingReference) =>
                     onCorrelateTrackingRef(trackingReference, selectedWorkspace, timespan)
                 : undefined
             }
+            onSuggestExclusion={canWrite ? applyExclusionSuggestion : undefined}
           />
         </TabsContent>
 

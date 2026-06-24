@@ -33,6 +33,25 @@ func TestPickColumnReturnsEmptyWhenColumnAbsent(t *testing.T) {
 	}
 }
 
+func TestApplicationGatewaySchemaProfileMapsAgwColumns(t *testing.T) {
+	profile := applicationGatewaySchemaProfile([]string{
+		"TimeGenerated", "Action", "RuleId", "RequestUri", "ClientIp", "Hostname",
+		"PolicyScopeName", "TransactionId", "DetailedData", "DetailedMessage",
+	})
+	if profile.TableName != wafApplicationGatewayTable {
+		t.Fatalf("table = %q", profile.TableName)
+	}
+	if profile.Mode != wafSchemaModeApplicationGateway {
+		t.Fatalf("mode = %q", profile.Mode)
+	}
+	if profile.Columns.ClientIP != "ClientIp" {
+		t.Fatalf("client IP column = %q", profile.Columns.ClientIP)
+	}
+	if profile.Columns.TrackingReference != "TransactionId" {
+		t.Fatalf("tracking column = %q", profile.Columns.TrackingReference)
+	}
+}
+
 func TestDiagnosticsSchemaProfileMatchesFrontDoorCustomerLogs(t *testing.T) {
 	profile := diagnosticsSchemaProfile([]string{
 		"TimeGenerated", "Category", "action_s", "clientIP_s", "clientPort_s",

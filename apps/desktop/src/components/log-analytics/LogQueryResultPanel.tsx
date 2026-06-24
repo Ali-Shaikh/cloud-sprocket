@@ -30,8 +30,9 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { EmptyState } from "@/components/empty-state";
-import type { AzureLogQueryResult, AzureWafLogColumnMap } from "@/types/backend";
+import type { AzureLogQueryResult, AzureWafExclusion, AzureWafLogColumnMap } from "@/types/backend";
 import { decodeWafRow, isTuningCandidate } from "@/lib/waf-decode";
+import { suggestExclusionsFromMatches } from "@/lib/waf-exclusion-suggestions";
 import {
   downloadTextFile,
   formatCellValue,
@@ -61,6 +62,7 @@ export type LogQueryResultPanelProps = {
   wafColumnMap?: AzureWafLogColumnMap;
   pagination?: LogQueryPagination;
   onCorrelateTrackingRef?: (trackingReference: string) => void;
+  onSuggestExclusion?: (exclusion: AzureWafExclusion) => void;
 };
 
 type SortDirection = "asc" | "desc" | null;
@@ -131,10 +133,16 @@ function wafDefaultVisibleColumns(
 function WafSummaryCard({
   decoded,
   onCorrelateTrackingRef,
+  onSuggestExclusion,
 }: {
   decoded: ReturnType<typeof decodeWafRow>;
   onCorrelateTrackingRef?: (trackingReference: string) => void;
+  onSuggestExclusion?: (exclusion: AzureWafExclusion) => void;
 }) {
+  const exclusionSuggestions = useMemo(
+    () => suggestExclusionsFromMatches(decoded.matches),
+    [decoded.matches],
+  );
   const facts: Array<{ label: string; value: string; mono?: boolean }> = [
     { label: "Time", value: decoded.timeGenerated ?? "" },
     { label: "Action", value: decoded.action ?? "", mono: true },
@@ -201,15 +209,29 @@ function WafSummaryCard({
           </table>
         </div>
       ) : null}
-      {decoded.trackingReference?.trim() && onCorrelateTrackingRef ? (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onCorrelateTrackingRef(decoded.trackingReference!.trim())}
-        >
-          View Front Door access logs
-        </Button>
-      ) : null}
+      <div className="flex flex-wrap gap-2">
+        {decoded.trackingReference?.trim() && onCorrelateTrackingRef ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onCorrelateTrackingRef(decoded.trackingReference!.trim())}
+          >
+            View Front Door access logs
+          </Button>
+        ) : null}
+        {onSuggestExclusion
+          ? exclusionSuggestions.map((suggestion) => (
+              <Button
+                key={`${suggestion.exclusion.matchVariable}-${suggestion.exclusion.selector}`}
+                variant="secondary"
+                size="sm"
+                onClick={() => onSuggestExclusion(suggestion.exclusion)}
+              >
+                {suggestion.label}
+              </Button>
+            ))
+          : null}
+      </div>
     </div>
   );
 }
@@ -221,6 +243,7 @@ function LogQueryRowDetailPanel({
   rowCount,
   wafColumnMap,
   onCorrelateTrackingRef,
+  onSuggestExclusion,
   onClose,
   onSelectRowIndex,
 }: {
@@ -230,6 +253,7 @@ function LogQueryRowDetailPanel({
   rowCount: number;
   wafColumnMap?: AzureWafLogColumnMap;
   onCorrelateTrackingRef?: (trackingReference: string) => void;
+  onSuggestExclusion?: (exclusion: AzureWafExclusion) => void;
   onClose: () => void;
   onSelectRowIndex: (index: number) => void;
 }) {
@@ -344,6 +368,7 @@ function LogQueryRowDetailPanel({
             <WafSummaryCard
               decoded={decodedWaf}
               onCorrelateTrackingRef={onCorrelateTrackingRef}
+              onSuggestExclusion={onSuggestExclusion}
             />
           ) : populated.length > 0 ? (
             <dl className="grid gap-3 sm:grid-cols-2">
@@ -426,6 +451,7 @@ function LogQueryResultPanel({
   wafColumnMap,
   pagination,
   onCorrelateTrackingRef,
+  onSuggestExclusion,
 }: LogQueryResultPanelProps) {
   const [wrapCells, setWrapCells] = useState(false);
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => new Set());
@@ -780,6 +806,7 @@ function LogQueryResultPanel({
             rowCount={displayRows.length}
             wafColumnMap={wafColumnMap}
             onCorrelateTrackingRef={onCorrelateTrackingRef}
+            onSuggestExclusion={onSuggestExclusion}
             onClose={() => setSelectedRowIndex(null)}
             onSelectRowIndex={setSelectedRowIndex}
           />

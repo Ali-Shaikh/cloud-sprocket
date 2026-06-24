@@ -8,6 +8,7 @@ import {
   buildBlockedRequestsQuery,
   buildTopClientIPsQuery,
   buildTopRulesQuery,
+  wafBlockedActions,
   type WafLogFilters,
 } from "./waf-kql";
 
@@ -83,7 +84,7 @@ export function buildWafOverviewQueries(
     topRules: `${buildTopRulesQuery(schema, filters)}\n| take 8`,
     topBlockedIPs: `${buildTopClientIPsQuery(schema, {
       ...filters,
-      actions: ["Block", "block"],
+      actions: wafBlockedActions(schema),
     })}\n| take 8`,
     blockedTotal: `${buildBlockedRequestsQuery(schema, filters)}\n| summarize Blocked=count()`,
   };
