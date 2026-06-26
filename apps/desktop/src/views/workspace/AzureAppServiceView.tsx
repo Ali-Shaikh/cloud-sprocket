@@ -2,7 +2,16 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { useState } from "react";
-import { ArrowLeftRight, ExternalLink, Globe, Plus, RotateCw, Square, Play } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Copy,
+  ExternalLink,
+  Globe,
+  Plus,
+  RotateCw,
+  Square,
+  Play,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -32,7 +41,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { EmptyState } from "@/components/empty-state";
+import { notify } from "@/lib/notify";
 import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
@@ -83,11 +102,103 @@ function isSensitiveSettingName(name: string): boolean {
 
 // Presentation-only masking: full values are still present in the workspace snapshot
 // serialised over IPC and held in React state.
-function maskSettingValue(name: string, value: string): string {
-  if (!value || !isSensitiveSettingName(name)) {
-    return value || "—";
+function maskSettingValue(name: string, value: string, showSensitive: boolean): string {
+  if (!value) {
+    return "—";
   }
-  return "••••••••";
+  if (!showSensitive && isSensitiveSettingName(name)) {
+    return "••••••••";
+  }
+  return value;
+}
+
+function copySettingValue(value: string): void {
+  if (!navigator.clipboard) {
+    return;
+  }
+  void navigator.clipboard.writeText(value).then(
+    () => notify("success", "Copied to clipboard"),
+    () => notify("error", "Could not copy to clipboard"),
+  );
+}
+
+function AppServiceSettingValueCell({
+  name,
+  value,
+  showSensitive,
+}: {
+  name: string;
+  value: string;
+  showSensitive: boolean;
+}) {
+  const [viewOpen, setViewOpen] = useState(false);
+  const [revealInDialog, setRevealInDialog] = useState(false);
+  const sensitive = isSensitiveSettingName(name);
+  const masked = sensitive && !showSensitive;
+  const displayValue = maskSettingValue(name, value, showSensitive);
+  const canRevealInDialog = sensitive && !showSensitive;
+
+  function closeDialog(open: boolean) {
+    setViewOpen(open);
+    if (!open) {
+      setRevealInDialog(false);
+    }
+  }
+
+  const dialogValue =
+    canRevealInDialog && !revealInDialog ? "••••••••" : value || "—";
+
+  return (
+    <>
+      <div className="flex min-w-0 items-start gap-2">
+        <span className="min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-xs">
+          {displayValue}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 shrink-0 px-2 text-xs"
+          onClick={() => setViewOpen(true)}
+        >
+          View
+        </Button>
+      </div>
+      <Dialog open={viewOpen} onOpenChange={closeDialog}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-sm">{name}</DialogTitle>
+            <DialogDescription>Full application setting value for {name}.</DialogDescription>
+          </DialogHeader>
+          {canRevealInDialog ? (
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Switch
+                checked={revealInDialog}
+                onCheckedChange={setRevealInDialog}
+                aria-label="Reveal sensitive value"
+              />
+              Reveal sensitive value
+            </label>
+          ) : null}
+          <pre className="max-h-72 overflow-auto rounded-lg border border-border bg-muted/30 p-3 font-mono text-xs whitespace-pre-wrap break-all">
+            {dialogValue}
+          </pre>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={masked && !revealInDialog}
+              onClick={() => copySettingValue(value)}
+            >
+              <Copy />
+              Copy
+            </Button>
+            <Button variant="outline" onClick={() => closeDialog(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
 export type AzureAppServiceViewProps = {
@@ -169,6 +280,7 @@ export default function AzureAppServiceView({
   const [logWorkspace, setLogWorkspace] = useState(
     workspace.selectedAzureLogWorkspace ?? workspace.azureLogAnalyticsWorkspaces[0]?.name ?? "",
   );
+  const [showSensitiveSettings, setShowSensitiveSettings] = useState(false);
 
   const selectedApp = workspace.azureWebApps.find(
     (app) => app.name === workspace.selectedAzureWebAppName,
@@ -649,16 +761,29 @@ export default function AzureAppServiceView({
             <h2 className="text-base font-bold">Application settings · {slotLabel}</h2>
             <p className="text-sm text-muted-foreground">
               On container web apps these settings are exposed as environment variables. Updates
-              trigger an app recycle for the active slot. Sensitive names are masked in the table
-              only; values still travel in the workspace payload for this local desktop session.
+              trigger an app recycle for the active slot. Use View to inspect the full value;
+              sensitive names stay masked until you reveal them.
             </p>
           </div>
-          {selectedApp && canWrite ? (
-            <Button variant="outline" size="sm" onClick={openAddSettingDialog}>
-              <Plus />
-              Add setting
-            </Button>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5">
+              <Switch
+                id="app-service-show-sensitive"
+                checked={showSensitiveSettings}
+                onCheckedChange={setShowSensitiveSettings}
+                aria-label="Show sensitive application setting values"
+              />
+              <label htmlFor="app-service-show-sensitive" className="text-xs font-medium">
+                Show sensitive values
+              </label>
+            </div>
+            {selectedApp && canWrite ? (
+              <Button variant="outline" size="sm" onClick={openAddSettingDialog}>
+                <Plus />
+                Add setting
+              </Button>
+            ) : null}
+          </div>
         </div>
         {settingError ? <p className="text-sm text-destructive">{settingError}</p> : null}
         {inventoryLoading ? (
@@ -666,11 +791,12 @@ export default function AzureAppServiceView({
         ) : !selectedApp ? (
           <p className="text-sm text-muted-foreground">Select a web app to view settings.</p>
         ) : settings.length > 0 ? (
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Value</TableHead>
+                <TableHead className="min-w-[12rem]">Name</TableHead>
+                <TableHead className="min-w-[20rem]">Value</TableHead>
                 <TableHead>Slot setting</TableHead>
                 {canWrite ? <TableHead /> : null}
               </TableRow>
@@ -678,9 +804,13 @@ export default function AzureAppServiceView({
             <TableBody>
               {settings.map((setting) => (
                 <TableRow key={setting.name}>
-                  <TableCell className="font-mono text-xs">{setting.name}</TableCell>
-                  <TableCell className="max-w-[360px] truncate font-mono text-xs">
-                    {maskSettingValue(setting.name, setting.value)}
+                  <TableCell className="align-top font-mono text-xs">{setting.name}</TableCell>
+                  <TableCell className="min-w-[20rem] align-top">
+                    <AppServiceSettingValueCell
+                      name={setting.name}
+                      value={setting.value}
+                      showSensitive={showSensitiveSettings}
+                    />
                   </TableCell>
                   <TableCell>{setting.slotSetting ? "Yes" : "No"}</TableCell>
                   {canWrite ? (
@@ -705,6 +835,7 @@ export default function AzureAppServiceView({
               ))}
             </TableBody>
           </Table>
+          </div>
         ) : (
           <p className="text-sm text-muted-foreground">No application settings returned.</p>
         )}

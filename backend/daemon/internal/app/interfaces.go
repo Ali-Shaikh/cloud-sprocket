@@ -102,6 +102,7 @@ type AzureInventory interface {
 	ListLogAnalyticsWorkspaces(ctx context.Context, profile models.ProfileSummary) ([]models.AzureLogAnalyticsWorkspace, error)
 	RunLogAnalyticsQuery(ctx context.Context, profile models.ProfileSummary, workspace string, query string, timespan string, maxRows int) (models.AzureLogQueryResult, error)
 	ListLogAnalyticsTables(ctx context.Context, profile models.ProfileSummary, workspaceName string, workspaceQueryID string, resourceGroup string, includeColumns bool) ([]models.AzureLogAnalyticsTableInfo, error)
+	GetLogAnalyticsTableSchema(ctx context.Context, profile models.ProfileSummary, workspaceQueryID string, tableName string) ([]string, error)
 	DetectWafLogSchema(ctx context.Context, profile models.ProfileSummary, workspace string, timespan string) (models.AzureWafLogSchemaProfile, error)
 	ListWafPolicies(ctx context.Context, profile models.ProfileSummary, withDetail bool) ([]models.AzureWafPolicySummary, error)
 	GetWafPolicy(ctx context.Context, profile models.ProfileSummary, resourceGroup string, policyName string) (models.AzureWafPolicyDetail, error)

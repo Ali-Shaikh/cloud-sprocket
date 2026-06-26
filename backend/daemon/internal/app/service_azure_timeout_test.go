@@ -232,6 +232,11 @@ func (blockingAzure) ListEntraAppRegistrations(ctx context.Context, _ models.Pro
 	return nil, ctx.Err()
 }
 
+func (blockingAzure) GetLogAnalyticsTableSchema(ctx context.Context, _ models.ProfileSummary, _ string, _ string) ([]string, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
 func (blockingAzure) ListLogAnalyticsTables(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ bool) ([]models.AzureLogAnalyticsTableInfo, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()

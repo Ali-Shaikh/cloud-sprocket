@@ -517,14 +517,20 @@ export default function AzureFrontDoorView({
                 </Button>
               ))}
               <Button
+                variant="outline"
                 size="sm"
-                className="gap-2"
-                disabled={queryRunning}
                 onClick={() => {
                   const nextQuery = buildAfdAccessFilteredQuery(logMode, logTable, filters);
                   setQuery(nextQuery);
-                  void runQuery(nextQuery);
                 }}
+              >
+                Apply filters
+              </Button>
+              <Button
+                size="sm"
+                className="gap-2"
+                disabled={queryRunning || !query.trim()}
+                onClick={() => void runQuery()}
               >
                 <Play className="h-4 w-4" />
                 Run query

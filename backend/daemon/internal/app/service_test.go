@@ -347,6 +347,10 @@ func (stubAzureInventory) ListLogAnalyticsTables(context.Context, models.Profile
 	return []models.AzureLogAnalyticsTableInfo{{Name: "AzureDiagnostics", Columns: []string{"Category", "action_s"}}}, nil
 }
 
+func (stubAzureInventory) GetLogAnalyticsTableSchema(context.Context, models.ProfileSummary, string, string) ([]string, error) {
+	return []string{"TimeGenerated", "Category"}, nil
+}
+
 func (stubAzureInventory) DetectWafLogSchema(context.Context, models.ProfileSummary, string, string) (models.AzureWafLogSchemaProfile, error) {
 	return models.AzureWafLogSchemaProfile{
 		Mode:       "azureDiagnostics",

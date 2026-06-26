@@ -33,6 +33,7 @@ const laMocks = {
   onSaveQuery: vi.fn().mockResolvedValue({ id: "s1", name: "test", query: "AppEvents" }),
   onDeleteSaved: vi.fn().mockResolvedValue(undefined),
   onListTables: vi.fn().mockResolvedValue([{ name: "AppEvents", columns: ["TimeGenerated"] }]),
+  onGetTableSchema: vi.fn().mockResolvedValue({ name: "AppEvents", columns: ["TimeGenerated"] }),
 };
 
 describe("LogAnalyticsView", () => {
@@ -61,6 +62,7 @@ describe("LogAnalyticsView", () => {
         expect.stringContaining("| take 101"),
         expect.any(String),
         101,
+        expect.any(String),
       ),
     );
     expect(await screen.findByText("hello-from-kql")).toBeTruthy();

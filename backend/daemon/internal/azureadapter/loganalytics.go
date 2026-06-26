@@ -228,6 +228,35 @@ func (i *Inventory) listLocalLogAnalyticsWorkspaces(ctx context.Context) ([]mode
 	return workspaces, nil
 }
 
+// GetLogAnalyticsTableSchema returns column names for a single workspace table.
+func (i *Inventory) GetLogAnalyticsTableSchema(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	workspaceQueryID string,
+	tableName string,
+) ([]string, error) {
+	tableName = strings.TrimSpace(tableName)
+	if tableName == "" {
+		return nil, fmt.Errorf("a table name is required")
+	}
+	schemaQuery := fmt.Sprintf("%s | getschema", tableName)
+	result, err := i.RunLogAnalyticsQuery(ctx, profile, workspaceQueryID, schemaQuery, "", 500)
+	if err != nil {
+		return nil, err
+	}
+	columnIndex := indexOfColumn(result.Columns, "ColumnName")
+	if columnIndex < 0 {
+		columnIndex = indexOfColumn(result.Columns, "Column")
+	}
+	columns := make([]string, 0, len(result.Rows))
+	for _, row := range result.Rows {
+		if columnIndex >= 0 && columnIndex < len(row) && strings.TrimSpace(row[columnIndex]) != "" {
+			columns = append(columns, row[columnIndex])
+		}
+	}
+	return columns, nil
+}
+
 // RunLogAnalyticsQuery runs a KQL query against a workspace and returns a
 // normalised column/row table. workspace is the workspace name or customer GUID.
 // maxRows caps the returned row count; zero or negative values use

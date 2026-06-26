@@ -74,3 +74,55 @@ func TestLogAnalyticsHistoryUsesRequestedWorkspaceIdentifier(t *testing.T) {
 		t.Fatalf("history should not be stored under resolved GUID, got %+v", entries)
 	}
 }
+
+func TestLogAnalyticsHistoryPrefersHistoryQuery(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("EnsureRuntimeDirs: %v", err)
+	}
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer dataStore.Close()
+
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(string) (string, error) { return "", nil }),
+		nil,
+		nil,
+		stubLambdaInventory{},
+		stubDynamoDBInventory{},
+		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{},
+		stubAzureInventory{},
+		stubDockerRuntime{},
+	)
+
+	ctx := context.Background()
+	requested := "law-platform"
+	sourceQuery := "dependencies | take 50"
+	service.appendLogAnalyticsHistory(ctx, requested, sourceQuery, "P1D")
+
+	payload, err := json.Marshal(map[string]string{"workspace": requested})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	result, err := service.Handle(ctx, "azure.logAnalytics.history.list", payload, nil)
+	if err != nil {
+		t.Fatalf("history.list: %v", err)
+	}
+	entries, ok := result.([]models.AzureLogAnalyticsHistoryEntry)
+	if !ok || len(entries) != 1 {
+		t.Fatalf("expected one history entry, got %T %+v", result, result)
+	}
+	if entries[0].Query != sourceQuery {
+		t.Fatalf("history query = %q, want %q", entries[0].Query, sourceQuery)
+	}
+}

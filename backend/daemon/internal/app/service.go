@@ -259,6 +259,8 @@ func (s *Service) Handle(
 		return s.handleAzureLogAnalyticsSavedDelete(ctx, params, notifier)
 	case "azure.logAnalytics.tables.list":
 		return s.handleAzureLogAnalyticsTablesList(ctx, params, notifier)
+	case "azure.logAnalytics.table.schema":
+		return s.handleAzureLogAnalyticsTableSchema(ctx, params, notifier)
 	case "azure.waf.logs.schema":
 		return s.handleAzureWafLogsSchema(ctx, params, notifier)
 	case "azure.waf.refresh":

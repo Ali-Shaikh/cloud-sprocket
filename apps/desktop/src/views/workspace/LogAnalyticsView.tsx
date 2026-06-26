@@ -2,16 +2,31 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Clock, Loader2, Save, Trash2 } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, Clock, Loader2, Save, Trash2 } from "lucide-react";
 
 import { KqlEditor } from "@/components/kql/KqlEditor";
 import { KqlQueryRunControls } from "@/components/kql/KqlQueryRunControls";
 import { LogQueryResultPanel } from "@/components/log-analytics/LogQueryResultPanel";
 import {
+  APPINSIGHTS_CURATED_CATEGORIES,
+  APPINSIGHTS_CURATED_QUERIES,
+  type AppInsightsCuratedCategory,
+} from "@/lib/appinsights-curated-queries";
+import { buildAzureLogAnalyticsPortalUrl } from "@/lib/azure-log-analytics-portal";
+import {
+  KQL_TIMESPAN_OPTIONS,
+  timespanDurationFor,
+  timespanLabelFor,
+  timespanValueFor,
+} from "@/lib/kql-timespan-options";
+import {
   buildExecutableKqlQuery,
+  detectDuplicateTimespan,
   KQL_PAGE_SIZE_OPTIONS,
   kqlQueryHasNextPage,
+  normaliseLogAnalyticsQuery,
   trimKqlQueryPageRows,
+  validateLogAnalyticsQuery,
 } from "@/lib/log-query-execution";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -65,6 +80,7 @@ export type LogAnalyticsViewProps = {
     query: string,
     timespan: string,
     maxRows?: number,
+    historyQuery?: string,
   ) => Promise<AzureLogQueryResult>;
   onListHistory: (workspace: string) => Promise<AzureLogAnalyticsHistoryEntry[]>;
   onListSaved: (workspace: string) => Promise<AzureLogAnalyticsSavedQuery[]>;
@@ -77,26 +93,25 @@ export type LogAnalyticsViewProps = {
   ) => Promise<AzureLogAnalyticsSavedQuery>;
   onDeleteSaved: (workspace: string, id: string) => Promise<void>;
   onListTables: (workspace: string, includeColumns: boolean) => Promise<AzureLogAnalyticsTableInfo[]>;
+  onGetTableSchema: (workspace: string, tableName: string) => Promise<AzureLogAnalyticsTableInfo>;
 };
 
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
 const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] shadow-sm";
 
-const SAMPLE_QUERY = "AppEvents\n| take 50";
+const DEFAULT_QUERY = APPINSIGHTS_CURATED_QUERIES[5]?.query ?? "AppEvents\n| take 50";
 
-const TIMESPAN_OPTIONS = [
-  { label: "All time", value: "all", timespan: "" },
-  { label: "Last 30 minutes", value: "PT30M", timespan: "PT30M" },
-  { label: "Last hour", value: "PT1H", timespan: "PT1H" },
-  { label: "Last 24 hours", value: "P1D", timespan: "P1D" },
-  { label: "Last 7 days", value: "P7D", timespan: "P7D" },
-  { label: "Last 30 days", value: "P30D", timespan: "P30D" },
-] as const;
+type TableSchemaState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; columns: string[] }
+  | { status: "error"; message: string };
 
-function timespanValueFor(timespan: string): string {
-  const match = TIMESPAN_OPTIONS.find((option) => option.timespan === timespan);
-  return match?.value ?? TIMESPAN_OPTIONS[0].value;
+function buildTableSnippet(tableName: string): string {
+  return `${tableName}
+| where TimeGenerated > ago(1h)
+| take 50`;
 }
 
 export default function LogAnalyticsView({
@@ -112,14 +127,16 @@ export default function LogAnalyticsView({
   onSaveQuery,
   onDeleteSaved,
   onListTables,
+  onGetTableSchema,
 }: LogAnalyticsViewProps) {
   const workspaces = workspace.azureLogAnalyticsWorkspaces ?? [];
   const selected = workspace.selectedAzureLogWorkspace ?? workspaces[0]?.name ?? "";
+  const selectedWorkspaceMeta = workspaces.find((item) => item.name === selected);
   const inventoryLoadingLabel = azureInventoryLoadingLabel(workspace, "loganalytics");
   const workspaceControlsBusy = inventoryLoading || workspaceSelectionLoading;
-  const [query, setQuery] = useState(initialQuery ?? SAMPLE_QUERY);
+  const [query, setQuery] = useState(initialQuery ?? DEFAULT_QUERY);
   const [timespanValue, setTimespanValue] = useState<string>(
-    initialTimespan != null ? timespanValueFor(initialTimespan) : TIMESPAN_OPTIONS[0].value,
+    initialTimespan != null ? timespanValueFor(initialTimespan) : KQL_TIMESPAN_OPTIONS[0].value,
   );
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,12 +147,26 @@ export default function LogAnalyticsView({
   const [history, setHistory] = useState<AzureLogAnalyticsHistoryEntry[]>([]);
   const [saved, setSaved] = useState<AzureLogAnalyticsSavedQuery[]>([]);
   const [tables, setTables] = useState<AzureLogAnalyticsTableInfo[]>([]);
+  const [tableSchemas, setTableSchemas] = useState<Record<string, TableSchemaState>>({});
+  const [expandedTables, setExpandedTables] = useState<Set<string>>(() => new Set());
   const [schemaOpen, setSchemaOpen] = useState(false);
   const [schemaLoading, setSchemaLoading] = useState(false);
   const [schemaError, setSchemaError] = useState<string | undefined>();
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
+  const [queryWarnings, setQueryWarnings] = useState<string[]>([]);
   const runTokenRef = useRef(0);
+
+  const portalUrl = useMemo(
+    () =>
+      buildAzureLogAnalyticsPortalUrl(
+        workspace.profile?.profileId,
+        selectedWorkspaceMeta,
+        query,
+        timespanDurationFor(timespanValue),
+      ),
+    [query, selectedWorkspaceMeta, timespanValue, workspace.profile?.profileId],
+  );
 
   useEffect(() => {
     if (initialQuery) {
@@ -153,7 +184,7 @@ export default function LogAnalyticsView({
   }, [selected, onListHistory, onListSaved]);
 
   const timeRangeLabel = useMemo(
-    () => TIMESPAN_OPTIONS.find((option) => option.value === timespanValue)?.label ?? "All time",
+    () => timespanLabelFor(timespanValue),
     [timespanValue],
   );
 
@@ -162,18 +193,40 @@ export default function LogAnalyticsView({
   useEffect(() => {
     setPage(1);
     setHasNextPage(false);
+    setQueryWarnings([]);
   }, [query, timespanValue, pageSize]);
 
   async function run(nextPage = page) {
     if (!selected.trim() || !query.trim() || running) return;
+
+    const validationError = validateLogAnalyticsQuery(query);
+    if (validationError) {
+      setError(validationError);
+      setResult(null);
+      setHasNextPage(false);
+      return;
+    }
+
     const token = ++runTokenRef.current;
     setRunning(true);
     setError(null);
     try {
-      const timespan =
-        TIMESPAN_OPTIONS.find((option) => option.value === timespanValue)?.timespan ?? "";
-      const built = buildExecutableKqlQuery(query, { page: nextPage, pageSize });
-      const queryResult = await onRunQuery(selected, built.query, timespan, built.maxRows);
+      const timespan = timespanDurationFor(timespanValue);
+      const normalised = normaliseLogAnalyticsQuery(query);
+      const duplicateTimespan = detectDuplicateTimespan(normalised.query, timespan);
+      setQueryWarnings(
+        duplicateTimespan
+          ? [...normalised.warnings, duplicateTimespan]
+          : normalised.warnings,
+      );
+      const built = buildExecutableKqlQuery(normalised.query, { page: nextPage, pageSize });
+      const queryResult = await onRunQuery(
+        selected,
+        built.query,
+        timespan,
+        built.maxRows,
+        query.trim(),
+      );
       if (token !== runTokenRef.current) return;
       const trimmedRows = trimKqlQueryPageRows(queryResult.rows, built.pageSize);
       setResult({ ...queryResult, rows: trimmedRows });
@@ -204,6 +257,11 @@ export default function LogAnalyticsView({
     void run(nextPage);
   }
 
+  function loadCurated(entry: (typeof APPINSIGHTS_CURATED_QUERIES)[number]) {
+    setQuery(entry.query);
+    setTimespanValue(timespanValueFor(entry.timespan));
+  }
+
   function loadHistoryEntry(entry: AzureLogAnalyticsHistoryEntry) {
     setQuery(entry.query);
     if (entry.timespan != null) {
@@ -222,8 +280,9 @@ export default function LogAnalyticsView({
     setSchemaOpen(true);
     setSchemaLoading(true);
     setSchemaError(undefined);
+    setTableSchemas({});
+    setExpandedTables(new Set());
     try {
-      // Table names only: column getschema per table can run hundreds of az queries.
       const listed = await onListTables(selected, false);
       setTables(listed);
     } catch (error) {
@@ -234,11 +293,44 @@ export default function LogAnalyticsView({
     }
   }
 
+  async function toggleTableSchema(tableName: string) {
+    setExpandedTables((current) => {
+      const next = new Set(current);
+      if (next.has(tableName)) {
+        next.delete(tableName);
+      } else {
+        next.add(tableName);
+      }
+      return next;
+    });
+
+    const existing = tableSchemas[tableName];
+    if (existing && existing.status !== "idle") {
+      return;
+    }
+
+    setTableSchemas((current) => ({ ...current, [tableName]: { status: "loading" } }));
+    try {
+      const schema = await onGetTableSchema(selected, tableName);
+      setTableSchemas((current) => ({
+        ...current,
+        [tableName]: { status: "ready", columns: schema.columns ?? [] },
+      }));
+    } catch (caught) {
+      setTableSchemas((current) => ({
+        ...current,
+        [tableName]: {
+          status: "error",
+          message: caught instanceof Error ? caught.message : "Could not load columns.",
+        },
+      }));
+    }
+  }
+
   async function confirmSaveQuery() {
     const name = saveName.trim();
     if (!name) return;
-    const timespan =
-      TIMESPAN_OPTIONS.find((option) => option.value === timespanValue)?.timespan ?? "";
+    const timespan = timespanDurationFor(timespanValue);
     await onSaveQuery(selected, name, query, timespan);
     setSaveDialogOpen(false);
     setSaveName("");
@@ -251,6 +343,23 @@ export default function LogAnalyticsView({
     const refreshed = await onListSaved(selected);
     setSaved(refreshed);
   }
+
+  function openPortal() {
+    if (!portalUrl) {
+      return;
+    }
+    window.open(portalUrl, "_blank", "noopener,noreferrer");
+  }
+
+  const curatedByCategory = useMemo(() => {
+    const grouped = new Map<AppInsightsCuratedCategory, typeof APPINSIGHTS_CURATED_QUERIES>();
+    for (const entry of APPINSIGHTS_CURATED_QUERIES) {
+      const bucket = grouped.get(entry.category) ?? [];
+      bucket.push(entry);
+      grouped.set(entry.category, bucket);
+    }
+    return grouped;
+  }, []);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -309,7 +418,7 @@ export default function LogAnalyticsView({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {TIMESPAN_OPTIONS.map((option) => (
+                {KQL_TIMESPAN_OPTIONS.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>
@@ -395,7 +504,37 @@ export default function LogAnalyticsView({
 
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className={fieldLabel}>KQL query</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className={fieldLabel}>KQL query</div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                    Curated
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="max-w-md">
+                  <DropdownMenuLabel>App Insights queries</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {Array.from(curatedByCategory.entries()).map(([category, entries]) => (
+                    <div key={category}>
+                      <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {APPINSIGHTS_CURATED_CATEGORIES[category]}
+                      </DropdownMenuLabel>
+                      {entries.map((entry) => (
+                        <DropdownMenuItem key={entry.id} onClick={() => loadCurated(entry)}>
+                          <span>
+                            <span className="font-medium">{entry.label}</span>
+                            <span className="mt-0.5 block text-xs text-muted-foreground">
+                              {entry.description}
+                            </span>
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+                    </div>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             <KqlQueryRunControls
               running={running}
               canRun={canRun}
@@ -403,9 +542,18 @@ export default function LogAnalyticsView({
               onRun={() => void run(1)}
               onCancel={cancelRun}
               onPageSizeChange={setPageSize}
+              onOpenInPortal={portalUrl ? openPortal : undefined}
+              openInPortalDisabled={!portalUrl}
             />
           </div>
           <KqlEditor value={query} onChange={setQuery} onRun={() => void run(1)} disabled={running} />
+          {queryWarnings.length > 0 ? (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+              {queryWarnings.map((warning) => (
+                <p key={warning}>{warning}</p>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="flex items-center justify-between gap-3">
@@ -461,7 +609,7 @@ export default function LogAnalyticsView({
           <DialogHeader>
             <DialogTitle>Schema browser</DialogTitle>
             <DialogDescription>
-              Tables in workspace {selected}. Click a table name to insert it into the editor.
+              Tables in workspace {selected}. Expand a table to load columns, or insert a starter snippet.
             </DialogDescription>
           </DialogHeader>
           {schemaLoading ? (
@@ -475,26 +623,53 @@ export default function LogAnalyticsView({
             <p className="text-sm text-muted-foreground">No tables returned for this workspace.</p>
           ) : (
             <ul className="space-y-3">
-              {tables.map((table) => (
-                <li key={table.name} className="rounded-lg border border-border px-3 py-2">
-                  <button
-                    type="button"
-                    className="font-mono text-sm font-semibold hover:underline"
-                    onClick={() => {
-                      setQuery((current) => (current.trim() ? `${current}\n${table.name}` : table.name));
-                      setSchemaOpen(false);
-                    }}
-                  >
-                    {table.name}
-                  </button>
-                  {table.columns && table.columns.length > 0 ? (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {table.columns.slice(0, 12).join(", ")}
-                      {table.columns.length > 12 ? "…" : ""}
-                    </p>
-                  ) : null}
-                </li>
-              ))}
+              {tables.map((table) => {
+                const expanded = expandedTables.has(table.name);
+                const schemaState = tableSchemas[table.name] ?? { status: "idle" as const };
+                return (
+                  <li key={table.name} className="rounded-lg border border-border px-3 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 font-mono text-sm font-semibold hover:underline"
+                        onClick={() => void toggleTableSchema(table.name)}
+                      >
+                        {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                        {table.name}
+                      </button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setQuery(buildTableSnippet(table.name));
+                          setSchemaOpen(false);
+                        }}
+                      >
+                        Insert snippet
+                      </Button>
+                    </div>
+                    {expanded ? (
+                      <div className="mt-2 border-t border-border/60 pt-2">
+                        {schemaState.status === "loading" ? (
+                          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Loader2 className="size-3 animate-spin" />
+                            Loading columns...
+                          </p>
+                        ) : schemaState.status === "error" ? (
+                          <p className="text-xs text-destructive">{schemaState.message}</p>
+                        ) : schemaState.status === "ready" && schemaState.columns.length > 0 ? (
+                          <p className="text-xs text-muted-foreground">
+                            {schemaState.columns.slice(0, 24).join(", ")}
+                            {schemaState.columns.length > 24 ? "…" : ""}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">No columns returned.</p>
+                        )}
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </DialogContent>

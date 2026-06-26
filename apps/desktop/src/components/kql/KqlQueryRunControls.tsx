@@ -22,6 +22,8 @@ export type KqlQueryRunControlsProps = {
   onPageSizeChange: (size: number) => void;
   onEditInLogAnalytics?: () => void;
   editDisabled?: boolean;
+  onOpenInPortal?: () => void;
+  openInPortalDisabled?: boolean;
 };
 
 export function KqlQueryRunControls({
@@ -33,6 +35,8 @@ export function KqlQueryRunControls({
   onPageSizeChange,
   onEditInLogAnalytics,
   editDisabled = false,
+  onOpenInPortal,
+  openInPortalDisabled = false,
 }: KqlQueryRunControlsProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -70,6 +74,17 @@ export function KqlQueryRunControls({
           </SelectContent>
         </Select>
       </div>
+      {onOpenInPortal ? (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={openInPortalDisabled}
+          onClick={onOpenInPortal}
+        >
+          <ExternalLink />
+          Open in Portal
+        </Button>
+      ) : null}
       {onEditInLogAnalytics ? (
         <Button
           variant="outline"

@@ -3463,10 +3463,11 @@ export default function App() {
       onSelectWorkspace={(ws) => {
         void selectAzureLogAnalyticsWorkspace(ws);
       }}
-      onRunQuery={(ws, query, timespan, maxRows) =>
+      onRunQuery={(ws, query, timespan, maxRows, historyQuery) =>
         backendRequest<AzureLogQueryResult>("azure.logAnalytics.query", {
           workspace: ws,
           query,
+          historyQuery,
           timespan,
           maxRows,
         })
@@ -3491,6 +3492,12 @@ export default function App() {
         backendRequest<AzureLogAnalyticsTableInfo[]>("azure.logAnalytics.tables.list", {
           workspace: ws,
           includeColumns,
+        })
+      }
+      onGetTableSchema={(ws, tableName) =>
+        backendRequest<AzureLogAnalyticsTableInfo>("azure.logAnalytics.table.schema", {
+          workspace: ws,
+          tableName,
         })
       }
     />

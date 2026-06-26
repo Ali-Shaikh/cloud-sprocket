@@ -149,10 +149,11 @@ func (s *Service) handleAzureLogAnalyticsSelectWorkspace(ctx context.Context, pa
 
 func (s *Service) handleAzureLogAnalyticsQuery(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
 	var request struct {
-		Workspace string `json:"workspace"`
-		Query     string `json:"query"`
-		Timespan  string `json:"timespan"`
-		MaxRows   int    `json:"maxRows"`
+		Workspace    string `json:"workspace"`
+		Query        string `json:"query"`
+		HistoryQuery string `json:"historyQuery"`
+		Timespan     string `json:"timespan"`
+		MaxRows      int    `json:"maxRows"`
 	}
 	if err := json.Unmarshal(params, &request); err != nil {
 		return nil, err
@@ -197,7 +198,11 @@ func (s *Service) handleAzureLogAnalyticsQuery(ctx context.Context, params json.
 	// The adapter bounds the query itself; do not also wrap in the shorter inventory timeout.
 	result, err := s.azure.RunLogAnalyticsQuery(ctx, profile, workspace, request.Query, request.Timespan, request.MaxRows)
 	if err == nil {
-		s.appendLogAnalyticsHistory(ctx, requestedWorkspace, request.Query, request.Timespan)
+		historyQuery := strings.TrimSpace(request.HistoryQuery)
+		if historyQuery == "" {
+			historyQuery = request.Query
+		}
+		s.appendLogAnalyticsHistory(ctx, requestedWorkspace, historyQuery, request.Timespan)
 	}
 	return result, err
 }

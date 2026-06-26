@@ -203,3 +203,41 @@ func (s *Service) handleAzureLogAnalyticsTablesList(ctx context.Context, params 
 	}
 	return s.azure.ListLogAnalyticsTables(ctx, profile, workspaceName, workspaceQueryID, resourceGroup, request.IncludeColumns)
 }
+
+func (s *Service) handleAzureLogAnalyticsTableSchema(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
+	var request struct {
+		Workspace string `json:"workspace"`
+		TableName string `json:"tableName"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	profile, session, err := s.lockedAzureProfile(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+
+	workspaces := s.azureLogAnalyticsWorkspaces(ctx, profile)
+	workspaceName := strings.TrimSpace(request.Workspace)
+	if workspaceName == "" {
+		workspaceName = s.selectedAzureLogWorkspace(session, workspaces)
+	}
+	tableName := strings.TrimSpace(request.TableName)
+	if workspaceName == "" {
+		return nil, errors.New("select a Log Analytics workspace before loading table schema")
+	}
+	if tableName == "" {
+		return nil, errors.New("a table name is required")
+	}
+	workspaceQueryID, err := azureLogAnalyticsQueryWorkspace(workspaceName, workspaces, !isLocalFlociProfile(profile))
+	if err != nil {
+		return nil, err
+	}
+	columns, err := s.azure.GetLogAnalyticsTableSchema(ctx, profile, workspaceQueryID, tableName)
+	if err != nil {
+		return nil, err
+	}
+	return models.AzureLogAnalyticsTableInfo{Name: tableName, Columns: columns}, nil
+}
