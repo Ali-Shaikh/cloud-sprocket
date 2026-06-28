@@ -21,12 +21,32 @@ export interface RailConnection {
   id: string;
   /** Accessible label / tooltip text, e.g. "AWS — sandbox". */
   label: string;
+  /** Rich tooltip override (provider · profile · region). */
+  tooltip?: string;
   /** Provider key for ProviderIcon ("aws" | "azure" | "gcp"). Omit for non-provider items. */
   provider?: string;
+  /** Provider accent for the active colour strip. */
+  accentColor?: string;
+  /** Two-letter badge when a workspace is open on this provider. */
+  profileBadge?: string;
   /** Connection health, shown as a small status dot on the rail item. */
   status: Status;
   /** Distinguishes the local-runtime and deploy rail items from providers. */
   kind: "provider" | "local" | "deploy";
+}
+
+/** Rail footer app menu (connection info, preferences, diagnostics, about). */
+export interface AppMenuProps {
+  /** Button label, usually profile initials. */
+  label: string;
+  connectionName?: string;
+  connectionDetail?: string;
+  daemonHealthy?: boolean;
+  onSwitchConnection?: () => void;
+  onOpenDebug?: () => void;
+  onCopyConfigPaths?: () => void;
+  onReset?: () => void;
+  onOpenCommandPalette?: () => void;
 }
 
 /** A single navigation entry in the contextual sidebar. */
@@ -83,11 +103,7 @@ export interface ConnectionRailProps {
   activeId: string | null;
   onSelect: (id: string) => void;
   onAddConnection?: () => void;
-  onOpenSettings?: () => void;
-  /** Two-letter initials for the user avatar at the foot of the rail. */
-  userInitials?: string;
-  /** When the contextual nav is hidden, show the app version at the rail foot. */
-  showVersion?: boolean;
+  menu: AppMenuProps;
 }
 
 export interface ContextNavProps {

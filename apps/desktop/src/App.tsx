@@ -19,7 +19,6 @@ import {
   LayoutGrid,
   Rocket,
   Server,
-  Trash2,
   TriangleAlert,
   Wrench,
 } from "lucide-react";
@@ -4125,24 +4124,61 @@ export default function App() {
       : session.currentProviderId ?? null;
 
   const railConnections: RailConnection[] = [
-    ...providers.map((provider) => ({
-      id: provider.providerId,
-      label: provider.profileCount
-        ? `${provider.label} · ${provider.profileCount} profile${provider.profileCount === 1 ? "" : "s"}`
-        : provider.label,
-      provider: provider.providerId,
-      status: providerStatus(provider),
-      kind: "provider" as const,
-    })),
+    ...providers.map((provider) => {
+      const lockedOnProvider =
+        session.isLocked && session.lockedProviderId === provider.providerId;
+      const providerProfile = lockedOnProvider
+        ? profiles.find((profile) => profile.profileId === session.lockedProfileId)
+        : undefined;
+      const region =
+        lockedOnProvider && provider.providerId === "aws"
+          ? workspace.selectedEc2Region
+          : undefined;
+      const tooltipParts = [provider.label];
+      if (lockedOnProvider && providerProfile) {
+        tooltipParts.push(providerProfile.displayName);
+        if (region) {
+          tooltipParts.push(region);
+        }
+        const auth = authLabel(session.lockedAuthMethod ?? session.selectedAuthMethod);
+        if (auth) {
+          tooltipParts.push(auth);
+        }
+      } else if (provider.profileCount) {
+        tooltipParts.push(
+          `${provider.profileCount} profile${provider.profileCount === 1 ? "" : "s"}`,
+        );
+      } else if (provider.state !== "configured") {
+        tooltipParts.push("Setup required");
+      }
+      return {
+        id: provider.providerId,
+        label: provider.profileCount
+          ? `${provider.label} · ${provider.profileCount} profile${provider.profileCount === 1 ? "" : "s"}`
+          : provider.label,
+        tooltip: tooltipParts.join(" · "),
+        provider: provider.providerId,
+        profileBadge:
+          lockedOnProvider && providerProfile
+            ? profileInitials(providerProfile.displayName)
+            : undefined,
+        status: providerStatus(provider),
+        kind: "provider" as const,
+      };
+    }),
     {
       id: "local",
       label: "Local Runtime",
+      tooltip: dockerReachable
+        ? "Local Runtime · Docker running"
+        : "Local Runtime · Docker not detected",
       status: (dockerReachable ? "on" : "off") as Status,
       kind: "local" as const,
     },
     {
       id: "deploy",
       label: "Deploy",
+      tooltip: "Deploy · IaC recipes",
       status: "on" as Status,
       kind: "deploy" as const,
     },
@@ -4391,8 +4427,36 @@ export default function App() {
             connections={railConnections}
             activeId={activeConnectionId}
             onSelect={handleRailSelect}
-            userInitials="AS"
-            showVersion={sidebarCollapsed || isTablet}
+            menu={{
+              label:
+                session.isLocked && lockedProfile
+                  ? profileInitials(lockedProfile.displayName)
+                  : "CS",
+              connectionName: navConnection.name,
+              connectionDetail: navConnection.meta,
+              daemonHealthy: Boolean(appSettings.localConfigDir),
+              onSwitchConnection: session.isLocked
+                ? () => {
+                    void mutateSession("session.unlock");
+                  }
+                : undefined,
+              onOpenDebug: () => setActiveWorkspaceTabId("debug"),
+              onCopyConfigPaths: () => {
+                const paths = [appSettings.localConfigDir, appSettings.emulatorStateDir]
+                  .filter(Boolean)
+                  .join("\n");
+                if (!paths || !navigator.clipboard) {
+                  notify("error", "Could not copy config paths");
+                  return;
+                }
+                void navigator.clipboard.writeText(paths).then(
+                  () => notify("success", "Config paths copied"),
+                  () => notify("error", "Could not copy config paths"),
+                );
+              },
+              onReset: () => setResetModalOpen(true),
+              onOpenCommandPalette: () => setCommandPaletteOpen(true),
+            }}
           />
         }
         nav={
@@ -4406,30 +4470,18 @@ export default function App() {
             }}
             activityActive={splitPanelOpen}
             footer={
-              <>
-                {session.isLocked ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void mutateSession("session.unlock");
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    <ArrowLeftRight className="size-[18px]" />
-                    <span className="truncate">Switch connection</span>
-                  </button>
-                ) : null}
+              session.isLocked ? (
                 <button
                   type="button"
                   onClick={() => {
-                    setResetModalOpen(true);
+                    void mutateSession("session.unlock");
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
-                  <Trash2 className="size-[18px]" />
-                  <span className="truncate">Reset app data</span>
+                  <ArrowLeftRight className="size-[18px]" />
+                  <span className="truncate">Switch connection</span>
                 </button>
-              </>
+              ) : null
             }
           />
         }
@@ -4601,6 +4653,14 @@ export default function App() {
       />
     </>
   );
+}
+
+function profileInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return `${words[0]![0] ?? ""}${words[1]![0] ?? ""}`.toUpperCase();
+  }
+  return name.trim().slice(0, 2).toUpperCase();
 }
 
 function providerStatus(provider: ProviderSummary): Status {

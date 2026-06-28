@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { backendRequest } from "./lib/backend";
@@ -1304,7 +1305,7 @@ describe("App", () => {
     );
 
     expect(await screen.findByText(/This profile does not support write mode/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Local Runtime" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Local Runtime/ }));
     expect(await screen.findByText("Docker Runtime")).toBeInTheDocument();
     expect(await screen.findByText("Local Runtimes")).toBeInTheDocument();
     expect(await screen.findByText("Managed Docker Resources")).toBeInTheDocument();
@@ -1379,7 +1380,7 @@ describe("App", () => {
 
     expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Switch connection" })).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("button", { name: "Local Runtime" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Local Runtime/ }));
     expect(await screen.findByRole("button", { name: "Start LocalStack" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Switch connection" }));
 
@@ -1388,6 +1389,7 @@ describe("App", () => {
   });
 
   it("resets app-owned state back to setup without cloud config deletion", async () => {
+    const user = userEvent.setup();
     sessionFixture = {
       ...sessionFixture,
       isLocked: true,
@@ -1411,7 +1413,8 @@ describe("App", () => {
     );
 
     expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Reset app data" }));
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("menuitem", { name: /Reset app data/ }));
     expect(await screen.findByRole("alertdialog", { name: "Reset app data" })).toBeInTheDocument();
     expect(screen.getByText(/does not touch AWS, Azure, or GCP config files/i)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Reset confirmation"), {

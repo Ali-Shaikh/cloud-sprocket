@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { Plus, Rocket, Server, Settings } from "lucide-react";
+import { Plus, Rocket, Server } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { ProviderIcon } from "@/components/provider-icon";
+import { PROVIDER_ACCENTS, ProviderIcon } from "@/components/provider-icon";
 import type { Status } from "@/components/status-dot";
 import {
   Tooltip,
@@ -13,8 +13,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-import { APP_VERSION } from "@/lib/app-version";
-
+import { AppMenu } from "./app-menu";
 import type { ConnectionRailProps } from "./types";
 
 const STATUS_BG: Record<Status, string> = {
@@ -26,16 +25,14 @@ const STATUS_BG: Record<Status, string> = {
 
 /**
  * The 68px dark rail down the left edge: brand mark, one item per connection,
- * an optional add button, and the settings + avatar footer.
+ * an optional add button, and the app menu footer.
  */
 function ConnectionRail({
   connections,
   activeId,
   onSelect,
   onAddConnection,
-  onOpenSettings,
-  userInitials,
-  showVersion = false,
+  menu,
 }: ConnectionRailProps) {
   return (
     <nav
@@ -49,34 +46,57 @@ function ConnectionRail({
 
         {connections.map((c) => {
           const active = c.id === activeId;
+          const accent = c.accentColor ?? (c.provider ? PROVIDER_ACCENTS[c.provider] : undefined);
+          const tooltip = c.tooltip ?? c.label;
           return (
             <Tooltip key={c.id}>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  aria-label={c.label}
+                  aria-label={tooltip}
                   aria-current={active ? "page" : undefined}
                   onClick={() => onSelect(c.id)}
                   className={cn(
                     "relative grid size-11 place-items-center rounded-[13px] transition-all",
-                    active
-                      ? "rounded-[15px] bg-white"
-                      : "bg-white/[0.06] text-[#c7ccd6] hover:rounded-[15px] hover:bg-white/15",
+                    active ? "rounded-[15px]" : "hover:rounded-[15px] hover:bg-white/[0.06]",
                   )}
                 >
                   {active && (
                     <span className="absolute -left-3 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r bg-white" />
                   )}
+                  {active && accent ? (
+                    <span
+                      className="absolute bottom-2 left-0.5 top-2 w-[3px] rounded-sm"
+                      style={{ backgroundColor: accent }}
+                    />
+                  ) : null}
                   {c.kind === "local" ? (
-                    <Server
-                      className={cn("size-[26px]", active ? "text-rail" : "text-sky-400")}
-                    />
+                    <span
+                      className={cn(
+                        "grid size-8 place-items-center rounded-[9px] bg-white/[0.08] transition-colors",
+                        active && "bg-white/[0.12] shadow-[0_0_0_1.5px_rgba(255,255,255,0.35)]",
+                      )}
+                    >
+                      <Server className="size-5 text-sky-400" />
+                    </span>
                   ) : c.kind === "deploy" ? (
-                    <Rocket
-                      className={cn("size-[26px]", active ? "text-rail" : "text-violet-400")}
-                    />
+                    <span
+                      className={cn(
+                        "grid size-8 place-items-center rounded-[9px] bg-white/[0.08] transition-colors",
+                        active && "bg-white/[0.12] shadow-[0_0_0_1.5px_rgba(255,255,255,0.35)]",
+                      )}
+                    >
+                      <Rocket className="size-5 text-violet-400" />
+                    </span>
                   ) : (
-                    <ProviderIcon provider={c.provider ?? c.id} size={26} />
+                    <ProviderIcon
+                      provider={c.provider ?? c.id}
+                      size={32}
+                      variant="rail"
+                      className={cn(
+                        active && "bg-white/[0.12] shadow-[0_0_0_1.5px_rgba(255,255,255,0.35)]",
+                      )}
+                    />
                   )}
                   <span
                     className={cn(
@@ -84,9 +104,14 @@ function ConnectionRail({
                       STATUS_BG[c.status],
                     )}
                   />
+                  {c.profileBadge ? (
+                    <span className="absolute -right-0.5 -top-0.5 grid min-w-[14px] place-items-center rounded-full border-2 border-rail bg-primary px-[3px] text-[8px] font-bold leading-none text-white">
+                      {c.profileBadge}
+                    </span>
+                  ) : null}
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right">{c.label}</TooltipContent>
+              <TooltipContent side="right">{tooltip}</TooltipContent>
             </Tooltip>
           );
         })}
@@ -109,34 +134,7 @@ function ConnectionRail({
 
         <div className="flex-1" />
 
-        {onOpenSettings && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label="Settings"
-                onClick={onOpenSettings}
-                className="grid size-11 place-items-center rounded-[13px] text-[#c7ccd6] transition-colors hover:bg-white/15"
-              >
-                <Settings className="size-[22px]" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Settings</TooltipContent>
-          </Tooltip>
-        )}
-
-        <div className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-orange-300 to-pink-400 text-[13px] font-bold text-white">
-          {userInitials ?? "CS"}
-        </div>
-
-        {showVersion && (
-          <span
-            className="pb-1 text-[10px] font-medium tracking-wide text-white/40"
-            title={`CloudSprocket v${APP_VERSION}`}
-          >
-            v{APP_VERSION}
-          </span>
-        )}
+        <AppMenu {...menu} />
       </TooltipProvider>
     </nav>
   );

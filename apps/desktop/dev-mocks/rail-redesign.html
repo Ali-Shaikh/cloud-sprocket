@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CloudSprocket — Rail redesign mock</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --background: oklch(0.985 0.002 247);
+      --foreground: oklch(0.21 0.02 256);
+      --muted: oklch(0.96 0.004 247);
+      --muted-foreground: oklch(0.55 0.02 256);
+      --primary: oklch(0.59 0.2 277);
+      --border: oklch(0.92 0.005 247);
+      --rail: oklch(0.23 0.015 270);
+      --sidebar: oklch(1 0 0);
+      --success: oklch(0.63 0.16 152);
+      --warning: oklch(0.72 0.15 75);
+      --destructive: oklch(0.6 0.21 25);
+      --card: oklch(1 0 0);
+      --radius: 12px;
+      --aws: #ff9900;
+      --azure: #0078d4;
+      --gcp: #4285f4;
+    }
+
+    [data-theme="dark"] {
+      --background: oklch(0.17 0.012 264);
+      --foreground: oklch(0.92 0.01 256);
+      --muted: oklch(0.25 0.015 264);
+      --muted-foreground: oklch(0.66 0.02 256);
+      --primary: oklch(0.66 0.18 277);
+      --border: oklch(0.3 0.015 264);
+      --rail: oklch(0.13 0.012 264);
+      --sidebar: oklch(0.19 0.013 264);
+      --card: oklch(0.21 0.015 264);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, "Segoe UI Variable", system-ui, sans-serif;
+      background: var(--background);
+      color: var(--foreground);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    /* ---- Page chrome ---- */
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 20px 28px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+    }
+    .page-header h1 {
+      font-size: 1.125rem;
+      font-weight: 750;
+      letter-spacing: -0.015em;
+    }
+    .page-header p {
+      font-size: 0.8125rem;
+      color: var(--muted-foreground);
+      margin-top: 2px;
+    }
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--muted);
+      color: var(--foreground);
+      font: inherit;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      padding: 7px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: var(--border); }
+    .btn.active {
+      background: color-mix(in oklch, var(--primary) 12%, transparent);
+      border-color: color-mix(in oklch, var(--primary) 35%, var(--border));
+      color: var(--primary);
+    }
+
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      min-height: calc(100vh - 73px);
+    }
+    @media (max-width: 1100px) {
+      .compare { grid-template-columns: 1fr; }
+      .panel + .panel { border-top: 2px solid var(--primary); }
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+    }
+    .panel:last-child { border-right: none; }
+
+    .panel-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 20px;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted-foreground);
+      border-bottom: 1px solid var(--border);
+      background: var(--muted);
+    }
+    .panel-label.proposed {
+      color: var(--primary);
+      background: color-mix(in oklch, var(--primary) 6%, var(--muted));
+    }
+    .badge {
+      font-size: 0.625rem;
+      padding: 2px 7px;
+      border-radius: 99px;
+      background: var(--border);
+      color: var(--muted-foreground);
+      letter-spacing: 0;
+      text-transform: none;
+      font-weight: 600;
+    }
+    .panel-label.proposed .badge {
+      background: color-mix(in oklch, var(--primary) 18%, transparent);
+      color: var(--primary);
+    }
+
+    /* ---- App shell ---- */
+    .shell {
+      display: grid;
+      grid-template-columns: 68px 256px 1fr;
+      flex: 1;
+      min-height: 640px;
+      overflow: hidden;
+    }
+
+    /* ---- Connection rail ---- */
+    .rail {
+      background: var(--rail);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 0;
+    }
+    .brand {
+      width: 40px;
+      height: 40px;
+      border-radius: 11px;
+      background: linear-gradient(135deg, var(--primary), #a855f7);
+      display: grid;
+      place-items: center;
+      font-size: 15px;
+      font-weight: 800;
+      color: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      margin-bottom: 4px;
+    }
+
+    .rail-item {
+      position: relative;
+      width: 44px;
+      height: 44px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      border-radius: 13px;
+      transition: all 0.15s;
+    }
+
+    /* CURRENT rail items */
+    .current .rail-item {
+      background: rgba(255,255,255,0.06);
+    }
+    .current .rail-item:hover { background: rgba(255,255,255,0.15); border-radius: 15px; }
+    .current .rail-item.active {
+      background: white;
+      border-radius: 15px;
+    }
+    .current .rail-item.active::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 4px;
+      height: 24px;
+      background: white;
+      border-radius: 0 4px 4px 0;
+    }
+
+    /* PROPOSED rail items */
+    .proposed .rail-item {
+      background: transparent;
+    }
+    .proposed .rail-item:hover .glyph-plate { background: rgba(255,255,255,0.14); }
+    .proposed .rail-item.active .glyph-plate {
+      background: rgba(255,255,255,0.12);
+      box-shadow: 0 0 0 1.5px rgba(255,255,255,0.35);
+    }
+    .proposed .rail-item.active::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 4px;
+      height: 24px;
+      background: white;
+      border-radius: 0 4px 4px 0;
+    }
+    .proposed .rail-item .provider-strip {
+      position: absolute;
+      left: 2px;
+      top: 8px;
+      bottom: 8px;
+      width: 3px;
+      border-radius: 2px;
+      opacity: 0;
+    }
+    .proposed .rail-item.active .provider-strip { opacity: 1; }
+
+    .glyph-plate {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      background: rgba(255,255,255,0.08);
+      display: grid;
+      place-items: center;
+      transition: background 0.15s, box-shadow 0.15s;
+    }
+
+    .status-dot {
+      position: absolute;
+      bottom: -1px;
+      right: -1px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2.5px solid var(--rail);
+    }
+    .status-dot.on { background: var(--success); }
+    .status-dot.warning { background: var(--warning); }
+    .status-dot.off { background: var(--muted-foreground); }
+
+    .profile-badge {
+      position: absolute;
+      top: -3px;
+      right: -3px;
+      min-width: 14px;
+      height: 14px;
+      padding: 0 3px;
+      border-radius: 7px;
+      background: var(--primary);
+      color: white;
+      font-size: 8px;
+      font-weight: 700;
+      display: grid;
+      place-items: center;
+      border: 2px solid var(--rail);
+      line-height: 1;
+    }
+
+    .rail-add {
+      width: 44px;
+      height: 44px;
+      border-radius: 13px;
+      border: 1.5px dashed rgba(255,255,255,0.25);
+      background: transparent;
+      color: #9aa3b2;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    .rail-spacer { flex: 1; }
+
+    .rail-footer-btn {
+      width: 44px;
+      height: 44px;
+      border: none;
+      background: transparent;
+      border-radius: 13px;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      color: #c7ccd6;
+      position: relative;
+    }
+    .rail-footer-btn:hover { background: rgba(255,255,255,0.12); }
+
+    .avatar-placeholder {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #fdba74, #f472b6);
+      display: grid;
+      place-items: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .app-menu-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 11px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.12);
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: white;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .app-menu-btn:hover { background: rgba(255,255,255,0.18); }
+    .app-menu-btn.open {
+      background: rgba(255,255,255,0.2);
+      box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary) 50%, transparent);
+    }
+
+    .daemon-pip {
+      position: absolute;
+      bottom: 6px;
+      right: 6px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--success);
+      border: 1.5px solid var(--rail);
+    }
+
+    /* ---- Context nav ---- */
+    .context-nav {
+      background: var(--sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .nav-header {
+      padding: 16px 16px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-header-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .nav-icon-box {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      background: var(--muted);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+    .nav-title { font-size: 0.875rem; font-weight: 700; line-height: 1.3; }
+    .nav-meta { font-size: 0.75rem; color: var(--muted-foreground); line-height: 1.3; margin-top: 1px; }
+    .nav-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      font-size: 0.75rem;
+      color: var(--muted-foreground);
+    }
+    .nav-status .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 0 2px color-mix(in oklch, var(--success) 25%, transparent);
+    }
+
+    .nav-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+    .nav-group-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted-foreground);
+      padding: 12px 8px 6px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 8px 10px;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      font: inherit;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--muted-foreground);
+      cursor: pointer;
+      text-align: left;
+    }
+    .nav-item:hover { background: var(--muted); color: var(--foreground); }
+    .nav-item.active {
+      background: color-mix(in oklch, var(--primary) 10%, transparent);
+      color: var(--primary);
+      font-weight: 600;
+    }
+    .nav-item .count {
+      margin-left: auto;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 99px;
+      background: var(--muted);
+    }
+    .nav-item.active .count {
+      background: var(--background);
+      color: var(--primary);
+    }
+
+    .nav-footer {
+      border-top: 1px solid var(--border);
+      padding: 10px;
+    }
+    .nav-footer .nav-item.destructive:hover {
+      background: color-mix(in oklch, var(--destructive) 10%, transparent);
+      color: var(--destructive);
+    }
+    .nav-version {
+      border-top: 1px solid var(--border);
+      padding: 8px 16px;
+      font-size: 10px;
+      font-weight: 500;
+      color: color-mix(in oklch, var(--muted-foreground) 70%, transparent);
+    }
+
+    .nav-footer-slim .hint {
+      padding: 8px 10px 4px;
+      font-size: 10px;
+      color: var(--muted-foreground);
+      opacity: 0.7;
+    }
+
+    /* ---- Main content ---- */
+    .main {
+      display: flex;
+      flex-direction: column;
+      background: var(--background);
+      min-width: 0;
+    }
+    .top-bar {
+      height: 56px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 0 20px;
+      flex-shrink: 0;
+    }
+    .top-bar .icon-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      display: grid;
+      place-items: center;
+      color: var(--muted-foreground);
+      font-size: 14px;
+    }
+    .breadcrumb {
+      font-size: 13.5px;
+    }
+    .breadcrumb strong { font-weight: 600; }
+    .breadcrumb span { color: var(--muted-foreground); }
+
+    .content {
+      flex: 1;
+      padding: 24px;
+      overflow: auto;
+    }
+    .content h2 {
+      font-size: 1.25rem;
+      font-weight: 750;
+      letter-spacing: -0.01em;
+    }
+    .content .subtitle {
+      font-size: 0.875rem;
+      color: var(--muted-foreground);
+      margin-top: 4px;
+    }
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .stat-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      background: var(--card);
+    }
+    .stat-card .label { font-size: 0.75rem; color: var(--muted-foreground); }
+    .stat-card .value { font-size: 1.5rem; font-weight: 700; margin-top: 4px; }
+
+    /* ---- Callout annotations ---- */
+    .callouts {
+      padding: 16px 20px 24px;
+      border-top: 1px solid var(--border);
+      background: var(--muted);
+      display: grid;
+      gap: 8px;
+    }
+    .callout {
+      display: flex;
+      gap: 10px;
+      font-size: 0.8125rem;
+      line-height: 1.45;
+    }
+    .callout-num {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      display: grid;
+      place-items: center;
+    }
+    .callout strong { font-weight: 600; }
+    .callout span { color: var(--muted-foreground); }
+
+    /* ---- App menu popover (proposed only) ---- */
+    .menu-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: none;
+    }
+    .menu-overlay.open { display: block; }
+    .app-menu-popover {
+      position: absolute;
+      bottom: 80px;
+      left: 76px;
+      width: 260px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.18);
+      overflow: hidden;
+      z-index: 51;
+      display: none;
+    }
+    .app-menu-popover.open { display: block; }
+    .menu-section {
+      padding: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .menu-section:last-child { border-bottom: none; }
+    .menu-section-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted-foreground);
+      padding: 6px 10px 4px;
+    }
+    .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 8px 10px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      font: inherit;
+      font-size: 13px;
+      color: var(--foreground);
+      cursor: pointer;
+      text-align: left;
+    }
+    .menu-item:hover { background: var(--muted); }
+    .menu-item .icon { width: 18px; text-align: center; opacity: 0.7; }
+    .menu-item.danger { color: var(--destructive); }
+    .menu-item.danger:hover { background: color-mix(in oklch, var(--destructive) 8%, transparent); }
+    .menu-connection-info {
+      padding: 8px 10px 4px;
+    }
+    .menu-connection-info .name { font-size: 13px; font-weight: 600; }
+    .menu-connection-info .detail {
+      font-size: 11px;
+      color: var(--muted-foreground);
+      margin-top: 2px;
+    }
+
+    /* ---- Tooltip ---- */
+    .tooltip-wrap { position: relative; }
+    .tooltip-wrap[data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: calc(100% + 10px);
+      top: 50%;
+      transform: translateY(-50%);
+      background: var(--foreground);
+      color: var(--background);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 10px;
+      border-radius: 6px;
+      white-space: nowrap;
+      z-index: 10;
+      pointer-events: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    /* SVG icon helpers */
+    .icon-aws-dark {
+      width: 26px;
+      height: 26px;
+      background: #242f3e;
+      border-radius: 2px;
+      display: grid;
+      place-items: center;
+    }
+    .icon-aws-dark svg { width: 22px; }
+    .icon-raw { width: 26px; height: 26px; }
+    .icon-glyph { width: 20px; height: 20px; }
+
+    .hidden-single .panel:first-child { display: none; }
+    .hidden-single .panel:last-child { border-right: none; }
+    .hidden-single .compare { grid-template-columns: 1fr; }
+
+    .legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 0 20px 12px;
+      font-size: 11px;
+      color: var(--muted-foreground);
+    }
+    .legend span { display: flex; align-items: center; gap: 5px; }
+    .legend .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body data-theme="dark">
+
+<header class="page-header">
+  <div>
+    <h1>Rail redesign mock</h1>
+    <p>Side-by-side: current shell vs proposed. Click the app menu (SB) on the right to preview the footer popover.</p>
+  </div>
+  <div class="controls">
+    <button class="btn active" id="btn-compare" type="button">Compare</button>
+    <button class="btn" id="btn-proposed" type="button">Proposed only</button>
+    <button class="btn" id="btn-theme" type="button">Light theme</button>
+  </div>
+</header>
+
+<div class="legend">
+  <span><span class="swatch" style="background:var(--aws)"></span> AWS accent strip</span>
+  <span><span class="swatch" style="background:var(--azure)"></span> Azure accent strip</span>
+  <span><span class="swatch" style="background:var(--gcp)"></span> GCP accent strip</span>
+  <span>Green dot = connected · Amber = tooling only</span>
+</div>
+
+<div class="compare" id="compare-grid">
+
+  <!-- ==================== CURRENT ==================== -->
+  <section class="panel">
+    <div class="panel-label">Current <span class="badge">v0.8.18</span></div>
+    <div class="shell current">
+      <nav class="rail">
+        <div class="brand">CS</div>
+
+        <div class="tooltip-wrap" data-tip="AWS · 2 profiles">
+          <button class="rail-item active" type="button">
+            <div class="icon-aws-dark">
+              <svg viewBox="0 0 40 40" fill="none"><path d="M32.7 23.9c.36.47-.52 2.4-.86 3.26-.1.26.12.36.35.17 1.51-1.28 1.9-3.97 1.59-4.36-.31-.39-3.2-.72-4.81.43-.25.18-.21.42.07.39.91-.11 3.17-.36 3.57.11z" fill="#fff"/><path d="M17.5 20.45h-.32c-.07 0-.13-.03-.18-.09l-2.22-7.16c-.05-.18-.04-.3 0-.36.05-.06.17-.1.33-.1h.83c.18 0 .31.03.38.09.07.06.13.18.18.36l1.59 6.12 1.48-6.12c.04-.18.1-.3.17-.36.08-.06.2-.09.38-.09h.77c.18 0 .3.03.38.09.08.06.14.18.18.36l1.49 6.2 1.64-6.2c.05-.18.12-.3.18-.36.08-.06.2-.09.38-.09h.78c.16 0 .27.04.33.1.05.06.06.15 0 .36l-2.22 7.16c-.05.18-.12.28-.19.34-.07.06-.19.09-.36.09h-.81z" fill="#fff"/></svg>
+            </div>
+            <span class="status-dot on"></span>
+          </button>
+        </div>
+
+        <div class="tooltip-wrap" data-tip="Microsoft Azure · 1 profile">
+          <button class="rail-item" type="button">
+            <img class="icon-raw" src="../src/assets/cloud-icons/azure.svg" alt="Azure" />
+            <span class="status-dot on"></span>
+          </button>
+        </div>
+
+        <div class="tooltip-wrap" data-tip="Google Cloud">
+          <button class="rail-item" type="button">
+            <img class="icon-raw" src="../src/assets/cloud-icons/gcp.svg" alt="GCP" />
+            <span class="status-dot off"></span>
+          </button>
+        </div>
+
+        <div class="tooltip-wrap" data-tip="Local Runtime">
+          <button class="rail-item" type="button">
+            <svg class="icon-raw" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="1.8"><rect x="2" y="3" width="20" height="6" rx="1"/><rect x="2" y="11" width="20" height="6" rx="1"/><circle cx="6" cy="6" r="1" fill="#38bdf8"/><circle cx="6" cy="14" r="1" fill="#38bdf8"/></svg>
+            <span class="status-dot on"></span>
+          </button>
+        </div>
+
+        <div class="tooltip-wrap" data-tip="Deploy">
+          <button class="rail-item" type="button">
+            <svg class="icon-raw" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.8"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/></svg>
+            <span class="status-dot on"></span>
+          </button>
+        </div>
+
+        <button class="rail-add" type="button" title="Connect a cloud">+</button>
+        <div class="rail-spacer"></div>
+
+        <!-- Settings slot exists in code but is not wired -->
+        <div class="avatar-placeholder">AS</div>
+      </nav>
+
+      <aside class="context-nav">
+        <div class="nav-header">
+          <div class="nav-header-top">
+            <div class="nav-icon-box">
+              <div class="icon-aws-dark" style="width:22px;height:22px;border-radius:4px">
+                <svg style="width:18px" viewBox="0 0 40 40" fill="none"><path d="M17.5 20.45h-.32l-2.22-7.16h.83l1.59 6.12 1.48-6.12h.77l1.49 6.2 1.64-6.2h.78l-2.22 7.16h-.81z" fill="#fff"/></svg>
+              </div>
+            </div>
+            <div>
+              <div class="nav-title">sandbox</div>
+              <div class="nav-meta">AWS · eu-west-1</div>
+            </div>
+          </div>
+          <div class="nav-status"><span class="dot"></span> Workspace open</div>
+        </div>
+        <div class="nav-scroll">
+          <div class="nav-group-label">Overview</div>
+          <button class="nav-item active" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            Dashboard
+          </button>
+          <div class="nav-group-label">Services</div>
+          <button class="nav-item" type="button">
+            <img src="../src/assets/cloud-icons/aws-s3.svg" width="18" height="18" alt="" />
+            S3 <span class="count">12</span>
+          </button>
+          <button class="nav-item" type="button">
+            <img src="../src/assets/cloud-icons/aws-ec2.svg" width="18" height="18" alt="" />
+            EC2 <span class="count">4</span>
+          </button>
+          <button class="nav-item" type="button">
+            <img src="../src/assets/cloud-icons/aws-lambda.svg" width="18" height="18" alt="" />
+            Lambda <span class="count">8</span>
+          </button>
+        </div>
+        <div class="nav-footer">
+          <button class="nav-item" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Recent activity
+          </button>
+          <button class="nav-item" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+            Switch connection
+          </button>
+          <button class="nav-item destructive" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Reset app data
+          </button>
+        </div>
+        <div class="nav-version">v0.8.18</div>
+      </aside>
+
+      <div class="main">
+        <div class="top-bar">
+          <div class="icon-btn">☰</div>
+          <div class="breadcrumb"><strong>sandbox</strong> <span>/ Dashboard</span></div>
+        </div>
+        <div class="content">
+          <h2>Dashboard</h2>
+          <p class="subtitle">AWS inventory overview for sandbox</p>
+          <div class="stat-row">
+            <div class="stat-card"><div class="label">S3 buckets</div><div class="value">12</div></div>
+            <div class="stat-card"><div class="label">EC2 instances</div><div class="value">4</div></div>
+            <div class="stat-card"><div class="label">Lambda functions</div><div class="value">8</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callouts">
+      <div class="callout"><span class="callout-num">1</span><div><strong>Mismatched icon weights</strong><br><span>AWS has a baked-in dark tile; Azure/GCP are transparent. Active white pill makes AWS look like a grey box.</span></div></div>
+      <div class="callout"><span class="callout-num">2</span><div><strong>Placeholder avatar</strong><br><span>"AS" has no click action. Settings prop exists in code but is never wired.</span></div></div>
+      <div class="callout"><span class="callout-num">3</span><div><strong>Cluttered nav footer</strong><br><span>Reset sits beside everyday actions. Version duplicated when rail shows it on collapse.</span></div></div>
+    </div>
+  </section>
+
+  <!-- ==================== PROPOSED ==================== -->
+  <section class="panel">
+    <div class="panel-label proposed">Proposed <span class="badge">mock</span></div>
+    <div class="shell proposed" id="proposed-shell">
+      <nav class="rail">
+        <div class="brand">CS</div>
+
+        <div class="tooltip-wrap" data-tip="AWS · sandbox · eu-west-1">
+          <button class="rail-item active" type="button">
+            <span class="provider-strip" style="background:var(--aws)"></span>
+            <div class="glyph-plate">
+              <svg class="icon-glyph" viewBox="0 0 24 24" fill="none">
+                <path d="M8 18c-4-2.5-4-7 0-9.5 1.5-.8 3.2-1 4.8-.8-.3 1.2-.1 2.5.7 3.5 1.2 1.4 3.3 1.7 4.9.7" stroke="#ff9900" stroke-width="2" stroke-linecap="round"/>
+                <path d="M14 6c3.5 1 5.5 4.5 4.5 8" stroke="#ff9900" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+              </svg>
+            </div>
+            <span class="status-dot on"></span>
+            <span class="profile-badge">SB</span>
+          </button>
+        </div>
+
+        <div class="tooltip-wrap" data-tip="Microsoft Azure · 1 profile">
+          <button class="rail-item" type="button">
+            <span class="provider-strip" style="background:var(--azure)"></span>
+            <div class="glyph-plate">
+              <svg class="icon-glyph" viewBox="0 0 24 24">
+                <path d="M5 4h6.5l2 4H19l-5 12H5l3.5-9H7L5 4z" fill="#0078d4" opacity="0.9"/>
+                <path d="M11.5 4h7.5l-5 16h-5l2.5-7h3l-1.5-5H11.5z" fill="#50e6ff" opacity="0.7"/>
+              </svg>
+            </div>
+            <span class="status-dot on"></span>
+          </button>
+        </div>
+
+        <div class="tooltip-wrap" data-tip="Google Cloud · Setup required">
+          <button class="rail-item" type="button">
+            <span class="provider-strip" style="background:var(--gcp)"></span>
+            <div class="glyph-plate">
+              <svg class="icon-glyph" viewBox="0 0 24 24">
+                <path d="M12 7a5 5 0 0 0-4.9 4H7a3.5 3.5 0 1 0 2.5 6h7a3.5 3.5 0 1 0 0-7h-.1A5 5 0 0 0 12 7z" fill="#4285f4"/>
+                <circle cx="9" cy="13.5" r="2.5" fill="#34a853"/>
+                <circle cx="15" cy="13.5" r="2.5" fill="#fbbc04"/>
+                <circle cx="12" cy="10" r="2.5" fill="#ea4335"/>
+              </svg>
+            </div>
+            <span class="status-dot off"></span>
+          </button>
+        </div>
+
+        <div class="tooltip-wrap" data-tip="Local Runtime · Docker running">
+          <button class="rail-item" type="button">
+            <div class="glyph-plate">
+              <svg class="icon-glyph" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="1.8"><rect x="2" y="3" width="20" height="6" rx="1"/><rect x="2" y="11" width="20" height="6" rx="1"/><circle cx="6" cy="6" r="1" fill="#38bdf8"/><circle cx="6" cy="14" r="1" fill="#38bdf8"/></svg>
+            </div>
+            <span class="status-dot on"></span>
+          </button>
+        </div>
+
+        <div class="tooltip-wrap" data-tip="Deploy · IaC recipes">
+          <button class="rail-item" type="button">
+            <div class="glyph-plate">
+              <svg class="icon-glyph" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.8"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/></svg>
+            </div>
+            <span class="status-dot on"></span>
+          </button>
+        </div>
+
+        <button class="rail-add" type="button">+</button>
+        <div class="rail-spacer"></div>
+
+        <button class="app-menu-btn open" id="app-menu-trigger" type="button" title="App menu">
+          SB
+          <span class="daemon-pip"></span>
+        </button>
+      </nav>
+
+      <aside class="context-nav">
+        <div class="nav-header">
+          <div class="nav-header-top">
+            <div class="nav-icon-box">
+              <img src="../src/assets/cloud-icons/aws.svg" width="22" height="22" alt="" style="border-radius:4px;background:#242f3e;padding:2px" />
+            </div>
+            <div>
+              <div class="nav-title">sandbox</div>
+              <div class="nav-meta">AWS · eu-west-1 · CLI auth</div>
+            </div>
+          </div>
+          <div class="nav-status"><span class="dot"></span> Workspace open</div>
+        </div>
+        <div class="nav-scroll">
+          <div class="nav-group-label">Overview</div>
+          <button class="nav-item active" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            Dashboard
+          </button>
+          <div class="nav-group-label">Services</div>
+          <button class="nav-item" type="button">
+            <img src="../src/assets/cloud-icons/aws-s3.svg" width="18" height="18" alt="" />
+            S3 <span class="count">12</span>
+          </button>
+          <button class="nav-item" type="button">
+            <img src="../src/assets/cloud-icons/aws-ec2.svg" width="18" height="18" alt="" />
+            EC2 <span class="count">4</span>
+          </button>
+          <button class="nav-item" type="button">
+            <img src="../src/assets/cloud-icons/aws-lambda.svg" width="18" height="18" alt="" />
+            Lambda <span class="count">8</span>
+          </button>
+        </div>
+        <div class="nav-footer nav-footer-slim">
+          <button class="nav-item" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Recent activity
+          </button>
+          <button class="nav-item" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+            Switch connection
+          </button>
+          <p class="hint">Settings, version, and reset moved to app menu</p>
+        </div>
+      </aside>
+
+      <div class="main">
+        <div class="top-bar">
+          <div class="icon-btn">☰</div>
+          <div class="breadcrumb"><strong>sandbox</strong> <span>/ Dashboard</span></div>
+        </div>
+        <div class="content">
+          <h2>Dashboard</h2>
+          <p class="subtitle">AWS inventory overview for sandbox</p>
+          <div class="stat-row">
+            <div class="stat-card"><div class="label">S3 buckets</div><div class="value">12</div></div>
+            <div class="stat-card"><div class="label">EC2 instances</div><div class="value">4</div></div>
+            <div class="stat-card"><div class="label">Lambda functions</div><div class="value">8</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callouts">
+      <div class="callout"><span class="callout-num">1</span><div><strong>Unified glyph plates</strong><br><span>Every rail item uses a 32×32 plate with a simplified 20px mark. Active = ring, not solid white fill.</span></div></div>
+      <div class="callout"><span class="callout-num">2</span><div><strong>Profile badge + rich tooltip</strong><br><span>When locked, show initials badge (SB) and tooltip with profile + region. Provider colour strip on active item.</span></div></div>
+      <div class="callout"><span class="callout-num">3</span><div><strong>App menu replaces avatar</strong><br><span>One footer button: connection info, preferences, diagnostics, about, reset. Green pip = daemon healthy.</span></div></div>
+      <div class="callout"><span class="callout-num">4</span><div><strong>Slim context nav footer</strong><br><span>Activity + switch only. Full-colour provider icons stay in the nav header and service list.</span></div></div>
+    </div>
+  </section>
+</div>
+
+<!-- App menu popover -->
+<div class="menu-overlay" id="menu-overlay"></div>
+<div class="app-menu-popover open" id="app-menu">
+  <div class="menu-section">
+    <div class="menu-connection-info">
+      <div class="name">sandbox</div>
+      <div class="detail">AWS · eu-west-1 · CLI credentials</div>
+    </div>
+    <button class="menu-item" type="button"><span class="icon">⇄</span> Switch connection</button>
+  </div>
+  <div class="menu-section">
+    <div class="menu-section-label">Preferences</div>
+    <button class="menu-item" type="button"><span class="icon">◐</span> Theme: Dark</button>
+    <button class="menu-item" type="button"><span class="icon">⌘</span> Keyboard shortcuts</button>
+  </div>
+  <div class="menu-section">
+    <div class="menu-section-label">Diagnostics</div>
+    <button class="menu-item" type="button"><span class="icon">⚙</span> Debug console</button>
+    <button class="menu-item" type="button"><span class="icon">📋</span> Copy config paths</button>
+  </div>
+  <div class="menu-section">
+    <div class="menu-section-label">About</div>
+    <button class="menu-item" type="button"><span class="icon">ℹ</span> CloudSprocket v0.8.18</button>
+    <button class="menu-item" type="button"><span class="icon">↗</span> Documentation</button>
+  </div>
+  <div class="menu-section">
+    <button class="menu-item danger" type="button"><span class="icon">🗑</span> Reset app data…</button>
+  </div>
+</div>
+
+<script>
+  const body = document.body;
+  const compareGrid = document.getElementById("compare-grid");
+  const btnCompare = document.getElementById("btn-compare");
+  const btnProposed = document.getElementById("btn-proposed");
+  const btnTheme = document.getElementById("btn-theme");
+  const menuTrigger = document.getElementById("app-menu-trigger");
+  const menuOverlay = document.getElementById("menu-overlay");
+  const appMenu = document.getElementById("app-menu");
+
+  btnCompare.addEventListener("click", () => {
+    compareGrid.classList.remove("hidden-single");
+    btnCompare.classList.add("active");
+    btnProposed.classList.remove("active");
+  });
+
+  btnProposed.addEventListener("click", () => {
+    compareGrid.classList.add("hidden-single");
+    btnProposed.classList.add("active");
+    btnCompare.classList.remove("active");
+    positionMenu();
+  });
+
+  btnTheme.addEventListener("click", () => {
+    const isDark = body.getAttribute("data-theme") === "dark";
+    body.setAttribute("data-theme", isDark ? "light" : "dark");
+    btnTheme.textContent = isDark ? "Dark theme" : "Light theme";
+  });
+
+  function positionMenu() {
+    const btn = menuTrigger.getBoundingClientRect();
+    appMenu.style.left = (btn.right + 8) + "px";
+    appMenu.style.bottom = (window.innerHeight - btn.bottom + 8) + "px";
+    appMenu.style.top = "auto";
+  }
+
+  function toggleMenu(open) {
+    appMenu.classList.toggle("open", open);
+    menuOverlay.classList.toggle("open", open);
+    menuTrigger.classList.toggle("open", open);
+    if (open) positionMenu();
+  }
+
+  menuTrigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleMenu(!appMenu.classList.contains("open"));
+  });
+
+  menuOverlay.addEventListener("click", () => toggleMenu(false));
+
+  window.addEventListener("resize", () => {
+    if (appMenu.classList.contains("open")) positionMenu();
+  });
+
+  positionMenu();
+</script>
+</body>
+</html>

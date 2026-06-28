@@ -7,8 +7,6 @@ import { cn } from "@/lib/utils";
 import { ProviderIcon } from "@/components/provider-icon";
 import { StatusDot } from "@/components/status-dot";
 
-import { APP_VERSION } from "@/lib/app-version";
-
 import type { ContextNavProps } from "./types";
 
 const navItemBase =
@@ -34,9 +32,9 @@ function ContextNav({
     >
       <div className="border-b border-border px-4 pb-3 pt-4">
         <div className="flex items-center gap-2.5">
-          <div className="grid size-8 shrink-0 place-items-center rounded-[9px] bg-muted">
+          <div className="grid size-8 shrink-0 place-items-center">
             {connection.provider ? (
-              <ProviderIcon provider={connection.provider} size={22} />
+              <ProviderIcon provider={connection.provider} size={32} variant="nav" />
             ) : (
               <Server className="size-[22px] text-sky-500" />
             )}
@@ -135,12 +133,6 @@ function ContextNav({
           </button>
           {footer}
         </div>
-        <p
-          className="border-t border-border px-4 py-2 text-[10px] font-medium text-muted-foreground/70"
-          title={`CloudSprocket v${APP_VERSION}`}
-        >
-          v{APP_VERSION}
-        </p>
       </div>
     </aside>
   );
