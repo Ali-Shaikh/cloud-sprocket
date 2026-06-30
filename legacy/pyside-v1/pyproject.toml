@@ -16,7 +16,7 @@ classifiers = [
   "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
 ]
 dependencies = [
-  "PySide6==6.11.0",
+  "PySide6==6.11.1",
   "PySide6-Fluent-Widgets==1.11.2",
 ]
 
