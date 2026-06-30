@@ -11,13 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"cloudsprocket/backend/daemon/internal/flociazcompat"
 	"cloudsprocket/backend/daemon/internal/models"
 )
 
-const (
-	localAWSProfileName   = "cloudsprocket-localstack"
-	localAzureProfileName = "cloudsprocket-floci-az"
-)
+const localAWSProfileName = "cloudsprocket-localstack"
 
 func (s *Service) emulatorsList() []models.EmulatorSummary {
 	summaries := []models.EmulatorSummary{}
@@ -74,11 +72,11 @@ func (s *Service) emulatorsPrepareProfile(emulatorID string) (models.EmulatorAct
 		statusCtx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
 		defer cancel()
 		status, _ := s.azureRuntime.Status(statusCtx)
-		status.ProfileName = localAzureProfileName
+		status.ProfileName = flociazcompat.LocalProfileID
 		status.ConfigPath = s.settings.AzureProfilePath()
 		status.Endpoint = "http://localhost:4577"
 		if strings.TrimSpace(status.Summary) == "" {
-			status.Summary = fmt.Sprintf("Local Azure profile %q is ready in your Azure config. Open it from the Connect screen.", localAzureProfileName)
+			status.Summary = fmt.Sprintf("Local Azure profile %q is ready in your Azure config. Open it from the Connect screen.", flociazcompat.LocalProfileID)
 		}
 		return emulatorActionResult("prepareProfile", status), nil
 	}
@@ -128,7 +126,7 @@ func (s *Service) writeLocalAzureSubscription() error {
 		return errors.New("Azure profile path is not configured")
 	}
 	subscription := map[string]any{
-		"id":              localAzureProfileName,
+		"id":              flociazcompat.LocalProfileID,
 		"name":            "CloudSprocket floci-az (local)",
 		"state":           "Enabled",
 		"isDefault":       false,
@@ -139,7 +137,7 @@ func (s *Service) writeLocalAzureSubscription() error {
 			"type": "user",
 		},
 	}
-	return upsertAzureSubscription(path, localAzureProfileName, subscription)
+	return upsertAzureSubscription(path, flociazcompat.LocalProfileID, subscription)
 }
 
 // upsertINISection writes or replaces a single [header] section's body in an INI

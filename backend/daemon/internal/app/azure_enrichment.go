@@ -59,6 +59,7 @@ func (s *Service) enrichAzureWorkspace(
 		{"functions", func(mu *sync.Mutex) { s.enrichAzureFunctionsInventory(workspace, session, opts, mu) }},
 		{"keyvault", func(mu *sync.Mutex) { s.enrichAzureKeyVaultInventory(workspace, session, opts, mu) }},
 		{"cosmos", func(mu *sync.Mutex) { s.enrichAzureCosmosInventory(workspace, session, opts, mu) }},
+		{"postgres", func(mu *sync.Mutex) { s.enrichAzurePostgresInventory(workspace, session, opts, mu) }},
 		{"entra", func(mu *sync.Mutex) { s.enrichAzureEntraInventory(workspace, session, mu) }},
 	}
 
@@ -166,6 +167,8 @@ func (s *Service) enrichAzureScoped(
 		s.enrichAzureKeyVaultInventory(workspace, session, scopeOpts, nil)
 	case "cosmos":
 		s.enrichAzureCosmosInventory(workspace, session, scopeOpts, nil)
+	case "postgres":
+		s.enrichAzurePostgresInventory(workspace, session, scopeOpts, nil)
 	case "loganalytics":
 		s.enrichAzureLogAnalyticsInventory(workspace, session, nil)
 	case "entra":

@@ -162,6 +162,7 @@ func (s *Service) startDeploymentPlan(ctx context.Context, request deploymentPla
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
+	deploy.NormaliseDeploymentTarget(deployment)
 	if err := s.store.SaveDeployment(ctx, deployment.ID, s.sealForStore(deployment), now); err != nil {
 		return deploymentJob{}, err
 	}
@@ -240,11 +241,8 @@ func (s *Service) runDeploymentPlan(deployment *deploy.Deployment, job models.Jo
 
 	onLine := s.deploymentLogger(deployment.ID, job.JobID, notifier)
 	onLine("Checking " + s.targetLabel(deployment) + " connectivity...")
+	deploy.NormaliseDeploymentTarget(deployment)
 	if err := s.deployer.Preflight(runCtx, deployment); err != nil {
-		s.finishWithError(ctx, runCtx, deployment, job, notifier, err)
-		return
-	}
-	if err := s.deployer.Prepare(deployment); err != nil {
 		s.finishWithError(ctx, runCtx, deployment, job, notifier, err)
 		return
 	}
@@ -268,6 +266,7 @@ func (s *Service) runDeploymentAction(deployment *deploy.Deployment, action depl
 
 	onLine := s.deploymentLogger(deployment.ID, job.JobID, notifier)
 
+	deploy.NormaliseDeploymentTarget(deployment)
 	onLine("Checking " + s.targetLabel(deployment) + " connectivity...")
 	if err := s.deployer.Preflight(runCtx, deployment); err != nil {
 		s.finishWithError(ctx, runCtx, deployment, job, notifier, err)

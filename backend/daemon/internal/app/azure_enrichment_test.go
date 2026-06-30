@@ -750,3 +750,73 @@ func TestAzureInventoryGetScopedStorage(t *testing.T) {
 		t.Fatal("expected storage accounts from scoped inventory fetch")
 	}
 }
+
+func TestAzureInventoryGetScopedPostgres(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+	mustWriteFile(
+		t,
+		filepath.Join(home, ".azure", "azureProfile.json"),
+		`{"subscriptions":[{"id":"sub-001","name":"Marketing","tenantId":"tenant-123","user":{"name":"ali@example.com"}}]}`,
+	)
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("EnsureRuntimeDirs: %v", err)
+	}
+
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer dataStore.Close()
+
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(command string) (string, error) {
+			if command == "az" {
+				return "/usr/bin/az", nil
+			}
+			return "", nil
+		}),
+		&stubS3Inventory{},
+		&stubEC2Inventory{},
+		stubLambdaInventory{},
+		stubDynamoDBInventory{},
+		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{},
+		stubAzureInventory{},
+		stubDockerRuntime{},
+	)
+
+	ctx := context.Background()
+	for _, step := range []struct {
+		method string
+		params []byte
+	}{
+		{"session.selectProvider", []byte(`{"providerId":"azure"}`)},
+		{"session.selectProfile", []byte(`{"providerId":"azure","profileId":"sub-001"}`)},
+		{"session.selectAuthMethod", []byte(`{"authMethod":"cli"}`)},
+		{"session.lock", nil},
+	} {
+		if _, err := service.Handle(ctx, step.method, step.params, nil); err != nil {
+			t.Fatalf("%s: %v", step.method, err)
+		}
+	}
+
+	result, err := service.Handle(ctx, "azure.inventory.get", []byte(`{"scope":"postgres"}`), nil)
+	if err != nil {
+		t.Fatalf("azure.inventory.get postgres: %v", err)
+	}
+	workspace, ok := result.(models.WorkspaceSnapshot)
+	if !ok {
+		t.Fatalf("expected WorkspaceSnapshot, got %T", result)
+	}
+	if len(workspace.AzurePostgresServers) == 0 {
+		t.Fatal("expected postgres servers from scoped inventory fetch")
+	}
+}

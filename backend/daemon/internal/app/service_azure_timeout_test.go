@@ -207,6 +207,16 @@ func (blockingAzure) ListCosmosItems(ctx context.Context, _ models.ProfileSummar
 	return nil, ctx.Err()
 }
 
+func (blockingAzure) ListPostgresServers(ctx context.Context, _ models.ProfileSummary) ([]models.AzurePostgresServer, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingAzure) GetPostgresConnection(ctx context.Context, _ models.ProfileSummary, _ string, _ string) (models.AzurePostgresConnection, error) {
+	<-ctx.Done()
+	return models.AzurePostgresConnection{}, ctx.Err()
+}
+
 func (blockingAzure) ListStorageQueues(ctx context.Context, _ models.ProfileSummary, _ string) ([]models.AzureStorageQueue, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()

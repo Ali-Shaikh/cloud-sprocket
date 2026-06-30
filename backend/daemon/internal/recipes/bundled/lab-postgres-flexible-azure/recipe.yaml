@@ -1,0 +1,85 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-postgres-flexible-azure
+kind: service-lab
+version: 0.1.0
+name: PostgreSQL Flexible Server lab (Azure)
+summary: An Azure Database for PostgreSQL Flexible Server with a starter database and an open dev firewall rule.
+description: |
+  A focused service lab for Azure Database for PostgreSQL Flexible Server
+  (Microsoft.DBforPostgreSQL/flexibleServers). Provisions one flexible server, a
+  starter database, and a permissive firewall rule for local development.
+
+  This recipe dry-runs locally against floci-az, which backs each logical server
+  with a real `postgres:17-alpine` container. After apply, open the Cosmos-style
+  PostgreSQL workspace tab (or call the floci-az `/connect` endpoint) to get the
+  host port and ready-to-paste connection strings. Local mode ships without TLS
+  (`sslmode=disable`); real Azure enforces TLS 1.2+.
+
+  The same recipe applies to a real Azure subscription on the cloud profile, where
+  it provisions a managed flexible server.
+providers:
+  - azure
+tags:
+  - postgres
+  - postgresql
+  - database
+  - azure
+  - lab
+  - floci-az
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: floci-az
+superpowers:
+  iamPolicyStream: false
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: azure_location
+        widget: text
+        help: Azure region (for example westeurope or eastus). Ignored by floci-az local.
+  - title: Server
+    variables:
+      - name: pg_admin_username
+        widget: text
+        help: Administrator login for the server.
+      - name: pg_admin_password
+        widget: password
+        help: Administrator password. Stored as a sensitive variable.
+      - name: pg_version
+        widget: select
+        options: ["13", "14", "15", "16", "17"]
+        help: PostgreSQL major version. floci-az runs postgres:17-alpine locally.
+      - name: pg_sku_name
+        widget: text
+        help: Compute SKU (for example B_Standard_B1ms). Ignored by floci-az local.
+      - name: pg_storage_mb
+        widget: number
+        help: Provisioned storage in MB (for example 32768). Ignored by floci-az local.
+  - title: Database
+    variables:
+      - name: database_name
+        widget: text
+        help: Name of the starter database created on the server.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object.
+outputs:
+  - name: server_name
+    primary: true
+  - name: server_fqdn
+    primary: true
+  - name: database_name
+  - name: resource_group_name
+  - name: admin_username
+  - name: connection_hint

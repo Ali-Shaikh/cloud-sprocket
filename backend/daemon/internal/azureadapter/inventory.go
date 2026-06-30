@@ -17,6 +17,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 
 	"cloudsprocket/backend/daemon/internal/config"
+	"cloudsprocket/backend/daemon/internal/flociazcompat"
 	"cloudsprocket/backend/daemon/internal/models"
 	"cloudsprocket/backend/daemon/internal/sysproc"
 )
@@ -73,7 +74,7 @@ func NewInventory(settings config.Settings) *Inventory {
 		settings:            settings,
 		runner:              execRunner{},
 		localEndpoint:       settings.FlociAZEndpoint,
-		localSubscriptionID: localFlociSubscriptionID,
+		localSubscriptionID: flociazcompat.SubscriptionID,
 	}
 	inv.newLocalCredential = inv.defaultLocalCredential
 	return inv

@@ -457,6 +457,31 @@ func (stubAzureInventory) ListCosmosItems(context.Context, models.ProfileSummary
 	return []models.AzureCosmosItem{{ID: "doc-1", JSON: `{"id":"doc-1"}`}}, nil
 }
 
+func (stubAzureInventory) ListPostgresServers(context.Context, models.ProfileSummary) ([]models.AzurePostgresServer, error) {
+	return []models.AzurePostgresServer{{
+		Name:               "lab-dev-pg",
+		ResourceGroup:      "demo-rg",
+		Location:           "westeurope",
+		Version:            "17",
+		AdministratorLogin: "psqladmin",
+		SKU:                "B_Standard_B1ms",
+		StorageMB:          32768,
+		ProvisioningState:  "Ready",
+		FQDN:               "localhost",
+	}}, nil
+}
+
+func (stubAzureInventory) GetPostgresConnection(context.Context, models.ProfileSummary, string, string) (models.AzurePostgresConnection, error) {
+	return models.AzurePostgresConnection{
+		Host:    "localhost",
+		Port:    54983,
+		URI:     "postgresql://psqladmin:secret@localhost:54983/postgres?sslmode=disable",
+		JDBCUrl: "jdbc:postgresql://localhost:54983/postgres?user=psqladmin&password=secret&sslmode=disable",
+		Psql:    `psql "host=localhost port=54983 dbname=postgres user=psqladmin password=secret sslmode=disable"`,
+		DotNet:  "Host=localhost;Port=54983;Database=postgres;Username=psqladmin;Password=secret;SSL Mode=Disable;",
+	}, nil
+}
+
 func (stubAzureInventory) ListStorageQueues(context.Context, models.ProfileSummary, string) ([]models.AzureStorageQueue, error) {
 	return []models.AzureStorageQueue{{Name: "jobs"}}, nil
 }

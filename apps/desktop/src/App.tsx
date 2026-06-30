@@ -86,6 +86,7 @@ import {
   ActivityView,
   AzureAppServiceView,
   AzureCosmosView,
+  AzurePostgresView,
   AzureEntraView,
   AzureFrontDoorView,
   AzureFunctionsView,
@@ -543,6 +544,20 @@ function mergeAzureCosmosSelection(
   });
 }
 
+function mergeAzurePostgresSelection(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  return normaliseWorkspaceSnapshot({
+    ...current,
+    selectedAzurePostgresServer: normalised.selectedAzurePostgresServer,
+    azurePostgresServers: normalised.azurePostgresServers,
+    azurePostgresConnection: normalised.azurePostgresConnection,
+    azurePostgresStatusMessage: normalised.azurePostgresStatusMessage,
+  });
+}
+
 function mergeAzureFrontDoorSelection(
   current: WorkspaceSnapshot,
   incoming: WorkspaceSnapshot,
@@ -667,6 +682,8 @@ function mergeAzureInventoryScope(
       return mergeAzureKeyVaultSelection(current, incoming);
     case "cosmos":
       return mergeAzureCosmosSelection(current, incoming);
+    case "postgres":
+      return mergeAzurePostgresSelection(current, incoming);
     case "waf":
       return mergeAzureWafSelection(current, incoming);
     case "frontdoor":
@@ -804,6 +821,8 @@ function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> | null 
     azureCosmosDatabases: normaliseArray(source.azureCosmosDatabases),
     azureCosmosContainers: normaliseArray(source.azureCosmosContainers),
     azureCosmosItems: normaliseArray(source.azureCosmosItems),
+    azurePostgresServers: normaliseArray(source.azurePostgresServers),
+    azurePostgresConnection: source.azurePostgresConnection,
     azureFrontDoorProfiles: normaliseArray(source.azureFrontDoorProfiles),
     azureFrontDoorEndpoints: normaliseArray(source.azureFrontDoorEndpoints),
     azureFrontDoorOriginGroups: normaliseArray(source.azureFrontDoorOriginGroups),
@@ -908,6 +927,7 @@ const emptyWorkspace: WorkspaceSnapshot = {
   azureCosmosDatabases: [],
   azureCosmosContainers: [],
   azureCosmosItems: [],
+  azurePostgresServers: [],
   azureFrontDoorProfiles: [],
   azureFrontDoorEndpoints: [],
   azureFrontDoorOriginGroups: [],
@@ -3914,6 +3934,33 @@ export default function App() {
         });
       }}
     />
+  ) : session.isLocked && activeWorkspaceTabId === "azure-postgres" ? (
+    <AzurePostgresView
+      workspace={activeWorkspace}
+      inventoryLoading={azureServiceInventoryLoading}
+      onSelectServer={(server) => {
+        void mutateWorkspaceSelection("azure.postgres.selectServer", { server }, {
+          panelLoading: true,
+          merge: mergeAzurePostgresSelection,
+          onOptimistic: () => {
+            setSession((current) =>
+              normaliseSessionSnapshot({
+                ...current,
+                selectedAzurePostgresServer: server,
+              }),
+            );
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedAzurePostgresServer: server,
+                azurePostgresConnection: undefined,
+              }),
+            );
+          },
+          errorTitle: "Could not select PostgreSQL server",
+        });
+      }}
+    />
   ) : session.isLocked && activeWorkspaceTabId === "azure-queues" ? (
     <AzureQueuesView
       workspace={activeWorkspace}
@@ -4713,6 +4760,7 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     "azure-functions": "Functions",
     "azure-key-vault": "Key Vault",
     "azure-cosmos": "Cosmos DB",
+    "azure-postgres": "PostgreSQL",
     "azure-queues": "Queues",
     "azure-entra": "Entra ID",
     actions: "Activity",
@@ -4774,6 +4822,8 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
       return { ...base, iconUrl: azureKeyVaultIconUrl, count: workspace.azureKeyVaults.length };
     case "azure-cosmos":
       return { ...base, iconUrl: azureCosmosIconUrl, count: workspace.azureCosmosAccounts.length };
+    case "azure-postgres":
+      return { ...base, iconUrl: awsRdsIconUrl, count: workspace.azurePostgresServers.length };
     case "azure-queues":
       return { ...base, iconUrl: azureQueuesIconUrl, count: workspace.azureStorageQueues.length };
     case "azure-entra":

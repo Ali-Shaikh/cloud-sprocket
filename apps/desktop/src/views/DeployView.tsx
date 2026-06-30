@@ -129,7 +129,7 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
     }
     for (const profile of profiles) {
       if (!providers.has(profile.providerId)) continue;
-      if (cloudOnlyAzure && profile.providerId === "azure" && isFlociAzureProfile(profile)) continue;
+      if (profile.providerId === "azure" && isFlociAzureProfile(profile)) continue;
       options.push({
         id: `profile:${profile.profileId}`,
         label: `${profile.providerId.toUpperCase()} · ${profile.displayName}`,
