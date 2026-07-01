@@ -165,6 +165,7 @@ export interface SessionSnapshot {
   selectedAzureCosmosAccount?: string;
   selectedAzureCosmosDatabase?: string;
   selectedAzureCosmosContainer?: string;
+  selectedAzurePostgresServer?: string;
   selectedAzureFrontDoorProfile?: string;
   selectedAzureFrontDoorEndpoint?: string;
   selectedAzureFrontDoorOriginGroup?: string;
@@ -721,6 +722,31 @@ export interface AzureCosmosItem {
   json: string;
 }
 
+export interface AzurePostgresServer {
+  name: string;
+  resourceGroup?: string;
+  location: string;
+  version: string;
+  administratorLogin: string;
+  sku: string;
+  storageMb: number;
+  provisioningState: string;
+  fqdn: string;
+  localHost?: string;
+  localPort?: number;
+  tags?: DetailField[];
+}
+
+export interface AzurePostgresConnection {
+  host: string;
+  port: number;
+  jdbcUrl: string;
+  uri: string;
+  psql: string;
+  dotNet: string;
+  note?: string;
+}
+
 export interface AzureStorageQueue {
   name: string;
 }
@@ -792,6 +818,7 @@ export interface WorkspaceSnapshot {
   selectedAzureCosmosAccount?: string;
   selectedAzureCosmosDatabase?: string;
   selectedAzureCosmosContainer?: string;
+  selectedAzurePostgresServer?: string;
   selectedAzureFrontDoorProfile?: string;
   selectedAzureFrontDoorEndpoint?: string;
   selectedAzureFrontDoorOriginGroup?: string;
@@ -803,6 +830,7 @@ export interface WorkspaceSnapshot {
   azureFunctionsStatusMessage?: string;
   azureKeyVaultStatusMessage?: string;
   azureCosmosStatusMessage?: string;
+  azurePostgresStatusMessage?: string;
   azureFrontDoorStatusMessage?: string;
   azureQueuesStatusMessage?: string;
   azureEntraStatusMessage?: string;
@@ -831,6 +859,8 @@ export interface WorkspaceSnapshot {
   azureCosmosDatabases: AzureCosmosDatabase[];
   azureCosmosContainers: AzureCosmosContainer[];
   azureCosmosItems: AzureCosmosItem[];
+  azurePostgresServers: AzurePostgresServer[];
+  azurePostgresConnection?: AzurePostgresConnection;
   azureFrontDoorProfiles: AzureFrontDoorProfile[];
   azureFrontDoorEndpoints: AzureFrontDoorEndpoint[];
   azureFrontDoorOriginGroups: AzureFrontDoorOriginGroup[];

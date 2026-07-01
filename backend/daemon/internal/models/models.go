@@ -224,6 +224,7 @@ type SessionSnapshot struct {
 	SelectedAzureCosmosAccount        string             `json:"selectedAzureCosmosAccount,omitempty"`
 	SelectedAzureCosmosDatabase       string             `json:"selectedAzureCosmosDatabase,omitempty"`
 	SelectedAzureCosmosContainer      string             `json:"selectedAzureCosmosContainer,omitempty"`
+	SelectedAzurePostgresServer       string             `json:"selectedAzurePostgresServer,omitempty"`
 	SelectedAzureFrontDoorProfile     string             `json:"selectedAzureFrontDoorProfile,omitempty"`
 	SelectedAzureFrontDoorEndpoint    string             `json:"selectedAzureFrontDoorEndpoint,omitempty"`
 	SelectedAzureFrontDoorOriginGroup string             `json:"selectedAzureFrontDoorOriginGroup,omitempty"`
@@ -854,6 +855,33 @@ type AzureCosmosItem struct {
 	JSON string `json:"json"`
 }
 
+// AzurePostgresServer is a PostgreSQL Flexible Server.
+type AzurePostgresServer struct {
+	Name               string        `json:"name"`
+	ResourceGroup      string        `json:"resourceGroup,omitempty"`
+	Location           string        `json:"location"`
+	Version            string        `json:"version"`
+	AdministratorLogin string        `json:"administratorLogin"`
+	SKU                string        `json:"sku"`
+	StorageMB          int           `json:"storageMb"`
+	ProvisioningState  string        `json:"provisioningState"`
+	FQDN               string        `json:"fqdn"`
+	LocalHost          string        `json:"localHost,omitempty"`
+	LocalPort          int           `json:"localPort,omitempty"`
+	Tags               []DetailField `json:"tags,omitempty"`
+}
+
+// AzurePostgresConnection holds ready-to-paste connection strings.
+type AzurePostgresConnection struct {
+	Host    string `json:"host"`
+	Port    int    `json:"port"`
+	JDBCUrl string `json:"jdbcUrl"`
+	URI     string `json:"uri"`
+	Psql    string `json:"psql"`
+	DotNet  string `json:"dotNet"`
+	Note    string `json:"note,omitempty"`
+}
+
 // AzureStorageQueue is a queue within a storage account.
 type AzureStorageQueue struct {
 	Name string `json:"name"`
@@ -980,6 +1008,7 @@ type WorkspaceSnapshot struct {
 	AzureFunctionsStatusMessage       string                       `json:"azureFunctionsStatusMessage,omitempty"`
 	AzureKeyVaultStatusMessage        string                       `json:"azureKeyVaultStatusMessage,omitempty"`
 	AzureCosmosStatusMessage          string                       `json:"azureCosmosStatusMessage,omitempty"`
+	AzurePostgresStatusMessage        string                       `json:"azurePostgresStatusMessage,omitempty"`
 	AzureQueuesStatusMessage          string                       `json:"azureQueuesStatusMessage,omitempty"`
 	SelectedAzureQueue                string                       `json:"selectedAzureQueue,omitempty"`
 	SelectedAzureKeyVault             string                       `json:"selectedAzureKeyVault,omitempty"`
@@ -987,6 +1016,7 @@ type WorkspaceSnapshot struct {
 	SelectedAzureCosmosAccount        string                       `json:"selectedAzureCosmosAccount,omitempty"`
 	SelectedAzureCosmosDatabase       string                       `json:"selectedAzureCosmosDatabase,omitempty"`
 	SelectedAzureCosmosContainer      string                       `json:"selectedAzureCosmosContainer,omitempty"`
+	SelectedAzurePostgresServer       string                       `json:"selectedAzurePostgresServer,omitempty"`
 	SelectedAzureFrontDoorProfile     string                       `json:"selectedAzureFrontDoorProfile,omitempty"`
 	SelectedAzureFrontDoorEndpoint    string                       `json:"selectedAzureFrontDoorEndpoint,omitempty"`
 	SelectedAzureFrontDoorOriginGroup string                       `json:"selectedAzureFrontDoorOriginGroup,omitempty"`
@@ -1020,6 +1050,8 @@ type WorkspaceSnapshot struct {
 	AzureCosmosDatabases              []AzureCosmosDatabase        `json:"azureCosmosDatabases"`
 	AzureCosmosContainers             []AzureCosmosContainer       `json:"azureCosmosContainers"`
 	AzureCosmosItems                  []AzureCosmosItem            `json:"azureCosmosItems"`
+	AzurePostgresServers              []AzurePostgresServer        `json:"azurePostgresServers"`
+	AzurePostgresConnection           *AzurePostgresConnection     `json:"azurePostgresConnection,omitempty"`
 	AzureStorageQueues                []AzureStorageQueue          `json:"azureStorageQueues"`
 	AzureQueueMessages                []AzureQueueMessage          `json:"azureQueueMessages"`
 	AzureEntraStatusMessage           string                       `json:"azureEntraStatusMessage,omitempty"`

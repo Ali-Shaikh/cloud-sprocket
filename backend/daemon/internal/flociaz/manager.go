@@ -19,6 +19,7 @@ import (
 
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/dockerruntime"
+	"cloudsprocket/backend/daemon/internal/flociazcompat"
 	"cloudsprocket/backend/daemon/internal/models"
 	"github.com/moby/moby/api/pkg/stdcopy"
 	containerapi "github.com/moby/moby/api/types/container"
@@ -36,12 +37,14 @@ const (
 	kafkaPort         = "9093"
 	managedLabelKey   = "com.cloudsprocket.managed"
 	managedLabelValue = "true"
+	dockerSocketPath  = "/var/run/docker.sock"
 	projectLabelKey   = "com.cloudsprocket.project"
 	projectLabelValue = "cloud-sprocket"
 )
 
 type dockerClient interface {
 	ContainerCreate(ctx context.Context, options client.ContainerCreateOptions) (client.ContainerCreateResult, error)
+	ContainerInspect(ctx context.Context, containerID string, options client.ContainerInspectOptions) (client.ContainerInspectResult, error)
 	ContainerList(ctx context.Context, options client.ContainerListOptions) (client.ContainerListResult, error)
 	ContainerStart(ctx context.Context, container string, options client.ContainerStartOptions) (client.ContainerStartResult, error)
 	ContainerStop(ctx context.Context, container string, options client.ContainerStopOptions) (client.ContainerStopResult, error)
@@ -95,7 +98,8 @@ func (m *Manager) Start(ctx context.Context, options models.LocalStackStartOptio
 	}
 	if len(containers.Items) > 0 {
 		container := containers.Items[0]
-		shouldReplace := options.Recreate || container.State == "created" ||
+		contractStale := m.containerMissingOpenTofuContract(ctx, api, container.ID)
+		shouldReplace := options.Recreate || contractStale || container.State == "created" ||
 			(container.State != "running" &&
 				(container.Image != m.image || options.Persistence || len(options.Environment) > 0))
 		if shouldReplace {
@@ -341,6 +345,17 @@ func (m *Manager) errorStatus(summary string) models.LocalStackStatus {
 	}
 }
 
+func (m *Manager) containerMissingOpenTofuContract(ctx context.Context, api dockerClient, containerID string) bool {
+	inspect, err := api.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
+	if err != nil {
+		return false
+	}
+	if inspect.Container.Config == nil {
+		return false
+	}
+	return !flociazcompat.ContainerHasOpenTofuContract(inspect.Container.Config.Env)
+}
+
 func (m *Manager) pullImage(ctx context.Context, api dockerClient) error {
 	response, err := api.ImagePull(ctx, m.image, client.ImagePullOptions{})
 	if err != nil {
@@ -366,9 +381,9 @@ func portConfig() (networkapi.PortSet, networkapi.PortMap, error) {
 }
 
 func flociAZEnv(options models.LocalStackStartOptions) []string {
-	values := map[string]string{}
+	values := flociazcompat.DefaultContainerEnvironment()
 	for key, value := range options.Environment {
-		if validEnvName(key) && key != "FLOCI_AZ_STORAGE_MODE" && key != "FLOCI_AZ_STORAGE_PATH" {
+		if validEnvName(key) && !isProtectedFlociAZEnvKey(key) {
 			values[key] = value
 		}
 	}
@@ -391,15 +406,42 @@ func flociAZEnv(options models.LocalStackStartOptions) []string {
 	return env
 }
 
+// isProtectedFlociAZEnvKey reports whether key is part of the OpenTofu
+// compatibility contract (see flociazcompat.DefaultContainerEnvironment) or the
+// storage configuration, neither of which a user-supplied env file may
+// override. Without this, a custom env value that doesn't match the contract
+// causes ContainerHasOpenTofuContract to flag the container as stale on every
+// Start(), triggering a recreation loop that reapplies the same value.
+func isProtectedFlociAZEnvKey(key string) bool {
+	switch key {
+	case "FLOCI_AZ_TLS_ENABLED", "FLOCI_AZ_HOSTNAME", "FLOCI_AZ_SERVICES_AKS_MOCKED",
+		"FLOCI_AZ_STORAGE_MODE", "FLOCI_AZ_STORAGE_PATH":
+		return true
+	default:
+		return false
+	}
+}
+
 func (m *Manager) containerMounts(options models.LocalStackStartOptions) ([]mountapi.Mount, error) {
-	if !options.Persistence {
-		return nil, nil
+	// floci-az runs docker-backed services (PostgreSQL Flexible Server, Redis,
+	// ACR, AKS) by spawning sibling Docker containers, which requires the host
+	// Docker socket mounted into the container. Without it, e.g. PostgreSQL
+	// create fails with "ContainerStartFailed". This mirrors the LocalStack
+	// manager; on Docker Desktop (Windows/macOS) the named pipe is exposed at
+	// this path.
+	mounts := []mountapi.Mount{{
+		Type:   mountapi.TypeBind,
+		Source: dockerSocketPath,
+		Target: dockerSocketPath,
+	}}
+	if options.Persistence {
+		stateDir := filepath.Join(m.settings.EmulatorStateDir, "floci-az")
+		if err := os.MkdirAll(stateDir, 0o755); err != nil {
+			return nil, err
+		}
+		mounts = append(mounts, mountapi.Mount{Type: mountapi.TypeBind, Source: stateDir, Target: "/app/data"})
 	}
-	stateDir := filepath.Join(m.settings.EmulatorStateDir, "floci-az")
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		return nil, err
-	}
-	return []mountapi.Mount{{Type: mountapi.TypeBind, Source: stateDir, Target: "/app/data"}}, nil
+	return mounts, nil
 }
 
 func (m *Manager) localEnvPath() string {

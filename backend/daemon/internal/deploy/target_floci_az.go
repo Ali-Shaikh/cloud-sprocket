@@ -5,21 +5,15 @@ package deploy
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"cloudsprocket/backend/daemon/internal/config"
+	"cloudsprocket/backend/daemon/internal/flociazcompat"
 )
 
-const (
-	localAzureProfileName    = "cloudsprocket-floci-az"
-	localFlociSubscriptionID = "00000000-0000-0000-0000-000000000001"
-	defaultFlociAzEndpoint   = "http://localhost:4577"
-	flociAzOverrideFile      = "cloudsprocket_floci_az_override.tf"
-)
+const flociAzOverrideFile = "cloudsprocket_floci_az_override.tf"
 
 type flociAzTarget struct {
 	endpoint string
@@ -28,7 +22,7 @@ type flociAzTarget struct {
 func newFlociAzTarget(opts TargetOptions) *flociAzTarget {
 	endpoint := strings.TrimSpace(opts.FlociAzEndpoint)
 	if endpoint == "" {
-		endpoint = defaultFlociAzEndpoint
+		endpoint = flociazcompat.DefaultEndpoint
 	}
 	return &flociAzTarget{endpoint: endpoint}
 }
@@ -38,77 +32,75 @@ func (t *flociAzTarget) ID() string { return "floci-az" }
 func (t *flociAzTarget) Label(_ *Deployment) string { return "floci-az" }
 
 func (t *flociAzTarget) Env(_ *Deployment, settings config.Settings) []string {
-	endpoint := strings.TrimRight(t.endpoint, "/")
-	env := []string{
-		"ARM_SUBSCRIPTION_ID=" + localFlociSubscriptionID,
-		"ARM_CLIENT_ID=00000000-0000-0000-0000-000000000000",
-		"ARM_CLIENT_SECRET=floci-az-local",
-		"ARM_TENANT_ID=00000000-0000-0000-0000-000000000000",
-		"ARM_RESOURCE_MANAGER_ENDPOINT=" + endpoint,
-		"ARM_USE_CLI=false",
-	}
-	if path := flociAzEnvPath(settings); path != "" {
-		if data, err := os.ReadFile(path); err == nil {
-			for _, line := range strings.Split(string(data), "\n") {
-				line = strings.TrimSpace(line)
-				if line == "" || strings.HasPrefix(line, "#") {
-					continue
-				}
-				key, _, ok := strings.Cut(line, "=")
-				if !ok {
-					continue
-				}
-				key = strings.TrimSpace(key)
-				if strings.HasPrefix(key, "ARM_") || strings.HasPrefix(key, "AZURE_") {
-					env = append(env, line)
-				}
-			}
-		}
-	}
-	return env
+	runtime := t.cachedRuntime(settings)
+	return flociazcompat.TofuEnvironment(runtime, readFlociAzExtraEnv(settings))
 }
 
-func (t *flociAzTarget) Preflight(ctx context.Context, _ *Deployment, _ config.Settings, opts TargetOptions) error {
-	endpoint := t.endpoint
-	if strings.TrimSpace(endpoint) == "" {
-		endpoint = opts.FlociAzEndpoint
-	}
-	if strings.TrimSpace(endpoint) == "" {
-		endpoint = defaultFlociAzEndpoint
-	}
-	return checkFlociAzHealth(ctx, endpoint)
+func (t *flociAzTarget) Preflight(ctx context.Context, _ *Deployment, settings config.Settings, opts TargetOptions) error {
+	_, err := t.prepareRuntime(ctx, settings, opts)
+	return err
 }
 
 func (t *flociAzTarget) WriteOverrides(dir string, _ *Deployment, opts TargetOptions) error {
-	endpoint := t.endpoint
-	if strings.TrimSpace(endpoint) == "" {
-		endpoint = opts.FlociAzEndpoint
-	}
-	if strings.TrimSpace(endpoint) == "" {
-		endpoint = defaultFlociAzEndpoint
-	}
-	content := flociAzOverride(endpoint)
+	endpoint := t.resolveEndpoint(opts)
+	content := flociazcompat.ProviderOverrideHCL(flociazcompat.MetadataHost(endpoint))
 	return os.WriteFile(filepath.Join(dir, flociAzOverrideFile), []byte(content), 0o644)
 }
 
-func checkFlociAzHealth(ctx context.Context, endpoint string) error {
-	base := strings.TrimRight(endpoint, "/")
-	probeCtx, cancel := context.WithTimeout(ctx, preflightTimeout)
-	defer cancel()
+func (t *flociAzTarget) prepareRuntime(ctx context.Context, settings config.Settings, opts TargetOptions) (flociazcompat.PreparedRuntime, error) {
+	return flociazcompat.PrepareOpenTofuRuntime(ctx, t.resolveEndpoint(opts), settings.LocalConfigDir)
+}
 
-	request, err := http.NewRequestWithContext(probeCtx, http.MethodGet, base+"/", nil)
+func (t *flociAzTarget) cachedRuntime(settings config.Settings) flociazcompat.PreparedRuntime {
+	endpoint := t.endpoint
+	if strings.TrimSpace(endpoint) == "" {
+		endpoint = flociazcompat.DefaultEndpoint
+	}
+	certPath := flociazcompat.TrustCertPath(settings.LocalConfigDir)
+	return flociazcompat.PreparedRuntime{
+		Endpoint:      endpoint,
+		MetadataHost:  flociazcompat.MetadataHost(endpoint),
+		TrustCertPath: certPath,
+	}
+}
+
+func (t *flociAzTarget) resolveEndpoint(opts TargetOptions) string {
+	endpoint := strings.TrimSpace(t.endpoint)
+	if endpoint == "" {
+		endpoint = strings.TrimSpace(opts.FlociAzEndpoint)
+	}
+	if endpoint == "" {
+		endpoint = flociazcompat.DefaultEndpoint
+	}
+	return endpoint
+}
+
+func readFlociAzExtraEnv(settings config.Settings) map[string]string {
+	path := flociAzEnvPath(settings)
+	if path == "" {
+		return nil
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return nil
 	}
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return fmt.Errorf("floci-az is not reachable at %s. Start it from Local Runtime, then try again", endpoint)
+	extra := map[string]string{}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		extra[key] = value
 	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode >= 500 {
-		return fmt.Errorf("floci-az at %s is not ready (HTTP %d). Wait for it to finish starting, then try again", endpoint, response.StatusCode)
-	}
-	return nil
+	return extra
 }
 
 func flociAzEnvPath(settings config.Settings) string {
@@ -119,25 +111,5 @@ func flociAzEnvPath(settings config.Settings) string {
 }
 
 func isLocalFlociProfileID(profileID string) bool {
-	return strings.TrimSpace(profileID) == localAzureProfileName
-}
-
-// flociAzOverride returns a Terraform override that points the azurerm provider
-// at the local floci-az emulator instead of real Azure.
-func flociAzOverride(endpoint string) string {
-	endpoint = strings.TrimRight(strings.TrimSpace(endpoint), "/")
-	return fmt.Sprintf(`# Generated by CloudSprocket: redirect the azurerm provider to floci-az.
-# Do not edit; this file is recreated on every local Azure deployment.
-provider "azurerm" {
-  features {}
-
-  subscription_id = %q
-  client_id       = "00000000-0000-0000-0000-000000000000"
-  client_secret   = "floci-az-local"
-  tenant_id       = "00000000-0000-0000-0000-000000000000"
-
-  resource_provider_registrations = "none"
-  use_cli                         = false
-}
-`, localFlociSubscriptionID)
+	return strings.TrimSpace(profileID) == flociazcompat.LocalProfileID
 }

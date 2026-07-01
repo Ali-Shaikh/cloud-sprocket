@@ -5,14 +5,23 @@ package deploy
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"cloudsprocket/backend/daemon/internal/config"
+	"cloudsprocket/backend/daemon/internal/flociazcompat"
 	"cloudsprocket/backend/daemon/internal/recipes"
 	"cloudsprocket/backend/daemon/internal/tofu"
 )
@@ -89,7 +98,7 @@ func TestPreflightAzureRejectsFlociProfileOnCloudTarget(t *testing.T) {
 	e := NewEngine(tofu.NewRunner("tofu"), config.Settings{}, recipes.Bundled())
 	err := e.Preflight(context.Background(), &Deployment{
 		ProviderID: "azure",
-		ProfileID:  localAzureProfileName,
+		ProfileID:  flociazcompat.LocalProfileID,
 	})
 	if err == nil {
 		t.Fatal("expected floci profile on cloud target to fail preflight")
@@ -143,6 +152,64 @@ func TestPreflightRejectsMagentoAWSOnLocalStack(t *testing.T) {
 	if !strings.Contains(err.Error(), "does not support a local LocalStack dry-run") {
 		t.Fatalf("expected recipe compat message, got %q", err)
 	}
+}
+
+func TestPreflightFlociAzValidatesOpenTofuContract(t *testing.T) {
+	certPEM := localhostFlociTestCert(t)
+	metadata := `{"resourceManager":"http://127.0.0.1:0"}`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			w.WriteHeader(http.StatusOK)
+		case "/metadata/endpoints":
+			_, _ = w.Write([]byte(metadata))
+		case "/_floci/tls-cert":
+			_, _ = w.Write(certPEM)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	e := NewEngine(tofu.NewRunner("tofu"), config.Settings{LocalConfigDir: t.TempDir()}, recipes.Bundled())
+	e.registry.SetOptions(TargetOptions{FlociAzEndpoint: server.URL})
+
+	err := e.Preflight(context.Background(), &Deployment{
+		ProviderID: "azure",
+		RecipeID:   "lab-postgres-flexible-azure",
+		Local:      true,
+		RuntimeID:  "floci-az",
+	})
+	if err == nil {
+		t.Fatal("expected floci-az preflight to fail when HTTPS metadata probe cannot succeed")
+	}
+	if !strings.Contains(err.Error(), "HTTPS") {
+		t.Fatalf("expected HTTPS metadata contract failure, got %q", err)
+	}
+}
+
+func localhostFlociTestCert(t *testing.T) []byte {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "localhost"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
+		DNSNames:     []string{"localhost"},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("create cert: %v", err)
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 }
 
 func TestPreflightAWSProfileFromConfigFile(t *testing.T) {

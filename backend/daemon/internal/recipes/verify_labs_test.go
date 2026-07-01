@@ -12,6 +12,7 @@ func TestLoadLabRecipes(t *testing.T) {
 		"lab-dynamodb-aws",
 		"lab-event-fanout-aws",
 		"lab-secrets-aws",
+		"lab-postgres-flexible-azure",
 	} {
 		recipe, err := Bundled().Load(id)
 		if err != nil {

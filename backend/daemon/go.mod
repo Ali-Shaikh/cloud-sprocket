@@ -26,6 +26,7 @@ require (
 	github.com/hashicorp/terraform-config-inspect v0.0.0-20260224005459-813a97530220
 	github.com/moby/moby/api v1.54.2
 	github.com/moby/moby/client v0.4.1
+	golang.org/x/sys v0.46.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.50.1
 )
@@ -81,7 +82,6 @@ require (
 	golang.org/x/mod v0.36.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/tools v0.45.0 // indirect
 	modernc.org/libc v1.72.3 // indirect

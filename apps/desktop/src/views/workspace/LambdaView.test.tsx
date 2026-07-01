@@ -83,6 +83,7 @@ const workspaceFixture: WorkspaceSnapshot = {
       azureKeyVaults: [],
       azureKeyVaultSecrets: [],
       azureCosmosAccounts: [],
+      azurePostgresServers: [],
       azureCosmosDatabases: [],
       azureCosmosContainers: [],
   azureCosmosItems: [],

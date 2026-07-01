@@ -17,20 +17,11 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources/v3"
 
+	"cloudsprocket/backend/daemon/internal/flociazcompat"
 	"cloudsprocket/backend/daemon/internal/models"
 )
 
 const (
-	// defaultFlociEndpoint is the floci-az unified HTTP port. ARM, the login
-	// authority, and the data plane all route through it.
-	defaultFlociEndpoint = "http://localhost:4577"
-
-	// localFlociSubscriptionID is floci-az's documented dev subscription (its
-	// compat-terraform provider.tf default). floci-az does not validate the
-	// subscription, but resources are keyed by it in the ARM path, so we use the
-	// same value the user's Terraform/SDK config defaults to.
-	localFlociSubscriptionID = "00000000-0000-0000-0000-000000000001"
-
 	// localTenantMarker is the tenantId the daemon writes for the local floci-az
 	// subscription (see app.writeLocalAzureSubscription). It is the marker that
 	// distinguishes the local profile from a real Azure subscription.
@@ -65,7 +56,7 @@ func isLocalFlociProfile(profile models.ProfileSummary) bool {
 func (i *Inventory) flociEndpoint() string {
 	endpoint := strings.TrimRight(strings.TrimSpace(i.localEndpoint), "/")
 	if endpoint == "" {
-		endpoint = defaultFlociEndpoint
+		endpoint = flociazcompat.DefaultEndpoint
 	}
 	return endpoint
 }

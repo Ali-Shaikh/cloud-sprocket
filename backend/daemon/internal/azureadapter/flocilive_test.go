@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"cloudsprocket/backend/daemon/internal/config"
+	"cloudsprocket/backend/daemon/internal/flociazcompat"
 )
 
 // TestLiveFlociEndToEnd exercises the REAL credential path (MSAL client-secret
@@ -22,7 +23,7 @@ func TestLiveFlociEndToEnd(t *testing.T) {
 	}
 	endpoint := os.Getenv("CLOUDSPROCKET_FLOCI_AZ_ENDPOINT")
 	if endpoint == "" {
-		endpoint = defaultFlociEndpoint
+		endpoint = flociazcompat.DefaultEndpoint
 	}
 	inv := NewInventory(config.Settings{FlociAZEndpoint: endpoint})
 

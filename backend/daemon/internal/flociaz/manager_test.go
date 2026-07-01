@@ -24,6 +24,7 @@ import (
 
 type stubDockerClient struct {
 	containers       []containerapi.Summary
+	inspectEnv         []string
 	createCalls      int
 	startCalls       []string
 	stopCalls        []string
@@ -46,6 +47,14 @@ func (s *stubDockerClient) ContainerCreate(_ context.Context, options client.Con
 	s.lastCreateEnv = append([]string(nil), options.Config.Env...)
 	s.lastCreateMounts = append([]mountapi.Mount(nil), options.HostConfig.Mounts...)
 	return client.ContainerCreateResult{ID: "ctr-created"}, nil
+}
+
+func (s *stubDockerClient) ContainerInspect(_ context.Context, containerID string, _ client.ContainerInspectOptions) (client.ContainerInspectResult, error) {
+	return client.ContainerInspectResult{
+		Container: containerapi.InspectResponse{
+			Config: &containerapi.Config{Env: append([]string(nil), s.inspectEnv...)},
+		},
+	}, nil
 }
 
 func (s *stubDockerClient) ContainerList(context.Context, client.ContainerListOptions) (client.ContainerListResult, error) {
@@ -170,15 +179,77 @@ func TestStartConfiguresPersistenceAndEnvironment(t *testing.T) {
 		t.Fatalf("expected start to succeed, got %v", err)
 	}
 	expectedEnv := []string{
+		"FLOCI_AZ_HOSTNAME=localhost",
+		"FLOCI_AZ_SERVICES_AKS_MOCKED=true",
 		"FLOCI_AZ_SERVICES_FUNCTIONS_ENABLED=false",
 		"FLOCI_AZ_STORAGE_MODE=persistent",
 		"FLOCI_AZ_STORAGE_PATH=/app/data",
+		"FLOCI_AZ_TLS_ENABLED=true",
 	}
 	if !reflect.DeepEqual(dockerClient.lastCreateEnv, expectedEnv) {
 		t.Fatalf("expected floci-az env, got %+v", dockerClient.lastCreateEnv)
 	}
-	if len(dockerClient.lastCreateMounts) != 1 || dockerClient.lastCreateMounts[0].Target != "/app/data" {
+	// Docker socket (for sibling service containers) + the persistence data mount.
+	if len(dockerClient.lastCreateMounts) != 2 {
+		t.Fatalf("expected docker socket + data mounts, got %+v", dockerClient.lastCreateMounts)
+	}
+	if dockerClient.lastCreateMounts[0].Target != dockerSocketPath {
+		t.Fatalf("expected docker socket mount first, got %+v", dockerClient.lastCreateMounts)
+	}
+	if dockerClient.lastCreateMounts[1].Target != "/app/data" {
 		t.Fatalf("expected floci-az data mount, got %+v", dockerClient.lastCreateMounts)
+	}
+}
+
+func TestStartProtectsOpenTofuContractKeysFromOverride(t *testing.T) {
+	dockerClient := &stubDockerClient{}
+	manager := newTestManager(t, dockerClient)
+
+	_, err := manager.Start(context.Background(), models.LocalStackStartOptions{
+		Environment: map[string]string{
+			"FLOCI_AZ_TLS_ENABLED":         "false",
+			"FLOCI_AZ_HOSTNAME":            "attacker.example",
+			"FLOCI_AZ_SERVICES_AKS_MOCKED": "false",
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected start to succeed, got %v", err)
+	}
+	expectedEnv := []string{
+		"FLOCI_AZ_HOSTNAME=localhost",
+		"FLOCI_AZ_SERVICES_AKS_MOCKED=true",
+		"FLOCI_AZ_TLS_ENABLED=true",
+	}
+	if !reflect.DeepEqual(dockerClient.lastCreateEnv, expectedEnv) {
+		t.Fatalf("expected OpenTofu contract keys to be protected, got %+v", dockerClient.lastCreateEnv)
+	}
+}
+
+func TestStartReplacesContainerMissingOpenTofuContract(t *testing.T) {
+	dockerClient := &stubDockerClient{
+		containers: []containerapi.Summary{{
+			ID:     "ctr-stale",
+			Names:  []string{"/" + containerName},
+			Image:  defaultImage,
+			State:  containerapi.StateRunning,
+			Status: "Up 1 minute",
+		}},
+		inspectEnv: []string{"FLOCI_AZ_SERVICES_FUNCTIONS_ENABLED=false"},
+	}
+	manager := newTestManager(t, dockerClient)
+
+	if _, err := manager.Start(context.Background(), models.LocalStackStartOptions{}); err != nil {
+		t.Fatalf("expected start to replace stale container, got %v", err)
+	}
+	if dockerClient.createCalls != 1 {
+		t.Fatalf("expected stale container to be recreated, createCalls=%d", dockerClient.createCalls)
+	}
+	if !reflect.DeepEqual(dockerClient.lastCreateEnv, []string{
+		"FLOCI_AZ_HOSTNAME=localhost",
+		"FLOCI_AZ_SERVICES_AKS_MOCKED=true",
+		"FLOCI_AZ_TLS_ENABLED=true",
+	}) {
+		t.Fatalf("expected OpenTofu contract env on recreate, got %+v", dockerClient.lastCreateEnv)
 	}
 }
 

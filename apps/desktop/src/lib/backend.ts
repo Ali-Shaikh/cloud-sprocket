@@ -265,6 +265,12 @@ const mockAzureWorkspaceTabs: WorkspaceTab[] = [
     detail: "Read-only Cosmos browse.",
   },
   {
+    tabId: "azure-postgres",
+    label: "PostgreSQL",
+    summary: "Azure Database for PostgreSQL Flexible Servers.",
+    detail: "List flexible servers and reveal connection strings.",
+  },
+  {
     tabId: "azure-queues",
     label: "Queues",
     summary: "Browse storage queues and peek messages.",
@@ -744,6 +750,33 @@ const mockAzureCosmosItems = [
   { id: "order-1", json: '{"id":"order-1","customerId":"c-9","total":42}' },
   { id: "order-2", json: '{"id":"order-2","customerId":"c-3","total":17}' },
 ];
+
+const mockAzurePostgresServers = [
+  {
+    name: "lab-dev-pg",
+    resourceGroup: "rg-marketing-prod",
+    location: "westeurope",
+    version: "17",
+    administratorLogin: "psqladmin",
+    sku: "B_Standard_B1ms",
+    storageMb: 32768,
+    provisioningState: "Succeeded",
+    fqdn: "localhost",
+    localHost: "localhost",
+    localPort: 54983,
+  },
+];
+
+const mockAzurePostgresConnection = {
+  host: "localhost",
+  port: 54983,
+  psql: 'psql "host=localhost port=54983 dbname=postgres user=psqladmin password=<password> sslmode=disable"',
+  uri: "postgresql://psqladmin:<password>@localhost:54983/postgres?sslmode=disable",
+  jdbcUrl:
+    "jdbc:postgresql://localhost:54983/postgres?user=psqladmin&password=<password>&sslmode=disable",
+  dotNet:
+    "Host=localhost;Port=54983;Database=postgres;Username=psqladmin;Password=<password>;SSL Mode=Disable;",
+};
 
 const mockAzureFrontDoorProfiles = [
   {
@@ -1403,6 +1436,14 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     azureCosmosDatabases: isAzureWorkspace ? mockAzureCosmosDatabases : [],
     azureCosmosContainers: isAzureWorkspace ? mockAzureCosmosContainers : [],
     azureCosmosItems: isAzureWorkspace ? mockAzureCosmosItems : [],
+    selectedAzurePostgresServer: isAzureWorkspace
+      ? mockState.session.selectedAzurePostgresServer ?? mockAzurePostgresServers[0]?.name
+      : undefined,
+    azurePostgresStatusMessage: isAzureWorkspace
+      ? `Loaded ${mockAzurePostgresServers.length} PostgreSQL server(s).`
+      : undefined,
+    azurePostgresServers: isAzureWorkspace ? mockAzurePostgresServers : [],
+    azurePostgresConnection: isAzureWorkspace ? mockAzurePostgresConnection : undefined,
     selectedAzureFrontDoorProfile: isAzureWorkspace
       ? mockState.session.selectedAzureFrontDoorProfile ?? mockAzureFrontDoorProfiles[0]?.name
       : undefined,
@@ -2501,6 +2542,9 @@ function handleMockRequest<T>(
       return Promise.resolve(buildMockWorkspace() as T);
     case "azure.cosmos.selectContainer":
       mockState.session.selectedAzureCosmosContainer = String(params.container ?? "");
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.postgres.selectServer":
+      mockState.session.selectedAzurePostgresServer = String(params.server ?? "");
       return Promise.resolve(buildMockWorkspace() as T);
     case "azure.frontDoor.selectProfile":
       mockState.session.selectedAzureFrontDoorProfile = String(params.profile ?? "");

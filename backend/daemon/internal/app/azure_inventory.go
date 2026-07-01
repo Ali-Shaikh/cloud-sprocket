@@ -17,6 +17,7 @@ var validAzureInventoryScopes = map[string]struct{}{
 	"functions":     {},
 	"keyvault":      {},
 	"cosmos":        {},
+	"postgres":      {},
 	"waf":           {},
 	"queues":        {},
 	"webapps":       {},

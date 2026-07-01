@@ -192,6 +192,7 @@ func (e *Engine) RemoveWorkspace(id string) error {
 // variables as tfvars, and, for a local AWS deployment, drops a LocalStack
 // endpoint override so the unchanged recipe targets the emulator.
 func (e *Engine) Prepare(deployment *Deployment) error {
+	NormaliseDeploymentTarget(deployment)
 	dir := e.WorkspaceDir(deployment.ID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -199,6 +200,23 @@ func (e *Engine) Prepare(deployment *Deployment) error {
 	if err := e.loader.Materialise(deployment.RecipeID, dir); err != nil {
 		return fmt.Errorf("materialise recipe: %w", err)
 	}
+	return e.writeWorkspaceFiles(dir, deployment)
+}
+
+// SyncWorkspace ensures the deployment workspace exists and that tfvars plus
+// provider overrides match the current target wiring. Plan, apply, and destroy
+// call this so a rebuilt daemon or retried apply cannot reuse stale floci-az
+// provider configuration from an earlier prepare.
+func (e *Engine) SyncWorkspace(deployment *Deployment) error {
+	NormaliseDeploymentTarget(deployment)
+	dir := e.WorkspaceDir(deployment.ID)
+	if _, err := os.Stat(filepath.Join(dir, "main.tf")); err != nil {
+		return e.Prepare(deployment)
+	}
+	return e.writeWorkspaceFiles(dir, deployment)
+}
+
+func (e *Engine) writeWorkspaceFiles(dir string, deployment *Deployment) error {
 	if err := writeTfvars(dir, deployment.Variables); err != nil {
 		return fmt.Errorf("write tfvars: %w", err)
 	}
@@ -222,6 +240,9 @@ func (e *Engine) Prepare(deployment *Deployment) error {
 // Plan runs init + plan and returns the parsed diff.
 func (e *Engine) Plan(ctx context.Context, deployment *Deployment, onLine tofu.LogFunc) (PlanSummary, error) {
 	if err := e.requireRunner(); err != nil {
+		return PlanSummary{}, err
+	}
+	if err := e.SyncWorkspace(deployment); err != nil {
 		return PlanSummary{}, err
 	}
 	if recipe, err := e.loader.Load(deployment.RecipeID); err == nil {
@@ -251,6 +272,9 @@ func (e *Engine) Plan(ctx context.Context, deployment *Deployment, onLine tofu.L
 // post-apply steps fail the result still carries outputs and PostApplyError.
 func (e *Engine) Apply(ctx context.Context, deployment *Deployment, onLine tofu.LogFunc) (ApplyResult, error) {
 	if err := e.requireRunner(); err != nil {
+		return ApplyResult{}, err
+	}
+	if err := e.SyncWorkspace(deployment); err != nil {
 		return ApplyResult{}, err
 	}
 	dir := e.WorkspaceDir(deployment.ID)
@@ -294,6 +318,9 @@ func (e *Engine) RetryPostApply(ctx context.Context, deployment *Deployment, onL
 // Destroy tears the deployment down.
 func (e *Engine) Destroy(ctx context.Context, deployment *Deployment, onLine tofu.LogFunc) error {
 	if err := e.requireRunner(); err != nil {
+		return err
+	}
+	if err := e.SyncWorkspace(deployment); err != nil {
 		return err
 	}
 	dir := e.WorkspaceDir(deployment.ID)

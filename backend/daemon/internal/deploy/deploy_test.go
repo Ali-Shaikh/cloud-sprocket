@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"cloudsprocket/backend/daemon/internal/config"
+	"cloudsprocket/backend/daemon/internal/flociazcompat"
 	"cloudsprocket/backend/daemon/internal/recipes"
 	"cloudsprocket/backend/daemon/internal/tofu"
 )
@@ -124,22 +125,72 @@ func TestEnvLocalVsReal(t *testing.T) {
 		t.Fatalf("azure cloud env = %v", azureCloud)
 	}
 	flociLocal := e.env(&Deployment{ProviderID: "azure", Local: true, RuntimeID: "floci-az"})
-	if !contains(flociLocal, "ARM_SUBSCRIPTION_ID="+localFlociSubscriptionID) || !contains(flociLocal, "ARM_USE_CLI=false") {
-		t.Fatalf("floci local env = %v", flociLocal)
+	for _, want := range []string{
+		"ARM_SUBSCRIPTION_ID=" + flociazcompat.SubscriptionID,
+		"ARM_CLIENT_ID=" + flociazcompat.ClientID,
+		"ARM_TENANT_ID=" + flociazcompat.TenantID,
+		"ARM_METADATA_HOSTNAME=localhost:4577",
+		"ARM_USE_CLI=false",
+	} {
+		if !contains(flociLocal, want) {
+			t.Fatalf("floci local env missing %q, got %v", want, flociLocal)
+		}
+	}
+	if !envContainsKey(flociLocal, "SSL_CERT_FILE", flociazcompat.TrustCertFilename) {
+		t.Fatalf("floci local env missing SSL_CERT_FILE with trust cert, got %v", flociLocal)
 	}
 }
 
 func TestFlociAzOverrideContent(t *testing.T) {
-	out := flociAzOverride("http://localhost:4577")
+	out := flociazcompat.ProviderOverrideHCL("localhost:4577")
 	for _, want := range []string{
 		`provider "azurerm"`,
 		`resource_provider_registrations = "none"`,
 		`use_cli                         = false`,
-		localFlociSubscriptionID,
+		`metadata_host = "localhost:4577"`,
+		flociazcompat.SubscriptionID,
+		flociazcompat.ClientID,
+		flociazcompat.TenantID,
+		flociazcompat.ClientSecret,
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("override missing %q in:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "00000000-0000-0000-0000-000000000000") {
+		t.Fatalf("override must not use all-zero Entra GUIDs:\n%s", out)
+	}
+}
+
+func TestSyncWorkspaceRefreshesFlociAzOverride(t *testing.T) {
+	settings := config.Settings{DeploymentsDir: t.TempDir()}
+	e := NewEngine(tofu.NewRunner("tofu"), settings, recipes.Bundled())
+	deployment := &Deployment{
+		ID:         "dep-sync",
+		RecipeID:   "lab-postgres-flexible-azure",
+		ProviderID: "azure",
+		Local:      true,
+		RuntimeID:  "floci-az",
+		Variables:  map[string]any{"app_name": "lab"},
+	}
+	if err := e.Prepare(deployment); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	dir := e.WorkspaceDir("dep-sync")
+	overridePath := filepath.Join(dir, flociAzOverrideFile)
+	if err := os.WriteFile(overridePath, []byte(`client_id = "00000000-0000-0000-0000-000000000000"`), 0o644); err != nil {
+		t.Fatalf("seed stale override: %v", err)
+	}
+	if err := e.SyncWorkspace(deployment); err != nil {
+		t.Fatalf("SyncWorkspace: %v", err)
+	}
+	content, err := os.ReadFile(overridePath)
+	if err != nil {
+		t.Fatalf("read override: %v", err)
+	}
+	text := string(content)
+	if !strings.Contains(text, flociazcompat.ClientID) || strings.Contains(text, "00000000-0000-0000-0000-000000000000") {
+		t.Fatalf("expected refreshed override, got:\n%s", text)
 	}
 }
 
@@ -164,6 +215,16 @@ func TestPrepareWritesFlociAzOverride(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, overrideFile)); err == nil {
 		t.Fatal("floci deployment should not write a LocalStack override file")
 	}
+}
+
+func envContainsKey(env []string, key, valueFragment string) bool {
+	prefix := key + "="
+	for _, entry := range env {
+		if strings.HasPrefix(entry, prefix) && strings.Contains(entry, valueFragment) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestPrepareMaterialisesWorkspace(t *testing.T) {

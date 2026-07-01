@@ -22,6 +22,7 @@ export const AzureFrontDoorView = lazy(() => import("./AzureFrontDoorView"));
 export const AzureFunctionsView = lazy(() => import("./AzureFunctionsView"));
 export const AzureKeyVaultView = lazy(() => import("./AzureKeyVaultView"));
 export const AzureCosmosView = lazy(() => import("./AzureCosmosView"));
+export const AzurePostgresView = lazy(() => import("./AzurePostgresView"));
 export const AzureQueuesView = lazy(() => import("./AzureQueuesView"));
 export const AzureEntraView = lazy(() => import("./AzureEntraView"));
 export const RuntimeView = lazy(() => import("./RuntimeView"));

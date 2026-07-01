@@ -8,6 +8,7 @@ export type AzureInventoryScope =
   | "functions"
   | "keyvault"
   | "cosmos"
+  | "postgres"
   | "waf"
   | "queues"
   | "webapps"
@@ -24,6 +25,7 @@ const TAB_SCOPE_MAP: Record<string, AzureInventoryScope | undefined> = {
   "azure-functions": "functions",
   "azure-key-vault": "keyvault",
   "azure-cosmos": "cosmos",
+  "azure-postgres": "postgres",
   "azure-queues": "queues",
   "azure-entra": "entra",
 };
@@ -53,6 +55,8 @@ export function azureInventoryStatusMessage(
       return workspace.azureKeyVaultStatusMessage;
     case "cosmos":
       return workspace.azureCosmosStatusMessage;
+    case "postgres":
+      return workspace.azurePostgresStatusMessage;
     case "queues":
       return workspace.azureQueuesStatusMessage;
     case "entra":
@@ -71,6 +75,7 @@ const DEFAULT_INVENTORY_LOADING_LABELS: Record<AzureInventoryScope, string> = {
   functions: "Loading Function Apps...",
   keyvault: "Loading Key Vaults...",
   cosmos: "Loading Cosmos DB accounts...",
+  postgres: "Loading PostgreSQL flexible servers...",
   queues: "Loading storage queues...",
   entra: "Loading Entra ID directory data...",
 };
@@ -115,6 +120,9 @@ export function azureInventoryLoaded(
     case "cosmos":
       return (workspace.azureCosmosAccounts?.length ?? 0) > 0 ||
         (workspace.azureCosmosStatusMessage ?? "").includes("No Cosmos");
+    case "postgres":
+      return (workspace.azurePostgresServers?.length ?? 0) > 0 ||
+        (workspace.azurePostgresStatusMessage ?? "").includes("No PostgreSQL");
     case "queues":
       return (workspace.azureQueuesStatusMessage ?? "").length > 0;
     case "entra":

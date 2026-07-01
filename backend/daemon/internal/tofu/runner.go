@@ -62,7 +62,7 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions) ([]byte, error) {
 	}
 	cmd := exec.CommandContext(ctx, r.binaryPath, opts.Args...)
 	cmd.Dir = opts.Dir
-	cmd.Env = append(os.Environ(), opts.Env...)
+	cmd.Env = mergeEnv(os.Environ(), opts.Env)
 	sysproc.Hide(cmd)
 
 	writer := &lineWriter{onLine: opts.OnLine}
@@ -75,6 +75,33 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions) ([]byte, error) {
 		return writer.captured.Bytes(), fmt.Errorf("tofu %s: %w", strings.Join(opts.Args, " "), err)
 	}
 	return writer.captured.Bytes(), nil
+}
+
+// mergeEnv combines process and deployment environment variables. Deployment
+// entries win on duplicate keys so emulator-specific ARM_* values are not
+// shadowed by a developer shell configured for real Azure.
+func mergeEnv(base, overlay []string) []string {
+	merged := make(map[string]string, len(base)+len(overlay))
+	order := make([]string, 0, len(base)+len(overlay))
+	add := func(entries []string) {
+		for _, entry := range entries {
+			key, _, ok := strings.Cut(entry, "=")
+			if !ok || strings.TrimSpace(key) == "" {
+				continue
+			}
+			if _, exists := merged[key]; !exists {
+				order = append(order, key)
+			}
+			merged[key] = entry
+		}
+	}
+	add(base)
+	add(overlay)
+	out := make([]string, 0, len(order))
+	for _, key := range order {
+		out = append(out, merged[key])
+	}
+	return out
 }
 
 // Version returns the OpenTofu version string (e.g. "1.12.2").

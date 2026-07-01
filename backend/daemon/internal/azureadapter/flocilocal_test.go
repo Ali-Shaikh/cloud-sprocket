@@ -37,6 +37,10 @@ const (
 	flociVirtualMachinesJSON = `{"value":[
 		{"id":"/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/spike-rg/providers/Microsoft.Compute/virtualMachines/spike-vm","name":"spike-vm","type":"Microsoft.Compute/virtualMachines","location":"westeurope","tags":{"role":"web"},"properties":{"hardwareProfile":{"vmSize":"Standard_B1s"},"storageProfile":{"osDisk":{"osType":"Linux"}},"vmId":"2ba37e39-309a-4484-9ef4-a7bfa0605d56","provisioningState":"Succeeded"}}
 	]}`
+
+	flociPostgresServersJSON = `{"value":[
+		{"id":"/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/app-rg/providers/Microsoft.DBforPostgreSQL/flexibleServers/lab-dev-pg","name":"lab-dev-pg","location":"eastus","sku":{"name":"B_Standard_B1ms"},"properties":{"version":"17","administratorLogin":"psqladmin","provisioningState":"Succeeded","fullyQualifiedDomainName":"localhost","storage":{"storageSizeGB":32}}}
+	]}`
 )
 
 func newFlociTestServer(t *testing.T) *httptest.Server {
@@ -52,6 +56,12 @@ func newFlociTestServer(t *testing.T) *httptest.Server {
 		path := strings.ToLower(r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		switch {
+		case strings.Contains(path, "/providers/microsoft.dbforpostgresql/flexibleservers"):
+			if strings.Contains(path, "/resourcegroups/app-rg/") {
+				_, _ = io.WriteString(w, flociPostgresServersJSON)
+			} else {
+				_, _ = io.WriteString(w, `{"value":[]}`)
+			}
 		case strings.Contains(path, "/providers/microsoft.compute/virtualmachines"):
 			_, _ = io.WriteString(w, flociVirtualMachinesJSON)
 		case strings.HasSuffix(path, "/resourcegroups") && r.Method == http.MethodGet:

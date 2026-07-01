@@ -123,6 +123,13 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 				Category: workspaceTabCategoryService,
 			},
 			{
+				TabID:    "azure-postgres",
+				Label:    "PostgreSQL",
+				Summary:  "Azure Database for PostgreSQL Flexible Servers.",
+				Detail:   "List flexible servers and reveal connection strings. Backed by floci-az containers on local; read-only on cloud.",
+				Category: workspaceTabCategoryService,
+			},
+			{
 				TabID:    "azure-queues",
 				Label:    "Queues",
 				Summary:  "Browse storage queues and peek messages.",
