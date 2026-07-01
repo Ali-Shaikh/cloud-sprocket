@@ -175,14 +175,14 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 			TabID:    "s3",
 			Label:    "S3",
 			Summary:  "Bucket and object workbench.",
-			Detail:   "Presigned URLs, uploads, validation, and bucket browsing are being ported.",
+			Detail:   "Presigned URLs, uploads, validation, and bucket browsing.",
 			Category: workspaceTabCategoryService,
 		},
 		{
 			TabID:    "ec2",
 			Label:    "EC2",
 			Summary:  "Fleet and instance operations.",
-			Detail:   "Instance inventory and lifecycle actions are being ported.",
+			Detail:   "Instance inventory and lifecycle actions.",
 			Category: workspaceTabCategoryService,
 		},
 		{

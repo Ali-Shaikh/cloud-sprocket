@@ -1,2 +1,0 @@
-"""UI package for CloudSprocket."""
-
