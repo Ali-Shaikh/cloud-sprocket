@@ -1,28 +1,28 @@
 # CloudSprocket
 
-CloudSprocket is being rewritten as a local-first desktop app built with `React`,
-`TypeScript`, `Cloudscape`, `Tauri v2`, and a `Go` sidecar backend.
+CloudSprocket is a local-first desktop cloud workbench built with `React`,
+`TypeScript`, `Tauri v2`, and a `Go` sidecar backend.
 
 ## Current Status
 
-The repository is now in the first rewrite slice:
+The Tauri rewrite is the active product (currently **v0.8.21**):
 
-- the previous PySide6 application has been archived to `legacy/pyside-v1/`
-- the new desktop shell lives in `apps/desktop/`
-- the new backend daemon lives in `backend/daemon/`
-- the repo is moving to a Tauri build and test pipeline across Windows, macOS,
-  and Linux
+- desktop shell in `apps/desktop/`
+- Go sidecar daemon in `backend/daemon/`
+- multi-platform CI and release builds for Windows, macOS, and Linux
+- AWS and Azure workspace tabs, OpenTofu deploy recipes, and local emulators
+  (LocalStack, floci-az)
 
-Parity with the archived Python app is still in progress. The current codebase
-focuses on the new app shell, RPC bridge, persistence layer, and the first port
-of provider discovery and session state.
+The original PySide6 application was archived in April 2026 and removed from the
+repository once the rewrite surpassed it in scope. A few legacy AWS session
+conveniences (Who Am I, SSO login/logout from the UI, open-config folder) are
+not yet reimplemented in the new actions surface.
 
 ## Repository Layout
 
 - `apps/desktop/`: Tauri v2 desktop shell, React UI, and desktop bridge
 - `backend/daemon/`: Go sidecar daemon, JSON-RPC handlers, discovery logic, and SQLite store
-- `legacy/pyside-v1/`: archived PySide6 implementation kept for behaviour reference
-- `.github/workflows/`: CI for the new multi-platform desktop pipeline
+- `.github/workflows/`: CI for the multi-platform desktop pipeline
 
 ## Toolchain Baseline
 
@@ -44,11 +44,6 @@ pnpm run build:desktop
 
 The desktop package builds the Go sidecar into `apps/desktop/src-tauri/binaries/`
 before invoking the Tauri bundle step.
-
-## Legacy Reference
-
-The archived Python code remains available under `legacy/pyside-v1/` while the
-rewrite reaches parity. It is no longer the active implementation path.
 
 ## Licence
 

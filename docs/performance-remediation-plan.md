@@ -359,7 +359,7 @@ Targets are provisional and must be confirmed/replaced against the Phase 0 basel
 - Cloud provider API latency itself (cannot fix AWS/Azure response times)
 - Network connectivity issues
 - SQLite schema migration (cache TTL can use existing `fetched_at` column)
-- Legacy PySide6 app in `legacy/pyside-v1/`
+- Archived PySide6 app (removed from the repository in v0.8.21+)
 
 ---
 

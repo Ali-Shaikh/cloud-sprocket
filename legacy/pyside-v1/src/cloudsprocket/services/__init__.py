@@ -1,2 +1,0 @@
-"""Service layer for CloudSprocket."""
-
