@@ -42,7 +42,7 @@ func (s *Service) azurePostgresConnection(
 	if conn.Host != "" && conn.Port > 0 {
 		return &conn
 	}
-	return &conn
+	return nil
 }
 
 func postgresServerNames(servers []models.AzurePostgresServer) []string {

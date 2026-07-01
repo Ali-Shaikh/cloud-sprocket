@@ -770,12 +770,12 @@ const mockAzurePostgresServers = [
 const mockAzurePostgresConnection = {
   host: "localhost",
   port: 54983,
-  psql: 'psql "host=localhost port=54983 dbname=postgres user=psqladmin password=FlociAz_Strong123! sslmode=disable"',
-  uri: "postgresql://psqladmin:FlociAz_Strong123!@localhost:54983/postgres?sslmode=disable",
+  psql: 'psql "host=localhost port=54983 dbname=postgres user=psqladmin password=<password> sslmode=disable"',
+  uri: "postgresql://psqladmin:<password>@localhost:54983/postgres?sslmode=disable",
   jdbcUrl:
-    "jdbc:postgresql://localhost:54983/postgres?user=psqladmin&password=FlociAz_Strong123!&sslmode=disable",
+    "jdbc:postgresql://localhost:54983/postgres?user=psqladmin&password=<password>&sslmode=disable",
   dotNet:
-    "Host=localhost;Port=54983;Database=postgres;Username=psqladmin;Password=FlociAz_Strong123!;SSL Mode=Disable;",
+    "Host=localhost;Port=54983;Database=postgres;Username=psqladmin;Password=<password>;SSL Mode=Disable;",
 };
 
 const mockAzureFrontDoorProfiles = [

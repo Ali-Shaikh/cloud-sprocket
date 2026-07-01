@@ -201,6 +201,30 @@ func TestStartConfiguresPersistenceAndEnvironment(t *testing.T) {
 	}
 }
 
+func TestStartProtectsOpenTofuContractKeysFromOverride(t *testing.T) {
+	dockerClient := &stubDockerClient{}
+	manager := newTestManager(t, dockerClient)
+
+	_, err := manager.Start(context.Background(), models.LocalStackStartOptions{
+		Environment: map[string]string{
+			"FLOCI_AZ_TLS_ENABLED":         "false",
+			"FLOCI_AZ_HOSTNAME":            "attacker.example",
+			"FLOCI_AZ_SERVICES_AKS_MOCKED": "false",
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected start to succeed, got %v", err)
+	}
+	expectedEnv := []string{
+		"FLOCI_AZ_HOSTNAME=localhost",
+		"FLOCI_AZ_SERVICES_AKS_MOCKED=true",
+		"FLOCI_AZ_TLS_ENABLED=true",
+	}
+	if !reflect.DeepEqual(dockerClient.lastCreateEnv, expectedEnv) {
+		t.Fatalf("expected OpenTofu contract keys to be protected, got %+v", dockerClient.lastCreateEnv)
+	}
+}
+
 func TestStartReplacesContainerMissingOpenTofuContract(t *testing.T) {
 	dockerClient := &stubDockerClient{
 		containers: []containerapi.Summary{{

@@ -383,7 +383,7 @@ func portConfig() (networkapi.PortSet, networkapi.PortMap, error) {
 func flociAZEnv(options models.LocalStackStartOptions) []string {
 	values := flociazcompat.DefaultContainerEnvironment()
 	for key, value := range options.Environment {
-		if validEnvName(key) && key != "FLOCI_AZ_STORAGE_MODE" && key != "FLOCI_AZ_STORAGE_PATH" {
+		if validEnvName(key) && !isProtectedFlociAZEnvKey(key) {
 			values[key] = value
 		}
 	}
@@ -404,6 +404,22 @@ func flociAZEnv(options models.LocalStackStartOptions) []string {
 		env = append(env, key+"="+values[key])
 	}
 	return env
+}
+
+// isProtectedFlociAZEnvKey reports whether key is part of the OpenTofu
+// compatibility contract (see flociazcompat.DefaultContainerEnvironment) or the
+// storage configuration, neither of which a user-supplied env file may
+// override. Without this, a custom env value that doesn't match the contract
+// causes ContainerHasOpenTofuContract to flag the container as stale on every
+// Start(), triggering a recreation loop that reapplies the same value.
+func isProtectedFlociAZEnvKey(key string) bool {
+	switch key {
+	case "FLOCI_AZ_TLS_ENABLED", "FLOCI_AZ_HOSTNAME", "FLOCI_AZ_SERVICES_AKS_MOCKED",
+		"FLOCI_AZ_STORAGE_MODE", "FLOCI_AZ_STORAGE_PATH":
+		return true
+	default:
+		return false
+	}
 }
 
 func (m *Manager) containerMounts(options models.LocalStackStartOptions) ([]mountapi.Mount, error) {
