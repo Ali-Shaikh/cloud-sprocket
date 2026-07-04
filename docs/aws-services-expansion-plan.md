@@ -1,7 +1,7 @@
 # AWS Services Expansion Plan
 
-**Status:** Phase 1 merged to `dev` (PR #69, unreleased); Phase 2+ next
-**Date:** 23 June 2026 (Phase 1 status updated 4 July 2026)
+**Status:** Phase 1 shipped in v0.8.23 (PR #69); Phase 2 shipped in v0.8.25–v0.8.26 (ECS #79, API Gateway #80, Secrets Manager #81). Phase 3+ next.
+**Date:** 23 June 2026 (Phase 2 status updated 5 July 2026)
 **Scope:** Add high-value AWS services to match Azure breadth, reusing v0.8.10 AWS performance patterns.
 
 ---

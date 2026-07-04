@@ -150,7 +150,7 @@ Two findings changed the sequencing:
 
 ### Step 1 — Deferred AWS inventory (one PR, no new dependencies)
 
-**Status:** Merged to `dev` (PR #69, unreleased).
+**Status:** Shipped in v0.8.23 (PR #69).
 
 Matches `docs/aws-services-expansion-plan.md` Phase 1. File-level scope:
 
@@ -166,7 +166,7 @@ Matches `docs/aws-services-expansion-plan.md` Phase 1. File-level scope:
 
 ### Step 2 — Overview polish + honest surface area (one PR)
 
-**Status:** Merged to `dev` (PR #70, unreleased).
+**Status:** Shipped in v0.8.23 (PR #70).
 
 1. `OverviewView`: runtime health strip (Docker + LocalStack + floci-az reachability, reusing `runtime.get` data), emulator quick actions, service cards with click-through to tabs
 2. GCP nav entries disabled with a "Soon" badge instead of a thin placeholder
@@ -175,12 +175,16 @@ Matches `docs/aws-services-expansion-plan.md` Phase 1. File-level scope:
 
 ### Step 3 — Per-action capabilities (one to two PRs)
 
+**Status:** Shipped in v0.8.23 (PRs #71–#73): `ActionCapability` model + AWS metadata (#71), AWS + core Azure view wiring (#72), Azure tools write gates (#73).
+
 1. Go handlers return `capabilities[]` per service (action, enabled, reason), building on the existing `AWSWriteCapable` / `AzureWriteCapable` flags
 2. One frontend helper replaces the per-view write-mode conditionals; disabled buttons show the reason (write mode off, real-cloud profile, runtime down)
 
 **Exit:** Buttons explain why they are disabled, consistently across AWS tabs, Azure tabs and Azure tools.
 
 ### Step 4 — App.tsx decomposition, then the TanStack Query decision
+
+**Status:** Structurally done, exit criterion not yet met. 4a snapshot/shell extraction (#74, v0.8.23), 4b session/loading hooks (#75), 4c IPC-boundary normalisation (#76, completes perf Phase 3c), 4d tab routers + `useWorkspaceState` + `useVirtualisationPoll` (#77), all in v0.8.24. `App.tsx` is at 2,891 lines; the remaining trim and the React Query decision are the next execution target below.
 
 1. Performance plan Phase 3b: extract `useWorkspaceState`, `useSessionState`, per-provider tab routers from `App.tsx` (~4,900 lines)
 2. Phase 3c while in there: normalise snapshots once at the IPC boundary
@@ -210,6 +214,35 @@ Pick high-impact Floci flows to port:
 - Wrapping all of `backendRequest` in a query client (Step 1 of the old Phase 1): premature while the sidecar is stateful
 - Backend `CloudResource` normalisation (old Phase 2.3): cross-cutting API change with mostly aesthetic benefit
 - Category-based navigation: revisit only after Step 5, as an Overview grouping rather than a nav replacement
+
+---
+
+## Next execution targets (updated 5 July 2026, post v0.8.27)
+
+Steps 1–4 shipped. Target A (handler hooks, #78) and Target B (AWS Phase 2, #79–#81) shipped in v0.8.25–v0.8.26. Service enablement Phases 1–3 shipped in v0.8.27 (#82). `App.tsx` is ~1,964 lines (exit criterion ~1,500 not met; remainder is app-shell logic).
+
+### Target A — App.tsx handler extraction (branch `refactor/app-action-hooks`) — **shipped v0.8.25 (#78)**
+
+The remaining bulk of `App.tsx` is per-service selection/mutation handlers. Extract them into hooks that take the shared dependencies (`backendRequest`, `setWorkspace`/`mergeWorkspace`, status setters, `startTransition`) and return the handler bundles the tab routers already consume via `workspace-tab-router-props.ts`:
+
+1. `hooks/use-aws-actions.ts`: the AWS blocks at roughly `App.tsx` lines 1125–1690 (EC2, Lambda, DynamoDB, SQS, SNS, RDS, Logs, IAM refresh/select/mutate handlers plus `applyS3PrefixFilter`)
+2. `hooks/use-azure-actions.ts`: the Azure blocks at roughly lines 679–1105 (web app/slot, VM, resource group, Front Door topology, WAF policy, Log Analytics workspace)
+3. `hooks/use-runtime-actions.ts`: Docker/emulator handlers (`refreshDockerRuntime`, `refreshLocalStackLogs`, `refreshFlociAzLogs`, environment parsing helpers, roughly lines 1729–1950)
+4. Keep behaviour identical: same RPC methods, same scoped snapshot merges, same status messages. No new dependencies
+
+**Exit:** `App.tsx` at or under ~1,500 lines; all 179 Vitest tests still pass unchanged (behaviour-preserving refactor); `pnpm --filter @cloudsprocket/desktop test` and `go test ./...` green.
+
+### Target B — AWS expansion Phase 2 (three PRs, after Target A merges) — **shipped v0.8.25–v0.8.26 (#79–#81)**
+
+Per `docs/aws-services-expansion-plan.md` Phase 2 and its per-service checklist: `feat/aws-ecs`, then `feat/aws-apigateway`, then `feat/aws-secrets`. Each service: `awsadapter/<service>.go`, enricher + `enrichAwsScoped` case + `validAwsInventoryScopes` entry in `aws_inventory.go`, scope entry in `lib/aws-inventory.ts`, lazy view under `views/workspace/`, tab wiring through the Step 4d tab routers (`components/workspace/aws-workspace-tabs.tsx`), action capabilities for any write actions, tests per the checklist.
+
+### Target C — TanStack Query decision (after Target A) — **next**
+
+A short spike, not a migration: pilot `@tanstack/react-query` on `runtime.get` polling and `deployments.list` only, behind the existing hooks. Write the outcome (adopt narrowly / decline) into this doc and remove the question from the backlog.
+
+### Service enablement (Phases 1–3) — **shipped v0.8.27 (#82)**
+
+Hierarchical provider + service toggles via App menu → Services; disabled = fully dormant. Overview hidden-resources hint with one-click enable. See `docs/service-enablement-plan.md`. Phase 4 (onboarding wizard) deferred.
 
 ---
 

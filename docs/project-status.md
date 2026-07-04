@@ -1,8 +1,8 @@
 # CloudSprocket project status
 
-**Last updated:** 4 July 2026 (PRs #69–#70 merged on `dev`; no release yet)  
-**Latest release:** [v0.8.22](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.8.22)  
-**Unreleased on `dev`:** AWS deferred inventory (#69), Overview polish (#70)
+**Last updated:** 5 July 2026 (v0.8.27 released, `dev` clean)  
+**Latest release:** [v0.8.27](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.8.27)  
+**Recent releases:** v0.8.25 (App.tsx action hooks #78, ECS #79, API Gateway #80), v0.8.26 (Secrets Manager #81), v0.8.27 (service enablement Phases 1–3, PR #82)
 
 CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tauri v2 + Go sidecar. The PySide6 legacy app was removed in PR #67. The Tauri rewrite is the active product.
 
@@ -20,13 +20,18 @@ CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tau
 - Rail/sidebar UX redesign (v0.8.20): unified glyphs, app menu, profile badges
 - App icon refresh committed (`c6a088d`, 3 July 2026): master logo in `design/brand/`, all Tauri icon sizes regenerated
 - Performance work (v0.8.10–0.8.11): `runtime.get` poll split, Azure deferred inventory, parallel enrichers, code splitting, table virtualisation
-- AWS deferred inventory (PR #69, on `dev`, unreleased): `aws.inventory.get` RPC; workspace open loads S3 + EC2 only; other tabs fetch on first activation
-- Overview polish (PR #70, on `dev`, unreleased): runtime health strip on Overview; GCP nav Soon badges for upcoming services
+- AWS deferred inventory (v0.8.23, PR #69): `aws.inventory.get` RPC; workspace open loads S3 + EC2 only; other tabs fetch on first activation
+- Overview polish (v0.8.23, PR #70): runtime health strip on Overview; GCP nav Soon badges for upcoming services
+- Per-action capabilities (v0.8.23, PRs #71–#73): `ActionCapability` model in Go, `actionCapabilities` on workspace snapshots, all AWS write buttons plus Azure core views and Azure tools (App Service, WAF, Front Door) gated with disabled reasons via `lib/action-capabilities.ts`
+- App.tsx decomposition Steps 4a–4d (v0.8.23–v0.8.24, PRs #74–#77): snapshot/shell helpers, `useSessionState` / `useWorkspaceState` / `useVirtualisationPoll` hooks, IPC-boundary snapshot normalisation (also completes perf plan Phase 3c), per-provider tab routers (`components/workspace/`). `App.tsx` 4,893 → 2,891 lines
+- App.tsx action hooks (v0.8.25, PR #78): `use-aws-actions`, `use-azure-actions`, `use-runtime-actions`; `App.tsx` now ~1,964 lines
+- AWS expansion Phase 2 (v0.8.25–v0.8.26, PRs #79–#81): ECS, API Gateway, Secrets Manager tabs
+- Service enablement Phases 1–3 (v0.8.27, PR #82): service catalogue, `preferences.json`, Services settings page (App menu), tab/enricher/provider filtering, Overview hidden-resources hint. See `docs/service-enablement-plan.md`. Phase 4 (onboarding wizard) deferred
 - Multi-platform CI and release builds (Windows, macOS, Linux)
 
 ### AWS (live)
 
-Nine service tabs: S3, EC2, Lambda, DynamoDB, SQS, SNS, RDS, IAM, CloudWatch Logs.
+Twelve service tabs: S3, EC2, Lambda, DynamoDB, SQS, SNS, RDS, ECS, API Gateway, Secrets Manager, IAM, CloudWatch Logs.
 
 Write operations (LocalStack / local endpoints only; Phase 1 shipped):
 
@@ -87,9 +92,9 @@ Full provider support beyond discovery/overview. Product positioning: AWS and Az
 
 See `docs/aws-services-expansion-plan.md`.
 
-- Phase 1 (deferred inventory): **merged to `dev`** (PR #69, unreleased)
-- Overview Step 2: **merged to `dev`** (PR #70, unreleased)
-- Phase 2+ not started: ECS, API Gateway, Secrets Manager, EKS, CloudFormation, EventBridge, Route 53, ELB, KMS
+- Phase 1 (deferred inventory): **shipped in v0.8.23** (PR #69)
+- Phase 2: **shipped in v0.8.25–v0.8.26** (ECS #79, API Gateway #80, Secrets Manager #81)
+- Phase 3+ not started: EKS, CloudFormation, EventBridge, Route 53, ELB, KMS
 
 ### AWS write operations (Phase 2+)
 
@@ -101,13 +106,11 @@ See `docs/aws-write-operations-plan.md`. Phase 1 done. Outstanding:
 
 ### Performance / architecture (deferred)
 
-See `docs/performance-remediation-plan.md`. Phases 1a-1d, 2a-2c, 3a and 3d shipped in v0.8.10; `awsScope` is live on every AWS selection handler (`aws_s3.go`, `aws_ec2.go`, `aws_lambda.go`, `aws_dynamodb.go`, `aws_sqs.go`, `aws_breadth.go`). Remaining:
+See `docs/performance-remediation-plan.md`. Phases 1a-1d, 2a-2c, 3a and 3d shipped in v0.8.10; AWS deferred inventory shipped in v0.8.23 (#69); Phase 3c (IPC-boundary snapshot normalisation) shipped in v0.8.24 (#76). Remaining:
 
+- Phase 3b: handler hooks shipped in v0.8.25 (#78); `App.tsx` is ~1,964 lines (exit criterion ~1,500 not met; remainder is genuine app-shell logic). This gates the TanStack Query decision
 - Phase 2d: parallelise Azure phase-2 enrichers where safe (Queues, WAF, Front Door)
-- Phase 3b: decompose `App.tsx` (now ~4,900 lines; prerequisite for any TanStack Query adoption)
-- Phase 3c: normalise workspace snapshots once at the IPC boundary instead of at each call site
 - Phase 4: IPC/API shape changes (partial snapshots, push events)
-- AWS deferred inventory: **shipped** (PR #69)
 - WAF optional Azure Monitor metrics tiles
 
 ### Release signing
@@ -136,13 +139,14 @@ Low urgency; mostly Renovate bumps.
 
 ## Suggested priorities
 
-Revised 4 July 2026 after PR #70 merged:
+Revised 5 July 2026 after v0.8.27 (Targets A–B and service enablement Phases 1–3 delivered):
 
-1. Per-action capability metadata (Step 3, PR #71): unify write-mode, profile capability and runtime-reachability gates
-2. AWS expansion Phase 2: ECS, API Gateway, Secrets Manager tabs (stacked PRs on `dev`)
-3. Re-test Postgres deploy when official floci-az ships Postgres (external blocker)
-4. `App.tsx` decomposition (perf plan Phase 3b), then decide on TanStack Query adoption
-5. GCP workspace or legacy AWS SSO/Who Am I (breadth vs polish)
+1. TanStack Query decision (`docs/floci-ui-inspiration.md` Target C): pilot on idempotent reads only (`runtime.get`, logs, `deployments.list`), or explicitly decline
+2. Step 5 shared inventory shell (`ResourceTable` + `ResourceInspector`, frontend only)
+3. AWS expansion Phase 3: EKS, CloudFormation, EventBridge (`docs/aws-services-expansion-plan.md`)
+4. Service enablement Phase 4: first-run onboarding wizard (thin skin over existing preferences; deferred from v0.8.27)
+5. Re-test Postgres deploy when official floci-az ships Postgres (external blocker)
+6. GCP workspace or legacy AWS SSO/Who Am I (breadth vs polish)
 
 ---
 
@@ -159,3 +163,4 @@ Revised 4 July 2026 after PR #70 merged:
 | `docs/waf-security-workbench.md` | WAF tool design |
 | `docs/azure-postgresql-flexible-server-plan.md` | Postgres feature (shipped v0.8.21) |
 | `docs/floci-ui-inspiration.md` | Patterns from floci-io/floci-ui |
+| `docs/service-enablement-plan.md` | Provider/service toggles (Phases 1–3 shipped v0.8.27) |

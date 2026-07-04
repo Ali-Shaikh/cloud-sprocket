@@ -1,8 +1,8 @@
 # CloudSprocket Performance Remediation Plan
 
-**Status:** Implemented in `perf/v0.8.10` (v0.8.10)  
-**Date:** 22 June 2026  
-**Scope:** Phases 1a-1d, 2a-2c, 3a, 3d implemented. Phase 3b (App.tsx decomposition) and Phase 4 deferred.
+**Status:** Largely implemented (v0.8.10 → v0.8.25)  
+**Date:** 22 June 2026 (status updated 5 July 2026)  
+**Scope:** Phases 1a-1d, 2a-2c, 3a, 3d shipped in v0.8.10. Phase 3c (IPC-boundary snapshot normalisation) shipped in v0.8.24 (PR #76). Phase 3b: tab routers shipped v0.8.24 (PRs #74–#77); action hooks shipped v0.8.25 (#78); `App.tsx` ~1,964 lines (~1,500 exit criterion not met). Phase 2d and Phase 4 deferred.
 
 ---
 
