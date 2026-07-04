@@ -173,14 +173,16 @@ jobs:
       # cloudsprocket.org fetches the latest release version and download links at build
       # time; Workers Builds only rebuilds on push, so an empty commit is the trigger.
       - name: Trigger site rebuild
+        continue-on-error: true
         env:
           SITE_PUSH_TOKEN: ${{ secrets.SITE_PUSH_TOKEN }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
         run: |
           if [ -z "$SITE_PUSH_TOKEN" ]; then
             echo "SITE_PUSH_TOKEN secret not set; skipping site rebuild trigger."
             exit 0
           fi
-          git clone --depth 1 https://github.com/CloudSprocket/cloudsprocket.org.git site-rebuild
+          git clone --depth 1 "https://x-access-token:${SITE_PUSH_TOKEN}@github.com/CloudSprocket/cloudsprocket.org.git" site-rebuild
           cd site-rebuild
           git -c user.name="cloudsprocket-release-bot" \
               -c user.email="releases@cloudsprocket.org" \
