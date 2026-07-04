@@ -1,7 +1,7 @@
 # CloudSprocket project status
 
-**Last updated:** 4 July 2026 (PR #69 merged; Step 1 shipped on `dev`)  
-**Current version:** v0.8.23 (`dev`)
+**Last updated:** 4 July 2026 (PR #70 merged; Step 2 shipped on `dev`)  
+**Current version:** v0.8.24 (`dev`)
 **Latest release:** [v0.8.21](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.8.21)
 
 CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tauri v2 + Go sidecar. The PySide6 legacy app was removed in PR #67. The Tauri rewrite is the active product.
@@ -21,6 +21,7 @@ CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tau
 - App icon refresh committed (`c6a088d`, 3 July 2026): master logo in `design/brand/`, all Tauri icon sizes regenerated
 - Performance work (v0.8.10–0.8.11): `runtime.get` poll split, Azure deferred inventory, parallel enrichers, code splitting, table virtualisation
 - AWS deferred inventory (v0.8.23, PR #69): `aws.inventory.get` RPC; workspace open loads S3 + EC2 only; other tabs fetch on first activation
+- Overview polish (v0.8.24, PR #70): runtime health strip on Overview; GCP nav Soon badges for upcoming services
 - Multi-platform CI and release builds (Windows, macOS, Linux)
 
 ### AWS (live)
@@ -87,6 +88,7 @@ Full provider support beyond discovery/overview. Product positioning: AWS and Az
 See `docs/aws-services-expansion-plan.md`.
 
 - Phase 1 (deferred inventory): **shipped** (PR #69, v0.8.23)
+- Overview Step 2: **shipped** (PR #70, v0.8.24)
 - Phase 2+ not started: ECS, API Gateway, Secrets Manager, EKS, CloudFormation, EventBridge, Route 53, ELB, KMS
 
 ### AWS write operations (Phase 2+)
@@ -134,14 +136,13 @@ Low urgency; mostly Renovate bumps.
 
 ## Suggested priorities
 
-Revised 4 July 2026 after PR #69 merged:
+Revised 4 July 2026 after PR #70 merged:
 
-1. Overview polish (Step 2): runtime health strip, service-card click-through, GCP "Soon" badges
-2. Per-action capability metadata (Step 3): unify write-mode, profile capability and runtime-reachability gates
-3. AWS expansion Phase 2: ECS, API Gateway, Secrets Manager tabs (stacked PRs on `dev`)
-4. Re-test Postgres deploy when official floci-az ships Postgres (external blocker)
-5. `App.tsx` decomposition (perf plan Phase 3b), then decide on TanStack Query adoption
-6. GCP workspace or legacy AWS SSO/Who Am I (breadth vs polish)
+1. Per-action capability metadata (Step 3, PR #71): unify write-mode, profile capability and runtime-reachability gates
+2. AWS expansion Phase 2: ECS, API Gateway, Secrets Manager tabs (stacked PRs on `dev`)
+3. Re-test Postgres deploy when official floci-az ships Postgres (external blocker)
+4. `App.tsx` decomposition (perf plan Phase 3b), then decide on TanStack Query adoption
+5. GCP workspace or legacy AWS SSO/Who Am I (breadth vs polish)
 
 ---
 

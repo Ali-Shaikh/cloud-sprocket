@@ -166,6 +166,8 @@ Matches `docs/aws-services-expansion-plan.md` Phase 1. File-level scope:
 
 ### Step 2 — Overview polish + honest surface area (one PR)
 
+**Status:** Shipped (PR #70, v0.8.24).
+
 1. `OverviewView`: runtime health strip (Docker + LocalStack + floci-az reachability, reusing `runtime.get` data), emulator quick actions, service cards with click-through to tabs
 2. GCP nav entries disabled with a "Soon" badge instead of a thin placeholder
 
