@@ -19,7 +19,11 @@ import awsIamIconUrl from "@/assets/cloud-icons/aws-iam.svg";
 import azureResourceGroupsIconUrl from "@/assets/cloud-icons/azure-resource-groups.svg";
 import azureVmIconUrl from "@/assets/cloud-icons/azure-vm.svg";
 import { RuntimeHealthStrip } from "@/components/overview/runtime-health-strip";
-import { buildRuntimeHealthTargets, type RuntimeHealthTargetId } from "@/lib/runtime-health";
+import {
+  buildRuntimeHealthTargets,
+  shouldShowRuntimeHealthStrip,
+  type RuntimeHealthTargetId,
+} from "@/lib/runtime-health";
 import type { SessionSnapshot, WorkspaceSnapshot } from "@/types/backend";
 
 export type OverviewNavigateContext = {
@@ -396,12 +400,14 @@ export default function OverviewView({
         />
       )}
 
-      <RuntimeHealthStrip
-        targets={runtimeTargets}
-        actionInFlight={runtimeActionInFlight}
-        onOpenRuntime={onOpenRuntime}
-        onQuickStart={onEmulatorQuickStart}
-      />
+      {shouldShowRuntimeHealthStrip(workspace) ? (
+        <RuntimeHealthStrip
+          targets={runtimeTargets}
+          actionInFlight={runtimeActionInFlight}
+          onOpenRuntime={onOpenRuntime}
+          onQuickStart={onEmulatorQuickStart}
+        />
+      ) : null}
 
       <section className="grid grid-cols-2 gap-[14px] sm:grid-cols-4">
         {stats.map((stat) => {

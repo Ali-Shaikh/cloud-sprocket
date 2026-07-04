@@ -37,9 +37,22 @@ function emulatorById(
   return emulators.find((emulator) => emulator.emulatorId === emulatorId);
 }
 
+function emulatorStartQuickAction(status?: string): "start" | undefined {
+  return emulatorStatus(status) === "off" ? "start" : undefined;
+}
+
+/** Local-runtime strip is only relevant for profiles that can target emulators. */
+export function shouldShowRuntimeHealthStrip(workspace: WorkspaceSnapshot): boolean {
+  return workspace.awsWriteCapable || workspace.azureWriteCapable;
+}
+
 export function buildRuntimeHealthTargets(
   workspace: WorkspaceSnapshot,
 ): RuntimeHealthTarget[] {
+  if (!shouldShowRuntimeHealthStrip(workspace)) {
+    return [];
+  }
+
   const targets: RuntimeHealthTarget[] = [
     {
       id: "docker",
@@ -52,7 +65,6 @@ export function buildRuntimeHealthTargets(
 
   const localStack = emulatorById(workspace.emulatorSummaries, "localstack");
   if (localStack) {
-    const running = localStack.status === "running";
     targets.push({
       id: "localstack",
       label: "LocalStack",
@@ -60,13 +72,12 @@ export function buildRuntimeHealthTargets(
       status: emulatorStatus(localStack.status),
       statusLabel: localStack.status,
       summary: localStack.summary,
-      quickAction: running ? undefined : "start",
+      quickAction: emulatorStartQuickAction(localStack.status),
     });
   }
 
   const flociAz = emulatorById(workspace.emulatorSummaries, "floci-az");
   if (flociAz) {
-    const running = flociAz.status === "running";
     targets.push({
       id: "floci-az",
       label: "floci-az",
@@ -74,7 +85,7 @@ export function buildRuntimeHealthTargets(
       status: emulatorStatus(flociAz.status),
       statusLabel: flociAz.status,
       summary: flociAz.summary,
-      quickAction: running ? undefined : "start",
+      quickAction: emulatorStartQuickAction(flociAz.status),
     });
   }
 

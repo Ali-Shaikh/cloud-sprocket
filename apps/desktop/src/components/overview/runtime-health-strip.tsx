@@ -63,13 +63,15 @@ export function RuntimeHealthStrip({
                 </span>
               </div>
               <p className="line-clamp-2 text-xs text-muted-foreground">{target.summary}</p>
-              {target.quickAction === "start" && onQuickStart && target.id !== "docker" ? (
+              {target.quickAction === "start" &&
+              onQuickStart &&
+              (target.id === "localstack" || target.id === "floci-az") ? (
                 <Button
                   variant="secondary"
                   size="sm"
                   className="w-fit"
                   disabled={inFlight || !workspaceDockerReachable(targets)}
-                  onClick={() => onQuickStart(target.id as "localstack" | "floci-az")}
+                  onClick={() => onQuickStart(target.id)}
                 >
                   <Play />
                   {inFlight ? "Starting..." : "Start"}

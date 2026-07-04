@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { buildRuntimeHealthTargets } from "./runtime-health";
+import { buildRuntimeHealthTargets, shouldShowRuntimeHealthStrip } from "./runtime-health";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
 function baseWorkspace(): WorkspaceSnapshot {
@@ -39,6 +39,8 @@ function baseWorkspace(): WorkspaceSnapshot {
         details: [],
       },
     ],
+    awsWriteCapable: true,
+    azureWriteCapable: false,
   } as WorkspaceSnapshot;
 }
 
@@ -61,5 +63,40 @@ describe("buildRuntimeHealthTargets", () => {
     const docker = buildRuntimeHealthTargets(workspace).find((target) => target.id === "docker");
     expect(docker?.status).toBe("off");
     expect(docker?.statusLabel).toBe("Unreachable");
+  });
+
+  it("offers start only for stopped emulators, not unhealthy or not-configured", () => {
+    const workspace = baseWorkspace();
+    workspace.emulatorSummaries = [
+      {
+        emulatorId: "localstack",
+        providerId: "aws",
+        label: "LocalStack",
+        kind: "docker",
+        status: "unhealthy",
+        summary: "Container running but failing health checks.",
+        details: [],
+      },
+      {
+        emulatorId: "floci-az",
+        providerId: "azure",
+        label: "floci-az",
+        kind: "docker",
+        status: "not-configured",
+        summary: "Not configured yet.",
+        details: [],
+      },
+    ];
+    const targets = buildRuntimeHealthTargets(workspace);
+    expect(targets.find((target) => target.id === "localstack")?.quickAction).toBeUndefined();
+    expect(targets.find((target) => target.id === "floci-az")?.quickAction).toBeUndefined();
+  });
+
+  it("returns no targets for real-cloud profiles", () => {
+    const workspace = baseWorkspace();
+    workspace.awsWriteCapable = false;
+    workspace.azureWriteCapable = false;
+    expect(shouldShowRuntimeHealthStrip(workspace)).toBe(false);
+    expect(buildRuntimeHealthTargets(workspace)).toEqual([]);
   });
 });

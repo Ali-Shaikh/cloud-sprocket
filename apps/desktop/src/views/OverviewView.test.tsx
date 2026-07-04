@@ -51,6 +51,7 @@ const workspace = {
   },
   awsWritesEnabled: false,
   awsWriteCapable: true,
+  azureWriteCapable: false,
 } as WorkspaceSnapshot;
 
 describe("OverviewView", () => {
