@@ -77,6 +77,9 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 	if session.CurrentProviderID == "azure" {
 		opts.azureDeferredInventory = true
 	}
+	if session.CurrentProviderID == "aws" {
+		opts.awsDeferredInventory = true
+	}
 	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, opts)
 
 	if notifier != nil {

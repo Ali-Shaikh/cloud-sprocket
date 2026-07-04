@@ -193,6 +193,9 @@ func (s *Service) handleWorkspaceGet(ctx context.Context, notifier Notifier) (an
 	if session.CurrentProviderID == "azure" {
 		opts.azureDeferredInventory = true
 	}
+	if session.CurrentProviderID == "aws" {
+		opts.awsDeferredInventory = true
+	}
 	return s.buildWorkspaceSnapshotOpts(snapshot, session, opts), nil
 }
 

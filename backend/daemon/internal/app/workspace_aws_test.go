@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
 	"cloudsprocket/backend/daemon/internal/store"
@@ -120,6 +121,133 @@ func TestAwsScopedWorkspaceOnlyRunsTargetEnricher(t *testing.T) {
 	}
 	if len(workspace.S3Buckets) != 0 {
 		t.Fatalf("expected no S3 buckets in EC2-scoped snapshot, got %+v", workspace.S3Buckets)
+	}
+}
+
+func TestAwsDeferredWorkspaceGetSkipsNonCoreEnrichers(t *testing.T) {
+	service, s3, ec2, lambda := awsTestService(t)
+
+	snapshot := discovery.Snapshot{
+		Providers: []models.ProviderSummary{{ProviderID: "aws", Label: "AWS"}},
+		Profiles:  []models.ProfileSummary{{ProviderID: "aws", ProfileID: "sandbox", DisplayName: "sandbox"}},
+	}
+	session := models.SessionSnapshot{
+		CurrentProviderID: "aws",
+		SelectedProfileID: "sandbox",
+		IsLocked:          true,
+	}
+
+	workspace := service.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+		lightweightAWS:       true,
+		awsDeferredInventory: true,
+		skipAzureInventory:   true,
+	})
+
+	if s3.listBuckets.Load() == 0 {
+		t.Fatal("expected S3 buckets on deferred workspace.get")
+	}
+	if ec2.listRegions.Load() == 0 {
+		t.Fatal("expected EC2 regions on deferred workspace.get")
+	}
+	if lambda.listFunctions.Load() != 0 {
+		t.Fatalf("deferred workspace.get should not load Lambda, listFunctions=%d", lambda.listFunctions.Load())
+	}
+	if len(workspace.S3Buckets) != 1 {
+		t.Fatalf("expected deferred S3 inventory, got %+v", workspace.S3Buckets)
+	}
+	if len(workspace.EC2Regions) != 1 {
+		t.Fatalf("expected deferred EC2 regions, got %+v", workspace.EC2Regions)
+	}
+	if len(workspace.LambdaFunctions) != 0 {
+		t.Fatal("deferred workspace.get should not load Lambda functions")
+	}
+}
+
+func TestAwsInventoryGetRunsSingleEnricher(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+	mustWriteFile(
+		t,
+		filepath.Join(home, ".aws", "config"),
+		"[profile sandbox]\nregion = us-east-1\n",
+	)
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("EnsureRuntimeDirs: %v", err)
+	}
+
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer dataStore.Close()
+
+	s3 := &countingS3Inventory{stubS3Inventory: stubS3Inventory{
+		buckets: []models.AwsS3Bucket{{Name: "demo-bucket"}},
+	}}
+	ec2 := &countingEC2Inventory{stubEC2Inventory: stubEC2Inventory{
+		regions: []string{"us-east-1"},
+	}}
+	lambda := &countingLambdaInventory{}
+
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(command string) (string, error) {
+			if command == "aws" {
+				return "/usr/bin/aws", nil
+			}
+			return "", nil
+		}),
+		s3,
+		ec2,
+		lambda,
+		stubDynamoDBInventory{},
+		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubLogsInventory{},
+		stubIAMInventory{},
+		stubAzureInventory{},
+		stubDockerRuntime{},
+	)
+	service.now = func() time.Time { return time.Now().UTC() }
+
+	ctx := context.Background()
+	for _, step := range []struct {
+		method string
+		params []byte
+	}{
+		{"session.selectProvider", []byte(`{"providerId":"aws"}`)},
+		{"session.selectProfile", []byte(`{"providerId":"aws","profileId":"sandbox"}`)},
+		{"session.selectAuthMethod", []byte(`{"authMethod":"cli"}`)},
+		{"session.lock", nil},
+	} {
+		if _, err := service.Handle(ctx, step.method, step.params, nil); err != nil {
+			t.Fatalf("%s: %v", step.method, err)
+		}
+	}
+
+	result, err := service.Handle(ctx, "aws.inventory.get", []byte(`{"scope":"s3"}`), nil)
+	if err != nil {
+		t.Fatalf("aws.inventory.get: %v", err)
+	}
+	workspace, ok := result.(models.WorkspaceSnapshot)
+	if !ok {
+		t.Fatalf("expected WorkspaceSnapshot, got %T", result)
+	}
+	if s3.listBuckets.Load() == 0 {
+		t.Fatal("expected S3 enricher on scoped aws.inventory.get")
+	}
+	if ec2.listRegions.Load() != 0 {
+		t.Fatalf("expected EC2 enricher to be skipped, listRegions=%d", ec2.listRegions.Load())
+	}
+	if lambda.listFunctions.Load() != 0 {
+		t.Fatalf("expected Lambda enricher to be skipped, listFunctions=%d", lambda.listFunctions.Load())
+	}
+	if len(workspace.S3Buckets) != 1 {
+		t.Fatalf("expected S3 inventory on scoped aws.inventory.get, got %+v", workspace.S3Buckets)
 	}
 }
 

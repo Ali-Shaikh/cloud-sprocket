@@ -201,6 +201,8 @@ func (s *Service) Handle(
 		return s.handleAwsLambdaInvoke(ctx, params, notifier)
 	case "aws.lambda.create":
 		return s.handleAwsLambdaCreate(ctx, params, notifier)
+	case "aws.inventory.get":
+		return s.handleAwsInventoryGet(ctx, params, notifier)
 	case "azure.inventory.get":
 		return s.handleAzureInventoryGet(ctx, params, notifier)
 	case "azure.selectResourceGroup":

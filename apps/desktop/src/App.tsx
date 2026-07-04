@@ -45,6 +45,7 @@ import azureCosmosIconUrl from "./assets/cloud-icons/azure-cosmos.svg";
 import azureQueuesIconUrl from "./assets/cloud-icons/azure-queues.svg";
 import azureEntraIconUrl from "./assets/cloud-icons/azure-entra.svg";
 import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
+import { awsInventoryLoaded, awsInventoryScopeForTab } from "./lib/aws-inventory";
 import { azureInventoryLoaded, azureInventoryScopeForTab } from "./lib/azure-inventory";
 import { notify, notifyJob, useNotifications, type NotificationTone } from "./lib/notify";
 import { useTheme } from "./lib/theme";
@@ -729,7 +730,93 @@ function mergeAwsS3Selection(
     s3Buckets: normalised.s3Buckets,
     s3Objects: normalised.s3Objects,
     s3ObjectMetadata: normalised.s3ObjectMetadata,
+    s3StatusMessage: normalised.s3StatusMessage,
   });
+}
+
+function mergeAwsInventoryScope(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+  scope: string,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  switch (scope) {
+    case "s3":
+      return mergeAwsS3Selection(current, incoming);
+    case "ec2":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedEc2Region: normalised.selectedEc2Region,
+        selectedEc2InstanceId: normalised.selectedEc2InstanceId,
+        ec2Regions: normalised.ec2Regions,
+        ec2Instances: normalised.ec2Instances,
+        ec2StatusMessage: normalised.ec2StatusMessage,
+      });
+    case "lambda":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedLambdaRegion: normalised.selectedLambdaRegion,
+        selectedLambdaFunctionName: normalised.selectedLambdaFunctionName,
+        lambdaRegions: normalised.lambdaRegions,
+        lambdaFunctions: normalised.lambdaFunctions,
+        lambdaStatusMessage: normalised.lambdaStatusMessage,
+      });
+    case "dynamodb":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedDynamodbRegion: normalised.selectedDynamodbRegion,
+        selectedDynamodbTableName: normalised.selectedDynamodbTableName,
+        dynamodbRegions: normalised.dynamodbRegions,
+        dynamodbTables: normalised.dynamodbTables,
+        dynamodbStatusMessage: normalised.dynamodbStatusMessage,
+      });
+    case "sqs":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedSqsRegion: normalised.selectedSqsRegion,
+        selectedSqsQueueUrl: normalised.selectedSqsQueueUrl,
+        sqsRegions: normalised.sqsRegions,
+        sqsQueues: normalised.sqsQueues,
+        sqsStatusMessage: normalised.sqsStatusMessage,
+      });
+    case "sns":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedSnsRegion: normalised.selectedSnsRegion,
+        selectedSnsTopicArn: normalised.selectedSnsTopicArn,
+        snsRegions: normalised.snsRegions,
+        snsTopics: normalised.snsTopics,
+        snsStatusMessage: normalised.snsStatusMessage,
+      });
+    case "rds":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedRdsRegion: normalised.selectedRdsRegion,
+        selectedRdsInstanceId: normalised.selectedRdsInstanceId,
+        rdsRegions: normalised.rdsRegions,
+        rdsInstances: normalised.rdsInstances,
+        rdsStatusMessage: normalised.rdsStatusMessage,
+      });
+    case "logs":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedLogsRegion: normalised.selectedLogsRegion,
+        selectedLogGroupName: normalised.selectedLogGroupName,
+        logsRegions: normalised.logsRegions,
+        logGroups: normalised.logGroups,
+        logsStatusMessage: normalised.logsStatusMessage,
+      });
+    case "iam":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedIamRoleName: normalised.selectedIamRoleName,
+        iamRoles: normalised.iamRoles,
+        iamPolicies: normalised.iamPolicies,
+        iamStatusMessage: normalised.iamStatusMessage,
+      });
+    default:
+      return normalised;
+  }
 }
 
 function applySessionWriteModeToWorkspace(
@@ -1012,7 +1099,9 @@ export default function App() {
   const frontDoorRefreshInFlightRef = useRef(false);
   const wafRefreshInFlightRef = useRef(false);
   const azureInventoryFetchedScopesRef = useRef(new Set<string>());
+  const awsInventoryFetchedScopesRef = useRef(new Set<string>());
   const [azureInventoryRefreshToken, setAzureInventoryRefreshToken] = useState(0);
+  const [awsInventoryRefreshToken, setAwsInventoryRefreshToken] = useState(0);
   const discoveryRefreshJobIdRef = useRef<string | undefined>(undefined);
   const sessionSnapshotRef = useRef(session);
   const loadWorkspaceRef = useRef<(snapshot: SessionSnapshot) => Promise<void>>(async () => undefined);
@@ -1029,7 +1118,9 @@ export default function App() {
   const [workspaceFetching, setWorkspaceFetching] = useState(false);
   const workspaceFetchDepthRef = useRef(0);
   const [azureInventoryLoading, setAzureInventoryLoading] = useState(false);
+  const [awsInventoryLoading, setAwsInventoryLoading] = useState(false);
   const azureInventoryFetchDepthRef = useRef(0);
+  const awsInventoryFetchDepthRef = useRef(0);
 
   function beginAzureInventoryFetch(): void {
     azureInventoryFetchDepthRef.current += 1;
@@ -1042,6 +1133,20 @@ export default function App() {
     azureInventoryFetchDepthRef.current = Math.max(0, azureInventoryFetchDepthRef.current - 1);
     if (azureInventoryFetchDepthRef.current === 0) {
       setAzureInventoryLoading(false);
+    }
+  }
+
+  function beginAwsInventoryFetch(): void {
+    awsInventoryFetchDepthRef.current += 1;
+    if (awsInventoryFetchDepthRef.current === 1) {
+      setAwsInventoryLoading(true);
+    }
+  }
+
+  function endAwsInventoryFetch(): void {
+    awsInventoryFetchDepthRef.current = Math.max(0, awsInventoryFetchDepthRef.current - 1);
+    if (awsInventoryFetchDepthRef.current === 0) {
+      setAwsInventoryLoading(false);
     }
   }
 
@@ -1212,7 +1317,9 @@ export default function App() {
             if (isDiscoveryRefresh) {
               discoveryRefreshJobIdRef.current = undefined;
               azureInventoryFetchedScopesRef.current.clear();
+              awsInventoryFetchedScopesRef.current.clear();
               setAzureInventoryRefreshToken((token) => token + 1);
+              setAwsInventoryRefreshToken((token) => token + 1);
             }
           } else if (
             isDiscoveryRefresh &&
@@ -1224,7 +1331,9 @@ export default function App() {
             } else if (sessionSnapshotRef.current.isLocked) {
               resetWorkspaceFetch();
               azureInventoryFetchedScopesRef.current.clear();
+              awsInventoryFetchedScopesRef.current.clear();
               setAzureInventoryRefreshToken((token) => token + 1);
+              setAwsInventoryRefreshToken((token) => token + 1);
               void loadWorkspaceRef.current(sessionSnapshotRef.current);
             } else {
               resetWorkspaceFetch();
@@ -1306,6 +1415,7 @@ export default function App() {
         setSession(normalisedSession);
         if (method === "session.unlock") {
           azureInventoryFetchedScopesRef.current.clear();
+          awsInventoryFetchedScopesRef.current.clear();
           setActiveWorkspaceTabId("overview");
           setLambdaInvokeResult(null);
           setLambdaInvokeInFlight(false);
@@ -1684,6 +1794,7 @@ export default function App() {
 
   useEffect(() => {
     azureInventoryFetchedScopesRef.current.clear();
+    awsInventoryFetchedScopesRef.current.clear();
   }, [session.lockedProfileId, session.selectedProfileId, session.isLocked]);
 
   useEffect(() => {
@@ -1735,6 +1846,57 @@ export default function App() {
     session.selectedProfileId,
     workspaceLoaded,
     azureInventoryRefreshToken,
+  ]);
+
+  useEffect(() => {
+    if (
+      !session.isLocked ||
+      session.lockedProviderId !== "aws" ||
+      !workspaceLoaded
+    ) {
+      return;
+    }
+    const scope = awsInventoryScopeForTab(activeWorkspaceTabId);
+    if (!scope) {
+      return;
+    }
+    if (
+      awsInventoryFetchedScopesRef.current.has(scope) ||
+      awsInventoryLoaded(workspace, scope)
+    ) {
+      return;
+    }
+    awsInventoryFetchedScopesRef.current.add(scope);
+    beginAwsInventoryFetch();
+    void backendRequest<WorkspaceSnapshot>("aws.inventory.get", { scope })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace((current) =>
+            mergeAwsInventoryScope(current, workspaceResult, scope),
+          );
+        });
+      })
+      .catch((error: unknown) => {
+        awsInventoryFetchedScopesRef.current.delete(scope);
+        pushNotification(
+          "error",
+          "Could not load AWS service inventory",
+          formatBackendError(error),
+        );
+      })
+      .finally(() => {
+        endAwsInventoryFetch();
+      });
+    // workspace is read for awsInventoryLoaded only; awsInventoryFetchedScopesRef
+    // is the primary guard against duplicate fetches (exhaustive-deps).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scope ref + tab id drive fetches
+  }, [
+    activeWorkspaceTabId,
+    session.isLocked,
+    session.lockedProviderId,
+    session.selectedProfileId,
+    workspaceLoaded,
+    awsInventoryRefreshToken,
   ]);
 
   useEffect(() => {
@@ -2603,6 +2765,7 @@ export default function App() {
       return;
     }
     azureInventoryFetchedScopesRef.current.clear();
+    awsInventoryFetchedScopesRef.current.clear();
     beginWorkspaceFetch();
     try {
       const workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
