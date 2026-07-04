@@ -150,7 +150,7 @@ Two findings changed the sequencing:
 
 ### Step 1 — Deferred AWS inventory (one PR, no new dependencies)
 
-**Status:** Shipped (PR #69, v0.8.23).
+**Status:** Merged to `dev` (PR #69, unreleased).
 
 Matches `docs/aws-services-expansion-plan.md` Phase 1. File-level scope:
 
@@ -166,7 +166,7 @@ Matches `docs/aws-services-expansion-plan.md` Phase 1. File-level scope:
 
 ### Step 2 — Overview polish + honest surface area (one PR)
 
-**Status:** Shipped (PR #70, v0.8.24).
+**Status:** Merged to `dev` (PR #70, unreleased).
 
 1. `OverviewView`: runtime health strip (Docker + LocalStack + floci-az reachability, reusing `runtime.get` data), emulator quick actions, service cards with click-through to tabs
 2. GCP nav entries disabled with a "Soon" badge instead of a thin placeholder

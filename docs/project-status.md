@@ -1,8 +1,8 @@
 # CloudSprocket project status
 
-**Last updated:** 4 July 2026 (PR #70 merged; Step 2 shipped on `dev`)  
-**Current version:** v0.8.24 (`dev`)
-**Latest release:** [v0.8.21](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.8.21)
+**Last updated:** 4 July 2026 (PRs #69–#70 merged on `dev`; no release yet)  
+**Latest release:** [v0.8.22](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.8.22)  
+**Unreleased on `dev`:** AWS deferred inventory (#69), Overview polish (#70)
 
 CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tauri v2 + Go sidecar. The PySide6 legacy app was removed in PR #67. The Tauri rewrite is the active product.
 
@@ -20,8 +20,8 @@ CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tau
 - Rail/sidebar UX redesign (v0.8.20): unified glyphs, app menu, profile badges
 - App icon refresh committed (`c6a088d`, 3 July 2026): master logo in `design/brand/`, all Tauri icon sizes regenerated
 - Performance work (v0.8.10–0.8.11): `runtime.get` poll split, Azure deferred inventory, parallel enrichers, code splitting, table virtualisation
-- AWS deferred inventory (v0.8.23, PR #69): `aws.inventory.get` RPC; workspace open loads S3 + EC2 only; other tabs fetch on first activation
-- Overview polish (v0.8.24, PR #70): runtime health strip on Overview; GCP nav Soon badges for upcoming services
+- AWS deferred inventory (PR #69, on `dev`, unreleased): `aws.inventory.get` RPC; workspace open loads S3 + EC2 only; other tabs fetch on first activation
+- Overview polish (PR #70, on `dev`, unreleased): runtime health strip on Overview; GCP nav Soon badges for upcoming services
 - Multi-platform CI and release builds (Windows, macOS, Linux)
 
 ### AWS (live)
@@ -87,8 +87,8 @@ Full provider support beyond discovery/overview. Product positioning: AWS and Az
 
 See `docs/aws-services-expansion-plan.md`.
 
-- Phase 1 (deferred inventory): **shipped** (PR #69, v0.8.23)
-- Overview Step 2: **shipped** (PR #70, v0.8.24)
+- Phase 1 (deferred inventory): **merged to `dev`** (PR #69, unreleased)
+- Overview Step 2: **merged to `dev`** (PR #70, unreleased)
 - Phase 2+ not started: ECS, API Gateway, Secrets Manager, EKS, CloudFormation, EventBridge, Route 53, ELB, KMS
 
 ### AWS write operations (Phase 2+)
