@@ -402,7 +402,7 @@ export function useRuntimeActions({
         );
         await refreshVirtualisationState().catch(() => undefined);
         if (timedOut && (action === "start" || action === "recreate" || action === "stop")) {
-          pollFlociAzState(label, action === "start" ? "running" : "stopped");
+          pollFlociAzState(label, action === "stop" ? "stopped" : "running");
         }
       } finally {
         setFlociAzActionInFlight(false);
