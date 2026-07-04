@@ -111,6 +111,7 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 			workspace.AWSWriteCapable = profileAllowsAWSWrites(profile)
 			workspace.AWSWriteModeEnabled = session.AWSWriteModeEnabled && session.IsLocked
 			workspace.AWSWritesEnabled = effectiveAWSWritesEnabled(session, profile)
+			workspace.ActionCapabilities = buildAWSActionCapabilities(session, profile)
 		}
 		if session.CurrentProviderID == "azure" {
 			azureCLI := ""

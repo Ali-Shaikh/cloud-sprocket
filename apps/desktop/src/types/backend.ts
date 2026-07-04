@@ -47,6 +47,13 @@ export interface ProfileSummary {
   authMethods: AuthMethodStatus[];
 }
 
+export interface ActionCapability {
+  actionId: string;
+  label: string;
+  enabled: boolean;
+  reason?: string;
+}
+
 export interface WorkspaceTab {
   tabId: string;
   label: string;
@@ -796,6 +803,7 @@ export interface WorkspaceSnapshot {
   awsWriteCapable: boolean;
   awsWriteModeEnabled: boolean;
   awsWritesEnabled: boolean;
+  actionCapabilities?: Record<string, ActionCapability[]>;
   azureEndpointUrl?: string;
   azureCliExtensions?: AzureCLIExtensionStatus[];
   azureWriteCapable: boolean;
