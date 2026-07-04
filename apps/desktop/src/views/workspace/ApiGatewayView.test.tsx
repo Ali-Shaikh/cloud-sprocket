@@ -5,10 +5,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
-import LogsView from "./LogsView";
-import type { LogsWorkspaceSnapshot } from "./LogsView";
+import ApiGatewayView from "./ApiGatewayView";
+import type { ApiGatewayWorkspaceSnapshot } from "./ApiGatewayView";
 
-const workspaceFixture: LogsWorkspaceSnapshot = {
+const workspaceFixture: ApiGatewayWorkspaceSnapshot = {
   provider: {
     providerId: "aws",
     label: "AWS",
@@ -71,31 +71,31 @@ const workspaceFixture: LogsWorkspaceSnapshot = {
   azureBlobContainers: [],
   azureBlobs: [],
   azureBlobMetadata: [],
-      azureWebApps: [],
-      azureAppServicePlans: [],
-      azureWebAppSettings: [],
-      azureWebAppDeploymentSlots: [],
-      azureLogAnalyticsWorkspaces: [],
-      azureWafPolicies: [],
-      azureWafRuleFireCounts: [],
-      azureFunctionApps: [],
-      azureFunctions: [],
-      azureKeyVaults: [],
-      azureKeyVaultSecrets: [],
-      azureCosmosAccounts: [],
-      azurePostgresServers: [],
-      azureCosmosDatabases: [],
-      azureCosmosContainers: [],
+  azureWebApps: [],
+  azureAppServicePlans: [],
+  azureWebAppSettings: [],
+  azureWebAppDeploymentSlots: [],
+  azureLogAnalyticsWorkspaces: [],
+  azureWafPolicies: [],
+  azureWafRuleFireCounts: [],
+  azureFunctionApps: [],
+  azureFunctions: [],
+  azureKeyVaults: [],
+  azureKeyVaultSecrets: [],
+  azureCosmosAccounts: [],
+  azurePostgresServers: [],
+  azureCosmosDatabases: [],
+  azureCosmosContainers: [],
   azureCosmosItems: [],
   azureFrontDoorProfiles: [],
   azureFrontDoorEndpoints: [],
   azureFrontDoorOriginGroups: [],
   azureFrontDoorOrigins: [],
   azureStorageQueues: [],
-      azureQueueMessages: [],
-      azureEntraUsers: [],
-      azureEntraGroups: [],
-      azureEntraApps: [],
+  azureQueueMessages: [],
+  azureEntraUsers: [],
+  azureEntraGroups: [],
+  azureEntraApps: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -116,76 +116,82 @@ const workspaceFixture: LogsWorkspaceSnapshot = {
   ecsClusters: [],
   ecsServices: [],
   ecsTasks: [],
-  apiGatewayRegions: [],
-  apiGatewayApis: [],
-  apiGatewayStages: [],
+  logsRegions: [],
+  logGroups: [],
   iamRoles: [],
   iamPolicies: [],
-  selectedLogsRegion: "us-east-1",
-  selectedLogGroupName: "/aws/lambda/process-order",
-  logsStatusMessage: "Loaded 2 log groups from us-east-1.",
-  logsRegions: ["us-east-1", "eu-west-2"],
-  logGroups: [
+  selectedApiGatewayRegion: "us-east-1",
+  selectedApiGatewayApiKey: "http:xyz789",
+  apiGatewayStatusMessage: "Loaded 2 APIs and 1 stages from us-east-1.",
+  apiGatewayRegions: ["us-east-1"],
+  apiGatewayApis: [
     {
-      logGroupName: "/aws/lambda/process-order",
-      arn: "arn:aws:logs:us-east-1:000000000000:log-group:/aws/lambda/process-order",
-      storedBytes: 1048576,
-      retentionInDays: 7,
-      creationTime: 1718448000000,
-      recentEvents: [
-        "2026-06-15 10:05:12 START RequestId: abc123",
-        "2026-06-15 10:05:12 END RequestId: abc123",
-      ],
+      apiKey: "http:xyz789",
+      apiId: "xyz789",
+      apiName: "orders-http-api",
+      apiType: "HTTP",
+      endpoint: "https://xyz789.execute-api.us-east-1.amazonaws.com",
     },
     {
-      logGroupName: "/ecs/cloudsprocket-app",
-      storedBytes: 524288,
-      retentionInDays: 30,
+      apiKey: "rest:abc123",
+      apiId: "abc123",
+      apiName: "legacy-rest-api",
+      apiType: "REST",
+      endpoint: "https://abc123.execute-api.us-east-1.amazonaws.com",
+    },
+  ],
+  apiGatewayStages: [
+    {
+      apiKey: "http:xyz789",
+      stageName: "$default",
+      invokeUrl: "https://xyz789.execute-api.us-east-1.amazonaws.com/$default",
     },
   ],
 };
 
-function renderLogsView() {
+function renderApiGatewayView() {
   const onSelectRegion = vi.fn();
-  const onSelectEntity = vi.fn();
+  const onSelectApi = vi.fn();
   const onRefresh = vi.fn();
   render(
     <ThemeProvider>
-      <LogsView
+      <ApiGatewayView
         workspace={workspaceFixture}
-        actionStatus="Ready to browse log groups."
+        actionStatus="Ready to browse APIs."
         onRefresh={onRefresh}
         onSelectRegion={onSelectRegion}
-        onSelectEntity={onSelectEntity}
+        onSelectApi={onSelectApi}
       />
     </ThemeProvider>,
   );
-  return { onSelectRegion, onSelectEntity, onRefresh };
+  return { onSelectRegion, onSelectApi, onRefresh };
 }
 
-describe("LogsView", () => {
-  it("renders inventory and recent event tail", () => {
-    renderLogsView();
+describe("ApiGatewayView", () => {
+  it("renders API and stage inventory", () => {
+    renderApiGatewayView();
 
-    expect(screen.getByText("Log Group Fleet")).toBeInTheDocument();
-    expect(screen.getByText("Log Group Inventory")).toBeInTheDocument();
-    expect(screen.getAllByText("/aws/lambda/process-order").length).toBeGreaterThan(0);
-    expect(screen.getByText(/Recent events \(read-only tail\)/)).toBeInTheDocument();
-    expect(screen.getAllByText(/START RequestId: abc123/).length).toBeGreaterThan(0);
+    expect(screen.getByText("API Inventory")).toBeInTheDocument();
+    expect(screen.getAllByText("orders-http-api").length).toBeGreaterThan(0);
+    expect(screen.getByText("legacy-rest-api")).toBeInTheDocument();
+    expect(screen.getAllByText("$default").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("https://xyz789.execute-api.us-east-1.amazonaws.com/$default").length,
+    ).toBeGreaterThan(0);
   });
 
-  it("selects a log group when a row is clicked", () => {
-    const { onSelectEntity } = renderLogsView();
+  it("selects an API when a row is clicked", () => {
+    const { onSelectApi } = renderApiGatewayView();
 
-    fireEvent.click(screen.getByText("/ecs/cloudsprocket-app"));
+    fireEvent.click(screen.getByText("legacy-rest-api"));
 
-    expect(onSelectEntity).toHaveBeenCalledWith("/ecs/cloudsprocket-app");
+    expect(onSelectApi).toHaveBeenCalledWith("rest:abc123");
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {
     render(
       <ThemeProvider>
-        <LogsView
+        <ApiGatewayView
           workspace={{
             ...workspaceFixture,
             provider: {
@@ -200,11 +206,11 @@ describe("LogsView", () => {
           actionStatus=""
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
-          onSelectEntity={vi.fn()}
+          onSelectApi={vi.fn()}
         />
       </ThemeProvider>,
     );
 
-    expect(screen.getByText("CloudWatch Logs requires an AWS workspace")).toBeInTheDocument();
+    expect(screen.getByText("API Gateway requires an AWS workspace")).toBeInTheDocument();
   });
 });

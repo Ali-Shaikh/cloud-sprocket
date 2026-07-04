@@ -258,6 +258,8 @@ type SessionSnapshot struct {
 	SelectedECSClusterArn             string             `json:"selectedEcsClusterArn,omitempty"`
 	SelectedECSServiceArn             string             `json:"selectedEcsServiceArn,omitempty"`
 	SelectedECSTaskArn                string             `json:"selectedEcsTaskArn,omitempty"`
+	SelectedApiGatewayRegion          string             `json:"selectedApiGatewayRegion,omitempty"`
+	SelectedApiGatewayApiKey          string             `json:"selectedApiGatewayApiKey,omitempty"`
 	SelectedLogsRegion                string             `json:"selectedLogsRegion,omitempty"`
 	SelectedLogGroupName              string             `json:"selectedLogGroupName,omitempty"`
 	SelectedIAMRoleName               string             `json:"selectedIamRoleName,omitempty"`
@@ -459,6 +461,27 @@ type AwsSnsTopic struct {
 	SubscriptionsConfirmed string               `json:"subscriptionsConfirmed,omitempty"`
 	SubscriptionsPending   string               `json:"subscriptionsPending,omitempty"`
 	Subscriptions          []AwsSnsSubscription `json:"subscriptions,omitempty"`
+}
+
+// AwsApiGatewayApi models a REST or HTTP/WebSocket API Gateway API.
+type AwsApiGatewayApi struct {
+	ApiKey      string `json:"apiKey"`
+	ApiId       string `json:"apiId"`
+	ApiName     string `json:"apiName"`
+	ApiType     string `json:"apiType"`
+	Description string `json:"description,omitempty"`
+	Endpoint    string `json:"endpoint,omitempty"`
+	Protocol    string `json:"protocol,omitempty"`
+}
+
+// AwsApiGatewayStage models a deployed API Gateway stage.
+type AwsApiGatewayStage struct {
+	ApiKey       string `json:"apiKey"`
+	StageName    string `json:"stageName"`
+	InvokeUrl    string `json:"invokeUrl,omitempty"`
+	DeploymentId string `json:"deploymentId,omitempty"`
+	Description  string `json:"description,omitempty"`
+	AutoDeploy   bool   `json:"autoDeploy,omitempty"`
 }
 
 // AwsEcsCluster models an ECS cluster for inventory.
@@ -1040,6 +1063,12 @@ type WorkspaceSnapshot struct {
 	ECSClusters                       []AwsEcsCluster              `json:"ecsClusters"`
 	ECSServices                       []AwsEcsService              `json:"ecsServices"`
 	ECSTasks                          []AwsEcsTask                 `json:"ecsTasks"`
+	SelectedApiGatewayRegion          string                       `json:"selectedApiGatewayRegion,omitempty"`
+	SelectedApiGatewayApiKey          string                       `json:"selectedApiGatewayApiKey,omitempty"`
+	ApiGatewayStatusMessage           string                       `json:"apiGatewayStatusMessage,omitempty"`
+	ApiGatewayRegions                 []string                     `json:"apiGatewayRegions"`
+	ApiGatewayApis                    []AwsApiGatewayApi           `json:"apiGatewayApis"`
+	ApiGatewayStages                  []AwsApiGatewayStage         `json:"apiGatewayStages"`
 	SelectedLogsRegion                string                       `json:"selectedLogsRegion,omitempty"`
 	SelectedLogGroupName              string                       `json:"selectedLogGroupName,omitempty"`
 	LogsStatusMessage                 string                       `json:"logsStatusMessage,omitempty"`

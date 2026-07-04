@@ -149,6 +149,9 @@ const workspaceFixture: EcsWorkspaceSnapshot = {
       containers: [{ name: "app", image: "nginx:latest", lastStatus: "RUNNING" }],
     },
   ],
+  apiGatewayRegions: [],
+  apiGatewayApis: [],
+  apiGatewayStages: [],
 };
 
 function renderECSView() {

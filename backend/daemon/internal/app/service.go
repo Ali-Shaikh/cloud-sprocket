@@ -34,6 +34,7 @@ type Service struct {
 	sns                   SNSInventory
 	rds                   RDSInventory
 	ecs                   ECSInventory
+	apigateway            ApiGatewayInventory
 	logs                  LogsInventory
 	iam                   IAMInventory
 	azure                 AzureInventory
@@ -65,6 +66,7 @@ func New(
 	snsInventory SNSInventory,
 	rdsInventory RDSInventory,
 	ecsInventory ECSInventory,
+	apigatewayInventory ApiGatewayInventory,
 	logsInventory LogsInventory,
 	iamInventory IAMInventory,
 	azureInventory AzureInventory,
@@ -72,7 +74,7 @@ func New(
 ) *Service {
 	localStackMgr := localstack.NewManager(settings)
 	azureRuntime := flociaz.NewManager(settings)
-	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, logsInventory, iamInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
+	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, apigatewayInventory, logsInventory, iamInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
 }
 
 func NewWithRuntimes(
@@ -87,6 +89,7 @@ func NewWithRuntimes(
 	snsInventory SNSInventory,
 	rdsInventory RDSInventory,
 	ecsInventory ECSInventory,
+	apigatewayInventory ApiGatewayInventory,
 	logsInventory LogsInventory,
 	iamInventory IAMInventory,
 	azureInventory AzureInventory,
@@ -108,6 +111,7 @@ func NewWithRuntimes(
 		sns:                   snsInventory,
 		rds:                   rdsInventory,
 		ecs:                   ecsInventory,
+		apigateway:            apigatewayInventory,
 		logs:                  logsInventory,
 		iam:                   iamInventory,
 		azure:                 azureInventory,
@@ -201,6 +205,10 @@ func (s *Service) Handle(
 		return s.handleAwsEcsSelectService(ctx, params, notifier)
 	case "aws.ecs.selectTask":
 		return s.handleAwsEcsSelectTask(ctx, params, notifier)
+	case "aws.apigateway.selectRegion":
+		return s.handleAwsApiGatewaySelectRegion(ctx, params, notifier)
+	case "aws.apigateway.selectApi":
+		return s.handleAwsApiGatewaySelectApi(ctx, params, notifier)
 	case "aws.logs.selectRegion":
 		return s.handleAwsLogsSelectRegion(ctx, params, notifier)
 	case "aws.logs.selectLogGroup":

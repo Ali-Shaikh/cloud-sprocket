@@ -34,6 +34,7 @@ export type UseAwsActionsParams = {
   setSnsActionStatus: Dispatch<SetStateAction<string>>;
   setRdsActionStatus: Dispatch<SetStateAction<string>>;
   setEcsActionStatus: Dispatch<SetStateAction<string>>;
+  setApiGatewayActionStatus: Dispatch<SetStateAction<string>>;
   setLogsActionStatus: Dispatch<SetStateAction<string>>;
   setIamActionStatus: Dispatch<SetStateAction<string>>;
 };
@@ -58,6 +59,7 @@ export function useAwsActions(params: UseAwsActionsParams) {
     setSnsActionStatus,
     setRdsActionStatus,
     setEcsActionStatus,
+    setApiGatewayActionStatus,
     setLogsActionStatus,
     setIamActionStatus,
   } = params;
@@ -570,6 +572,44 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setEcsActionStatus, setWorkspace]);
 
+  const selectApiGatewayRegion = useCallback((region: string): void => {
+    setApiGatewayActionStatus(`Loading API Gateway APIs for ${region}.`);
+    void requestWorkspaceSnapshot("aws.apigateway.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setApiGatewayActionStatus(
+          workspaceResult.apiGatewayStatusMessage || `Loaded API Gateway APIs from ${region}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setApiGatewayActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setApiGatewayActionStatus, setWorkspace]);
+
+  const refreshApiGatewayInventory = useCallback((): void => {
+    const region = workspace.selectedApiGatewayRegion;
+    if (!region) {
+      setApiGatewayActionStatus("Select a region before refreshing API Gateway inventory.");
+      return;
+    }
+    selectApiGatewayRegion(region);
+  }, [selectApiGatewayRegion, setApiGatewayActionStatus, workspace.selectedApiGatewayRegion]);
+
+  const selectApiGatewayApi = useCallback((apiKey: string): void => {
+    void requestWorkspaceSnapshot("aws.apigateway.selectApi", { apiKey })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setApiGatewayActionStatus(workspaceResult.apiGatewayStatusMessage || "Selected API Gateway API.");
+      })
+      .catch((error: unknown) => {
+        setApiGatewayActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setApiGatewayActionStatus, setWorkspace]);
+
   const selectLogsRegion = useCallback((region: string): void => {
     setLogsActionStatus(`Loading log groups for ${region}.`);
     void requestWorkspaceSnapshot("aws.logs.selectRegion", { region })
@@ -681,6 +721,9 @@ export function useAwsActions(params: UseAwsActionsParams) {
     selectECSCluster,
     selectECSService,
     selectECSTask,
+    refreshApiGatewayInventory,
+    selectApiGatewayRegion,
+    selectApiGatewayApi,
     refreshLogsInventory,
     selectLogsRegion,
     selectLogGroup,

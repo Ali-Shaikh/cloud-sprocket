@@ -496,6 +496,39 @@ const mockWorkspaceECSTasks = [
   },
 ];
 
+const mockWorkspaceApiGatewayApis = [
+  {
+    apiKey: "http:xyz789",
+    apiId: "xyz789",
+    apiName: "orders-http-api",
+    apiType: "HTTP",
+    endpoint: "https://xyz789.execute-api.us-east-1.amazonaws.com",
+    protocol: "HTTP",
+  },
+  {
+    apiKey: "rest:abc123",
+    apiId: "abc123",
+    apiName: "legacy-rest-api",
+    apiType: "REST",
+    endpoint: "https://abc123.execute-api.us-east-1.amazonaws.com",
+  },
+];
+
+const mockWorkspaceApiGatewayStages = [
+  {
+    apiKey: "http:xyz789",
+    stageName: "$default",
+    invokeUrl: "https://xyz789.execute-api.us-east-1.amazonaws.com/$default",
+    autoDeploy: true,
+  },
+  {
+    apiKey: "rest:abc123",
+    stageName: "prod",
+    invokeUrl: "https://abc123.execute-api.us-east-1.amazonaws.com/prod",
+    deploymentId: "dep1",
+  },
+];
+
 const mockWorkspaceRDSInstances = [
   {
     dbInstanceIdentifier: "cloudsprocket-app-db",
@@ -1598,6 +1631,18 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     ecsClusters: isAWSWorkspace ? mockWorkspaceECSClusters : [],
     ecsServices: isAWSWorkspace ? mockWorkspaceECSServices : [],
     ecsTasks: isAWSWorkspace ? mockWorkspaceECSTasks : [],
+    selectedApiGatewayRegion: isAWSWorkspace
+      ? mockState.session.selectedApiGatewayRegion ?? mockWorkspaceRegions[0]
+      : undefined,
+    selectedApiGatewayApiKey: isAWSWorkspace
+      ? mockState.session.selectedApiGatewayApiKey ?? mockWorkspaceApiGatewayApis[0]?.apiKey
+      : undefined,
+    apiGatewayStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceApiGatewayApis.length} APIs from ${mockState.session.selectedApiGatewayRegion ?? mockWorkspaceRegions[0]}.`
+      : "API Gateway inventory is only available for open AWS workspaces.",
+    apiGatewayRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
+    apiGatewayApis: isAWSWorkspace ? mockWorkspaceApiGatewayApis : [],
+    apiGatewayStages: isAWSWorkspace ? mockWorkspaceApiGatewayStages : [],
     selectedLogsRegion: isAWSWorkspace
       ? mockState.session.selectedLogsRegion ?? mockWorkspaceRegions[0]
       : undefined,
@@ -2125,6 +2170,15 @@ function handleMockRequest<T>(
     case "aws.ecs.selectTask":
       mockState.session.selectedEcsTaskArn = String(params.taskArn ?? "");
       appendLog("info", `Selected ECS task ${params.taskArn}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.apigateway.selectRegion":
+      mockState.session.selectedApiGatewayRegion = String(params.region ?? "");
+      mockState.session.selectedApiGatewayApiKey = undefined;
+      appendLog("info", `Selected API Gateway region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.apigateway.selectApi":
+      mockState.session.selectedApiGatewayApiKey = String(params.apiKey ?? "");
+      appendLog("info", `Selected API Gateway API ${params.apiKey}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     case "aws.logs.selectRegion":
       mockState.session.selectedLogsRegion = String(params.region ?? "");

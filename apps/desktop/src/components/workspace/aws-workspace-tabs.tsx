@@ -11,6 +11,7 @@ import {
   IAMView,
   LambdaView,
   LogsView,
+  ApiGatewayView,
   ECSView,
   RDSView,
   SNSView,
@@ -19,7 +20,7 @@ import {
 } from "@/views/workspace/lazy-views";
 import type { AwsWorkspaceTabsProps } from "./workspace-tab-router-props";
 
-const AWS_TAB_IDS = new Set(["s3", "ec2", "lambda", "dynamodb", "sqs", "sns", "rds", "ecs", "logs", "iam"]);
+const AWS_TAB_IDS = new Set(["s3", "ec2", "lambda", "dynamodb", "sqs", "sns", "rds", "ecs", "apigateway", "logs", "iam"]);
 
 export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
   const {
@@ -65,6 +66,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     snsActionStatus,
     rdsActionStatus,
     ecsActionStatus,
+    apiGatewayActionStatus,
     logsActionStatus,
     iamActionStatus,
     azureActionStatus,
@@ -142,6 +144,9 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     selectECSCluster,
     selectECSService,
     selectECSTask,
+    refreshApiGatewayInventory,
+    selectApiGatewayRegion,
+    selectApiGatewayApi,
     refreshLogsInventory,
     selectLogsRegion,
     selectLogGroup,
@@ -302,6 +307,14 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onSelectCluster={selectECSCluster}
       onSelectService={selectECSService}
       onSelectTask={selectECSTask}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "apigateway" ? (
+    <ApiGatewayView
+      workspace={activeWorkspace}
+      actionStatus={apiGatewayActionStatus}
+      onRefresh={refreshApiGatewayInventory}
+      onSelectRegion={selectApiGatewayRegion}
+      onSelectApi={selectApiGatewayApi}
     />
   ) : session.isLocked && activeWorkspaceTabId === "logs" ? (
     <LogsView
