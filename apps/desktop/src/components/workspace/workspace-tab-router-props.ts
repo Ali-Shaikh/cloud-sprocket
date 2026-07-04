@@ -78,6 +78,7 @@ export type WorkspaceTabRouterProps = {
   sqsPeekInFlight: boolean;
   snsActionStatus: string;
   rdsActionStatus: string;
+  ecsActionStatus: string;
   logsActionStatus: string;
   iamActionStatus: string;
   azureActionStatus: string;
@@ -166,6 +167,11 @@ export type WorkspaceTabRouterProps = {
   refreshRDSInventory: () => void;
   selectRDSRegion: (region: string) => void;
   selectRDSInstance: (instanceId: string) => void;
+  refreshECSInventory: () => void;
+  selectECSRegion: (region: string) => void;
+  selectECSCluster: (clusterArn: string) => void;
+  selectECSService: (serviceArn: string) => void;
+  selectECSTask: (taskArn: string) => void;
   refreshLogsInventory: () => void;
   selectLogsRegion: (region: string) => void;
   selectLogGroup: (logGroupName: string) => void;

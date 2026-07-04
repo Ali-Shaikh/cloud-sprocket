@@ -152,6 +152,10 @@ export interface SessionSnapshot {
   selectedSnsTopicArn?: string;
   selectedRdsRegion?: string;
   selectedRdsInstanceId?: string;
+  selectedEcsRegion?: string;
+  selectedEcsClusterArn?: string;
+  selectedEcsServiceArn?: string;
+  selectedEcsTaskArn?: string;
   selectedLogsRegion?: string;
   selectedLogGroupName?: string;
   selectedIamRoleName?: string;
@@ -387,6 +391,44 @@ export interface AwsRdsInstance {
   allocatedStorage?: number;
   multiAz?: boolean;
   storageEncrypted?: boolean;
+}
+
+export interface AwsEcsCluster {
+  clusterArn: string;
+  clusterName: string;
+  status?: string;
+  runningTasksCount?: number;
+  pendingTasksCount?: number;
+  activeServicesCount?: number;
+  registeredContainerInstancesCount?: number;
+}
+
+export interface AwsEcsService {
+  serviceArn: string;
+  serviceName: string;
+  status?: string;
+  desiredCount?: number;
+  runningCount?: number;
+  pendingCount?: number;
+  launchType?: string;
+  taskDefinition?: string;
+}
+
+export interface AwsEcsContainer {
+  name: string;
+  image?: string;
+  lastStatus?: string;
+}
+
+export interface AwsEcsTask {
+  taskArn: string;
+  taskDefinitionArn?: string;
+  lastStatus?: string;
+  desiredStatus?: string;
+  launchType?: string;
+  startedAt?: string;
+  group?: string;
+  containers?: AwsEcsContainer[];
 }
 
 export interface AwsLogGroup {
@@ -904,6 +946,10 @@ export interface WorkspaceSnapshot {
   selectedSnsTopicArn?: string;
   selectedRdsRegion?: string;
   selectedRdsInstanceId?: string;
+  selectedEcsRegion?: string;
+  selectedEcsClusterArn?: string;
+  selectedEcsServiceArn?: string;
+  selectedEcsTaskArn?: string;
   selectedLogsRegion?: string;
   selectedLogGroupName?: string;
   selectedIamRoleName?: string;
@@ -919,6 +965,11 @@ export interface WorkspaceSnapshot {
   rdsStatusMessage?: string;
   rdsRegions: string[];
   rdsInstances: AwsRdsInstance[];
+  ecsStatusMessage?: string;
+  ecsRegions: string[];
+  ecsClusters: AwsEcsCluster[];
+  ecsServices: AwsEcsService[];
+  ecsTasks: AwsEcsTask[];
   logsStatusMessage?: string;
   logsRegions: string[];
   logGroups: AwsLogGroup[];

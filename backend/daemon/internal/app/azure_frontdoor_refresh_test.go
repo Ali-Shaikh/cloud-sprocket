@@ -51,6 +51,7 @@ func TestHandleAzureFrontDoorRefreshReturnsTopology(t *testing.T) {
 		stubSQSInventory{},
 		stubSNSInventory{},
 		stubRDSInventory{},
+		stubECSInventory{},
 		stubLogsInventory{},
 		stubIAMInventory{},
 		stubAzureInventory{},

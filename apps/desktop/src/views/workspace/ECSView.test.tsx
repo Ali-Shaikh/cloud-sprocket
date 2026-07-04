@@ -5,10 +5,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
-import RDSView from "./RDSView";
-import type { RdsWorkspaceSnapshot } from "./RDSView";
+import ECSView from "./ECSView";
+import type { EcsWorkspaceSnapshot } from "./ECSView";
 
-const workspaceFixture: RdsWorkspaceSnapshot = {
+const workspaceFixture: EcsWorkspaceSnapshot = {
   provider: {
     providerId: "aws",
     label: "AWS",
@@ -71,31 +71,31 @@ const workspaceFixture: RdsWorkspaceSnapshot = {
   azureBlobContainers: [],
   azureBlobs: [],
   azureBlobMetadata: [],
-      azureWebApps: [],
-      azureAppServicePlans: [],
-      azureWebAppSettings: [],
-      azureWebAppDeploymentSlots: [],
-      azureLogAnalyticsWorkspaces: [],
-      azureWafPolicies: [],
-      azureWafRuleFireCounts: [],
-      azureFunctionApps: [],
-      azureFunctions: [],
-      azureKeyVaults: [],
-      azureKeyVaultSecrets: [],
-      azureCosmosAccounts: [],
-      azurePostgresServers: [],
-      azureCosmosDatabases: [],
-      azureCosmosContainers: [],
+  azureWebApps: [],
+  azureAppServicePlans: [],
+  azureWebAppSettings: [],
+  azureWebAppDeploymentSlots: [],
+  azureLogAnalyticsWorkspaces: [],
+  azureWafPolicies: [],
+  azureWafRuleFireCounts: [],
+  azureFunctionApps: [],
+  azureFunctions: [],
+  azureKeyVaults: [],
+  azureKeyVaultSecrets: [],
+  azureCosmosAccounts: [],
+  azurePostgresServers: [],
+  azureCosmosDatabases: [],
+  azureCosmosContainers: [],
   azureCosmosItems: [],
   azureFrontDoorProfiles: [],
   azureFrontDoorEndpoints: [],
   azureFrontDoorOriginGroups: [],
   azureFrontDoorOrigins: [],
   azureStorageQueues: [],
-      azureQueueMessages: [],
-      azureEntraUsers: [],
-      azureEntraGroups: [],
-      azureEntraApps: [],
+  azureQueueMessages: [],
+  azureEntraUsers: [],
+  azureEntraGroups: [],
+  azureEntraApps: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -110,83 +110,93 @@ const workspaceFixture: RdsWorkspaceSnapshot = {
   sqsQueues: [],
   snsRegions: [],
   snsTopics: [],
+  rdsRegions: [],
+  rdsInstances: [],
   logsRegions: [],
   logGroups: [],
   iamRoles: [],
   iamPolicies: [],
-  selectedRdsRegion: "us-east-1",
-  selectedRdsInstanceId: "cloudsprocket-app-db",
-  rdsStatusMessage: "Loaded 2 RDS instances from us-east-1.",
-  rdsRegions: ["us-east-1", "eu-west-2"],
-  rdsInstances: [
+  selectedEcsRegion: "us-east-1",
+  selectedEcsClusterArn: "arn:aws:ecs:us-east-1:123:cluster/demo",
+  selectedEcsServiceArn: "arn:aws:ecs:us-east-1:123:service/demo/web",
+  selectedEcsTaskArn: "arn:aws:ecs:us-east-1:123:task/demo/abc123",
+  ecsStatusMessage: "Loaded 1 clusters, 1 services, and 1 tasks from us-east-1.",
+  ecsRegions: ["us-east-1"],
+  ecsClusters: [
     {
-      dbInstanceIdentifier: "cloudsprocket-app-db",
-      engine: "postgres",
-      engineVersion: "15.4",
-      status: "available",
-      instanceClass: "db.t3.micro",
-      endpointAddress: "cloudsprocket-app-db.rds.localhost",
-      endpointPort: 5432,
-      availabilityZone: "us-east-1a",
-      allocatedStorage: 20,
-      multiAz: false,
-      storageEncrypted: true,
-    },
-    {
-      dbInstanceIdentifier: "cloudsprocket-analytics-db",
-      engine: "mysql",
-      engineVersion: "8.0",
-      status: "available",
-      instanceClass: "db.t3.small",
+      clusterArn: "arn:aws:ecs:us-east-1:123:cluster/demo",
+      clusterName: "demo",
+      status: "ACTIVE",
+      runningTasksCount: 1,
+      activeServicesCount: 1,
     },
   ],
-  ecsRegions: [],
-  ecsClusters: [],
-  ecsServices: [],
-  ecsTasks: [],
+  ecsServices: [
+    {
+      serviceArn: "arn:aws:ecs:us-east-1:123:service/demo/web",
+      serviceName: "web",
+      status: "ACTIVE",
+      desiredCount: 1,
+      runningCount: 1,
+      launchType: "FARGATE",
+    },
+  ],
+  ecsTasks: [
+    {
+      taskArn: "arn:aws:ecs:us-east-1:123:task/demo/abc123",
+      lastStatus: "RUNNING",
+      launchType: "FARGATE",
+      containers: [{ name: "app", image: "nginx:latest", lastStatus: "RUNNING" }],
+    },
+  ],
 };
 
-function renderRDSView() {
+function renderECSView() {
   const onSelectRegion = vi.fn();
-  const onSelectEntity = vi.fn();
+  const onSelectCluster = vi.fn();
+  const onSelectService = vi.fn();
+  const onSelectTask = vi.fn();
   const onRefresh = vi.fn();
   render(
     <ThemeProvider>
-      <RDSView
+      <ECSView
         workspace={workspaceFixture}
-        actionStatus="Ready to browse instances."
+        actionStatus="Ready to browse ECS inventory."
         onRefresh={onRefresh}
         onSelectRegion={onSelectRegion}
-        onSelectEntity={onSelectEntity}
+        onSelectCluster={onSelectCluster}
+        onSelectService={onSelectService}
+        onSelectTask={onSelectTask}
       />
     </ThemeProvider>,
   );
-  return { onSelectRegion, onSelectEntity, onRefresh };
+  return { onSelectRegion, onSelectCluster, onSelectService, onSelectTask, onRefresh };
 }
 
-describe("RDSView", () => {
-  it("renders inventory and endpoint detail", () => {
-    renderRDSView();
+describe("ECSView", () => {
+  it("renders cluster, service, and task inventory", () => {
+    renderECSView();
 
-    expect(screen.getByText("Instance Fleet")).toBeInTheDocument();
-    expect(screen.getByText("Instance Inventory")).toBeInTheDocument();
-    expect(screen.getAllByText("cloudsprocket-app-db").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("cloudsprocket-app-db.rds.localhost:5432").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/postgres 15\.4/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Container Fleet")).toBeInTheDocument();
+    expect(screen.getByText("Cluster Inventory")).toBeInTheDocument();
+    expect(screen.getAllByText("demo").length).toBeGreaterThan(0);
+    expect(screen.getByText("web")).toBeInTheDocument();
+    expect(screen.getByText("abc123")).toBeInTheDocument();
+    expect(screen.getByText("nginx:latest")).toBeInTheDocument();
   });
 
-  it("selects an instance when a row is clicked", () => {
-    const { onSelectEntity } = renderRDSView();
+  it("selects a task when a row is clicked", () => {
+    const { onSelectTask } = renderECSView();
 
-    fireEvent.click(screen.getByText("cloudsprocket-analytics-db"));
+    fireEvent.click(screen.getByText("abc123"));
 
-    expect(onSelectEntity).toHaveBeenCalledWith("cloudsprocket-analytics-db");
+    expect(onSelectTask).toHaveBeenCalledWith("arn:aws:ecs:us-east-1:123:task/demo/abc123");
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {
     render(
       <ThemeProvider>
-        <RDSView
+        <ECSView
           workspace={{
             ...workspaceFixture,
             provider: {
@@ -201,11 +211,13 @@ describe("RDSView", () => {
           actionStatus=""
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
-          onSelectEntity={vi.fn()}
+          onSelectCluster={vi.fn()}
+          onSelectService={vi.fn()}
+          onSelectTask={vi.fn()}
         />
       </ThemeProvider>,
     );
 
-    expect(screen.getByText("RDS requires an AWS workspace")).toBeInTheDocument();
+    expect(screen.getByText("ECS requires an AWS workspace")).toBeInTheDocument();
   });
 });

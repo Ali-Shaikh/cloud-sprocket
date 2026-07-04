@@ -5,6 +5,9 @@ import type {
   AppSettingsSnapshot,
   AwsDynamoDBTable,
   AwsEc2Instance,
+  AwsEcsCluster,
+  AwsEcsService,
+  AwsEcsTask,
   AwsIamPolicy,
   AwsIamRole,
   AwsLambdaFunction,
@@ -135,6 +138,10 @@ export const emptyWorkspace: WorkspaceSnapshot = {
   snsTopics: [],
   rdsRegions: [],
   rdsInstances: [],
+  ecsRegions: [],
+  ecsClusters: [],
+  ecsServices: [],
+  ecsTasks: [],
   logsRegions: [],
   logGroups: [],
   iamRoles: [],
@@ -329,6 +336,21 @@ function normaliseSnsTopic(topic: AwsSnsTopic): AwsSnsTopic {
 
 function normaliseRdsInstance(instance: AwsRdsInstance): AwsRdsInstance {
   return { ...instance };
+}
+
+function normaliseEcsCluster(cluster: AwsEcsCluster): AwsEcsCluster {
+  return { ...cluster };
+}
+
+function normaliseEcsService(service: AwsEcsService): AwsEcsService {
+  return { ...service };
+}
+
+function normaliseEcsTask(task: AwsEcsTask): AwsEcsTask {
+  return {
+    ...task,
+    containers: normaliseArray(task.containers),
+  };
 }
 
 function normaliseLogGroup(group: AwsLogGroup): AwsLogGroup {
@@ -718,6 +740,19 @@ export function mergeAwsInventoryScope(
         rdsInstances: normalised.rdsInstances,
         rdsStatusMessage: normalised.rdsStatusMessage,
       });
+    case "ecs":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedEcsRegion: normalised.selectedEcsRegion,
+        selectedEcsClusterArn: normalised.selectedEcsClusterArn,
+        selectedEcsServiceArn: normalised.selectedEcsServiceArn,
+        selectedEcsTaskArn: normalised.selectedEcsTaskArn,
+        ecsRegions: normalised.ecsRegions,
+        ecsClusters: normalised.ecsClusters,
+        ecsServices: normalised.ecsServices,
+        ecsTasks: normalised.ecsTasks,
+        ecsStatusMessage: normalised.ecsStatusMessage,
+      });
     case "logs":
       return normaliseWorkspaceSnapshot({
         ...current,
@@ -857,6 +892,10 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     snsTopics: normaliseArray(source.snsTopics).map(normaliseSnsTopic),
     rdsRegions: normaliseArray(source.rdsRegions),
     rdsInstances: normaliseArray(source.rdsInstances).map(normaliseRdsInstance),
+    ecsRegions: normaliseArray(source.ecsRegions),
+    ecsClusters: normaliseArray(source.ecsClusters).map(normaliseEcsCluster),
+    ecsServices: normaliseArray(source.ecsServices).map(normaliseEcsService),
+    ecsTasks: normaliseArray(source.ecsTasks).map(normaliseEcsTask),
     logsRegions: normaliseArray(source.logsRegions),
     logGroups: normaliseArray(source.logGroups).map(normaliseLogGroup),
     iamRoles: normaliseArray(source.iamRoles).map(normaliseIamRole),

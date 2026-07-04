@@ -33,6 +33,7 @@ type Service struct {
 	sqs                   SQSInventory
 	sns                   SNSInventory
 	rds                   RDSInventory
+	ecs                   ECSInventory
 	logs                  LogsInventory
 	iam                   IAMInventory
 	azure                 AzureInventory
@@ -63,6 +64,7 @@ func New(
 	sqsInventory SQSInventory,
 	snsInventory SNSInventory,
 	rdsInventory RDSInventory,
+	ecsInventory ECSInventory,
 	logsInventory LogsInventory,
 	iamInventory IAMInventory,
 	azureInventory AzureInventory,
@@ -70,7 +72,7 @@ func New(
 ) *Service {
 	localStackMgr := localstack.NewManager(settings)
 	azureRuntime := flociaz.NewManager(settings)
-	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, logsInventory, iamInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
+	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, logsInventory, iamInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
 }
 
 func NewWithRuntimes(
@@ -84,6 +86,7 @@ func NewWithRuntimes(
 	sqsInventory SQSInventory,
 	snsInventory SNSInventory,
 	rdsInventory RDSInventory,
+	ecsInventory ECSInventory,
 	logsInventory LogsInventory,
 	iamInventory IAMInventory,
 	azureInventory AzureInventory,
@@ -104,6 +107,7 @@ func NewWithRuntimes(
 		sqs:                   sqsInventory,
 		sns:                   snsInventory,
 		rds:                   rdsInventory,
+		ecs:                   ecsInventory,
 		logs:                  logsInventory,
 		iam:                   iamInventory,
 		azure:                 azureInventory,
@@ -189,6 +193,14 @@ func (s *Service) Handle(
 		return s.handleAwsRdsSelectRegion(ctx, params, notifier)
 	case "aws.rds.selectInstance":
 		return s.handleAwsRdsSelectInstance(ctx, params, notifier)
+	case "aws.ecs.selectRegion":
+		return s.handleAwsEcsSelectRegion(ctx, params, notifier)
+	case "aws.ecs.selectCluster":
+		return s.handleAwsEcsSelectCluster(ctx, params, notifier)
+	case "aws.ecs.selectService":
+		return s.handleAwsEcsSelectService(ctx, params, notifier)
+	case "aws.ecs.selectTask":
+		return s.handleAwsEcsSelectTask(ctx, params, notifier)
 	case "aws.logs.selectRegion":
 		return s.handleAwsLogsSelectRegion(ctx, params, notifier)
 	case "aws.logs.selectLogGroup":

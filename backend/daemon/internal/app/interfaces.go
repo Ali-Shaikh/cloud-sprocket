@@ -61,6 +61,14 @@ type RDSInventory interface {
 	DescribeInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) (models.AwsRdsInstance, error)
 }
 
+type ECSInventory interface {
+	ListClusters(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsEcsCluster, error)
+	DescribeCluster(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string) (models.AwsEcsCluster, error)
+	ListServices(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string) ([]models.AwsEcsService, error)
+	ListTasks(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, serviceArn string) ([]models.AwsEcsTask, error)
+	DescribeTask(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, taskArn string) (models.AwsEcsTask, error)
+}
+
 type LogsInventory interface {
 	ListLogGroups(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsLogGroup, error)
 	DescribeLogGroup(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string) (models.AwsLogGroup, error)

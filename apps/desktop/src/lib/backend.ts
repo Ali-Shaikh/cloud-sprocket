@@ -466,6 +466,36 @@ const mockWorkspaceSNSTopics = [
   },
 ];
 
+const mockWorkspaceECSClusters = [
+  {
+    clusterArn: "arn:aws:ecs:us-east-1:000000000000:cluster/demo",
+    clusterName: "demo",
+    status: "ACTIVE",
+    runningTasksCount: 1,
+    activeServicesCount: 1,
+  },
+];
+
+const mockWorkspaceECSServices = [
+  {
+    serviceArn: "arn:aws:ecs:us-east-1:000000000000:service/demo/web",
+    serviceName: "web",
+    status: "ACTIVE",
+    desiredCount: 1,
+    runningCount: 1,
+    launchType: "FARGATE",
+  },
+];
+
+const mockWorkspaceECSTasks = [
+  {
+    taskArn: "arn:aws:ecs:us-east-1:000000000000:task/demo/abc123",
+    lastStatus: "RUNNING",
+    launchType: "FARGATE",
+    containers: [{ name: "app", image: "nginx:latest", lastStatus: "RUNNING" }],
+  },
+];
+
 const mockWorkspaceRDSInstances = [
   {
     dbInstanceIdentifier: "cloudsprocket-app-db",
@@ -1549,6 +1579,25 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       : "RDS inventory is only available for open AWS workspaces.",
     rdsRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
     rdsInstances: isAWSWorkspace ? mockWorkspaceRDSInstances : [],
+    selectedEcsRegion: isAWSWorkspace
+      ? mockState.session.selectedEcsRegion ?? mockWorkspaceRegions[0]
+      : undefined,
+    selectedEcsClusterArn: isAWSWorkspace
+      ? mockState.session.selectedEcsClusterArn ?? mockWorkspaceECSClusters[0]?.clusterArn
+      : undefined,
+    selectedEcsServiceArn: isAWSWorkspace
+      ? mockState.session.selectedEcsServiceArn ?? mockWorkspaceECSServices[0]?.serviceArn
+      : undefined,
+    selectedEcsTaskArn: isAWSWorkspace
+      ? mockState.session.selectedEcsTaskArn ?? mockWorkspaceECSTasks[0]?.taskArn
+      : undefined,
+    ecsStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceECSClusters.length} ECS clusters from ${mockState.session.selectedEcsRegion ?? mockWorkspaceRegions[0]}.`
+      : "ECS inventory is only available for open AWS workspaces.",
+    ecsRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
+    ecsClusters: isAWSWorkspace ? mockWorkspaceECSClusters : [],
+    ecsServices: isAWSWorkspace ? mockWorkspaceECSServices : [],
+    ecsTasks: isAWSWorkspace ? mockWorkspaceECSTasks : [],
     selectedLogsRegion: isAWSWorkspace
       ? mockState.session.selectedLogsRegion ?? mockWorkspaceRegions[0]
       : undefined,
@@ -2054,6 +2103,28 @@ function handleMockRequest<T>(
     case "aws.rds.selectInstance":
       mockState.session.selectedRdsInstanceId = String(params.instanceId ?? "");
       appendLog("info", `Selected RDS instance ${params.instanceId}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.ecs.selectRegion":
+      mockState.session.selectedEcsRegion = String(params.region ?? "");
+      mockState.session.selectedEcsClusterArn = undefined;
+      mockState.session.selectedEcsServiceArn = undefined;
+      mockState.session.selectedEcsTaskArn = undefined;
+      appendLog("info", `Selected ECS region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.ecs.selectCluster":
+      mockState.session.selectedEcsClusterArn = String(params.clusterArn ?? "");
+      mockState.session.selectedEcsServiceArn = undefined;
+      mockState.session.selectedEcsTaskArn = undefined;
+      appendLog("info", `Selected ECS cluster ${params.clusterArn}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.ecs.selectService":
+      mockState.session.selectedEcsServiceArn = String(params.serviceArn ?? "");
+      mockState.session.selectedEcsTaskArn = undefined;
+      appendLog("info", `Selected ECS service ${params.serviceArn}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.ecs.selectTask":
+      mockState.session.selectedEcsTaskArn = String(params.taskArn ?? "");
+      appendLog("info", `Selected ECS task ${params.taskArn}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     case "aws.logs.selectRegion":
       mockState.session.selectedLogsRegion = String(params.region ?? "");

@@ -81,6 +81,9 @@ export function useWorkspaceState(session: SessionSnapshot) {
   const [rdsActionStatus, setRdsActionStatus] = useState(
     "Select a region before refreshing RDS instances.",
   );
+  const [ecsActionStatus, setEcsActionStatus] = useState(
+    "Select a region before refreshing ECS clusters.",
+  );
   const [logsActionStatus, setLogsActionStatus] = useState(
     "Select a region before refreshing log groups.",
   );
@@ -241,6 +244,8 @@ export function useWorkspaceState(session: SessionSnapshot) {
     setSnsActionStatus,
     rdsActionStatus,
     setRdsActionStatus,
+    ecsActionStatus,
+    setEcsActionStatus,
     logsActionStatus,
     setLogsActionStatus,
     iamActionStatus,
