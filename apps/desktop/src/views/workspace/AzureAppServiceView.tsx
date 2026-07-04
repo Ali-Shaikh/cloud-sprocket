@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { actionCapabilityState } from "@/lib/action-capabilities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -253,7 +254,12 @@ export default function AzureAppServiceView({
   onSwapSlot,
 }: AzureAppServiceViewProps) {
   const localProfile = isLocalFlociProfile(workspace);
-  const canWrite = workspace.azureWritesEnabled && !localProfile;
+  const writeCapability = actionCapabilityState(workspace, "appService", "createWebApp", "azure");
+  const localProfileBlock = localProfile
+    ? "App Service write actions are not available on local floci-az profiles."
+    : undefined;
+  const canWrite = writeCapability.enabled && !localProfile;
+  const writeDisabledReason = canWrite ? undefined : localProfileBlock ?? writeCapability.reason;
   const [createOpen, setCreateOpen] = useState(false);
   const [settingDialogOpen, setSettingDialogOpen] = useState(false);
   const [settingDialogMode, setSettingDialogMode] = useState<"add" | "edit">("add");
@@ -420,6 +426,9 @@ export default function AzureAppServiceView({
             label={canWrite ? "Writes enabled" : "Read-only"}
           />
         </div>
+        {writeDisabledReason ? (
+          <p className="text-sm text-muted-foreground">{writeDisabledReason}</p>
+        ) : null}
         {inventoryLoading ? (
           <InventoryLoadingState
             variant="inline"
