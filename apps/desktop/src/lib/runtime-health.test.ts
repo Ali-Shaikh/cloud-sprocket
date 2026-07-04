@@ -41,7 +41,7 @@ function baseWorkspace(): WorkspaceSnapshot {
     ],
     awsWriteCapable: true,
     azureWriteCapable: false,
-  } as WorkspaceSnapshot;
+  } as unknown as WorkspaceSnapshot;
 }
 
 describe("buildRuntimeHealthTargets", () => {

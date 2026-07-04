@@ -43,6 +43,8 @@ export function RuntimeHealthStrip({
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         {targets.map((target) => {
           const inFlight = actionInFlight?.[target.id] ?? false;
+          const emulatorId =
+            target.id === "localstack" || target.id === "floci-az" ? target.id : undefined;
           return (
             <div
               key={target.id}
@@ -63,15 +65,13 @@ export function RuntimeHealthStrip({
                 </span>
               </div>
               <p className="line-clamp-2 text-xs text-muted-foreground">{target.summary}</p>
-              {target.quickAction === "start" &&
-              onQuickStart &&
-              (target.id === "localstack" || target.id === "floci-az") ? (
+              {target.quickAction === "start" && onQuickStart && emulatorId ? (
                 <Button
                   variant="secondary"
                   size="sm"
                   className="w-fit"
                   disabled={inFlight || !workspaceDockerReachable(targets)}
-                  onClick={() => onQuickStart(target.id)}
+                  onClick={() => onQuickStart(emulatorId)}
                 >
                   <Play />
                   {inFlight ? "Starting..." : "Start"}

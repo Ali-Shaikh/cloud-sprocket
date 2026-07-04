@@ -11,6 +11,7 @@ const session: SessionSnapshot = {
   isLocked: true,
   lockedProviderId: "aws",
   workspaceTabs: [],
+  availableAuthMethods: [],
 };
 
 const workspace = {
@@ -52,7 +53,7 @@ const workspace = {
   awsWritesEnabled: false,
   awsWriteCapable: true,
   azureWriteCapable: false,
-} as WorkspaceSnapshot;
+} as unknown as WorkspaceSnapshot;
 
 describe("OverviewView", () => {
   it("renders the runtime health strip and service stat cards", () => {
