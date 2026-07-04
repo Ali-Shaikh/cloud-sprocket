@@ -1,18 +1,13 @@
 # Checkpoint
 
-**Branch:** `feat/aws-apigateway` (PR pending)
-**Latest:** API Gateway tab ready for review (AWS expansion Phase 2, service 2/3)
+**Branch:** `dev` (v0.8.25 release in progress)
+**Latest:** Tagging v0.8.25 for ECS + API Gateway + action hooks (#78–#80)
 
-## Shipped
-- PR #79: ECS / Fargate tab (`feat/aws-ecs` → `dev`)
-- PR #78: action hooks refactor (on `dev`)
+## Shipped on dev (awaiting release)
+- PR #80: API Gateway tab
+- PR #79: ECS / Fargate tab
+- PR #78: action hooks refactor
 
-## In progress
-- `feat/aws-apigateway` — API Gateway tab (REST + HTTP/WebSocket, stages + invoke URLs)
-  - Backend: `awsadapter/apigateway.go`, `app/aws_apigateway.go`, deferred scope `apigateway`
-  - Frontend: `ApiGatewayView.tsx`, tab router + hooks wired
-  - Tests: 185 desktop + Go green
-
-## Next (Target B)
-- Merge API Gateway PR
-- `feat/aws-secrets` — Secrets Manager tab
+## Next
+- Confirm v0.8.25 installers published
+- `feat/aws-secrets` — Secrets Manager tab (Target B 3/3)

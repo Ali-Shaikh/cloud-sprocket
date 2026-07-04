@@ -1,6 +1,6 @@
 {
   "name": "cloud-sprocket-workspace",
-  "version": "0.8.24",
+  "version": "0.8.25",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "packageManager": "pnpm@11.9.0",
