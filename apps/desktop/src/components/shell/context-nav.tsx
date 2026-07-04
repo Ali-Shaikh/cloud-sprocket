@@ -77,12 +77,15 @@ function ContextNav({
                 <button
                   key={item.id}
                   type="button"
+                  disabled={item.comingSoon}
                   onClick={() => onSelectItem(item.id)}
                   className={cn(
                     navItemBase,
-                    active
-                      ? "bg-primary/10 font-semibold text-primary"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    item.comingSoon
+                      ? "cursor-not-allowed opacity-70"
+                      : active
+                        ? "bg-primary/10 font-semibold text-primary"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
                   {item.iconUrl ? (
@@ -97,7 +100,11 @@ function ContextNav({
                     />
                   ) : null}
                   <span className="truncate">{item.label}</span>
-                  {item.countLoading ? (
+                  {item.comingSoon ? (
+                    <span className="ml-auto shrink-0 rounded-full bg-muted px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                      Soon
+                    </span>
+                  ) : item.countLoading ? (
                     <Loader2 className="ml-auto size-3.5 shrink-0 animate-spin text-muted-foreground" />
                   ) : item.count != null ? (
                     <span

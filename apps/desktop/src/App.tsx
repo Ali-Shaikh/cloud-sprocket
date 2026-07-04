@@ -44,6 +44,7 @@ import azureKeyVaultIconUrl from "./assets/cloud-icons/azure-key-vault.svg";
 import azureCosmosIconUrl from "./assets/cloud-icons/azure-cosmos.svg";
 import azureQueuesIconUrl from "./assets/cloud-icons/azure-queues.svg";
 import azureEntraIconUrl from "./assets/cloud-icons/azure-entra.svg";
+import gcpIconUrl from "./assets/cloud-icons/gcp.svg";
 import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
 import { awsInventoryLoaded, awsInventoryScopeForTab } from "./lib/aws-inventory";
 import { azureInventoryLoaded, azureInventoryScopeForTab } from "./lib/azure-inventory";
@@ -3086,6 +3087,20 @@ export default function App() {
       onRefresh={() => {
         void refreshDiscovery();
       }}
+      onOpenRuntime={() => {
+        setActiveWorkspaceTabId("virtualisation");
+      }}
+      onEmulatorQuickStart={(emulatorId) => {
+        if (emulatorId === "localstack") {
+          void invokeLocalStackAction("start");
+          return;
+        }
+        void invokeFlociAzAction("start");
+      }}
+      runtimeActionInFlight={{
+        localstack: localStackActionInFlight,
+        "floci-az": flociAzActionInFlight,
+      }}
       onNavigate={(tabId, context) => {
         setActiveWorkspaceTabId(tabId);
         if (context?.lambdaFunctionName) {
@@ -4458,8 +4473,13 @@ export default function App() {
     // is in flight, swap count badges for a spinner so empty counts do not read
     // as "zero resources".
     const countsPending = workspaceFetching || (workspaceLoading && !workspaceLoaded);
-    const tabCategory = (tab: WorkspaceTab): "workspace" | "service" | "tool" => {
-      if (tab.category === "workspace" || tab.category === "service" || tab.category === "tool") {
+    const tabCategory = (tab: WorkspaceTab): "workspace" | "service" | "tool" | "coming_soon" => {
+      if (
+        tab.category === "workspace" ||
+        tab.category === "service" ||
+        tab.category === "tool" ||
+        tab.category === "coming_soon"
+      ) {
         return tab.category;
       }
       if (tab.tabId === "overview" || tab.tabId === "virtualisation" || tab.tabId === "actions") {
@@ -4486,7 +4506,9 @@ export default function App() {
     });
     const workspaceItems = entries.filter((entry) => entry.category === "workspace").map((entry) => entry.item);
     const toolItems = entries.filter((entry) => entry.category === "tool").map((entry) => entry.item);
-    const serviceItems = entries.filter((entry) => entry.category === "service").map((entry) => entry.item);
+    const serviceItems = entries
+      .filter((entry) => entry.category === "service" || entry.category === "coming_soon")
+      .map((entry) => entry.item);
     const groups: NavGroup[] = [];
     if (workspaceItems.length > 0) {
       groups.push({ label: "Workspace", items: workspaceItems });
@@ -4545,12 +4567,14 @@ export default function App() {
       run: () => handleRailSelect(connection.id),
     })),
     ...navGroups.flatMap((group) =>
-      group.items.map((item) => ({
-        id: `nav:${group.label}:${item.id}`,
-        group: group.label,
-        label: item.label,
-        run: () => handleNavSelect(item.id),
-      })),
+      group.items
+        .filter((item) => !item.comingSoon)
+        .map((item) => ({
+          id: `nav:${group.label}:${item.id}`,
+          group: group.label,
+          label: item.label,
+          run: () => handleNavSelect(item.id),
+        })),
     ),
     {
       id: "act:refresh",
@@ -4600,6 +4624,12 @@ export default function App() {
   }
 
   function handleNavSelect(id: string): void {
+    const comingSoonTab = session.workspaceTabs.find(
+      (tab) => tab.tabId === id && tab.category === "coming_soon",
+    );
+    if (comingSoonTab) {
+      return;
+    }
     const separator = id.indexOf(":");
     if (separator >= 0) {
       const tabId = id.slice(0, separator);
@@ -4932,7 +4962,14 @@ function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
 }
 
 function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem {
-  const base: NavItem = { id: tab.tabId, label: tab.label };
+  const base: NavItem = {
+    id: tab.tabId,
+    label: tab.label,
+    comingSoon: tab.category === "coming_soon",
+  };
+  if (tab.category === "coming_soon") {
+    return base;
+  }
   switch (tab.tabId) {
     case "overview":
       return { ...base, icon: LayoutGrid };
@@ -4995,6 +5032,8 @@ function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): NavItem
       return { ...base, icon: Boxes };
     case "virtualisation":
       return { ...base, icon: Server, count: workspace.emulatorSummaries.length };
+    case "gcp-overview":
+      return { ...base, iconUrl: gcpIconUrl };
     case "debug":
       return { ...base, icon: Bug };
     default:
