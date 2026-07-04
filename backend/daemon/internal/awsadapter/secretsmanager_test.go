@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 )
 
@@ -25,5 +26,24 @@ func TestSecretSummaryMapsMetadata(t *testing.T) {
 	}
 	if got.LastChangedDate != changed.UTC().Format(time.RFC3339) {
 		t.Fatalf("lastChanged = %q", got.LastChangedDate)
+	}
+}
+
+func TestSecretValueFromResultPrefersString(t *testing.T) {
+	got := secretValueFromResult(&secretsmanager.GetSecretValueOutput{
+		SecretString: aws.String("plain-text"),
+		SecretBinary: []byte{0xff, 0xfe},
+	})
+	if got != "plain-text" {
+		t.Fatalf("secret value = %q", got)
+	}
+}
+
+func TestSecretValueFromResultBase64EncodesBinary(t *testing.T) {
+	got := secretValueFromResult(&secretsmanager.GetSecretValueOutput{
+		SecretBinary: []byte{0xff, 0xfe, 0xfd},
+	})
+	if got != "//79" {
+		t.Fatalf("secret value = %q", got)
 	}
 }

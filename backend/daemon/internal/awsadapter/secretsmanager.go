@@ -5,6 +5,7 @@ package awsadapter
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"sort"
 	"strings"
@@ -83,13 +84,17 @@ func (s *SecretsManagerInventory) GetSecretValue(
 	if err != nil {
 		return "", err
 	}
+	return secretValueFromResult(result), nil
+}
+
+func secretValueFromResult(result *secretsmanager.GetSecretValueOutput) string {
 	if result.SecretString != nil {
-		return *result.SecretString, nil
+		return *result.SecretString
 	}
 	if len(result.SecretBinary) > 0 {
-		return string(result.SecretBinary), nil
+		return base64.StdEncoding.EncodeToString(result.SecretBinary)
 	}
-	return "", nil
+	return ""
 }
 
 func (s *SecretsManagerInventory) loadConfig(

@@ -177,7 +177,11 @@ export default function SecretsManagerView({
           <Button
             variant="outline"
             disabled={!workspace.selectedSecretsManagerRegion}
-            onClick={onRefresh}
+            onClick={() => {
+              setRevealedValue(null);
+              setRevealError(null);
+              onRefresh();
+            }}
           >
             <RefreshCw />
             Refresh secrets
