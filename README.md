@@ -5,7 +5,7 @@ CloudSprocket is a local-first desktop cloud workbench built with `React`,
 
 ## Current Status
 
-The Tauri rewrite is the active product (currently **v0.8.23**):
+The Tauri rewrite is the active product (currently **v0.8.24**):
 
 - desktop shell in `apps/desktop/`
 - Go sidecar daemon in `backend/daemon/`
