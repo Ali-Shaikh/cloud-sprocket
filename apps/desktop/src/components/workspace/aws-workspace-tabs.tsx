@@ -1,0 +1,306 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ali Shaikh
+
+import type { ReactNode } from "react";
+import { backendRequest } from "@/lib/backend";
+import { mergeAwsS3Selection, normaliseWorkspaceSnapshot } from "@/lib/workspace-snapshot";
+import type { UrlInspection } from "@/types/backend";
+import {
+  ComputeView,
+  DynamoDBView,
+  IAMView,
+  LambdaView,
+  LogsView,
+  RDSView,
+  SNSView,
+  SQSView,
+  StorageView,
+} from "@/views/workspace/lazy-views";
+import type { AwsWorkspaceTabsProps } from "./workspace-tab-router-props";
+
+const AWS_TAB_IDS = new Set(["s3", "ec2", "lambda", "dynamodb", "sqs", "sns", "rds", "logs", "iam"]);
+
+export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
+  const {
+    activeWorkspaceTabId,
+    setActiveWorkspaceTabId,
+    session,
+    activeWorkspace,
+    workspace,
+    selectedProvider,
+    selectedProfile,
+    profiles,
+    providers,
+    loading,
+    openingProfileId,
+    logs,
+    showSensitiveValues,
+    setShowSensitiveValues,
+    activeS3PageId,
+    setActiveS3PageId,
+    activeAzurePageId,
+    activeAzureStoragePageId,
+    s3UploadStatus,
+    setS3UploadStatus,
+    s3SignedUrlStatus,
+    setS3SignedUrlStatus,
+    s3SignedUrlResult,
+    s3UrlInspection,
+    setS3UrlInspection,
+    s3UrlValidation,
+    ec2ActionStatus,
+    ec2ActionInFlight,
+    ec2ActionHistory,
+    lambdaActionStatus,
+    lambdaInvokeResult,
+    lambdaInvokeInFlight,
+    lambdaCreateInFlight,
+    lambdaCreateFormOpen,
+    setLambdaCreateFormOpen,
+    dynamodbActionStatus,
+    sqsActionStatus,
+    sqsPeekResult,
+    sqsPeekInFlight,
+    snsActionStatus,
+    rdsActionStatus,
+    logsActionStatus,
+    iamActionStatus,
+    azureActionStatus,
+    setAzureActionStatus,
+    azureStorageActionStatus,
+    setAzureStorageActionStatus,
+    azureAppServiceActionStatus,
+    setAzureAppServiceActionStatus,
+    azureFrontDoorActionStatus,
+    setAzureFrontDoorActionStatus,
+    azureServiceInventoryLoading,
+    azureLogWorkspaceSelectionLoading,
+    azureWafConfigLoading,
+    azureFrontDoorTopologyLoading,
+    logAnalyticsPrefill,
+    setLogAnalyticsPrefill,
+    frontDoorAccessPrefill,
+    setFrontDoorAccessPrefill,
+    localStackAuthToken,
+    setLocalStackAuthToken,
+    localStackPersistence,
+    setLocalStackPersistence,
+    localStackEnvironmentText,
+    setLocalStackEnvironmentText,
+    localStackLogs,
+    localStackLogsStatus,
+    localStackActionStatus,
+    localStackActionInFlight,
+    flociAzPersistence,
+    setFlociAzPersistence,
+    flociAzEnvironmentText,
+    setFlociAzEnvironmentText,
+    flociAzLogs,
+    flociAzLogsStatus,
+    flociAzActionStatus,
+    flociAzActionInFlight,
+    setWorkspace,
+    setSession,
+    mutateWorkspaceSelection,
+    mutateSession,
+    refreshDiscovery,
+    refreshDockerRuntime,
+    refreshLocalStackLogs,
+    refreshFlociAzLogs,
+    refreshEC2Inventory,
+    selectEC2Region,
+    selectEC2Instance,
+    invokeEC2LifecycleAction,
+    refreshLambdaInventory,
+    selectLambdaRegion,
+    selectLambdaFunction,
+    invokeLambda,
+    createLambda,
+    refreshDynamoDBInventory,
+    selectDynamoDBRegion,
+    selectDynamoDBTable,
+    putDynamoDBItem,
+    deleteDynamoDBItem,
+    refreshSQSInventory,
+    selectSQSRegion,
+    selectSQSQueue,
+    peekSQSQueue,
+    sendSQSMessage,
+    createSQSQueue,
+    refreshSNSInventory,
+    selectSNSRegion,
+    selectSNSTopic,
+    publishSNSTopic,
+    createSNSTopic,
+    refreshRDSInventory,
+    selectRDSRegion,
+    selectRDSInstance,
+    refreshLogsInventory,
+    selectLogsRegion,
+    selectLogGroup,
+    refreshIAMInventory,
+    selectIAMRole,
+    applyS3PrefixFilter,
+    selectAzureResourceGroup,
+    selectAzureVirtualMachine,
+    selectAzureWebApp,
+    selectAzureWebAppSlot,
+    selectAzureLogAnalyticsWorkspace,
+    selectAzureWafPolicy,
+    refreshAzureFrontDoorTopology,
+    listLogAnalyticsHistory,
+    listLogAnalyticsSaved,
+    invokeLocalStackAction,
+    invokeFlociAzAction,
+    openWorkspace,
+    chooseAuthMethod,
+  } = props;
+
+  if (!session.isLocked || !AWS_TAB_IDS.has(activeWorkspaceTabId)) {
+    return null;
+  }
+
+  return session.isLocked && activeWorkspaceTabId === "s3" ? (
+    <StorageView
+      workspace={activeWorkspace}
+      activePageId={activeS3PageId}
+      onNavigatePage={setActiveS3PageId}
+      showSensitiveValues={showSensitiveValues}
+      onSelectBucket={(bucketName) => {
+        void mutateWorkspaceSelection("aws.s3.selectBucket", { bucketName }, {
+          merge: mergeAwsS3Selection,
+          onOptimistic: () => {
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedS3BucketName: bucketName,
+                selectedS3ObjectKey: undefined,
+              }),
+            );
+          },
+        });
+      }}
+      onSelectObject={(objectKey) => {
+        void mutateWorkspaceSelection("aws.s3.selectObject", { objectKey }, {
+          merge: mergeAwsS3Selection,
+          persistOnly: true,
+          onOptimistic: () => {
+            setWorkspace((current) =>
+              normaliseWorkspaceSnapshot({
+                ...current,
+                selectedS3ObjectKey: objectKey,
+              }),
+            );
+          },
+        });
+      }}
+      onSetPrefixFilter={applyS3PrefixFilter}
+      uploadStatus={s3UploadStatus}
+      signedUrlStatus={s3SignedUrlStatus}
+      signedUrlResult={s3SignedUrlResult}
+      urlInspection={s3UrlInspection}
+      urlValidation={s3UrlValidation}
+      onUploadObject={(sourcePath, objectKey) => {
+        setS3UploadStatus(`Queueing upload for ${objectKey}.`);
+        void backendRequest("aws.s3.uploadObject", { objectKey, sourcePath });
+      }}
+      onPresignObject={(durationSeconds) => {
+        setS3SignedUrlStatus("Queueing signed URL generation.");
+        void backendRequest("aws.s3.presignObject", { durationSeconds });
+      }}
+      onAnalyseUrl={(url) => {
+        void (async () => {
+          setS3UrlInspection(await backendRequest<UrlInspection>("aws.s3.analyseUrl", { url }));
+        })();
+      }}
+      onValidateUrl={(url) => {
+        void (async () => {
+          await backendRequest("aws.s3.validateUrl", { url });
+        })();
+      }}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "ec2" ? (
+    <ComputeView
+      workspace={activeWorkspace}
+      actionStatus={ec2ActionStatus}
+      actionInFlight={ec2ActionInFlight}
+      actionHistory={ec2ActionHistory}
+      onRefreshInstances={refreshEC2Inventory}
+      onSelectRegion={selectEC2Region}
+      onSelectInstance={selectEC2Instance}
+      onInvokeAction={invokeEC2LifecycleAction}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "lambda" ? (
+    <LambdaView
+      workspace={activeWorkspace}
+      actionStatus={lambdaActionStatus}
+      invokeResult={lambdaInvokeResult}
+      invokeInFlight={lambdaInvokeInFlight}
+      createInFlight={lambdaCreateInFlight}
+      onRefresh={refreshLambdaInventory}
+      onSelectRegion={selectLambdaRegion}
+      onSelectFunction={selectLambdaFunction}
+      onInvoke={invokeLambda}
+      onCreate={createLambda}
+      openCreateForm={lambdaCreateFormOpen}
+      onCreateFormOpenChange={setLambdaCreateFormOpen}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "dynamodb" ? (
+    <DynamoDBView
+      workspace={activeWorkspace}
+      actionStatus={dynamodbActionStatus}
+      onRefresh={refreshDynamoDBInventory}
+      onSelectRegion={selectDynamoDBRegion}
+      onSelectTable={selectDynamoDBTable}
+      onPutItem={putDynamoDBItem}
+      onDeleteItem={deleteDynamoDBItem}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "sqs" ? (
+    <SQSView
+      workspace={activeWorkspace}
+      actionStatus={sqsActionStatus}
+      peekResult={sqsPeekResult}
+      peekInFlight={sqsPeekInFlight}
+      onRefresh={refreshSQSInventory}
+      onSelectRegion={selectSQSRegion}
+      onSelectQueue={selectSQSQueue}
+      onPeek={peekSQSQueue}
+      onSendMessage={sendSQSMessage}
+      onCreateQueue={createSQSQueue}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "sns" ? (
+    <SNSView
+      workspace={activeWorkspace}
+      actionStatus={snsActionStatus}
+      onRefresh={refreshSNSInventory}
+      onSelectRegion={selectSNSRegion}
+      onSelectEntity={selectSNSTopic}
+      onPublish={publishSNSTopic}
+      onCreateTopic={createSNSTopic}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "rds" ? (
+    <RDSView
+      workspace={activeWorkspace}
+      actionStatus={rdsActionStatus}
+      onRefresh={refreshRDSInventory}
+      onSelectRegion={selectRDSRegion}
+      onSelectEntity={selectRDSInstance}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "logs" ? (
+    <LogsView
+      workspace={activeWorkspace}
+      actionStatus={logsActionStatus}
+      onRefresh={refreshLogsInventory}
+      onSelectRegion={selectLogsRegion}
+      onSelectEntity={selectLogGroup}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "iam" ? (
+    <IAMView
+      workspace={activeWorkspace}
+      actionStatus={iamActionStatus}
+      onRefresh={refreshIAMInventory}
+      onSelectRegion={selectSQSRegion}
+      onSelectEntity={selectIAMRole}
+    />
+  ) : null;
+}

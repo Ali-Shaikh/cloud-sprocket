@@ -22,9 +22,14 @@ import {
 } from "lucide-react";
 import { Toaster } from "sonner";
 import { useSessionState } from "./hooks/use-session-state";
+import { useVirtualisationPoll } from "./hooks/use-virtualisation-poll";
 import { useWorkspaceLoading } from "./hooks/use-workspace-loading";
+import { useWorkspaceState } from "./hooks/use-workspace-state";
+import { WorkspaceTabRouter } from "./components/workspace/workspace-tab-router";
+import type { WorkspaceTabRouterProps } from "./components/workspace/workspace-tab-router-props";
 import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
 import { normaliseWorkspaceFromUnknown, requestWorkspaceSnapshot } from "./lib/workspace-request";
+import { fetchVirtualisationSnapshot } from "./lib/workspace-runtime";
 import { awsInventoryLoaded, awsInventoryScopeForTab } from "./lib/aws-inventory";
 import { azureInventoryLoaded, azureInventoryScopeForTab } from "./lib/azure-inventory";
 import { notify, notifyJob, useNotifications, type NotificationTone } from "./lib/notify";
@@ -55,41 +60,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./components/ui/alert-dialog";
-import ConnectView from "./views/ConnectView";
-import OverviewView from "./views/OverviewView";
 import { AzureCLIExtensionsBanner } from "./components/azure-cli-extensions-banner";
-import DeployView from "./views/DeployView";
 import { CommandPalette, type Command } from "./components/command-palette";
 import { InventoryLoadingState } from "./components/inventory-loading-state";
 import { WorkspaceSkeleton } from "./components/workspace-skeleton";
-import DebugView from "./views/DebugView";
-import {
-  ActivityView,
-  AzureAppServiceView,
-  AzureCosmosView,
-  AzurePostgresView,
-  AzureEntraView,
-  AzureFrontDoorView,
-  AzureFunctionsView,
-  AzureKeyVaultView,
-  AzureQueuesView,
-  AzureStorageView,
-  AzureView,
-  AzureWafView,
-  ComputeView,
-  DynamoDBView,
-  IAMView,
-  LambdaView,
-  LogAnalyticsView,
-  ToolsHubView,
-  LogsView,
-  PlaceholderView,
-  RDSView,
-  RuntimeView,
-  SNSView,
-  SQSView,
-  StorageView,
-} from "./views/workspace/lazy-views";
 import type {
   ActivityLogEntry,
   AppResetResult,
@@ -134,7 +108,6 @@ import type {
   EmulatorActionResult,
   EmulatorLogSnapshot,
   DockerRuntimeSnapshot,
-  RuntimeSnapshot,
   EmulatorSummary,
   JobStatus,
   JobLifecycle,
@@ -151,13 +124,6 @@ import type {
 } from "./types/backend";
 
 type EC2LifecycleAction = "start" | "stop" | "reboot";
-
-type EC2ActionHistoryItem = {
-  jobId: string;
-  status: JobLifecycle;
-  message: string;
-  completedAt?: string;
-};
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, { error?: Error }> {
   state: { error?: Error } = {};
@@ -268,52 +234,112 @@ export default function App() {
     beginAwsInventoryFetch,
     endAwsInventoryFetch,
   } = useWorkspaceLoading();
-  const [workspace, setWorkspace] = useState<WorkspaceSnapshot>(emptyWorkspace);
-  const [azureLogWorkspaceSelectionLoading, setAzureLogWorkspaceSelectionLoading] = useState(false);
-  const azureLogWorkspaceSelectionRequest = useRef(0);
+  const {
+    workspace,
+    setWorkspace,
+    activeWorkspace,
+    azureLogWorkspaceSelectionLoading,
+    setAzureLogWorkspaceSelectionLoading,
+    azureLogWorkspaceSelectionRequest,
+    s3UploadStatus,
+    setS3UploadStatus,
+    s3SignedUrlStatus,
+    setS3SignedUrlStatus,
+    s3SignedUrlResult,
+    setS3SignedUrlResult,
+    s3UrlInspection,
+    setS3UrlInspection,
+    s3UrlValidation,
+    ec2ActionStatus,
+    setEC2ActionStatus,
+    ec2ActionInFlight,
+    setEC2ActionInFlight,
+    ec2ActionHistory,
+    setEC2ActionHistory,
+    lambdaActionStatus,
+    setLambdaActionStatus,
+    lambdaInvokeResult,
+    setLambdaInvokeResult,
+    lambdaInvokeInFlight,
+    setLambdaInvokeInFlight,
+    lambdaCreateInFlight,
+    setLambdaCreateInFlight,
+    lambdaCreateFormOpen,
+    setLambdaCreateFormOpen,
+    dynamodbActionStatus,
+    setDynamodbActionStatus,
+    sqsActionStatus,
+    setSqsActionStatus,
+    sqsPeekResult,
+    setSqsPeekResult,
+    sqsPeekInFlight,
+    setSqsPeekInFlight,
+    snsActionStatus,
+    setSnsActionStatus,
+    rdsActionStatus,
+    setRdsActionStatus,
+    logsActionStatus,
+    setLogsActionStatus,
+    iamActionStatus,
+    setIamActionStatus,
+    azureActionStatus,
+    setAzureActionStatus,
+    azureStorageActionStatus,
+    setAzureStorageActionStatus,
+    azureAppServiceActionStatus,
+    setAzureAppServiceActionStatus,
+    azureFrontDoorActionStatus,
+    setAzureFrontDoorActionStatus,
+    azureFrontDoorTopologyLoading,
+    setAzureFrontDoorTopologyLoading,
+    azureWafConfigLoading,
+    setAzureWafConfigLoading,
+    frontDoorRefreshInFlightRef,
+    wafRefreshInFlightRef,
+    s3PrefixRequestIdRef,
+    localStackAuthToken,
+    setLocalStackAuthToken,
+    localStackPersistence,
+    setLocalStackPersistence,
+    localStackEnvironmentText,
+    setLocalStackEnvironmentText,
+    localStackLogs,
+    setLocalStackLogs,
+    localStackLogsStatus,
+    setLocalStackLogsStatus,
+    localStackActionStatus,
+    setLocalStackActionStatus,
+    localStackActionInFlight,
+    setLocalStackActionInFlight,
+    flociAzPersistence,
+    setFlociAzPersistence,
+    flociAzEnvironmentText,
+    setFlociAzEnvironmentText,
+    flociAzLogs,
+    setFlociAzLogs,
+    flociAzLogsStatus,
+    setFlociAzLogsStatus,
+    flociAzActionStatus,
+    setFlociAzActionInFlight,
+    flociAzActionInFlight,
+    setFlociAzActionStatus,
+    frontDoorAccessPrefill,
+    setFrontDoorAccessPrefill,
+    logAnalyticsPrefill,
+    setLogAnalyticsPrefill,
+    activeS3PageId,
+    setActiveS3PageId,
+    activeAzurePageId,
+    setActiveAzurePageId,
+    activeAzureStoragePageId,
+    setActiveAzureStoragePageId,
+    showSensitiveValues,
+    setShowSensitiveValues,
+    listLogAnalyticsHistory,
+    listLogAnalyticsSaved,
+    resetWorkspaceUiState,
+  } = useWorkspaceState(session);
   const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
-  const [s3UploadStatus, setS3UploadStatus] = useState("Select a bucket and provide a local file path to upload.");
-  const [s3SignedUrlStatus, setS3SignedUrlStatus] = useState("Select an object to generate a signed URL.");
-  const [s3SignedUrlResult, setS3SignedUrlResult] = useState<AwsS3PresignResult>();
-  const [s3UrlInspection, setS3UrlInspection] = useState<UrlInspection>();
-  const [s3UrlValidation, setS3UrlValidation] = useState<UrlValidationResult>();
-  const [ec2ActionStatus, setEC2ActionStatus] = useState("Select an EC2 region before refreshing inventory.");
-  const [ec2ActionInFlight, setEC2ActionInFlight] = useState(false);
-  const [ec2ActionHistory, setEC2ActionHistory] = useState<EC2ActionHistoryItem[]>([]);
-
-  const [lambdaActionStatus, setLambdaActionStatus] = useState("Select a region before refreshing Lambda functions.");
-  const [lambdaInvokeResult, setLambdaInvokeResult] = useState<AwsLambdaInvokeResult | null>(null);
-  const [lambdaInvokeInFlight, setLambdaInvokeInFlight] = useState(false);
-  const [lambdaCreateInFlight, setLambdaCreateInFlight] = useState(false);
-  const [lambdaCreateFormOpen, setLambdaCreateFormOpen] = useState(false);
-  const [dynamodbActionStatus, setDynamodbActionStatus] = useState(
-    "Select a region before refreshing DynamoDB tables.",
-  );
-  const [sqsActionStatus, setSqsActionStatus] = useState(
-    "Select a region before refreshing SQS queues.",
-  );
-  const [sqsPeekResult, setSqsPeekResult] = useState<AwsSqsPeekResult | null>(null);
-  const [sqsPeekInFlight, setSqsPeekInFlight] = useState(false);
-  const [snsActionStatus, setSnsActionStatus] = useState(
-    "Select a region before refreshing SNS topics.",
-  );
-  const [rdsActionStatus, setRdsActionStatus] = useState(
-    "Select a region before refreshing RDS instances.",
-  );
-  const [logsActionStatus, setLogsActionStatus] = useState(
-    "Select a region before refreshing log groups.",
-  );
-  const [iamActionStatus, setIamActionStatus] = useState(
-    "IAM inventory loads account-wide roles and policies.",
-  );
-  const [azureActionStatus, setAzureActionStatus] = useState("");
-  const [azureStorageActionStatus, setAzureStorageActionStatus] = useState("");
-  const [azureAppServiceActionStatus, setAzureAppServiceActionStatus] = useState("");
-  const [azureFrontDoorActionStatus, setAzureFrontDoorActionStatus] = useState("");
-  const [azureFrontDoorTopologyLoading, setAzureFrontDoorTopologyLoading] = useState(false);
-  const [azureWafConfigLoading, setAzureWafConfigLoading] = useState(false);
-  const frontDoorRefreshInFlightRef = useRef(false);
-  const wafRefreshInFlightRef = useRef(false);
   const azureInventoryFetchedScopesRef = useRef(new Set<string>());
   const awsInventoryFetchedScopesRef = useRef(new Set<string>());
   const [azureInventoryRefreshToken, setAzureInventoryRefreshToken] = useState(0);
@@ -326,40 +352,7 @@ export default function App() {
   const writeModeRequestRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [openingProfileId, setOpeningProfileId] = useState<string>();
-  const [localStackAuthToken, setLocalStackAuthToken] = useState("");
-  const [localStackPersistence, setLocalStackPersistence] = useState(false);
-  const [localStackEnvironmentText, setLocalStackEnvironmentText] = useState("");
-  const [localStackLogs, setLocalStackLogs] = useState<EmulatorLogSnapshot>({
-    emulatorId: "localstack",
-    lines: [],
-    summary: "LocalStack logs have not been loaded yet.",
-  });
-  const [localStackLogsStatus, setLocalStackLogsStatus] = useState("");
-  const [localStackActionStatus, setLocalStackActionStatus] = useState("No LocalStack action has run yet.");
-  const [localStackActionInFlight, setLocalStackActionInFlight] = useState(false);
-  const [flociAzPersistence, setFlociAzPersistence] = useState(false);
-  const [flociAzEnvironmentText, setFlociAzEnvironmentText] = useState("FLOCI_AZ_SERVICES_FUNCTIONS_ENABLED=false");
-  const [flociAzLogs, setFlociAzLogs] = useState<EmulatorLogSnapshot>({
-    emulatorId: "floci-az",
-    lines: [],
-    summary: "floci-az logs have not been loaded yet.",
-  });
-  const [flociAzLogsStatus, setFlociAzLogsStatus] = useState("");
-  const [flociAzActionStatus, setFlociAzActionStatus] = useState("No floci-az action has run yet.");
-  const [flociAzActionInFlight, setFlociAzActionInFlight] = useState(false);
   const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState("overview");
-  const [frontDoorAccessPrefill, setFrontDoorAccessPrefill] = useState<{
-    trackingReference: string;
-    workspace?: string;
-    timespan?: string;
-  } | null>(null);
-  const [logAnalyticsPrefill, setLogAnalyticsPrefill] = useState<{
-    query?: string;
-    timespan?: string;
-  } | null>(null);
-  const [activeS3PageId, setActiveS3PageId] = useState("buckets");
-  const [activeAzurePageId, setActiveAzurePageId] = useState("resource-groups");
-  const [activeAzureStoragePageId, setActiveAzureStoragePageId] = useState("blobs");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [splitPanelOpen, setSplitPanelOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -367,13 +360,11 @@ export default function App() {
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [resetConfirmation, setResetConfirmation] = useState("");
   const [resetInFlight, setResetInFlight] = useState(false);
-  const [showSensitiveValues, setShowSensitiveValues] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const { resolvedTheme } = useTheme();
   const notifications = useNotifications();
 
   const isInitialLoad = useRef(true);
-  const s3PrefixRequestIdRef = useRef(0);
   const isTablet = viewportWidth < 1180;
 
   useEffect(() => {
@@ -542,19 +533,6 @@ export default function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
-
-  useEffect(() => {
-    if (activeWorkspaceTabId !== "virtualisation") {
-      return undefined;
-    }
-    void refreshVirtualisationState();
-    const interval = window.setInterval(() => {
-      void refreshVirtualisationState();
-    }, 5000);
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [activeWorkspaceTabId]);
 
   async function mutateSession(
     method: string,
@@ -1127,23 +1105,6 @@ export default function App() {
     }
   }
 
-  // Stable references so the Log Analytics / WAF views' history+saved effects
-  // (which list them on workspace change) do not re-fire on every App re-render.
-  const listLogAnalyticsHistory = useCallback(
-    (ws: string) =>
-      backendRequest<AzureLogAnalyticsHistoryEntry[]>("azure.logAnalytics.history.list", {
-        workspace: ws,
-      }),
-    [],
-  );
-  const listLogAnalyticsSaved = useCallback(
-    (ws: string) =>
-      backendRequest<AzureLogAnalyticsSavedQuery[]>("azure.logAnalytics.saved.list", {
-        workspace: ws,
-      }),
-    [],
-  );
-
   async function refreshDiscovery(): Promise<void> {
     // The refresh runs as a backend job; the deferred workspace snapshot arrives
     // via job.updated when the job completes. Show the indicator straight away,
@@ -1348,10 +1309,6 @@ export default function App() {
       });
   }
 
-  const activeWorkspace = useMemo(
-    () => applySessionWriteModeToWorkspace(workspace, session),
-    [workspace, session],
-  );
   const azureServiceInventoryLoading =
     session.lockedProviderId === "azure" &&
     (azureInventoryLoading || workspaceFetching || !workspaceLoaded);
@@ -1747,43 +1704,11 @@ export default function App() {
       clearDebugLogs();
       startTransition(() => {
         setSession(emptySession);
-        setWorkspace(emptyWorkspace);
+        resetWorkspaceUiState();
         setLogs([]);
-        setS3UploadStatus("Select a bucket and provide a local file path to upload.");
-        setS3SignedUrlStatus("Select an object to generate a signed URL.");
-        setS3SignedUrlResult(undefined);
-        setS3UrlInspection(undefined);
-        setS3UrlValidation(undefined);
-        setEC2ActionStatus("Select an EC2 region before refreshing inventory.");
-        setEC2ActionInFlight(false);
-        setEC2ActionHistory([]);
-        setLocalStackAuthToken("");
-        setLocalStackPersistence(false);
-        setLocalStackEnvironmentText("");
-        setLocalStackLogs({
-          emulatorId: "localstack",
-          lines: [],
-          summary: "LocalStack logs have not been loaded yet.",
-        });
-        setLocalStackLogsStatus("");
-        setLocalStackActionStatus("No LocalStack action has run yet.");
-        setLocalStackActionInFlight(false);
-        setFlociAzPersistence(false);
-        setFlociAzEnvironmentText("FLOCI_AZ_SERVICES_FUNCTIONS_ENABLED=false");
-        setFlociAzLogs({
-          emulatorId: "floci-az",
-          lines: [],
-          summary: "floci-az logs have not been loaded yet.",
-        });
-        setFlociAzLogsStatus("");
-        setFlociAzActionStatus("No floci-az action has run yet.");
-        setFlociAzActionInFlight(false);
         setActiveWorkspaceTabId("overview");
-        setActiveS3PageId("buckets");
-        setActiveAzurePageId("resource-groups");
         setSplitPanelOpen(false);
         setNotificationsOpen(false);
-        setShowSensitiveValues(false);
       });
       notifications.clearAll();
       setResetModalOpen(false);
@@ -1816,38 +1741,28 @@ export default function App() {
     });
   }
 
-  async function refreshVirtualisationState(): Promise<WorkspaceSnapshot> {
-    const [runtimeResult, logResult, flociLogResult] = await Promise.all([
-      backendRequest<RuntimeSnapshot>("runtime.get"),
-      backendRequest<EmulatorLogSnapshot>("emulators.logs", { emulatorId: "localstack", tail: 200 }).catch((error) => ({
-        emulatorId: "localstack",
-        lines: [],
-        summary: error instanceof Error ? error.message : "Failed to load LocalStack logs.",
-      })),
-      backendRequest<EmulatorLogSnapshot>("emulators.logs", { emulatorId: "floci-az", tail: 200 }).catch((error) => ({
-        emulatorId: "floci-az",
-        lines: [],
-        summary: error instanceof Error ? error.message : "Failed to load floci-az logs.",
-      })),
-    ]);
+  const refreshVirtualisationState = useCallback(async (): Promise<WorkspaceSnapshot> => {
+    const result = await fetchVirtualisationSnapshot();
     return await new Promise<WorkspaceSnapshot>((resolve) => {
       startTransition(() => {
         setWorkspace((current) => {
           const nextWorkspace = normaliseWorkspaceSnapshot({
             ...current,
-            dockerRuntime: runtimeResult.dockerRuntime,
-            dockerResources: runtimeResult.dockerResources,
-            emulatorSummaries: runtimeResult.emulatorSummaries,
-            dockerDiagnostics: runtimeResult.dockerDiagnostics,
+            dockerRuntime: result.dockerRuntime,
+            dockerResources: result.dockerResources,
+            emulatorSummaries: result.emulatorSummaries,
+            dockerDiagnostics: result.dockerDiagnostics,
           });
           resolve(nextWorkspace);
           return nextWorkspace;
         });
-        setLocalStackLogs(normaliseEmulatorLogSnapshot(logResult));
-        setFlociAzLogs(normaliseEmulatorLogSnapshot(flociLogResult));
+        setLocalStackLogs(normaliseEmulatorLogSnapshot(result.localStackLogs));
+        setFlociAzLogs(normaliseEmulatorLogSnapshot(result.flociAzLogs));
       });
     });
-  }
+  }, [setFlociAzLogs, setLocalStackLogs, setWorkspace]);
+
+  useVirtualisationPoll(activeWorkspaceTabId, refreshVirtualisationState);
 
   async function refreshLocalStackLogs(): Promise<void> {
     setLocalStackLogsStatus("Refreshing LocalStack logs...");
@@ -2224,1213 +2139,143 @@ export default function App() {
     }
   }
 
-  const content = activeWorkspaceTabId === "debug" ? (
-    <DebugView />
-  ) : activeWorkspaceTabId === "deploy" ? (
-    <DeployView profiles={profiles} />
-  ) : session.isLocked && activeWorkspaceTabId === "overview" ? (
-    <OverviewView
-      workspace={activeWorkspace}
-      session={session}
-      providerLabel={workspace.provider?.label ?? selectedProvider?.label ?? "Workspace"}
-      profileLabel={workspace.profile?.displayName ?? selectedProfile?.displayName}
-      onRefresh={() => {
-        void refreshDiscovery();
-      }}
-      onOpenRuntime={() => {
-        setActiveWorkspaceTabId("virtualisation");
-      }}
-      onEmulatorQuickStart={(emulatorId) => {
-        if (emulatorId === "localstack") {
-          void invokeLocalStackAction("start");
-          return;
-        }
-        void invokeFlociAzAction("start");
-      }}
-      runtimeActionInFlight={{
-        localstack: localStackActionInFlight,
-        "floci-az": flociAzActionInFlight,
-      }}
-      onNavigate={(tabId, context) => {
-        setActiveWorkspaceTabId(tabId);
-        if (context?.lambdaFunctionName) {
-          selectLambdaFunction(context.lambdaFunctionName);
-        }
-        if (context?.dynamodbTableName) {
-          selectDynamoDBTable(context.dynamodbTableName);
-        }
-        if (context?.sqsQueueUrl) {
-          selectSQSQueue(context.sqsQueueUrl);
-        }
-        if (context?.snsTopicArn) {
-          selectSNSTopic(context.snsTopicArn);
-        }
-        if (context?.rdsInstanceId) {
-          selectRDSInstance(context.rdsInstanceId);
-        }
-        if (context?.logGroupName) {
-          selectLogGroup(context.logGroupName);
-        }
-        if (context?.iamRoleName) {
-          selectIAMRole(context.iamRoleName);
-        }
-        if (context?.ec2InstanceId) {
-          selectEC2Instance(context.ec2InstanceId);
-        }
-        if (context?.s3BucketName) {
-          void mutateWorkspaceSelection("aws.s3.selectBucket", { bucketName: context.s3BucketName }, {
-            merge: mergeAwsS3Selection,
-            onOptimistic: () => {
-              setWorkspace((current) =>
-                normaliseWorkspaceSnapshot({
-                  ...current,
-                  selectedS3BucketName: context.s3BucketName,
-                  selectedS3ObjectKey: undefined,
-                }),
-              );
-            },
-          });
-        }
-        if (context?.openLambdaCreate) {
-          setLambdaCreateFormOpen(true);
-        }
-      }}
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "s3" ? (
-    <StorageView
-      workspace={activeWorkspace}
-      activePageId={activeS3PageId}
-      onNavigatePage={setActiveS3PageId}
-      showSensitiveValues={showSensitiveValues}
-      onSelectBucket={(bucketName) => {
-        void mutateWorkspaceSelection("aws.s3.selectBucket", { bucketName }, {
-          merge: mergeAwsS3Selection,
-          onOptimistic: () => {
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedS3BucketName: bucketName,
-                selectedS3ObjectKey: undefined,
-              }),
-            );
-          },
-        });
-      }}
-      onSelectObject={(objectKey) => {
-        void mutateWorkspaceSelection("aws.s3.selectObject", { objectKey }, {
-          merge: mergeAwsS3Selection,
-          persistOnly: true,
-          onOptimistic: () => {
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedS3ObjectKey: objectKey,
-              }),
-            );
-          },
-        });
-      }}
-      onSetPrefixFilter={applyS3PrefixFilter}
-      uploadStatus={s3UploadStatus}
-      signedUrlStatus={s3SignedUrlStatus}
-      signedUrlResult={s3SignedUrlResult}
-      urlInspection={s3UrlInspection}
-      urlValidation={s3UrlValidation}
-      onUploadObject={(sourcePath, objectKey) => {
-        setS3UploadStatus(`Queueing upload for ${objectKey}.`);
-        void backendRequest("aws.s3.uploadObject", { objectKey, sourcePath });
-      }}
-      onPresignObject={(durationSeconds) => {
-        setS3SignedUrlStatus("Queueing signed URL generation.");
-        void backendRequest("aws.s3.presignObject", { durationSeconds });
-      }}
-      onAnalyseUrl={(url) => {
-        void (async () => {
-          setS3UrlInspection(await backendRequest<UrlInspection>("aws.s3.analyseUrl", { url }));
-        })();
-      }}
-      onValidateUrl={(url) => {
-        void (async () => {
-          await backendRequest("aws.s3.validateUrl", { url });
-        })();
-      }}
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "ec2" ? (
-    <ComputeView
-      workspace={activeWorkspace}
-      actionStatus={ec2ActionStatus}
-      actionInFlight={ec2ActionInFlight}
-      actionHistory={ec2ActionHistory}
-      onRefreshInstances={refreshEC2Inventory}
-      onSelectRegion={selectEC2Region}
-      onSelectInstance={selectEC2Instance}
-      onInvokeAction={invokeEC2LifecycleAction}
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "lambda" ? (
-    <LambdaView
-      workspace={activeWorkspace}
-      actionStatus={lambdaActionStatus}
-      invokeResult={lambdaInvokeResult}
-      invokeInFlight={lambdaInvokeInFlight}
-      createInFlight={lambdaCreateInFlight}
-      onRefresh={refreshLambdaInventory}
-      onSelectRegion={selectLambdaRegion}
-      onSelectFunction={selectLambdaFunction}
-      onInvoke={invokeLambda}
-      onCreate={createLambda}
-      openCreateForm={lambdaCreateFormOpen}
-      onCreateFormOpenChange={setLambdaCreateFormOpen}
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "dynamodb" ? (
-    <DynamoDBView
-      workspace={activeWorkspace}
-      actionStatus={dynamodbActionStatus}
-      onRefresh={refreshDynamoDBInventory}
-      onSelectRegion={selectDynamoDBRegion}
-      onSelectTable={selectDynamoDBTable}
-      onPutItem={putDynamoDBItem}
-      onDeleteItem={deleteDynamoDBItem}
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "sqs" ? (
-    <SQSView
-      workspace={activeWorkspace}
-      actionStatus={sqsActionStatus}
-      peekResult={sqsPeekResult}
-      peekInFlight={sqsPeekInFlight}
-      onRefresh={refreshSQSInventory}
-      onSelectRegion={selectSQSRegion}
-      onSelectQueue={selectSQSQueue}
-      onPeek={peekSQSQueue}
-      onSendMessage={sendSQSMessage}
-      onCreateQueue={createSQSQueue}
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "sns" ? (
-    <SNSView
-      workspace={activeWorkspace}
-      actionStatus={snsActionStatus}
-      onRefresh={refreshSNSInventory}
-      onSelectRegion={selectSNSRegion}
-      onSelectEntity={selectSNSTopic}
-      onPublish={publishSNSTopic}
-      onCreateTopic={createSNSTopic}
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "rds" ? (
-    <RDSView
-      workspace={activeWorkspace}
-      actionStatus={rdsActionStatus}
-      onRefresh={refreshRDSInventory}
-      onSelectRegion={selectRDSRegion}
-      onSelectEntity={selectRDSInstance}
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "logs" ? (
-    <LogsView
-      workspace={activeWorkspace}
-      actionStatus={logsActionStatus}
-      onRefresh={refreshLogsInventory}
-      onSelectRegion={selectLogsRegion}
-      onSelectEntity={selectLogGroup}
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "iam" ? (
-    <IAMView
-      workspace={activeWorkspace}
-      actionStatus={iamActionStatus}
-      onRefresh={refreshIAMInventory}
-      onSelectRegion={selectSQSRegion}
-      onSelectEntity={selectIAMRole}
-    />
-  ) : session.isLocked &&
-    ["azure-overview", "azure-resource-groups", "azure-vms"].includes(activeWorkspaceTabId) ? (
-    <AzureView
-      workspace={activeWorkspace}
-      inventoryLoading={azureServiceInventoryLoading}
-      activePageId={
-        activeWorkspaceTabId === "azure-resource-groups"
-          ? "resource-groups"
-          : activeWorkspaceTabId === "azure-vms"
-            ? "virtual-machines"
-            : activeAzurePageId
-      }
-      showSensitiveValues={showSensitiveValues}
-      actionStatus={azureActionStatus}
-      onSelectResourceGroup={(resourceGroup) => {
-        void selectAzureResourceGroup(resourceGroup);
-      }}
-      onSelectVirtualMachine={(vmId) => {
-        void selectAzureVirtualMachine(vmId);
-      }}
-      onCreateResourceGroup={(name, location) => {
-        setAzureActionStatus(`Creating resource group ${name}...`);
-        void requestWorkspaceSnapshot("azure.resourceGroups.create", { name, location })
-          .then((workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(workspaceResult);
-            });
-            setAzureActionStatus(workspaceResult.azureStatusMessage || `Created resource group ${name}.`);
-          })
-          .catch((error: unknown) => {
-            setAzureActionStatus(error instanceof Error ? error.message : String(error));
-          });
-      }}
-      onDeleteResourceGroup={(name) => {
-        setAzureActionStatus(`Deleting resource group ${name}...`);
-        void requestWorkspaceSnapshot("azure.resourceGroups.delete", { name })
-          .then((workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(workspaceResult);
-            });
-            setAzureActionStatus(workspaceResult.azureStatusMessage || `Deleted resource group ${name}.`);
-          })
-          .catch((error: unknown) => {
-            setAzureActionStatus(error instanceof Error ? error.message : String(error));
-          });
-      }}
-      onInvokeVMAction={(action, vmId) => {
-        setAzureActionStatus(`Invoking ${action} on virtual machine...`);
-        void requestWorkspaceSnapshot("azure.virtualMachines.invokeAction", { action, vmId })
-          .then((workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(workspaceResult);
-            });
-            setAzureActionStatus(workspaceResult.azureStatusMessage || `Invoked ${action} on virtual machine.`);
-          })
-          .catch((error: unknown) => {
-            setAzureActionStatus(error instanceof Error ? error.message : String(error));
-          });
-      }}
-      onListBastionHosts={() =>
-        backendRequest<{ hosts: AzureBastionHost[]; statusMessage: string }>("azure.bastion.list")
-      }
-      onBastionConnect={(request) =>
-        backendRequest<AzureBastionConnectResult>("azure.bastion.connect", request)
-      }
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "azure-storage" ? (
-    <AzureStorageView
-      workspace={activeWorkspace}
-      activePageId={activeAzureStoragePageId}
-      actionStatus={azureStorageActionStatus}
-      inventoryLoading={azureServiceInventoryLoading}
-      onSelectAccount={(accountName) => {
-        void mutateWorkspaceSelection("azure.storage.selectAccount", { accountName }, {
-          panelLoading: true,
-          merge: mergeAzureStorageSelection,
-          onOptimistic: () => {
-            setSession((current) =>
-              normaliseSessionSnapshot({
-                ...current,
-                selectedAzureStorageAccount: accountName,
-                selectedAzureBlobContainer: undefined,
-                selectedAzureBlobName: undefined,
-              }),
-            );
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedAzureStorageAccount: accountName,
-                selectedAzureBlobContainer: undefined,
-                selectedAzureBlobName: undefined,
-                azureBlobContainers: [],
-                azureBlobs: [],
-              }),
-            );
-          },
-          errorTitle: "Could not select storage account",
-        });
-      }}
-      onSelectContainer={(containerName) => {
-        void mutateWorkspaceSelection("azure.storage.selectContainer", { containerName }, {
-          panelLoading: true,
-          merge: mergeAzureStorageSelection,
-          onOptimistic: () => {
-            setSession((current) =>
-              normaliseSessionSnapshot({
-                ...current,
-                selectedAzureBlobContainer: containerName,
-                selectedAzureBlobName: undefined,
-              }),
-            );
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedAzureBlobContainer: containerName,
-                selectedAzureBlobName: undefined,
-                azureBlobs: [],
-              }),
-            );
-          },
-          errorTitle: "Could not select blob container",
-        });
-      }}
-      onSelectBlob={(blobName) => {
-        void mutateWorkspaceSelection("azure.storage.selectBlob", { blobName }, {
-          persistOnly: true,
-          onOptimistic: () => {
-            setSession((current) =>
-              normaliseSessionSnapshot({
-                ...current,
-                selectedAzureBlobName: blobName,
-              }),
-            );
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedAzureBlobName: blobName,
-              }),
-            );
-          },
-          errorTitle: "Could not select blob",
-        });
-      }}
-      onSetPrefixFilter={(prefix) => {
-        void mutateWorkspaceSelection("azure.storage.setPrefixFilter", { prefix }, {
-          panelLoading: true,
-          merge: mergeAzureStorageSelection,
-          onOptimistic: () => {
-            setSession((current) =>
-              normaliseSessionSnapshot({
-                ...current,
-                azureBlobPrefixFilter: prefix,
-                selectedAzureBlobName: undefined,
-              }),
-            );
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                azureBlobPrefixFilter: prefix,
-                selectedAzureBlobName: undefined,
-                azureBlobs: [],
-              }),
-            );
-          },
-          errorTitle: "Could not update blob prefix filter",
-        });
-      }}
-      onCreateAccount={(resourceGroup, accountName, location) => {
-        setAzureStorageActionStatus(`Creating storage account ${accountName}...`);
-        void requestWorkspaceSnapshot("azure.storage.createAccount", {
-          resourceGroup,
-          accountName,
-          location,
-        })
-          .then((workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(workspaceResult);
-            });
-            setAzureStorageActionStatus(
-              workspaceResult.azureStorageStatusMessage || `Created storage account ${accountName}.`,
-            );
-          })
-          .catch((error: unknown) => {
-            setAzureStorageActionStatus(error instanceof Error ? error.message : String(error));
-          });
-      }}
-      onCreateContainer={(containerName) => {
-        setAzureStorageActionStatus(`Creating container ${containerName}...`);
-        void requestWorkspaceSnapshot("azure.storage.createContainer", { containerName })
-          .then((workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(workspaceResult);
-            });
-            setAzureStorageActionStatus(
-              workspaceResult.azureStorageStatusMessage || `Created container ${containerName}.`,
-            );
-          })
-          .catch((error: unknown) => {
-            setAzureStorageActionStatus(error instanceof Error ? error.message : String(error));
-          });
-      }}
-      onUploadBlob={(sourcePath, blobName) => {
-        setAzureStorageActionStatus(`Uploading ${blobName}...`);
-        void backendRequest<{ workspace: WorkspaceSnapshot }>("azure.storage.uploadBlob", {
-          sourcePath,
-          blobName,
-        })
-          .then((response) => {
-            startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(response.workspace));
-            });
-            setAzureStorageActionStatus(`Uploaded blob ${blobName}.`);
-          })
-          .catch((error: unknown) => {
-            setAzureStorageActionStatus(error instanceof Error ? error.message : String(error));
-          });
-      }}
-      onDeleteBlob={(blobName) => {
-        setAzureStorageActionStatus(`Deleting blob ${blobName}...`);
-        void requestWorkspaceSnapshot("azure.storage.deleteBlob", { blobName })
-          .then((workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(workspaceResult);
-            });
-            setAzureStorageActionStatus(`Deleted blob ${blobName}.`);
-          })
-          .catch((error: unknown) => {
-            setAzureStorageActionStatus(error instanceof Error ? error.message : String(error));
-          });
-      }}
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "azure-app-service" ? (
-    <AzureAppServiceView
-      workspace={activeWorkspace}
-      inventoryLoading={azureServiceInventoryLoading}
-      actionStatus={azureAppServiceActionStatus}
-      onSelectResourceGroup={(resourceGroup) => {
-        void selectAzureResourceGroup(resourceGroup);
-      }}
-      onSelectWebApp={(appName) => {
-        void selectAzureWebApp(appName);
-      }}
-      onSelectSlot={(slot) => {
-        void selectAzureWebAppSlot(slot);
-      }}
-      onEditInLogAnalytics={(workspaceName, query, timespan) => {
-        setLogAnalyticsPrefill({ query, timespan });
-        void selectAzureLogAnalyticsWorkspace(workspaceName).finally(() => {
-          setActiveWorkspaceTabId("azure-log-analytics");
-        });
-      }}
-      onCreateWebApp={(resourceGroup, appName, location, runtime, planOptions) => {
-        setAzureAppServiceActionStatus(`Creating web app ${appName}...`);
-        void requestWorkspaceSnapshot("azure.webApps.create", {
-          resourceGroup,
-          appName,
-          location,
-          runtime,
-          existingPlanName: planOptions.existingPlanName,
-          newPlanName: planOptions.newPlanName,
-          planSku: planOptions.planSku,
-        })
-          .then((workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(workspaceResult);
-            });
-            setAzureAppServiceActionStatus(
-              workspaceResult.azureAppServiceStatusMessage || `Created web app ${appName}.`,
-            );
-          })
-          .catch((error: unknown) => {
-            setAzureAppServiceActionStatus(error instanceof Error ? error.message : String(error));
-          });
-      }}
-      onInvokeAction={(action, appName) => {
-        setAzureAppServiceActionStatus(`Invoking ${action} on web app...`);
-        void requestWorkspaceSnapshot("azure.webApps.invokeAction", { action, appName })
-          .then((workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(workspaceResult);
-            });
-            setAzureAppServiceActionStatus(
-              workspaceResult.azureAppServiceStatusMessage || `Invoked ${action} on web app.`,
-            );
-          })
-          .catch((error: unknown) => {
-            setAzureAppServiceActionStatus(error instanceof Error ? error.message : String(error));
-          });
-      }}
-      onSetSetting={(appName, name, value, slotSetting) => {
-        setAzureAppServiceActionStatus(`Setting ${name}...`);
-        return requestWorkspaceSnapshot("azure.webApps.setSetting", {
-          appName,
-          name,
-          value,
-          slotSetting,
-        }).then((workspaceResult) => {
-          startTransition(() => {
-            setWorkspace(workspaceResult);
-          });
-          setAzureAppServiceActionStatus(
-            workspaceResult.azureAppServiceStatusMessage || `Set application setting ${name}.`,
-          );
-        });
-      }}
-      onDeleteSetting={(appName, name) => {
-        setAzureAppServiceActionStatus(`Deleting ${name}...`);
-        return requestWorkspaceSnapshot("azure.webApps.deleteSetting", {
-          appName,
-          name,
-        }).then((workspaceResult) => {
-          startTransition(() => {
-            setWorkspace(workspaceResult);
-          });
-          setAzureAppServiceActionStatus(
-            workspaceResult.azureAppServiceStatusMessage || `Deleted application setting ${name}.`,
-          );
-        });
-      }}
-      onCreateSlot={(appName, slotName) => {
-        setAzureAppServiceActionStatus(`Creating deployment slot ${slotName}...`);
-        void requestWorkspaceSnapshot("azure.webApps.createSlot", { appName, slotName })
-          .then((workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(workspaceResult);
-            });
-            setAzureAppServiceActionStatus(
-              workspaceResult.azureAppServiceStatusMessage ||
-                `Created deployment slot ${slotName}.`,
-            );
-          })
-          .catch((error: unknown) => {
-            setAzureAppServiceActionStatus(error instanceof Error ? error.message : String(error));
-          });
-      }}
-      onSwapSlot={(appName, slotName) => {
-        setAzureAppServiceActionStatus(`Swapping production with ${slotName}...`);
-        void requestWorkspaceSnapshot("azure.webApps.swapSlots", { appName, slotName })
-          .then((workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(workspaceResult);
-            });
-            setAzureAppServiceActionStatus(
-              workspaceResult.azureAppServiceStatusMessage ||
-                `Swapped production with deployment slot ${slotName}.`,
-            );
-          })
-          .catch((error: unknown) => {
-            setAzureAppServiceActionStatus(error instanceof Error ? error.message : String(error));
-          });
-      }}
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "azure-tools" ? (
-    <ToolsHubView
-      workspace={activeWorkspace}
-      providerLabel={workspace.provider?.label ?? selectedProvider?.label ?? "Azure"}
-      profileLabel={activeWorkspace.profile?.displayName ?? selectedProfile?.displayName}
-      workspaceTabs={session.workspaceTabs}
-      onNavigate={(tabId) => {
-        setActiveWorkspaceTabId(tabId);
-      }}
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "azure-log-analytics" ? (
-    <LogAnalyticsView
-      workspace={activeWorkspace}
-      workspaceSelectionLoading={azureLogWorkspaceSelectionLoading}
-      inventoryLoading={azureServiceInventoryLoading}
-      initialQuery={logAnalyticsPrefill?.query}
-      initialTimespan={logAnalyticsPrefill?.timespan}
-      onSelectWorkspace={(ws) => {
-        void selectAzureLogAnalyticsWorkspace(ws);
-      }}
-      onRunQuery={(ws, query, timespan, maxRows, historyQuery) =>
-        backendRequest<AzureLogQueryResult>("azure.logAnalytics.query", {
-          workspace: ws,
-          query,
-          historyQuery,
-          timespan,
-          maxRows,
-        })
-      }
-      onListHistory={listLogAnalyticsHistory}
-      onListSaved={listLogAnalyticsSaved}
-      onSaveQuery={(ws, name, query, timespan, id) =>
-        backendRequest<AzureLogAnalyticsSavedQuery>("azure.logAnalytics.saved.save", {
-          workspace: ws,
-          name,
-          query,
-          timespan,
-          id,
-        })
-      }
-      onDeleteSaved={(ws, id) =>
-        backendRequest<{ deleted: boolean }>("azure.logAnalytics.saved.delete", { workspace: ws, id }).then(
-          () => undefined,
-        )
-      }
-      onListTables={(ws, includeColumns) =>
-        backendRequest<AzureLogAnalyticsTableInfo[]>("azure.logAnalytics.tables.list", {
-          workspace: ws,
-          includeColumns,
-        })
-      }
-      onGetTableSchema={(ws, tableName) =>
-        backendRequest<AzureLogAnalyticsTableInfo>("azure.logAnalytics.table.schema", {
-          workspace: ws,
-          tableName,
-        })
-      }
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "azure-waf" ? (
-    <AzureWafView
-      workspace={activeWorkspace}
-      workspaceSelectionLoading={azureLogWorkspaceSelectionLoading}
-      inventoryLoading={azureServiceInventoryLoading}
-      configLoading={azureWafConfigLoading}
-      onSelectWorkspace={(ws) => {
-        void selectAzureLogAnalyticsWorkspace(ws);
-      }}
-      onSelectPolicy={(policyName) => {
-        void selectAzureWafPolicy(policyName);
-      }}
-      onProbeLogSchema={(ws, timespan) =>
-        backendRequest<AzureWafLogSchemaProfile>("azure.waf.logs.schema", {
-          workspace: ws,
-          timespan,
-        })
-      }
-      onCorrelateTrackingRef={(trackingReference, ws, timespan) => {
-        setFrontDoorAccessPrefill({ trackingReference, workspace: ws, timespan });
-        setActiveWorkspaceTabId("azure-front-door");
-      }}
-      onRunQuery={(ws, query, timespan, maxRows) =>
-        backendRequest<AzureLogQueryResult>("azure.logAnalytics.query", {
-          workspace: ws,
-          query,
-          timespan,
-          maxRows,
-        })
-      }
-      onEditInLogAnalytics={(ws, query, timespan) => {
-        setLogAnalyticsPrefill({ query, timespan });
-        void selectAzureLogAnalyticsWorkspace(ws).finally(() => {
-          setActiveWorkspaceTabId("azure-log-analytics");
-        });
-      }}
-      onSetMode={(resourceGroup, policyName, mode) =>
-        requestWorkspaceSnapshot("azure.waf.config.setMode", {
-          resourceGroup,
-          policyName,
-          mode,
-          confirm: true,
-        }).then((workspaceResult) => {
-          startTransition(() => {
-            setWorkspace(workspaceResult);
-          });
-        })
-      }
-      onSetManagedRule={(
-        resourceGroup,
-        policyName,
-        ruleSetType,
-        ruleSetVersion,
-        ruleGroupName,
-        ruleId,
-        enabled,
-      ) =>
-        requestWorkspaceSnapshot("azure.waf.config.setManagedRule", {
-          resourceGroup,
-          policyName,
-          ruleSetType,
-          ruleSetVersion,
-          ruleGroupName,
-          ruleId,
-          enabled,
-          confirm: true,
-        }).then((workspaceResult) => {
-          startTransition(() => {
-            setWorkspace(workspaceResult);
-          });
-        })
-      }
-      onRemoveExclusion={(resourceGroup, policyName, exclusion) =>
-        requestWorkspaceSnapshot("azure.waf.config.removeExclusion", {
-          resourceGroup,
-          policyName,
-          exclusion,
-          confirm: true,
-        }).then((workspaceResult) => {
-          startTransition(() => {
-            setWorkspace(workspaceResult);
-          });
-        })
-      }
-      onAddExclusion={(resourceGroup, policyName, exclusion) =>
-        requestWorkspaceSnapshot("azure.waf.config.addExclusion", {
-          resourceGroup,
-          policyName,
-          exclusion,
-          confirm: true,
-        }).then((workspaceResult) => {
-          startTransition(() => {
-            setWorkspace(workspaceResult);
-          });
-        })
-      }
-      onListSaved={listLogAnalyticsSaved}
-      onSaveQuery={(ws, name, queryText, timespan, id) =>
-        backendRequest<AzureLogAnalyticsSavedQuery>("azure.logAnalytics.saved.save", {
-          workspace: ws,
-          name,
-          query: queryText,
-          timespan,
-          id,
-        })
-      }
-      onDeleteSaved={(ws, id) =>
-        backendRequest<{ deleted: boolean }>("azure.logAnalytics.saved.delete", {
-          workspace: ws,
-          id,
-        }).then(() => undefined)
-      }
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "azure-front-door" ? (
-    <AzureFrontDoorView
-      workspace={activeWorkspace}
-      initialTrackingReference={frontDoorAccessPrefill?.trackingReference}
-      initialLogWorkspace={frontDoorAccessPrefill?.workspace}
-      initialTimespan={frontDoorAccessPrefill?.timespan}
-      inventoryLoading={azureServiceInventoryLoading || azureFrontDoorTopologyLoading}
-      actionStatus={azureFrontDoorActionStatus}
-      onRefresh={() => {
-        setAzureFrontDoorActionStatus("Refreshing Front Door topology...");
-        void refreshAzureFrontDoorTopology(workspace, session.selectedProfileId ?? "", { force: true });
-      }}
-      onPurgeCache={(profile, endpointName, contentPaths, domains) => {
-        setAzureFrontDoorActionStatus(`Purging cache for ${endpointName}...`);
-        void requestWorkspaceSnapshot("azure.frontDoor.purgeCache", {
-          profileName: profile,
-          endpointName,
-          contentPaths,
-          domains,
-        })
-          .then((workspaceResult) => {
-            startTransition(() => {
-              setWorkspace((current) => mergeAzureFrontDoorSelection(current, workspaceResult));
-            });
-            setAzureFrontDoorActionStatus(
-              workspaceResult.azureFrontDoorStatusMessage || `Purged cache for ${endpointName}.`,
-            );
-          })
-          .catch((error: unknown) => {
-            setAzureFrontDoorActionStatus(formatBackendError(error));
-          });
-      }}
-      onSelectProfile={(profile) => {
-        void mutateWorkspaceSelection("azure.frontDoor.selectProfile", { profile }, {
-          panelLoading: true,
-          merge: mergeAzureFrontDoorSelection,
-          onOptimistic: () => {
-            setSession((current) =>
-              normaliseSessionSnapshot({
-                ...current,
-                selectedAzureFrontDoorProfile: profile,
-                selectedAzureFrontDoorEndpoint: undefined,
-                selectedAzureFrontDoorOriginGroup: undefined,
-              }),
-            );
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedAzureFrontDoorProfile: profile,
-                selectedAzureFrontDoorEndpoint: undefined,
-                selectedAzureFrontDoorOriginGroup: undefined,
-                azureFrontDoorEndpoints: [],
-                azureFrontDoorOriginGroups: [],
-                azureFrontDoorOrigins: [],
-              }),
-            );
-          },
-          errorTitle: "Could not select Front Door profile",
-        });
-      }}
-      onSelectEndpoint={(endpoint) => {
-        void mutateWorkspaceSelection("azure.frontDoor.selectEndpoint", { endpoint }, {
-          panelLoading: true,
-          merge: mergeAzureFrontDoorSelection,
-          onOptimistic: () => {
-            setSession((current) =>
-              normaliseSessionSnapshot({
-                ...current,
-                selectedAzureFrontDoorEndpoint: endpoint,
-              }),
-            );
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedAzureFrontDoorEndpoint: endpoint,
-              }),
-            );
-          },
-          errorTitle: "Could not select Front Door endpoint",
-        });
-      }}
-      onSelectOriginGroup={(originGroup) => {
-        void mutateWorkspaceSelection("azure.frontDoor.selectOriginGroup", { originGroup }, {
-          panelLoading: true,
-          merge: mergeAzureFrontDoorSelection,
-          onOptimistic: () => {
-            setSession((current) =>
-              normaliseSessionSnapshot({
-                ...current,
-                selectedAzureFrontDoorOriginGroup: originGroup,
-              }),
-            );
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedAzureFrontDoorOriginGroup: originGroup,
-                azureFrontDoorOrigins: [],
-              }),
-            );
-          },
-          errorTitle: "Could not select Front Door origin group",
-        });
-      }}
-      onOpenWafPolicy={(policyName) => {
-        void selectAzureWafPolicy(policyName).finally(() => {
-          setActiveWorkspaceTabId("azure-waf");
-        });
-      }}
-      onEditInLogAnalytics={(ws, query, timespan) => {
-        setLogAnalyticsPrefill({ query, timespan });
-        void selectAzureLogAnalyticsWorkspace(ws).finally(() => {
-          setActiveWorkspaceTabId("azure-log-analytics");
-        });
-      }}
-      onRunQuery={(ws, query, timespan) =>
-        backendRequest<AzureLogQueryResult>("azure.logAnalytics.query", {
-          workspace: ws,
-          query,
-          timespan,
-        })
-      }
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "azure-functions" ? (
-    <AzureFunctionsView
-      workspace={activeWorkspace}
-      inventoryLoading={azureServiceInventoryLoading}
-      onSelectApp={(appName) => {
-        void mutateWorkspaceSelection("azure.functions.selectApp", { appName }, {
-          panelLoading: true,
-          merge: mergeAzureFunctionsSelection,
-          onOptimistic: () => {
-            setSession((current) =>
-              normaliseSessionSnapshot({
-                ...current,
-                selectedAzureFunctionApp: appName,
-                selectedAzureFunction: undefined,
-              }),
-            );
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedAzureFunctionApp: appName,
-                selectedAzureFunction: undefined,
-                azureFunctions: [],
-              }),
-            );
-          },
-          errorTitle: "Could not select Function App",
-        });
-      }}
-      onSelectFunction={(functionName) => {
-        void mutateWorkspaceSelection("azure.functions.selectFunction", { functionName }, {
-          persistOnly: true,
-          onOptimistic: () => {
-            setSession((current) =>
-              normaliseSessionSnapshot({
-                ...current,
-                selectedAzureFunction: functionName,
-              }),
-            );
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedAzureFunction: functionName,
-              }),
-            );
-          },
-          errorTitle: "Could not select function",
-        });
-      }}
-      onInvoke={(appName, functionName, payload) =>
-        backendRequest<AzureFunctionInvokeResult>("azure.functions.invoke", {
-          appName,
-          functionName,
-          payload,
-        })
-      }
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "azure-key-vault" ? (
-    <AzureKeyVaultView
-      workspace={activeWorkspace}
-      inventoryLoading={azureServiceInventoryLoading}
-      onSelectVault={(vaultName) => {
-        void mutateWorkspaceSelection("azure.keyVault.selectVault", { vaultName }, {
-          panelLoading: true,
-          merge: mergeAzureKeyVaultSelection,
-          onOptimistic: () => {
-            setSession((current) =>
-              normaliseSessionSnapshot({
-                ...current,
-                selectedAzureKeyVault: vaultName,
-                selectedAzureSecret: undefined,
-              }),
-            );
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedAzureKeyVault: vaultName,
-                selectedAzureSecret: undefined,
-                azureKeyVaultSecrets: [],
-              }),
-            );
-          },
-          errorTitle: "Could not select Key Vault",
-        });
-      }}
-      onReveal={(vaultName, secretName) =>
-        backendRequest<{ value: string }>("azure.keyVault.revealSecret", { vaultName, secretName }).then(
-          (result) => result.value,
-        )
-      }
-      onSetSecret={(vaultName, secretName, value) =>
-        requestWorkspaceSnapshot("azure.keyVault.setSecret", { vaultName, secretName, value }).then(
-          (workspaceResult) => {
-            startTransition(() => {
-              setWorkspace(workspaceResult);
-            });
-          },
-        )
-      }
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "azure-cosmos" ? (
-    <AzureCosmosView
-      workspace={activeWorkspace}
-      inventoryLoading={azureServiceInventoryLoading}
-      onSelectAccount={(account) => {
-        void mutateWorkspaceSelection("azure.cosmos.selectAccount", { account }, {
-          panelLoading: true,
-          merge: mergeAzureCosmosSelection,
-          onOptimistic: () => {
-            setSession((current) =>
-              normaliseSessionSnapshot({
-                ...current,
-                selectedAzureCosmosAccount: account,
-                selectedAzureCosmosDatabase: undefined,
-                selectedAzureCosmosContainer: undefined,
-              }),
-            );
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedAzureCosmosAccount: account,
-                selectedAzureCosmosDatabase: undefined,
-                selectedAzureCosmosContainer: undefined,
-                azureCosmosDatabases: [],
-                azureCosmosContainers: [],
-                azureCosmosItems: [],
-              }),
-            );
-          },
-          errorTitle: "Could not select Cosmos account",
-        });
-      }}
-      onSelectDatabase={(database) => {
-        void mutateWorkspaceSelection("azure.cosmos.selectDatabase", { database }, {
-          panelLoading: true,
-          merge: mergeAzureCosmosSelection,
-          onOptimistic: () => {
-            setSession((current) =>
-              normaliseSessionSnapshot({
-                ...current,
-                selectedAzureCosmosDatabase: database,
-                selectedAzureCosmosContainer: undefined,
-              }),
-            );
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedAzureCosmosDatabase: database,
-                selectedAzureCosmosContainer: undefined,
-                azureCosmosContainers: [],
-                azureCosmosItems: [],
-              }),
-            );
-          },
-          errorTitle: "Could not select Cosmos database",
-        });
-      }}
-      onSelectContainer={(container) => {
-        void mutateWorkspaceSelection("azure.cosmos.selectContainer", { container }, {
-          panelLoading: true,
-          merge: mergeAzureCosmosSelection,
-          onOptimistic: () => {
-            setSession((current) =>
-              normaliseSessionSnapshot({
-                ...current,
-                selectedAzureCosmosContainer: container,
-              }),
-            );
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedAzureCosmosContainer: container,
-                azureCosmosItems: [],
-              }),
-            );
-          },
-          errorTitle: "Could not select Cosmos container",
-        });
-      }}
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "azure-postgres" ? (
-    <AzurePostgresView
-      workspace={activeWorkspace}
-      inventoryLoading={azureServiceInventoryLoading}
-      onSelectServer={(server) => {
-        void mutateWorkspaceSelection("azure.postgres.selectServer", { server }, {
-          panelLoading: true,
-          merge: mergeAzurePostgresSelection,
-          onOptimistic: () => {
-            setSession((current) =>
-              normaliseSessionSnapshot({
-                ...current,
-                selectedAzurePostgresServer: server,
-              }),
-            );
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedAzurePostgresServer: server,
-                azurePostgresConnection: undefined,
-              }),
-            );
-          },
-          errorTitle: "Could not select PostgreSQL server",
-        });
-      }}
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "azure-queues" ? (
-    <AzureQueuesView
-      workspace={activeWorkspace}
-      inventoryLoading={azureServiceInventoryLoading}
-      onSelectAccount={(account) => {
-        void mutateWorkspaceSelection("azure.storage.selectAccount", { accountName: account }, {
-          panelLoading: true,
-          merge: mergeAzureQueuesSelection,
-          onOptimistic: () => {
-            setSession((current) =>
-              normaliseSessionSnapshot({
-                ...current,
-                selectedAzureStorageAccount: account,
-                selectedAzureQueue: undefined,
-              }),
-            );
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedAzureStorageAccount: account,
-                selectedAzureQueue: undefined,
-                azureStorageQueues: [],
-                azureQueueMessages: [],
-              }),
-            );
-          },
-          errorTitle: "Could not select storage account",
-        });
-      }}
-      onSelectQueue={(queue) => {
-        void mutateWorkspaceSelection("azure.queues.selectQueue", { queue }, {
-          panelLoading: true,
-          merge: mergeAzureQueuesSelection,
-          onOptimistic: () => {
-            setSession((current) =>
-              normaliseSessionSnapshot({
-                ...current,
-                selectedAzureQueue: queue,
-              }),
-            );
-            setWorkspace((current) =>
-              normaliseWorkspaceSnapshot({
-                ...current,
-                selectedAzureQueue: queue,
-              }),
-            );
-          },
-          errorTitle: "Could not select queue",
-        });
-      }}
-    />
-  ) : session.isLocked && activeWorkspaceTabId === "azure-entra" ? (
-    <AzureEntraView
-      workspace={activeWorkspace}
-      inventoryLoading={azureServiceInventoryLoading}
-    />
-  ) : activeWorkspaceTabId === "virtualisation" ? (
-    <RuntimeView
-      workspace={activeWorkspace}
-      unlocked={!session.isLocked}
-      showSensitiveValues={showSensitiveValues}
-      onRefreshDockerRuntime={() => {
-        void refreshDockerRuntime();
-      }}
-      localStack={{
-        authToken: localStackAuthToken,
-        onAuthTokenChange: setLocalStackAuthToken,
-        persistence: localStackPersistence,
-        onPersistenceChange: setLocalStackPersistence,
-        environmentText: localStackEnvironmentText,
-        onEnvironmentTextChange: setLocalStackEnvironmentText,
-        logs: localStackLogs,
-        logsStatus: localStackLogsStatus,
-        actionStatus: localStackActionStatus,
-        actionInFlight: localStackActionInFlight,
-        onRefreshLogs: () => {
-          void refreshLocalStackLogs();
-        },
-        onInvokeAction: (action) => {
-          void invokeLocalStackAction(action);
-        },
-      }}
-      flociAz={{
-        persistence: flociAzPersistence,
-        onPersistenceChange: setFlociAzPersistence,
-        environmentText: flociAzEnvironmentText,
-        onEnvironmentTextChange: setFlociAzEnvironmentText,
-        logs: flociAzLogs,
-        logsStatus: flociAzLogsStatus,
-        actionStatus: flociAzActionStatus,
-        actionInFlight: flociAzActionInFlight,
-        onRefreshLogs: () => {
-          void refreshFlociAzLogs();
-        },
-        onInvokeAction: (action) => {
-          void invokeFlociAzAction(action);
-        },
-      }}
-    />
-  ) : session.isLocked && activeWorkspaceTabId !== "actions" ? (
-    <PlaceholderView
-      tab={session.workspaceTabs.find((tab) => tab.tabId === activeWorkspaceTabId)}
-      workspace={activeWorkspace}
-      showSensitiveValues={showSensitiveValues}
-      onToggleSensitiveValues={() => {
-        setShowSensitiveValues((current) => !current);
-      }}
-    />
-  ) : session.isLocked ? (
-    <ActivityView
-      entries={toActivityEntries(logs).slice(0, 12)}
-      onRefreshDiscovery={() => {
-        void refreshDiscovery();
-      }}
-    />
-  ) : (
-    <ConnectView
-      providers={providers}
-      profiles={profiles}
-      session={session}
-      selectedProvider={selectedProvider}
-      selectedProfile={selectedProfile}
-      loading={loading}
-      localRuntimeReady={workspace.dockerRuntime.reachable}
-      openingProfileId={openingProfileId}
-      onRefreshDiscovery={() => {
-        void refreshDiscovery();
-      }}
-      onSelectProvider={(providerId) => {
-        void mutateSession("session.selectProvider", { providerId });
-      }}
-      onOpenProfile={(providerId, profileId) => {
-        void openWorkspace(providerId, profileId);
-      }}
-      onChooseAuthMethod={(authMethod) => {
-        void chooseAuthMethod(authMethod);
-      }}
-      onOpenLocalRuntime={() => {
-        setActiveWorkspaceTabId("virtualisation");
-      }}
-    />
-  );
+  const workspaceTabRouterProps: WorkspaceTabRouterProps = {
+    activeWorkspaceTabId,
+    setActiveWorkspaceTabId,
+    session,
+    activeWorkspace,
+    workspace,
+    selectedProvider,
+    selectedProfile,
+    profiles,
+    providers,
+    loading,
+    openingProfileId,
+    logs,
+    showSensitiveValues,
+    setShowSensitiveValues,
+    activeS3PageId,
+    setActiveS3PageId,
+    activeAzurePageId,
+    activeAzureStoragePageId,
+    s3UploadStatus,
+    setS3UploadStatus,
+    s3SignedUrlStatus,
+    setS3SignedUrlStatus,
+    s3SignedUrlResult,
+    s3UrlInspection,
+    setS3UrlInspection,
+    s3UrlValidation,
+    ec2ActionStatus,
+    ec2ActionInFlight,
+    ec2ActionHistory,
+    lambdaActionStatus,
+    lambdaInvokeResult,
+    lambdaInvokeInFlight,
+    lambdaCreateInFlight,
+    lambdaCreateFormOpen,
+    setLambdaCreateFormOpen,
+    dynamodbActionStatus,
+    sqsActionStatus,
+    sqsPeekResult,
+    sqsPeekInFlight,
+    snsActionStatus,
+    rdsActionStatus,
+    logsActionStatus,
+    iamActionStatus,
+    azureActionStatus,
+    setAzureActionStatus,
+    azureStorageActionStatus,
+    setAzureStorageActionStatus,
+    azureAppServiceActionStatus,
+    setAzureAppServiceActionStatus,
+    azureFrontDoorActionStatus,
+    setAzureFrontDoorActionStatus,
+    azureServiceInventoryLoading,
+    azureLogWorkspaceSelectionLoading,
+    azureWafConfigLoading,
+    azureFrontDoorTopologyLoading,
+    logAnalyticsPrefill,
+    setLogAnalyticsPrefill,
+    frontDoorAccessPrefill,
+    setFrontDoorAccessPrefill,
+    localStackAuthToken,
+    setLocalStackAuthToken,
+    localStackPersistence,
+    setLocalStackPersistence,
+    localStackEnvironmentText,
+    setLocalStackEnvironmentText,
+    localStackLogs,
+    localStackLogsStatus,
+    localStackActionStatus,
+    localStackActionInFlight,
+    flociAzPersistence,
+    setFlociAzPersistence,
+    flociAzEnvironmentText,
+    setFlociAzEnvironmentText,
+    flociAzLogs,
+    flociAzLogsStatus,
+    flociAzActionStatus,
+    flociAzActionInFlight,
+    setWorkspace,
+    setSession,
+    mutateWorkspaceSelection,
+    mutateSession,
+    refreshDiscovery,
+    refreshDockerRuntime,
+    refreshLocalStackLogs,
+    refreshFlociAzLogs,
+    refreshEC2Inventory,
+    selectEC2Region,
+    selectEC2Instance,
+    invokeEC2LifecycleAction,
+    refreshLambdaInventory,
+    selectLambdaRegion,
+    selectLambdaFunction,
+    invokeLambda,
+    createLambda,
+    refreshDynamoDBInventory,
+    selectDynamoDBRegion,
+    selectDynamoDBTable,
+    putDynamoDBItem,
+    deleteDynamoDBItem,
+    refreshSQSInventory,
+    selectSQSRegion,
+    selectSQSQueue,
+    peekSQSQueue,
+    sendSQSMessage,
+    createSQSQueue,
+    refreshSNSInventory,
+    selectSNSRegion,
+    selectSNSTopic,
+    publishSNSTopic,
+    createSNSTopic,
+    refreshRDSInventory,
+    selectRDSRegion,
+    selectRDSInstance,
+    refreshLogsInventory,
+    selectLogsRegion,
+    selectLogGroup,
+    refreshIAMInventory,
+    selectIAMRole,
+    applyS3PrefixFilter,
+    selectAzureResourceGroup,
+    selectAzureVirtualMachine,
+    selectAzureWebApp,
+    selectAzureWebAppSlot,
+    selectAzureLogAnalyticsWorkspace,
+    selectAzureWafPolicy,
+    refreshAzureFrontDoorTopology,
+    listLogAnalyticsHistory,
+    listLogAnalyticsSaved,
+    invokeLocalStackAction,
+    invokeFlociAzAction,
+    openWorkspace,
+    chooseAuthMethod,
+  };
+
+  const content = <WorkspaceTabRouter {...workspaceTabRouterProps} />;
+
 
   const resetDialog = (
     <AlertDialog
