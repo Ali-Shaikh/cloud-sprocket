@@ -21,6 +21,8 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { Toaster } from "sonner";
+import { useSessionState } from "./hooks/use-session-state";
+import { useWorkspaceLoading } from "./hooks/use-workspace-loading";
 import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
 import { awsInventoryLoaded, awsInventoryScopeForTab } from "./lib/aws-inventory";
 import { azureInventoryLoaded, azureInventoryScopeForTab } from "./lib/azure-inventory";
@@ -238,10 +240,34 @@ import {
 } from "./lib/workspace-shell";
 
 export default function App() {
-  const [providers, setProviders] = useState<ProviderSummary[]>([]);
-  const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
-  const [session, setSession] = useState<SessionSnapshot>(emptySession);
-  const [appSettings, setAppSettings] = useState<AppSettingsSnapshot>(emptySettings);
+  const {
+    providers,
+    setProviders,
+    profiles,
+    setProfiles,
+    session,
+    setSession,
+    appSettings,
+    setAppSettings,
+    sessionSnapshotRef,
+    selectedProvider,
+    selectedProfile,
+  } = useSessionState();
+  const {
+    workspaceLoading,
+    workspaceFetching,
+    workspaceLoaded,
+    setWorkspaceLoaded,
+    azureInventoryLoading,
+    awsInventoryLoading,
+    beginWorkspaceFetch,
+    endWorkspaceFetch,
+    resetWorkspaceFetch,
+    beginAzureInventoryFetch,
+    endAzureInventoryFetch,
+    beginAwsInventoryFetch,
+    endAwsInventoryFetch,
+  } = useWorkspaceLoading();
   const [workspace, setWorkspace] = useState<WorkspaceSnapshot>(emptyWorkspace);
   const [azureLogWorkspaceSelectionLoading, setAzureLogWorkspaceSelectionLoading] = useState(false);
   const azureLogWorkspaceSelectionRequest = useRef(0);
@@ -293,74 +319,12 @@ export default function App() {
   const [azureInventoryRefreshToken, setAzureInventoryRefreshToken] = useState(0);
   const [awsInventoryRefreshToken, setAwsInventoryRefreshToken] = useState(0);
   const discoveryRefreshJobIdRef = useRef<string | undefined>(undefined);
-  const sessionSnapshotRef = useRef(session);
   const loadWorkspaceRef = useRef<(snapshot: SessionSnapshot) => Promise<void>>(async () => undefined);
   const [writeModeDialogOpen, setWriteModeDialogOpen] = useState(false);
   const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<"enable" | "incapable">("enable");
   const [writeModePending, setWriteModePending] = useState(false);
   const writeModeRequestRef = useRef(0);
   const [loading, setLoading] = useState(true);
-  // workspaceLoading: an inventory fetch (workspace.get / discovery refresh) is
-  // in flight. workspaceLoaded: at least one fetch has completed for the current
-  // lock, so zero counts are real rather than "not fetched yet".
-  const [workspaceLoading, setWorkspaceLoading] = useState(false);
-  const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
-  const [workspaceFetching, setWorkspaceFetching] = useState(false);
-  const workspaceFetchDepthRef = useRef(0);
-  const [azureInventoryLoading, setAzureInventoryLoading] = useState(false);
-  const [awsInventoryLoading, setAwsInventoryLoading] = useState(false);
-  const azureInventoryFetchDepthRef = useRef(0);
-  const awsInventoryFetchDepthRef = useRef(0);
-
-  function beginAzureInventoryFetch(): void {
-    azureInventoryFetchDepthRef.current += 1;
-    if (azureInventoryFetchDepthRef.current === 1) {
-      setAzureInventoryLoading(true);
-    }
-  }
-
-  function endAzureInventoryFetch(): void {
-    azureInventoryFetchDepthRef.current = Math.max(0, azureInventoryFetchDepthRef.current - 1);
-    if (azureInventoryFetchDepthRef.current === 0) {
-      setAzureInventoryLoading(false);
-    }
-  }
-
-  function beginAwsInventoryFetch(): void {
-    awsInventoryFetchDepthRef.current += 1;
-    if (awsInventoryFetchDepthRef.current === 1) {
-      setAwsInventoryLoading(true);
-    }
-  }
-
-  function endAwsInventoryFetch(): void {
-    awsInventoryFetchDepthRef.current = Math.max(0, awsInventoryFetchDepthRef.current - 1);
-    if (awsInventoryFetchDepthRef.current === 0) {
-      setAwsInventoryLoading(false);
-    }
-  }
-
-  function beginWorkspaceFetch(): void {
-    workspaceFetchDepthRef.current += 1;
-    if (workspaceFetchDepthRef.current === 1) {
-      setWorkspaceFetching(true);
-      setWorkspaceLoading(true);
-    }
-  }
-
-  function endWorkspaceFetch(): void {
-    workspaceFetchDepthRef.current = Math.max(0, workspaceFetchDepthRef.current - 1);
-    if (workspaceFetchDepthRef.current === 0) {
-      setWorkspaceFetching(false);
-      setWorkspaceLoading(false);
-    }
-  }
-
-  function resetWorkspaceFetch(): void {
-    workspaceFetchDepthRef.current = 0;
-    setWorkspaceFetching(false);
-    setWorkspaceLoading(false);
-  }
   const [openingProfileId, setOpeningProfileId] = useState<string>();
   const [localStackAuthToken, setLocalStackAuthToken] = useState("");
   const [localStackPersistence, setLocalStackPersistence] = useState(false);
@@ -411,8 +375,6 @@ export default function App() {
   const isInitialLoad = useRef(true);
   const s3PrefixRequestIdRef = useRef(0);
   const isTablet = viewportWidth < 1180;
-  const selectedProvider = providers.find((provider) => provider.providerId === session.currentProviderId);
-  const selectedProfile = profiles.find((profile) => profile.profileId === session.selectedProfileId);
 
   useEffect(() => {
     // Intercept console
