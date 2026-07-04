@@ -10,6 +10,7 @@ export const SQSView = lazy(() => import("./SQSView"));
 export const SNSView = lazy(() => import("./SNSView"));
 export const RDSView = lazy(() => import("./RDSView"));
 export const ECSView = lazy(() => import("./ECSView"));
+export const ApiGatewayView = lazy(() => import("./ApiGatewayView"));
 export const LogsView = lazy(() => import("./LogsView"));
 export const IAMView = lazy(() => import("./IAMView"));
 export const LambdaView = lazy(() => import("./LambdaView"));

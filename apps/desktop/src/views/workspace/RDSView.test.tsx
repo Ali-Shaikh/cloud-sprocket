@@ -144,6 +144,9 @@ const workspaceFixture: RdsWorkspaceSnapshot = {
   ecsClusters: [],
   ecsServices: [],
   ecsTasks: [],
+  apiGatewayRegions: [],
+  apiGatewayApis: [],
+  apiGatewayStages: [],
 };
 
 function renderRDSView() {

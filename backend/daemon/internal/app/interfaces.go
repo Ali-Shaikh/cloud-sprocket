@@ -61,6 +61,11 @@ type RDSInventory interface {
 	DescribeInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) (models.AwsRdsInstance, error)
 }
 
+type ApiGatewayInventory interface {
+	ListApis(ctx context.Context, profile models.ProfileSummary, region string) (models.AwsApiGatewayListResult, error)
+	ListStages(ctx context.Context, profile models.ProfileSummary, region string, apiKey string) ([]models.AwsApiGatewayStage, error)
+}
+
 type ECSInventory interface {
 	ListClusters(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsEcsCluster, error)
 	DescribeCluster(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string) (models.AwsEcsCluster, error)

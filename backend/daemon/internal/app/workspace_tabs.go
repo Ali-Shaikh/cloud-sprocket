@@ -258,6 +258,13 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 			Category: workspaceTabCategoryService,
 		},
 		{
+			TabID:    "apigateway",
+			Label:    "API Gateway",
+			Summary:  "REST and HTTP API inventory.",
+			Detail:   "List REST and HTTP/WebSocket APIs by region with stage invoke URLs.",
+			Category: workspaceTabCategoryService,
+		},
+		{
 			TabID:    "iam",
 			Label:    "IAM",
 			Summary:  "Role and policy inventory.",

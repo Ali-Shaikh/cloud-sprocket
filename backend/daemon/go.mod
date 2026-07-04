@@ -43,6 +43,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.30 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.6 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.30 // indirect
+	github.com/aws/aws-sdk-go-v2/service/apigateway v1.40.8 // indirect
+	github.com/aws/aws-sdk-go-v2/service/apigatewayv2 v1.35.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.34.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ecs v1.86.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.12 // indirect

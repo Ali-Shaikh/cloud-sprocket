@@ -273,6 +273,8 @@ export default function App() {
     setRdsActionStatus,
     ecsActionStatus,
     setEcsActionStatus,
+    apiGatewayActionStatus,
+    setApiGatewayActionStatus,
     logsActionStatus,
     setLogsActionStatus,
     iamActionStatus,
@@ -376,6 +378,9 @@ export default function App() {
     selectECSCluster,
     selectECSService,
     selectECSTask,
+    refreshApiGatewayInventory,
+    selectApiGatewayRegion,
+    selectApiGatewayApi,
     refreshLogsInventory,
     selectLogsRegion,
     selectLogGroup,
@@ -401,6 +406,7 @@ export default function App() {
     setSnsActionStatus,
     setRdsActionStatus,
     setEcsActionStatus,
+    setApiGatewayActionStatus,
     setLogsActionStatus,
     setIamActionStatus,
   });
@@ -1095,6 +1101,9 @@ export default function App() {
         if (workspaceResult.ecsStatusMessage) {
           setEcsActionStatus(workspaceResult.ecsStatusMessage);
         }
+        if (workspaceResult.apiGatewayStatusMessage) {
+          setApiGatewayActionStatus(workspaceResult.apiGatewayStatusMessage);
+        }
         if (workspaceResult.logsStatusMessage) {
           setLogsActionStatus(workspaceResult.logsStatusMessage);
         }
@@ -1172,6 +1181,7 @@ export default function App() {
     snsActionStatus,
     rdsActionStatus,
     ecsActionStatus,
+    apiGatewayActionStatus,
     logsActionStatus,
     iamActionStatus,
     azureActionStatus,
@@ -1249,6 +1259,9 @@ export default function App() {
     selectECSCluster,
     selectECSService,
     selectECSTask,
+    refreshApiGatewayInventory,
+    selectApiGatewayRegion,
+    selectApiGatewayApi,
     refreshLogsInventory,
     selectLogsRegion,
     selectLogGroup,

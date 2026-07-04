@@ -5,6 +5,8 @@ import type {
   AppSettingsSnapshot,
   AwsDynamoDBTable,
   AwsEc2Instance,
+  AwsApiGatewayApi,
+  AwsApiGatewayStage,
   AwsEcsCluster,
   AwsEcsService,
   AwsEcsTask,
@@ -142,6 +144,9 @@ export const emptyWorkspace: WorkspaceSnapshot = {
   ecsClusters: [],
   ecsServices: [],
   ecsTasks: [],
+  apiGatewayRegions: [],
+  apiGatewayApis: [],
+  apiGatewayStages: [],
   logsRegions: [],
   logGroups: [],
   iamRoles: [],
@@ -351,6 +356,14 @@ function normaliseEcsTask(task: AwsEcsTask): AwsEcsTask {
     ...task,
     containers: normaliseArray(task.containers),
   };
+}
+
+function normaliseApiGatewayApi(api: AwsApiGatewayApi): AwsApiGatewayApi {
+  return { ...api };
+}
+
+function normaliseApiGatewayStage(stage: AwsApiGatewayStage): AwsApiGatewayStage {
+  return { ...stage };
 }
 
 function normaliseLogGroup(group: AwsLogGroup): AwsLogGroup {
@@ -753,6 +766,16 @@ export function mergeAwsInventoryScope(
         ecsTasks: normalised.ecsTasks,
         ecsStatusMessage: normalised.ecsStatusMessage,
       });
+    case "apigateway":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedApiGatewayRegion: normalised.selectedApiGatewayRegion,
+        selectedApiGatewayApiKey: normalised.selectedApiGatewayApiKey,
+        apiGatewayRegions: normalised.apiGatewayRegions,
+        apiGatewayApis: normalised.apiGatewayApis,
+        apiGatewayStages: normalised.apiGatewayStages,
+        apiGatewayStatusMessage: normalised.apiGatewayStatusMessage,
+      });
     case "logs":
       return normaliseWorkspaceSnapshot({
         ...current,
@@ -896,6 +919,9 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     ecsClusters: normaliseArray(source.ecsClusters).map(normaliseEcsCluster),
     ecsServices: normaliseArray(source.ecsServices).map(normaliseEcsService),
     ecsTasks: normaliseArray(source.ecsTasks).map(normaliseEcsTask),
+    apiGatewayRegions: normaliseArray(source.apiGatewayRegions),
+    apiGatewayApis: normaliseArray(source.apiGatewayApis).map(normaliseApiGatewayApi),
+    apiGatewayStages: normaliseArray(source.apiGatewayStages).map(normaliseApiGatewayStage),
     logsRegions: normaliseArray(source.logsRegions),
     logGroups: normaliseArray(source.logGroups).map(normaliseLogGroup),
     iamRoles: normaliseArray(source.iamRoles).map(normaliseIamRole),

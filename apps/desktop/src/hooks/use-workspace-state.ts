@@ -84,6 +84,9 @@ export function useWorkspaceState(session: SessionSnapshot) {
   const [ecsActionStatus, setEcsActionStatus] = useState(
     "Select a region before refreshing ECS clusters.",
   );
+  const [apiGatewayActionStatus, setApiGatewayActionStatus] = useState(
+    "Select a region before refreshing API Gateway APIs.",
+  );
   const [logsActionStatus, setLogsActionStatus] = useState(
     "Select a region before refreshing log groups.",
   );
@@ -246,6 +249,8 @@ export function useWorkspaceState(session: SessionSnapshot) {
     setRdsActionStatus,
     ecsActionStatus,
     setEcsActionStatus,
+    apiGatewayActionStatus,
+    setApiGatewayActionStatus,
     logsActionStatus,
     setLogsActionStatus,
     iamActionStatus,

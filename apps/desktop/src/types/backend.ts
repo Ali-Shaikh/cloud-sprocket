@@ -156,6 +156,8 @@ export interface SessionSnapshot {
   selectedEcsClusterArn?: string;
   selectedEcsServiceArn?: string;
   selectedEcsTaskArn?: string;
+  selectedApiGatewayRegion?: string;
+  selectedApiGatewayApiKey?: string;
   selectedLogsRegion?: string;
   selectedLogGroupName?: string;
   selectedIamRoleName?: string;
@@ -429,6 +431,25 @@ export interface AwsEcsTask {
   startedAt?: string;
   group?: string;
   containers?: AwsEcsContainer[];
+}
+
+export interface AwsApiGatewayApi {
+  apiKey: string;
+  apiId: string;
+  apiName: string;
+  apiType: string;
+  description?: string;
+  endpoint?: string;
+  protocol?: string;
+}
+
+export interface AwsApiGatewayStage {
+  apiKey: string;
+  stageName: string;
+  invokeUrl?: string;
+  deploymentId?: string;
+  description?: string;
+  autoDeploy?: boolean;
 }
 
 export interface AwsLogGroup {
@@ -950,6 +971,8 @@ export interface WorkspaceSnapshot {
   selectedEcsClusterArn?: string;
   selectedEcsServiceArn?: string;
   selectedEcsTaskArn?: string;
+  selectedApiGatewayRegion?: string;
+  selectedApiGatewayApiKey?: string;
   selectedLogsRegion?: string;
   selectedLogGroupName?: string;
   selectedIamRoleName?: string;
@@ -970,6 +993,10 @@ export interface WorkspaceSnapshot {
   ecsClusters: AwsEcsCluster[];
   ecsServices: AwsEcsService[];
   ecsTasks: AwsEcsTask[];
+  apiGatewayStatusMessage?: string;
+  apiGatewayRegions: string[];
+  apiGatewayApis: AwsApiGatewayApi[];
+  apiGatewayStages: AwsApiGatewayStage[];
   logsStatusMessage?: string;
   logsRegions: string[];
   logGroups: AwsLogGroup[];
