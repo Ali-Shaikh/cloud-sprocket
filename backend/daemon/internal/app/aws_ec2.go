@@ -277,13 +277,11 @@ func (s *Service) runEC2Action(
 		}
 	}
 
-	s.mu.Lock()
 	workspace := s.buildWorkspaceSnapshot(snapshot, session)
 	workspace.EC2Instances = instances
 	workspace.SelectedEC2Region = region
 	workspace.SelectedEC2InstanceID = instanceID
 	err = s.notifyStateAndLog(background, snapshot, session, notifier, "success", successMessage)
-	s.mu.Unlock()
 	if err != nil {
 		s.notifyJob(notifier, models.JobStatus{
 			JobID:   job.JobID,
