@@ -180,9 +180,9 @@ jobs:
             echo "SITE_PUSH_TOKEN secret not set; skipping site rebuild trigger."
             exit 0
           fi
-          git clone --depth 1 "https://x-access-token:${SITE_PUSH_TOKEN}@github.com/CloudSprocket/cloudsprocket.org.git" site-rebuild
+          git clone --depth 1 https://github.com/CloudSprocket/cloudsprocket.org.git site-rebuild
           cd site-rebuild
           git -c user.name="cloudsprocket-release-bot" \
               -c user.email="releases@cloudsprocket.org" \
-              commit --allow-empty -m "chore: rebuild for app release ${{ github.ref_name }}"
-          git push
+              commit --allow-empty -m "chore: rebuild for app release ${GITHUB_REF_NAME}"
+          git push "https://x-access-token:${SITE_PUSH_TOKEN}@github.com/CloudSprocket/cloudsprocket.org.git" HEAD:master
