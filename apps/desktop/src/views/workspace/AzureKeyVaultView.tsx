@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Eye, EyeOff, KeyRound, Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { actionCapabilityState } from "@/lib/action-capabilities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -60,7 +61,8 @@ export default function AzureKeyVaultView({
   const vaults = workspace.azureKeyVaults ?? [];
   const secrets = workspace.azureKeyVaultSecrets ?? [];
   const selectedVault = workspace.selectedAzureKeyVault ?? vaults[0]?.name ?? "";
-  const canWrite = workspace.azureWritesEnabled;
+  const writeCapability = actionCapabilityState(workspace, "keyvault", "setSecret", "azure");
+  const canWrite = writeCapability.enabled;
 
   const [revealed, setRevealed] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);

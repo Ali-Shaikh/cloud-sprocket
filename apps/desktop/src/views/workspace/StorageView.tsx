@@ -44,6 +44,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
+import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { DetailFieldList } from "./detail-fields";
 import awsS3IconUrl from "@/assets/cloud-icons/aws-s3.svg";
 import type {
@@ -197,6 +198,29 @@ export default function StorageView({
   const [uploadSourcePath, setUploadSourcePath] = useState("");
   const [uploadObjectKey, setUploadObjectKey] = useState("");
   const [uploadAcknowledged, setUploadAcknowledged] = useState(false);
+  const uploadCapability = actionCapabilityState(workspace, "s3", "uploadObject");
+  const canUpload =
+    uploadCapability.enabled &&
+    Boolean(workspace.selectedS3BucketName) &&
+    Boolean(uploadSourcePath) &&
+    Boolean(uploadObjectKey) &&
+    uploadAcknowledged;
+  const uploadDisabledReason = canUpload
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "s3",
+        "uploadObject",
+        !workspace.selectedS3BucketName
+          ? "Select a bucket first."
+          : !uploadSourcePath
+            ? "Choose a local file to upload."
+            : !uploadObjectKey
+              ? "Enter a destination object key."
+              : !uploadAcknowledged
+                ? "Confirm the upload checklist before continuing."
+                : undefined,
+      );
   const [signedUrlAmount, setSignedUrlAmount] = useState(15);
   const [signedUrlUnit, setSignedUrlUnit] = useState<DurationUnit>("minutes");
   const signedUrlSeconds = Math.min(
@@ -746,8 +770,8 @@ export default function StorageView({
         <div>
           <div className={fieldLabel}>Write policy</div>
           <StatusPill
-            status={workspace.awsWritesEnabled ? "on" : "warning"}
-            label={workspace.awsWritesEnabled ? "Writes enabled" : "Read-only"}
+            status={uploadCapability.enabled ? "on" : "warning"}
+            label={uploadCapability.enabled ? "Writes enabled" : "Read-only"}
           />
         </div>
         <div>
@@ -792,7 +816,7 @@ export default function StorageView({
           type="checkbox"
           checked={uploadAcknowledged}
           disabled={
-            !workspace.awsWritesEnabled ||
+            !uploadCapability.enabled ||
             !workspace.selectedS3BucketName ||
             !uploadSourcePath ||
             !uploadObjectKey
@@ -813,13 +837,8 @@ export default function StorageView({
       </p>
 
       <Button
-        disabled={
-          !workspace.awsWritesEnabled ||
-          !workspace.selectedS3BucketName ||
-          !uploadSourcePath ||
-          !uploadObjectKey ||
-          !uploadAcknowledged
-        }
+        disabled={!canUpload}
+        title={uploadDisabledReason}
         onClick={() => {
           onUploadObject(uploadSourcePath, uploadObjectKey);
           setUploadAcknowledged(false);
@@ -828,6 +847,9 @@ export default function StorageView({
         <Upload />
         Upload
       </Button>
+      {uploadDisabledReason ? (
+        <p className="text-xs text-muted-foreground">{uploadDisabledReason}</p>
+      ) : null}
       <p className="text-sm text-muted-foreground">{uploadStatus}</p>
     </section>
   );

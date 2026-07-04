@@ -122,6 +122,7 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 			workspace.AzureWriteCapable = profileAllowsAzureWrites(profile, azureCLI)
 			workspace.AzureWriteModeEnabled = session.AzureWriteModeEnabled && session.IsLocked
 			workspace.AzureWritesEnabled = effectiveAzureWritesEnabled(session, profile, azureCLI)
+			workspace.ActionCapabilities = buildAzureActionCapabilities(session, profile, azureCLI)
 		}
 	}
 

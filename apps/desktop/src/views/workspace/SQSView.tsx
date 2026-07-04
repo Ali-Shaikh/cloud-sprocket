@@ -35,6 +35,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/empty-state";
+import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { DetailFieldList } from "./detail-fields";
 import type { AwsSqsPeekResult, WorkspaceSnapshot } from "@/types/backend";
 
@@ -129,8 +130,36 @@ export default function SQSView({
     workspace.sqsStatusMessage ||
     "SQS inventory is waiting for an open AWS workspace.";
 
-  const canPeek =
-    workspace.awsWritesEnabled && !!selectedQueue?.queueUrl && !peekInFlight;
+  const peekCapability = actionCapabilityState(workspace, "sqs", "peek");
+  const sendCapability = actionCapabilityState(workspace, "sqs", "sendMessage");
+  const createQueueCapability = actionCapabilityState(workspace, "sqs", "createQueue");
+  const canPeek = peekCapability.enabled && !!selectedQueue?.queueUrl && !peekInFlight;
+  const canSend = sendCapability.enabled && !!selectedQueue?.queueUrl && !peekInFlight;
+  const canCreateQueue = createQueueCapability.enabled && !!workspace.selectedSqsRegion && !peekInFlight;
+  const peekDisabledReason = canPeek
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "sqs",
+        "peek",
+        !selectedQueue?.queueUrl ? "Select a queue first." : undefined,
+      );
+  const sendDisabledReason = canSend
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "sqs",
+        "sendMessage",
+        !selectedQueue?.queueUrl ? "Select a queue first." : undefined,
+      );
+  const createQueueDisabledReason = canCreateQueue
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "sqs",
+        "createQueue",
+        !workspace.selectedSqsRegion ? "Select a region first." : undefined,
+      );
 
   const copySnippets = selectedQueue
     ? [
@@ -260,17 +289,16 @@ export default function SQSView({
             <RefreshCw />
             Refresh queues
           </Button>
-          {workspace.awsWritesEnabled ? (
-            <Button
-              variant="outline"
-              disabled={!workspace.selectedSqsRegion || peekInFlight}
-              onClick={() => {
-                setCreateDialogOpen(true);
-              }}
-            >
-              Create queue
-            </Button>
-          ) : null}
+          <Button
+            variant="outline"
+            disabled={!canCreateQueue}
+            title={createQueueDisabledReason}
+            onClick={() => {
+              setCreateDialogOpen(true);
+            }}
+          >
+            Create queue
+          </Button>
           <div className="min-w-56 flex-1">
             <div className={cn(fieldLabel, "mb-1")}>Filter</div>
             <Input
@@ -392,32 +420,33 @@ export default function SQSView({
                 <p className="mb-3 text-sm text-muted-foreground">
                   Receives up to 10 messages with visibility timeout 0. Messages stay on the queue.
                 </p>
-                {!workspace.awsWritesEnabled ? (
-                  <p className="text-sm text-muted-foreground">
-                    Enable write mode from the top bar to peek messages on a local endpoint profile.
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    disabled={!canPeek}
+                    title={peekDisabledReason}
+                    onClick={() => {
+                      setPeekDialogOpen(true);
+                    }}
+                  >
+                    Peek messages
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={!canSend}
+                    title={sendDisabledReason}
+                    onClick={() => {
+                      setSendDialogOpen(true);
+                    }}
+                  >
+                    Send message
+                  </Button>
+                </div>
+                {peekDisabledReason || sendDisabledReason ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {peekDisabledReason || sendDisabledReason}
                   </p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      disabled={!canPeek}
-                      onClick={() => {
-                        setPeekDialogOpen(true);
-                      }}
-                    >
-                      Peek messages
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={!canPeek}
-                      onClick={() => {
-                        setSendDialogOpen(true);
-                      }}
-                    >
-                      Send message
-                    </Button>
-                  </div>
-                )}
+                ) : null}
               </div>
 
               {peekResult ? (

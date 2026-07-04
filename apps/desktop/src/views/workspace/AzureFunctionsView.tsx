@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Play, Zap } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -50,14 +51,29 @@ export default function AzureFunctionsView({
   const functions = workspace.azureFunctions ?? [];
   const selectedApp = workspace.selectedAzureFunctionApp ?? apps[0]?.name ?? "";
   const selectedFunction = workspace.selectedAzureFunction ?? "";
-  const canWrite = workspace.azureWritesEnabled;
+  const invokeCapability = actionCapabilityState(workspace, "functions", "invoke", "azure");
+  const canWrite = invokeCapability.enabled;
 
   const [payload, setPayload] = useState('{\n  "name": "world"\n}');
   const [invoking, setInvoking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AzureFunctionInvokeResult | null>(null);
 
-  const canInvoke = canWrite && selectedApp !== "" && selectedFunction !== "" && !invoking;
+  const canInvoke =
+    invokeCapability.enabled && selectedApp !== "" && selectedFunction !== "" && !invoking;
+  const invokeDisabledReason = canInvoke
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "functions",
+        "invoke",
+        selectedApp === ""
+          ? "Select a function app first."
+          : selectedFunction === ""
+            ? "Select a function to invoke."
+            : undefined,
+        "azure",
+      );
 
   async function invoke() {
     if (!canInvoke) return;
@@ -159,15 +175,17 @@ export default function AzureFunctionsView({
       <section className={sectionCard}>
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-bold">Invoke</h2>
-          <Button onClick={() => void invoke()} disabled={!canInvoke}>
+          <Button
+            onClick={() => void invoke()}
+            disabled={!canInvoke}
+            title={invokeDisabledReason}
+          >
             <Play />
             {invoking ? "Invoking…" : "Invoke"}
           </Button>
         </div>
-        {!canWrite ? (
-          <p className="text-sm text-muted-foreground">
-            Enable write mode to invoke functions with a test payload.
-          </p>
+        {invokeDisabledReason ? (
+          <p className="text-sm text-muted-foreground">{invokeDisabledReason}</p>
         ) : null}
         <div>
           <div className={cn(fieldLabel, "mb-1")}>

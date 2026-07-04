@@ -35,6 +35,7 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
+import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { DetailFieldList } from "./detail-fields";
 import type {
   AwsEc2Instance,
@@ -170,10 +171,60 @@ export default function ComputeView({
   }, [filterText, workspace.ec2Instances]);
 
   const selectedState = selectedInstance?.state?.toLowerCase();
-  const canWrite = Boolean(selectedInstance) && workspace.awsWritesEnabled && !actionInFlight;
-  const canStart = canWrite && selectedState === "stopped";
-  const canStop = canWrite && selectedState === "running";
-  const canReboot = canWrite && selectedState === "running";
+  const startCapability = actionCapabilityState(workspace, "ec2", "start");
+  const stopCapability = actionCapabilityState(workspace, "ec2", "stop");
+  const rebootCapability = actionCapabilityState(workspace, "ec2", "reboot");
+  const canStart =
+    startCapability.enabled &&
+    Boolean(selectedInstance) &&
+    selectedState === "stopped" &&
+    !actionInFlight;
+  const canStop =
+    stopCapability.enabled &&
+    Boolean(selectedInstance) &&
+    selectedState === "running" &&
+    !actionInFlight;
+  const canReboot =
+    rebootCapability.enabled &&
+    Boolean(selectedInstance) &&
+    selectedState === "running" &&
+    !actionInFlight;
+  const startDisabledReason = canStart
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "ec2",
+        "start",
+        !selectedInstance
+          ? "Select an instance first."
+          : selectedState !== "stopped"
+            ? "Start is only available when the instance is stopped."
+            : undefined,
+      );
+  const stopDisabledReason = canStop
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "ec2",
+        "stop",
+        !selectedInstance
+          ? "Select an instance first."
+          : selectedState !== "running"
+            ? "Stop is only available when the instance is running."
+            : undefined,
+      );
+  const rebootDisabledReason = canReboot
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "ec2",
+        "reboot",
+        !selectedInstance
+          ? "Select an instance first."
+          : selectedState !== "running"
+            ? "Reboot is only available when the instance is running."
+            : undefined,
+      );
 
   const pendingLabel = pending
     ? pending.action[0].toUpperCase() + pending.action.slice(1)
@@ -287,7 +338,7 @@ export default function ComputeView({
           <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
             <div className={fieldLabel}>Write Mode</div>
             <p className="truncate text-sm">
-              {workspace.awsWritesEnabled ? "Local endpoint enabled" : "Read-only"}
+              {startCapability.enabled ? "Writes enabled" : "Read-only"}
             </p>
           </div>
         </div>
@@ -346,10 +397,11 @@ export default function ComputeView({
               }}
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               disabled={!canStart}
+              title={startDisabledReason}
               onClick={() => {
                 requestAction("start");
               }}
@@ -359,6 +411,7 @@ export default function ComputeView({
             <Button
               variant="outline"
               disabled={!canStop}
+              title={stopDisabledReason}
               onClick={() => {
                 requestAction("stop");
               }}
@@ -368,12 +421,18 @@ export default function ComputeView({
             <Button
               variant="outline"
               disabled={!canReboot}
+              title={rebootDisabledReason}
               onClick={() => {
                 requestAction("reboot");
               }}
             >
               Reboot
             </Button>
+            {startDisabledReason || stopDisabledReason || rebootDisabledReason ? (
+              <span className="text-xs text-muted-foreground">
+                {startDisabledReason || stopDisabledReason || rebootDisabledReason}
+              </span>
+            ) : null}
           </div>
           <div className="pb-2 text-xs text-muted-foreground">
             {filteredInstances.length}/{workspace.ec2Instances.length} shown

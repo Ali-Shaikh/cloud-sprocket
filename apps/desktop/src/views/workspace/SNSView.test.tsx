@@ -227,11 +227,11 @@ describe("SNSView", () => {
     expect(onCreateTopic).toHaveBeenCalledWith("new-events");
   });
 
-  it("hides write actions when write mode is off", () => {
+  it("disables write actions when write mode is off", () => {
     renderSNSView();
 
-    expect(screen.queryByRole("button", { name: "Publish message" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Create topic" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publish message" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create topic" })).toBeDisabled();
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {

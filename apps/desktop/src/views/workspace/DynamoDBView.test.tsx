@@ -233,11 +233,11 @@ describe("DynamoDBView", () => {
     );
   });
 
-  it("hides write actions when write mode is off", () => {
+  it("disables write actions when write mode is off", () => {
     renderDynamoDBView();
 
-    expect(screen.queryByRole("button", { name: "Put item" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Delete item" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Put item" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete item" })).toBeDisabled();
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {
