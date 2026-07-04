@@ -35,6 +35,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/empty-state";
+import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { DetailFieldList } from "./detail-fields";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
@@ -133,6 +134,27 @@ export default function SNSView({
         .some((value) => value?.toLowerCase().includes(query)),
     );
   }, [filterText, workspace.snsTopics]);
+
+  const publishCapability = actionCapabilityState(workspace, "sns", "publish");
+  const createTopicCapability = actionCapabilityState(workspace, "sns", "createTopic");
+  const canPublish = publishCapability.enabled && Boolean(selectedTopic?.topicArn);
+  const canCreateTopic = createTopicCapability.enabled && Boolean(workspace.selectedSnsRegion);
+  const publishDisabledReason = canPublish
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "sns",
+        "publish",
+        !selectedTopic?.topicArn ? "Select a topic first." : undefined,
+      );
+  const createTopicDisabledReason = canCreateTopic
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "sns",
+        "createTopic",
+        !workspace.selectedSnsRegion ? "Select a region first." : undefined,
+      );
 
   const statusMessage =
     actionStatus ||
@@ -260,17 +282,16 @@ export default function SNSView({
             <RefreshCw />
             Refresh topics
           </Button>
-          {workspace.awsWritesEnabled ? (
-            <Button
-              variant="outline"
-              disabled={!workspace.selectedSnsRegion}
-              onClick={() => {
-                setCreateDialogOpen(true);
-              }}
-            >
-              Create topic
-            </Button>
-          ) : null}
+          <Button
+            variant="outline"
+            disabled={!canCreateTopic}
+            title={createTopicDisabledReason}
+            onClick={() => {
+              setCreateDialogOpen(true);
+            }}
+          >
+            Create topic
+          </Button>
           <div className="min-w-56 flex-1">
             <div className={cn(fieldLabel, "mb-1")}>Filter</div>
             <Input
@@ -391,21 +412,19 @@ export default function SNSView({
 
               <div>
                 <div className={fieldLabel}>Publish message (write action)</div>
-                {!workspace.awsWritesEnabled ? (
-                  <p className="text-sm text-muted-foreground">
-                    Enable write mode from the top bar to publish on a local endpoint profile.
-                  </p>
-                ) : (
-                  <Button
-                    variant="outline"
-                    disabled={!selectedTopic?.topicArn}
-                    onClick={() => {
-                      setPublishDialogOpen(true);
-                    }}
-                  >
-                    Publish message
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  disabled={!canPublish}
+                  title={publishDisabledReason}
+                  onClick={() => {
+                    setPublishDialogOpen(true);
+                  }}
+                >
+                  Publish message
+                </Button>
+                {publishDisabledReason ? (
+                  <p className="mt-2 text-xs text-muted-foreground">{publishDisabledReason}</p>
+                ) : null}
               </div>
             </>
           ) : (

@@ -37,6 +37,7 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
+import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { DetailFieldList } from "./detail-fields";
 import type { AwsDynamoDBTable, WorkspaceSnapshot } from "@/types/backend";
 
@@ -137,6 +138,27 @@ export default function DynamoDBView({
         .some((value) => value?.toLowerCase().includes(query)),
     );
   }, [filterText, workspace.dynamodbTables]);
+
+  const putCapability = actionCapabilityState(workspace, "dynamodb", "putItem");
+  const deleteCapability = actionCapabilityState(workspace, "dynamodb", "deleteItem");
+  const canPutItem = putCapability.enabled && Boolean(selectedTable?.tableName);
+  const canDeleteItem = deleteCapability.enabled && Boolean(selectedTable?.tableName);
+  const putDisabledReason = canPutItem
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "dynamodb",
+        "putItem",
+        !selectedTable?.tableName ? "Select a table first." : undefined,
+      );
+  const deleteDisabledReason = canDeleteItem
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "dynamodb",
+        "deleteItem",
+        !selectedTable?.tableName ? "Select a table first." : undefined,
+      );
 
   const statusMessage =
     actionStatus ||
@@ -417,33 +439,33 @@ export default function DynamoDBView({
 
               <div>
                 <div className={fieldLabel}>Write actions</div>
-                {!workspace.awsWritesEnabled ? (
-                  <p className="text-sm text-muted-foreground">
-                    Enable write mode from the top bar to put or delete items on a local endpoint
-                    profile.
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    disabled={!canPutItem}
+                    title={putDisabledReason}
+                    onClick={() => {
+                      setPutDialogOpen(true);
+                    }}
+                  >
+                    Put item
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={!canDeleteItem}
+                    title={deleteDisabledReason}
+                    onClick={() => {
+                      setDeleteDialogOpen(true);
+                    }}
+                  >
+                    Delete item
+                  </Button>
+                </div>
+                {putDisabledReason || deleteDisabledReason ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {putDisabledReason || deleteDisabledReason}
                   </p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      disabled={!selectedTable?.tableName}
-                      onClick={() => {
-                        setPutDialogOpen(true);
-                      }}
-                    >
-                      Put item
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={!selectedTable?.tableName}
-                      onClick={() => {
-                        setDeleteDialogOpen(true);
-                      }}
-                    >
-                      Delete item
-                    </Button>
-                  </div>
-                )}
+                ) : null}
               </div>
             </>
           ) : (

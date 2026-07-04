@@ -6,6 +6,7 @@ import { Copy, Layers, MonitorCog, Plus, Terminal, Trash2 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 
 import { cn } from "@/lib/utils";
+import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -163,7 +164,19 @@ export default function AzureView({
   onBastionConnect,
 }: AzureViewProps) {
   const page = normalisePageId(activePageId);
-  const canWrite = workspace.azureWritesEnabled;
+  const createRgCapability = actionCapabilityState(
+    workspace,
+    "resourceGroups",
+    "createResourceGroup",
+    "azure",
+  );
+  const deleteRgCapability = actionCapabilityState(
+    workspace,
+    "resourceGroups",
+    "deleteResourceGroup",
+    "azure",
+  );
+  const canWrite = createRgCapability.enabled;
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [pendingVmAction, setPendingVmAction] = useState<
@@ -204,10 +217,31 @@ export default function AzureView({
       (vm) => vm.vmId === workspace.selectedAzureVmId,
     ) ?? workspace.azureVirtualMachines[0];
   const selectedVmPower = normaliseVMPowerState(selectedVm?.powerState);
-  const canStartVm = canWrite && (selectedVmPower === "stopped" || selectedVmPower === "deallocated");
-  const canPowerOffVm = canWrite && selectedVmPower === "running";
-  const canDeallocateVm = canWrite && (selectedVmPower === "running" || selectedVmPower === "stopped");
-  const canRestartVm = canWrite && selectedVmPower === "running";
+  const startVmCapability = actionCapabilityState(workspace, "compute", "startVm", "azure");
+  const stopVmCapability = actionCapabilityState(workspace, "compute", "stopVm", "azure");
+  const deallocateVmCapability = actionCapabilityState(workspace, "compute", "deallocateVm", "azure");
+  const restartVmCapability = actionCapabilityState(workspace, "compute", "restartVm", "azure");
+  const canStartVm =
+    startVmCapability.enabled &&
+    (selectedVmPower === "stopped" || selectedVmPower === "deallocated");
+  const canPowerOffVm = stopVmCapability.enabled && selectedVmPower === "running";
+  const canDeallocateVm =
+    deallocateVmCapability.enabled &&
+    (selectedVmPower === "running" || selectedVmPower === "stopped");
+  const canRestartVm = restartVmCapability.enabled && selectedVmPower === "running";
+  const startVmDisabledReason = canStartVm
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "compute",
+        "startVm",
+        !selectedVm
+          ? "Select a virtual machine first."
+          : selectedVmPower !== "stopped" && selectedVmPower !== "deallocated"
+            ? "Start is only available when the VM is stopped or deallocated."
+            : undefined,
+        "azure",
+      );
   const selectedBastion = bastionHosts.find(
     (host) => bastionHostKey(host) === selectedBastionKey,
   );
@@ -277,11 +311,11 @@ export default function AzureView({
   const metricCards = [
     {
       label: "Workspace mode",
-      value: workspace.azureWritesEnabled ? "Writes on" : "Read-only",
+      value: canWrite ? "Writes on" : "Read-only",
       detail: workspace.azureWriteCapable
-        ? workspace.azureWritesEnabled
+        ? canWrite
           ? `Mutating actions target ${workspace.azureEndpointUrl || "Azure CLI"}`
-          : "Enable write mode from the top bar for create/delete actions"
+          : createRgCapability.reason || "Enable write mode from the top bar for create/delete actions"
         : "This profile is read-only in this release",
     },
     {
@@ -595,6 +629,7 @@ export default function AzureView({
             <Button
               variant="outline"
               disabled={!canStartVm || !selectedVm}
+              title={startVmDisabledReason}
               onClick={() => {
                 if (selectedVm) {
                   setPendingVmAction({ action: "start", vm: selectedVm });

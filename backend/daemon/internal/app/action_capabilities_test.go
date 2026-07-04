@@ -40,3 +40,20 @@ func TestBuildAWSActionCapabilitiesRealCloudProfile(t *testing.T) {
 		t.Fatal("expected create disabled for real-cloud profile")
 	}
 }
+
+func TestBuildAzureActionCapabilitiesWriteModeOff(t *testing.T) {
+	profile := models.ProfileSummary{
+		Attributes: []models.DetailField{
+			{Label: "Tenant ID", Value: "cloudsprocket-local"},
+		},
+	}
+	session := models.SessionSnapshot{AzureWriteModeEnabled: false}
+	caps := buildAzureActionCapabilities(session, profile, "")
+	invoke := caps["functions"][0]
+	if invoke.Enabled {
+		t.Fatal("expected invoke disabled when Azure write mode is off")
+	}
+	if invoke.Reason == "" {
+		t.Fatal("expected disabled reason for Azure write mode off")
+	}
+}

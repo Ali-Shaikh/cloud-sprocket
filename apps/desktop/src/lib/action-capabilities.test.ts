@@ -38,4 +38,15 @@ describe("actionCapabilityState", () => {
       reason: undefined,
     });
   });
+
+  it("falls back to azureWritesEnabled for Azure actions", () => {
+    const workspace = {
+      azureWritesEnabled: false,
+    } as unknown as WorkspaceSnapshot;
+
+    expect(actionCapabilityState(workspace, "functions", "invoke", "azure")).toEqual({
+      enabled: false,
+      reason: "Mutating actions require write mode on a profile that supports Azure writes.",
+    });
+  });
 });

@@ -33,6 +33,36 @@ func awsActionCapability(
 	}
 }
 
+func azureActionGate(
+	session models.SessionSnapshot,
+	profile models.ProfileSummary,
+	providerCommandPath string,
+) (enabled bool, reason string) {
+	if !profileAllowsAzureWrites(profile, providerCommandPath) {
+		return false, "This profile does not support write mode. Use a local floci-az profile or an Azure CLI profile with write access."
+	}
+	if !session.AzureWriteModeEnabled {
+		return false, "Turn on write mode from the top bar to run mutating actions."
+	}
+	return true, ""
+}
+
+func azureActionCapability(
+	session models.SessionSnapshot,
+	profile models.ProfileSummary,
+	providerCommandPath string,
+	actionID string,
+	label string,
+) models.ActionCapability {
+	enabled, reason := azureActionGate(session, profile, providerCommandPath)
+	return models.ActionCapability{
+		ActionID: actionID,
+		Label:    label,
+		Enabled:  enabled,
+		Reason:   reason,
+	}
+}
+
 func buildAWSActionCapabilities(
 	session models.SessionSnapshot,
 	profile models.ProfileSummary,
@@ -62,6 +92,40 @@ func buildAWSActionCapabilities(
 		"dynamodb": {
 			awsActionCapability(session, profile, "putItem", "Put item"),
 			awsActionCapability(session, profile, "deleteItem", "Delete item"),
+		},
+	}
+}
+
+func buildAzureActionCapabilities(
+	session models.SessionSnapshot,
+	profile models.ProfileSummary,
+	providerCommandPath string,
+) map[string][]models.ActionCapability {
+	cap := func(actionID, label string) models.ActionCapability {
+		return azureActionCapability(session, profile, providerCommandPath, actionID, label)
+	}
+	return map[string][]models.ActionCapability{
+		"resourceGroups": {
+			cap("createResourceGroup", "Create resource group"),
+			cap("deleteResourceGroup", "Delete resource group"),
+		},
+		"compute": {
+			cap("startVm", "Start VM"),
+			cap("stopVm", "Stop VM"),
+			cap("deallocateVm", "Deallocate VM"),
+			cap("restartVm", "Restart VM"),
+		},
+		"storage": {
+			cap("createAccount", "Create storage account"),
+			cap("createContainer", "Create container"),
+			cap("uploadBlob", "Upload blob"),
+			cap("deleteBlob", "Delete blob"),
+		},
+		"functions": {
+			cap("invoke", "Invoke function"),
+		},
+		"keyvault": {
+			cap("setSecret", "Set secret"),
 		},
 	}
 }

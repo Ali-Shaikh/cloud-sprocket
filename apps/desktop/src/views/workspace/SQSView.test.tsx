@@ -207,7 +207,7 @@ describe("SQSView", () => {
     expect(onCreateQueue).toHaveBeenCalledWith("new-orders");
   });
 
-  it("hides write actions when write mode is off", () => {
+  it("disables write actions when write mode is off", () => {
     render(
       <ThemeProvider>
         <SQSView
@@ -225,8 +225,8 @@ describe("SQSView", () => {
       </ThemeProvider>,
     );
 
-    expect(screen.queryByRole("button", { name: "Send message" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Create queue" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create queue" })).toBeDisabled();
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {

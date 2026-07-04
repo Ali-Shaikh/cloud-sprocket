@@ -6,6 +6,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Database, Trash2, Upload } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { actionCapabilityState } from "@/lib/action-capabilities";
 import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,7 +86,9 @@ export default function AzureStorageView({
   onDeleteBlob,
 }: AzureStorageViewProps) {
   const page = normalisePageId(activePageId);
-  const canWrite = workspace.azureWritesEnabled;
+  const writeCapability = actionCapabilityState(workspace, "storage", "uploadBlob", "azure");
+  const canWrite = writeCapability.enabled;
+  const writeDisabledReason = writeCapability.reason;
   const inventoryLoadingLabel = azureInventoryLoadingLabel(workspace, "storage");
   const [prefixInput, setPrefixInput] = useState(workspace.azureBlobPrefixFilter ?? "");
   const [createAccountOpen, setCreateAccountOpen] = useState(false);
@@ -458,10 +461,8 @@ export default function AzureStorageView({
         <Upload />
         Upload blob
       </Button>
-      {!canWrite ? (
-        <p className="text-sm text-muted-foreground">
-          Enable write mode from the top bar to upload blobs.
-        </p>
+      {writeDisabledReason ? (
+        <p className="text-sm text-muted-foreground">{writeDisabledReason}</p>
       ) : null}
       {actionStatus ? <p className="text-sm text-muted-foreground">{actionStatus}</p> : null}
     </section>
