@@ -64,7 +64,38 @@ const workspace = {
   azureWriteCapable: false,
 } as unknown as WorkspaceSnapshot;
 
+const hiddenResourceHits = [
+  {
+    providerId: "aws",
+    serviceId: "rds",
+    label: "RDS",
+    resourceCount: 2,
+  },
+];
+
 describe("OverviewView", () => {
+  it("renders hidden-resource hint with one-click enable", () => {
+    const onEnableHiddenService = vi.fn();
+    render(
+      <OverviewView
+        workspace={workspace}
+        session={session}
+        providerLabel="AWS"
+        profileLabel="sandbox"
+        onRefresh={vi.fn()}
+        onNavigate={vi.fn()}
+        onOpenRuntime={vi.fn()}
+        hiddenResourceHits={hiddenResourceHits}
+        onEnableHiddenService={onEnableHiddenService}
+      />,
+    );
+
+    expect(screen.getByText("Resources exist in 1 disabled service")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /review/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^enable$/i }));
+    expect(onEnableHiddenService).toHaveBeenCalledWith(hiddenResourceHits[0]);
+  });
+
   it("renders the runtime health strip and service stat cards", () => {
     render(
       <OverviewView

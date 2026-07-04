@@ -14,19 +14,9 @@ import (
 	"cloudsprocket/backend/daemon/internal/models"
 )
 
-var validAwsInventoryScopes = map[string]struct{}{
-	"s3":       {},
-	"ec2":      {},
-	"lambda":   {},
-	"dynamodb": {},
-	"sqs":      {},
-	"sns":      {},
-	"rds":      {},
-	"ecs":         {},
-	"apigateway":  {},
-	"secrets":     {},
-	"logs":        {},
-	"iam":      {},
+func isValidAwsInventoryScope(scope string) bool {
+	_, ok := awsInventoryScopesFromCatalog()[scope]
+	return ok
 }
 
 func (s *Service) enrichAwsInventory(
@@ -64,8 +54,12 @@ func (s *Service) handleAwsInventoryGet(ctx context.Context, params json.RawMess
 	if scope == "" {
 		return nil, errors.New("scope is required")
 	}
-	if _, ok := validAwsInventoryScopes[scope]; !ok {
+	if !isValidAwsInventoryScope(scope) {
 		return nil, fmt.Errorf("unknown AWS inventory scope %q", request.Scope)
+	}
+	serviceID := awsServiceIDForInventoryScope(scope)
+	if !s.isServiceEnabled("aws", serviceID) {
+		return nil, errors.New("that AWS service is disabled in settings")
 	}
 
 	snapshot, err := s.discovery.Discover()

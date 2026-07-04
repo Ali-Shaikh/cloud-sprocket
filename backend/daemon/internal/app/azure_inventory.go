@@ -40,6 +40,9 @@ func (s *Service) handleAzureInventoryGet(ctx context.Context, params json.RawMe
 	if _, ok := validAzureInventoryScopes[scope]; !ok {
 		return nil, fmt.Errorf("unknown Azure inventory scope %q", request.Scope)
 	}
+	if serviceID := azureServiceIDForInventoryScope(scope); serviceID != "" && !s.isServiceEnabled("azure", serviceID) {
+		return nil, errors.New("that Azure service is disabled in settings")
+	}
 
 	snapshot, err := s.discovery.Discover()
 	if err != nil {

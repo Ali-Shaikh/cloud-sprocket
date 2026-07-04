@@ -13,8 +13,11 @@ import type {
   AzureLogAnalyticsSavedQuery,
   EmulatorLogSnapshot,
   JobLifecycle,
+  HiddenResourceHit,
+  PreferencesSnapshot,
   ProfileSummary,
   ProviderSummary,
+  ServicePreferences,
   SessionSnapshot,
   UrlInspection,
   UrlValidationResult,
@@ -207,6 +210,12 @@ export type WorkspaceTabRouterProps = {
   ) => Promise<void>;
   openWorkspace: (providerId: string, profileId: string) => Promise<void>;
   chooseAuthMethod: (authMethod: string) => Promise<void>;
+  preferencesSnapshot: PreferencesSnapshot | null;
+  preferencesSaving: boolean;
+  onPreferencesUpdate: (preferences: ServicePreferences) => Promise<void>;
+  hiddenResourceHits: HiddenResourceHit[];
+  hiddenResourceEnablingServiceId: string | null;
+  onEnableHiddenService: (hit: HiddenResourceHit) => Promise<void>;
 };
 
 export type AwsWorkspaceTabsProps = WorkspaceTabRouterProps;

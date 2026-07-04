@@ -24,7 +24,16 @@ import type {
   WorkspaceSnapshot,
   WorkspaceTab,
   AwsLambdaInvokeResult,
+  HiddenResourceHit,
+  HiddenResourcesSnapshot,
+  PreferencesSnapshot,
+  ServiceCatalogEntry,
+  ServicePreferences,
 } from "../types/backend";
+import {
+  isProviderEnabled,
+  isServiceEnabled,
+} from "./service-preferences";
 
 export type BackendEventName =
   | "state.changed"
@@ -102,6 +111,7 @@ type MockState = {
   session: SessionSnapshot;
   logs: ActivityLogEntry[];
   settings: AppSettingsSnapshot;
+  preferences: ServicePreferences;
   localStackStatus: EmulatorStatus;
   flociAzStatus: EmulatorStatus;
   flociAzConfigReady: boolean;
@@ -1097,6 +1107,10 @@ const mockState: MockState = {
   localStackStatus: "stopped",
   flociAzStatus: "stopped",
   flociAzConfigReady: false,
+  preferences: {
+    disabledProviders: [],
+    disabledServices: {},
+  } satisfies ServicePreferences,
 };
 
 const initialMockSession: SessionSnapshot = {
@@ -1157,9 +1171,10 @@ function rebuildSessionDerivedState(): void {
     : mockState.session.currentProviderId;
   mockState.session.workspaceTabs = !mockState.session.isLocked
     ? []
-    : providerId === "azure"
-      ? mockAzureWorkspaceTabs
-      : mockWorkspaceTabs;
+    : filterMockWorkspaceTabs(
+        providerId === "azure" ? mockAzureWorkspaceTabs : mockWorkspaceTabs,
+        providerId ?? "aws",
+      );
 }
 
 function emitMockEvent<K extends BackendEventName>(
@@ -1210,6 +1225,166 @@ function filteredProfiles(providerId?: string): ProfileSummary[] {
     return mockState.profiles;
   }
   return mockState.profiles.filter((profile) => profile.providerId === providerId);
+}
+
+const mockServiceCatalogue: ServiceCatalogEntry[] = [
+  {
+    providerId: "aws",
+    serviceId: "s3",
+    label: "S3",
+    summary: "Bucket and object workbench.",
+    detail: "Presigned URLs, uploads, validation, and bucket browsing.",
+    category: "service",
+    inventoryScope: "s3",
+    enabled: true,
+  },
+  {
+    providerId: "aws",
+    serviceId: "ec2",
+    label: "EC2",
+    summary: "Fleet and instance operations.",
+    detail: "Instance inventory and lifecycle actions.",
+    category: "service",
+    inventoryScope: "ec2",
+    enabled: true,
+  },
+  {
+    providerId: "azure",
+    serviceId: "azure-storage",
+    label: "Storage",
+    summary: "Blob storage accounts, containers, and objects.",
+    detail: "Browse storage accounts and blob containers.",
+    category: "service",
+    inventoryScope: "storage",
+    enabled: true,
+  },
+];
+
+function mockPreferencesState(): ServicePreferences {
+  return mockState.preferences;
+}
+
+function countMockCatalogueResources(
+  workspace: WorkspaceSnapshot,
+  providerId: string,
+  serviceId: string,
+): number {
+  if (providerId === "aws") {
+    switch (serviceId) {
+      case "s3":
+        return workspace.s3Buckets.length;
+      case "ec2":
+        return workspace.ec2Instances.length;
+      case "lambda":
+        return workspace.lambdaFunctions.length;
+      case "dynamodb":
+        return workspace.dynamodbTables.length;
+      case "sqs":
+        return workspace.sqsQueues.length;
+      case "sns":
+        return workspace.snsTopics.length;
+      case "rds":
+        return workspace.rdsInstances.length;
+      case "ecs":
+        return workspace.ecsClusters.length;
+      case "apigateway":
+        return workspace.apiGatewayApis.length;
+      case "secrets":
+        return workspace.secretsManagerSecrets.length;
+      case "logs":
+        return workspace.logGroups.length;
+      case "iam":
+        return workspace.iamRoles.length + workspace.iamPolicies.length;
+      default:
+        return 0;
+    }
+  }
+  if (providerId === "azure") {
+    switch (serviceId) {
+      case "azure-overview":
+      case "azure-resource-groups":
+        return workspace.azureResourceGroups.length;
+      case "azure-vms":
+        return workspace.azureVirtualMachines.length;
+      case "azure-storage":
+        return workspace.azureStorageAccounts.length;
+      default:
+        return 0;
+    }
+  }
+  return 0;
+}
+
+function buildMockHiddenResourcesSnapshot(): HiddenResourcesSnapshot {
+  if (!mockState.session.isLocked) {
+    return { hits: [] };
+  }
+  const providerId = mockState.session.lockedProviderId;
+  if (!providerId) {
+    return { hits: [] };
+  }
+  const preferences = mockPreferencesState();
+  const workspace = buildMockWorkspace();
+  const hits: HiddenResourceHit[] = [];
+  for (const entry of mockServiceCatalogue) {
+    if (entry.providerId !== providerId) {
+      continue;
+    }
+    if (isServiceEnabled(preferences, entry.providerId, entry.serviceId)) {
+      continue;
+    }
+    const resourceCount = countMockCatalogueResources(
+      workspace,
+      entry.providerId,
+      entry.serviceId,
+    );
+    if (resourceCount <= 0) {
+      continue;
+    }
+    hits.push({
+      providerId: entry.providerId,
+      serviceId: entry.serviceId,
+      label: entry.label,
+      resourceCount,
+    });
+  }
+  return { hits };
+}
+
+function buildMockPreferencesSnapshot(update?: ServicePreferences): PreferencesSnapshot {
+  if (update) {
+    mockState.preferences = {
+      disabledProviders: [...update.disabledProviders],
+      disabledServices: Object.fromEntries(
+        Object.entries(update.disabledServices).map(([providerId, serviceIds]) => [
+          providerId,
+          [...serviceIds],
+        ]),
+      ),
+    };
+  }
+  const preferences = mockPreferencesState();
+  return {
+    preferences,
+    catalogue: mockServiceCatalogue.map((entry) => ({
+      ...entry,
+      enabled: isServiceEnabled(preferences, entry.providerId, entry.serviceId),
+    })),
+  };
+}
+
+function filterMockWorkspaceTabs(tabs: WorkspaceTab[], providerId: string): WorkspaceTab[] {
+  const preferences = mockPreferencesState();
+  if (!isProviderEnabled(preferences, providerId)) {
+    return tabs.filter((tab) =>
+      ["overview", "virtualisation", "actions"].includes(tab.tabId),
+    );
+  }
+  return tabs.filter(
+    (tab) =>
+      ["overview", "virtualisation", "actions"].includes(tab.tabId) ||
+      isServiceEnabled(preferences, providerId, tab.tabId),
+  );
 }
 
 function buildMockWorkspace(): WorkspaceSnapshot {
@@ -1699,7 +1874,11 @@ function handleMockRequest<T>(
 ): Promise<T> {
   switch (method) {
     case "providers.list":
-      return Promise.resolve(mockState.providers as T);
+      return Promise.resolve(
+        mockState.providers.filter((provider) =>
+          isProviderEnabled(mockPreferencesState(), provider.providerId),
+        ) as T,
+      );
     case "profiles.list":
       return Promise.resolve(filteredProfiles(params.providerId as string | undefined) as T);
     case "session.get":
@@ -2942,6 +3121,16 @@ function handleMockRequest<T>(
       );
     case "app.settings.get":
       return Promise.resolve(mockState.settings as T);
+    case "preferences.get":
+      return Promise.resolve(buildMockPreferencesSnapshot() as T);
+    case "preferences.update": {
+      const snapshot = buildMockPreferencesSnapshot(params as unknown as ServicePreferences);
+      rebuildSessionDerivedState();
+      return Promise.resolve(snapshot as T);
+    }
+    case "preferences.hiddenResources.get":
+      rebuildSessionDerivedState();
+      return Promise.resolve(buildMockHiddenResourcesSnapshot() as T);
     case "app.reset":
       if (String(params.confirmation ?? "") !== "RESET") {
         return Promise.reject(new Error("type RESET to confirm the app reset"));

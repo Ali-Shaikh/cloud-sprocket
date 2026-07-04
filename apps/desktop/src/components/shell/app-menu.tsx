@@ -10,6 +10,7 @@ import {
   Keyboard,
   Monitor,
   Moon,
+  Settings2,
   Sun,
   Trash2,
 } from "lucide-react";
@@ -44,6 +45,7 @@ function AppMenu({
   daemonHealthy = true,
   onSwitchConnection,
   onOpenDebug,
+  onOpenSettings,
   onCopyConfigPaths,
   onReset,
   onOpenCommandPalette,
@@ -115,6 +117,12 @@ function AppMenu({
           <DropdownMenuItem onClick={onOpenCommandPalette}>
             <Keyboard />
             Keyboard shortcuts
+          </DropdownMenuItem>
+        ) : null}
+        {onOpenSettings ? (
+          <DropdownMenuItem onClick={onOpenSettings}>
+            <Settings2 />
+            Services…
           </DropdownMenuItem>
         ) : null}
 

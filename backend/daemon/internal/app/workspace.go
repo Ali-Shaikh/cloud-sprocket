@@ -131,15 +131,24 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 		scope:                  opts.azureScope,
 		resourceGroupSelection: opts.azureResourceGroupSelection,
 	}
-	if !opts.skipAzureInventory {
+	if !opts.skipAzureInventory &&
+		workspace.Provider != nil &&
+		workspace.Provider.ProviderID == "azure" &&
+		s.isProviderEnabled("azure") {
 		if opts.azureDeferredInventory {
-			var mu sync.Mutex
-			s.enrichAzureInventory(&workspace, session, &mu)
+			if s.anyServiceEnabled("azure", azureEnricherServiceIDs("inventory")) {
+				var mu sync.Mutex
+				s.enrichAzureInventory(&workspace, session, &mu)
+			}
 		} else {
 			s.enrichAzureWorkspace(&workspace, session, azureOpts)
 		}
 	}
-	if !opts.azureResourceGroupSelection && !opts.skipAwsInventory {
+	if !opts.azureResourceGroupSelection &&
+		!opts.skipAwsInventory &&
+		workspace.Provider != nil &&
+		workspace.Provider.ProviderID == "aws" &&
+		s.isProviderEnabled("aws") {
 		awsOpts := awsEnrichmentOptions{
 			lightweight: opts.lightweightAWS,
 			scope:       opts.awsScope,

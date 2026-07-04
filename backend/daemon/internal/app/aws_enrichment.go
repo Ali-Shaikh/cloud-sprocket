@@ -32,19 +32,15 @@ func (s *Service) enrichAwsWorkspace(
 		return
 	}
 
-	enrichers := []func(*sync.Mutex){
-		func(mu *sync.Mutex) { s.enrichS3Inventory(workspace, session, opts, mu) },
-		func(mu *sync.Mutex) { s.enrichEC2Inventory(workspace, session, opts, mu) },
-		func(mu *sync.Mutex) { s.enrichLambdaInventory(workspace, session, opts, mu) },
-		func(mu *sync.Mutex) { s.enrichDynamoDBInventory(workspace, session, opts, mu) },
-		func(mu *sync.Mutex) { s.enrichSQSInventory(workspace, session, opts, mu) },
-		func(mu *sync.Mutex) { s.enrichSNSInventory(workspace, session, opts, mu) },
-		func(mu *sync.Mutex) { s.enrichRDSInventory(workspace, session, opts, mu) },
-		func(mu *sync.Mutex) { s.enrichECSInventory(workspace, session, opts, mu) },
-		func(mu *sync.Mutex) { s.enrichApiGatewayInventory(workspace, session, opts, mu) },
-		func(mu *sync.Mutex) { s.enrichSecretsManagerInventory(workspace, session, opts, mu) },
-		func(mu *sync.Mutex) { s.enrichLogsInventory(workspace, session, opts, mu) },
-		func(mu *sync.Mutex) { s.enrichIAMInventory(workspace, session, opts, mu) },
+	enrichers := make([]func(*sync.Mutex), 0, len(awsServiceCatalog()))
+	for _, entry := range awsServiceCatalog() {
+		if entry.InventoryScope == "" || !s.isServiceEnabled(entry.ProviderID, entry.ServiceID) {
+			continue
+		}
+		scope := entry.InventoryScope
+		enrichers = append(enrichers, func(mu *sync.Mutex) {
+			s.runAwsInventoryEnricher(scope, workspace, session, opts, mu)
+		})
 	}
 
 	var mu sync.Mutex
@@ -71,31 +67,45 @@ func (s *Service) enrichAwsScoped(
 	session models.SessionSnapshot,
 	opts awsEnrichmentOptions,
 ) {
+	serviceID := awsServiceIDForInventoryScope(opts.scope)
+	if !s.isServiceEnabled("aws", serviceID) {
+		return
+	}
 	scopeOpts := awsEnrichmentOptions{lightweight: opts.lightweight}
-	switch opts.scope {
+	s.runAwsInventoryEnricher(opts.scope, workspace, session, scopeOpts, nil)
+}
+
+func (s *Service) runAwsInventoryEnricher(
+	scope string,
+	workspace *models.WorkspaceSnapshot,
+	session models.SessionSnapshot,
+	opts awsEnrichmentOptions,
+	mu *sync.Mutex,
+) {
+	switch scope {
 	case "s3":
-		s.enrichS3Inventory(workspace, session, scopeOpts, nil)
+		s.enrichS3Inventory(workspace, session, opts, mu)
 	case "ec2":
-		s.enrichEC2Inventory(workspace, session, scopeOpts, nil)
+		s.enrichEC2Inventory(workspace, session, opts, mu)
 	case "lambda":
-		s.enrichLambdaInventory(workspace, session, scopeOpts, nil)
+		s.enrichLambdaInventory(workspace, session, opts, mu)
 	case "dynamodb":
-		s.enrichDynamoDBInventory(workspace, session, scopeOpts, nil)
+		s.enrichDynamoDBInventory(workspace, session, opts, mu)
 	case "sqs":
-		s.enrichSQSInventory(workspace, session, scopeOpts, nil)
+		s.enrichSQSInventory(workspace, session, opts, mu)
 	case "sns":
-		s.enrichSNSInventory(workspace, session, scopeOpts, nil)
+		s.enrichSNSInventory(workspace, session, opts, mu)
 	case "rds":
-		s.enrichRDSInventory(workspace, session, scopeOpts, nil)
+		s.enrichRDSInventory(workspace, session, opts, mu)
 	case "ecs":
-		s.enrichECSInventory(workspace, session, scopeOpts, nil)
+		s.enrichECSInventory(workspace, session, opts, mu)
 	case "apigateway":
-		s.enrichApiGatewayInventory(workspace, session, scopeOpts, nil)
+		s.enrichApiGatewayInventory(workspace, session, opts, mu)
 	case "secrets":
-		s.enrichSecretsManagerInventory(workspace, session, scopeOpts, nil)
+		s.enrichSecretsManagerInventory(workspace, session, opts, mu)
 	case "logs":
-		s.enrichLogsInventory(workspace, session, scopeOpts, nil)
+		s.enrichLogsInventory(workspace, session, opts, mu)
 	case "iam":
-		s.enrichIAMInventory(workspace, session, scopeOpts, nil)
+		s.enrichIAMInventory(workspace, session, opts, mu)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -51,6 +52,7 @@ type Service struct {
 	dockerSnapshotAt      time.Time
 	deployCancelsMu       sync.Mutex
 	deployCancels         map[string]context.CancelFunc
+	preferences           models.ServicePreferences
 	now                   func() time.Time
 	mu                    sync.Mutex
 }
@@ -102,7 +104,7 @@ func NewWithRuntimes(
 ) *Service {
 	recipeLoader := recipes.Bundled()
 	deployEngine := deploy.NewEngine(tofu.NewRunner(tofu.Resolve(settings)), settings, recipeLoader)
-	return &Service{
+	service := &Service{
 		settings:              settings,
 		store:                 store,
 		discovery:             discoveryService,
@@ -126,8 +128,16 @@ func NewWithRuntimes(
 		deployer:              deployEngine,
 		cipher:                loadCipher(settings.SecretKeyPath),
 		azureInventoryTimeout: defaultAzureInventoryTimeout,
+		preferences:           defaultServicePreferences(),
 		now:                   func() time.Time { return time.Now().UTC() },
 	}
+	service.mu.Lock()
+	if err := service.loadPreferencesLocked(); err != nil {
+		log.Printf("preferences: could not load %s, using defaults: %v", service.preferencesPath(), err)
+		service.preferences = defaultServicePreferences()
+	}
+	service.mu.Unlock()
+	return service
 }
 
 func (s *Service) Handle(
@@ -361,6 +371,12 @@ func (s *Service) Handle(
 		return s.handleLogsList(ctx, params)
 	case "app.settings.get":
 		return s.handleAppSettingsGet()
+	case "preferences.get":
+		return s.handlePreferencesGet()
+	case "preferences.update":
+		return s.handlePreferencesUpdate(params)
+	case "preferences.hiddenResources.get":
+		return s.handlePreferencesHiddenResourcesGet(ctx, notifier)
 	case "app.reset":
 		return s.handleAppReset(ctx, params, notifier)
 	case "docker.runtime.get":

@@ -21,7 +21,20 @@ import {
 } from "@/views/workspace/lazy-views";
 import type { AwsWorkspaceTabsProps } from "./workspace-tab-router-props";
 
-const AWS_TAB_IDS = new Set(["s3", "ec2", "lambda", "dynamodb", "sqs", "sns", "rds", "ecs", "apigateway", "secrets", "logs", "iam"]);
+export const AWS_TAB_IDS = new Set([
+  "s3",
+  "ec2",
+  "lambda",
+  "dynamodb",
+  "sqs",
+  "sns",
+  "rds",
+  "ecs",
+  "apigateway",
+  "secrets",
+  "logs",
+  "iam",
+]);
 
 export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
   const {

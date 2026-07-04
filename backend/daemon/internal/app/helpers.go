@@ -87,7 +87,7 @@ func statePayload(snapshot discovery.Snapshot, session models.SessionSnapshot) m
 	}
 }
 
-func reconcileSession(session models.SessionSnapshot, snapshot discovery.Snapshot) models.SessionSnapshot {
+func (s *Service) reconcileSession(session models.SessionSnapshot, snapshot discovery.Snapshot) models.SessionSnapshot {
 	if session.IsLocked {
 		session.CurrentProviderID = session.LockedProviderID
 		session.SelectedProfileID = session.LockedProfileID
@@ -123,7 +123,9 @@ func reconcileSession(session models.SessionSnapshot, snapshot discovery.Snapsho
 		if session.LockedProviderID != session.CurrentProviderID || session.LockedProfileID != session.SelectedProfileID || session.LockedAuthMethod != session.SelectedAuthMethod {
 			return clearLockState(session)
 		}
-		session.WorkspaceTabs = workspaceTabs(session.LockedProviderID)
+		// Caller must hold s.mu (or otherwise exclude preference writes); do not
+		// call s.workspaceTabs here because it acquires s.mu again.
+		session.WorkspaceTabs = workspaceTabsForPreferences(session.LockedProviderID, s.preferences)
 		return session
 	}
 

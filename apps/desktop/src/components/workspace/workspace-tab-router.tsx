@@ -9,7 +9,8 @@ import OverviewView from "@/views/OverviewView";
 import DeployView from "@/views/DeployView";
 import DebugView from "@/views/DebugView";
 import { ActivityView, RuntimeView, PlaceholderView } from "@/views/workspace/lazy-views";
-import { AwsWorkspaceTabs } from "./aws-workspace-tabs";
+import SettingsView from "@/views/SettingsView";
+import { AwsWorkspaceTabs, AWS_TAB_IDS } from "./aws-workspace-tabs";
 import { AzureWorkspaceTabs } from "./azure-workspace-tabs";
 import type { WorkspaceTabRouterProps } from "./workspace-tab-router-props";
 
@@ -166,6 +167,17 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
   if (activeWorkspaceTabId === "debug") {
     return <DebugView />;
   }
+  if (activeWorkspaceTabId === "settings" && props.preferencesSnapshot) {
+    return (
+      <SettingsView
+        snapshot={props.preferencesSnapshot}
+        saving={props.preferencesSaving}
+        onUpdate={(preferences) => {
+          void props.onPreferencesUpdate(preferences);
+        }}
+      />
+    );
+  }
   if (activeWorkspaceTabId === "deploy") {
     return <DeployView profiles={profiles} />;
   }
@@ -192,6 +204,11 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
         runtimeActionInFlight={{
           localstack: localStackActionInFlight,
           "floci-az": flociAzActionInFlight,
+        }}
+        hiddenResourceHits={props.hiddenResourceHits}
+        hiddenResourceEnablingServiceId={props.hiddenResourceEnablingServiceId}
+        onEnableHiddenService={(hit) => {
+          void props.onEnableHiddenService(hit);
         }}
         onNavigate={(tabId, context) => {
           setActiveWorkspaceTabId(tabId);
@@ -241,7 +258,7 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     );
   }
 
-  if (session.isLocked && ["s3","ec2","lambda","dynamodb","sqs","sns","rds","logs","iam"].includes(activeWorkspaceTabId)) {
+  if (session.isLocked && AWS_TAB_IDS.has(activeWorkspaceTabId)) {
     return <AwsWorkspaceTabs {...props} />;
   }
 
