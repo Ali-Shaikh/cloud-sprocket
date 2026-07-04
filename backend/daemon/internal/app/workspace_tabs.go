@@ -265,6 +265,13 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 			Category: workspaceTabCategoryService,
 		},
 		{
+			TabID:    "secrets",
+			Label:    "Secrets",
+			Summary:  "Secrets Manager inventory.",
+			Detail:   "List secrets by region and reveal values when write mode is enabled.",
+			Category: workspaceTabCategoryService,
+		},
+		{
 			TabID:    "iam",
 			Label:    "IAM",
 			Summary:  "Role and policy inventory.",

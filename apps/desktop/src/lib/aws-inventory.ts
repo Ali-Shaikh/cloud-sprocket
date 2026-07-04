@@ -13,6 +13,7 @@ export type AwsInventoryScope =
   | "rds"
   | "ecs"
   | "apigateway"
+  | "secrets"
   | "logs"
   | "iam";
 
@@ -26,6 +27,7 @@ const TAB_SCOPE_MAP: Record<string, AwsInventoryScope | undefined> = {
   rds: "rds",
   ecs: "ecs",
   apigateway: "apigateway",
+  secrets: "secrets",
   logs: "logs",
   iam: "iam",
 };
@@ -57,6 +59,8 @@ export function awsInventoryStatusMessage(
       return workspace.ecsStatusMessage;
     case "apigateway":
       return workspace.apiGatewayStatusMessage;
+    case "secrets":
+      return workspace.secretsManagerStatusMessage;
     case "logs":
       return workspace.logsStatusMessage;
     case "iam":
@@ -76,6 +80,7 @@ const DEFAULT_INVENTORY_LOADING_LABELS: Record<AwsInventoryScope, string> = {
   rds: "Loading RDS instances...",
   ecs: "Loading ECS clusters...",
   apigateway: "Loading API Gateway APIs...",
+  secrets: "Loading Secrets Manager secrets...",
   logs: "Loading CloudWatch log groups...",
   iam: "Loading IAM roles and policies...",
 };
@@ -123,6 +128,9 @@ export function awsInventoryLoaded(
     case "apigateway":
       return (workspace.apiGatewayRegions?.length ?? 0) > 0 ||
         (workspace.apiGatewayStatusMessage ?? "").length > 0;
+    case "secrets":
+      return (workspace.secretsManagerRegions?.length ?? 0) > 0 ||
+        (workspace.secretsManagerStatusMessage ?? "").length > 0;
     case "logs":
       return (workspace.logsRegions?.length ?? 0) > 0 ||
         (workspace.logsStatusMessage ?? "").length > 0;

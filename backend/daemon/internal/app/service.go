@@ -35,6 +35,7 @@ type Service struct {
 	rds                   RDSInventory
 	ecs                   ECSInventory
 	apigateway            ApiGatewayInventory
+	secretsManager        SecretsManagerInventory
 	logs                  LogsInventory
 	iam                   IAMInventory
 	azure                 AzureInventory
@@ -67,6 +68,7 @@ func New(
 	rdsInventory RDSInventory,
 	ecsInventory ECSInventory,
 	apigatewayInventory ApiGatewayInventory,
+	secretsManagerInventory SecretsManagerInventory,
 	logsInventory LogsInventory,
 	iamInventory IAMInventory,
 	azureInventory AzureInventory,
@@ -74,7 +76,7 @@ func New(
 ) *Service {
 	localStackMgr := localstack.NewManager(settings)
 	azureRuntime := flociaz.NewManager(settings)
-	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, apigatewayInventory, logsInventory, iamInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
+	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, apigatewayInventory, secretsManagerInventory, logsInventory, iamInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
 }
 
 func NewWithRuntimes(
@@ -90,6 +92,7 @@ func NewWithRuntimes(
 	rdsInventory RDSInventory,
 	ecsInventory ECSInventory,
 	apigatewayInventory ApiGatewayInventory,
+	secretsManagerInventory SecretsManagerInventory,
 	logsInventory LogsInventory,
 	iamInventory IAMInventory,
 	azureInventory AzureInventory,
@@ -112,6 +115,7 @@ func NewWithRuntimes(
 		rds:                   rdsInventory,
 		ecs:                   ecsInventory,
 		apigateway:            apigatewayInventory,
+		secretsManager:        secretsManagerInventory,
 		logs:                  logsInventory,
 		iam:                   iamInventory,
 		azure:                 azureInventory,
@@ -209,6 +213,12 @@ func (s *Service) Handle(
 		return s.handleAwsApiGatewaySelectRegion(ctx, params, notifier)
 	case "aws.apigateway.selectApi":
 		return s.handleAwsApiGatewaySelectApi(ctx, params, notifier)
+	case "aws.secrets.selectRegion":
+		return s.handleAwsSecretsManagerSelectRegion(ctx, params, notifier)
+	case "aws.secrets.selectSecret":
+		return s.handleAwsSecretsManagerSelectSecret(ctx, params, notifier)
+	case "aws.secrets.reveal":
+		return s.handleAwsSecretsManagerReveal(ctx, params, notifier)
 	case "aws.logs.selectRegion":
 		return s.handleAwsLogsSelectRegion(ctx, params, notifier)
 	case "aws.logs.selectLogGroup":

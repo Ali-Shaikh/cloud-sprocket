@@ -529,6 +529,23 @@ const mockWorkspaceApiGatewayStages = [
   },
 ];
 
+const mockWorkspaceSecretsManagerSecrets = [
+  {
+    arn: "arn:aws:secretsmanager:us-east-1:000000000000:secret:cloudsprocket/db-password-abc",
+    name: "cloudsprocket/db-password",
+    description: "Application database password",
+    lastChangedDate: "2026-07-01T10:00:00Z",
+    rotationEnabled: false,
+  },
+  {
+    arn: "arn:aws:secretsmanager:us-east-1:000000000000:secret:cloudsprocket/api-key-xyz",
+    name: "cloudsprocket/api-key",
+    description: "Outbound API credentials",
+    lastChangedDate: "2026-06-15T08:30:00Z",
+    rotationEnabled: true,
+  },
+];
+
 const mockWorkspaceRDSInstances = [
   {
     dbInstanceIdentifier: "cloudsprocket-app-db",
@@ -1643,6 +1660,17 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     apiGatewayRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
     apiGatewayApis: isAWSWorkspace ? mockWorkspaceApiGatewayApis : [],
     apiGatewayStages: isAWSWorkspace ? mockWorkspaceApiGatewayStages : [],
+    selectedSecretsManagerRegion: isAWSWorkspace
+      ? mockState.session.selectedSecretsManagerRegion ?? mockWorkspaceRegions[0]
+      : undefined,
+    selectedSecretsManagerName: isAWSWorkspace
+      ? mockState.session.selectedSecretsManagerName ?? mockWorkspaceSecretsManagerSecrets[0]?.name
+      : undefined,
+    secretsManagerStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceSecretsManagerSecrets.length} secrets from ${mockState.session.selectedSecretsManagerRegion ?? mockWorkspaceRegions[0]}.`
+      : "Secrets Manager inventory is only available for open AWS workspaces.",
+    secretsManagerRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
+    secretsManagerSecrets: isAWSWorkspace ? mockWorkspaceSecretsManagerSecrets : [],
     selectedLogsRegion: isAWSWorkspace
       ? mockState.session.selectedLogsRegion ?? mockWorkspaceRegions[0]
       : undefined,
@@ -2180,6 +2208,26 @@ function handleMockRequest<T>(
       mockState.session.selectedApiGatewayApiKey = String(params.apiKey ?? "");
       appendLog("info", `Selected API Gateway API ${params.apiKey}.`);
       return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.secrets.selectRegion":
+      mockState.session.selectedSecretsManagerRegion = String(params.region ?? "");
+      mockState.session.selectedSecretsManagerName = undefined;
+      appendLog("info", `Selected Secrets Manager region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.secrets.selectSecret":
+      mockState.session.selectedSecretsManagerName = String(params.secretName ?? "");
+      appendLog("info", `Selected secret ${params.secretName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.secrets.reveal": {
+      const secretName = String(params.secretName ?? "");
+      const mockValues: Record<string, string> = {
+        "cloudsprocket/db-password": "postgres://app:local-dev@localhost:5432/cloudsprocket",
+        "cloudsprocket/api-key": "mock-api-key-12345",
+      };
+      if (!mockState.session.awsWriteModeEnabled) {
+        return Promise.reject(new Error("Turn on write mode from the top bar to reveal secret values."));
+      }
+      return Promise.resolve({ value: mockValues[secretName] ?? "mock-secret-value" } as T);
+    }
     case "aws.logs.selectRegion":
       mockState.session.selectedLogsRegion = String(params.region ?? "");
       mockState.session.selectedLogGroupName = undefined;

@@ -120,6 +120,8 @@ const workspaceFixture: WorkspaceSnapshot = {
   apiGatewayRegions: [],
   apiGatewayApis: [],
   apiGatewayStages: [],
+  secretsManagerRegions: [],
+  secretsManagerSecrets: [],
   logsRegions: [],
   logGroups: [],
   iamRoles: [],

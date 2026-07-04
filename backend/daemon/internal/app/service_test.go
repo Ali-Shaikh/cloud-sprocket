@@ -162,6 +162,16 @@ func (stubApiGatewayInventory) ListStages(context.Context, models.ProfileSummary
 	return nil, nil
 }
 
+type stubSecretsManagerInventory struct{}
+
+func (stubSecretsManagerInventory) ListSecrets(context.Context, models.ProfileSummary, string) ([]models.AwsSecretsManagerSecret, error) {
+	return nil, nil
+}
+
+func (stubSecretsManagerInventory) GetSecretValue(context.Context, models.ProfileSummary, string, string) (string, error) {
+	return "", nil
+}
+
 type stubLogsInventory struct{}
 
 func (stubLogsInventory) ListLogGroups(context.Context, models.ProfileSummary, string) ([]models.AwsLogGroup, error) {
@@ -676,6 +686,7 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubApiGatewayInventory{},
+		stubSecretsManagerInventory{},
 		stubLogsInventory{},
 		stubIAMInventory{},
 		stubAzureInventory{},
@@ -962,6 +973,7 @@ func TestServiceReportsFailedEC2ActionJob(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubApiGatewayInventory{},
+		stubSecretsManagerInventory{},
 		stubLogsInventory{},
 		stubIAMInventory{},
 		stubAzureInventory{},
@@ -1041,6 +1053,7 @@ func TestServiceRejectsEC2ActionWithoutLocalEndpoint(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubApiGatewayInventory{},
+		stubSecretsManagerInventory{},
 		stubLogsInventory{},
 		stubIAMInventory{},
 		stubAzureInventory{},
@@ -1106,6 +1119,7 @@ func TestServiceRejectsWriteActionsWithoutWriteMode(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubApiGatewayInventory{},
+		stubSecretsManagerInventory{},
 		stubLogsInventory{},
 		stubIAMInventory{},
 		stubAzureInventory{},
@@ -1179,6 +1193,7 @@ func TestServiceRejectsEC2ActionWithoutWriteOptIn(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubApiGatewayInventory{},
+		stubSecretsManagerInventory{},
 		stubLogsInventory{},
 		stubIAMInventory{},
 		stubAzureInventory{},
@@ -1251,6 +1266,7 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubApiGatewayInventory{},
+		stubSecretsManagerInventory{},
 		stubLogsInventory{},
 		stubIAMInventory{}, stubAzureInventory{}, stubDockerRuntime{})
 	ctx := context.Background()
@@ -1282,6 +1298,7 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubApiGatewayInventory{},
+		stubSecretsManagerInventory{},
 		stubLogsInventory{},
 		stubIAMInventory{}, stubAzureInventory{}, stubDockerRuntime{})
 
@@ -1356,6 +1373,7 @@ func TestServiceResetClearsOnlyAppOwnedState(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubApiGatewayInventory{},
+		stubSecretsManagerInventory{},
 		stubLogsInventory{},
 		stubIAMInventory{},
 		stubAzureInventory{},
@@ -1474,6 +1492,7 @@ func TestPrepareProfileWritesDiscoverableLocalProfiles(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubApiGatewayInventory{},
+		stubSecretsManagerInventory{},
 		stubLogsInventory{},
 		stubIAMInventory{},
 		stubAzureInventory{},
@@ -1580,6 +1599,7 @@ func TestDockerRuntimeProbeIsBoundedWhenEngineBlocks(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubApiGatewayInventory{},
+		stubSecretsManagerInventory{},
 		stubLogsInventory{},
 		stubIAMInventory{},
 		stubAzureInventory{},
@@ -1646,6 +1666,7 @@ func TestUnlockNotBlockedBySlowWorkspaceFetch(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubApiGatewayInventory{},
+		stubSecretsManagerInventory{},
 		stubLogsInventory{},
 		stubIAMInventory{},
 		stubAzureInventory{},

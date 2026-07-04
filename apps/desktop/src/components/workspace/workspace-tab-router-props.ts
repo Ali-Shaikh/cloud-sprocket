@@ -80,6 +80,7 @@ export type WorkspaceTabRouterProps = {
   rdsActionStatus: string;
   ecsActionStatus: string;
   apiGatewayActionStatus: string;
+  secretsManagerActionStatus: string;
   logsActionStatus: string;
   iamActionStatus: string;
   azureActionStatus: string;
@@ -176,6 +177,9 @@ export type WorkspaceTabRouterProps = {
   refreshApiGatewayInventory: () => void;
   selectApiGatewayRegion: (region: string) => void;
   selectApiGatewayApi: (apiKey: string) => void;
+  refreshSecretsManagerInventory: () => void;
+  selectSecretsManagerRegion: (region: string) => void;
+  selectSecretsManagerSecret: (secretName: string) => void;
   refreshLogsInventory: () => void;
   selectLogsRegion: (region: string) => void;
   selectLogGroup: (logGroupName: string) => void;

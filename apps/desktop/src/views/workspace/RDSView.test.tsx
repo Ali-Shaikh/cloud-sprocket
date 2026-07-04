@@ -147,6 +147,8 @@ const workspaceFixture: RdsWorkspaceSnapshot = {
   apiGatewayRegions: [],
   apiGatewayApis: [],
   apiGatewayStages: [],
+  secretsManagerRegions: [],
+  secretsManagerSecrets: [],
 };
 
 function renderRDSView() {

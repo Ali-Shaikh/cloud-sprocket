@@ -119,6 +119,8 @@ const workspaceFixture: LogsWorkspaceSnapshot = {
   apiGatewayRegions: [],
   apiGatewayApis: [],
   apiGatewayStages: [],
+  secretsManagerRegions: [],
+  secretsManagerSecrets: [],
   iamRoles: [],
   iamPolicies: [],
   selectedLogsRegion: "us-east-1",

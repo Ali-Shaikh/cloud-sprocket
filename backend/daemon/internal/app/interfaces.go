@@ -66,6 +66,11 @@ type ApiGatewayInventory interface {
 	ListStages(ctx context.Context, profile models.ProfileSummary, region string, apiKey string) ([]models.AwsApiGatewayStage, error)
 }
 
+type SecretsManagerInventory interface {
+	ListSecrets(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsSecretsManagerSecret, error)
+	GetSecretValue(ctx context.Context, profile models.ProfileSummary, region string, secretID string) (string, error)
+}
+
 type ECSInventory interface {
 	ListClusters(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsEcsCluster, error)
 	DescribeCluster(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string) (models.AwsEcsCluster, error)

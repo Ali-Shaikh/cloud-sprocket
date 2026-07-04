@@ -31,6 +31,8 @@ const workspace = {
   apiGatewayRegions: [],
   apiGatewayApis: [],
   apiGatewayStages: [],
+  secretsManagerRegions: [],
+  secretsManagerSecrets: [],
   logGroups: [],
   iamRoles: [],
   azureVirtualMachines: [],

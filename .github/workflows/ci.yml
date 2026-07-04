@@ -169,3 +169,20 @@ jobs:
           files: release-assets/*
           fail_on_unmatched_files: true
           overwrite_files: true
+
+      # cloudsprocket.org fetches the latest release version and download links at build
+      # time; Workers Builds only rebuilds on push, so an empty commit is the trigger.
+      - name: Trigger site rebuild
+        env:
+          SITE_PUSH_TOKEN: ${{ secrets.SITE_PUSH_TOKEN }}
+        run: |
+          if [ -z "$SITE_PUSH_TOKEN" ]; then
+            echo "SITE_PUSH_TOKEN secret not set; skipping site rebuild trigger."
+            exit 0
+          fi
+          git clone --depth 1 "https://x-access-token:${SITE_PUSH_TOKEN}@github.com/CloudSprocket/cloudsprocket.org.git" site-rebuild
+          cd site-rebuild
+          git -c user.name="cloudsprocket-release-bot" \
+              -c user.email="releases@cloudsprocket.org" \
+              commit --allow-empty -m "chore: rebuild for app release ${{ github.ref_name }}"
+          git push

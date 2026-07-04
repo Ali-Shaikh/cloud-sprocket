@@ -46,6 +46,7 @@ Legend: **Browse** = inventory and detail views · **Write** = mutating actions 
 | RDS | Databases | Yes | — | LocalStack |
 | ECS | Containers | Yes | — | LocalStack |
 | API Gateway | REST / HTTP APIs | Yes | — | LocalStack |
+| Secrets | Secrets Manager | Yes | Reveal value | LocalStack |
 | Logs | CloudWatch Logs | Yes | — | LocalStack |
 | IAM | Roles and policies | Yes | — | Partial |
 
