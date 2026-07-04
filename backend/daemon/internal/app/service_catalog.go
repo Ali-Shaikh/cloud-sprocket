@@ -318,6 +318,55 @@ func knownCatalogProviderIDs() map[string]struct{} {
 	}
 }
 
+func awsServiceIDForInventoryScope(scope string) string {
+	for _, entry := range awsServiceCatalog() {
+		if entry.InventoryScope == scope {
+			return entry.ServiceID
+		}
+	}
+	return scope
+}
+
+func azureServiceIDForInventoryScope(scope string) string {
+	for _, entry := range azureServiceCatalog() {
+		if entry.InventoryScope == scope {
+			return entry.ServiceID
+		}
+	}
+	return ""
+}
+
+func azureEnricherServiceIDs(enricherName string) []string {
+	switch enricherName {
+	case "inventory":
+		return []string{"azure-overview", "azure-resource-groups", "azure-vms"}
+	case "storage":
+		return []string{"azure-storage"}
+	case "log-analytics":
+		return []string{"azure-log-analytics"}
+	case "functions":
+		return []string{"azure-functions"}
+	case "keyvault":
+		return []string{"azure-key-vault"}
+	case "cosmos":
+		return []string{"azure-cosmos"}
+	case "postgres":
+		return []string{"azure-postgres"}
+	case "entra":
+		return []string{"azure-entra"}
+	case "app-service":
+		return []string{"azure-app-service"}
+	case "queues":
+		return []string{"azure-queues"}
+	case "waf":
+		return []string{"azure-waf"}
+	case "frontdoor":
+		return []string{"azure-front-door"}
+	default:
+		return nil
+	}
+}
+
 func awsInventoryScopesFromCatalog() map[string]struct{} {
 	scopes := map[string]struct{}{}
 	for _, entry := range awsServiceCatalog() {

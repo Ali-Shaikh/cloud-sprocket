@@ -66,11 +66,17 @@ func (s *Service) enrichAzureWorkspace(
 	var mu sync.Mutex
 	if opts.serialPhaseOne {
 		for _, enrich := range phaseOne {
+			if !s.anyServiceEnabled("azure", azureEnricherServiceIDs(enrich.name)) {
+				continue
+			}
 			s.runAzureEnricher(enrich.name, func() { enrich.fn(&mu) })
 		}
 	} else {
 		var wg sync.WaitGroup
 		for _, enrich := range phaseOne {
+			if !s.anyServiceEnabled("azure", azureEnricherServiceIDs(enrich.name)) {
+				continue
+			}
 			wg.Add(1)
 			go func(item struct {
 				name string
@@ -123,6 +129,9 @@ func (s *Service) enrichAzurePhaseTwo(
 	var mu sync.Mutex
 	if opts.serialPhaseTwo {
 		for _, enrich := range phaseTwo {
+			if !s.anyServiceEnabled("azure", azureEnricherServiceIDs(enrich.name)) {
+				continue
+			}
 			s.runAzureEnricher(enrich.name, func() { enrich.fn(&mu) })
 		}
 		return
@@ -130,6 +139,9 @@ func (s *Service) enrichAzurePhaseTwo(
 
 	var wg sync.WaitGroup
 	for _, enrich := range phaseTwo {
+		if !s.anyServiceEnabled("azure", azureEnricherServiceIDs(enrich.name)) {
+			continue
+		}
 		wg.Add(1)
 		go func(item struct {
 			name string
@@ -157,6 +169,9 @@ func (s *Service) enrichAzureScoped(
 	session models.SessionSnapshot,
 	opts azureEnrichmentOptions,
 ) {
+	if serviceID := azureServiceIDForInventoryScope(opts.scope); serviceID != "" && !s.isServiceEnabled("azure", serviceID) {
+		return
+	}
 	scopeOpts := azureEnrichmentOptions{lightweight: opts.lightweight}
 	switch opts.scope {
 	case "storage":

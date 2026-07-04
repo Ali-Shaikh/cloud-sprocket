@@ -12,14 +12,32 @@ const (
 	workspaceTabCategoryComingSoon = "coming_soon"
 )
 
-func workspaceTabs(providerID string) []models.WorkspaceTab {
+func workspaceTabsForPreferences(
+	providerID string,
+	prefs models.ServicePreferences,
+) []models.WorkspaceTab {
+	service := &Service{preferences: prefs}
 	tabs := []models.WorkspaceTab{
 		workspaceOverviewTab(),
 		workspaceVirtualisationTab(),
 	}
 	for _, entry := range serviceCatalogForProvider(providerID) {
+		if !service.isServiceEnabledLocked(entry.ProviderID, entry.ServiceID) {
+			continue
+		}
 		tabs = append(tabs, catalogEntryToTab(entry))
 	}
 	tabs = append(tabs, workspaceActivityTab())
 	return tabs
+}
+
+func workspaceTabs(providerID string) []models.WorkspaceTab {
+	return workspaceTabsForPreferences(providerID, defaultServicePreferences())
+}
+
+func (s *Service) workspaceTabs(providerID string) []models.WorkspaceTab {
+	s.mu.Lock()
+	prefs := s.preferences
+	s.mu.Unlock()
+	return workspaceTabsForPreferences(providerID, prefs)
 }

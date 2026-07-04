@@ -44,6 +44,7 @@ export interface AppMenuProps {
   daemonHealthy?: boolean;
   onSwitchConnection?: () => void;
   onOpenDebug?: () => void;
+  onOpenSettings?: () => void;
   onCopyConfigPaths?: () => void;
   onReset?: () => void;
   onOpenCommandPalette?: () => void;

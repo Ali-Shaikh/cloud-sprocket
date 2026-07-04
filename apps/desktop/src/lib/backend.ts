@@ -25,8 +25,13 @@ import type {
   WorkspaceTab,
   AwsLambdaInvokeResult,
   PreferencesSnapshot,
+  ServiceCatalogEntry,
   ServicePreferences,
 } from "../types/backend";
+import {
+  isProviderEnabled,
+  isServiceEnabled,
+} from "./service-preferences";
 
 export type BackendEventName =
   | "state.changed"
@@ -104,6 +109,7 @@ type MockState = {
   session: SessionSnapshot;
   logs: ActivityLogEntry[];
   settings: AppSettingsSnapshot;
+  preferences: ServicePreferences;
   localStackStatus: EmulatorStatus;
   flociAzStatus: EmulatorStatus;
   flociAzConfigReady: boolean;
@@ -1099,6 +1105,10 @@ const mockState: MockState = {
   localStackStatus: "stopped",
   flociAzStatus: "stopped",
   flociAzConfigReady: false,
+  preferences: {
+    disabledProviders: [],
+    disabledServices: {},
+  } satisfies ServicePreferences,
 };
 
 const initialMockSession: SessionSnapshot = {
@@ -1159,9 +1169,10 @@ function rebuildSessionDerivedState(): void {
     : mockState.session.currentProviderId;
   mockState.session.workspaceTabs = !mockState.session.isLocked
     ? []
-    : providerId === "azure"
-      ? mockAzureWorkspaceTabs
-      : mockWorkspaceTabs;
+    : filterMockWorkspaceTabs(
+        providerId === "azure" ? mockAzureWorkspaceTabs : mockWorkspaceTabs,
+        providerId ?? "aws",
+      );
 }
 
 function emitMockEvent<K extends BackendEventName>(
@@ -1214,17 +1225,77 @@ function filteredProfiles(providerId?: string): ProfileSummary[] {
   return mockState.profiles.filter((profile) => profile.providerId === providerId);
 }
 
-function buildMockPreferencesSnapshot(
-  update?: Partial<ServicePreferences>,
-): PreferencesSnapshot {
-  const preferences: ServicePreferences = {
-    disabledProviders: update?.disabledProviders ?? [],
-    disabledServices: update?.disabledServices ?? {},
-  };
+const mockServiceCatalogue: ServiceCatalogEntry[] = [
+  {
+    providerId: "aws",
+    serviceId: "s3",
+    label: "S3",
+    summary: "Bucket and object workbench.",
+    detail: "Presigned URLs, uploads, validation, and bucket browsing.",
+    category: "service",
+    inventoryScope: "s3",
+    enabled: true,
+  },
+  {
+    providerId: "aws",
+    serviceId: "ec2",
+    label: "EC2",
+    summary: "Fleet and instance operations.",
+    detail: "Instance inventory and lifecycle actions.",
+    category: "service",
+    inventoryScope: "ec2",
+    enabled: true,
+  },
+  {
+    providerId: "azure",
+    serviceId: "azure-storage",
+    label: "Storage",
+    summary: "Blob storage accounts, containers, and objects.",
+    detail: "Browse storage accounts and blob containers.",
+    category: "service",
+    inventoryScope: "storage",
+    enabled: true,
+  },
+];
+
+function mockPreferencesState(): ServicePreferences {
+  return mockState.preferences;
+}
+
+function buildMockPreferencesSnapshot(update?: ServicePreferences): PreferencesSnapshot {
+  if (update) {
+    mockState.preferences = {
+      disabledProviders: [...update.disabledProviders],
+      disabledServices: Object.fromEntries(
+        Object.entries(update.disabledServices).map(([providerId, serviceIds]) => [
+          providerId,
+          [...serviceIds],
+        ]),
+      ),
+    };
+  }
+  const preferences = mockPreferencesState();
   return {
     preferences,
-    catalogue: [],
+    catalogue: mockServiceCatalogue.map((entry) => ({
+      ...entry,
+      enabled: isServiceEnabled(preferences, entry.providerId, entry.serviceId),
+    })),
   };
+}
+
+function filterMockWorkspaceTabs(tabs: WorkspaceTab[], providerId: string): WorkspaceTab[] {
+  const preferences = mockPreferencesState();
+  if (!isProviderEnabled(preferences, providerId)) {
+    return tabs.filter((tab) =>
+      ["overview", "virtualisation", "actions"].includes(tab.tabId),
+    );
+  }
+  return tabs.filter(
+    (tab) =>
+      ["overview", "virtualisation", "actions"].includes(tab.tabId) ||
+      isServiceEnabled(preferences, providerId, tab.tabId),
+  );
 }
 
 function buildMockWorkspace(): WorkspaceSnapshot {
@@ -1714,7 +1785,11 @@ function handleMockRequest<T>(
 ): Promise<T> {
   switch (method) {
     case "providers.list":
-      return Promise.resolve(mockState.providers as T);
+      return Promise.resolve(
+        mockState.providers.filter((provider) =>
+          isProviderEnabled(mockPreferencesState(), provider.providerId),
+        ) as T,
+      );
     case "profiles.list":
       return Promise.resolve(filteredProfiles(params.providerId as string | undefined) as T);
     case "session.get":
@@ -2960,7 +3035,10 @@ function handleMockRequest<T>(
     case "preferences.get":
       return Promise.resolve(buildMockPreferencesSnapshot() as T);
     case "preferences.update":
-      return Promise.resolve(buildMockPreferencesSnapshot(params) as T);
+      rebuildSessionDerivedState();
+      return Promise.resolve(
+        buildMockPreferencesSnapshot(params as unknown as ServicePreferences) as T,
+      );
     case "app.reset":
       if (String(params.confirmation ?? "") !== "RESET") {
         return Promise.reject(new Error("type RESET to confirm the app reset"));

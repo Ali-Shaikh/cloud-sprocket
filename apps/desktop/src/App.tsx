@@ -71,6 +71,8 @@ import type {
   ActivityLogEntry,
   AppResetResult,
   AppSettingsSnapshot,
+  PreferencesSnapshot,
+  ServicePreferences,
   AuthMethod,
   AuthMethodStatus,
   AwsDynamoDBTable,
@@ -339,6 +341,8 @@ export default function App() {
     resetWorkspaceUiState,
   } = useWorkspaceState(session);
   const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState("overview");
+  const [preferencesSnapshot, setPreferencesSnapshot] = useState<PreferencesSnapshot | null>(null);
+  const [preferencesSaving, setPreferencesSaving] = useState(false);
   const pushNotification = useCallback(
     (tone: NotificationTone, header: string, content: string) => {
       notify(tone, header, content);
@@ -618,10 +622,11 @@ export default function App() {
       session.workspaceTabs.length > 0 &&
       activeWorkspaceTabId !== "virtualisation" &&
       activeWorkspaceTabId !== "debug" &&
+      activeWorkspaceTabId !== "settings" &&
       activeWorkspaceTabId !== "deploy" &&
       !session.workspaceTabs.some((tab) => tab.tabId === activeWorkspaceTabId)
     ) {
-      setActiveWorkspaceTabId(session.workspaceTabs[0].tabId);
+      setActiveWorkspaceTabId("overview");
     }
   }, [activeWorkspaceTabId, session.isLocked, session.workspaceTabs]);
 
@@ -1147,6 +1152,43 @@ export default function App() {
   }
   reloadProvidersAndProfilesRef.current = reloadProvidersAndProfiles;
 
+  async function openSettings(): Promise<void> {
+    const snapshot = await backendRequest<PreferencesSnapshot>("preferences.get");
+    setPreferencesSnapshot(snapshot);
+    setActiveWorkspaceTabId("settings");
+  }
+
+  async function applyPreferencesUpdate(preferences: ServicePreferences): Promise<void> {
+    setPreferencesSaving(true);
+    try {
+      const snapshot = await backendRequest<PreferencesSnapshot>(
+        "preferences.update",
+        preferences as unknown as Record<string, unknown>,
+      );
+      setPreferencesSnapshot(snapshot);
+      const [providersResult, sessionResult] = await Promise.all([
+        backendRequest<ProviderSummary[]>("providers.list"),
+        backendRequest<SessionSnapshot>("session.get"),
+      ]);
+      setProviders(normaliseArray(providersResult).map(normaliseProvider));
+      const normalisedSession = normaliseSessionSnapshot(sessionResult);
+      setSession(normalisedSession);
+      if (
+        normalisedSession.isLocked &&
+        activeWorkspaceTabId !== "settings" &&
+        activeWorkspaceTabId !== "debug" &&
+        activeWorkspaceTabId !== "deploy" &&
+        activeWorkspaceTabId !== "virtualisation" &&
+        !normalisedSession.workspaceTabs.some((tab) => tab.tabId === activeWorkspaceTabId)
+      ) {
+        setActiveWorkspaceTabId("overview");
+      }
+      await loadWorkspace(normalisedSession);
+    } finally {
+      setPreferencesSaving(false);
+    }
+  }
+
   const workspaceTabRouterProps: WorkspaceTabRouterProps = {
     activeWorkspaceTabId,
     setActiveWorkspaceTabId,
@@ -1294,6 +1336,9 @@ export default function App() {
     invokeFlociAzAction,
     openWorkspace,
     chooseAuthMethod,
+    preferencesSnapshot,
+    preferencesSaving,
+    onPreferencesUpdate: applyPreferencesUpdate,
   };
 
   const content = <WorkspaceTabRouter {...workspaceTabRouterProps} />;
@@ -1570,9 +1615,11 @@ export default function App() {
         ? `azure-storage:${activeAzureStoragePageId}`
         : activeWorkspaceTabId;
   const viewLabel =
-    !session.isLocked && activeWorkspaceTabId === "overview"
-      ? "Connect"
-      : viewLabelFor(activeWorkspaceTabId, session.workspaceTabs);
+    activeWorkspaceTabId === "settings"
+      ? "Services"
+      : !session.isLocked && activeWorkspaceTabId === "overview"
+        ? "Connect"
+        : viewLabelFor(activeWorkspaceTabId, session.workspaceTabs);
   const activityEntries = toActivityEntries(logs);
 
   const paletteCommands: Command[] = [
@@ -1698,6 +1745,9 @@ export default function App() {
                   }
                 : undefined,
               onOpenDebug: () => setActiveWorkspaceTabId("debug"),
+              onOpenSettings: () => {
+                void openSettings();
+              },
               onCopyConfigPaths: () => {
                 const paths = [appSettings.localConfigDir, appSettings.emulatorStateDir]
                   .filter(Boolean)

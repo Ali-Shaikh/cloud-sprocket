@@ -24,7 +24,7 @@ func (s *Service) currentState(ctx context.Context, snapshot discovery.Snapshot)
 		stored = models.SessionSnapshot{}
 	}
 
-	session := reconcileSession(stored, snapshot)
+	session := s.reconcileSession(stored, snapshot)
 	if err := s.store.SaveSession(ctx, session); err != nil {
 		return models.SessionSnapshot{}, err
 	}
@@ -148,7 +148,15 @@ func (s *Service) handleProvidersList() (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return snapshot.Providers, nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	providers := make([]models.ProviderSummary, 0, len(snapshot.Providers))
+	for _, provider := range snapshot.Providers {
+		if s.isProviderEnabledLocked(provider.ProviderID) {
+			providers = append(providers, provider)
+		}
+	}
+	return providers, nil
 }
 
 func (s *Service) handleProfilesList(params json.RawMessage) (any, error) {
@@ -227,7 +235,7 @@ func (s *Service) handleSessionSelectProvider(ctx context.Context, params json.R
 	session.S3PrefixFilter = ""
 	session.SelectedEC2Region = ""
 	session.SelectedEC2InstanceID = ""
-	session = reconcileSession(session, snapshot)
+	session = s.reconcileSession(session, snapshot)
 	if err := s.store.SaveSession(ctx, session); err != nil {
 		return nil, err
 	}
@@ -263,7 +271,7 @@ func (s *Service) handleSessionSelectProfile(ctx context.Context, params json.Ra
 	session.S3PrefixFilter = ""
 	session.SelectedEC2Region = ""
 	session.SelectedEC2InstanceID = ""
-	session = reconcileSession(session, snapshot)
+	session = s.reconcileSession(session, snapshot)
 	if err := s.store.SaveSession(ctx, session); err != nil {
 		return nil, err
 	}
@@ -320,7 +328,7 @@ func (s *Service) handleSessionLock(ctx context.Context, notifier Notifier) (any
 	session.LockedProviderID = session.CurrentProviderID
 	session.LockedProfileID = session.SelectedProfileID
 	session.LockedAuthMethod = session.SelectedAuthMethod
-	session = reconcileSession(session, snapshot)
+	session = s.reconcileSession(session, snapshot)
 	if err := s.store.SaveSession(ctx, session); err != nil {
 		return nil, err
 	}
@@ -424,7 +432,7 @@ func (s *Service) handleSessionUnlock(ctx context.Context, notifier Notifier) (a
 	}
 	session.IsLocked = false
 	session.WorkspaceTabs = []models.WorkspaceTab{}
-	session = reconcileSession(session, snapshot)
+	session = s.reconcileSession(session, snapshot)
 	if err := s.store.SaveSession(ctx, session); err != nil {
 		return nil, err
 	}

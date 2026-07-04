@@ -57,6 +57,10 @@ func (s *Service) handleAwsInventoryGet(ctx context.Context, params json.RawMess
 	if !isValidAwsInventoryScope(scope) {
 		return nil, fmt.Errorf("unknown AWS inventory scope %q", request.Scope)
 	}
+	serviceID := awsServiceIDForInventoryScope(scope)
+	if !s.isServiceEnabled("aws", serviceID) {
+		return nil, errors.New("that AWS service is disabled in settings")
+	}
 
 	snapshot, err := s.discovery.Discover()
 	if err != nil {

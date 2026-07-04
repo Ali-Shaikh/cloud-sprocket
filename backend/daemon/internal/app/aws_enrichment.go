@@ -34,7 +34,7 @@ func (s *Service) enrichAwsWorkspace(
 
 	enrichers := make([]func(*sync.Mutex), 0, len(awsServiceCatalog()))
 	for _, entry := range awsServiceCatalog() {
-		if entry.InventoryScope == "" {
+		if entry.InventoryScope == "" || !s.isServiceEnabled(entry.ProviderID, entry.ServiceID) {
 			continue
 		}
 		scope := entry.InventoryScope
@@ -67,6 +67,10 @@ func (s *Service) enrichAwsScoped(
 	session models.SessionSnapshot,
 	opts awsEnrichmentOptions,
 ) {
+	serviceID := awsServiceIDForInventoryScope(opts.scope)
+	if !s.isServiceEnabled("aws", serviceID) {
+		return
+	}
 	scopeOpts := awsEnrichmentOptions{lightweight: opts.lightweight}
 	s.runAwsInventoryEnricher(opts.scope, workspace, session, scopeOpts, nil)
 }

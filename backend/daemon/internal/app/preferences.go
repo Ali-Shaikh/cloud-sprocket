@@ -131,6 +131,29 @@ func (s *Service) isServiceEnabledLocked(providerID, serviceID string) bool {
 	return !slices.Contains(disabled, serviceID)
 }
 
+func (s *Service) isProviderEnabled(providerID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.isProviderEnabledLocked(providerID)
+}
+
+func (s *Service) isServiceEnabled(providerID, serviceID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.isServiceEnabledLocked(providerID, serviceID)
+}
+
+func (s *Service) anyServiceEnabled(providerID string, serviceIDs []string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, serviceID := range serviceIDs {
+		if s.isServiceEnabledLocked(providerID, serviceID) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Service) buildPreferencesSnapshotLocked() models.PreferencesSnapshot {
 	catalogue := make([]models.ServiceCatalogEntry, 0, len(allServiceCatalogEntries()))
 	for _, entry := range allServiceCatalogEntries() {
