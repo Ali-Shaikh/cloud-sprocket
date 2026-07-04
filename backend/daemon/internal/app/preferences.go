@@ -46,7 +46,7 @@ func (s *Service) savePreferencesLocked() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.preferencesPath(), encoded, 0o644)
+	return os.WriteFile(s.preferencesPath(), encoded, 0o600)
 }
 
 func defaultServicePreferences() models.ServicePreferences {

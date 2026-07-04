@@ -30,8 +30,14 @@ func TestAwsInventoryScopesMatchCatalogue(t *testing.T) {
 			t.Fatalf("catalogue scope %q missing from inventory scopes", entry.InventoryScope)
 		}
 	}
-	if len(scopes) != len(awsServiceCatalog()) {
-		t.Fatalf("scope count = %d, catalogue entries = %d", len(scopes), len(awsServiceCatalog()))
+	entriesWithScope := 0
+	for _, entry := range awsServiceCatalog() {
+		if entry.InventoryScope != "" {
+			entriesWithScope++
+		}
+	}
+	if len(scopes) != entriesWithScope {
+		t.Fatalf("scope count = %d, catalogue entries with scope = %d", len(scopes), entriesWithScope)
 	}
 }
 

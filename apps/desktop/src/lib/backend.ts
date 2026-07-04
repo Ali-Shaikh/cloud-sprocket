@@ -3123,11 +3123,11 @@ function handleMockRequest<T>(
       return Promise.resolve(mockState.settings as T);
     case "preferences.get":
       return Promise.resolve(buildMockPreferencesSnapshot() as T);
-    case "preferences.update":
+    case "preferences.update": {
+      const snapshot = buildMockPreferencesSnapshot(params as unknown as ServicePreferences);
       rebuildSessionDerivedState();
-      return Promise.resolve(
-        buildMockPreferencesSnapshot(params as unknown as ServicePreferences) as T,
-      );
+      return Promise.resolve(snapshot as T);
+    }
     case "preferences.hiddenResources.get":
       rebuildSessionDerivedState();
       return Promise.resolve(buildMockHiddenResourcesSnapshot() as T);

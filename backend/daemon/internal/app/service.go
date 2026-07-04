@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -132,6 +133,7 @@ func NewWithRuntimes(
 	}
 	service.mu.Lock()
 	if err := service.loadPreferencesLocked(); err != nil {
+		log.Printf("preferences: could not load %s, using defaults: %v", service.preferencesPath(), err)
 		service.preferences = defaultServicePreferences()
 	}
 	service.mu.Unlock()
