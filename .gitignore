@@ -35,6 +35,7 @@ apps/desktop/scripts/esbuild-wrapper/esbuild-wrapper.pdb
 .review-pr*/
 
 # Local dev scratch (never commit)
+.codex/
 .claude/launch.json
 apps/desktop/test-ui.mjs
 mcps/localstack/tools/
