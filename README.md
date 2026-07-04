@@ -50,9 +50,3 @@ before invoking the Tauri bundle step.
 CloudSprocket is licensed under the GNU Affero General Public License v3.0
 (AGPL-3.0-or-later). See [`LICENSE`](LICENSE) for the full text and
 [`COPYRIGHT`](COPYRIGHT) for project-specific copyright and notice details.
-
-## Sponsors
-
-[![Termius](docs/sponsors/termius-logo.svg)](https://termius.com/)
-
-[Termius](https://termius.com/) provides a secure, reliable, and collaborative SSH client.
