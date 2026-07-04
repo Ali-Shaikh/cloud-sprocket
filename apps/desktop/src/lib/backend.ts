@@ -24,6 +24,8 @@ import type {
   WorkspaceSnapshot,
   WorkspaceTab,
   AwsLambdaInvokeResult,
+  PreferencesSnapshot,
+  ServicePreferences,
 } from "../types/backend";
 
 export type BackendEventName =
@@ -1210,6 +1212,19 @@ function filteredProfiles(providerId?: string): ProfileSummary[] {
     return mockState.profiles;
   }
   return mockState.profiles.filter((profile) => profile.providerId === providerId);
+}
+
+function buildMockPreferencesSnapshot(
+  update?: Partial<ServicePreferences>,
+): PreferencesSnapshot {
+  const preferences: ServicePreferences = {
+    disabledProviders: update?.disabledProviders ?? [],
+    disabledServices: update?.disabledServices ?? {},
+  };
+  return {
+    preferences,
+    catalogue: [],
+  };
 }
 
 function buildMockWorkspace(): WorkspaceSnapshot {
@@ -2942,6 +2957,10 @@ function handleMockRequest<T>(
       );
     case "app.settings.get":
       return Promise.resolve(mockState.settings as T);
+    case "preferences.get":
+      return Promise.resolve(buildMockPreferencesSnapshot() as T);
+    case "preferences.update":
+      return Promise.resolve(buildMockPreferencesSnapshot(params) as T);
     case "app.reset":
       if (String(params.confirmation ?? "") !== "RESET") {
         return Promise.reject(new Error("type RESET to confirm the app reset"));

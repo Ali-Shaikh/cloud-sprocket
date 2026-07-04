@@ -103,6 +103,31 @@ type WorkspaceTab struct {
 	Category string `json:"category,omitempty"`
 }
 
+// ServicePreferences stores globally disabled providers and services. Absence of
+// config or empty sets means everything is enabled.
+type ServicePreferences struct {
+	DisabledProviders []string            `json:"disabledProviders"`
+	DisabledServices  map[string][]string `json:"disabledServices"`
+}
+
+// ServiceCatalogEntry describes a toggleable provider service or tool.
+type ServiceCatalogEntry struct {
+	ProviderID     string `json:"providerId"`
+	ServiceID      string `json:"serviceId"`
+	Label          string `json:"label"`
+	Summary        string `json:"summary"`
+	Detail         string `json:"detail"`
+	Category       string `json:"category"`
+	InventoryScope string `json:"inventoryScope,omitempty"`
+	Enabled        bool   `json:"enabled"`
+}
+
+// PreferencesSnapshot is returned by preferences.get and preferences.update.
+type PreferencesSnapshot struct {
+	Preferences ServicePreferences    `json:"preferences"`
+	Catalogue   []ServiceCatalogEntry `json:"catalogue"`
+}
+
 type DockerDiagnostics struct {
 	EngineState DockerEngineState `json:"engineState"`
 	Summary     string            `json:"summary"`

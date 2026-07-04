@@ -62,6 +62,27 @@ export interface WorkspaceTab {
   category?: "workspace" | "service" | "tool" | "coming_soon";
 }
 
+export interface ServicePreferences {
+  disabledProviders: string[];
+  disabledServices: Record<string, string[]>;
+}
+
+export interface ServiceCatalogEntry {
+  providerId: string;
+  serviceId: string;
+  label: string;
+  summary: string;
+  detail: string;
+  category: string;
+  inventoryScope?: string;
+  enabled: boolean;
+}
+
+export interface PreferencesSnapshot {
+  preferences: ServicePreferences;
+  catalogue: ServiceCatalogEntry[];
+}
+
 export interface DockerDiagnostics {
   engineState: DockerEngineState;
   summary: string;
