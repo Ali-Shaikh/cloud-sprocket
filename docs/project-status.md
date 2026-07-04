@@ -1,7 +1,7 @@
 # CloudSprocket project status
 
-**Last updated:** 4 July 2026 (PR #69 open; Step 1 implementation complete, awaiting review)  
-**Current version:** v0.8.22 (`dev`; v0.8.22 tag exists; deferred inventory lands in next release after #69 merges)
+**Last updated:** 4 July 2026 (PR #69 merged; Step 1 shipped on `dev`)  
+**Current version:** v0.8.23 (`dev`)
 **Latest release:** [v0.8.21](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.8.21)
 
 CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tauri v2 + Go sidecar. The PySide6 legacy app was removed in PR #67. The Tauri rewrite is the active product.
@@ -20,6 +20,7 @@ CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tau
 - Rail/sidebar UX redesign (v0.8.20): unified glyphs, app menu, profile badges
 - App icon refresh committed (`c6a088d`, 3 July 2026): master logo in `design/brand/`, all Tauri icon sizes regenerated
 - Performance work (v0.8.10–0.8.11): `runtime.get` poll split, Azure deferred inventory, parallel enrichers, code splitting, table virtualisation
+- AWS deferred inventory (v0.8.23, PR #69): `aws.inventory.get` RPC; workspace open loads S3 + EC2 only; other tabs fetch on first activation
 - Multi-platform CI and release builds (Windows, macOS, Linux)
 
 ### AWS (live)
@@ -61,10 +62,6 @@ Recent highlights:
 
 ## In progress / local WIP
 
-### AWS deferred inventory (Step 1)
-
-**PR #69** (`feat/aws-deferred-inventory` → `dev`): `aws.inventory.get` RPC + `awsDeferredInventory` on workspace open. Implementation complete; awaiting Greptile review and CI. Do not merge until approved. After merge, continue with Step 2 (Overview polish) and AWS expansion Phase 2 (ECS, API Gateway, Secrets Manager).
-
 ### floci-az Postgres image
 
 Code and socket-mount fix are on `dev`. End-to-end Postgres deploy works with a local `floci/floci-az:pg-local` build. Waiting on an official floci-az release that includes Postgres (PR #80 merged 27 Jun; published image is still 0.8.0 without Postgres).
@@ -89,7 +86,7 @@ Full provider support beyond discovery/overview. Product positioning: AWS and Az
 
 See `docs/aws-services-expansion-plan.md`.
 
-- Phase 1 (deferred inventory): **in PR #69**, awaiting review
+- Phase 1 (deferred inventory): **shipped** (PR #69, v0.8.23)
 - Phase 2+ not started: ECS, API Gateway, Secrets Manager, EKS, CloudFormation, EventBridge, Route 53, ELB, KMS
 
 ### AWS write operations (Phase 2+)
@@ -108,7 +105,7 @@ See `docs/performance-remediation-plan.md`. Phases 1a-1d, 2a-2c, 3a and 3d shipp
 - Phase 3b: decompose `App.tsx` (now ~4,900 lines; prerequisite for any TanStack Query adoption)
 - Phase 3c: normalise workspace snapshots once at the IPC boundary instead of at each call site
 - Phase 4: IPC/API shape changes (partial snapshots, push events)
-- AWS deferred inventory: **in PR #69** (`feat/aws-deferred-inventory`); on `dev` today, `workspace.get` still runs all nine enrichers until #69 merges
+- AWS deferred inventory: **shipped** (PR #69)
 - WAF optional Azure Monitor metrics tiles
 
 ### Release signing
@@ -121,13 +118,7 @@ Progressive snapshots and further phase-2 parallelisation deferred. See `docs/az
 
 ---
 
-## Open PRs
-
-| PR | Scope | Status |
-|----|-------|--------|
-| **#69** | AWS deferred inventory (`aws.inventory.get` + tab-scoped fetch) | Awaiting Greptile review + CI |
-
-### Open dependency PRs
+## Open dependency PRs
 
 Low urgency; mostly Renovate bumps.
 
@@ -143,15 +134,14 @@ Low urgency; mostly Renovate bumps.
 
 ## Suggested priorities
 
-Revised 4 July 2026 after PR #69 opened:
+Revised 4 July 2026 after PR #69 merged:
 
-1. **Merge PR #69** after Greptile review + CI (squash to `dev`; bump version post-merge)
-2. Overview polish (Step 2): runtime health strip, service-card click-through, GCP "Soon" badges
-3. Per-action capability metadata (Step 3): unify write-mode, profile capability and runtime-reachability gates
-4. AWS expansion Phase 2: ECS, API Gateway, Secrets Manager tabs (stacked PRs on `dev`)
-5. Re-test Postgres deploy when official floci-az ships Postgres (external blocker)
-6. `App.tsx` decomposition (perf plan Phase 3b), then decide on TanStack Query adoption
-7. GCP workspace or legacy AWS SSO/Who Am I (breadth vs polish)
+1. Overview polish (Step 2): runtime health strip, service-card click-through, GCP "Soon" badges
+2. Per-action capability metadata (Step 3): unify write-mode, profile capability and runtime-reachability gates
+3. AWS expansion Phase 2: ECS, API Gateway, Secrets Manager tabs (stacked PRs on `dev`)
+4. Re-test Postgres deploy when official floci-az ships Postgres (external blocker)
+5. `App.tsx` decomposition (perf plan Phase 3b), then decide on TanStack Query adoption
+6. GCP workspace or legacy AWS SSO/Who Am I (breadth vs polish)
 
 ---
 

@@ -150,7 +150,7 @@ Two findings changed the sequencing:
 
 ### Step 1 — Deferred AWS inventory (one PR, no new dependencies)
 
-**Status:** Complete in PR #69 (`feat/aws-deferred-inventory`); awaiting Greptile review + merge to `dev`.
+**Status:** Shipped (PR #69, v0.8.23).
 
 Matches `docs/aws-services-expansion-plan.md` Phase 1. File-level scope:
 
