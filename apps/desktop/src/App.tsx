@@ -24,6 +24,7 @@ import { Toaster } from "sonner";
 import { useSessionState } from "./hooks/use-session-state";
 import { useWorkspaceLoading } from "./hooks/use-workspace-loading";
 import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
+import { normaliseWorkspaceFromUnknown, requestWorkspaceSnapshot } from "./lib/workspace-request";
 import { awsInventoryLoaded, awsInventoryScopeForTab } from "./lib/aws-inventory";
 import { azureInventoryLoaded, azureInventoryScopeForTab } from "./lib/azure-inventory";
 import { notify, notifyJob, useNotifications, type NotificationTone } from "./lib/notify";
@@ -205,7 +206,6 @@ import {
   emptyWorkspace,
   NON_INVENTORY_TABS,
   isS3PresignResult,
-  isWorkspaceSnapshot,
   normaliseArray,
   normaliseProvider,
   normaliseProfile,
@@ -459,8 +459,8 @@ export default function App() {
             job.label === "Refresh Discovery" ||
             job.jobId === discoveryRefreshJobIdRef.current;
 
-          if (isWorkspaceSnapshot(job.result)) {
-            const workspaceResult = normaliseWorkspaceSnapshot(job.result);
+          const workspaceResult = normaliseWorkspaceFromUnknown(job.result);
+          if (workspaceResult) {
             startTransition(() => {
               setWorkspace(workspaceResult);
               setWorkspaceLoaded(true);
@@ -677,11 +677,11 @@ export default function App() {
       beginAzureInventoryFetch();
     }
     try {
-      const workspaceResult = await backendRequest<WorkspaceSnapshot>(method, params);
+      const workspaceResult = await requestWorkspaceSnapshot(method, params);
       if (!persistOnly) {
         startTransition(() => {
           setWorkspace((current) =>
-            merge ? merge(current, workspaceResult) : normaliseWorkspaceSnapshot(workspaceResult),
+            merge ? merge(current, workspaceResult) : workspaceResult,
           );
         });
       }
@@ -715,7 +715,7 @@ export default function App() {
       );
     });
     try {
-      const workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.webApps.selectSlot", {
+      const workspaceResult = await requestWorkspaceSnapshot("azure.webApps.selectSlot", {
         slot,
       });
       startTransition(() => {
@@ -755,7 +755,7 @@ export default function App() {
       );
     });
     try {
-      const workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.webApps.select", {
+      const workspaceResult = await requestWorkspaceSnapshot("azure.webApps.select", {
         appName: trimmed,
       });
       startTransition(() => {
@@ -790,7 +790,7 @@ export default function App() {
       );
     });
     try {
-      const workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.selectVirtualMachine", {
+      const workspaceResult = await requestWorkspaceSnapshot("azure.selectVirtualMachine", {
         vmId: trimmed,
       });
       startTransition(() => {
@@ -836,7 +836,7 @@ export default function App() {
       );
     });
     try {
-      const workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.selectResourceGroup", {
+      const workspaceResult = await requestWorkspaceSnapshot("azure.selectResourceGroup", {
         resourceGroup: trimmed,
       });
       startTransition(() => {
@@ -869,7 +869,7 @@ export default function App() {
     beginAzureInventoryFetch();
     setAzureFrontDoorTopologyLoading(true);
     try {
-      const workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.frontDoor.refresh", {});
+      const workspaceResult = await requestWorkspaceSnapshot("azure.frontDoor.refresh", {});
       startTransition(() => {
         setWorkspace((prev) => mergeAzureFrontDoorSelection(prev, workspaceResult));
       });
@@ -915,7 +915,7 @@ export default function App() {
     try {
       let workspaceResult: WorkspaceSnapshot;
       try {
-        workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.waf.refresh", {});
+        workspaceResult = await requestWorkspaceSnapshot("azure.waf.refresh", {});
       } catch (error) {
         const message = formatBackendError(error);
         const missingRefresh =
@@ -924,7 +924,7 @@ export default function App() {
         if (!missingRefresh || !selected) {
           throw error;
         }
-        workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.waf.selectPolicy", {
+        workspaceResult = await requestWorkspaceSnapshot("azure.waf.selectPolicy", {
           policyName: selected,
         });
       }
@@ -969,7 +969,7 @@ export default function App() {
     }
     azureInventoryFetchedScopesRef.current.add(scope);
     beginAzureInventoryFetch();
-    void backendRequest<WorkspaceSnapshot>("azure.inventory.get", { scope })
+    void requestWorkspaceSnapshot("azure.inventory.get", { scope })
       .then((workspaceResult) => {
         startTransition(() => {
           setWorkspace((current) =>
@@ -1020,7 +1020,7 @@ export default function App() {
     }
     awsInventoryFetchedScopesRef.current.add(scope);
     beginAwsInventoryFetch();
-    void backendRequest<WorkspaceSnapshot>("aws.inventory.get", { scope })
+    void requestWorkspaceSnapshot("aws.inventory.get", { scope })
       .then((workspaceResult) => {
         startTransition(() => {
           setWorkspace((current) =>
@@ -1089,7 +1089,7 @@ export default function App() {
       );
     });
     try {
-      const workspaceResult = await backendRequest<WorkspaceSnapshot>("azure.waf.selectPolicy", {
+      const workspaceResult = await requestWorkspaceSnapshot("azure.waf.selectPolicy", {
         policyName: trimmed,
       });
       startTransition(() => {
@@ -1168,10 +1168,10 @@ export default function App() {
       return;
     }
     setEC2ActionStatus(`Refreshing EC2 inventory for ${region}.`);
-    void backendRequest<WorkspaceSnapshot>("aws.ec2.selectRegion", { region })
+    void requestWorkspaceSnapshot("aws.ec2.selectRegion", { region })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setEC2ActionStatus(workspaceResult.ec2StatusMessage || `Loaded EC2 instances from ${region}.`);
       })
@@ -1183,9 +1183,9 @@ export default function App() {
   function selectEC2Region(region: string): void {
     setEC2ActionStatus("Select an instance to run lifecycle actions.");
     setEC2ActionInFlight(false);
-    void backendRequest<WorkspaceSnapshot>("aws.ec2.selectRegion", { region }).then((workspaceResult) => {
+    void requestWorkspaceSnapshot("aws.ec2.selectRegion", { region }).then((workspaceResult) => {
       startTransition(() => {
-        setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        setWorkspace(workspaceResult);
       });
     });
   }
@@ -1193,9 +1193,9 @@ export default function App() {
   function selectEC2Instance(instanceId: string): void {
     setEC2ActionStatus("Instance selected. EC2 lifecycle writes require a local endpoint profile with write opt-in.");
     setEC2ActionInFlight(false);
-    void backendRequest<WorkspaceSnapshot>("aws.ec2.selectInstance", { instanceId }).then((workspaceResult) => {
+    void requestWorkspaceSnapshot("aws.ec2.selectInstance", { instanceId }).then((workspaceResult) => {
       startTransition(() => {
-        setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+        setWorkspace(workspaceResult);
       });
     });
   }
@@ -1222,10 +1222,10 @@ export default function App() {
       return;
     }
     setLambdaActionStatus(`Refreshing Lambda functions for ${region}.`);
-    void backendRequest<WorkspaceSnapshot>("aws.lambda.selectRegion", { region })
+    void requestWorkspaceSnapshot("aws.lambda.selectRegion", { region })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setLambdaActionStatus(workspaceResult.lambdaStatusMessage || `Loaded Lambda functions from ${region}.`);
         setLambdaInvokeResult(null);
@@ -1239,10 +1239,10 @@ export default function App() {
     setLambdaActionStatus(`Loading Lambda functions for ${region}.`);
     setLambdaInvokeInFlight(false);
     setLambdaInvokeResult(null);
-    void backendRequest<WorkspaceSnapshot>("aws.lambda.selectRegion", { region })
+    void requestWorkspaceSnapshot("aws.lambda.selectRegion", { region })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setLambdaActionStatus(
           workspaceResult.lambdaStatusMessage || `Loaded Lambda functions from ${region}.`,
@@ -1255,10 +1255,10 @@ export default function App() {
 
   function selectLambdaFunction(functionName: string): void {
     setLambdaInvokeResult(null);
-    void backendRequest<WorkspaceSnapshot>("aws.lambda.selectFunction", { functionName })
+    void requestWorkspaceSnapshot("aws.lambda.selectFunction", { functionName })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setLambdaActionStatus(
           workspaceResult.lambdaStatusMessage || `Selected Lambda function ${functionName}.`,
@@ -1294,10 +1294,10 @@ export default function App() {
     setLambdaCreateInFlight(true);
     const region = workspace.selectedLambdaRegion || "us-east-1";
     setLambdaActionStatus(`Creating ${input.functionName} in ${region}...`);
-    void backendRequest<WorkspaceSnapshot>("aws.lambda.create", { ...input })
+    void requestWorkspaceSnapshot("aws.lambda.create", { ...input })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setLambdaActionStatus(
           workspaceResult.lambdaStatusMessage ||
@@ -1318,10 +1318,10 @@ export default function App() {
       return;
     }
     setDynamodbActionStatus(`Refreshing DynamoDB tables for ${region}.`);
-    void backendRequest<WorkspaceSnapshot>("aws.dynamodb.selectRegion", { region })
+    void requestWorkspaceSnapshot("aws.dynamodb.selectRegion", { region })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setDynamodbActionStatus(
           workspaceResult.dynamodbStatusMessage || `Loaded DynamoDB tables from ${region}.`,
@@ -1334,10 +1334,10 @@ export default function App() {
 
   function selectDynamoDBRegion(region: string): void {
     setDynamodbActionStatus(`Loading DynamoDB tables for ${region}.`);
-    void backendRequest<WorkspaceSnapshot>("aws.dynamodb.selectRegion", { region })
+    void requestWorkspaceSnapshot("aws.dynamodb.selectRegion", { region })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setDynamodbActionStatus(
           workspaceResult.dynamodbStatusMessage || `Loaded DynamoDB tables from ${region}.`,
@@ -1411,10 +1411,10 @@ export default function App() {
   }
 
   function selectDynamoDBTable(tableName: string): void {
-    void backendRequest<WorkspaceSnapshot>("aws.dynamodb.selectTable", { tableName })
+    void requestWorkspaceSnapshot("aws.dynamodb.selectTable", { tableName })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setDynamodbActionStatus(
           workspaceResult.dynamodbStatusMessage || `Selected DynamoDB table ${tableName}.`,
@@ -1432,10 +1432,10 @@ export default function App() {
       return;
     }
     setSqsActionStatus(`Refreshing SQS queues for ${region}.`);
-    void backendRequest<WorkspaceSnapshot>("aws.sqs.selectRegion", { region })
+    void requestWorkspaceSnapshot("aws.sqs.selectRegion", { region })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setSqsActionStatus(
           workspaceResult.sqsStatusMessage || `Loaded SQS queues from ${region}.`,
@@ -1448,10 +1448,10 @@ export default function App() {
 
   function selectSQSRegion(region: string): void {
     setSqsActionStatus(`Loading SQS queues for ${region}.`);
-    void backendRequest<WorkspaceSnapshot>("aws.sqs.selectRegion", { region })
+    void requestWorkspaceSnapshot("aws.sqs.selectRegion", { region })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setSqsActionStatus(
           workspaceResult.sqsStatusMessage || `Loaded SQS queues from ${region}.`,
@@ -1463,10 +1463,10 @@ export default function App() {
   }
 
   function selectSQSQueue(queueUrl: string): void {
-    void backendRequest<WorkspaceSnapshot>("aws.sqs.selectQueue", { queueUrl })
+    void requestWorkspaceSnapshot("aws.sqs.selectQueue", { queueUrl })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setSqsActionStatus(
           workspaceResult.sqsStatusMessage || "Selected SQS queue.",
@@ -1506,10 +1506,10 @@ export default function App() {
 
   function createSQSQueue(queueName: string): void {
     setSqsActionStatus(`Creating SQS queue ${queueName}.`);
-    void backendRequest<WorkspaceSnapshot>("aws.sqs.createQueue", { queueName })
+    void requestWorkspaceSnapshot("aws.sqs.createQueue", { queueName })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setSqsActionStatus(
           workspaceResult.sqsStatusMessage || `Created SQS queue ${queueName}.`,
@@ -1531,10 +1531,10 @@ export default function App() {
 
   function selectSNSRegion(region: string): void {
     setSnsActionStatus(`Loading SNS topics for ${region}.`);
-    void backendRequest<WorkspaceSnapshot>("aws.sns.selectRegion", { region })
+    void requestWorkspaceSnapshot("aws.sns.selectRegion", { region })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setSnsActionStatus(
           workspaceResult.snsStatusMessage || `Loaded SNS topics from ${region}.`,
@@ -1546,10 +1546,10 @@ export default function App() {
   }
 
   function selectSNSTopic(topicArn: string): void {
-    void backendRequest<WorkspaceSnapshot>("aws.sns.selectTopic", { topicArn })
+    void requestWorkspaceSnapshot("aws.sns.selectTopic", { topicArn })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setSnsActionStatus(workspaceResult.snsStatusMessage || "Selected SNS topic.");
       })
@@ -1571,10 +1571,10 @@ export default function App() {
 
   function createSNSTopic(topicName: string): void {
     setSnsActionStatus(`Creating SNS topic ${topicName}.`);
-    void backendRequest<WorkspaceSnapshot>("aws.sns.createTopic", { topicName })
+    void requestWorkspaceSnapshot("aws.sns.createTopic", { topicName })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setSnsActionStatus(
           workspaceResult.snsStatusMessage || `Created SNS topic ${topicName}.`,
@@ -1587,10 +1587,10 @@ export default function App() {
 
   function putDynamoDBItem(tableName: string, itemJson: string): void {
     setDynamodbActionStatus(`Putting item into ${tableName}.`);
-    void backendRequest<WorkspaceSnapshot>("aws.dynamodb.putItem", { tableName, itemJson })
+    void requestWorkspaceSnapshot("aws.dynamodb.putItem", { tableName, itemJson })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setDynamodbActionStatus(
           workspaceResult.dynamodbStatusMessage || `Put item into ${tableName}.`,
@@ -1603,10 +1603,10 @@ export default function App() {
 
   function deleteDynamoDBItem(tableName: string, keyJson: string): void {
     setDynamodbActionStatus(`Deleting item from ${tableName}.`);
-    void backendRequest<WorkspaceSnapshot>("aws.dynamodb.deleteItem", { tableName, keyJson })
+    void requestWorkspaceSnapshot("aws.dynamodb.deleteItem", { tableName, keyJson })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setDynamodbActionStatus(
           workspaceResult.dynamodbStatusMessage || `Deleted item from ${tableName}.`,
@@ -1628,10 +1628,10 @@ export default function App() {
 
   function selectRDSRegion(region: string): void {
     setRdsActionStatus(`Loading RDS instances for ${region}.`);
-    void backendRequest<WorkspaceSnapshot>("aws.rds.selectRegion", { region })
+    void requestWorkspaceSnapshot("aws.rds.selectRegion", { region })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setRdsActionStatus(
           workspaceResult.rdsStatusMessage || `Loaded RDS instances from ${region}.`,
@@ -1643,10 +1643,10 @@ export default function App() {
   }
 
   function selectRDSInstance(instanceId: string): void {
-    void backendRequest<WorkspaceSnapshot>("aws.rds.selectInstance", { instanceId })
+    void requestWorkspaceSnapshot("aws.rds.selectInstance", { instanceId })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setRdsActionStatus(workspaceResult.rdsStatusMessage || "Selected RDS instance.");
       })
@@ -1666,10 +1666,10 @@ export default function App() {
 
   function selectLogsRegion(region: string): void {
     setLogsActionStatus(`Loading log groups for ${region}.`);
-    void backendRequest<WorkspaceSnapshot>("aws.logs.selectRegion", { region })
+    void requestWorkspaceSnapshot("aws.logs.selectRegion", { region })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setLogsActionStatus(
           workspaceResult.logsStatusMessage || `Loaded log groups from ${region}.`,
@@ -1681,10 +1681,10 @@ export default function App() {
   }
 
   function selectLogGroup(logGroupName: string): void {
-    void backendRequest<WorkspaceSnapshot>("aws.logs.selectLogGroup", { logGroupName })
+    void requestWorkspaceSnapshot("aws.logs.selectLogGroup", { logGroupName })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setLogsActionStatus(workspaceResult.logsStatusMessage || "Selected log group.");
       })
@@ -1695,10 +1695,10 @@ export default function App() {
 
   function refreshIAMInventory(): void {
     setIamActionStatus("Refreshing IAM roles and policies.");
-    void backendRequest<WorkspaceSnapshot>("workspace.get")
+    void requestWorkspaceSnapshot("workspace.get")
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setIamActionStatus(workspaceResult.iamStatusMessage || "IAM inventory refreshed.");
       })
@@ -1708,10 +1708,10 @@ export default function App() {
   }
 
   function selectIAMRole(roleName: string): void {
-    void backendRequest<WorkspaceSnapshot>("aws.iam.selectRole", { roleName })
+    void requestWorkspaceSnapshot("aws.iam.selectRole", { roleName })
       .then((workspaceResult) => {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
         setIamActionStatus(workspaceResult.iamStatusMessage || "Selected IAM role.");
       })
@@ -1725,10 +1725,10 @@ export default function App() {
   function applyS3PrefixFilter(prefix: string): void {
     const requestId = s3PrefixRequestIdRef.current + 1;
     s3PrefixRequestIdRef.current = requestId;
-    void backendRequest<WorkspaceSnapshot>("aws.s3.setPrefixFilter", { prefix }).then((workspaceResult) => {
+    void requestWorkspaceSnapshot("aws.s3.setPrefixFilter", { prefix }).then((workspaceResult) => {
       if (requestId === s3PrefixRequestIdRef.current) {
         startTransition(() => {
-          setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+          setWorkspace(workspaceResult);
         });
       }
     });
@@ -1920,31 +1920,30 @@ export default function App() {
     awsInventoryFetchedScopesRef.current.clear();
     beginWorkspaceFetch();
     try {
-      const workspaceResult = await backendRequest<WorkspaceSnapshot>("workspace.get");
+      const workspaceResult = await requestWorkspaceSnapshot("workspace.get");
       startTransition(() => {
-        const normalised = normaliseWorkspaceSnapshot(workspaceResult);
-        setWorkspace(normalised);
+        setWorkspace(workspaceResult);
         setWorkspaceLoaded(true);
-        if (!lambdaInvokeInFlight && normalised.lambdaStatusMessage) {
-          setLambdaActionStatus(normalised.lambdaStatusMessage);
+        if (!lambdaInvokeInFlight && workspaceResult.lambdaStatusMessage) {
+          setLambdaActionStatus(workspaceResult.lambdaStatusMessage);
         }
-        if (normalised.dynamodbStatusMessage) {
-          setDynamodbActionStatus(normalised.dynamodbStatusMessage);
+        if (workspaceResult.dynamodbStatusMessage) {
+          setDynamodbActionStatus(workspaceResult.dynamodbStatusMessage);
         }
-        if (!sqsPeekInFlight && normalised.sqsStatusMessage) {
-          setSqsActionStatus(normalised.sqsStatusMessage);
+        if (!sqsPeekInFlight && workspaceResult.sqsStatusMessage) {
+          setSqsActionStatus(workspaceResult.sqsStatusMessage);
         }
-        if (normalised.snsStatusMessage) {
-          setSnsActionStatus(normalised.snsStatusMessage);
+        if (workspaceResult.snsStatusMessage) {
+          setSnsActionStatus(workspaceResult.snsStatusMessage);
         }
-        if (normalised.rdsStatusMessage) {
-          setRdsActionStatus(normalised.rdsStatusMessage);
+        if (workspaceResult.rdsStatusMessage) {
+          setRdsActionStatus(workspaceResult.rdsStatusMessage);
         }
-        if (normalised.logsStatusMessage) {
-          setLogsActionStatus(normalised.logsStatusMessage);
+        if (workspaceResult.logsStatusMessage) {
+          setLogsActionStatus(workspaceResult.logsStatusMessage);
         }
-        if (normalised.iamStatusMessage) {
-          setIamActionStatus(normalised.iamStatusMessage);
+        if (workspaceResult.iamStatusMessage) {
+          setIamActionStatus(workspaceResult.iamStatusMessage);
         }
       });
     } finally {
@@ -2461,10 +2460,10 @@ export default function App() {
       }}
       onCreateResourceGroup={(name, location) => {
         setAzureActionStatus(`Creating resource group ${name}...`);
-        void backendRequest<WorkspaceSnapshot>("azure.resourceGroups.create", { name, location })
+        void requestWorkspaceSnapshot("azure.resourceGroups.create", { name, location })
           .then((workspaceResult) => {
             startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+              setWorkspace(workspaceResult);
             });
             setAzureActionStatus(workspaceResult.azureStatusMessage || `Created resource group ${name}.`);
           })
@@ -2474,10 +2473,10 @@ export default function App() {
       }}
       onDeleteResourceGroup={(name) => {
         setAzureActionStatus(`Deleting resource group ${name}...`);
-        void backendRequest<WorkspaceSnapshot>("azure.resourceGroups.delete", { name })
+        void requestWorkspaceSnapshot("azure.resourceGroups.delete", { name })
           .then((workspaceResult) => {
             startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+              setWorkspace(workspaceResult);
             });
             setAzureActionStatus(workspaceResult.azureStatusMessage || `Deleted resource group ${name}.`);
           })
@@ -2487,10 +2486,10 @@ export default function App() {
       }}
       onInvokeVMAction={(action, vmId) => {
         setAzureActionStatus(`Invoking ${action} on virtual machine...`);
-        void backendRequest<WorkspaceSnapshot>("azure.virtualMachines.invokeAction", { action, vmId })
+        void requestWorkspaceSnapshot("azure.virtualMachines.invokeAction", { action, vmId })
           .then((workspaceResult) => {
             startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+              setWorkspace(workspaceResult);
             });
             setAzureActionStatus(workspaceResult.azureStatusMessage || `Invoked ${action} on virtual machine.`);
           })
@@ -2608,14 +2607,14 @@ export default function App() {
       }}
       onCreateAccount={(resourceGroup, accountName, location) => {
         setAzureStorageActionStatus(`Creating storage account ${accountName}...`);
-        void backendRequest<WorkspaceSnapshot>("azure.storage.createAccount", {
+        void requestWorkspaceSnapshot("azure.storage.createAccount", {
           resourceGroup,
           accountName,
           location,
         })
           .then((workspaceResult) => {
             startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+              setWorkspace(workspaceResult);
             });
             setAzureStorageActionStatus(
               workspaceResult.azureStorageStatusMessage || `Created storage account ${accountName}.`,
@@ -2627,10 +2626,10 @@ export default function App() {
       }}
       onCreateContainer={(containerName) => {
         setAzureStorageActionStatus(`Creating container ${containerName}...`);
-        void backendRequest<WorkspaceSnapshot>("azure.storage.createContainer", { containerName })
+        void requestWorkspaceSnapshot("azure.storage.createContainer", { containerName })
           .then((workspaceResult) => {
             startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+              setWorkspace(workspaceResult);
             });
             setAzureStorageActionStatus(
               workspaceResult.azureStorageStatusMessage || `Created container ${containerName}.`,
@@ -2658,10 +2657,10 @@ export default function App() {
       }}
       onDeleteBlob={(blobName) => {
         setAzureStorageActionStatus(`Deleting blob ${blobName}...`);
-        void backendRequest<WorkspaceSnapshot>("azure.storage.deleteBlob", { blobName })
+        void requestWorkspaceSnapshot("azure.storage.deleteBlob", { blobName })
           .then((workspaceResult) => {
             startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+              setWorkspace(workspaceResult);
             });
             setAzureStorageActionStatus(`Deleted blob ${blobName}.`);
           })
@@ -2692,7 +2691,7 @@ export default function App() {
       }}
       onCreateWebApp={(resourceGroup, appName, location, runtime, planOptions) => {
         setAzureAppServiceActionStatus(`Creating web app ${appName}...`);
-        void backendRequest<WorkspaceSnapshot>("azure.webApps.create", {
+        void requestWorkspaceSnapshot("azure.webApps.create", {
           resourceGroup,
           appName,
           location,
@@ -2703,7 +2702,7 @@ export default function App() {
         })
           .then((workspaceResult) => {
             startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+              setWorkspace(workspaceResult);
             });
             setAzureAppServiceActionStatus(
               workspaceResult.azureAppServiceStatusMessage || `Created web app ${appName}.`,
@@ -2715,10 +2714,10 @@ export default function App() {
       }}
       onInvokeAction={(action, appName) => {
         setAzureAppServiceActionStatus(`Invoking ${action} on web app...`);
-        void backendRequest<WorkspaceSnapshot>("azure.webApps.invokeAction", { action, appName })
+        void requestWorkspaceSnapshot("azure.webApps.invokeAction", { action, appName })
           .then((workspaceResult) => {
             startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+              setWorkspace(workspaceResult);
             });
             setAzureAppServiceActionStatus(
               workspaceResult.azureAppServiceStatusMessage || `Invoked ${action} on web app.`,
@@ -2730,14 +2729,14 @@ export default function App() {
       }}
       onSetSetting={(appName, name, value, slotSetting) => {
         setAzureAppServiceActionStatus(`Setting ${name}...`);
-        return backendRequest<WorkspaceSnapshot>("azure.webApps.setSetting", {
+        return requestWorkspaceSnapshot("azure.webApps.setSetting", {
           appName,
           name,
           value,
           slotSetting,
         }).then((workspaceResult) => {
           startTransition(() => {
-            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            setWorkspace(workspaceResult);
           });
           setAzureAppServiceActionStatus(
             workspaceResult.azureAppServiceStatusMessage || `Set application setting ${name}.`,
@@ -2746,12 +2745,12 @@ export default function App() {
       }}
       onDeleteSetting={(appName, name) => {
         setAzureAppServiceActionStatus(`Deleting ${name}...`);
-        return backendRequest<WorkspaceSnapshot>("azure.webApps.deleteSetting", {
+        return requestWorkspaceSnapshot("azure.webApps.deleteSetting", {
           appName,
           name,
         }).then((workspaceResult) => {
           startTransition(() => {
-            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            setWorkspace(workspaceResult);
           });
           setAzureAppServiceActionStatus(
             workspaceResult.azureAppServiceStatusMessage || `Deleted application setting ${name}.`,
@@ -2760,10 +2759,10 @@ export default function App() {
       }}
       onCreateSlot={(appName, slotName) => {
         setAzureAppServiceActionStatus(`Creating deployment slot ${slotName}...`);
-        void backendRequest<WorkspaceSnapshot>("azure.webApps.createSlot", { appName, slotName })
+        void requestWorkspaceSnapshot("azure.webApps.createSlot", { appName, slotName })
           .then((workspaceResult) => {
             startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+              setWorkspace(workspaceResult);
             });
             setAzureAppServiceActionStatus(
               workspaceResult.azureAppServiceStatusMessage ||
@@ -2776,10 +2775,10 @@ export default function App() {
       }}
       onSwapSlot={(appName, slotName) => {
         setAzureAppServiceActionStatus(`Swapping production with ${slotName}...`);
-        void backendRequest<WorkspaceSnapshot>("azure.webApps.swapSlots", { appName, slotName })
+        void requestWorkspaceSnapshot("azure.webApps.swapSlots", { appName, slotName })
           .then((workspaceResult) => {
             startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+              setWorkspace(workspaceResult);
             });
             setAzureAppServiceActionStatus(
               workspaceResult.azureAppServiceStatusMessage ||
@@ -2886,14 +2885,14 @@ export default function App() {
         });
       }}
       onSetMode={(resourceGroup, policyName, mode) =>
-        backendRequest<WorkspaceSnapshot>("azure.waf.config.setMode", {
+        requestWorkspaceSnapshot("azure.waf.config.setMode", {
           resourceGroup,
           policyName,
           mode,
           confirm: true,
         }).then((workspaceResult) => {
           startTransition(() => {
-            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            setWorkspace(workspaceResult);
           });
         })
       }
@@ -2906,7 +2905,7 @@ export default function App() {
         ruleId,
         enabled,
       ) =>
-        backendRequest<WorkspaceSnapshot>("azure.waf.config.setManagedRule", {
+        requestWorkspaceSnapshot("azure.waf.config.setManagedRule", {
           resourceGroup,
           policyName,
           ruleSetType,
@@ -2917,31 +2916,31 @@ export default function App() {
           confirm: true,
         }).then((workspaceResult) => {
           startTransition(() => {
-            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            setWorkspace(workspaceResult);
           });
         })
       }
       onRemoveExclusion={(resourceGroup, policyName, exclusion) =>
-        backendRequest<WorkspaceSnapshot>("azure.waf.config.removeExclusion", {
+        requestWorkspaceSnapshot("azure.waf.config.removeExclusion", {
           resourceGroup,
           policyName,
           exclusion,
           confirm: true,
         }).then((workspaceResult) => {
           startTransition(() => {
-            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            setWorkspace(workspaceResult);
           });
         })
       }
       onAddExclusion={(resourceGroup, policyName, exclusion) =>
-        backendRequest<WorkspaceSnapshot>("azure.waf.config.addExclusion", {
+        requestWorkspaceSnapshot("azure.waf.config.addExclusion", {
           resourceGroup,
           policyName,
           exclusion,
           confirm: true,
         }).then((workspaceResult) => {
           startTransition(() => {
-            setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+            setWorkspace(workspaceResult);
           });
         })
       }
@@ -2976,7 +2975,7 @@ export default function App() {
       }}
       onPurgeCache={(profile, endpointName, contentPaths, domains) => {
         setAzureFrontDoorActionStatus(`Purging cache for ${endpointName}...`);
-        void backendRequest<WorkspaceSnapshot>("azure.frontDoor.purgeCache", {
+        void requestWorkspaceSnapshot("azure.frontDoor.purgeCache", {
           profileName: profile,
           endpointName,
           contentPaths,
@@ -3174,10 +3173,10 @@ export default function App() {
         )
       }
       onSetSecret={(vaultName, secretName, value) =>
-        backendRequest<WorkspaceSnapshot>("azure.keyVault.setSecret", { vaultName, secretName, value }).then(
+        requestWorkspaceSnapshot("azure.keyVault.setSecret", { vaultName, secretName, value }).then(
           (workspaceResult) => {
             startTransition(() => {
-              setWorkspace(normaliseWorkspaceSnapshot(workspaceResult));
+              setWorkspace(workspaceResult);
             });
           },
         )
