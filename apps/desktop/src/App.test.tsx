@@ -209,6 +209,28 @@ vi.mock("./lib/backend", () => ({
         };
       case "workspace.get":
         return workspaceFixture;
+      case "aws.inventory.get":
+        return {
+          ...workspaceFixture,
+          selectedLambdaRegion: "us-east-1",
+          selectedLambdaFunctionName: "process-order",
+          lambdaRegions: ["us-east-1", "eu-west-2"],
+          lambdaFunctions: [
+            {
+              functionName: "process-order",
+              runtime: "nodejs20.x",
+              memorySize: 512,
+              lastModified: "2026-06-10T12:00:00Z",
+              description: "Handles order processing from SQS",
+              state: "Active",
+              handler: "index.handler",
+              timeout: 30,
+              logGroup: "/aws/lambda/process-order",
+              recentLogs: ["2026-06-15 10:05:12 START RequestId: abc123"],
+            },
+          ],
+          lambdaStatusMessage: "Loaded 1 Lambda function from us-east-1.",
+        };
       case "azure.inventory.get":
         return {
           ...workspaceFixture,
@@ -2183,6 +2205,73 @@ describe("App", () => {
     expect((await screen.findAllByText("mkt-api-01")).length).toBeGreaterThan(0);
     expect((await screen.findAllByText("Standard_D2s_v5")).length).toBeGreaterThan(0);
   });
+
+  it("loads AWS scoped inventory when activating a deferred service tab", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+        {
+          tabId: "s3",
+          label: "S3",
+          summary: "S3 summary",
+          detail: "S3 panel",
+        },
+        {
+          tabId: "lambda",
+          label: "Lambda",
+          summary: "Lambda summary",
+          detail: "Lambda panel",
+        },
+      ],
+    };
+    workspaceFixture = {
+      ...workspaceFixture,
+      provider: providerFixtures[0],
+      profile: profileFixtures[0],
+      authMethod: "cli",
+      s3Buckets: [{ name: "cloudsprocket-artifacts" }],
+      s3StatusMessage: "Loaded 1 bucket(s). Select cloudsprocket-artifacts to browse objects.",
+      ec2Regions: ["us-east-1"],
+      ec2Instances: [],
+      ec2StatusMessage: "Loaded 1 region(s). Select us-east-1 to browse instances.",
+      selectedLambdaRegion: undefined,
+      selectedLambdaFunctionName: undefined,
+      lambdaRegions: [],
+      lambdaFunctions: [],
+      lambdaStatusMessage: undefined,
+    };
+
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
+
+    expect(await screen.findByText("S3 buckets")).toBeInTheDocument();
+    const awsNav = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
+    await act(async () => {
+      fireEvent.click(awsNav.getByRole("button", { name: /Lambda/ }));
+    });
+    expect(await screen.findByRole("heading", { name: "Lambda" })).toBeInTheDocument();
+
+    await waitFor(() => {
+      const inventoryCalls = vi
+        .mocked(backendRequest)
+        .mock.calls.filter(([method]) => method === "aws.inventory.get");
+      expect(inventoryCalls.length).toBeGreaterThan(0);
+      expect(inventoryCalls.at(-1)?.[1]).toEqual({ scope: "lambda" });
+    });
+  }, 15000);
 
   it("reloads Azure scoped inventory after Refresh Discovery completes", async () => {
     sessionFixture = {

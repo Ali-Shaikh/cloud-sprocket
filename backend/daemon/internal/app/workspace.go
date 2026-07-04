@@ -38,6 +38,9 @@ type workspaceSnapshotOptions struct {
 	// azureDeferredInventory loads only resource groups and VMs on workspace.get.
 	// Other Azure services load on demand via azure.inventory.get per tab scope.
 	azureDeferredInventory bool
+	// awsDeferredInventory loads only S3 buckets and EC2 regions on workspace.get.
+	// Other AWS services load on demand via aws.inventory.get per tab scope.
+	awsDeferredInventory bool
 }
 
 func (s *Service) buildWorkspaceSnapshot(
@@ -139,7 +142,12 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 			lightweight: opts.lightweightAWS,
 			scope:       opts.awsScope,
 		}
-		s.enrichAwsWorkspace(&workspace, session, awsOpts)
+		if opts.awsDeferredInventory {
+			var mu sync.Mutex
+			s.enrichAwsInventory(&workspace, session, &mu)
+		} else {
+			s.enrichAwsWorkspace(&workspace, session, awsOpts)
+		}
 	}
 
 	return workspace
