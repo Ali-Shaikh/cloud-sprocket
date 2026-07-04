@@ -20,7 +20,7 @@ describe("actionCapabilityState", () => {
         ],
       },
       awsWritesEnabled: false,
-    } as WorkspaceSnapshot;
+    } as unknown as WorkspaceSnapshot;
 
     expect(actionCapabilityState(workspace, "lambda", "invoke")).toEqual({
       enabled: false,
@@ -31,7 +31,7 @@ describe("actionCapabilityState", () => {
   it("falls back to awsWritesEnabled when capabilities are missing", () => {
     const workspace = {
       awsWritesEnabled: true,
-    } as WorkspaceSnapshot;
+    } as unknown as WorkspaceSnapshot;
 
     expect(actionCapabilityState(workspace, "lambda", "invoke")).toEqual({
       enabled: true,
