@@ -9,6 +9,7 @@ import { LogQueryResultPanel } from "@/components/log-analytics/LogQueryResultPa
 import { WafOverviewPanel } from "@/components/waf/WafOverviewPanel";
 import { WafQueryGroupByBar, WafQueryRunControls } from "@/components/waf/WafQueryExecutionBar";
 import { cn } from "@/lib/utils";
+import { actionCapabilityState } from "@/lib/action-capabilities";
 import {
   buildTrackingReferenceExtendQuery,
   buildTrackingReferenceSearchQuery,
@@ -216,7 +217,9 @@ export default function AzureWafView({
   const schemaDescription = useMemo(() => describeWafLogSchema(schema), [schema]);
   const policyDetail = workspace.azureWafPolicyDetail;
   const fireCounts = workspace.azureWafRuleFireCounts ?? [];
-  const canWrite = workspace.azureWritesEnabled;
+  const writeCapability = actionCapabilityState(workspace, "waf", "setMode", "azure");
+  const canWrite = writeCapability.enabled;
+  const writeDisabledReason = writeCapability.reason;
   const inventoryLoadingLabel = azureInventoryLoadingLabel(workspace, "waf");
   const inventoryControlsBusy = inventoryLoading || workspaceSelectionLoading;
 
@@ -1136,6 +1139,9 @@ export default function AzureWafView({
 
             {configError ? <p className="text-sm text-destructive">{configError}</p> : null}
             <p className="text-sm text-muted-foreground">{workspace.azureWafStatusMessage}</p>
+            {writeDisabledReason ? (
+              <p className="text-sm text-muted-foreground">{writeDisabledReason}</p>
+            ) : null}
 
             {policyDetail ? (
               <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">

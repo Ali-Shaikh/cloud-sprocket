@@ -38,6 +38,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusPill } from "@/components/status-pill";
 import { cn } from "@/lib/utils";
+import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { AFD_CURATED_QUERIES } from "@/lib/afd-curated-queries";
 import {
   buildAfdAccessFilteredQuery,
@@ -104,7 +105,18 @@ export default function AzureFrontDoorView({
   initialLogWorkspace,
   initialTimespan,
 }: AzureFrontDoorViewProps) {
-  const canWrite = workspace.azureWritesEnabled;
+  const purgeCapability = actionCapabilityState(workspace, "frontDoor", "purgeCache", "azure");
+  const canWrite = purgeCapability.enabled;
+  const purgeDisabledReason = (endpointName: string) =>
+    canWrite
+      ? undefined
+      : actionDisabledReason(
+          workspace,
+          "frontDoor",
+          "purgeCache",
+          !endpointName ? "Select an endpoint first." : undefined,
+          "azure",
+        );
   const profiles = workspace.azureFrontDoorProfiles ?? [];
   const endpoints = workspace.azureFrontDoorEndpoints ?? [];
   const originGroups = workspace.azureFrontDoorOriginGroups ?? [];
@@ -314,7 +326,7 @@ export default function AzureFrontDoorView({
                       <TableHead>Name</TableHead>
                       <TableHead>Hostname</TableHead>
                       <TableHead>State</TableHead>
-                      {canWrite ? <TableHead className="w-[120px]">Actions</TableHead> : null}
+                      <TableHead className="w-[120px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -330,24 +342,23 @@ export default function AzureFrontDoorView({
                         <TableCell>
                           <StatusPill status={enabledStatus(item.enabledState)} label={item.enabledState || "Unknown"} />
                         </TableCell>
-                        {canWrite ? (
-                          <TableCell>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={inventoryLoading}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setPurgePaths("/*");
-                                setPurgeDomains(item.hostName ?? "");
-                                setPurgeEndpoint(item.name);
-                              }}
-                            >
-                              <Eraser />
-                              Purge cache
-                            </Button>
-                          </TableCell>
-                        ) : null}
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={inventoryLoading || !canWrite}
+                            title={purgeDisabledReason(item.name)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setPurgePaths("/*");
+                              setPurgeDomains(item.hostName ?? "");
+                              setPurgeEndpoint(item.name);
+                            }}
+                          >
+                            <Eraser />
+                            Purge cache
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

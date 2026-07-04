@@ -127,5 +127,22 @@ func buildAzureActionCapabilities(
 		"keyvault": {
 			cap("setSecret", "Set secret"),
 		},
+		"appService": {
+			cap("createWebApp", "Create web app"),
+			cap("lifecycleAction", "Lifecycle action"),
+			cap("setSetting", "Set app setting"),
+			cap("deleteSetting", "Delete app setting"),
+			cap("createSlot", "Create deployment slot"),
+			cap("swapSlot", "Swap deployment slot"),
+		},
+		"waf": {
+			cap("setMode", "Change WAF mode"),
+			cap("toggleRule", "Toggle managed rule"),
+			cap("addExclusion", "Add exclusion"),
+			cap("removeExclusion", "Remove exclusion"),
+		},
+		"frontDoor": {
+			cap("purgeCache", "Purge cache"),
+		},
 	}
 }
