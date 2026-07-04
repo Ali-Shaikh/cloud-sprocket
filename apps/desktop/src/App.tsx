@@ -21,6 +21,9 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { Toaster } from "sonner";
+import { useAwsActions } from "./hooks/use-aws-actions";
+import { useAzureActions } from "./hooks/use-azure-actions";
+import { useRuntimeActions } from "./hooks/use-runtime-actions";
 import { useSessionState } from "./hooks/use-session-state";
 import { useVirtualisationPoll } from "./hooks/use-virtualisation-poll";
 import { useWorkspaceLoading } from "./hooks/use-workspace-loading";
@@ -29,7 +32,7 @@ import { WorkspaceTabRouter } from "./components/workspace/workspace-tab-router"
 import type { WorkspaceTabRouterProps } from "./components/workspace/workspace-tab-router-props";
 import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
 import { normaliseWorkspaceFromUnknown, requestWorkspaceSnapshot } from "./lib/workspace-request";
-import { fetchVirtualisationSnapshot } from "./lib/workspace-runtime";
+
 import { awsInventoryLoaded, awsInventoryScopeForTab } from "./lib/aws-inventory";
 import { azureInventoryLoaded, azureInventoryScopeForTab } from "./lib/azure-inventory";
 import { notify, notifyJob, useNotifications, type NotificationTone } from "./lib/notify";
@@ -72,10 +75,7 @@ import type {
   AuthMethodStatus,
   AwsDynamoDBTable,
   AwsEc2Instance,
-  AwsLambdaCreateInput,
   AwsLambdaFunction,
-  AwsLambdaInvokeResult,
-  AwsSqsPeekResult,
   AwsSqsQueue,
   AwsSnsTopic,
   AwsRdsInstance,
@@ -99,13 +99,11 @@ import type {
   AzureWebAppSetting,
   AzureLogAnalyticsHistoryEntry,
   AzureLogAnalyticsSavedQuery,
-  AzureLogAnalyticsSelectionResult,
   AzureLogAnalyticsTableInfo,
   AzureLogQueryResult,
   AzureWafLogSchemaProfile,
   AzureFunctionInvokeResult,
   DetailField,
-  EmulatorActionResult,
   EmulatorLogSnapshot,
   DockerRuntimeSnapshot,
   EmulatorSummary,
@@ -122,8 +120,6 @@ import type {
   WorkspaceSnapshot,
   WorkspaceTab,
 } from "./types/backend";
-
-type EC2LifecycleAction = "start" | "stop" | "reboot";
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, { error?: Error }> {
   state: { error?: Error } = {};
@@ -200,9 +196,6 @@ import {
   viewLabelFor,
   navItemForTab,
   toActivityEntries,
-  dockerDiagnosticsFromRuntime,
-  normaliseEmulatorLogSnapshot,
-  emulatorStatusFromWorkspace,
 } from "./lib/workspace-shell";
 
 export default function App() {
@@ -339,6 +332,96 @@ export default function App() {
     listLogAnalyticsSaved,
     resetWorkspaceUiState,
   } = useWorkspaceState(session);
+  const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState("overview");
+  const pushNotification = useCallback(
+    (tone: NotificationTone, header: string, content: string) => {
+      notify(tone, header, content);
+    },
+    [],
+  );
+  const reloadProvidersAndProfilesRef = useRef<() => Promise<void>>(async () => undefined);
+  const {
+    refreshEC2Inventory,
+    selectEC2Region,
+    selectEC2Instance,
+    invokeEC2LifecycleAction,
+    refreshLambdaInventory,
+    selectLambdaRegion,
+    selectLambdaFunction,
+    invokeLambda,
+    createLambda,
+    refreshDynamoDBInventory,
+    selectDynamoDBRegion,
+    selectDynamoDBTable,
+    putDynamoDBItem,
+    deleteDynamoDBItem,
+    refreshSQSInventory,
+    selectSQSRegion,
+    selectSQSQueue,
+    peekSQSQueue,
+    sendSQSMessage,
+    createSQSQueue,
+    refreshSNSInventory,
+    selectSNSRegion,
+    selectSNSTopic,
+    publishSNSTopic,
+    createSNSTopic,
+    refreshRDSInventory,
+    selectRDSRegion,
+    selectRDSInstance,
+    refreshLogsInventory,
+    selectLogsRegion,
+    selectLogGroup,
+    refreshIAMInventory,
+    selectIAMRole,
+    applyS3PrefixFilter,
+  } = useAwsActions({
+    workspace,
+    setWorkspace,
+    s3PrefixRequestIdRef,
+    lambdaInvokeInFlight,
+    lambdaCreateInFlight,
+    setEC2ActionStatus,
+    setEC2ActionInFlight,
+    setLambdaActionStatus,
+    setLambdaInvokeResult,
+    setLambdaInvokeInFlight,
+    setLambdaCreateInFlight,
+    setDynamodbActionStatus,
+    setSqsActionStatus,
+    setSqsPeekResult,
+    setSqsPeekInFlight,
+    setSnsActionStatus,
+    setRdsActionStatus,
+    setLogsActionStatus,
+    setIamActionStatus,
+  });
+  const {
+    refreshDockerRuntime,
+    refreshVirtualisationState,
+    refreshLocalStackLogs,
+    refreshFlociAzLogs,
+    invokeLocalStackAction,
+    invokeFlociAzAction,
+  } = useRuntimeActions({
+    setWorkspace,
+    setLocalStackLogs,
+    setLocalStackLogsStatus,
+    setLocalStackActionStatus,
+    setLocalStackActionInFlight,
+    localStackAuthToken,
+    localStackPersistence,
+    localStackEnvironmentText,
+    setFlociAzLogs,
+    setFlociAzLogsStatus,
+    setFlociAzActionStatus,
+    setFlociAzActionInFlight,
+    flociAzPersistence,
+    flociAzEnvironmentText,
+    setActiveWorkspaceTabId,
+    reloadProvidersAndProfiles: () => reloadProvidersAndProfilesRef.current(),
+  });
+  useVirtualisationPoll(activeWorkspaceTabId, refreshVirtualisationState);
   const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
   const azureInventoryFetchedScopesRef = useRef(new Set<string>());
   const awsInventoryFetchedScopesRef = useRef(new Set<string>());
@@ -352,7 +435,6 @@ export default function App() {
   const writeModeRequestRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [openingProfileId, setOpeningProfileId] = useState<string>();
-  const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState("overview");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [splitPanelOpen, setSplitPanelOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -676,251 +758,30 @@ export default function App() {
     }
   }
 
-  async function selectAzureWebAppSlot(slot: string): Promise<void> {
-    beginAzureInventoryFetch();
-    startTransition(() => {
-      setSession((current) =>
-        normaliseSessionSnapshot({
-          ...current,
-          selectedAzureWebAppSlot: slot,
-        }),
-      );
-      setWorkspace((current) =>
-        normaliseWorkspaceSnapshot({
-          ...current,
-          selectedAzureWebAppSlot: slot,
-        }),
-      );
-    });
-    try {
-      const workspaceResult = await requestWorkspaceSnapshot("azure.webApps.selectSlot", {
-        slot,
-      });
-      startTransition(() => {
-        setWorkspace((current) => mergeAzureResourceGroupSelection(current, workspaceResult));
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Deployment slot selection failed";
-      pushNotification("error", "Could not select deployment slot", message);
-    } finally {
-      endAzureInventoryFetch();
-    }
-  }
-
-  async function selectAzureWebApp(appName: string): Promise<void> {
-    const trimmed = appName.trim();
-    if (!trimmed) {
-      return;
-    }
-    beginAzureInventoryFetch();
-    startTransition(() => {
-      setSession((current) =>
-        normaliseSessionSnapshot({
-          ...current,
-          selectedAzureWebAppName: trimmed,
-          selectedAzureWebAppSlot: undefined,
-        }),
-      );
-      setWorkspace((current) =>
-        normaliseWorkspaceSnapshot({
-          ...current,
-          selectedAzureWebAppName: trimmed,
-          selectedAzureWebAppSlot: undefined,
-          azureWebAppDeploymentSlots: [],
-          azureWebAppSettings: [],
-          azureWebAppActiveDetail: undefined,
-        }),
-      );
-    });
-    try {
-      const workspaceResult = await requestWorkspaceSnapshot("azure.webApps.select", {
-        appName: trimmed,
-      });
-      startTransition(() => {
-        setWorkspace((current) => mergeAzureResourceGroupSelection(current, workspaceResult));
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "App Service selection failed";
-      pushNotification("error", "Could not select web app", message);
-    } finally {
-      endAzureInventoryFetch();
-    }
-  }
-
-  async function selectAzureVirtualMachine(vmId: string): Promise<void> {
-    const trimmed = vmId.trim();
-    if (!trimmed) {
-      return;
-    }
-    beginAzureInventoryFetch();
-    startTransition(() => {
-      setSession((current) =>
-        normaliseSessionSnapshot({
-          ...current,
-          selectedAzureVmId: trimmed,
-        }),
-      );
-      setWorkspace((current) =>
-        normaliseWorkspaceSnapshot({
-          ...current,
-          selectedAzureVmId: trimmed,
-        }),
-      );
-    });
-    try {
-      const workspaceResult = await requestWorkspaceSnapshot("azure.selectVirtualMachine", {
-        vmId: trimmed,
-      });
-      startTransition(() => {
-        setWorkspace((current) =>
-          mergeAzureResourceGroupSelection(current, workspaceResult),
-        );
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Virtual machine selection failed";
-      pushNotification("error", "Could not select virtual machine", message);
-    } finally {
-      endAzureInventoryFetch();
-    }
-  }
-
-  async function selectAzureResourceGroup(resourceGroup: string): Promise<void> {
-    const trimmed = resourceGroup.trim();
-    if (!trimmed) {
-      return;
-    }
-    beginAzureInventoryFetch();
-    startTransition(() => {
-      setSession((current) =>
-        normaliseSessionSnapshot({
-          ...current,
-          selectedAzureResourceGroup: trimmed,
-          selectedAzureVmId: undefined,
-        }),
-      );
-      setWorkspace((current) =>
-        normaliseWorkspaceSnapshot({
-          ...current,
-          selectedAzureResourceGroup: trimmed,
-          selectedAzureVmId: undefined,
-          azureVirtualMachines: [],
-          azureWebApps: [],
-          azureAppServicePlans: [],
-          azureWebAppSettings: [],
-          selectedAzureWebAppName: undefined,
-          azureStatusMessage: `Loading virtual machines from ${trimmed}...`,
-          azureAppServiceStatusMessage: `Loading App Service web apps from ${trimmed}...`,
-        }),
-      );
-    });
-    try {
-      const workspaceResult = await requestWorkspaceSnapshot("azure.selectResourceGroup", {
-        resourceGroup: trimmed,
-      });
-      startTransition(() => {
-        setWorkspace((current) =>
-          mergeAzureResourceGroupSelection(current, workspaceResult),
-        );
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Resource group selection failed";
-      pushNotification("error", "Could not load resource group inventory", message);
-    } finally {
-      endAzureInventoryFetch();
-    }
-  }
-
-  async function refreshAzureFrontDoorTopology(
-    current: WorkspaceSnapshot,
-    sessionProfileId: string,
-    options: { force?: boolean } = {},
-  ): Promise<void> {
-    if (frontDoorRefreshInFlightRef.current) {
-      return;
-    }
-    if (!options.force && frontDoorTopologyLoaded(current, sessionProfileId)) {
-      setAzureFrontDoorTopologyLoading(false);
-      return;
-    }
-
-    frontDoorRefreshInFlightRef.current = true;
-    beginAzureInventoryFetch();
-    setAzureFrontDoorTopologyLoading(true);
-    try {
-      const workspaceResult = await requestWorkspaceSnapshot("azure.frontDoor.refresh", {});
-      startTransition(() => {
-        setWorkspace((prev) => mergeAzureFrontDoorSelection(prev, workspaceResult));
-      });
-      setAzureFrontDoorActionStatus("");
-    } catch (error) {
-      pushNotification(
-        "error",
-        "Could not refresh Front Door topology",
-        formatBackendError(error),
-      );
-      setAzureFrontDoorActionStatus(formatBackendError(error));
-    } finally {
-      frontDoorRefreshInFlightRef.current = false;
-      endAzureInventoryFetch();
-      setAzureFrontDoorTopologyLoading(false);
-    }
-  }
-
-  async function refreshAzureWafPolicyConfig(
-    current: WorkspaceSnapshot,
-    sessionProfileId: string,
-  ): Promise<void> {
-    if (wafRefreshInFlightRef.current) {
-      return;
-    }
-    const selected =
-      current.selectedAzureWafPolicy?.trim() ||
-      current.azureWafPolicies?.[0]?.name?.trim() ||
-      "";
-    const inventoryReady =
-      azureInventoryLoaded(current, "waf") && current.profile?.profileId === sessionProfileId;
-    if (
-      inventoryReady &&
-      (!selected || current.azureWafPolicyDetail?.name === selected)
-    ) {
-      setAzureWafConfigLoading(false);
-      return;
-    }
-
-    wafRefreshInFlightRef.current = true;
-    beginAzureInventoryFetch();
-    setAzureWafConfigLoading(true);
-    try {
-      let workspaceResult: WorkspaceSnapshot;
-      try {
-        workspaceResult = await requestWorkspaceSnapshot("azure.waf.refresh", {});
-      } catch (error) {
-        const message = formatBackendError(error);
-        const missingRefresh =
-          message.includes("unknown backend method") &&
-          message.includes("azure.waf.refresh");
-        if (!missingRefresh || !selected) {
-          throw error;
-        }
-        workspaceResult = await requestWorkspaceSnapshot("azure.waf.selectPolicy", {
-          policyName: selected,
-        });
-      }
-      startTransition(() => {
-        setWorkspace((prev) => mergeAzureWafSelection(prev, workspaceResult));
-      });
-    } catch (error) {
-      pushNotification(
-        "error",
-        "Could not refresh WAF policy config",
-        formatBackendError(error),
-      );
-    } finally {
-      wafRefreshInFlightRef.current = false;
-      endAzureInventoryFetch();
-      setAzureWafConfigLoading(false);
-    }
-  }
+  const {
+    selectAzureWebAppSlot,
+    selectAzureWebApp,
+    selectAzureVirtualMachine,
+    selectAzureResourceGroup,
+    refreshAzureFrontDoorTopology,
+    refreshAzureWafPolicyConfig,
+    selectAzureWafPolicy,
+    selectAzureLogAnalyticsWorkspace,
+  } = useAzureActions({
+    workspace,
+    setWorkspace,
+    setSession,
+    beginAzureInventoryFetch,
+    endAzureInventoryFetch,
+    pushNotification,
+    frontDoorRefreshInFlightRef,
+    wafRefreshInFlightRef,
+    azureLogWorkspaceSelectionRequest,
+    setAzureLogWorkspaceSelectionLoading,
+    setAzureFrontDoorTopologyLoading,
+    setAzureWafConfigLoading,
+    setAzureFrontDoorActionStatus,
+  });
 
   useEffect(() => {
     azureInventoryFetchedScopesRef.current.clear();
@@ -1045,66 +906,6 @@ export default function App() {
     void refreshAzureWafPolicyConfig(workspace, session.selectedProfileId ?? "");
   }, [activeWorkspaceTabId, session.isLocked, session.selectedProfileId]);
 
-  async function selectAzureWafPolicy(policyName: string): Promise<void> {
-    const trimmed = policyName.trim();
-    if (!trimmed) {
-      return;
-    }
-    const previousPolicy = workspace.selectedAzureWafPolicy;
-    beginAzureInventoryFetch();
-    startTransition(() => {
-      setSession((current) =>
-        normaliseSessionSnapshot({
-          ...current,
-          selectedAzureWafPolicy: trimmed,
-        }),
-      );
-      setWorkspace((current) =>
-        normaliseWorkspaceSnapshot({
-          ...current,
-          selectedAzureWafPolicy: trimmed,
-        }),
-      );
-    });
-    try {
-      const workspaceResult = await requestWorkspaceSnapshot("azure.waf.selectPolicy", {
-        policyName: trimmed,
-      });
-      startTransition(() => {
-        setWorkspace((current) => mergeAzureWafSelection(current, workspaceResult));
-      });
-    } catch (error) {
-      setWorkspace((current) => ({ ...current, selectedAzureWafPolicy: previousPolicy }));
-      pushNotification("error", "Could not select WAF policy", formatBackendError(error));
-    } finally {
-      endAzureInventoryFetch();
-    }
-  }
-
-  async function selectAzureLogAnalyticsWorkspace(nextWorkspace: string): Promise<void> {
-    const requestID = ++azureLogWorkspaceSelectionRequest.current;
-    const previousWorkspace = workspace.selectedAzureLogWorkspace;
-    setAzureLogWorkspaceSelectionLoading(true);
-    setWorkspace((current) => ({ ...current, selectedAzureLogWorkspace: nextWorkspace }));
-    try {
-      const result = await backendRequest<AzureLogAnalyticsSelectionResult>(
-        "azure.logAnalytics.selectWorkspace",
-        { workspace: nextWorkspace },
-      );
-      if (requestID !== azureLogWorkspaceSelectionRequest.current) return;
-      setWorkspace((current) => ({ ...current, selectedAzureLogWorkspace: result.workspace }));
-    } catch (error) {
-      if (requestID !== azureLogWorkspaceSelectionRequest.current) return;
-      setWorkspace((current) => ({ ...current, selectedAzureLogWorkspace: previousWorkspace }));
-      const message = error instanceof Error ? error.message : "Workspace selection failed";
-      pushNotification("error", "Could not select Log Analytics workspace", message);
-    } finally {
-      if (requestID === azureLogWorkspaceSelectionRequest.current) {
-        setAzureLogWorkspaceSelectionLoading(false);
-      }
-    }
-  }
-
   async function refreshDiscovery(): Promise<void> {
     // The refresh runs as a backend job; the deferred workspace snapshot arrives
     // via job.updated when the job completes. Show the indicator straight away,
@@ -1120,193 +921,6 @@ export default function App() {
       endWorkspaceFetch();
       throw error;
     }
-  }
-
-  function refreshEC2Inventory(): void {
-    const region = workspace.selectedEc2Region;
-    if (!region) {
-      setEC2ActionStatus("Select an EC2 region before refreshing inventory.");
-      return;
-    }
-    setEC2ActionStatus(`Refreshing EC2 inventory for ${region}.`);
-    void requestWorkspaceSnapshot("aws.ec2.selectRegion", { region })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setEC2ActionStatus(workspaceResult.ec2StatusMessage || `Loaded EC2 instances from ${region}.`);
-      })
-      .catch((error: unknown) => {
-        setEC2ActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function selectEC2Region(region: string): void {
-    setEC2ActionStatus("Select an instance to run lifecycle actions.");
-    setEC2ActionInFlight(false);
-    void requestWorkspaceSnapshot("aws.ec2.selectRegion", { region }).then((workspaceResult) => {
-      startTransition(() => {
-        setWorkspace(workspaceResult);
-      });
-    });
-  }
-
-  function selectEC2Instance(instanceId: string): void {
-    setEC2ActionStatus("Instance selected. EC2 lifecycle writes require a local endpoint profile with write opt-in.");
-    setEC2ActionInFlight(false);
-    void requestWorkspaceSnapshot("aws.ec2.selectInstance", { instanceId }).then((workspaceResult) => {
-      startTransition(() => {
-        setWorkspace(workspaceResult);
-      });
-    });
-  }
-
-  function invokeEC2LifecycleAction(action: EC2LifecycleAction, instanceId: string): void {
-    setEC2ActionStatus(`Queueing EC2 ${action} for ${instanceId}.`);
-    setEC2ActionInFlight(true);
-    void backendRequest<JobStatus>("aws.ec2.invokeAction", { action, instanceId })
-      .then((job) => {
-        setEC2ActionStatus(job.message);
-        setEC2ActionInFlight(job.status === "queued" || job.status === "running");
-      })
-      .catch((error: unknown) => {
-        setEC2ActionStatus(error instanceof Error ? error.message : String(error));
-        setEC2ActionInFlight(false);
-      });
-  }
-
-  // Lambda handlers (v0.6 cloud breadth). Mirror EC2 style for region/function select + safe invoke.
-  function refreshLambdaInventory(): void {
-    const region = workspace.selectedLambdaRegion;
-    if (!region) {
-      setLambdaActionStatus("Select a region before refreshing Lambda inventory.");
-      return;
-    }
-    setLambdaActionStatus(`Refreshing Lambda functions for ${region}.`);
-    void requestWorkspaceSnapshot("aws.lambda.selectRegion", { region })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setLambdaActionStatus(workspaceResult.lambdaStatusMessage || `Loaded Lambda functions from ${region}.`);
-        setLambdaInvokeResult(null);
-      })
-      .catch((error: unknown) => {
-        setLambdaActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function selectLambdaRegion(region: string): void {
-    setLambdaActionStatus(`Loading Lambda functions for ${region}.`);
-    setLambdaInvokeInFlight(false);
-    setLambdaInvokeResult(null);
-    void requestWorkspaceSnapshot("aws.lambda.selectRegion", { region })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setLambdaActionStatus(
-          workspaceResult.lambdaStatusMessage || `Loaded Lambda functions from ${region}.`,
-        );
-      })
-      .catch((error: unknown) => {
-        setLambdaActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function selectLambdaFunction(functionName: string): void {
-    setLambdaInvokeResult(null);
-    void requestWorkspaceSnapshot("aws.lambda.selectFunction", { functionName })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setLambdaActionStatus(
-          workspaceResult.lambdaStatusMessage || `Selected Lambda function ${functionName}.`,
-        );
-      })
-      .catch((error: unknown) => {
-        setLambdaActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function invokeLambda(functionName: string, payload: unknown): void {
-    if (lambdaInvokeInFlight) return;
-    setLambdaInvokeInFlight(true);
-    const region = workspace.selectedLambdaRegion || "us-east-1";
-    setLambdaActionStatus(`Invoking ${functionName} in ${region}...`);
-    void backendRequest<AwsLambdaInvokeResult>("aws.lambda.invoke", { functionName, payload: payload || {} })
-      .then((result) => {
-        setLambdaInvokeResult(result);
-        setLambdaActionStatus(`Invoke completed (status ${result?.statusCode ?? "?"})`);
-      })
-      .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
-        setLambdaActionStatus(message);
-        setLambdaInvokeResult({ statusCode: 0, error: message });
-      })
-      .finally(() => setLambdaInvokeInFlight(false));
-  }
-
-  function createLambda(input: AwsLambdaCreateInput): void {
-    if (lambdaCreateInFlight) {
-      return;
-    }
-    setLambdaCreateInFlight(true);
-    const region = workspace.selectedLambdaRegion || "us-east-1";
-    setLambdaActionStatus(`Creating ${input.functionName} in ${region}...`);
-    void requestWorkspaceSnapshot("aws.lambda.create", { ...input })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setLambdaActionStatus(
-          workspaceResult.lambdaStatusMessage ||
-            `Created Lambda function ${input.functionName} in ${region}.`,
-        );
-        setLambdaInvokeResult(null);
-      })
-      .catch((error: unknown) => {
-        setLambdaActionStatus(error instanceof Error ? error.message : String(error));
-      })
-      .finally(() => setLambdaCreateInFlight(false));
-  }
-
-  function refreshDynamoDBInventory(): void {
-    const region = workspace.selectedDynamodbRegion;
-    if (!region) {
-      setDynamodbActionStatus("Select a region before refreshing DynamoDB inventory.");
-      return;
-    }
-    setDynamodbActionStatus(`Refreshing DynamoDB tables for ${region}.`);
-    void requestWorkspaceSnapshot("aws.dynamodb.selectRegion", { region })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setDynamodbActionStatus(
-          workspaceResult.dynamodbStatusMessage || `Loaded DynamoDB tables from ${region}.`,
-        );
-      })
-      .catch((error: unknown) => {
-        setDynamodbActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function selectDynamoDBRegion(region: string): void {
-    setDynamodbActionStatus(`Loading DynamoDB tables for ${region}.`);
-    void requestWorkspaceSnapshot("aws.dynamodb.selectRegion", { region })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setDynamodbActionStatus(
-          workspaceResult.dynamodbStatusMessage || `Loaded DynamoDB tables from ${region}.`,
-        );
-      })
-      .catch((error: unknown) => {
-        setDynamodbActionStatus(error instanceof Error ? error.message : String(error));
-      });
   }
 
   const azureServiceInventoryLoading =
@@ -1367,330 +981,6 @@ export default function App() {
       });
   }
 
-  function selectDynamoDBTable(tableName: string): void {
-    void requestWorkspaceSnapshot("aws.dynamodb.selectTable", { tableName })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setDynamodbActionStatus(
-          workspaceResult.dynamodbStatusMessage || `Selected DynamoDB table ${tableName}.`,
-        );
-      })
-      .catch((error: unknown) => {
-        setDynamodbActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function refreshSQSInventory(): void {
-    const region = workspace.selectedSqsRegion;
-    if (!region) {
-      setSqsActionStatus("Select a region before refreshing SQS inventory.");
-      return;
-    }
-    setSqsActionStatus(`Refreshing SQS queues for ${region}.`);
-    void requestWorkspaceSnapshot("aws.sqs.selectRegion", { region })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setSqsActionStatus(
-          workspaceResult.sqsStatusMessage || `Loaded SQS queues from ${region}.`,
-        );
-      })
-      .catch((error: unknown) => {
-        setSqsActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function selectSQSRegion(region: string): void {
-    setSqsActionStatus(`Loading SQS queues for ${region}.`);
-    void requestWorkspaceSnapshot("aws.sqs.selectRegion", { region })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setSqsActionStatus(
-          workspaceResult.sqsStatusMessage || `Loaded SQS queues from ${region}.`,
-        );
-      })
-      .catch((error: unknown) => {
-        setSqsActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function selectSQSQueue(queueUrl: string): void {
-    void requestWorkspaceSnapshot("aws.sqs.selectQueue", { queueUrl })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setSqsActionStatus(
-          workspaceResult.sqsStatusMessage || "Selected SQS queue.",
-        );
-      })
-      .catch((error: unknown) => {
-        setSqsActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function peekSQSQueue(queueUrl: string): void {
-    setSqsPeekInFlight(true);
-    setSqsActionStatus("Peeking SQS messages without deleting them.");
-    void backendRequest<AwsSqsPeekResult>("aws.sqs.peek", { queueUrl })
-      .then((result) => {
-        setSqsPeekResult(result);
-        setSqsActionStatus(result.summary || "SQS peek completed.");
-      })
-      .catch((error: unknown) => {
-        setSqsActionStatus(error instanceof Error ? error.message : String(error));
-      })
-      .finally(() => setSqsPeekInFlight(false));
-  }
-
-  function sendSQSMessage(queueUrl: string, messageBody: string): void {
-    setSqsPeekInFlight(true);
-    setSqsActionStatus("Sending message to the queue.");
-    void backendRequest<{ summary: string }>("aws.sqs.sendMessage", { queueUrl, messageBody })
-      .then((result) => {
-        setSqsActionStatus(result.summary || "Message sent.");
-      })
-      .catch((error: unknown) => {
-        setSqsActionStatus(error instanceof Error ? error.message : String(error));
-      })
-      .finally(() => setSqsPeekInFlight(false));
-  }
-
-  function createSQSQueue(queueName: string): void {
-    setSqsActionStatus(`Creating SQS queue ${queueName}.`);
-    void requestWorkspaceSnapshot("aws.sqs.createQueue", { queueName })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setSqsActionStatus(
-          workspaceResult.sqsStatusMessage || `Created SQS queue ${queueName}.`,
-        );
-      })
-      .catch((error: unknown) => {
-        setSqsActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function refreshSNSInventory(): void {
-    const region = workspace.selectedSnsRegion;
-    if (!region) {
-      setSnsActionStatus("Select a region before refreshing SNS inventory.");
-      return;
-    }
-    selectSNSRegion(region);
-  }
-
-  function selectSNSRegion(region: string): void {
-    setSnsActionStatus(`Loading SNS topics for ${region}.`);
-    void requestWorkspaceSnapshot("aws.sns.selectRegion", { region })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setSnsActionStatus(
-          workspaceResult.snsStatusMessage || `Loaded SNS topics from ${region}.`,
-        );
-      })
-      .catch((error: unknown) => {
-        setSnsActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function selectSNSTopic(topicArn: string): void {
-    void requestWorkspaceSnapshot("aws.sns.selectTopic", { topicArn })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setSnsActionStatus(workspaceResult.snsStatusMessage || "Selected SNS topic.");
-      })
-      .catch((error: unknown) => {
-        setSnsActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function publishSNSTopic(topicArn: string, message: string): void {
-    setSnsActionStatus("Publishing message to the topic.");
-    void backendRequest<{ summary: string }>("aws.sns.publish", { topicArn, message })
-      .then((result) => {
-        setSnsActionStatus(result.summary || "Message published.");
-      })
-      .catch((error: unknown) => {
-        setSnsActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function createSNSTopic(topicName: string): void {
-    setSnsActionStatus(`Creating SNS topic ${topicName}.`);
-    void requestWorkspaceSnapshot("aws.sns.createTopic", { topicName })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setSnsActionStatus(
-          workspaceResult.snsStatusMessage || `Created SNS topic ${topicName}.`,
-        );
-      })
-      .catch((error: unknown) => {
-        setSnsActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function putDynamoDBItem(tableName: string, itemJson: string): void {
-    setDynamodbActionStatus(`Putting item into ${tableName}.`);
-    void requestWorkspaceSnapshot("aws.dynamodb.putItem", { tableName, itemJson })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setDynamodbActionStatus(
-          workspaceResult.dynamodbStatusMessage || `Put item into ${tableName}.`,
-        );
-      })
-      .catch((error: unknown) => {
-        setDynamodbActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function deleteDynamoDBItem(tableName: string, keyJson: string): void {
-    setDynamodbActionStatus(`Deleting item from ${tableName}.`);
-    void requestWorkspaceSnapshot("aws.dynamodb.deleteItem", { tableName, keyJson })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setDynamodbActionStatus(
-          workspaceResult.dynamodbStatusMessage || `Deleted item from ${tableName}.`,
-        );
-      })
-      .catch((error: unknown) => {
-        setDynamodbActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function refreshRDSInventory(): void {
-    const region = workspace.selectedRdsRegion;
-    if (!region) {
-      setRdsActionStatus("Select a region before refreshing RDS inventory.");
-      return;
-    }
-    selectRDSRegion(region);
-  }
-
-  function selectRDSRegion(region: string): void {
-    setRdsActionStatus(`Loading RDS instances for ${region}.`);
-    void requestWorkspaceSnapshot("aws.rds.selectRegion", { region })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setRdsActionStatus(
-          workspaceResult.rdsStatusMessage || `Loaded RDS instances from ${region}.`,
-        );
-      })
-      .catch((error: unknown) => {
-        setRdsActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function selectRDSInstance(instanceId: string): void {
-    void requestWorkspaceSnapshot("aws.rds.selectInstance", { instanceId })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setRdsActionStatus(workspaceResult.rdsStatusMessage || "Selected RDS instance.");
-      })
-      .catch((error: unknown) => {
-        setRdsActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function refreshLogsInventory(): void {
-    const region = workspace.selectedLogsRegion;
-    if (!region) {
-      setLogsActionStatus("Select a region before refreshing log groups.");
-      return;
-    }
-    selectLogsRegion(region);
-  }
-
-  function selectLogsRegion(region: string): void {
-    setLogsActionStatus(`Loading log groups for ${region}.`);
-    void requestWorkspaceSnapshot("aws.logs.selectRegion", { region })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setLogsActionStatus(
-          workspaceResult.logsStatusMessage || `Loaded log groups from ${region}.`,
-        );
-      })
-      .catch((error: unknown) => {
-        setLogsActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function selectLogGroup(logGroupName: string): void {
-    void requestWorkspaceSnapshot("aws.logs.selectLogGroup", { logGroupName })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setLogsActionStatus(workspaceResult.logsStatusMessage || "Selected log group.");
-      })
-      .catch((error: unknown) => {
-        setLogsActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function refreshIAMInventory(): void {
-    setIamActionStatus("Refreshing IAM roles and policies.");
-    void requestWorkspaceSnapshot("workspace.get")
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setIamActionStatus(workspaceResult.iamStatusMessage || "IAM inventory refreshed.");
-      })
-      .catch((error: unknown) => {
-        setIamActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  function selectIAMRole(roleName: string): void {
-    void requestWorkspaceSnapshot("aws.iam.selectRole", { roleName })
-      .then((workspaceResult) => {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-        setIamActionStatus(workspaceResult.iamStatusMessage || "Selected IAM role.");
-      })
-      .catch((error: unknown) => {
-        setIamActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  // Applies an S3 prefix filter, ignoring stale responses that finish after a
-  // newer request has been issued (keeps fast typing from reverting the list).
-  function applyS3PrefixFilter(prefix: string): void {
-    const requestId = s3PrefixRequestIdRef.current + 1;
-    s3PrefixRequestIdRef.current = requestId;
-    void requestWorkspaceSnapshot("aws.s3.setPrefixFilter", { prefix }).then((workspaceResult) => {
-      if (requestId === s3PrefixRequestIdRef.current) {
-        startTransition(() => {
-          setWorkspace(workspaceResult);
-        });
-      }
-    });
-  }
-
   async function resetAppData(): Promise<void> {
     if (resetConfirmation !== "RESET") {
       return;
@@ -1723,66 +1013,6 @@ export default function App() {
       pushNotification("error", "Failed to reset app", message);
     } finally {
       setResetInFlight(false);
-    }
-  }
-
-  async function refreshDockerRuntime(): Promise<void> {
-    const [dockerRuntime, dockerResources] = await Promise.all([
-      backendRequest<DockerRuntimeSnapshot>("docker.runtime.get"),
-      backendRequest<ManagedDockerResource[]>("docker.resources.list"),
-    ]);
-    startTransition(() => {
-      setWorkspace((current) => normaliseWorkspaceSnapshot({
-        ...current,
-        dockerRuntime,
-        dockerResources,
-        dockerDiagnostics: dockerDiagnosticsFromRuntime(dockerRuntime),
-      }));
-    });
-  }
-
-  const refreshVirtualisationState = useCallback(async (): Promise<WorkspaceSnapshot> => {
-    const result = await fetchVirtualisationSnapshot();
-    return await new Promise<WorkspaceSnapshot>((resolve) => {
-      startTransition(() => {
-        setWorkspace((current) => {
-          const nextWorkspace = normaliseWorkspaceSnapshot({
-            ...current,
-            dockerRuntime: result.dockerRuntime,
-            dockerResources: result.dockerResources,
-            emulatorSummaries: result.emulatorSummaries,
-            dockerDiagnostics: result.dockerDiagnostics,
-          });
-          resolve(nextWorkspace);
-          return nextWorkspace;
-        });
-        setLocalStackLogs(normaliseEmulatorLogSnapshot(result.localStackLogs));
-        setFlociAzLogs(normaliseEmulatorLogSnapshot(result.flociAzLogs));
-      });
-    });
-  }, [setFlociAzLogs, setLocalStackLogs, setWorkspace]);
-
-  useVirtualisationPoll(activeWorkspaceTabId, refreshVirtualisationState);
-
-  async function refreshLocalStackLogs(): Promise<void> {
-    setLocalStackLogsStatus("Refreshing LocalStack logs...");
-    try {
-      const logsResult = await backendRequest<EmulatorLogSnapshot>("emulators.logs", { emulatorId: "localstack", tail: 200 });
-      setLocalStackLogs(normaliseEmulatorLogSnapshot(logsResult));
-      setLocalStackLogsStatus("");
-    } catch (error) {
-      setLocalStackLogsStatus(error instanceof Error ? error.message : "Failed to refresh logs.");
-    }
-  }
-
-  async function refreshFlociAzLogs(): Promise<void> {
-    setFlociAzLogsStatus("Refreshing floci-az logs...");
-    try {
-      const logsResult = await backendRequest<EmulatorLogSnapshot>("emulators.logs", { emulatorId: "floci-az", tail: 200 });
-      setFlociAzLogs(normaliseEmulatorLogSnapshot(logsResult));
-      setFlociAzLogsStatus("");
-    } catch (error) {
-      setFlociAzLogsStatus(error instanceof Error ? error.message : "Failed to refresh logs.");
     }
   }
 
@@ -1886,258 +1116,7 @@ export default function App() {
       setProfiles(normaliseArray(profilesResult).map(normaliseProfile));
     });
   }
-
-  function parseEnvironment(text: string, blockedKeys: string[] = []): Record<string, string> {
-    const env: Record<string, string> = {};
-    const blocked = new Set(blockedKeys);
-    text.split("\n").forEach((line) => {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) {
-        return;
-      }
-      const parts = trimmed.split("=");
-      if (parts.length >= 2) {
-        const key = parts[0].trim();
-        if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && !blocked.has(key)) {
-          env[key] = parts.slice(1).join("=").trim();
-        }
-      }
-    });
-    return env;
-  }
-
-  function localStackEnvironment(): Record<string, string> {
-    return parseEnvironment(localStackEnvironmentText, ["LOCALSTACK_AUTH_TOKEN", "PERSISTENCE"]);
-  }
-
-  function flociAzEnvironment(): Record<string, string> {
-    return parseEnvironment(flociAzEnvironmentText);
-  }
-
-  function withTimeout<T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> {
-    const timeout = new Promise<never>((_, reject) => {
-      window.setTimeout(() => reject(new Error(errorMessage)), ms);
-    });
-    return Promise.race([promise, timeout]);
-  }
-
-  function pushNotification(tone: NotificationTone, header: string, content: string): void {
-    notify(tone, header, content);
-  }
-
-  // Errors and warnings from an emulator carry a "View logs" action that jumps
-  // to the Local Runtime view, where the LogStream is shown.
-  function emulatorNotifyOptions(tone: NotificationTone) {
-    if (tone === "error" || tone === "warning") {
-      return {
-        action: {
-          label: "View logs",
-          run: () => setActiveWorkspaceTabId("virtualisation"),
-        },
-      };
-    }
-    return undefined;
-  }
-
-  function addLocalStackNotification(tone: NotificationTone, header: string, content: string): void {
-    notify(tone, header, content, emulatorNotifyOptions(tone));
-  }
-
-  function addEmulatorNotification(_emulatorId: string, tone: NotificationTone, header: string, content: string): void {
-    notify(tone, header, content, emulatorNotifyOptions(tone));
-  }
-
-  function pollLocalStackState(label: string, expectedStatus?: "running" | "stopped"): void {
-    let resolved = false;
-    for (let attempt = 0; attempt < 12; attempt += 1) {
-      window.setTimeout(() => {
-        if (resolved) {
-          return;
-        }
-        void refreshVirtualisationState().then((workspaceSnapshot) => {
-          if (resolved) {
-            return;
-          }
-          const localStack = emulatorStatusFromWorkspace(workspaceSnapshot, "localstack");
-          if (expectedStatus && localStack?.status === expectedStatus) {
-            resolved = true;
-            const message = `${label} completed. ${localStack.summary}`;
-            setLocalStackActionStatus(message);
-            addLocalStackNotification("success", `${label} completed`, localStack.summary);
-            return;
-          }
-          if (!expectedStatus && attempt === 11) {
-            resolved = true;
-            setLocalStackActionStatus(`${label} completed.`);
-          }
-        });
-      }, (attempt + 1) * 2500);
-    }
-  }
-
-  async function invokeLocalStackAction(action: "prepareProfile" | "start" | "stop" | "recreate"): Promise<void> {
-    const method =
-      action === "prepareProfile"
-        ? "emulators.prepareProfile"
-        : action === "stop"
-          ? "emulators.stop"
-          : "emulators.start";
-    const startParams =
-      action === "start" || action === "recreate"
-        ? {
-          emulatorId: "localstack",
-          authToken: localStackAuthToken,
-          persistence: localStackPersistence,
-          environment: localStackEnvironment(),
-          // Only sent for recreate so a normal start keeps its minimal payload.
-          ...(action === "recreate" ? { recreate: true } : {}),
-        }
-        : { emulatorId: "localstack" };
-    const label =
-      action === "prepareProfile"
-        ? "Prepare LocalStack profile"
-        : action === "start"
-          ? "Start LocalStack"
-          : action === "recreate"
-            ? "Recreate LocalStack"
-          : "Stop LocalStack";
-    const requestTimeoutMs = action === "recreate" ? 95000 : 22000;
-    setLocalStackActionInFlight(true);
-    setLocalStackActionStatus(`${label} requested.`);
-    try {
-      const result = await withTimeout(
-        backendRequest<EmulatorActionResult>(method, startParams),
-        requestTimeoutMs,
-        `${label} did not finish within ${Math.round(requestTimeoutMs / 1000)} seconds. Check Docker and LocalStack logs, then retry.`,
-      );
-      const summary = result.summary || `${label} completed.`;
-      setLocalStackActionStatus(summary);
-      addLocalStackNotification(
-        result.state === "failed" ? "error" : result.state === "degraded" ? "warning" : "success",
-        result.state === "degraded" ? `${label} needs attention` : `${label} ${result.state}`,
-        summary,
-      );
-      await refreshVirtualisationState();
-      await refreshLocalStackLogs();
-      if (action === "prepareProfile") {
-        await reloadProvidersAndProfiles().catch(() => undefined);
-      }
-      if (action === "start" || action === "recreate" || action === "stop") {
-        pollLocalStackState(label, action === "stop" ? "stopped" : "running");
-      }
-    } catch (error) {
-      const rawMessage = error instanceof Error ? error.message : `${label} failed.`;
-      const timedOut = rawMessage.includes("did not finish within");
-      const message =
-        rawMessage === `${label} failed.`
-          ? `${label} failed. Docker did not complete the request. Try Recreate LocalStack, refresh Docker, check the logs, then retry.`
-          : rawMessage;
-      setLocalStackActionStatus(message);
-      addLocalStackNotification(timedOut ? "warning" : "error", timedOut ? `${label} still pending` : `${label} failed`, message);
-      await refreshVirtualisationState().catch(() => undefined);
-      if (timedOut && (action === "start" || action === "recreate" || action === "stop")) {
-        pollLocalStackState(label, action === "stop" ? "stopped" : "running");
-      }
-    } finally {
-      setLocalStackActionInFlight(false);
-    }
-  }
-
-  function pollFlociAzState(label: string, expectedStatus?: "running" | "stopped"): void {
-    let resolved = false;
-    for (let attempt = 0; attempt < 12; attempt += 1) {
-      window.setTimeout(() => {
-        if (resolved) {
-          return;
-        }
-        void refreshVirtualisationState().then((workspaceSnapshot) => {
-          if (resolved) {
-            return;
-          }
-          const flociAz = emulatorStatusFromWorkspace(workspaceSnapshot, "floci-az");
-          if (expectedStatus && flociAz?.status === expectedStatus) {
-            resolved = true;
-            const message = `${label} completed. ${flociAz.summary}`;
-            setFlociAzActionStatus(message);
-            addEmulatorNotification("floci-az", "success", `${label} completed`, flociAz.summary);
-            return;
-          }
-          if (!expectedStatus && attempt === 11) {
-            resolved = true;
-            setFlociAzActionStatus(`${label} completed.`);
-          }
-        });
-      }, (attempt + 1) * 2500);
-    }
-  }
-
-  async function invokeFlociAzAction(action: "prepareProfile" | "start" | "stop" | "recreate"): Promise<void> {
-    const method =
-      action === "prepareProfile"
-        ? "emulators.prepareProfile"
-        : action === "stop"
-          ? "emulators.stop"
-          : "emulators.start";
-    const startParams =
-      action === "start" || action === "recreate"
-        ? {
-          emulatorId: "floci-az",
-          persistence: flociAzPersistence,
-          environment: flociAzEnvironment(),
-          // Only sent for recreate so a normal start keeps its minimal payload.
-          ...(action === "recreate" ? { recreate: true } : {}),
-        }
-        : { emulatorId: "floci-az" };
-    const label =
-      action === "prepareProfile"
-        ? "Prepare floci-az config"
-        : action === "start"
-          ? "Start floci-az"
-          : action === "recreate"
-            ? "Recreate floci-az"
-          : "Stop floci-az";
-    const requestTimeoutMs = action === "recreate" ? 95000 : 22000;
-    setFlociAzActionInFlight(true);
-    setFlociAzActionStatus(`${label} requested.`);
-    try {
-      const result = await withTimeout(
-        backendRequest<EmulatorActionResult>(method, startParams),
-        requestTimeoutMs,
-        `${label} did not finish within ${Math.round(requestTimeoutMs / 1000)} seconds. Check Docker and floci-az logs, then retry.`,
-      );
-      const summary = result.summary || `${label} completed.`;
-      setFlociAzActionStatus(summary);
-      addEmulatorNotification(
-        "floci-az",
-        result.state === "failed" ? "error" : result.state === "degraded" ? "warning" : "success",
-        result.state === "degraded" ? `${label} needs attention` : `${label} ${result.state}`,
-        summary,
-      );
-      await refreshVirtualisationState();
-      await refreshFlociAzLogs();
-      if (action === "prepareProfile") {
-        await reloadProvidersAndProfiles().catch(() => undefined);
-      }
-      if (action === "start" || action === "recreate" || action === "stop") {
-        pollFlociAzState(label, action === "stop" ? "stopped" : "running");
-      }
-    } catch (error) {
-      const rawMessage = error instanceof Error ? error.message : `${label} failed.`;
-      const timedOut = rawMessage.includes("did not finish within");
-      const message =
-        rawMessage === `${label} failed.`
-          ? `${label} failed. Docker did not complete the request. Try Recreate floci-az, refresh Docker, check the logs, then retry.`
-          : rawMessage;
-      setFlociAzActionStatus(message);
-      addEmulatorNotification("floci-az", timedOut ? "warning" : "error", timedOut ? `${label} still pending` : `${label} failed`, message);
-      await refreshVirtualisationState().catch(() => undefined);
-      if (timedOut && (action === "start" || action === "recreate" || action === "stop")) {
-        pollFlociAzState(label, action === "start" ? "running" : "stopped");
-      }
-    } finally {
-      setFlociAzActionInFlight(false);
-    }
-  }
+  reloadProvidersAndProfilesRef.current = reloadProvidersAndProfiles;
 
   const workspaceTabRouterProps: WorkspaceTabRouterProps = {
     activeWorkspaceTabId,
