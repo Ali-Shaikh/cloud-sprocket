@@ -33,6 +33,7 @@ export type UseAwsActionsParams = {
   setSqsPeekInFlight: Dispatch<SetStateAction<boolean>>;
   setSnsActionStatus: Dispatch<SetStateAction<string>>;
   setRdsActionStatus: Dispatch<SetStateAction<string>>;
+  setEcsActionStatus: Dispatch<SetStateAction<string>>;
   setLogsActionStatus: Dispatch<SetStateAction<string>>;
   setIamActionStatus: Dispatch<SetStateAction<string>>;
 };
@@ -56,6 +57,7 @@ export function useAwsActions(params: UseAwsActionsParams) {
     setSqsPeekInFlight,
     setSnsActionStatus,
     setRdsActionStatus,
+    setEcsActionStatus,
     setLogsActionStatus,
     setIamActionStatus,
   } = params;
@@ -504,6 +506,70 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setRdsActionStatus, setWorkspace]);
 
+  const selectECSRegion = useCallback((region: string): void => {
+    setEcsActionStatus(`Loading ECS clusters for ${region}.`);
+    void requestWorkspaceSnapshot("aws.ecs.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setEcsActionStatus(
+          workspaceResult.ecsStatusMessage || `Loaded ECS clusters from ${region}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setEcsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setEcsActionStatus, setWorkspace]);
+
+  const refreshECSInventory = useCallback((): void => {
+    const region = workspace.selectedEcsRegion;
+    if (!region) {
+      setEcsActionStatus("Select a region before refreshing ECS inventory.");
+      return;
+    }
+    selectECSRegion(region);
+  }, [selectECSRegion, setEcsActionStatus, workspace.selectedEcsRegion]);
+
+  const selectECSCluster = useCallback((clusterArn: string): void => {
+    void requestWorkspaceSnapshot("aws.ecs.selectCluster", { clusterArn })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setEcsActionStatus(workspaceResult.ecsStatusMessage || "Selected ECS cluster.");
+      })
+      .catch((error: unknown) => {
+        setEcsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setEcsActionStatus, setWorkspace]);
+
+  const selectECSService = useCallback((serviceArn: string): void => {
+    void requestWorkspaceSnapshot("aws.ecs.selectService", { serviceArn })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setEcsActionStatus(workspaceResult.ecsStatusMessage || "Selected ECS service.");
+      })
+      .catch((error: unknown) => {
+        setEcsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setEcsActionStatus, setWorkspace]);
+
+  const selectECSTask = useCallback((taskArn: string): void => {
+    void requestWorkspaceSnapshot("aws.ecs.selectTask", { taskArn })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setEcsActionStatus(workspaceResult.ecsStatusMessage || "Selected ECS task.");
+      })
+      .catch((error: unknown) => {
+        setEcsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setEcsActionStatus, setWorkspace]);
+
   const selectLogsRegion = useCallback((region: string): void => {
     setLogsActionStatus(`Loading log groups for ${region}.`);
     void requestWorkspaceSnapshot("aws.logs.selectRegion", { region })
@@ -610,6 +676,11 @@ export function useAwsActions(params: UseAwsActionsParams) {
     refreshRDSInventory,
     selectRDSRegion,
     selectRDSInstance,
+    refreshECSInventory,
+    selectECSRegion,
+    selectECSCluster,
+    selectECSService,
+    selectECSTask,
     refreshLogsInventory,
     selectLogsRegion,
     selectLogGroup,

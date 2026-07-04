@@ -11,6 +11,7 @@ import {
   IAMView,
   LambdaView,
   LogsView,
+  ECSView,
   RDSView,
   SNSView,
   SQSView,
@@ -18,7 +19,7 @@ import {
 } from "@/views/workspace/lazy-views";
 import type { AwsWorkspaceTabsProps } from "./workspace-tab-router-props";
 
-const AWS_TAB_IDS = new Set(["s3", "ec2", "lambda", "dynamodb", "sqs", "sns", "rds", "logs", "iam"]);
+const AWS_TAB_IDS = new Set(["s3", "ec2", "lambda", "dynamodb", "sqs", "sns", "rds", "ecs", "logs", "iam"]);
 
 export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
   const {
@@ -63,6 +64,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     sqsPeekInFlight,
     snsActionStatus,
     rdsActionStatus,
+    ecsActionStatus,
     logsActionStatus,
     iamActionStatus,
     azureActionStatus,
@@ -135,6 +137,11 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     refreshRDSInventory,
     selectRDSRegion,
     selectRDSInstance,
+    refreshECSInventory,
+    selectECSRegion,
+    selectECSCluster,
+    selectECSService,
+    selectECSTask,
     refreshLogsInventory,
     selectLogsRegion,
     selectLogGroup,
@@ -285,6 +292,16 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onRefresh={refreshRDSInventory}
       onSelectRegion={selectRDSRegion}
       onSelectEntity={selectRDSInstance}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "ecs" ? (
+    <ECSView
+      workspace={activeWorkspace}
+      actionStatus={ecsActionStatus}
+      onRefresh={refreshECSInventory}
+      onSelectRegion={selectECSRegion}
+      onSelectCluster={selectECSCluster}
+      onSelectService={selectECSService}
+      onSelectTask={selectECSTask}
     />
   ) : session.isLocked && activeWorkspaceTabId === "logs" ? (
     <LogsView

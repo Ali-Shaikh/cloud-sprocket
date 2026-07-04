@@ -251,6 +251,13 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 			Category: workspaceTabCategoryService,
 		},
 		{
+			TabID:    "ecs",
+			Label:    "ECS",
+			Summary:  "Container fleet inventory.",
+			Detail:   "List ECS clusters, services, and tasks by region with Fargate and EC2 launch details.",
+			Category: workspaceTabCategoryService,
+		},
+		{
 			TabID:    "iam",
 			Label:    "IAM",
 			Summary:  "Role and policy inventory.",

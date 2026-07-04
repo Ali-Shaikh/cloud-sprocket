@@ -22,6 +22,7 @@ var validAwsInventoryScopes = map[string]struct{}{
 	"sqs":      {},
 	"sns":      {},
 	"rds":      {},
+	"ecs":      {},
 	"logs":     {},
 	"iam":      {},
 }

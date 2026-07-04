@@ -254,6 +254,10 @@ type SessionSnapshot struct {
 	SelectedSNSTopicArn               string             `json:"selectedSnsTopicArn,omitempty"`
 	SelectedRDSRegion                 string             `json:"selectedRdsRegion,omitempty"`
 	SelectedRDSInstanceID             string             `json:"selectedRdsInstanceId,omitempty"`
+	SelectedECSRegion                 string             `json:"selectedEcsRegion,omitempty"`
+	SelectedECSClusterArn             string             `json:"selectedEcsClusterArn,omitempty"`
+	SelectedECSServiceArn             string             `json:"selectedEcsServiceArn,omitempty"`
+	SelectedECSTaskArn                string             `json:"selectedEcsTaskArn,omitempty"`
 	SelectedLogsRegion                string             `json:"selectedLogsRegion,omitempty"`
 	SelectedLogGroupName              string             `json:"selectedLogGroupName,omitempty"`
 	SelectedIAMRoleName               string             `json:"selectedIamRoleName,omitempty"`
@@ -455,6 +459,48 @@ type AwsSnsTopic struct {
 	SubscriptionsConfirmed string               `json:"subscriptionsConfirmed,omitempty"`
 	SubscriptionsPending   string               `json:"subscriptionsPending,omitempty"`
 	Subscriptions          []AwsSnsSubscription `json:"subscriptions,omitempty"`
+}
+
+// AwsEcsCluster models an ECS cluster for inventory.
+type AwsEcsCluster struct {
+	ClusterArn                        string `json:"clusterArn"`
+	ClusterName                       string `json:"clusterName"`
+	Status                            string `json:"status,omitempty"`
+	RunningTasksCount                 int32  `json:"runningTasksCount,omitempty"`
+	PendingTasksCount                 int32  `json:"pendingTasksCount,omitempty"`
+	ActiveServicesCount               int32  `json:"activeServicesCount,omitempty"`
+	RegisteredContainerInstancesCount int32  `json:"registeredContainerInstancesCount,omitempty"`
+}
+
+// AwsEcsService models an ECS service for inventory.
+type AwsEcsService struct {
+	ServiceArn     string `json:"serviceArn"`
+	ServiceName    string `json:"serviceName"`
+	Status         string `json:"status,omitempty"`
+	DesiredCount   int32  `json:"desiredCount,omitempty"`
+	RunningCount   int32  `json:"runningCount,omitempty"`
+	PendingCount   int32  `json:"pendingCount,omitempty"`
+	LaunchType     string `json:"launchType,omitempty"`
+	TaskDefinition string `json:"taskDefinition,omitempty"`
+}
+
+// AwsEcsContainer models a container within an ECS task.
+type AwsEcsContainer struct {
+	Name       string `json:"name"`
+	Image      string `json:"image,omitempty"`
+	LastStatus string `json:"lastStatus,omitempty"`
+}
+
+// AwsEcsTask models an ECS task for inventory.
+type AwsEcsTask struct {
+	TaskArn           string            `json:"taskArn"`
+	TaskDefinitionArn string            `json:"taskDefinitionArn,omitempty"`
+	LastStatus        string            `json:"lastStatus,omitempty"`
+	DesiredStatus     string            `json:"desiredStatus,omitempty"`
+	LaunchType        string            `json:"launchType,omitempty"`
+	StartedAt         string            `json:"startedAt,omitempty"`
+	Group             string            `json:"group,omitempty"`
+	Containers        []AwsEcsContainer `json:"containers,omitempty"`
 }
 
 // AwsRdsInstance models an RDS DB instance for inventory.
@@ -985,6 +1031,15 @@ type WorkspaceSnapshot struct {
 	RDSStatusMessage                  string                       `json:"rdsStatusMessage,omitempty"`
 	RDSRegions                        []string                     `json:"rdsRegions"`
 	RDSInstances                      []AwsRdsInstance             `json:"rdsInstances"`
+	SelectedECSRegion                 string                       `json:"selectedEcsRegion,omitempty"`
+	SelectedECSClusterArn             string                       `json:"selectedEcsClusterArn,omitempty"`
+	SelectedECSServiceArn             string                       `json:"selectedEcsServiceArn,omitempty"`
+	SelectedECSTaskArn                string                       `json:"selectedEcsTaskArn,omitempty"`
+	ECSStatusMessage                  string                       `json:"ecsStatusMessage,omitempty"`
+	ECSRegions                        []string                     `json:"ecsRegions"`
+	ECSClusters                       []AwsEcsCluster              `json:"ecsClusters"`
+	ECSServices                       []AwsEcsService              `json:"ecsServices"`
+	ECSTasks                          []AwsEcsTask                 `json:"ecsTasks"`
 	SelectedLogsRegion                string                       `json:"selectedLogsRegion,omitempty"`
 	SelectedLogGroupName              string                       `json:"selectedLogGroupName,omitempty"`
 	LogsStatusMessage                 string                       `json:"logsStatusMessage,omitempty"`

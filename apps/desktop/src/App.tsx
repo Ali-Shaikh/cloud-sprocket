@@ -271,6 +271,8 @@ export default function App() {
     setSnsActionStatus,
     rdsActionStatus,
     setRdsActionStatus,
+    ecsActionStatus,
+    setEcsActionStatus,
     logsActionStatus,
     setLogsActionStatus,
     iamActionStatus,
@@ -369,6 +371,11 @@ export default function App() {
     refreshRDSInventory,
     selectRDSRegion,
     selectRDSInstance,
+    refreshECSInventory,
+    selectECSRegion,
+    selectECSCluster,
+    selectECSService,
+    selectECSTask,
     refreshLogsInventory,
     selectLogsRegion,
     selectLogGroup,
@@ -393,6 +400,7 @@ export default function App() {
     setSqsPeekInFlight,
     setSnsActionStatus,
     setRdsActionStatus,
+    setEcsActionStatus,
     setLogsActionStatus,
     setIamActionStatus,
   });
@@ -1084,6 +1092,9 @@ export default function App() {
         if (workspaceResult.rdsStatusMessage) {
           setRdsActionStatus(workspaceResult.rdsStatusMessage);
         }
+        if (workspaceResult.ecsStatusMessage) {
+          setEcsActionStatus(workspaceResult.ecsStatusMessage);
+        }
         if (workspaceResult.logsStatusMessage) {
           setLogsActionStatus(workspaceResult.logsStatusMessage);
         }
@@ -1160,6 +1171,7 @@ export default function App() {
     sqsPeekInFlight,
     snsActionStatus,
     rdsActionStatus,
+    ecsActionStatus,
     logsActionStatus,
     iamActionStatus,
     azureActionStatus,
@@ -1232,6 +1244,11 @@ export default function App() {
     refreshRDSInventory,
     selectRDSRegion,
     selectRDSInstance,
+    refreshECSInventory,
+    selectECSRegion,
+    selectECSCluster,
+    selectECSService,
+    selectECSTask,
     refreshLogsInventory,
     selectLogsRegion,
     selectLogGroup,

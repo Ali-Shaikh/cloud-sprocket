@@ -40,6 +40,7 @@ func (s *Service) enrichAwsWorkspace(
 		func(mu *sync.Mutex) { s.enrichSQSInventory(workspace, session, opts, mu) },
 		func(mu *sync.Mutex) { s.enrichSNSInventory(workspace, session, opts, mu) },
 		func(mu *sync.Mutex) { s.enrichRDSInventory(workspace, session, opts, mu) },
+		func(mu *sync.Mutex) { s.enrichECSInventory(workspace, session, opts, mu) },
 		func(mu *sync.Mutex) { s.enrichLogsInventory(workspace, session, opts, mu) },
 		func(mu *sync.Mutex) { s.enrichIAMInventory(workspace, session, opts, mu) },
 	}
@@ -84,6 +85,8 @@ func (s *Service) enrichAwsScoped(
 		s.enrichSNSInventory(workspace, session, scopeOpts, nil)
 	case "rds":
 		s.enrichRDSInventory(workspace, session, scopeOpts, nil)
+	case "ecs":
+		s.enrichECSInventory(workspace, session, scopeOpts, nil)
 	case "logs":
 		s.enrichLogsInventory(workspace, session, scopeOpts, nil)
 	case "iam":

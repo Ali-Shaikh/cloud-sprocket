@@ -11,6 +11,7 @@ export type AwsInventoryScope =
   | "sqs"
   | "sns"
   | "rds"
+  | "ecs"
   | "logs"
   | "iam";
 
@@ -22,6 +23,7 @@ const TAB_SCOPE_MAP: Record<string, AwsInventoryScope | undefined> = {
   sqs: "sqs",
   sns: "sns",
   rds: "rds",
+  ecs: "ecs",
   logs: "logs",
   iam: "iam",
 };
@@ -49,6 +51,8 @@ export function awsInventoryStatusMessage(
       return workspace.snsStatusMessage;
     case "rds":
       return workspace.rdsStatusMessage;
+    case "ecs":
+      return workspace.ecsStatusMessage;
     case "logs":
       return workspace.logsStatusMessage;
     case "iam":
@@ -66,6 +70,7 @@ const DEFAULT_INVENTORY_LOADING_LABELS: Record<AwsInventoryScope, string> = {
   sqs: "Loading SQS queues...",
   sns: "Loading SNS topics...",
   rds: "Loading RDS instances...",
+  ecs: "Loading ECS clusters...",
   logs: "Loading CloudWatch log groups...",
   iam: "Loading IAM roles and policies...",
 };
@@ -107,6 +112,9 @@ export function awsInventoryLoaded(
     case "rds":
       return (workspace.rdsRegions?.length ?? 0) > 0 ||
         (workspace.rdsStatusMessage ?? "").length > 0;
+    case "ecs":
+      return (workspace.ecsRegions?.length ?? 0) > 0 ||
+        (workspace.ecsStatusMessage ?? "").length > 0;
     case "logs":
       return (workspace.logsRegions?.length ?? 0) > 0 ||
         (workspace.logsStatusMessage ?? "").length > 0;
