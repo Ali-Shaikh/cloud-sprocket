@@ -932,6 +932,8 @@ describe("App", () => {
       apiGatewayRegions: [],
       apiGatewayApis: [],
       apiGatewayStages: [],
+  secretsManagerRegions: [],
+  secretsManagerSecrets: [],
       selectedLogsRegion: "us-east-1",
       selectedLogGroupName: "/aws/lambda/process-order",
       logsStatusMessage: "Loaded 2 log groups from us-east-1.",

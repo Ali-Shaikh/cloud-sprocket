@@ -275,6 +275,8 @@ export default function App() {
     setEcsActionStatus,
     apiGatewayActionStatus,
     setApiGatewayActionStatus,
+    secretsManagerActionStatus,
+    setSecretsManagerActionStatus,
     logsActionStatus,
     setLogsActionStatus,
     iamActionStatus,
@@ -381,6 +383,9 @@ export default function App() {
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
+    refreshSecretsManagerInventory,
+    selectSecretsManagerRegion,
+    selectSecretsManagerSecret,
     refreshLogsInventory,
     selectLogsRegion,
     selectLogGroup,
@@ -407,6 +412,7 @@ export default function App() {
     setRdsActionStatus,
     setEcsActionStatus,
     setApiGatewayActionStatus,
+    setSecretsManagerActionStatus,
     setLogsActionStatus,
     setIamActionStatus,
   });
@@ -1104,6 +1110,9 @@ export default function App() {
         if (workspaceResult.apiGatewayStatusMessage) {
           setApiGatewayActionStatus(workspaceResult.apiGatewayStatusMessage);
         }
+        if (workspaceResult.secretsManagerStatusMessage) {
+          setSecretsManagerActionStatus(workspaceResult.secretsManagerStatusMessage);
+        }
         if (workspaceResult.logsStatusMessage) {
           setLogsActionStatus(workspaceResult.logsStatusMessage);
         }
@@ -1182,6 +1191,7 @@ export default function App() {
     rdsActionStatus,
     ecsActionStatus,
     apiGatewayActionStatus,
+    secretsManagerActionStatus,
     logsActionStatus,
     iamActionStatus,
     azureActionStatus,
@@ -1262,6 +1272,9 @@ export default function App() {
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
+    refreshSecretsManagerInventory,
+    selectSecretsManagerRegion,
+    selectSecretsManagerSecret,
     refreshLogsInventory,
     selectLogsRegion,
     selectLogGroup,

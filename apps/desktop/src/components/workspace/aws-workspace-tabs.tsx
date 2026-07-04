@@ -12,6 +12,7 @@ import {
   LambdaView,
   LogsView,
   ApiGatewayView,
+  SecretsManagerView,
   ECSView,
   RDSView,
   SNSView,
@@ -20,7 +21,7 @@ import {
 } from "@/views/workspace/lazy-views";
 import type { AwsWorkspaceTabsProps } from "./workspace-tab-router-props";
 
-const AWS_TAB_IDS = new Set(["s3", "ec2", "lambda", "dynamodb", "sqs", "sns", "rds", "ecs", "apigateway", "logs", "iam"]);
+const AWS_TAB_IDS = new Set(["s3", "ec2", "lambda", "dynamodb", "sqs", "sns", "rds", "ecs", "apigateway", "secrets", "logs", "iam"]);
 
 export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
   const {
@@ -67,6 +68,10 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     rdsActionStatus,
     ecsActionStatus,
     apiGatewayActionStatus,
+    secretsManagerActionStatus,
+    refreshSecretsManagerInventory,
+    selectSecretsManagerRegion,
+    selectSecretsManagerSecret,
     logsActionStatus,
     iamActionStatus,
     azureActionStatus,
@@ -315,6 +320,19 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onRefresh={refreshApiGatewayInventory}
       onSelectRegion={selectApiGatewayRegion}
       onSelectApi={selectApiGatewayApi}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "secrets" ? (
+    <SecretsManagerView
+      workspace={activeWorkspace}
+      actionStatus={secretsManagerActionStatus}
+      onRefresh={refreshSecretsManagerInventory}
+      onSelectRegion={selectSecretsManagerRegion}
+      onSelectSecret={selectSecretsManagerSecret}
+      onReveal={(region, secretName) =>
+        backendRequest<{ value: string }>("aws.secrets.reveal", { region, secretName }).then(
+          (result) => result.value,
+        )
+      }
     />
   ) : session.isLocked && activeWorkspaceTabId === "logs" ? (
     <LogsView

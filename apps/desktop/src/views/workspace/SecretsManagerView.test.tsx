@@ -5,10 +5,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
-import IAMView from "./IAMView";
-import type { IamWorkspaceSnapshot } from "./IAMView";
+import SecretsManagerView from "./SecretsManagerView";
+import type { SecretsManagerWorkspaceSnapshot } from "./SecretsManagerView";
 
-const workspaceFixture: IamWorkspaceSnapshot = {
+const workspaceFixture: SecretsManagerWorkspaceSnapshot = {
   provider: {
     providerId: "aws",
     label: "AWS",
@@ -58,9 +58,9 @@ const workspaceFixture: IamWorkspaceSnapshot = {
   dockerResources: [],
   emulatorSummaries: [],
   localConfigArtifacts: [],
-  awsWriteCapable: false,
-  awsWriteModeEnabled: false,
-  awsWritesEnabled: false,
+  awsWriteCapable: true,
+  awsWriteModeEnabled: true,
+  awsWritesEnabled: true,
   awsEndpointUrl: "http://localhost:4566",
   azureWriteCapable: false,
   azureWriteModeEnabled: false,
@@ -71,31 +71,31 @@ const workspaceFixture: IamWorkspaceSnapshot = {
   azureBlobContainers: [],
   azureBlobs: [],
   azureBlobMetadata: [],
-      azureWebApps: [],
-      azureAppServicePlans: [],
-      azureWebAppSettings: [],
-      azureWebAppDeploymentSlots: [],
-      azureLogAnalyticsWorkspaces: [],
-      azureWafPolicies: [],
-      azureWafRuleFireCounts: [],
-      azureFunctionApps: [],
-      azureFunctions: [],
-      azureKeyVaults: [],
-      azureKeyVaultSecrets: [],
-      azureCosmosAccounts: [],
-      azurePostgresServers: [],
-      azureCosmosDatabases: [],
-      azureCosmosContainers: [],
+  azureWebApps: [],
+  azureAppServicePlans: [],
+  azureWebAppSettings: [],
+  azureWebAppDeploymentSlots: [],
+  azureLogAnalyticsWorkspaces: [],
+  azureWafPolicies: [],
+  azureWafRuleFireCounts: [],
+  azureFunctionApps: [],
+  azureFunctions: [],
+  azureKeyVaults: [],
+  azureKeyVaultSecrets: [],
+  azureCosmosAccounts: [],
+  azurePostgresServers: [],
+  azureCosmosDatabases: [],
+  azureCosmosContainers: [],
   azureCosmosItems: [],
   azureFrontDoorProfiles: [],
   azureFrontDoorEndpoints: [],
   azureFrontDoorOriginGroups: [],
   azureFrontDoorOrigins: [],
   azureStorageQueues: [],
-      azureQueueMessages: [],
-      azureEntraUsers: [],
-      azureEntraGroups: [],
-      azureEntraApps: [],
+  azureQueueMessages: [],
+  azureEntraUsers: [],
+  azureEntraGroups: [],
+  azureEntraApps: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -119,80 +119,75 @@ const workspaceFixture: IamWorkspaceSnapshot = {
   apiGatewayRegions: [],
   apiGatewayApis: [],
   apiGatewayStages: [],
-  secretsManagerRegions: [],
-  secretsManagerSecrets: [],
+  secretsManagerRegions: ["us-east-1"],
+  secretsManagerSecrets: [
+    {
+      arn: "arn:aws:secretsmanager:us-east-1:123:secret:cloudsprocket/db-password-abc",
+      name: "cloudsprocket/db-password",
+      description: "Application database password",
+      lastChangedDate: "2026-07-01T10:00:00Z",
+    },
+    {
+      arn: "arn:aws:secretsmanager:us-east-1:123:secret:cloudsprocket/api-key-xyz",
+      name: "cloudsprocket/api-key",
+      description: "Outbound API credentials",
+      rotationEnabled: true,
+    },
+  ],
   logsRegions: [],
   logGroups: [],
-  selectedIamRoleName: "cloudsprocket-lambda-role",
-  iamStatusMessage: "Loaded 2 IAM roles and 1 customer-managed policies.",
-  iamRoles: [
-    {
-      roleName: "cloudsprocket-lambda-role",
-      roleArn: "arn:aws:iam::000000000000:role/cloudsprocket-lambda-role",
-      path: "/",
-      description: "Lambda execution role for CloudSprocket demos.",
-      createDate: "2026-06-01T09:00:00Z",
-      attachedPolicies: ["AWSLambdaBasicExecutionRole", "cloudsprocket-data-access"],
-    },
-    {
-      roleName: "cloudsprocket-ecs-task-role",
-      roleArn: "arn:aws:iam::000000000000:role/cloudsprocket-ecs-task-role",
-      path: "/service/",
-      attachedPolicies: ["AmazonECSTaskExecutionRolePolicy"],
-    },
-  ],
-  iamPolicies: [
-    {
-      policyName: "cloudsprocket-data-access",
-      policyArn: "arn:aws:iam::000000000000:policy/cloudsprocket-data-access",
-      attachmentCount: 2,
-      updateDate: "2026-06-10T14:30:00Z",
-    },
-  ],
+  iamRoles: [],
+  iamPolicies: [],
+  selectedSecretsManagerRegion: "us-east-1",
+  selectedSecretsManagerName: "cloudsprocket/db-password",
+  secretsManagerStatusMessage: "Loaded 2 secrets from us-east-1.",
+  actionCapabilities: {
+    secrets: [{ actionId: "reveal", label: "Reveal secret value", enabled: true, reason: "" }],
+  },
 };
 
-function renderIAMView() {
+function renderSecretsManagerView() {
   const onSelectRegion = vi.fn();
-  const onSelectEntity = vi.fn();
+  const onSelectSecret = vi.fn();
+  const onReveal = vi.fn().mockResolvedValue("postgres://app:local-dev@localhost:5432/cloudsprocket");
   const onRefresh = vi.fn();
   render(
     <ThemeProvider>
-      <IAMView
+      <SecretsManagerView
         workspace={workspaceFixture}
-        actionStatus="Ready to browse roles."
+        actionStatus="Ready to browse secrets."
         onRefresh={onRefresh}
         onSelectRegion={onSelectRegion}
-        onSelectEntity={onSelectEntity}
+        onSelectSecret={onSelectSecret}
+        onReveal={onReveal}
       />
     </ThemeProvider>,
   );
-  return { onSelectRegion, onSelectEntity, onRefresh };
+  return { onSelectRegion, onSelectSecret, onReveal, onRefresh };
 }
 
-describe("IAMView", () => {
-  it("renders inventory, role detail, and customer-managed policies", () => {
-    renderIAMView();
+describe("SecretsManagerView", () => {
+  it("renders secret inventory", () => {
+    renderSecretsManagerView();
 
-    expect(screen.getByText("Role Fleet")).toBeInTheDocument();
-    expect(screen.getByText("Role Inventory")).toBeInTheDocument();
-    expect(screen.getAllByText("cloudsprocket-lambda-role").length).toBeGreaterThan(0);
-    expect(screen.getByText("Customer-managed policies")).toBeInTheDocument();
-    expect(screen.getByText("cloudsprocket-data-access")).toBeInTheDocument();
-    expect(screen.getAllByText(/Lambda execution role for CloudSprocket demos/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Secret Inventory")).toBeInTheDocument();
+    expect(screen.getAllByText("cloudsprocket/db-password").length).toBeGreaterThan(0);
+    expect(screen.getByText("cloudsprocket/api-key")).toBeInTheDocument();
+    expect(screen.getAllByText("Application database password").length).toBeGreaterThan(0);
   });
 
-  it("selects a role when a row is clicked", () => {
-    const { onSelectEntity } = renderIAMView();
+  it("selects a secret when a row is clicked", () => {
+    const { onSelectSecret } = renderSecretsManagerView();
 
-    fireEvent.click(screen.getByText("cloudsprocket-ecs-task-role"));
+    fireEvent.click(screen.getByText("cloudsprocket/api-key"));
 
-    expect(onSelectEntity).toHaveBeenCalledWith("cloudsprocket-ecs-task-role");
+    expect(onSelectSecret).toHaveBeenCalledWith("cloudsprocket/api-key");
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {
     render(
       <ThemeProvider>
-        <IAMView
+        <SecretsManagerView
           workspace={{
             ...workspaceFixture,
             provider: {
@@ -207,11 +202,12 @@ describe("IAMView", () => {
           actionStatus=""
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
-          onSelectEntity={vi.fn()}
+          onSelectSecret={vi.fn()}
+          onReveal={vi.fn()}
         />
       </ThemeProvider>,
     );
 
-    expect(screen.getByText("IAM requires an AWS workspace")).toBeInTheDocument();
+    expect(screen.getByText("Secrets Manager requires an AWS workspace")).toBeInTheDocument();
   });
 });

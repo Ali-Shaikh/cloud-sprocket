@@ -93,6 +93,9 @@ func buildAWSActionCapabilities(
 			awsActionCapability(session, profile, "putItem", "Put item"),
 			awsActionCapability(session, profile, "deleteItem", "Delete item"),
 		},
+		"secrets": {
+			awsActionCapability(session, profile, "reveal", "Reveal secret value"),
+		},
 	}
 }
 

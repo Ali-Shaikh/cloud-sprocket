@@ -35,6 +35,7 @@ export type UseAwsActionsParams = {
   setRdsActionStatus: Dispatch<SetStateAction<string>>;
   setEcsActionStatus: Dispatch<SetStateAction<string>>;
   setApiGatewayActionStatus: Dispatch<SetStateAction<string>>;
+  setSecretsManagerActionStatus: Dispatch<SetStateAction<string>>;
   setLogsActionStatus: Dispatch<SetStateAction<string>>;
   setIamActionStatus: Dispatch<SetStateAction<string>>;
 };
@@ -60,6 +61,7 @@ export function useAwsActions(params: UseAwsActionsParams) {
     setRdsActionStatus,
     setEcsActionStatus,
     setApiGatewayActionStatus,
+    setSecretsManagerActionStatus,
     setLogsActionStatus,
     setIamActionStatus,
   } = params;
@@ -610,6 +612,46 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setApiGatewayActionStatus, setWorkspace]);
 
+  const selectSecretsManagerRegion = useCallback((region: string): void => {
+    setSecretsManagerActionStatus(`Loading secrets for ${region}.`);
+    void requestWorkspaceSnapshot("aws.secrets.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setSecretsManagerActionStatus(
+          workspaceResult.secretsManagerStatusMessage || `Loaded secrets from ${region}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setSecretsManagerActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setSecretsManagerActionStatus, setWorkspace]);
+
+  const refreshSecretsManagerInventory = useCallback((): void => {
+    const region = workspace.selectedSecretsManagerRegion;
+    if (!region) {
+      setSecretsManagerActionStatus("Select a region before refreshing secrets.");
+      return;
+    }
+    selectSecretsManagerRegion(region);
+  }, [selectSecretsManagerRegion, setSecretsManagerActionStatus, workspace.selectedSecretsManagerRegion]);
+
+  const selectSecretsManagerSecret = useCallback((secretName: string): void => {
+    void requestWorkspaceSnapshot("aws.secrets.selectSecret", { secretName })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setSecretsManagerActionStatus(
+          workspaceResult.secretsManagerStatusMessage || "Selected secret.",
+        );
+      })
+      .catch((error: unknown) => {
+        setSecretsManagerActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setSecretsManagerActionStatus, setWorkspace]);
+
   const selectLogsRegion = useCallback((region: string): void => {
     setLogsActionStatus(`Loading log groups for ${region}.`);
     void requestWorkspaceSnapshot("aws.logs.selectRegion", { region })
@@ -724,6 +766,9 @@ export function useAwsActions(params: UseAwsActionsParams) {
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
+    refreshSecretsManagerInventory,
+    selectSecretsManagerRegion,
+    selectSecretsManagerSecret,
     refreshLogsInventory,
     selectLogsRegion,
     selectLogGroup,

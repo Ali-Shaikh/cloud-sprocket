@@ -87,6 +87,9 @@ export function useWorkspaceState(session: SessionSnapshot) {
   const [apiGatewayActionStatus, setApiGatewayActionStatus] = useState(
     "Select a region before refreshing API Gateway APIs.",
   );
+  const [secretsManagerActionStatus, setSecretsManagerActionStatus] = useState(
+    "Select a region before refreshing Secrets Manager secrets.",
+  );
   const [logsActionStatus, setLogsActionStatus] = useState(
     "Select a region before refreshing log groups.",
   );
@@ -251,6 +254,8 @@ export function useWorkspaceState(session: SessionSnapshot) {
     setEcsActionStatus,
     apiGatewayActionStatus,
     setApiGatewayActionStatus,
+    secretsManagerActionStatus,
+    setSecretsManagerActionStatus,
     logsActionStatus,
     setLogsActionStatus,
     iamActionStatus,

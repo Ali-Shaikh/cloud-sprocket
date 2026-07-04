@@ -116,6 +116,8 @@ const workspaceFixture: ApiGatewayWorkspaceSnapshot = {
   ecsClusters: [],
   ecsServices: [],
   ecsTasks: [],
+  secretsManagerRegions: [],
+  secretsManagerSecrets: [],
   logsRegions: [],
   logGroups: [],
   iamRoles: [],

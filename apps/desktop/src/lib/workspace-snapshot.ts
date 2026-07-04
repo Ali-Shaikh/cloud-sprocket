@@ -7,6 +7,7 @@ import type {
   AwsEc2Instance,
   AwsApiGatewayApi,
   AwsApiGatewayStage,
+  AwsSecretsManagerSecret,
   AwsEcsCluster,
   AwsEcsService,
   AwsEcsTask,
@@ -147,6 +148,8 @@ export const emptyWorkspace: WorkspaceSnapshot = {
   apiGatewayRegions: [],
   apiGatewayApis: [],
   apiGatewayStages: [],
+  secretsManagerRegions: [],
+  secretsManagerSecrets: [],
   logsRegions: [],
   logGroups: [],
   iamRoles: [],
@@ -364,6 +367,10 @@ function normaliseApiGatewayApi(api: AwsApiGatewayApi): AwsApiGatewayApi {
 
 function normaliseApiGatewayStage(stage: AwsApiGatewayStage): AwsApiGatewayStage {
   return { ...stage };
+}
+
+function normaliseSecretsManagerSecret(secret: AwsSecretsManagerSecret): AwsSecretsManagerSecret {
+  return { ...secret };
 }
 
 function normaliseLogGroup(group: AwsLogGroup): AwsLogGroup {
@@ -776,6 +783,15 @@ export function mergeAwsInventoryScope(
         apiGatewayStages: normalised.apiGatewayStages,
         apiGatewayStatusMessage: normalised.apiGatewayStatusMessage,
       });
+    case "secrets":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedSecretsManagerRegion: normalised.selectedSecretsManagerRegion,
+        selectedSecretsManagerName: normalised.selectedSecretsManagerName,
+        secretsManagerRegions: normalised.secretsManagerRegions,
+        secretsManagerSecrets: normalised.secretsManagerSecrets,
+        secretsManagerStatusMessage: normalised.secretsManagerStatusMessage,
+      });
     case "logs":
       return normaliseWorkspaceSnapshot({
         ...current,
@@ -922,6 +938,10 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     apiGatewayRegions: normaliseArray(source.apiGatewayRegions),
     apiGatewayApis: normaliseArray(source.apiGatewayApis).map(normaliseApiGatewayApi),
     apiGatewayStages: normaliseArray(source.apiGatewayStages).map(normaliseApiGatewayStage),
+    secretsManagerRegions: normaliseArray(source.secretsManagerRegions),
+    secretsManagerSecrets: normaliseArray(source.secretsManagerSecrets).map(
+      normaliseSecretsManagerSecret,
+    ),
     logsRegions: normaliseArray(source.logsRegions),
     logGroups: normaliseArray(source.logGroups).map(normaliseLogGroup),
     iamRoles: normaliseArray(source.iamRoles).map(normaliseIamRole),

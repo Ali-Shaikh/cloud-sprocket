@@ -158,6 +158,8 @@ export interface SessionSnapshot {
   selectedEcsTaskArn?: string;
   selectedApiGatewayRegion?: string;
   selectedApiGatewayApiKey?: string;
+  selectedSecretsManagerRegion?: string;
+  selectedSecretsManagerName?: string;
   selectedLogsRegion?: string;
   selectedLogGroupName?: string;
   selectedIamRoleName?: string;
@@ -450,6 +452,15 @@ export interface AwsApiGatewayStage {
   deploymentId?: string;
   description?: string;
   autoDeploy?: boolean;
+}
+
+export interface AwsSecretsManagerSecret {
+  arn: string;
+  name: string;
+  description?: string;
+  lastChangedDate?: string;
+  lastAccessedDate?: string;
+  rotationEnabled?: boolean;
 }
 
 export interface AwsLogGroup {
@@ -997,6 +1008,11 @@ export interface WorkspaceSnapshot {
   apiGatewayRegions: string[];
   apiGatewayApis: AwsApiGatewayApi[];
   apiGatewayStages: AwsApiGatewayStage[];
+  selectedSecretsManagerRegion?: string;
+  selectedSecretsManagerName?: string;
+  secretsManagerStatusMessage?: string;
+  secretsManagerRegions: string[];
+  secretsManagerSecrets: AwsSecretsManagerSecret[];
   logsStatusMessage?: string;
   logsRegions: string[];
   logGroups: AwsLogGroup[];

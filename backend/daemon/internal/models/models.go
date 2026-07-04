@@ -260,6 +260,8 @@ type SessionSnapshot struct {
 	SelectedECSTaskArn                string             `json:"selectedEcsTaskArn,omitempty"`
 	SelectedApiGatewayRegion          string             `json:"selectedApiGatewayRegion,omitempty"`
 	SelectedApiGatewayApiKey          string             `json:"selectedApiGatewayApiKey,omitempty"`
+	SelectedSecretsManagerRegion      string             `json:"selectedSecretsManagerRegion,omitempty"`
+	SelectedSecretsManagerName        string             `json:"selectedSecretsManagerName,omitempty"`
 	SelectedLogsRegion                string             `json:"selectedLogsRegion,omitempty"`
 	SelectedLogGroupName              string             `json:"selectedLogGroupName,omitempty"`
 	SelectedIAMRoleName               string             `json:"selectedIamRoleName,omitempty"`
@@ -488,6 +490,16 @@ type AwsApiGatewayStage struct {
 type AwsApiGatewayListResult struct {
 	Apis    []AwsApiGatewayApi `json:"apis"`
 	Warning string             `json:"warning,omitempty"`
+}
+
+// AwsSecretsManagerSecret models Secrets Manager secret metadata (no value).
+type AwsSecretsManagerSecret struct {
+	Arn              string `json:"arn"`
+	Name             string `json:"name"`
+	Description      string `json:"description,omitempty"`
+	LastChangedDate  string `json:"lastChangedDate,omitempty"`
+	LastAccessedDate string `json:"lastAccessedDate,omitempty"`
+	RotationEnabled  bool   `json:"rotationEnabled,omitempty"`
 }
 
 // AwsEcsCluster models an ECS cluster for inventory.
@@ -1075,6 +1087,11 @@ type WorkspaceSnapshot struct {
 	ApiGatewayRegions                 []string                     `json:"apiGatewayRegions"`
 	ApiGatewayApis                    []AwsApiGatewayApi           `json:"apiGatewayApis"`
 	ApiGatewayStages                  []AwsApiGatewayStage         `json:"apiGatewayStages"`
+	SelectedSecretsManagerRegion      string                       `json:"selectedSecretsManagerRegion,omitempty"`
+	SelectedSecretsManagerName        string                       `json:"selectedSecretsManagerName,omitempty"`
+	SecretsManagerStatusMessage       string                       `json:"secretsManagerStatusMessage,omitempty"`
+	SecretsManagerRegions             []string                     `json:"secretsManagerRegions"`
+	SecretsManagerSecrets             []AwsSecretsManagerSecret    `json:"secretsManagerSecrets"`
 	SelectedLogsRegion                string                       `json:"selectedLogsRegion,omitempty"`
 	SelectedLogGroupName              string                       `json:"selectedLogGroupName,omitempty"`
 	LogsStatusMessage                 string                       `json:"logsStatusMessage,omitempty"`
