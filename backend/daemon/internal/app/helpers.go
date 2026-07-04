@@ -123,7 +123,9 @@ func (s *Service) reconcileSession(session models.SessionSnapshot, snapshot disc
 		if session.LockedProviderID != session.CurrentProviderID || session.LockedProfileID != session.SelectedProfileID || session.LockedAuthMethod != session.SelectedAuthMethod {
 			return clearLockState(session)
 		}
-		session.WorkspaceTabs = s.workspaceTabs(session.LockedProviderID)
+		// Caller must hold s.mu (or otherwise exclude preference writes); do not
+		// call s.workspaceTabs here because it acquires s.mu again.
+		session.WorkspaceTabs = workspaceTabsForPreferences(session.LockedProviderID, s.preferences)
 		return session
 	}
 
