@@ -83,6 +83,17 @@ export interface PreferencesSnapshot {
   catalogue: ServiceCatalogEntry[];
 }
 
+export interface HiddenResourceHit {
+  providerId: string;
+  serviceId: string;
+  label: string;
+  resourceCount: number;
+}
+
+export interface HiddenResourcesSnapshot {
+  hits: HiddenResourceHit[];
+}
+
 export interface DockerDiagnostics {
   engineState: DockerEngineState;
   summary: string;

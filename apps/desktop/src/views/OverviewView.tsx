@@ -24,7 +24,8 @@ import {
   shouldShowRuntimeHealthStrip,
   type RuntimeHealthTargetId,
 } from "@/lib/runtime-health";
-import type { SessionSnapshot, WorkspaceSnapshot } from "@/types/backend";
+import { HiddenResourcesHint } from "@/components/overview/hidden-resources-hint";
+import type { HiddenResourceHit, SessionSnapshot, WorkspaceSnapshot } from "@/types/backend";
 
 export type OverviewNavigateContext = {
   lambdaFunctionName?: string;
@@ -49,6 +50,9 @@ export type OverviewViewProps = {
   onOpenRuntime: () => void;
   onEmulatorQuickStart?: (emulatorId: "localstack" | "floci-az") => void;
   runtimeActionInFlight?: Partial<Record<RuntimeHealthTargetId, boolean>>;
+  hiddenResourceHits?: HiddenResourceHit[];
+  hiddenResourceEnablingServiceId?: string | null;
+  onEnableHiddenService?: (hit: HiddenResourceHit) => void;
 };
 
 type StatItem = {
@@ -95,6 +99,9 @@ export default function OverviewView({
   onOpenRuntime,
   onEmulatorQuickStart,
   runtimeActionInFlight,
+  hiddenResourceHits = [],
+  hiddenResourceEnablingServiceId = null,
+  onEnableHiddenService,
 }: OverviewViewProps) {
   const runtimeTargets = buildRuntimeHealthTargets(workspace);
   const providerId = session.lockedProviderId ?? workspace.provider?.providerId ?? "";
@@ -399,6 +406,14 @@ export default function OverviewView({
           }
         />
       )}
+
+      {hiddenResourceHits.length > 0 && onEnableHiddenService ? (
+        <HiddenResourcesHint
+          hits={hiddenResourceHits}
+          enablingServiceId={hiddenResourceEnablingServiceId}
+          onEnableService={onEnableHiddenService}
+        />
+      ) : null}
 
       {shouldShowRuntimeHealthStrip(workspace) ? (
         <RuntimeHealthStrip

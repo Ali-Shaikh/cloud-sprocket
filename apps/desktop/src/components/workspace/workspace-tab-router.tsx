@@ -205,6 +205,11 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
           localstack: localStackActionInFlight,
           "floci-az": flociAzActionInFlight,
         }}
+        hiddenResourceHits={props.hiddenResourceHits}
+        hiddenResourceEnablingServiceId={props.hiddenResourceEnablingServiceId}
+        onEnableHiddenService={(hit) => {
+          void props.onEnableHiddenService(hit);
+        }}
         onNavigate={(tabId, context) => {
           setActiveWorkspaceTabId(tabId);
           if (context?.lambdaFunctionName) {

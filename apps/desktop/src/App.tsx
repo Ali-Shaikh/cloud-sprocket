@@ -31,6 +31,7 @@ import { useWorkspaceState } from "./hooks/use-workspace-state";
 import { WorkspaceTabRouter } from "./components/workspace/workspace-tab-router";
 import type { WorkspaceTabRouterProps } from "./components/workspace/workspace-tab-router-props";
 import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
+import { toggleService } from "./lib/service-preferences";
 import { normaliseWorkspaceFromUnknown, requestWorkspaceSnapshot } from "./lib/workspace-request";
 
 import { awsInventoryLoaded, awsInventoryScopeForTab } from "./lib/aws-inventory";
@@ -71,6 +72,8 @@ import type {
   ActivityLogEntry,
   AppResetResult,
   AppSettingsSnapshot,
+  HiddenResourceHit,
+  HiddenResourcesSnapshot,
   PreferencesSnapshot,
   ServicePreferences,
   AuthMethod,
@@ -343,6 +346,11 @@ export default function App() {
   const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState("overview");
   const [preferencesSnapshot, setPreferencesSnapshot] = useState<PreferencesSnapshot | null>(null);
   const [preferencesSaving, setPreferencesSaving] = useState(false);
+  const [hiddenResourceHits, setHiddenResourceHits] = useState<HiddenResourceHit[]>([]);
+  const [hiddenResourceEnablingServiceId, setHiddenResourceEnablingServiceId] = useState<
+    string | null
+  >(null);
+  const hiddenResourcesProbeKeyRef = useRef<string | null>(null);
   const pushNotification = useCallback(
     (tone: NotificationTone, header: string, content: string) => {
       notify(tone, header, content);
@@ -629,6 +637,15 @@ export default function App() {
       setActiveWorkspaceTabId("overview");
     }
   }, [activeWorkspaceTabId, session.isLocked, session.workspaceTabs]);
+
+  useEffect(() => {
+    if (!session.isLocked) {
+      setHiddenResourceHits([]);
+      hiddenResourcesProbeKeyRef.current = null;
+      return;
+    }
+    void probeHiddenResources();
+  }, [session.isLocked, session.lockedProviderId, session.lockedProfileId]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -1152,8 +1169,32 @@ export default function App() {
   }
   reloadProvidersAndProfilesRef.current = reloadProvidersAndProfiles;
 
+  async function probeHiddenResources(force = false): Promise<void> {
+    if (!session.isLocked) {
+      setHiddenResourceHits([]);
+      hiddenResourcesProbeKeyRef.current = null;
+      return;
+    }
+    const probeKey = `${session.lockedProviderId}:${session.lockedProfileId}`;
+    if (!force && hiddenResourcesProbeKeyRef.current === probeKey) {
+      return;
+    }
+    try {
+      const snapshot = await backendRequest<HiddenResourcesSnapshot>(
+        "preferences.hiddenResources.get",
+      );
+      setHiddenResourceHits(snapshot.hits ?? []);
+      hiddenResourcesProbeKeyRef.current = probeKey;
+    } catch {
+      setHiddenResourceHits([]);
+    }
+  }
+
   async function openSettings(): Promise<void> {
-    const snapshot = await backendRequest<PreferencesSnapshot>("preferences.get");
+    const [snapshot] = await Promise.all([
+      backendRequest<PreferencesSnapshot>("preferences.get"),
+      probeHiddenResources(true),
+    ]);
     setPreferencesSnapshot(snapshot);
     setActiveWorkspaceTabId("settings");
   }
@@ -1184,8 +1225,30 @@ export default function App() {
         setActiveWorkspaceTabId("overview");
       }
       await loadWorkspace(normalisedSession);
+      void probeHiddenResources(true);
     } finally {
       setPreferencesSaving(false);
+    }
+  }
+
+  async function enableHiddenService(hit: HiddenResourceHit): Promise<void> {
+    setHiddenResourceEnablingServiceId(hit.serviceId);
+    try {
+      const snapshot =
+        preferencesSnapshot ??
+        (await backendRequest<PreferencesSnapshot>("preferences.get"));
+      if (!preferencesSnapshot) {
+        setPreferencesSnapshot(snapshot);
+      }
+      const nextPreferences = toggleService(
+        snapshot.preferences,
+        hit.providerId,
+        hit.serviceId,
+        true,
+      );
+      await applyPreferencesUpdate(nextPreferences);
+    } finally {
+      setHiddenResourceEnablingServiceId(null);
     }
   }
 
@@ -1339,6 +1402,9 @@ export default function App() {
     preferencesSnapshot,
     preferencesSaving,
     onPreferencesUpdate: applyPreferencesUpdate,
+    hiddenResourceHits,
+    hiddenResourceEnablingServiceId,
+    onEnableHiddenService: enableHiddenService,
   };
 
   const content = <WorkspaceTabRouter {...workspaceTabRouterProps} />;

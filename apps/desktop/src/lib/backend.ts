@@ -24,6 +24,8 @@ import type {
   WorkspaceSnapshot,
   WorkspaceTab,
   AwsLambdaInvokeResult,
+  HiddenResourceHit,
+  HiddenResourcesSnapshot,
   PreferencesSnapshot,
   ServiceCatalogEntry,
   ServicePreferences,
@@ -1260,6 +1262,93 @@ const mockServiceCatalogue: ServiceCatalogEntry[] = [
 
 function mockPreferencesState(): ServicePreferences {
   return mockState.preferences;
+}
+
+function countMockCatalogueResources(
+  workspace: WorkspaceSnapshot,
+  providerId: string,
+  serviceId: string,
+): number {
+  if (providerId === "aws") {
+    switch (serviceId) {
+      case "s3":
+        return workspace.s3Buckets.length;
+      case "ec2":
+        return workspace.ec2Instances.length;
+      case "lambda":
+        return workspace.lambdaFunctions.length;
+      case "dynamodb":
+        return workspace.dynamodbTables.length;
+      case "sqs":
+        return workspace.sqsQueues.length;
+      case "sns":
+        return workspace.snsTopics.length;
+      case "rds":
+        return workspace.rdsInstances.length;
+      case "ecs":
+        return workspace.ecsClusters.length;
+      case "apigateway":
+        return workspace.apiGatewayApis.length;
+      case "secrets":
+        return workspace.secretsManagerSecrets.length;
+      case "logs":
+        return workspace.logGroups.length;
+      case "iam":
+        return workspace.iamRoles.length + workspace.iamPolicies.length;
+      default:
+        return 0;
+    }
+  }
+  if (providerId === "azure") {
+    switch (serviceId) {
+      case "azure-overview":
+      case "azure-resource-groups":
+        return workspace.azureResourceGroups.length;
+      case "azure-vms":
+        return workspace.azureVirtualMachines.length;
+      case "azure-storage":
+        return workspace.azureStorageAccounts.length;
+      default:
+        return 0;
+    }
+  }
+  return 0;
+}
+
+function buildMockHiddenResourcesSnapshot(): HiddenResourcesSnapshot {
+  if (!mockState.session.isLocked) {
+    return { hits: [] };
+  }
+  const providerId = mockState.session.lockedProviderId;
+  if (!providerId) {
+    return { hits: [] };
+  }
+  const preferences = mockPreferencesState();
+  const workspace = buildMockWorkspace();
+  const hits: HiddenResourceHit[] = [];
+  for (const entry of mockServiceCatalogue) {
+    if (entry.providerId !== providerId) {
+      continue;
+    }
+    if (isServiceEnabled(preferences, entry.providerId, entry.serviceId)) {
+      continue;
+    }
+    const resourceCount = countMockCatalogueResources(
+      workspace,
+      entry.providerId,
+      entry.serviceId,
+    );
+    if (resourceCount <= 0) {
+      continue;
+    }
+    hits.push({
+      providerId: entry.providerId,
+      serviceId: entry.serviceId,
+      label: entry.label,
+      resourceCount,
+    });
+  }
+  return { hits };
 }
 
 function buildMockPreferencesSnapshot(update?: ServicePreferences): PreferencesSnapshot {
@@ -3039,6 +3128,9 @@ function handleMockRequest<T>(
       return Promise.resolve(
         buildMockPreferencesSnapshot(params as unknown as ServicePreferences) as T,
       );
+    case "preferences.hiddenResources.get":
+      rebuildSessionDerivedState();
+      return Promise.resolve(buildMockHiddenResourcesSnapshot() as T);
     case "app.reset":
       if (String(params.confirmation ?? "") !== "RESET") {
         return Promise.reject(new Error("type RESET to confirm the app reset"));

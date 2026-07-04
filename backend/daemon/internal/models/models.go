@@ -128,6 +128,19 @@ type PreferencesSnapshot struct {
 	Catalogue   []ServiceCatalogEntry `json:"catalogue"`
 }
 
+// HiddenResourceHit reports inventory found in a disabled service tab.
+type HiddenResourceHit struct {
+	ProviderID    string `json:"providerId"`
+	ServiceID     string `json:"serviceId"`
+	Label         string `json:"label"`
+	ResourceCount int    `json:"resourceCount"`
+}
+
+// HiddenResourcesSnapshot is returned by preferences.hiddenResources.get.
+type HiddenResourcesSnapshot struct {
+	Hits []HiddenResourceHit `json:"hits"`
+}
+
 type DockerDiagnostics struct {
 	EngineState DockerEngineState `json:"engineState"`
 	Summary     string            `json:"summary"`

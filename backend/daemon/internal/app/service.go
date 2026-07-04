@@ -373,6 +373,8 @@ func (s *Service) Handle(
 		return s.handlePreferencesGet()
 	case "preferences.update":
 		return s.handlePreferencesUpdate(params)
+	case "preferences.hiddenResources.get":
+		return s.handlePreferencesHiddenResourcesGet(ctx, notifier)
 	case "app.reset":
 		return s.handleAppReset(ctx, params, notifier)
 	case "docker.runtime.get":

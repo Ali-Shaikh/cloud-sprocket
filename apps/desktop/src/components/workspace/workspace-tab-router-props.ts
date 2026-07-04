@@ -13,6 +13,7 @@ import type {
   AzureLogAnalyticsSavedQuery,
   EmulatorLogSnapshot,
   JobLifecycle,
+  HiddenResourceHit,
   PreferencesSnapshot,
   ProfileSummary,
   ProviderSummary,
@@ -212,6 +213,9 @@ export type WorkspaceTabRouterProps = {
   preferencesSnapshot: PreferencesSnapshot | null;
   preferencesSaving: boolean;
   onPreferencesUpdate: (preferences: ServicePreferences) => Promise<void>;
+  hiddenResourceHits: HiddenResourceHit[];
+  hiddenResourceEnablingServiceId: string | null;
+  onEnableHiddenService: (hit: HiddenResourceHit) => Promise<void>;
 };
 
 export type AwsWorkspaceTabsProps = WorkspaceTabRouterProps;
