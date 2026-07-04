@@ -6,9 +6,10 @@ package app
 import "cloudsprocket/backend/daemon/internal/models"
 
 const (
-	workspaceTabCategoryWorkspace = "workspace"
-	workspaceTabCategoryService   = "service"
-	workspaceTabCategoryTool        = "tool"
+	workspaceTabCategoryWorkspace  = "workspace"
+	workspaceTabCategoryService    = "service"
+	workspaceTabCategoryTool       = "tool"
+	workspaceTabCategoryComingSoon = "coming_soon"
 )
 
 func workspaceTabs(providerID string) []models.WorkspaceTab {
@@ -152,10 +153,39 @@ func workspaceTabs(providerID string) []models.WorkspaceTab {
 			overviewTab,
 			virtualisationTab,
 			{
-				TabID:   "gcp-overview",
-				Label:   "GCP",
-				Summary: "Project context and readiness.",
-				Detail:  "Surfaces the open GCP configuration details while provider-specific inventory is ported.",
+				TabID:    "gcp-overview",
+				Label:    "GCP",
+				Summary:  "Project context and readiness.",
+				Detail:   "Surfaces the open GCP configuration details while provider-specific inventory is ported.",
+				Category: workspaceTabCategoryWorkspace,
+			},
+			{
+				TabID:    "gcp-storage",
+				Label:    "Cloud Storage",
+				Summary:  "GCS bucket and object inventory.",
+				Detail:   "Planned for a future release once floci-gcp inventory is wired.",
+				Category: workspaceTabCategoryComingSoon,
+			},
+			{
+				TabID:    "gcp-compute",
+				Label:    "Compute Engine",
+				Summary:  "VM instance inventory.",
+				Detail:   "Planned for a future release once floci-gcp inventory is wired.",
+				Category: workspaceTabCategoryComingSoon,
+			},
+			{
+				TabID:    "gcp-functions",
+				Label:    "Cloud Functions",
+				Summary:  "Function inventory and invoke.",
+				Detail:   "Planned for a future release once floci-gcp inventory is wired.",
+				Category: workspaceTabCategoryComingSoon,
+			},
+			{
+				TabID:    "gcp-gke",
+				Label:    "GKE",
+				Summary:  "Kubernetes cluster inventory.",
+				Detail:   "Planned for a future release once floci-gcp inventory is wired.",
+				Category: workspaceTabCategoryComingSoon,
 			},
 			activityTab,
 		}

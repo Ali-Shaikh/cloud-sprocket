@@ -61,6 +61,8 @@ export interface NavItem {
   count?: string | number;
   /** When true, the badge shows a spinner instead of a count (data still loading). */
   countLoading?: boolean;
+  /** Disabled nav entry with an explicit Soon badge (GCP placeholders). */
+  comingSoon?: boolean;
 }
 
 export interface NavGroup {
