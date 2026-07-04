@@ -39,6 +39,7 @@ import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
 import { DetailFieldList } from "./detail-fields";
+import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import type {
   AwsLambdaCreateInput,
   AwsLambdaFunction,
@@ -248,9 +249,35 @@ export default function LambdaView({
 
   const isLocalEndpoint = Boolean(workspace.awsEndpointUrl);
   const showConsoleActions = !isLocalEndpoint && Boolean(selectedFunction);
-  const canWrite = workspace.awsWritesEnabled && !invokeInFlight && !createInFlight;
-  const canInvoke = canWrite && Boolean(selectedFunction?.functionName);
-  const canCreate = canWrite && Boolean(onCreate) && Boolean(workspace.selectedLambdaRegion);
+  const invokeCapability = actionCapabilityState(workspace, "lambda", "invoke");
+  const createCapability = actionCapabilityState(workspace, "lambda", "create");
+  const canInvoke =
+    invokeCapability.enabled &&
+    !invokeInFlight &&
+    !createInFlight &&
+    Boolean(selectedFunction?.functionName);
+  const canCreate =
+    createCapability.enabled &&
+    !invokeInFlight &&
+    !createInFlight &&
+    Boolean(onCreate) &&
+    Boolean(workspace.selectedLambdaRegion);
+  const invokeDisabledReason = canInvoke
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "lambda",
+        "invoke",
+        !selectedFunction?.functionName ? "Select a function to invoke." : undefined,
+      );
+  const createDisabledReason = canCreate
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "lambda",
+        "create",
+        !workspace.selectedLambdaRegion ? "Select a region before creating a function." : undefined,
+      );
 
   useEffect(() => {
     if (openCreateForm) {
@@ -519,6 +546,7 @@ export default function LambdaView({
           {onCreate ? (
             <Button
               disabled={!canCreate}
+              title={createDisabledReason}
               onClick={() => {
                 setCreateFormOpen(true);
               }}
@@ -671,15 +699,14 @@ export default function LambdaView({
                 {payloadError ? (
                   <p className="mt-1 text-xs text-destructive">{payloadError}</p>
                 ) : null}
-                {!workspace.awsWritesEnabled ? (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Invoke and create require a local endpoint profile with writes enabled.
-                  </p>
+                {invokeDisabledReason ? (
+                  <p className="mt-1 text-xs text-muted-foreground">{invokeDisabledReason}</p>
                 ) : null}
                 <div className="mt-2 flex gap-2">
                   <Button
                     size="sm"
                     disabled={!canInvoke}
+                    title={invokeDisabledReason}
                     onClick={handleInvokeClick}
                   >
                     <Play className="mr-1 h-3 w-3" />

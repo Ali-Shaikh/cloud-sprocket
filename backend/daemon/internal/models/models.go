@@ -50,6 +50,15 @@ type DetailField struct {
 	Sensitive bool   `json:"sensitive,omitempty"`
 }
 
+// ActionCapability describes whether a single mutating UI action is available
+// and why it may be disabled (write mode, profile, runtime reachability).
+type ActionCapability struct {
+	ActionID string `json:"actionId"`
+	Label    string `json:"label"`
+	Enabled  bool   `json:"enabled"`
+	Reason   string `json:"reason,omitempty"`
+}
+
 // AzureCLIExtensionStatus reports whether a required Azure CLI extension is
 // installed for cloud profile workbenches.
 type AzureCLIExtensionStatus struct {
@@ -937,6 +946,7 @@ type WorkspaceSnapshot struct {
 	AWSWriteCapable                   bool                         `json:"awsWriteCapable"`
 	AWSWriteModeEnabled               bool                         `json:"awsWriteModeEnabled"`
 	AWSWritesEnabled                  bool                         `json:"awsWritesEnabled"`
+	ActionCapabilities                map[string][]ActionCapability `json:"actionCapabilities,omitempty"`
 	SelectedS3BucketName              string                       `json:"selectedS3BucketName,omitempty"`
 	SelectedS3ObjectKey               string                       `json:"selectedS3ObjectKey,omitempty"`
 	S3PrefixFilter                    string                       `json:"s3PrefixFilter,omitempty"`
