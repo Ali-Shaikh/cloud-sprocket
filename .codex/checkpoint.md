@@ -1,13 +1,11 @@
 # Checkpoint
 
-**Branch:** `dev` (v0.8.25 release in progress)
-**Latest:** Tagging v0.8.25 for ECS + API Gateway + action hooks (#78–#80)
+**Branch:** `dev` (v0.8.25 released 4 Jul 2026)
+**Latest:** ECS + API Gateway tabs shipped in v0.8.25 (#78–#80)
 
-## Shipped on dev (awaiting release)
-- PR #80: API Gateway tab
-- PR #79: ECS / Fargate tab
-- PR #78: action hooks refactor
+## Shipped
+- **v0.8.25:** PR #78 action hooks, PR #79 ECS tab, PR #80 API Gateway tab
+- **v0.8.24:** App.tsx decomposition (#75–#77)
 
-## Next
-- Confirm v0.8.25 installers published
-- `feat/aws-secrets` — Secrets Manager tab (Target B 3/3)
+## Next (Target B)
+- `feat/aws-secrets` — Secrets Manager tab (3/3)
