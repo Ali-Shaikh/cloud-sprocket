@@ -4,6 +4,7 @@
 package awsadapter
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -57,5 +58,25 @@ func TestParseApiGatewayKey(t *testing.T) {
 	apiType, apiID, err := parseApiGatewayKey("http:xyz789")
 	if err != nil || apiType != "http" || apiID != "xyz789" {
 		t.Fatalf("parse = %q %q %v", apiType, apiID, err)
+	}
+}
+
+func TestMergeApiGatewayListOutcomeReturnsPartialResults(t *testing.T) {
+	restErr := fmt.Errorf("access denied")
+	warning, err := mergeApiGatewayListOutcome(restErr, nil, 2)
+	if err != nil {
+		t.Fatalf("expected partial success, got error %v", err)
+	}
+	if warning == "" {
+		t.Fatalf("expected warning for REST failure")
+	}
+}
+
+func TestMergeApiGatewayListOutcomeFailsWhenBothEmpty(t *testing.T) {
+	restErr := fmt.Errorf("rest failed")
+	v2Err := fmt.Errorf("v2 failed")
+	_, err := mergeApiGatewayListOutcome(restErr, v2Err, 0)
+	if err == nil {
+		t.Fatal("expected combined error when both listings fail")
 	}
 }

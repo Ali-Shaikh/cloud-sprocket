@@ -32,35 +32,63 @@ func (a *ApiGatewayInventory) ListApis(
 	ctx context.Context,
 	profile models.ProfileSummary,
 	region string,
-) ([]models.AwsApiGatewayApi, error) {
+) (models.AwsApiGatewayListResult, error) {
 	if region == "" {
 		region = awsRegionHint(profile)
 	}
 	cfg, err := a.loadConfig(ctx, profile, region)
 	if err != nil {
-		return nil, err
+		return models.AwsApiGatewayListResult{}, err
 	}
 
-	apis := []models.AwsApiGatewayApi{}
+	restApis, restErr := a.listRestApis(ctx, cfg, profile, region)
+	v2Apis, v2Err := a.listV2Apis(ctx, cfg, profile)
 
+	apis := append(restApis, v2Apis...)
+	sort.SliceStable(apis, func(i, j int) bool {
+		if apis[i].ApiType == apis[j].ApiType {
+			return apis[i].ApiName < apis[j].ApiName
+		}
+		return apis[i].ApiType < apis[j].ApiType
+	})
+
+	warning, err := mergeApiGatewayListOutcome(restErr, v2Err, len(apis))
+	return models.AwsApiGatewayListResult{Apis: apis, Warning: warning}, err
+}
+
+func (a *ApiGatewayInventory) listRestApis(
+	ctx context.Context,
+	cfg aws.Config,
+	profile models.ProfileSummary,
+	region string,
+) ([]models.AwsApiGatewayApi, error) {
+	apis := []models.AwsApiGatewayApi{}
 	restClient := apigatewayClient(cfg, profile)
 	restPaginator := apigateway.NewGetRestApisPaginator(restClient, &apigateway.GetRestApisInput{})
 	for restPaginator.HasMorePages() {
 		page, err := restPaginator.NextPage(ctx)
 		if err != nil {
-			return nil, err
+			return apis, err
 		}
 		for _, item := range page.Items {
 			apis = append(apis, restApiSummary(item, region))
 		}
 	}
+	return apis, nil
+}
 
+func (a *ApiGatewayInventory) listV2Apis(
+	ctx context.Context,
+	cfg aws.Config,
+	profile models.ProfileSummary,
+) ([]models.AwsApiGatewayApi, error) {
+	apis := []models.AwsApiGatewayApi{}
 	v2Client := apigatewayV2Client(cfg, profile)
 	v2Input := &apigatewayv2.GetApisInput{}
 	for {
 		page, err := v2Client.GetApis(ctx, v2Input)
 		if err != nil {
-			return nil, err
+			return apis, err
 		}
 		for _, item := range page.Items {
 			apis = append(apis, v2ApiSummary(item))
@@ -70,14 +98,33 @@ func (a *ApiGatewayInventory) ListApis(
 		}
 		v2Input.NextToken = page.NextToken
 	}
-
-	sort.SliceStable(apis, func(i, j int) bool {
-		if apis[i].ApiType == apis[j].ApiType {
-			return apis[i].ApiName < apis[j].ApiName
-		}
-		return apis[i].ApiType < apis[j].ApiType
-	})
 	return apis, nil
+}
+
+func mergeApiGatewayListOutcome(restErr, v2Err error, apiCount int) (warning string, err error) {
+	switch {
+	case restErr == nil && v2Err == nil:
+		return "", nil
+	case apiCount > 0:
+		return joinApiGatewayListWarnings(restErr, v2Err), nil
+	case restErr != nil && v2Err != nil:
+		return "", fmt.Errorf("REST APIs: %w; HTTP/WebSocket APIs: %v", restErr, v2Err)
+	case restErr != nil:
+		return "", restErr
+	default:
+		return "", v2Err
+	}
+}
+
+func joinApiGatewayListWarnings(restErr, v2Err error) string {
+	parts := []string{}
+	if restErr != nil {
+		parts = append(parts, fmt.Sprintf("REST API listing failed: %v", restErr))
+	}
+	if v2Err != nil {
+		parts = append(parts, fmt.Sprintf("HTTP/WebSocket API listing failed: %v", v2Err))
+	}
+	return strings.Join(parts, "; ")
 }
 
 func (a *ApiGatewayInventory) ListStages(

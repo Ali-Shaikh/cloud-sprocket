@@ -269,7 +269,7 @@ export default function ApiGatewayView({
               <div className={fieldLabel}>Copy invoke URL</div>
               {workspace.apiGatewayStages.map((stage) =>
                 stage.invokeUrl ? (
-                  <div key={stage.stageName} className={snippetCard}>
+                  <div key={`${stage.apiKey}:${stage.stageName}`} className={snippetCard}>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         {stage.stageName}

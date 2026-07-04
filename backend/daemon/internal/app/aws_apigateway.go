@@ -48,7 +48,7 @@ func (s *Service) enrichApiGatewayInventory(
 	}
 
 	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
-	apis := s.apiGatewayApis(timeoutCtx, *workspace.Profile, selectedRegion)
+	apis, listWarning := s.apiGatewayApis(timeoutCtx, *workspace.Profile, selectedRegion)
 	cancel()
 	selectedAPI := s.selectedApiGatewayApiKey(session, apis)
 	stages := []models.AwsApiGatewayStage{}
@@ -66,6 +66,13 @@ func (s *Service) enrichApiGatewayInventory(
 			status = fmt.Sprintf("Loaded %d APIs from %s.", len(apis), selectedRegion)
 		} else {
 			status = fmt.Sprintf("Loaded %d APIs and %d stages from %s.", len(apis), len(stages), selectedRegion)
+		}
+	}
+	if listWarning != "" {
+		if status != "" {
+			status += " " + listWarning
+		} else {
+			status = listWarning
 		}
 	}
 
@@ -102,28 +109,28 @@ func (s *Service) apiGatewayApis(
 	ctx context.Context,
 	profile models.ProfileSummary,
 	region string,
-) []models.AwsApiGatewayApi {
+) ([]models.AwsApiGatewayApi, string) {
 	if region == "" {
-		return []models.AwsApiGatewayApi{}
+		return []models.AwsApiGatewayApi{}, ""
 	}
 	const scope = "aws.apigateway.apis"
 	queryHash := profile.ProfileID + "|" + region
 
 	var cached []models.AwsApiGatewayApi
 	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
-		return cached
+		return cached, ""
 	}
 
-	apis, err := s.apigateway.ListApis(ctx, profile, region)
+	result, err := s.apigateway.ListApis(ctx, profile, region)
 	if err == nil {
-		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, apis)
-		return apis
+		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, result.Apis)
+		return result.Apis, result.Warning
 	}
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
-		return cached
+		return cached, ""
 	}
-	return []models.AwsApiGatewayApi{}
+	return []models.AwsApiGatewayApi{}, ""
 }
 
 func (s *Service) selectedApiGatewayApiKey(

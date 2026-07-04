@@ -62,7 +62,7 @@ type RDSInventory interface {
 }
 
 type ApiGatewayInventory interface {
-	ListApis(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsApiGatewayApi, error)
+	ListApis(ctx context.Context, profile models.ProfileSummary, region string) (models.AwsApiGatewayListResult, error)
 	ListStages(ctx context.Context, profile models.ProfileSummary, region string, apiKey string) ([]models.AwsApiGatewayStage, error)
 }
 

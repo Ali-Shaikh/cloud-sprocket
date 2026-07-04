@@ -154,8 +154,8 @@ func (stubECSInventory) DescribeTask(context.Context, models.ProfileSummary, str
 
 type stubApiGatewayInventory struct{}
 
-func (stubApiGatewayInventory) ListApis(context.Context, models.ProfileSummary, string) ([]models.AwsApiGatewayApi, error) {
-	return nil, nil
+func (stubApiGatewayInventory) ListApis(context.Context, models.ProfileSummary, string) (models.AwsApiGatewayListResult, error) {
+	return models.AwsApiGatewayListResult{}, nil
 }
 
 func (stubApiGatewayInventory) ListStages(context.Context, models.ProfileSummary, string, string) ([]models.AwsApiGatewayStage, error) {

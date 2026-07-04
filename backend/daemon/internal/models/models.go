@@ -484,6 +484,12 @@ type AwsApiGatewayStage struct {
 	AutoDeploy   bool   `json:"autoDeploy,omitempty"`
 }
 
+// AwsApiGatewayListResult carries API inventory with an optional partial-failure warning.
+type AwsApiGatewayListResult struct {
+	Apis    []AwsApiGatewayApi `json:"apis"`
+	Warning string             `json:"warning,omitempty"`
+}
+
 // AwsEcsCluster models an ECS cluster for inventory.
 type AwsEcsCluster struct {
 	ClusterArn                        string `json:"clusterArn"`
