@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 
@@ -86,8 +85,4 @@ func (s *Service) handleAwsInventoryGet(ctx context.Context, params json.RawMess
 		awsScope:               scope,
 		awsDeferredInventory:   false,
 	}), nil
-}
-
-func awsInventoryProfilingEnabled() bool {
-	return strings.TrimSpace(os.Getenv("CLOUDSPROCKET_AWS_PROFILE")) == "1"
 }

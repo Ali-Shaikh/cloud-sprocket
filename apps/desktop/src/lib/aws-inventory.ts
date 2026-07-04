@@ -111,7 +111,9 @@ export function awsInventoryLoaded(
       return (workspace.logsRegions?.length ?? 0) > 0 ||
         (workspace.logsStatusMessage ?? "").length > 0;
     case "iam":
-      return (workspace.iamStatusMessage ?? "").length > 0;
+      return (workspace.iamRoles?.length ?? 0) > 0 ||
+        (workspace.iamPolicies?.length ?? 0) > 0 ||
+        (workspace.iamStatusMessage ?? "").length > 0;
     default:
       return false;
   }

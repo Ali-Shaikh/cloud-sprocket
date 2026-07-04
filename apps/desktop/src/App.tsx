@@ -815,7 +815,7 @@ function mergeAwsInventoryScope(
         iamStatusMessage: normalised.iamStatusMessage,
       });
     default:
-      return normalised;
+      return current;
   }
 }
 
