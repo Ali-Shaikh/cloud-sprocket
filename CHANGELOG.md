@@ -9,6 +9,24 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.8.32] - 2026-07-05
+
+### Added
+
+- AWS Route 53 tab with account-wide hosted zone inventory and record preview
+  (#111)
+- AWS ELBv2 tab with regional load balancer inventory and target group
+  drill-down (#112)
+- AWS KMS tab with encryption key listing, alias preview, and key metadata in
+  the inspector (#112)
+
+### Fixed
+
+- Route 53 record pagination now uses `NextRecord*` tokens from the AWS API
+  (#111)
+- Route 53 record table row keys include `setIdentifier` for weighted and
+  latency-based routing records (#111)
+
 ## [0.8.31] - 2026-07-05
 
 ### Added
@@ -632,7 +650,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.31...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.32...HEAD
+[0.8.32]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.31...v0.8.32
 [0.8.31]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.30...v0.8.31
 [0.8.30]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.29...v0.8.30
 [0.8.29]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.28...v0.8.29
