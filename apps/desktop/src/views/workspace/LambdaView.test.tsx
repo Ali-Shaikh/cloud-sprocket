@@ -2,11 +2,28 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
 import LambdaView from "./LambdaView";
 import type { AwsLambdaCreateInput, AwsLambdaInvokeResult, WorkspaceSnapshot } from "@/types/backend";
+
+function mockMatchMedia(matches: boolean) {
+  return vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const workspaceFixture: WorkspaceSnapshot = {
   provider: {
@@ -165,7 +182,17 @@ function renderLambdaView(overrides?: {
 }
 
 describe("LambdaView", () => {
+  it("docks function detail in the inspector on wide viewports", () => {
+    mockMatchMedia(true);
+    renderLambdaView();
+
+    expect(screen.getByLabelText("Lambda function details")).toBeInTheDocument();
+    expect(screen.getByText("Function")).toBeInTheDocument();
+    expect(screen.getByText("Copy actions")).toBeInTheDocument();
+  });
+
   it("renders inventory, logs, and confirms invoke", async () => {
+    mockMatchMedia(true);
     const { onInvoke } = renderLambdaView();
 
     expect(screen.getByText("Lambda Fleet")).toBeInTheDocument();
@@ -182,6 +209,7 @@ describe("LambdaView", () => {
   });
 
   it("shows the last invoke result", () => {
+    mockMatchMedia(true);
     renderLambdaView({
       invokeResult: {
         statusCode: 200,
@@ -195,6 +223,7 @@ describe("LambdaView", () => {
   });
 
   it("shows invoke transport errors in the result panel", () => {
+    mockMatchMedia(true);
     renderLambdaView({
       invokeResult: {
         statusCode: 0,
