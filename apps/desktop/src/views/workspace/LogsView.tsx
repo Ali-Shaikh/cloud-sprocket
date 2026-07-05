@@ -4,6 +4,8 @@
 import { useMemo, useState } from "react";
 import { Copy, RefreshCw, ScrollText } from "lucide-react";
 
+import { actionCapabilityState } from "@/lib/action-capabilities";
+
 import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
@@ -50,6 +52,8 @@ export type LogsViewProps = {
   onRefresh: () => void;
   onSelectRegion: (region: string) => void;
   onSelectEntity: (logGroupName: string) => void;
+  onCreateLogGroup?: (logGroupName: string) => void;
+  onPutLogEvents?: (logGroupName: string, message: string) => void;
 };
 
 const fieldLabel =
@@ -103,8 +107,13 @@ export default function LogsView({
   onRefresh,
   onSelectRegion,
   onSelectEntity,
+  onCreateLogGroup,
+  onPutLogEvents,
 }: LogsViewProps) {
   const [filterText, setFilterText] = useState("");
+  const [newLogGroupName, setNewLogGroupName] = useState("/aws/test/group");
+  const createCapability = actionCapabilityState(workspace, "logs", "createLogGroup");
+  const putCapability = actionCapabilityState(workspace, "logs", "putLogEvents");
 
   const regions =
     workspace.logsRegions.length > 0
@@ -254,6 +263,31 @@ export default function LogsView({
             <RefreshCw />
             Refresh log groups
           </Button>
+          {onCreateLogGroup ? (
+            <Button
+              variant="outline"
+              disabled={!createCapability.enabled}
+              title={createCapability.enabled ? undefined : createCapability.reason}
+              onClick={() => onCreateLogGroup(newLogGroupName.trim() || "/aws/test/group")}
+            >
+              Create log group
+            </Button>
+          ) : null}
+          {onPutLogEvents && selectedLogGroup ? (
+            <Button
+              variant="outline"
+              disabled={!putCapability.enabled}
+              title={putCapability.enabled ? undefined : putCapability.reason}
+              onClick={() =>
+                onPutLogEvents(
+                  selectedLogGroup.logGroupName,
+                  `CloudSprocket test event at ${new Date().toISOString()}`,
+                )
+              }
+            >
+              Inject test event
+            </Button>
+          ) : null}
           <div className="min-w-56 flex-1">
             <div className={cn(fieldLabel, "mb-1")}>Filter</div>
             <Input

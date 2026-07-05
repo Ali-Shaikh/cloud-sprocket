@@ -124,6 +124,39 @@ func (i *IAMInventory) ListPolicies(
 	return policies, nil
 }
 
+func (i *IAMInventory) CreateRole(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	roleName string,
+) (models.AwsIamCreateRoleResult, error) {
+	roleName = strings.TrimSpace(roleName)
+	if roleName == "" {
+		return models.AwsIamCreateRoleResult{}, fmt.Errorf("role name is required")
+	}
+	cfg, err := i.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsIamCreateRoleResult{}, err
+	}
+	client := iamClient(cfg, profile)
+	res, err := client.CreateRole(ctx, &iam.CreateRoleInput{
+		RoleName:                 aws.String(roleName),
+		AssumeRolePolicyDocument: aws.String(lambdaTrustPolicy),
+		Description:              aws.String("CloudSprocket IAM role"),
+	})
+	if err != nil {
+		return models.AwsIamCreateRoleResult{}, err
+	}
+	roleArn := ""
+	if res.Role != nil {
+		roleArn = awsString(res.Role.Arn)
+	}
+	return models.AwsIamCreateRoleResult{
+		RoleName: roleName,
+		RoleArn:  roleArn,
+	}, nil
+}
+
 func (i *IAMInventory) loadConfig(
 	ctx context.Context,
 	profile models.ProfileSummary,

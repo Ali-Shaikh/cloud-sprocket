@@ -41,6 +41,44 @@ func TestBuildAWSActionCapabilitiesRealCloudProfile(t *testing.T) {
 	}
 }
 
+func TestBuildAWSActionCapabilitiesIncludePhase2And3Writes(t *testing.T) {
+	profile := models.ProfileSummary{
+		Attributes: []models.DetailField{
+			{Label: "endpoint_url", Value: "http://localhost:4566"},
+			{Label: "cloudsprocket_allow_writes", Value: "true"},
+		},
+	}
+	session := models.SessionSnapshot{AWSWriteModeEnabled: true}
+	caps := buildAWSActionCapabilities(session, profile)
+
+	for _, scope := range []struct {
+		scope    string
+		actionID string
+	}{
+		{"s3", "deleteObject"},
+		{"s3", "createBucket"},
+		{"ec2", "runInstances"},
+		{"ec2", "terminateInstances"},
+		{"lambda", "deleteFunction"},
+		{"rds", "startInstance"},
+		{"rds", "stopInstance"},
+		{"logs", "createLogGroup"},
+		{"logs", "putLogEvents"},
+		{"iam", "createRole"},
+	} {
+		enabled := false
+		for _, capability := range caps[scope.scope] {
+			if capability.ActionID == scope.actionID {
+				enabled = capability.Enabled
+				break
+			}
+		}
+		if !enabled {
+			t.Fatalf("expected %s.%s to be enabled for local write mode", scope.scope, scope.actionID)
+		}
+	}
+}
+
 func TestBuildAzureActionCapabilitiesWriteModeOff(t *testing.T) {
 	profile := models.ProfileSummary{
 		Attributes: []models.DetailField{

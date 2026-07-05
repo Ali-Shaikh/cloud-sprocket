@@ -4,6 +4,8 @@
 import { useMemo, useState } from "react";
 import { Copy, RefreshCw, Shield } from "lucide-react";
 
+import { actionCapabilityState } from "@/lib/action-capabilities";
+
 import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
@@ -49,6 +51,7 @@ export type IAMViewProps = {
   onRefresh: () => void;
   onSelectRegion: (region: string) => void;
   onSelectEntity: (roleName: string) => void;
+  onCreateRole?: (roleName: string) => void;
 };
 
 const fieldLabel =
@@ -86,8 +89,11 @@ export default function IAMView({
   onRefresh,
   onSelectRegion: _onSelectRegion,
   onSelectEntity,
+  onCreateRole,
 }: IAMViewProps) {
   const [filterText, setFilterText] = useState("");
+  const [newRoleName, setNewRoleName] = useState("demo-lambda-role");
+  const createCapability = actionCapabilityState(workspace, "iam", "createRole");
 
   const selectedRole =
     workspace.iamRoles.find((role) => role.roleName === workspace.selectedIamRoleName) ??
@@ -202,6 +208,16 @@ export default function IAMView({
             <RefreshCw />
             Refresh roles
           </Button>
+          {onCreateRole ? (
+            <Button
+              variant="outline"
+              disabled={!createCapability.enabled || !newRoleName.trim()}
+              title={createCapability.enabled ? undefined : createCapability.reason}
+              onClick={() => onCreateRole(newRoleName.trim())}
+            >
+              Create role
+            </Button>
+          ) : null}
           <div className="min-w-56 flex-1">
             <div className={cn(fieldLabel, "mb-1")}>Filter</div>
             <Input

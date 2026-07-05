@@ -96,6 +96,86 @@ func (l *LogsInventory) DescribeLogGroup(
 	return group, nil
 }
 
+const cloudsprocketTestLogStream = "cloudsprocket-test"
+
+func (l *LogsInventory) CreateLogGroup(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	logGroupName string,
+) (models.AwsLogsCreateLogGroupResult, error) {
+	logGroupName = strings.TrimSpace(logGroupName)
+	if logGroupName == "" {
+		return models.AwsLogsCreateLogGroupResult{}, fmt.Errorf("log group name is required")
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := l.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsLogsCreateLogGroupResult{}, err
+	}
+	client := logsClient(cfg, profile)
+	_, err = client.CreateLogGroup(ctx, &cloudwatchlogs.CreateLogGroupInput{
+		LogGroupName: aws.String(logGroupName),
+	})
+	if err != nil {
+		return models.AwsLogsCreateLogGroupResult{}, err
+	}
+	return models.AwsLogsCreateLogGroupResult{
+		LogGroupName: logGroupName,
+		Region:       region,
+	}, nil
+}
+
+func (l *LogsInventory) PutLogEvents(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	logGroupName string,
+	message string,
+) (models.AwsLogsPutLogEventsResult, error) {
+	logGroupName = strings.TrimSpace(logGroupName)
+	message = strings.TrimSpace(message)
+	if logGroupName == "" {
+		return models.AwsLogsPutLogEventsResult{}, fmt.Errorf("log group name is required")
+	}
+	if message == "" {
+		message = fmt.Sprintf("CloudSprocket test event at %s", time.Now().UTC().Format(time.RFC3339))
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := l.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsLogsPutLogEventsResult{}, err
+	}
+	client := logsClient(cfg, profile)
+	_, _ = client.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
+		LogGroupName:  aws.String(logGroupName),
+		LogStreamName: aws.String(cloudsprocketTestLogStream),
+	})
+	timestamp := time.Now().UnixMilli()
+	_, err = client.PutLogEvents(ctx, &cloudwatchlogs.PutLogEventsInput{
+		LogGroupName:  aws.String(logGroupName),
+		LogStreamName: aws.String(cloudsprocketTestLogStream),
+		LogEvents: []cwtypes.InputLogEvent{
+			{
+				Message:   aws.String(message),
+				Timestamp: aws.Int64(timestamp),
+			},
+		},
+	})
+	if err != nil {
+		return models.AwsLogsPutLogEventsResult{}, err
+	}
+	return models.AwsLogsPutLogEventsResult{
+		LogGroupName:  logGroupName,
+		LogStreamName: cloudsprocketTestLogStream,
+		Summary:       fmt.Sprintf("Injected test event into %s.", logGroupName),
+	}, nil
+}
+
 func (l *LogsInventory) recentEvents(
 	ctx context.Context,
 	client *cloudwatchlogs.Client,

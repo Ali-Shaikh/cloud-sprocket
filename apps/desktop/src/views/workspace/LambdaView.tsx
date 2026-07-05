@@ -56,6 +56,7 @@ export type LambdaViewProps = {
   onSelectFunction: (functionName: string) => void;
   onInvoke: (functionName: string, payload: unknown) => void;
   onCreate?: (input: AwsLambdaCreateInput) => void;
+  onDeleteFunction?: (functionName: string) => void;
   openCreateForm?: boolean;
   onCreateFormOpenChange?: (open: boolean) => void;
 };
@@ -201,6 +202,7 @@ export default function LambdaView({
   onSelectFunction,
   onInvoke,
   onCreate,
+  onDeleteFunction,
   openCreateForm = false,
   onCreateFormOpenChange,
 }: LambdaViewProps) {
@@ -249,6 +251,7 @@ export default function LambdaView({
   const showConsoleActions = !isLocalEndpoint && Boolean(selectedFunction);
   const invokeCapability = actionCapabilityState(workspace, "lambda", "invoke");
   const createCapability = actionCapabilityState(workspace, "lambda", "create");
+  const deleteCapability = actionCapabilityState(workspace, "lambda", "deleteFunction");
   const canInvoke =
     invokeCapability.enabled &&
     !invokeInFlight &&
@@ -551,6 +554,17 @@ export default function LambdaView({
             <Play className="mr-1 h-3 w-3" />
             Invoke
           </Button>
+          {onDeleteFunction && selectedFunction ? (
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={!deleteCapability.enabled || invokeInFlight || createInFlight}
+              title={deleteCapability.enabled ? undefined : deleteCapability.reason}
+              onClick={() => onDeleteFunction(selectedFunction.functionName)}
+            >
+              Delete function
+            </Button>
+          ) : null}
           <Button
             size="sm"
             variant="outline"

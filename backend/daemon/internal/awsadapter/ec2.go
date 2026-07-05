@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -107,6 +108,69 @@ func (e *EC2Inventory) StopInstance(ctx context.Context, profile models.ProfileS
 		return err
 	}
 	_, err = client.StopInstances(ctx, &ec2.StopInstancesInput{InstanceIds: []string{instanceID}})
+	return err
+}
+
+const localStackDefaultAMI = "ami-00000000"
+const localStackDefaultInstanceType = "t3.micro"
+
+func (e *EC2Inventory) RunInstances(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	instanceType string,
+) (models.AwsEc2RunInstancesResult, error) {
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	instanceType = strings.TrimSpace(instanceType)
+	if instanceType == "" {
+		instanceType = localStackDefaultInstanceType
+	}
+	client, err := e.client(ctx, profile, region)
+	if err != nil {
+		return models.AwsEc2RunInstancesResult{}, err
+	}
+	res, err := client.RunInstances(ctx, &ec2.RunInstancesInput{
+		ImageId:      aws.String(localStackDefaultAMI),
+		InstanceType: types.InstanceType(instanceType),
+		MinCount:     aws.Int32(1),
+		MaxCount:     aws.Int32(1),
+	})
+	if err != nil {
+		return models.AwsEc2RunInstancesResult{}, err
+	}
+	instanceID := ""
+	if len(res.Instances) > 0 {
+		instanceID = awsString(res.Instances[0].InstanceId)
+	}
+	if instanceID == "" {
+		return models.AwsEc2RunInstancesResult{}, fmt.Errorf("EC2 RunInstances returned no instance id")
+	}
+	return models.AwsEc2RunInstancesResult{
+		InstanceID:   instanceID,
+		Region:       region,
+		InstanceType: instanceType,
+		Summary:      fmt.Sprintf("Launched EC2 instance %s (%s) in %s.", instanceID, instanceType, region),
+	}, nil
+}
+
+func (e *EC2Inventory) TerminateInstances(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	instanceID string,
+) error {
+	if instanceID == "" {
+		return fmt.Errorf("instance id is required")
+	}
+	client, err := e.client(ctx, profile, region)
+	if err != nil {
+		return err
+	}
+	_, err = client.TerminateInstances(ctx, &ec2.TerminateInstancesInput{
+		InstanceIds: []string{instanceID},
+	})
 	return err
 }
 

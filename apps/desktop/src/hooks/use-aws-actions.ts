@@ -28,6 +28,7 @@ export type UseAwsActionsParams = {
   setLambdaInvokeInFlight: Dispatch<SetStateAction<boolean>>;
   setLambdaCreateInFlight: Dispatch<SetStateAction<boolean>>;
   setDynamodbActionStatus: Dispatch<SetStateAction<string>>;
+  setS3UploadStatus: Dispatch<SetStateAction<string>>;
   setSqsActionStatus: Dispatch<SetStateAction<string>>;
   setSqsPeekResult: Dispatch<SetStateAction<AwsSqsPeekResult | null>>;
   setSqsPeekInFlight: Dispatch<SetStateAction<boolean>>;
@@ -55,6 +56,7 @@ export function useAwsActions(params: UseAwsActionsParams) {
     setLambdaInvokeInFlight,
     setLambdaCreateInFlight,
     setDynamodbActionStatus,
+    setS3UploadStatus,
     setSqsActionStatus,
     setSqsPeekResult,
     setSqsPeekInFlight,
@@ -512,6 +514,127 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setRdsActionStatus, setWorkspace]);
 
+  const deleteS3Object = useCallback((objectKey: string): void => {
+    setS3UploadStatus(`Deleting object ${objectKey}.`);
+    void requestWorkspaceSnapshot("aws.s3.deleteObject", { objectKey })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setS3UploadStatus(workspaceResult.s3StatusMessage || `Deleted object ${objectKey}.`);
+      })
+      .catch((error: unknown) => {
+        setS3UploadStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setS3UploadStatus, setWorkspace]);
+
+  const createS3Bucket = useCallback((bucketName: string, region?: string): void => {
+    setS3UploadStatus(`Creating bucket ${bucketName}.`);
+    void requestWorkspaceSnapshot("aws.s3.createBucket", { bucketName, region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setS3UploadStatus(workspaceResult.s3StatusMessage || `Created bucket ${bucketName}.`);
+      })
+      .catch((error: unknown) => {
+        setS3UploadStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setS3UploadStatus, setWorkspace]);
+
+  const runEC2Instances = useCallback((instanceType?: string): void => {
+    setEC2ActionStatus("Launching EC2 instance.");
+    void requestWorkspaceSnapshot("aws.ec2.runInstances", { instanceType })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setEC2ActionStatus(workspaceResult.ec2StatusMessage || "Launched EC2 instance.");
+      })
+      .catch((error: unknown) => {
+        setEC2ActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setEC2ActionStatus, setWorkspace]);
+
+  const terminateEC2Instance = useCallback((instanceId: string): void => {
+    setEC2ActionStatus(`Queueing terminate for ${instanceId}.`);
+    setEC2ActionInFlight(true);
+    void backendRequest<JobStatus>("aws.ec2.terminateInstances", { instanceId })
+      .then((job) => {
+        setEC2ActionStatus(job.message);
+        setEC2ActionInFlight(job.status === "queued" || job.status === "running");
+      })
+      .catch((error: unknown) => {
+        setEC2ActionStatus(error instanceof Error ? error.message : String(error));
+        setEC2ActionInFlight(false);
+      });
+  }, [setEC2ActionInFlight, setEC2ActionStatus]);
+
+  const deleteLambdaFunction = useCallback((functionName: string): void => {
+    setLambdaActionStatus(`Deleting function ${functionName}.`);
+    void requestWorkspaceSnapshot("aws.lambda.deleteFunction", { functionName })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setLambdaActionStatus(workspaceResult.lambdaStatusMessage || `Deleted function ${functionName}.`);
+        setLambdaInvokeResult(null);
+      })
+      .catch((error: unknown) => {
+        setLambdaActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setLambdaActionStatus, setLambdaInvokeResult, setWorkspace]);
+
+  const invokeRDSLifecycleAction = useCallback((action: "start" | "stop", instanceId: string): void => {
+    setRdsActionStatus(`Queueing RDS ${action} for ${instanceId}.`);
+    void backendRequest<JobStatus>(`aws.rds.${action}Instance`, { instanceId })
+      .then((job) => {
+        setRdsActionStatus(job.message);
+      })
+      .catch((error: unknown) => {
+        setRdsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setRdsActionStatus]);
+
+  const createLogGroup = useCallback((logGroupName: string): void => {
+    setLogsActionStatus(`Creating log group ${logGroupName}.`);
+    void requestWorkspaceSnapshot("aws.logs.createLogGroup", { logGroupName })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setLogsActionStatus(workspaceResult.logsStatusMessage || `Created log group ${logGroupName}.`);
+      })
+      .catch((error: unknown) => {
+        setLogsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setLogsActionStatus, setWorkspace]);
+
+  const putLogEvents = useCallback((logGroupName: string, message: string): void => {
+    setLogsActionStatus("Injecting test log event.");
+    void backendRequest<{ summary: string }>("aws.logs.putLogEvents", { logGroupName, message })
+      .then((result) => {
+        setLogsActionStatus(result.summary || "Injected test event.");
+      })
+      .catch((error: unknown) => {
+        setLogsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setLogsActionStatus]);
+
+  const createIAMRole = useCallback((roleName: string): void => {
+    setIamActionStatus(`Creating IAM role ${roleName}.`);
+    void requestWorkspaceSnapshot("aws.iam.createRole", { roleName })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setIamActionStatus(workspaceResult.iamStatusMessage || `Created IAM role ${roleName}.`);
+      })
+      .catch((error: unknown) => {
+        setIamActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setIamActionStatus, setWorkspace]);
+
   const selectECSRegion = useCallback((region: string): void => {
     setEcsActionStatus(`Loading ECS clusters for ${region}.`);
     void requestWorkspaceSnapshot("aws.ecs.selectRegion", { region })
@@ -799,6 +922,15 @@ export function useAwsActions(params: UseAwsActionsParams) {
     refreshRDSInventory,
     selectRDSRegion,
     selectRDSInstance,
+    deleteS3Object,
+    createS3Bucket,
+    runEC2Instances,
+    terminateEC2Instance,
+    deleteLambdaFunction,
+    invokeRDSLifecycleAction,
+    createLogGroup,
+    putLogEvents,
+    createIAMRole,
     refreshECSInventory,
     selectECSRegion,
     selectECSCluster,

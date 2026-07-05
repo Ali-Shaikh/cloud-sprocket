@@ -2183,6 +2183,23 @@ function handleMockRequest<T>(
       }, 30);
       return Promise.resolve(job as T);
     }
+    case "aws.s3.deleteObject": {
+      const objectKey = String(params.objectKey ?? mockState.session.selectedS3ObjectKey ?? "");
+      mockState.session.selectedS3ObjectKey = undefined;
+      appendLog("success", `Deleted object ${objectKey}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "aws.s3.createBucket": {
+      const bucketName = String(params.bucketName ?? "new-bucket");
+      mockWorkspaceBuckets.push({
+        name: bucketName,
+        summary: `Bucket ${bucketName} created in the mock workspace.`,
+      });
+      mockState.session.selectedS3BucketName = bucketName;
+      mockState.session.selectedS3ObjectKey = undefined;
+      appendLog("success", `Created S3 bucket ${bucketName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "aws.s3.presignObject": {
       const objectKey = mockState.session.selectedS3ObjectKey ?? mockWorkspaceObjects[0]?.key;
       const bucketName = mockState.session.selectedS3BucketName ?? mockWorkspaceBuckets[0]?.name;
@@ -2290,6 +2307,61 @@ function handleMockRequest<T>(
       }, 30);
       return Promise.resolve(job as T);
     }
+    case "aws.ec2.runInstances": {
+      const region = mockState.session.selectedEc2Region ?? mockWorkspaceRegions[0];
+      const instanceId = "i-mocklaunch01";
+      mockWorkspaceInstances.push({
+        instanceId,
+        name: "launched-instance",
+        state: "pending",
+        instanceType: String(params.instanceType ?? "t3.micro"),
+        availabilityZone: `${region}a`,
+        privateIp: "10.0.99.1",
+        vpcId: "vpc-0sandbox001",
+        subnetId: "subnet-0launch001",
+        keyName: "sandbox-key",
+        platformDetails: "Linux/UNIX",
+        architecture: "x86_64",
+        launchTime: new Date().toISOString(),
+        securityGroups: ["app-sg (sg-0123456789abcdef0)"],
+        tags: [{ label: "Name", value: "launched-instance" }],
+      });
+      mockState.session.selectedEc2InstanceId = instanceId;
+      appendLog("success", `Launched EC2 instance ${instanceId} in ${region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "aws.ec2.terminateInstances": {
+      const instanceId =
+        String(params.instanceId ?? "") ||
+        mockState.session.selectedEc2InstanceId ||
+        mockWorkspaceInstances[0]?.instanceId;
+      const region = mockState.session.selectedEc2Region ?? mockWorkspaceRegions[0];
+      const job: JobStatus = {
+        jobId: `job-${Date.now()}`,
+        label: "EC2 Terminate",
+        status: "queued",
+        message: `Queueing EC2 terminate for ${instanceId} in ${region}.`,
+      };
+      setTimeout(() => {
+        const terminateIndex = mockWorkspaceInstances.findIndex(
+          (instance) => instance.instanceId === instanceId,
+        );
+        if (terminateIndex >= 0) {
+          mockWorkspaceInstances.splice(terminateIndex, 1);
+        }
+        if (mockState.session.selectedEc2InstanceId === instanceId) {
+          mockState.session.selectedEc2InstanceId = undefined;
+        }
+        appendLog("success", `Terminated EC2 instance ${instanceId}.`);
+        emitMockEvent("job.updated", {
+          ...job,
+          status: "completed",
+          message: `Terminated EC2 instance ${instanceId}.`,
+          completedAt: new Date().toISOString(),
+        });
+      }, 30);
+      return Promise.resolve(job as T);
+    }
     case "aws.dynamodb.selectRegion":
       mockState.session.selectedDynamodbRegion = String(params.region ?? "");
       mockState.session.selectedDynamodbTableName = undefined;
@@ -2392,6 +2464,30 @@ function handleMockRequest<T>(
       mockState.session.selectedRdsInstanceId = String(params.instanceId ?? "");
       appendLog("info", `Selected RDS instance ${params.instanceId}.`);
       return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.rds.startInstance":
+    case "aws.rds.stopInstance": {
+      const instanceId =
+        String(params.instanceId ?? "") ||
+        mockState.session.selectedRdsInstanceId ||
+        "cloudsprocket-db";
+      const action = method.endsWith("startInstance") ? "start" : "stop";
+      const job: JobStatus = {
+        jobId: `job-${Date.now()}`,
+        label: "RDS Action",
+        status: "queued",
+        message: `Queueing RDS ${action} for ${instanceId}.`,
+      };
+      setTimeout(() => {
+        appendLog("success", `RDS ${action} completed for ${instanceId}.`);
+        emitMockEvent("job.updated", {
+          ...job,
+          status: "completed",
+          message: `RDS ${action} completed for ${instanceId}.`,
+          completedAt: new Date().toISOString(),
+        });
+      }, 30);
+      return Promise.resolve(job as T);
+    }
     case "aws.ecs.selectRegion":
       mockState.session.selectedEcsRegion = String(params.region ?? "");
       mockState.session.selectedEcsClusterArn = undefined;
@@ -2461,10 +2557,35 @@ function handleMockRequest<T>(
       mockState.session.selectedLogGroupName = String(params.logGroupName ?? "");
       appendLog("info", `Selected log group ${params.logGroupName}.`);
       return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.logs.createLogGroup": {
+      const logGroupName = String(params.logGroupName ?? "/aws/test/group");
+      if (!mockWorkspaceLogGroups.some((group) => group.logGroupName === logGroupName)) {
+        mockWorkspaceLogGroups.push({
+          logGroupName,
+          storedBytes: 0,
+          retentionInDays: 7,
+        });
+      }
+      mockState.session.selectedLogGroupName = logGroupName;
+      appendLog("success", `Created log group ${logGroupName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "aws.logs.putLogEvents":
+      return Promise.resolve({
+        logGroupName: String(params.logGroupName ?? mockState.session.selectedLogGroupName ?? ""),
+        logStreamName: "cloudsprocket-test",
+        summary: "Injected test event.",
+      } as T);
     case "aws.iam.selectRole":
       mockState.session.selectedIamRoleName = String(params.roleName ?? "");
       appendLog("info", `Selected IAM role ${params.roleName}.`);
       return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.iam.createRole": {
+      const roleName = String(params.roleName ?? "demo-lambda-role");
+      mockState.session.selectedIamRoleName = roleName;
+      appendLog("success", `Created IAM role ${roleName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "aws.lambda.selectRegion":
       mockState.session.selectedLambdaRegion = String(params.region ?? "");
       mockState.session.selectedLambdaFunctionName = undefined;
@@ -2527,6 +2648,23 @@ function handleMockRequest<T>(
       mockWorkspaceLambdaFunctions.sort((a, b) => a.functionName.localeCompare(b.functionName));
       mockState.session.selectedLambdaFunctionName = functionName;
       appendLog("success", `Created Lambda function ${functionName} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "aws.lambda.deleteFunction": {
+      const functionName =
+        String(params.functionName ?? "") ||
+        mockState.session.selectedLambdaFunctionName ||
+        mockWorkspaceLambdaFunctions[0]?.functionName;
+      const deleteIndex = mockWorkspaceLambdaFunctions.findIndex(
+        (fn) => fn.functionName === functionName,
+      );
+      if (deleteIndex >= 0) {
+        mockWorkspaceLambdaFunctions.splice(deleteIndex, 1);
+      }
+      if (mockState.session.selectedLambdaFunctionName === functionName) {
+        mockState.session.selectedLambdaFunctionName = undefined;
+      }
+      appendLog("success", `Deleted Lambda function ${functionName}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     }
     case "azure.selectResourceGroup":

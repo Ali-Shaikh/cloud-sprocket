@@ -88,6 +88,58 @@ func (r *RDSInventory) DescribeInstance(
 	return rdsInstanceSummary(res.DBInstances[0]), nil
 }
 
+func (r *RDSInventory) StartDBInstance(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	instanceID string,
+) error {
+	return r.lifecycleAction(ctx, profile, region, instanceID, "start")
+}
+
+func (r *RDSInventory) StopDBInstance(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	instanceID string,
+) error {
+	return r.lifecycleAction(ctx, profile, region, instanceID, "stop")
+}
+
+func (r *RDSInventory) lifecycleAction(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	instanceID string,
+	action string,
+) error {
+	instanceID = strings.TrimSpace(instanceID)
+	if instanceID == "" {
+		return fmt.Errorf("DB instance identifier is required")
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := r.loadConfig(ctx, profile, region)
+	if err != nil {
+		return err
+	}
+	client := rdsClient(cfg, profile)
+	switch action {
+	case "start":
+		_, err = client.StartDBInstance(ctx, &rds.StartDBInstanceInput{
+			DBInstanceIdentifier: aws.String(instanceID),
+		})
+	case "stop":
+		_, err = client.StopDBInstance(ctx, &rds.StopDBInstanceInput{
+			DBInstanceIdentifier: aws.String(instanceID),
+		})
+	default:
+		return fmt.Errorf("RDS action %q is not supported", action)
+	}
+	return err
+}
+
 func (r *RDSInventory) loadConfig(
 	ctx context.Context,
 	profile models.ProfileSummary,

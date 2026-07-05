@@ -4,6 +4,8 @@
 import { useMemo, useState } from "react";
 import { Copy, Database, RefreshCw } from "lucide-react";
 
+import { actionCapabilityState } from "@/lib/action-capabilities";
+
 import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
@@ -58,6 +60,7 @@ export type RDSViewProps = {
   onRefresh: () => void;
   onSelectRegion: (region: string) => void;
   onSelectEntity: (dbInstanceIdentifier: string) => void;
+  onInvokeLifecycleAction?: (action: "start" | "stop", instanceId: string) => void;
 };
 
 const fieldLabel =
@@ -119,8 +122,11 @@ export default function RDSView({
   onRefresh,
   onSelectRegion,
   onSelectEntity,
+  onInvokeLifecycleAction,
 }: RDSViewProps) {
   const [filterText, setFilterText] = useState("");
+  const startCapability = actionCapabilityState(workspace, "rds", "startInstance");
+  const stopCapability = actionCapabilityState(workspace, "rds", "stopInstance");
 
   const regions =
     workspace.rdsRegions.length > 0
@@ -278,6 +284,26 @@ export default function RDSView({
             <RefreshCw />
             Refresh instances
           </Button>
+          {onInvokeLifecycleAction && selectedInstance ? (
+            <>
+              <Button
+                variant="outline"
+                disabled={!startCapability.enabled}
+                title={startCapability.enabled ? undefined : startCapability.reason}
+                onClick={() => onInvokeLifecycleAction("start", selectedInstance.dbInstanceIdentifier)}
+              >
+                Start instance
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!stopCapability.enabled}
+                title={stopCapability.enabled ? undefined : stopCapability.reason}
+                onClick={() => onInvokeLifecycleAction("stop", selectedInstance.dbInstanceIdentifier)}
+              >
+                Stop instance
+              </Button>
+            </>
+          ) : null}
           <div className="min-w-56 flex-1">
             <div className={cn(fieldLabel, "mb-1")}>Filter</div>
             <Input

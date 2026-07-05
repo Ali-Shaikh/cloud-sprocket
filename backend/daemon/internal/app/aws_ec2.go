@@ -233,6 +233,8 @@ func (s *Service) runEC2Action(
 		err = s.ec2.StopInstance(background, profile, region, instanceID)
 	case "reboot":
 		err = s.ec2.RebootInstance(background, profile, region, instanceID)
+	case "terminate":
+		err = s.ec2.TerminateInstances(background, profile, region, instanceID)
 	default:
 		err = fmt.Errorf("EC2 action %q is not implemented", action)
 	}
