@@ -56,8 +56,8 @@ export function ResourceTable<TRow>({
   }
 
   return (
-    <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-      <Table className={cn("table-fixed", tableClassName)}>
+    <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
+      <Table className={cn("w-full", tableClassName)}>
         <TableHeader>
           <TableRow>
             {columns.map((column) => (
