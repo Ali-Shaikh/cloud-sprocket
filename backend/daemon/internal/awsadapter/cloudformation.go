@@ -95,9 +95,6 @@ func (c *CloudFormationInventory) DescribeStackEvents(
 			}
 		}
 	}
-	sort.SliceStable(events, func(i, j int) bool {
-		return events[i].Timestamp > events[j].Timestamp
-	})
 	return events, nil
 }
 

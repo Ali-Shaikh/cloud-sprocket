@@ -36,6 +36,7 @@ const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] 
 
 function resourceStatus(status?: string): Status {
   const normalised = status?.toUpperCase();
+  if (normalised?.includes("DELETE")) return "off";
   if (normalised?.includes("COMPLETE") && !normalised.includes("ROLLBACK")) return "on";
   if (normalised?.includes("IN_PROGRESS")) return "warning";
   if (normalised?.includes("FAILED") || normalised?.includes("ROLLBACK")) return "error";

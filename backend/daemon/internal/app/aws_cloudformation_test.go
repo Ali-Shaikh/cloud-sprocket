@@ -79,11 +79,11 @@ func TestAwsScopedCloudFormationInventoryLoadsStacksAndEvents(t *testing.T) {
 		Profiles:  []models.ProfileSummary{{ProviderID: "aws", ProfileID: "sandbox", DisplayName: "sandbox"}},
 	}
 	session := models.SessionSnapshot{
-		CurrentProviderID:             "aws",
-		SelectedProfileID:             "sandbox",
-		SelectedCloudFormationRegion:  "us-east-1",
+		CurrentProviderID:               "aws",
+		SelectedProfileID:               "sandbox",
+		SelectedCloudFormationRegion:    "us-east-1",
 		SelectedCloudFormationStackName: "demo",
-		IsLocked:                      true,
+		IsLocked:                        true,
 	}
 
 	workspace := service.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
