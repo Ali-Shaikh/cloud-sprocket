@@ -227,10 +227,9 @@ export default function LambdaView({
   const regions =
     workspace.lambdaRegions.length > 0 ? workspace.lambdaRegions : workspace.ec2Regions;
 
-  const selectedFunction =
-    workspace.lambdaFunctions.find(
-      (fn) => fn.functionName === workspace.selectedLambdaFunctionName,
-    ) ?? workspace.lambdaFunctions[0];
+  const selectedFunction = workspace.lambdaFunctions.find(
+    (fn) => fn.functionName === workspace.selectedLambdaFunctionName,
+  );
 
   const filteredFunctions = useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -772,7 +771,7 @@ export default function LambdaView({
                 { id: "state", label: "State" },
               ]}
               rows={filteredFunctions}
-              selectedKey={selectedFunction?.functionName}
+              selectedKey={workspace.selectedLambdaFunctionName}
               getRowKey={(fn) => fn.functionName}
               onRowClick={(fn) => {
                 onSelectFunction(fn.functionName);
@@ -791,12 +790,15 @@ export default function LambdaView({
                 if (columnId === "lastModified") {
                   return fn.lastModified || "Unknown";
                 }
-                return (
-                  <StatusPill
-                    status={lambdaStateStatus(fn.state)}
-                    label={fn.state || "Unknown"}
-                  />
-                );
+                if (columnId === "state") {
+                  return (
+                    <StatusPill
+                      status={lambdaStateStatus(fn.state)}
+                      label={fn.state || "Unknown"}
+                    />
+                  );
+                }
+                return null;
               }}
               emptyState={tableEmptyState}
             />

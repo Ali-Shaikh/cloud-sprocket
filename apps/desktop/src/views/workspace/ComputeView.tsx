@@ -147,10 +147,9 @@ export default function ComputeView({
   const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedEc2InstanceId));
   const lastSelectedInstanceRef = useRef(workspace.selectedEc2InstanceId || "");
 
-  const selectedInstance =
-    workspace.ec2Instances.find(
-      (instance) => instance.instanceId === workspace.selectedEc2InstanceId,
-    ) ?? workspace.ec2Instances[0];
+  const selectedInstance = workspace.ec2Instances.find(
+    (instance) => instance.instanceId === workspace.selectedEc2InstanceId,
+  );
 
   const filteredInstances = useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -553,7 +552,7 @@ export default function ComputeView({
                 { id: "publicIp", label: "Public IP" },
               ]}
               rows={filteredInstances}
-              selectedKey={selectedInstance?.instanceId}
+              selectedKey={workspace.selectedEc2InstanceId}
               getRowKey={(instance) => instance.instanceId}
               onRowClick={(instance) => {
                 onSelectInstance(instance.instanceId);
@@ -583,7 +582,10 @@ export default function ComputeView({
                 if (columnId === "privateIp") {
                   return instance.privateIp || "Unavailable";
                 }
-                return instance.publicIp || "Unavailable";
+                if (columnId === "publicIp") {
+                  return instance.publicIp || "Unavailable";
+                }
+                return null;
               }}
               emptyState={tableEmptyState}
             />
