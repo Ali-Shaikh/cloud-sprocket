@@ -403,7 +403,7 @@ export default function EKSView({
               ]}
               rows={filteredClusters}
               selectedKey={workspace.selectedEksClusterName}
-              getRowKey={(cluster) => cluster.clusterArn}
+              getRowKey={(cluster) => cluster.clusterName}
               onRowClick={(cluster) => {
                 onSelectCluster(cluster.clusterName);
                 setInspectorOpen(true);
