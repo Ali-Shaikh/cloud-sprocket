@@ -633,10 +633,19 @@ export default function StorageView({
         table={
           <ResourceTable
             columns={[
-              { id: "key", label: "Object Key" },
-              { id: "size", label: "Size", headerClassName: "w-28" },
-              { id: "modified", label: "Modified", headerClassName: "w-44" },
-              { id: "storageClass", label: "Storage Class", headerClassName: "w-36" },
+              {
+                id: "key",
+                label: "Object Key",
+                cellClassName: "max-w-0 truncate font-medium",
+              },
+              { id: "size", label: "Size", headerClassName: "w-28", cellClassName: "truncate" },
+              { id: "modified", label: "Modified", headerClassName: "w-44", cellClassName: "truncate" },
+              {
+                id: "storageClass",
+                label: "Storage Class",
+                headerClassName: "w-36",
+                cellClassName: "truncate",
+              },
             ]}
             rows={workspace.s3Objects}
             selectedKey={workspace.selectedS3ObjectKey}
@@ -645,21 +654,18 @@ export default function StorageView({
               onSelectObject(object.key);
               setDrawerOpen(true);
             }}
+            getCellTitle={(object, columnId) => (columnId === "key" ? object.key : undefined)}
             renderCell={(object, columnId) => {
               if (columnId === "key") {
-                return (
-                  <span className="block max-w-0 truncate font-medium" title={object.key}>
-                    {object.key}
-                  </span>
-                );
+                return object.key;
               }
               if (columnId === "size") {
-                return <span className="truncate">{object.size || "Unknown"}</span>;
+                return object.size || "Unknown";
               }
               if (columnId === "modified") {
-                return <span className="truncate">{object.modifiedAt || "Unknown"}</span>;
+                return object.modifiedAt || "Unknown";
               }
-              return <span className="truncate">{object.storageClass || "STANDARD"}</span>;
+              return object.storageClass || "STANDARD";
             }}
             emptyState={
               <EmptyState

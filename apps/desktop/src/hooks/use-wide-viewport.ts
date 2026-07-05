@@ -10,18 +10,26 @@ export const WIDE_VIEWPORT_MIN_PX = 1280;
  * Tracks whether the viewport is wide enough to dock a resource inspector inline
  * beside an inventory table. Below the breakpoint the same panel floats in a Sheet.
  */
+function wideViewportQuery(minWidthPx: number): string {
+  return `(min-width: ${minWidthPx}px)`;
+}
+
 export function useWideViewport(minWidthPx = WIDE_VIEWPORT_MIN_PX): boolean {
-  const [isWide, setIsWide] = useState(() =>
-    typeof window === "undefined" ? true : window.innerWidth >= minWidthPx,
-  );
+  const [isWide, setIsWide] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    return window.matchMedia(wideViewportQuery(minWidthPx)).matches;
+  });
 
   useEffect(() => {
-    const onResize = () => {
-      setIsWide(window.innerWidth >= minWidthPx);
+    const mediaQuery = window.matchMedia(wideViewportQuery(minWidthPx));
+    const onChange = (event: MediaQueryListEvent) => {
+      setIsWide(event.matches);
     };
-    window.addEventListener("resize", onResize);
+    mediaQuery.addEventListener("change", onChange);
     return () => {
-      window.removeEventListener("resize", onResize);
+      mediaQuery.removeEventListener("change", onChange);
     };
   }, [minWidthPx]);
 

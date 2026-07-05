@@ -27,6 +27,7 @@ export type ResourceTableProps<TRow> = {
   selectedKey?: string;
   onRowClick?: (row: TRow) => void;
   renderCell: (row: TRow, columnId: string) => ReactNode;
+  getCellTitle?: (row: TRow, columnId: string) => string | undefined;
   renderTrailingCell?: (row: TRow) => ReactNode;
   emptyState: ReactNode;
   tableClassName?: string;
@@ -44,6 +45,7 @@ export function ResourceTable<TRow>({
   selectedKey,
   onRowClick,
   renderCell,
+  getCellTitle,
   renderTrailingCell,
   emptyState,
   tableClassName,
@@ -84,7 +86,11 @@ export function ResourceTable<TRow>({
                 }
               >
                 {columns.map((column) => (
-                  <TableCell key={column.id} className={column.cellClassName}>
+                  <TableCell
+                    key={column.id}
+                    className={column.cellClassName}
+                    title={getCellTitle?.(row, column.id)}
+                  >
                     {renderCell(row, column.id)}
                   </TableCell>
                 ))}
