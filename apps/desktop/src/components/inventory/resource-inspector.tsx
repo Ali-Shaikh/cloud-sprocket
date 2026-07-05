@@ -79,8 +79,9 @@ export type ResourceInventoryShellProps = {
 };
 
 /**
- * Split-pane inventory layout: table on the left, inspector docked on wide viewports
- * or floating in a Sheet below xl. Matches the Floci table + inspector pattern.
+ * Inventory layout: full-width table with the inspector stacked beneath on wide
+ * viewports (matches pre-ResourceTable EC2/Lambda detail placement). Narrow
+ * viewports use a Sheet so the table keeps the full width.
  */
 export function ResourceInventoryShell({
   table,
@@ -90,12 +91,12 @@ export function ResourceInventoryShell({
   inspectorAriaLabel,
 }: ResourceInventoryShellProps) {
   const isWideViewport = useWideViewport();
-  const showInlineInspector = isWideViewport && inspectorContent && inspectorOpen;
+  const showStackedInspector = isWideViewport && inspectorContent && inspectorOpen;
 
-  const inlineInspector = showInlineInspector ? (
+  const stackedInspector = showStackedInspector ? (
     <aside
       aria-label={inspectorAriaLabel}
-      className="sticky top-4 max-h-[calc(100vh-7rem)] w-[360px] shrink-0 self-start overflow-y-auto rounded-lg border border-border bg-card p-[18px] shadow-sm"
+      className="rounded-lg border border-border bg-card p-[18px] shadow-sm"
     >
       {inspectorContent}
     </aside>
@@ -115,9 +116,9 @@ export function ResourceInventoryShell({
 
   return (
     <>
-      <div className="flex items-start gap-4">
+      <div className="space-y-4">
         {table}
-        {inlineInspector}
+        {stackedInspector}
       </div>
       {sheetInspector}
     </>
