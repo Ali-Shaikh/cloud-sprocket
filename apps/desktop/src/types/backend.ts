@@ -540,6 +540,7 @@ export interface AwsRoute53HostedZone {
 export interface AwsRoute53ResourceRecordSet {
   name: string;
   type?: string;
+  setIdentifier?: string;
   ttl?: number;
   values?: string[];
   aliasTarget?: string;

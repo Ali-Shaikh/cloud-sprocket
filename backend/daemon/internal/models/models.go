@@ -692,11 +692,12 @@ type AwsRoute53HostedZone struct {
 
 // AwsRoute53ResourceRecordSet models a Route 53 record preview for inventory.
 type AwsRoute53ResourceRecordSet struct {
-	Name        string   `json:"name"`
-	Type        string   `json:"type,omitempty"`
-	TTL         int64    `json:"ttl,omitempty"`
-	Values      []string `json:"values,omitempty"`
-	AliasTarget string   `json:"aliasTarget,omitempty"`
+	Name           string   `json:"name"`
+	Type           string   `json:"type,omitempty"`
+	SetIdentifier  string   `json:"setIdentifier,omitempty"`
+	TTL            int64    `json:"ttl,omitempty"`
+	Values         []string `json:"values,omitempty"`
+	AliasTarget    string   `json:"aliasTarget,omitempty"`
 }
 
 // AwsEksNodeGroup models an EKS managed node group summary.

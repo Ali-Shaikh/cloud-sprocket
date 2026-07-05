@@ -99,10 +99,9 @@ func (r *Route53Inventory) ListResourceRecordSets(
 		if !res.IsTruncated || len(records) >= maxRoute53ResourceRecordSets {
 			break
 		}
-		last := res.ResourceRecordSets[len(res.ResourceRecordSets)-1]
-		startRecordName = last.Name
-		startRecordType = last.Type
-		startRecordIdentifier = last.SetIdentifier
+		startRecordName = res.NextRecordName
+		startRecordType = res.NextRecordType
+		startRecordIdentifier = res.NextRecordIdentifier
 	}
 	return records, nil
 }
@@ -141,8 +140,9 @@ func route53HostedZoneSummary(zone types.HostedZone) models.AwsRoute53HostedZone
 
 func route53ResourceRecordSetSummary(record types.ResourceRecordSet) models.AwsRoute53ResourceRecordSet {
 	summary := models.AwsRoute53ResourceRecordSet{
-		Name: awsString(record.Name),
-		Type: string(record.Type),
+		Name:          awsString(record.Name),
+		Type:          string(record.Type),
+		SetIdentifier: awsString(record.SetIdentifier),
 	}
 	if record.TTL != nil {
 		summary.TTL = *record.TTL

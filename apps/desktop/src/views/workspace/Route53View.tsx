@@ -189,7 +189,9 @@ export default function Route53View({
               { id: "value", label: "Value", cellClassName: "max-w-md truncate font-mono text-xs" },
             ]}
             rows={filteredRecords}
-            getRowKey={(record) => `${record.name}:${record.type}`}
+            getRowKey={(record) =>
+              `${record.name}:${record.type ?? ""}:${record.setIdentifier ?? ""}`
+            }
             renderCell={(record, columnId) => {
               if (columnId === "name") {
                 return <span className="font-medium">{record.name}</span>;
