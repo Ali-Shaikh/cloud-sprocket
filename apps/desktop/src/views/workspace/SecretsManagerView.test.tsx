@@ -2,11 +2,28 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
 import SecretsManagerView from "./SecretsManagerView";
 import type { SecretsManagerWorkspaceSnapshot } from "./SecretsManagerView";
+
+function mockMatchMedia(matches: boolean) {
+  return vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const workspaceFixture: SecretsManagerWorkspaceSnapshot = {
   provider: {
@@ -170,9 +187,19 @@ function renderSecretsManagerView() {
 }
 
 describe("SecretsManagerView", () => {
-  it("renders secret inventory", () => {
+  it("docks secret detail and reveal controls in the inspector on wide viewports", () => {
+    mockMatchMedia(true);
     renderSecretsManagerView();
 
+    expect(screen.getByLabelText("Secrets Manager details")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reveal value" })).toBeInTheDocument();
+  });
+
+  it("renders secret inventory", () => {
+    mockMatchMedia(true);
+    renderSecretsManagerView();
+
+    expect(screen.getByText("Secret Fleet")).toBeInTheDocument();
     expect(screen.getByText("Secret Inventory")).toBeInTheDocument();
     expect(screen.getAllByText("cloudsprocket/db-password").length).toBeGreaterThan(0);
     expect(screen.getByText("cloudsprocket/api-key")).toBeInTheDocument();

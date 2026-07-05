@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Copy, RefreshCw, Shield } from "lucide-react";
 
 import { actionCapabilityState } from "@/lib/action-capabilities";
@@ -10,15 +10,13 @@ import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
+import {
+  ResourceInspectorHeader,
+  ResourceInspectorPanel,
+  ResourceInventoryShell,
+} from "@/components/inventory/resource-inspector";
+import { ResourceTable } from "@/components/inventory/resource-table";
 import { DetailFieldList } from "./detail-fields";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
@@ -92,12 +90,14 @@ export default function IAMView({
   onCreateRole,
 }: IAMViewProps) {
   const [filterText, setFilterText] = useState("");
+  const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedIamRoleName));
+  const lastSelectedRoleRef = useRef(workspace.selectedIamRoleName || "");
   const [newRoleName, setNewRoleName] = useState("demo-lambda-role");
   const createCapability = actionCapabilityState(workspace, "iam", "createRole");
 
-  const selectedRole =
-    workspace.iamRoles.find((role) => role.roleName === workspace.selectedIamRoleName) ??
-    workspace.iamRoles[0];
+  const selectedRole = workspace.iamRoles.find(
+    (role) => role.roleName === workspace.selectedIamRoleName,
+  );
 
   const filteredRoles = useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -137,6 +137,14 @@ export default function IAMView({
       ]
     : [];
 
+  useEffect(() => {
+    const nextRoleName = workspace.selectedIamRoleName || "";
+    if (nextRoleName !== lastSelectedRoleRef.current) {
+      lastSelectedRoleRef.current = nextRoleName;
+      setInspectorOpen(Boolean(nextRoleName));
+    }
+  }, [workspace.selectedIamRoleName]);
+
   if (workspace.provider?.providerId && workspace.provider.providerId !== "aws") {
     return (
       <div className="p-6">
@@ -148,6 +156,105 @@ export default function IAMView({
       </div>
     );
   }
+
+  const tableEmptyState =
+    workspace.iamRoles.length === 0 ? (
+      <EmptyState
+        icon={<Shield />}
+        title="No roles"
+        description="No IAM roles were returned for this AWS workspace."
+        className="border-0"
+      />
+    ) : (
+      <EmptyState
+        icon={<Shield />}
+        title="No matches"
+        description="No IAM roles match the current filter."
+        className="border-0"
+      />
+    );
+
+  const inspectorContent = selectedRole ? (
+    <ResourceInspectorPanel>
+      <ResourceInspectorHeader
+        icon={Shield}
+        eyebrow="Role"
+        title={selectedRole.roleName}
+        subtitle={selectedRole.roleArn}
+        onClose={() => setInspectorOpen(false)}
+      />
+
+      <DetailFieldList
+        fields={[
+          { label: "Role ARN", value: selectedRole.roleArn || "Unknown" },
+          { label: "Path", value: selectedRole.path || "/" },
+          { label: "Description", value: selectedRole.description || "No description" },
+          { label: "Created", value: selectedRole.createDate || "Unknown" },
+          {
+            label: "Attached policies",
+            value: joinedValues(selectedRole.attachedPolicies, "None"),
+          },
+        ]}
+        emptyText="No role details are available."
+      />
+
+      <div>
+        <div className={fieldLabel}>Customer-managed policies</div>
+        {workspace.iamPolicies.length > 0 ? (
+          <div className="mt-2 space-y-2">
+            {workspace.iamPolicies.map((policy) => (
+              <div key={policy.policyArn ?? policy.policyName} className={snippetCard}>
+                <div className="text-sm font-semibold">{policy.policyName}</div>
+                <div className="text-xs text-muted-foreground">
+                  {policy.policyArn || "No ARN"}
+                  {policy.attachmentCount != null
+                    ? ` · ${policy.attachmentCount} attachment${policy.attachmentCount === 1 ? "" : "s"}`
+                    : ""}
+                  {policy.updateDate ? ` · updated ${policy.updateDate}` : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-muted-foreground">
+            No customer-managed policies were returned for this AWS workspace.
+          </p>
+        )}
+      </div>
+
+      <div>
+        <div className={fieldLabel}>Copy actions</div>
+        {copySnippets.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Select a role to generate copy actions.
+          </p>
+        ) : (
+          <div className="mt-2 space-y-3">
+            {copySnippets.map((snippet) => (
+              <div key={snippet.label} className={snippetCard}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className={fieldLabel}>{snippet.label}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      copyToClipboard(snippet.value, `${snippet.label} copied`);
+                    }}
+                  >
+                    <Copy />
+                    Copy
+                  </Button>
+                </div>
+                <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                  {snippet.value}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </ResourceInspectorPanel>
+  ) : null;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -233,142 +340,42 @@ export default function IAMView({
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border">
-          {workspace.iamRoles.length === 0 ? (
-            <EmptyState
-              icon={<Shield />}
-              title="No roles"
-              description="No IAM roles were returned for this AWS workspace."
-              className="border-0"
+        <ResourceInventoryShell
+          table={
+            <ResourceTable
+              columns={[
+                { id: "name", label: "Name" },
+                { id: "path", label: "Path" },
+                { id: "policies", label: "Attached policies" },
+              ]}
+              rows={filteredRoles}
+              selectedKey={workspace.selectedIamRoleName}
+              getRowKey={(role) => role.roleName}
+              onRowClick={(role) => {
+                onSelectEntity(role.roleName);
+                setInspectorOpen(true);
+              }}
+              renderCell={(role, columnId) => {
+                if (columnId === "name") {
+                  return <span className="font-mono text-sm">{role.roleName}</span>;
+                }
+                if (columnId === "path") {
+                  return role.path || "/";
+                }
+                if (columnId === "policies") {
+                  return role.attachedPolicies?.length ?? 0;
+                }
+                return null;
+              }}
+              emptyState={tableEmptyState}
             />
-          ) : filteredRoles.length === 0 ? (
-            <EmptyState
-              icon={<Shield />}
-              title="No matches"
-              description="No IAM roles match the current filter."
-              className="border-0"
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Path</TableHead>
-                  <TableHead>Attached policies</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredRoles.map((role) => {
-                  const active = role.roleName === selectedRole?.roleName;
-                  return (
-                    <TableRow
-                      key={role.roleName}
-                      data-state={active ? "selected" : undefined}
-                      className="cursor-pointer"
-                      onClick={() => {
-                        onSelectEntity(role.roleName);
-                      }}
-                    >
-                      <TableCell className="font-mono text-sm">{role.roleName}</TableCell>
-                      <TableCell>{role.path || "/"}</TableCell>
-                      <TableCell>{role.attachedPolicies?.length ?? 0}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </div>
+          }
+          inspectorContent={inspectorContent}
+          inspectorOpen={inspectorOpen}
+          onInspectorOpenChange={setInspectorOpen}
+          inspectorAriaLabel="IAM role details"
+        />
       </section>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className={sectionCard}>
-          <div>
-            <h2 className="text-base font-bold">Role Detail</h2>
-            <p className="text-sm text-muted-foreground">
-              {selectedRole?.roleName || "Select a role for policy and metadata detail."}
-            </p>
-          </div>
-          {selectedRole ? (
-            <>
-              <DetailFieldList
-                fields={[
-                  { label: "Role ARN", value: selectedRole.roleArn || "Unknown" },
-                  { label: "Path", value: selectedRole.path || "/" },
-                  { label: "Description", value: selectedRole.description || "No description" },
-                  { label: "Created", value: selectedRole.createDate || "Unknown" },
-                  {
-                    label: "Attached policies",
-                    value: joinedValues(selectedRole.attachedPolicies, "None"),
-                  },
-                ]}
-                emptyText="No role details are available."
-              />
-
-              <div>
-                <div className={fieldLabel}>Customer-managed policies</div>
-                {workspace.iamPolicies.length > 0 ? (
-                  <div className="space-y-2">
-                    {workspace.iamPolicies.map((policy) => (
-                      <div key={policy.policyArn ?? policy.policyName} className={snippetCard}>
-                        <div className="text-sm font-semibold">{policy.policyName}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {policy.policyArn || "No ARN"}
-                          {policy.attachmentCount != null
-                            ? ` · ${policy.attachmentCount} attachment${policy.attachmentCount === 1 ? "" : "s"}`
-                            : ""}
-                          {policy.updateDate ? ` · updated ${policy.updateDate}` : ""}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No customer-managed policies were returned for this AWS workspace.
-                  </p>
-                )}
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">No IAM role selected.</p>
-          )}
-        </section>
-
-        <section className={sectionCard}>
-          <div>
-            <h2 className="text-base font-bold">Copy Actions</h2>
-            <p className="text-sm text-muted-foreground">
-              Generated locally from the selected role. No snippet is stored.
-            </p>
-          </div>
-          {copySnippets.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Select a role to generate copy actions.</p>
-          ) : (
-            <div className="space-y-3">
-              {copySnippets.map((snippet) => (
-                <div key={snippet.label} className={snippetCard}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={fieldLabel}>{snippet.label}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        copyToClipboard(snippet.value, `${snippet.label} copied`);
-                      }}
-                    >
-                      <Copy />
-                      Copy
-                    </Button>
-                  </div>
-                  <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                    {snippet.value}
-                  </pre>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
     </div>
   );
 }

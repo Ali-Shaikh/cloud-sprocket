@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Copy, RefreshCw, ScrollText } from "lucide-react";
 
 import { actionCapabilityState } from "@/lib/action-capabilities";
@@ -17,15 +17,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
+import {
+  ResourceInspectorHeader,
+  ResourceInspectorPanel,
+  ResourceInventoryShell,
+} from "@/components/inventory/resource-inspector";
+import { ResourceTable } from "@/components/inventory/resource-table";
 import { DetailFieldList } from "./detail-fields";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
@@ -111,6 +109,8 @@ export default function LogsView({
   onPutLogEvents,
 }: LogsViewProps) {
   const [filterText, setFilterText] = useState("");
+  const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedLogGroupName));
+  const lastSelectedLogGroupRef = useRef(workspace.selectedLogGroupName || "");
   const [newLogGroupName, setNewLogGroupName] = useState("/aws/test/group");
   const createCapability = actionCapabilityState(workspace, "logs", "createLogGroup");
   const putCapability = actionCapabilityState(workspace, "logs", "putLogEvents");
@@ -124,9 +124,9 @@ export default function LogsView({
           ? workspace.lambdaRegions
           : workspace.ec2Regions;
 
-  const selectedLogGroup =
-    workspace.logGroups.find((group) => group.logGroupName === workspace.selectedLogGroupName) ??
-    workspace.logGroups[0];
+  const selectedLogGroup = workspace.logGroups.find(
+    (group) => group.logGroupName === workspace.selectedLogGroupName,
+  );
 
   const filteredLogGroups = useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -166,6 +166,14 @@ export default function LogsView({
       ]
     : [];
 
+  useEffect(() => {
+    const nextLogGroupName = workspace.selectedLogGroupName || "";
+    if (nextLogGroupName !== lastSelectedLogGroupRef.current) {
+      lastSelectedLogGroupRef.current = nextLogGroupName;
+      setInspectorOpen(Boolean(nextLogGroupName));
+    }
+  }, [workspace.selectedLogGroupName]);
+
   if (workspace.provider?.providerId && workspace.provider.providerId !== "aws") {
     return (
       <div className="p-6">
@@ -177,6 +185,121 @@ export default function LogsView({
       </div>
     );
   }
+
+  const tableEmptyState =
+    workspace.logGroups.length === 0 ? (
+      <EmptyState
+        icon={<ScrollText />}
+        title="No log groups"
+        description={
+          workspace.selectedLogsRegion
+            ? `No log groups were returned for ${workspace.selectedLogsRegion}.`
+            : "Select a region to list CloudWatch log groups."
+        }
+        className="border-0"
+      />
+    ) : (
+      <EmptyState
+        icon={<ScrollText />}
+        title="No matches"
+        description="No log groups match the current filter."
+        className="border-0"
+      />
+    );
+
+  const inspectorContent = selectedLogGroup ? (
+    <ResourceInspectorPanel>
+      <ResourceInspectorHeader
+        icon={ScrollText}
+        eyebrow="Log group"
+        title={selectedLogGroup.logGroupName}
+        onClose={() => setInspectorOpen(false)}
+      />
+
+      <DetailFieldList
+        fields={[
+          { label: "ARN", value: selectedLogGroup.arn || "Unknown" },
+          { label: "Stored bytes", value: formatBytes(selectedLogGroup.storedBytes) },
+          {
+            label: "Retention",
+            value:
+              selectedLogGroup.retentionInDays != null
+                ? `${selectedLogGroup.retentionInDays} days`
+                : "Never expire",
+          },
+          {
+            label: "Created",
+            value: formatCreationTime(selectedLogGroup.creationTime),
+          },
+        ]}
+        emptyText="No log group details are available."
+      />
+
+      {selectedLogGroup.recentEvents && selectedLogGroup.recentEvents.length > 0 ? (
+        <div>
+          <div className={fieldLabel}>Recent events (read-only tail)</div>
+          <div
+            className={cn(
+              snippetCard,
+              "mt-2 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-[11px]",
+            )}
+          >
+            {selectedLogGroup.recentEvents.join("\n")}
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="mt-2 h-7 px-2 text-[10px]"
+            onClick={() => {
+              copyToClipboard(
+                selectedLogGroup.recentEvents?.join("\n") ?? "",
+                "Recent events copied",
+              );
+            }}
+          >
+            <Copy className="mr-1 h-3 w-3" />
+            Copy events
+          </Button>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          No recent log events were returned for this log group.
+        </p>
+      )}
+
+      <div>
+        <div className={fieldLabel}>Copy actions</div>
+        {copySnippets.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Select a log group to generate copy actions.
+          </p>
+        ) : (
+          <div className="mt-2 space-y-3">
+            {copySnippets.map((snippet) => (
+              <div key={snippet.label} className={snippetCard}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className={fieldLabel}>{snippet.label}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      copyToClipboard(snippet.value, `${snippet.label} copied`);
+                    }}
+                  >
+                    <Copy />
+                    Copy
+                  </Button>
+                </div>
+                <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                  {snippet.value}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </ResourceInspectorPanel>
+  ) : null;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -303,161 +426,44 @@ export default function LogsView({
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border">
-          {workspace.logGroups.length === 0 ? (
-            <EmptyState
-              icon={<ScrollText />}
-              title="No log groups"
-              description={
-                workspace.selectedLogsRegion
-                  ? `No log groups were returned for ${workspace.selectedLogsRegion}.`
-                  : "Select a region to list CloudWatch log groups."
-              }
-              className="border-0"
+        <ResourceInventoryShell
+          table={
+            <ResourceTable
+              columns={[
+                { id: "name", label: "Name" },
+                { id: "stored", label: "Stored" },
+                { id: "retention", label: "Retention" },
+              ]}
+              rows={filteredLogGroups}
+              selectedKey={workspace.selectedLogGroupName}
+              getRowKey={(group) => group.logGroupName}
+              onRowClick={(group) => {
+                onSelectEntity(group.logGroupName);
+                setInspectorOpen(true);
+              }}
+              renderCell={(group, columnId) => {
+                if (columnId === "name") {
+                  return <span className="font-mono text-sm">{group.logGroupName}</span>;
+                }
+                if (columnId === "stored") {
+                  return formatBytes(group.storedBytes);
+                }
+                if (columnId === "retention") {
+                  return group.retentionInDays != null
+                    ? `${group.retentionInDays} days`
+                    : "Never expire";
+                }
+                return null;
+              }}
+              emptyState={tableEmptyState}
             />
-          ) : filteredLogGroups.length === 0 ? (
-            <EmptyState
-              icon={<ScrollText />}
-              title="No matches"
-              description="No log groups match the current filter."
-              className="border-0"
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Stored</TableHead>
-                  <TableHead>Retention</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredLogGroups.map((group) => {
-                  const active = group.logGroupName === selectedLogGroup?.logGroupName;
-                  return (
-                    <TableRow
-                      key={group.logGroupName}
-                      data-state={active ? "selected" : undefined}
-                      className="cursor-pointer"
-                      onClick={() => {
-                        onSelectEntity(group.logGroupName);
-                      }}
-                    >
-                      <TableCell className="font-mono text-sm">{group.logGroupName}</TableCell>
-                      <TableCell>{formatBytes(group.storedBytes)}</TableCell>
-                      <TableCell>
-                        {group.retentionInDays != null ? `${group.retentionInDays} days` : "Never expire"}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </div>
+          }
+          inspectorContent={inspectorContent}
+          inspectorOpen={inspectorOpen}
+          onInspectorOpenChange={setInspectorOpen}
+          inspectorAriaLabel="CloudWatch log group details"
+        />
       </section>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className={sectionCard}>
-          <div>
-            <h2 className="text-base font-bold">Log Group Detail</h2>
-            <p className="text-sm text-muted-foreground">
-              {selectedLogGroup?.logGroupName || "Select a log group for metadata and recent events."}
-            </p>
-          </div>
-          {selectedLogGroup ? (
-            <>
-              <DetailFieldList
-                fields={[
-                  { label: "ARN", value: selectedLogGroup.arn || "Unknown" },
-                  { label: "Stored bytes", value: formatBytes(selectedLogGroup.storedBytes) },
-                  {
-                    label: "Retention",
-                    value:
-                      selectedLogGroup.retentionInDays != null
-                        ? `${selectedLogGroup.retentionInDays} days`
-                        : "Never expire",
-                  },
-                  {
-                    label: "Created",
-                    value: formatCreationTime(selectedLogGroup.creationTime),
-                  },
-                ]}
-                emptyText="No log group details are available."
-              />
-
-              {selectedLogGroup.recentEvents && selectedLogGroup.recentEvents.length > 0 ? (
-                <div>
-                  <div className={fieldLabel}>Recent events (read-only tail)</div>
-                  <div
-                    className={cn(
-                      snippetCard,
-                      "max-h-48 overflow-auto whitespace-pre-wrap font-mono text-[11px]",
-                    )}
-                  >
-                    {selectedLogGroup.recentEvents.join("\n")}
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="mt-2 h-7 px-2 text-[10px]"
-                    onClick={() => {
-                      copyToClipboard(
-                        selectedLogGroup.recentEvents?.join("\n") ?? "",
-                        "Recent events copied",
-                      );
-                    }}
-                  >
-                    <Copy className="mr-1 h-3 w-3" />
-                    Copy events
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No recent log events were returned for this log group.
-                </p>
-              )}
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">No log group selected.</p>
-          )}
-        </section>
-
-        <section className={sectionCard}>
-          <div>
-            <h2 className="text-base font-bold">Copy Actions</h2>
-            <p className="text-sm text-muted-foreground">
-              Generated locally from the selected region and log group. No snippet is stored.
-            </p>
-          </div>
-          {copySnippets.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Select a log group to generate copy actions.</p>
-          ) : (
-            <div className="space-y-3">
-              {copySnippets.map((snippet) => (
-                <div key={snippet.label} className={snippetCard}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={fieldLabel}>{snippet.label}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        copyToClipboard(snippet.value, `${snippet.label} copied`);
-                      }}
-                    >
-                      <Copy />
-                      Copy
-                    </Button>
-                  </div>
-                  <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                    {snippet.value}
-                  </pre>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
     </div>
   );
 }

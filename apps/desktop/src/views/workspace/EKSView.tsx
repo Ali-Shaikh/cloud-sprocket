@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Boxes, Copy, RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -15,17 +15,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
+import {
+  ResourceInspectorHeader,
+  ResourceInspectorPanel,
+  ResourceInventoryShell,
+} from "@/components/inventory/resource-inspector";
+import { ResourceTable } from "@/components/inventory/resource-table";
 import { DetailFieldList } from "./detail-fields";
 import type {
   AwsEksCluster,
@@ -96,6 +94,8 @@ export default function EKSView({
   onSelectCluster,
 }: EKSViewProps) {
   const [clusterFilter, setClusterFilter] = useState("");
+  const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedEksClusterName));
+  const lastSelectedClusterRef = useRef(workspace.selectedEksClusterName || "");
 
   const regions =
     workspace.eksRegions.length > 0
@@ -108,10 +108,9 @@ export default function EKSView({
             ? workspace.lambdaRegions
             : workspace.ec2Regions;
 
-  const selectedCluster =
-    workspace.eksClusters.find(
-      (cluster) => cluster.clusterName === workspace.selectedEksClusterName,
-    ) ?? workspace.eksClusters[0];
+  const selectedCluster = workspace.eksClusters.find(
+    (cluster) => cluster.clusterName === workspace.selectedEksClusterName,
+  );
 
   const filteredClusters = useMemo(() => {
     const query = clusterFilter.trim().toLowerCase();
@@ -129,17 +128,6 @@ export default function EKSView({
     actionStatus ||
     workspace.eksStatusMessage ||
     "EKS inventory is waiting for an open AWS workspace.";
-
-  const detailFields = selectedCluster
-    ? [
-        { label: "Cluster", value: selectedCluster.clusterName },
-        { label: "Status", value: selectedCluster.status || "Unknown" },
-        { label: "Version", value: selectedCluster.version || "Unknown" },
-        { label: "Platform", value: selectedCluster.platformVersion || "Unknown" },
-        { label: "Endpoint", value: selectedCluster.endpoint || "Unknown" },
-        { label: "Role ARN", value: selectedCluster.roleArn || "Unknown" },
-      ]
-    : [];
 
   const copySnippets = selectedCluster
     ? [
@@ -165,6 +153,14 @@ export default function EKSView({
       ]
     : [];
 
+  useEffect(() => {
+    const nextClusterName = workspace.selectedEksClusterName || "";
+    if (nextClusterName !== lastSelectedClusterRef.current) {
+      lastSelectedClusterRef.current = nextClusterName;
+      setInspectorOpen(Boolean(nextClusterName));
+    }
+  }, [workspace.selectedEksClusterName]);
+
   if (workspace.provider?.providerId && workspace.provider.providerId !== "aws") {
     return (
       <div className="p-6">
@@ -176,6 +172,135 @@ export default function EKSView({
       </div>
     );
   }
+
+  const tableEmptyState =
+    workspace.eksClusters.length === 0 ? (
+      <EmptyState
+        icon={<Boxes />}
+        title="No clusters"
+        description={
+          workspace.selectedEksRegion
+            ? `No EKS clusters were returned for ${workspace.selectedEksRegion}.`
+            : "Select a region to list EKS clusters."
+        }
+        className="border-0"
+      />
+    ) : (
+      <EmptyState
+        icon={<Boxes />}
+        title="No matches"
+        description="No EKS clusters match the current filter."
+        className="border-0"
+      />
+    );
+
+  const nodeGroupsEmptyState = (
+    <EmptyState
+      icon={<Boxes />}
+      title="No node groups"
+      description={
+        selectedCluster
+          ? `No managed node groups were returned for ${selectedCluster.clusterName}.`
+          : "Select a cluster to list node groups."
+      }
+      className="border-0"
+    />
+  );
+
+  const inspectorContent = selectedCluster ? (
+    <ResourceInspectorPanel>
+      <ResourceInspectorHeader
+        icon={Boxes}
+        eyebrow="Cluster"
+        title={selectedCluster.clusterName}
+        subtitle={selectedCluster.clusterArn}
+        onClose={() => setInspectorOpen(false)}
+      />
+
+      <DetailFieldList
+        fields={[
+          { label: "Cluster", value: selectedCluster.clusterName },
+          { label: "Status", value: selectedCluster.status || "Unknown" },
+          { label: "Version", value: selectedCluster.version || "Unknown" },
+          { label: "Platform", value: selectedCluster.platformVersion || "Unknown" },
+          { label: "Endpoint", value: selectedCluster.endpoint || "Unknown" },
+          { label: "Role ARN", value: selectedCluster.roleArn || "Unknown" },
+        ]}
+        emptyText="No EKS selection details are available."
+      />
+
+      <div>
+        <div className={fieldLabel}>Node groups</div>
+        <div className="mt-2">
+          <ResourceTable
+            columns={[
+              { id: "name", label: "Node Group" },
+              { id: "status", label: "Status" },
+              { id: "desired", label: "Desired" },
+              { id: "instanceTypes", label: "Instance Types" },
+              { id: "capacity", label: "Capacity" },
+            ]}
+            rows={workspace.eksNodeGroups}
+            getRowKey={(nodeGroup) => nodeGroup.nodeGroupArn}
+            renderCell={(nodeGroup, columnId) => {
+              if (columnId === "name") {
+                return <span className="font-medium">{nodeGroup.nodeGroupName}</span>;
+              }
+              if (columnId === "status") {
+                return (
+                  <StatusPill
+                    status={resourceStatus(nodeGroup.status)}
+                    label={nodeGroup.status || "Unknown"}
+                  />
+                );
+              }
+              if (columnId === "desired") {
+                return nodeGroup.desiredSize ?? 0;
+              }
+              if (columnId === "instanceTypes") {
+                return nodeGroup.instanceTypes?.join(", ") || "Unknown";
+              }
+              if (columnId === "capacity") {
+                return nodeGroup.capacityType || "Unknown";
+              }
+              return null;
+            }}
+            emptyState={nodeGroupsEmptyState}
+          />
+        </div>
+      </div>
+
+      {copySnippets.length > 0 ? (
+        <div>
+          <div className={fieldLabel}>Copy helpers</div>
+          <div className="mt-2 space-y-2">
+            {copySnippets.map((snippet) => (
+              <div key={snippet.label} className={snippetCard}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {snippet.label}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Copy ${snippet.label}`}
+                    onClick={() => {
+                      copyToClipboard(snippet.value);
+                    }}
+                  >
+                    <Copy />
+                  </Button>
+                </div>
+                <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-xs">
+                  {snippet.value}
+                </pre>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </ResourceInspectorPanel>
+  ) : null;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -262,131 +387,56 @@ export default function EKSView({
               }}
             />
           </div>
-        </div>
-
-        <div className="overflow-hidden rounded-lg border border-border">
-          {workspace.eksClusters.length === 0 ? (
-            <EmptyState
-              icon={<Boxes />}
-              title="No clusters"
-              description={
-                workspace.selectedEksRegion
-                  ? `No EKS clusters were returned for ${workspace.selectedEksRegion}.`
-                  : "Select a region to list EKS clusters."
-              }
-              className="border-0"
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Cluster</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Version</TableHead>
-                  <TableHead>Platform</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredClusters.map((cluster) => (
-                  <TableRow
-                    key={cluster.clusterArn}
-                    className={cn(
-                      "cursor-pointer",
-                      cluster.clusterName === workspace.selectedEksClusterName && "bg-muted/50",
-                    )}
-                    onClick={() => {
-                      onSelectCluster(cluster.clusterName);
-                    }}
-                  >
-                    <TableCell className="font-medium">{cluster.clusterName}</TableCell>
-                    <TableCell>
-                      <StatusPill status={resourceStatus(cluster.status)} label={cluster.status || "Unknown"} />
-                    </TableCell>
-                    <TableCell>{cluster.version || "Unknown"}</TableCell>
-                    <TableCell>{cluster.platformVersion || "Unknown"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </div>
-      </section>
-
-      {selectedCluster ? (
-        <section className={sectionCard}>
-          <h2 className="text-base font-bold">Node Groups</h2>
-          <div className="overflow-hidden rounded-lg border border-border">
-            {workspace.eksNodeGroups.length === 0 ? (
-              <EmptyState
-                icon={<Boxes />}
-                title="No node groups"
-                description={`No managed node groups were returned for ${selectedCluster.clusterName}.`}
-                className="border-0"
-              />
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Node Group</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Desired</TableHead>
-                    <TableHead>Instance Types</TableHead>
-                    <TableHead>Capacity</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {workspace.eksNodeGroups.map((nodeGroup) => (
-                    <TableRow key={nodeGroup.nodeGroupArn}>
-                      <TableCell className="font-medium">{nodeGroup.nodeGroupName}</TableCell>
-                      <TableCell>
-                        <StatusPill
-                          status={resourceStatus(nodeGroup.status)}
-                          label={nodeGroup.status || "Unknown"}
-                        />
-                      </TableCell>
-                      <TableCell>{nodeGroup.desiredSize ?? 0}</TableCell>
-                      <TableCell>{nodeGroup.instanceTypes?.join(", ") || "Unknown"}</TableCell>
-                      <TableCell>{nodeGroup.capacityType || "Unknown"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
+          <div className="pb-2 text-xs text-muted-foreground">
+            {filteredClusters.length}/{workspace.eksClusters.length} shown
           </div>
-        </section>
-      ) : null}
+        </div>
 
-      {detailFields.length > 0 ? (
-        <section className={sectionCard}>
-          <h2 className="text-base font-bold">Selection Detail</h2>
-          <DetailFieldList fields={detailFields} emptyText="No EKS selection details are available." />
-          {copySnippets.length > 0 ? (
-            <div className="space-y-2">
-              <div className={fieldLabel}>Copy helpers</div>
-              {copySnippets.map((snippet) => (
-                <div key={snippet.label} className={snippetCard}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {snippet.label}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Copy ${snippet.label}`}
-                      onClick={() => {
-                        copyToClipboard(snippet.value);
-                      }}
-                    >
-                      <Copy />
-                    </Button>
-                  </div>
-                  <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-xs">{snippet.value}</pre>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </section>
-      ) : null}
+        <ResourceInventoryShell
+          table={
+            <ResourceTable
+              columns={[
+                { id: "cluster", label: "Cluster" },
+                { id: "status", label: "Status" },
+                { id: "version", label: "Version" },
+                { id: "platform", label: "Platform" },
+              ]}
+              rows={filteredClusters}
+              selectedKey={workspace.selectedEksClusterName}
+              getRowKey={(cluster) => cluster.clusterArn}
+              onRowClick={(cluster) => {
+                onSelectCluster(cluster.clusterName);
+                setInspectorOpen(true);
+              }}
+              renderCell={(cluster, columnId) => {
+                if (columnId === "cluster") {
+                  return <span className="font-medium">{cluster.clusterName}</span>;
+                }
+                if (columnId === "status") {
+                  return (
+                    <StatusPill
+                      status={resourceStatus(cluster.status)}
+                      label={cluster.status || "Unknown"}
+                    />
+                  );
+                }
+                if (columnId === "version") {
+                  return cluster.version || "Unknown";
+                }
+                if (columnId === "platform") {
+                  return cluster.platformVersion || "Unknown";
+                }
+                return null;
+              }}
+              emptyState={tableEmptyState}
+            />
+          }
+          inspectorContent={inspectorContent}
+          inspectorOpen={inspectorOpen}
+          onInspectorOpenChange={setInspectorOpen}
+          inspectorAriaLabel="EKS cluster details"
+        />
+      </section>
     </div>
   );
 }

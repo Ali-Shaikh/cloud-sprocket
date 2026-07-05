@@ -2,11 +2,28 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
 import EKSView from "./EKSView";
 import type { EksWorkspaceSnapshot } from "./EKSView";
+
+function mockMatchMedia(matches: boolean) {
+  return vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const workspaceFixture: EksWorkspaceSnapshot = {
   provider: {
@@ -170,7 +187,16 @@ function renderEKSView() {
 }
 
 describe("EKSView", () => {
+  it("docks cluster detail and node groups in the inspector on wide viewports", () => {
+    mockMatchMedia(true);
+    renderEKSView();
+
+    expect(screen.getByLabelText("EKS cluster details")).toBeInTheDocument();
+    expect(screen.getByText("Copy helpers")).toBeInTheDocument();
+  });
+
   it("renders cluster and node group inventory", () => {
+    mockMatchMedia(true);
     renderEKSView();
 
     expect(screen.getByText("Kubernetes Fleet")).toBeInTheDocument();
@@ -181,6 +207,7 @@ describe("EKSView", () => {
   });
 
   it("selects a cluster when a row is clicked", () => {
+    mockMatchMedia(true);
     const { onSelectCluster } = renderEKSView();
 
     fireEvent.click(screen.getByRole("cell", { name: "demo" }));

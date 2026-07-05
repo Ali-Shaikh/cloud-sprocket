@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Globe, RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -15,15 +15,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
+import {
+  ResourceInspectorHeader,
+  ResourceInspectorPanel,
+  ResourceInventoryShell,
+} from "@/components/inventory/resource-inspector";
+import { ResourceTable } from "@/components/inventory/resource-table";
 import { DetailFieldList } from "./detail-fields";
 import type { AwsApiGatewayApi, AwsApiGatewayStage, WorkspaceSnapshot } from "@/types/backend";
 
@@ -71,6 +69,8 @@ export default function ApiGatewayView({
   onSelectApi,
 }: ApiGatewayViewProps) {
   const [filterText, setFilterText] = useState("");
+  const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedApiGatewayApiKey));
+  const lastSelectedApiRef = useRef(workspace.selectedApiGatewayApiKey || "");
 
   const regions =
     workspace.apiGatewayRegions.length > 0
@@ -81,9 +81,16 @@ export default function ApiGatewayView({
           ? workspace.rdsRegions
           : workspace.ec2Regions;
 
-  const selectedApi =
-    workspace.apiGatewayApis.find((api) => api.apiKey === workspace.selectedApiGatewayApiKey) ??
-    workspace.apiGatewayApis[0];
+  const selectedApi = workspace.apiGatewayApis.find(
+    (api) => api.apiKey === workspace.selectedApiGatewayApiKey,
+  );
+
+  const selectedStages = useMemo(() => {
+    if (!selectedApi) {
+      return [];
+    }
+    return workspace.apiGatewayStages.filter((stage) => stage.apiKey === selectedApi.apiKey);
+  }, [selectedApi, workspace.apiGatewayStages]);
 
   const filteredApis = useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -102,6 +109,14 @@ export default function ApiGatewayView({
     workspace.apiGatewayStatusMessage ||
     "API Gateway inventory is waiting for an open AWS workspace.";
 
+  useEffect(() => {
+    const nextApiKey = workspace.selectedApiGatewayApiKey || "";
+    if (nextApiKey !== lastSelectedApiRef.current) {
+      lastSelectedApiRef.current = nextApiKey;
+      setInspectorOpen(Boolean(nextApiKey));
+    }
+  }, [workspace.selectedApiGatewayApiKey]);
+
   if (workspace.provider?.providerId && workspace.provider.providerId !== "aws") {
     return (
       <div className="p-6">
@@ -113,6 +128,121 @@ export default function ApiGatewayView({
       </div>
     );
   }
+
+  const tableEmptyState =
+    workspace.apiGatewayApis.length === 0 ? (
+      <EmptyState
+        icon={<Globe />}
+        title="No APIs"
+        description={
+          workspace.selectedApiGatewayRegion
+            ? `No API Gateway APIs were returned for ${workspace.selectedApiGatewayRegion}.`
+            : "Select a region to list APIs."
+        }
+        className="border-0"
+      />
+    ) : (
+      <EmptyState
+        icon={<Globe />}
+        title="No matches"
+        description="No API Gateway APIs match the current filter."
+        className="border-0"
+      />
+    );
+
+  const stagesEmptyState = (
+    <EmptyState
+      icon={<Globe />}
+      title="No stages"
+      description={
+        selectedApi
+          ? `No stages were returned for ${selectedApi.apiName || selectedApi.apiId}.`
+          : "Select an API to list stages."
+      }
+      className="border-0"
+    />
+  );
+
+  const inspectorContent = selectedApi ? (
+    <ResourceInspectorPanel>
+      <ResourceInspectorHeader
+        icon={Globe}
+        eyebrow="API"
+        title={selectedApi.apiName || selectedApi.apiId}
+        subtitle={selectedApi.apiId}
+        onClose={() => setInspectorOpen(false)}
+      />
+
+      <DetailFieldList
+        fields={[
+          { label: "API", value: selectedApi.apiName || selectedApi.apiId },
+          { label: "Type", value: selectedApi.apiType || "Unknown" },
+          { label: "Endpoint", value: selectedApi.endpoint || "Unknown" },
+        ]}
+        emptyText="No API details are available."
+      />
+
+      <div>
+        <div className={fieldLabel}>Stages</div>
+        <div className="mt-2">
+          <ResourceTable
+            columns={[
+              { id: "stage", label: "Stage" },
+              { id: "invokeUrl", label: "Invoke URL", cellClassName: "max-w-md truncate font-mono text-xs" },
+              { id: "deployment", label: "Deployment", cellClassName: "font-mono text-xs" },
+            ]}
+            rows={selectedStages}
+            getRowKey={(stage) => `${stage.apiKey}:${stage.stageName}`}
+            renderCell={(stage, columnId) => {
+              if (columnId === "stage") {
+                return <span className="font-medium">{stage.stageName}</span>;
+              }
+              if (columnId === "invokeUrl") {
+                return stage.invokeUrl || "—";
+              }
+              if (columnId === "deployment") {
+                return stage.deploymentId || "—";
+              }
+              return null;
+            }}
+            emptyState={stagesEmptyState}
+          />
+        </div>
+      </div>
+
+      {selectedStages.some((stage) => stage.invokeUrl) ? (
+        <div>
+          <div className={fieldLabel}>Copy invoke URL</div>
+          <div className="mt-2 space-y-2">
+            {selectedStages.map((stage) =>
+              stage.invokeUrl ? (
+                <div key={`${stage.apiKey}:${stage.stageName}`} className={snippetCard}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {stage.stageName}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Copy ${stage.stageName} invoke URL`}
+                      onClick={() => {
+                        copyToClipboard(stage.invokeUrl ?? "");
+                      }}
+                    >
+                      <Copy />
+                    </Button>
+                  </div>
+                  <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-xs">
+                    {stage.invokeUrl}
+                  </pre>
+                </div>
+              ) : null,
+            )}
+          </div>
+        </div>
+      ) : null}
+    </ResourceInspectorPanel>
+  ) : null;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -126,12 +256,47 @@ export default function ApiGatewayView({
 
       <section className={sectionCard}>
         <div>
-          <h2 className="text-base font-bold">API Inventory</h2>
+          <h2 className="text-base font-bold">API Fleet</h2>
           <p className="text-sm text-muted-foreground">
             REST and HTTP/WebSocket APIs with stage invoke URLs for the selected region.
           </p>
         </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <div className={fieldLabel}>Selected Region</div>
+            <p className="truncate text-sm">
+              {workspace.selectedApiGatewayRegion || "No region selected"}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <div className={fieldLabel}>Selected API</div>
+            <p className="truncate text-sm">
+              {selectedApi?.apiName || selectedApi?.apiId || "No API selected"}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <div className={fieldLabel}>APIs</div>
+            <p className="truncate text-sm">
+              {countLabel(workspace.apiGatewayApis.length, "API", "APIs")}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <div className={fieldLabel}>Endpoint</div>
+            <p className="truncate text-sm">
+              {workspace.awsEndpointUrl || "Default AWS endpoint"}
+            </p>
+          </div>
+        </div>
         <p className="text-sm text-muted-foreground">{statusMessage}</p>
+      </section>
+
+      <section className={sectionCard}>
+        <div>
+          <h2 className="text-base font-bold">API Inventory</h2>
+          <p className="text-sm text-muted-foreground">
+            Select a region, filter APIs, then choose one for stage invoke URLs.
+          </p>
+        </div>
 
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-56">
@@ -174,127 +339,51 @@ export default function ApiGatewayView({
               }}
             />
           </div>
-        </div>
-
-        <div className="overflow-hidden rounded-lg border border-border">
-          {workspace.apiGatewayApis.length === 0 ? (
-            <EmptyState
-              icon={<Globe />}
-              title="No APIs"
-              description={
-                workspace.selectedApiGatewayRegion
-                  ? `No API Gateway APIs were returned for ${workspace.selectedApiGatewayRegion}.`
-                  : "Select a region to list APIs."
-              }
-              className="border-0"
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>API ID</TableHead>
-                  <TableHead>Endpoint</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredApis.map((api) => (
-                  <TableRow
-                    key={api.apiKey}
-                    className={cn(
-                      "cursor-pointer",
-                      api.apiKey === workspace.selectedApiGatewayApiKey && "bg-muted/50",
-                    )}
-                    onClick={() => {
-                      onSelectApi(api.apiKey);
-                    }}
-                  >
-                    <TableCell className="font-medium">{api.apiName || api.apiId}</TableCell>
-                    <TableCell>{api.apiType}</TableCell>
-                    <TableCell className="font-mono text-xs">{api.apiId}</TableCell>
-                    <TableCell className="max-w-xs truncate text-xs">{api.endpoint || "—"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </div>
-      </section>
-
-      {selectedApi ? (
-        <section className={sectionCard}>
-          <h2 className="text-base font-bold">Stages</h2>
-          <DetailFieldList
-            fields={[
-              { label: "API", value: selectedApi.apiName || selectedApi.apiId },
-              { label: "Type", value: selectedApi.apiType },
-              { label: "Endpoint", value: selectedApi.endpoint || "Unknown" },
-            ]}
-            emptyText="No API details are available."
-          />
-          <div className="overflow-hidden rounded-lg border border-border">
-            {workspace.apiGatewayStages.length === 0 ? (
-              <EmptyState
-                icon={<Globe />}
-                title="No stages"
-                description={`No stages were returned for ${selectedApi.apiName || selectedApi.apiId}.`}
-                className="border-0"
-              />
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Stage</TableHead>
-                    <TableHead>Invoke URL</TableHead>
-                    <TableHead>Deployment</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {workspace.apiGatewayStages.map((stage) => (
-                    <TableRow key={`${stage.apiKey}:${stage.stageName}`}>
-                      <TableCell className="font-medium">{stage.stageName}</TableCell>
-                      <TableCell className="max-w-md truncate font-mono text-xs">
-                        {stage.invokeUrl || "—"}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">{stage.deploymentId || "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
+          <div className="pb-2 text-xs text-muted-foreground">
+            {filteredApis.length}/{workspace.apiGatewayApis.length} shown
           </div>
-          {workspace.apiGatewayStages.length > 0 ? (
-            <div className="space-y-2">
-              <div className={fieldLabel}>Copy invoke URL</div>
-              {workspace.apiGatewayStages.map((stage) =>
-                stage.invokeUrl ? (
-                  <div key={`${stage.apiKey}:${stage.stageName}`} className={snippetCard}>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        {stage.stageName}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Copy ${stage.stageName} invoke URL`}
-                        onClick={() => {
-                          copyToClipboard(stage.invokeUrl ?? "");
-                        }}
-                      >
-                        <Copy />
-                      </Button>
-                    </div>
-                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-xs">
-                      {stage.invokeUrl}
-                    </pre>
-                  </div>
-                ) : null,
-              )}
-            </div>
-          ) : null}
-        </section>
-      ) : null}
+        </div>
+
+        <ResourceInventoryShell
+          table={
+            <ResourceTable
+              columns={[
+                { id: "name", label: "Name" },
+                { id: "type", label: "Type" },
+                { id: "apiId", label: "API ID", cellClassName: "font-mono text-xs" },
+                { id: "endpoint", label: "Endpoint", cellClassName: "max-w-xs truncate text-xs" },
+              ]}
+              rows={filteredApis}
+              selectedKey={workspace.selectedApiGatewayApiKey}
+              getRowKey={(api) => api.apiKey}
+              onRowClick={(api) => {
+                onSelectApi(api.apiKey);
+                setInspectorOpen(true);
+              }}
+              renderCell={(api, columnId) => {
+                if (columnId === "name") {
+                  return <span className="font-medium">{api.apiName || api.apiId}</span>;
+                }
+                if (columnId === "type") {
+                  return api.apiType || "Unknown";
+                }
+                if (columnId === "apiId") {
+                  return api.apiId;
+                }
+                if (columnId === "endpoint") {
+                  return api.endpoint || "—";
+                }
+                return null;
+              }}
+              emptyState={tableEmptyState}
+            />
+          }
+          inspectorContent={inspectorContent}
+          inspectorOpen={inspectorOpen}
+          onInspectorOpenChange={setInspectorOpen}
+          inspectorAriaLabel="API Gateway details"
+        />
+      </section>
     </div>
   );
 }
