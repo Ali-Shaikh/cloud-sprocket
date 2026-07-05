@@ -92,6 +92,9 @@ func (s *Service) enrichAzureWorkspace(
 	s.enrichAzurePhaseTwo(workspace, session, opts)
 }
 
+// enrichAzurePhaseTwo runs App Service (including WebApp detail), Queues, WAF, and Front
+// Door enrichers concurrently in production (serialPhaseTwo false). Phase 2d: WebApp detail
+// stays serial within the app-service goroutine. See TestAzurePhaseTwoEnrichmentRunsInParallel.
 func (s *Service) enrichAzurePhaseTwo(
 	workspace *models.WorkspaceSnapshot,
 	session models.SessionSnapshot,

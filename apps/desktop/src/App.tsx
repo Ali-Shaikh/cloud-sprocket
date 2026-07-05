@@ -12,26 +12,22 @@ import {
   useState,
 } from "react";
 import type { ErrorInfo, ReactNode } from "react";
-import {
-  ArrowLeftRight,
-  Bug,
-  LayoutGrid,
-  Rocket,
-  Server,
-  TriangleAlert,
-} from "lucide-react";
+import { ArrowLeftRight, TriangleAlert } from "lucide-react";
 import { Toaster } from "sonner";
+import { useAppReset } from "./hooks/use-app-reset";
+import { useAppShellNavigation } from "./hooks/use-app-shell-navigation";
 import { useAwsActions } from "./hooks/use-aws-actions";
 import { useAzureActions } from "./hooks/use-azure-actions";
 import { useRuntimeActions } from "./hooks/use-runtime-actions";
+import { useServicePreferencesFlow } from "./hooks/use-service-preferences-flow";
 import { useSessionState } from "./hooks/use-session-state";
 import { useVirtualisationPoll } from "./hooks/use-virtualisation-poll";
+import { useWriteModeFlow } from "./hooks/use-write-mode-flow";
 import { useWorkspaceLoading } from "./hooks/use-workspace-loading";
 import { useWorkspaceState } from "./hooks/use-workspace-state";
 import { WorkspaceTabRouter } from "./components/workspace/workspace-tab-router";
 import type { WorkspaceTabRouterProps } from "./components/workspace/workspace-tab-router-props";
-import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
-import { normalisePreferencesSnapshot, toggleService } from "./lib/service-preferences";
+import { backendRequest, subscribeToBackendEvent, addDebugLog } from "./lib/backend";
 import { normaliseWorkspaceFromUnknown, requestWorkspaceSnapshot } from "./lib/workspace-request";
 
 import { awsInventoryLoaded, awsInventoryScopeForTab } from "./lib/aws-inventory";
@@ -46,36 +42,14 @@ import {
   ActivityDrawer,
   NotificationCenter,
 } from "./components/shell";
-import type {
-  ActivityEntry,
-  NavConnectionHeader,
-  NavGroup,
-  NavItem,
-  RailConnection,
-} from "./components/shell/types";
-import type { Status } from "./components/status-dot";
-import { Button } from "./components/ui/button";
-import { Input } from "./components/ui/input";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "./components/ui/alert-dialog";
+
 import { AzureCLIExtensionsBanner } from "./components/azure-cli-extensions-banner";
-import { CommandPalette, type Command } from "./components/command-palette";
+import { CommandPalette } from "./components/command-palette";
 import { InventoryLoadingState } from "./components/inventory-loading-state";
 import { WorkspaceSkeleton } from "./components/workspace-skeleton";
 import type {
   ActivityLogEntry,
-  AppResetResult,
   AppSettingsSnapshot,
-  HiddenResourceHit,
-  HiddenResourcesSnapshot,
-  PreferencesSnapshot,
-  ServicePreferences,
   AuthMethod,
   AuthMethodStatus,
   AwsDynamoDBTable,
@@ -123,7 +97,6 @@ import type {
   UrlInspection,
   UrlValidationResult,
   WorkspaceSnapshot,
-  WorkspaceTab,
 } from "./types/backend";
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, { error?: Error }> {
@@ -190,18 +163,10 @@ import {
   mergeAwsS3Selection,
   mergeAzureInventoryScope,
   mergeAwsInventoryScope,
-  applySessionWriteModeToWorkspace,
   formatBackendError,
   frontDoorTopologyLoaded,
 } from "./lib/workspace-snapshot";
-import {
-  profileInitials,
-  providerStatus,
-  authLabel,
-  viewLabelFor,
-  navItemForTab,
-  toActivityEntries,
-} from "./lib/workspace-shell";
+import { profileInitials } from "./lib/workspace-shell";
 
 export default function App() {
   const {
@@ -278,6 +243,8 @@ export default function App() {
     setRdsActionStatus,
     ecsActionStatus,
     setEcsActionStatus,
+    eksActionStatus,
+    setEksActionStatus,
     apiGatewayActionStatus,
     setApiGatewayActionStatus,
     secretsManagerActionStatus,
@@ -344,13 +311,6 @@ export default function App() {
     resetWorkspaceUiState,
   } = useWorkspaceState(session);
   const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState("overview");
-  const [preferencesSnapshot, setPreferencesSnapshot] = useState<PreferencesSnapshot | null>(null);
-  const [preferencesSaving, setPreferencesSaving] = useState(false);
-  const [hiddenResourceHits, setHiddenResourceHits] = useState<HiddenResourceHit[]>([]);
-  const [hiddenResourceEnablingServiceId, setHiddenResourceEnablingServiceId] = useState<
-    string | null
-  >(null);
-  const hiddenResourcesProbeKeyRef = useRef<string | null>(null);
   const pushNotification = useCallback(
     (tone: NotificationTone, header: string, content: string) => {
       notify(tone, header, content);
@@ -392,6 +352,9 @@ export default function App() {
     selectECSCluster,
     selectECSService,
     selectECSTask,
+    refreshEKSInventory,
+    selectEKSRegion,
+    selectEKSCluster,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
@@ -423,6 +386,7 @@ export default function App() {
     setSnsActionStatus,
     setRdsActionStatus,
     setEcsActionStatus,
+    setEksActionStatus,
     setApiGatewayActionStatus,
     setSecretsManagerActionStatus,
     setLogsActionStatus,
@@ -461,19 +425,12 @@ export default function App() {
   const [awsInventoryRefreshToken, setAwsInventoryRefreshToken] = useState(0);
   const discoveryRefreshJobIdRef = useRef<string | undefined>(undefined);
   const loadWorkspaceRef = useRef<(snapshot: SessionSnapshot) => Promise<void>>(async () => undefined);
-  const [writeModeDialogOpen, setWriteModeDialogOpen] = useState(false);
-  const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<"enable" | "incapable">("enable");
-  const [writeModePending, setWriteModePending] = useState(false);
-  const writeModeRequestRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [openingProfileId, setOpeningProfileId] = useState<string>();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [splitPanelOpen, setSplitPanelOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [resetModalOpen, setResetModalOpen] = useState(false);
-  const [resetConfirmation, setResetConfirmation] = useState("");
-  const [resetInFlight, setResetInFlight] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const { resolvedTheme } = useTheme();
   const notifications = useNotifications();
@@ -638,15 +595,6 @@ export default function App() {
       setActiveWorkspaceTabId("overview");
     }
   }, [activeWorkspaceTabId, session.isLocked, session.workspaceTabs]);
-
-  useEffect(() => {
-    if (!session.isLocked) {
-      setHiddenResourceHits([]);
-      hiddenResourcesProbeKeyRef.current = null;
-      return;
-    }
-    void probeHiddenResources();
-  }, [session.isLocked, session.lockedProviderId, session.lockedProfileId]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -969,99 +917,6 @@ export default function App() {
   const azureServiceInventoryLoading =
     session.lockedProviderId === "azure" &&
     (azureInventoryLoading || workspaceFetching || !workspaceLoaded);
-  const writeModeEnabled =
-    session.lockedProviderId === "azure"
-      ? activeWorkspace.azureWriteModeEnabled
-      : activeWorkspace.awsWriteModeEnabled;
-  const writeModeCapable =
-    session.lockedProviderId === "azure"
-      ? activeWorkspace.azureWriteCapable
-      : activeWorkspace.awsWriteCapable;
-
-  function requestWriteModeChange(): void {
-    if (writeModePending) {
-      return;
-    }
-    if (writeModeEnabled) {
-      void setWriteMode(false);
-      return;
-    }
-    setWriteModeDialogIntent(writeModeCapable ? "enable" : "incapable");
-    setWriteModeDialogOpen(true);
-  }
-
-  function setWriteMode(enabled: boolean): void {
-    const token = ++writeModeRequestRef.current;
-    setWriteModePending(true);
-    void backendRequest<SessionSnapshot>("session.setWriteMode", { enabled })
-      .then((sessionResult) => {
-        if (token !== writeModeRequestRef.current) {
-          return;
-        }
-        const normalisedSession = normaliseSessionSnapshot(sessionResult);
-        startTransition(() => {
-          setSession(normalisedSession);
-          setWorkspace((currentWorkspace) =>
-            applySessionWriteModeToWorkspace(currentWorkspace, normalisedSession),
-          );
-        });
-        setWriteModeDialogOpen(false);
-      })
-      .catch((error: unknown) => {
-        if (token !== writeModeRequestRef.current) {
-          return;
-        }
-        notify(
-          "error",
-          "Write mode",
-          error instanceof Error ? error.message : String(error),
-        );
-      })
-      .finally(() => {
-        if (token === writeModeRequestRef.current) {
-          setWriteModePending(false);
-        }
-      });
-  }
-
-  async function resetAppData(): Promise<void> {
-    if (resetConfirmation !== "RESET") {
-      return;
-    }
-
-    setResetInFlight(true);
-    try {
-      const result = await backendRequest<AppResetResult>("app.reset", {
-        confirmation: resetConfirmation,
-      });
-      clearDebugLogs();
-      startTransition(() => {
-        setSession(emptySession);
-        resetWorkspaceUiState();
-        setLogs([]);
-        setPreferencesSnapshot(null);
-        setHiddenResourceHits([]);
-        setHiddenResourceEnablingServiceId(null);
-        hiddenResourcesProbeKeyRef.current = null;
-        setActiveWorkspaceTabId("overview");
-        setSplitPanelOpen(false);
-        setNotificationsOpen(false);
-      });
-      notifications.clearAll();
-      setResetModalOpen(false);
-      setResetConfirmation("");
-      void loadState().catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : "Provider discovery reload failed after reset";
-        pushNotification("warning", "Reset completed, reload failed", message);
-      });
-      pushNotification("success", "App reset complete", result.summary);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "App reset failed";
-      pushNotification("error", "Failed to reset app", message);
-    } finally {
-      setResetInFlight(false);
-    }
-  }
 
   async function loadState(
     options: { refreshWorkspace?: boolean } = {},
@@ -1134,6 +989,9 @@ export default function App() {
         if (workspaceResult.ecsStatusMessage) {
           setEcsActionStatus(workspaceResult.ecsStatusMessage);
         }
+        if (workspaceResult.eksStatusMessage) {
+          setEksActionStatus(workspaceResult.eksStatusMessage);
+        }
         if (workspaceResult.apiGatewayStatusMessage) {
           setApiGatewayActionStatus(workspaceResult.apiGatewayStatusMessage);
         }
@@ -1174,89 +1032,88 @@ export default function App() {
   }
   reloadProvidersAndProfilesRef.current = reloadProvidersAndProfiles;
 
-  async function probeHiddenResources(force = false): Promise<void> {
-    if (!session.isLocked) {
-      setHiddenResourceHits([]);
-      hiddenResourcesProbeKeyRef.current = null;
-      return;
-    }
-    const probeKey = `${session.lockedProviderId}:${session.lockedProfileId}`;
-    if (!force && hiddenResourcesProbeKeyRef.current === probeKey) {
-      return;
-    }
-    try {
-      const snapshot = await backendRequest<HiddenResourcesSnapshot>(
-        "preferences.hiddenResources.get",
-      );
-      setHiddenResourceHits(snapshot.hits ?? []);
-      hiddenResourcesProbeKeyRef.current = probeKey;
-    } catch {
-      setHiddenResourceHits([]);
-    }
-  }
+  const {
+    preferencesSnapshot,
+    setPreferencesSnapshot,
+    preferencesSaving,
+    hiddenResourceHits,
+    setHiddenResourceHits,
+    hiddenResourceEnablingServiceId,
+    setHiddenResourceEnablingServiceId,
+    hiddenResourcesProbeKeyRef,
+    openSettings,
+    applyPreferencesUpdate,
+    enableHiddenService,
+  } = useServicePreferencesFlow({
+    session,
+    activeWorkspaceTabId,
+    setActiveWorkspaceTabId,
+    setProviders,
+    setSession,
+    loadWorkspace,
+  });
 
-  async function openSettings(): Promise<void> {
-    const [snapshot] = await Promise.all([
-      backendRequest<PreferencesSnapshot>("preferences.get"),
-      probeHiddenResources(true),
-    ]);
-    setPreferencesSnapshot(normalisePreferencesSnapshot(snapshot));
-    setActiveWorkspaceTabId("settings");
-  }
+  const { openResetModal, resetDialog } = useAppReset({
+    resetWorkspaceUiState,
+    loadState,
+    pushNotification,
+    clearNotifications: notifications.clearAll,
+    setSession,
+    setLogs,
+    setPreferencesSnapshot,
+    setHiddenResourceHits,
+    setHiddenResourceEnablingServiceId,
+    hiddenResourcesProbeKeyRef,
+    setActiveWorkspaceTabId,
+    setSplitPanelOpen,
+    setNotificationsOpen,
+  });
 
-  async function applyPreferencesUpdate(preferences: ServicePreferences): Promise<void> {
-    setPreferencesSaving(true);
-    try {
-      const snapshot = await backendRequest<PreferencesSnapshot>(
-        "preferences.update",
-        preferences as unknown as Record<string, unknown>,
-      );
-      setPreferencesSnapshot(normalisePreferencesSnapshot(snapshot));
-      const [providersResult, sessionResult] = await Promise.all([
-        backendRequest<ProviderSummary[]>("providers.list"),
-        backendRequest<SessionSnapshot>("session.get"),
-      ]);
-      setProviders(normaliseArray(providersResult).map(normaliseProvider));
-      const normalisedSession = normaliseSessionSnapshot(sessionResult);
-      setSession(normalisedSession);
-      if (
-        normalisedSession.isLocked &&
-        activeWorkspaceTabId !== "settings" &&
-        activeWorkspaceTabId !== "debug" &&
-        activeWorkspaceTabId !== "developer-tools" &&
-        activeWorkspaceTabId !== "deploy" &&
-        activeWorkspaceTabId !== "virtualisation" &&
-        !normalisedSession.workspaceTabs.some((tab) => tab.tabId === activeWorkspaceTabId)
-      ) {
-        setActiveWorkspaceTabId("overview");
-      }
-      await loadWorkspace(normalisedSession);
-      void probeHiddenResources(true);
-    } finally {
-      setPreferencesSaving(false);
-    }
-  }
+  const { writeModeEnabled, writeModeCapable, requestWriteModeChange, writeModeDialog } =
+    useWriteModeFlow({
+      session,
+      activeWorkspace,
+      workspace,
+      lockedProfile: profiles.find((profile) => profile.profileId === session.lockedProfileId),
+      setSession,
+      setWorkspace,
+    });
 
-  async function enableHiddenService(hit: HiddenResourceHit): Promise<void> {
-    setHiddenResourceEnablingServiceId(hit.serviceId);
-    try {
-      const snapshot =
-        preferencesSnapshot ??
-        (await backendRequest<PreferencesSnapshot>("preferences.get"));
-      if (!preferencesSnapshot) {
-        setPreferencesSnapshot(normalisePreferencesSnapshot(snapshot));
-      }
-      const nextPreferences = toggleService(
-        snapshot.preferences,
-        hit.providerId,
-        hit.serviceId,
-        true,
-      );
-      await applyPreferencesUpdate(nextPreferences);
-    } finally {
-      setHiddenResourceEnablingServiceId(null);
-    }
-  }
+  const {
+    lockedProfile,
+    isDeveloperToolsActive,
+    activeConnectionId,
+    railConnections,
+    navConnection,
+    navGroups,
+    activeNavItemId,
+    viewLabel,
+    activityEntries,
+    paletteCommands,
+    handleRailSelect,
+    handleNavSelect,
+  } = useAppShellNavigation({
+    session,
+    profiles,
+    providers,
+    selectedProvider,
+    selectedProfile,
+    workspace,
+    activeWorkspaceTabId,
+    setActiveWorkspaceTabId,
+    activeS3PageId,
+    setActiveS3PageId,
+    setActiveAzurePageId,
+    activeAzureStoragePageId,
+    setActiveAzureStoragePageId,
+    workspaceFetching,
+    workspaceLoading,
+    workspaceLoaded,
+    logs,
+    mutateSession,
+    refreshDiscovery,
+    openResetModal,
+  });
 
   const workspaceTabRouterProps: WorkspaceTabRouterProps = {
     activeWorkspaceTabId,
@@ -1301,6 +1158,7 @@ export default function App() {
     snsActionStatus,
     rdsActionStatus,
     ecsActionStatus,
+    eksActionStatus,
     apiGatewayActionStatus,
     secretsManagerActionStatus,
     logsActionStatus,
@@ -1380,6 +1238,9 @@ export default function App() {
     selectECSCluster,
     selectECSService,
     selectECSTask,
+    refreshEKSInventory,
+    selectEKSRegion,
+    selectEKSCluster,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
@@ -1414,416 +1275,6 @@ export default function App() {
   };
 
   const content = <WorkspaceTabRouter {...workspaceTabRouterProps} />;
-
-
-  const resetDialog = (
-    <AlertDialog
-      open={resetModalOpen}
-      onOpenChange={(open) => {
-        if (!open && !resetInFlight) {
-          setResetModalOpen(false);
-          setResetConfirmation("");
-        }
-      }}
-    >
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Reset app data</AlertDialogTitle>
-          <AlertDialogDescription>
-            This clears CloudSprocket session state, activity logs, cached inventory, debug
-            logs, and app-managed local runtime files. It does not touch AWS, Azure, or GCP
-            config files outside the CloudSprocket app data folder.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <Input
-          value={resetConfirmation}
-          placeholder="RESET"
-          aria-label="Reset confirmation"
-          disabled={resetInFlight}
-          onChange={(event) => {
-            setResetConfirmation(event.target.value);
-          }}
-        />
-        <AlertDialogFooter>
-          <Button
-            variant="ghost"
-            disabled={resetInFlight}
-            onClick={() => {
-              setResetModalOpen(false);
-              setResetConfirmation("");
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            disabled={resetConfirmation !== "RESET" || resetInFlight}
-            onClick={() => {
-              void resetAppData();
-            }}
-          >
-            {resetInFlight ? "Resetting..." : "Reset app"}
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-
-  // ---- Shell view-model derived from live state ----
-  const lockedProfile = profiles.find((profile) => profile.profileId === session.lockedProfileId);
-  const activeProvider = selectedProvider ?? workspace.provider;
-  const emulatorCount = workspace.emulatorSummaries.length;
-  const dockerReachable = workspace.dockerRuntime.reachable;
-  const isLocalActive = activeWorkspaceTabId === "virtualisation";
-  const isDeployActive = activeWorkspaceTabId === "deploy";
-  const isDeveloperToolsActive = activeWorkspaceTabId === "developer-tools";
-  const activeConnectionId = isDeployActive
-    ? "deploy"
-    : isLocalActive
-      ? "local"
-      : isDeveloperToolsActive
-        ? "developer-tools"
-        : session.currentProviderId ?? null;
-
-  const railConnections: RailConnection[] = [
-    ...providers.map((provider) => {
-      const lockedOnProvider =
-        session.isLocked && session.lockedProviderId === provider.providerId;
-      const providerProfile = lockedOnProvider
-        ? profiles.find((profile) => profile.profileId === session.lockedProfileId)
-        : undefined;
-      const region =
-        lockedOnProvider && provider.providerId === "aws"
-          ? workspace.selectedEc2Region
-          : undefined;
-      const tooltipParts = [provider.label];
-      if (lockedOnProvider && providerProfile) {
-        tooltipParts.push(providerProfile.displayName);
-        if (region) {
-          tooltipParts.push(region);
-        }
-        const auth = authLabel(session.lockedAuthMethod ?? session.selectedAuthMethod);
-        if (auth) {
-          tooltipParts.push(auth);
-        }
-      } else if (provider.profileCount) {
-        tooltipParts.push(
-          `${provider.profileCount} profile${provider.profileCount === 1 ? "" : "s"}`,
-        );
-      } else if (provider.state !== "configured") {
-        tooltipParts.push("Setup required");
-      }
-      return {
-        id: provider.providerId,
-        label: provider.profileCount
-          ? `${provider.label} · ${provider.profileCount} profile${provider.profileCount === 1 ? "" : "s"}`
-          : provider.label,
-        tooltip: tooltipParts.join(" · "),
-        provider: provider.providerId,
-        profileBadge:
-          lockedOnProvider && providerProfile
-            ? profileInitials(providerProfile.displayName)
-            : undefined,
-        status: providerStatus(provider),
-        kind: "provider" as const,
-      };
-    }),
-    {
-      id: "developer-tools",
-      label: "Developer Toolbox",
-      tooltip: "Developer Toolbox · JSON, YAML, diff, encoders",
-      status: "on" as Status,
-      kind: "tools" as const,
-    },
-    {
-      id: "local",
-      label: "Local Runtime",
-      tooltip: dockerReachable
-        ? "Local Runtime · Docker running"
-        : "Local Runtime · Docker not detected",
-      status: (dockerReachable ? "on" : "off") as Status,
-      kind: "local" as const,
-    },
-    {
-      id: "deploy",
-      label: "Deploy",
-      tooltip: "Deploy · IaC recipes",
-      status: "on" as Status,
-      kind: "deploy" as const,
-    },
-  ];
-
-  const navConnection: NavConnectionHeader = isDeployActive
-    ? {
-        name: "Deploy",
-        meta: "IaC recipes",
-        status: "on",
-        statusText: "Provision stacks with OpenTofu",
-      }
-    : isLocalActive
-    ? {
-        name: "Local Runtime",
-        meta: `Docker · ${emulatorCount} emulator${emulatorCount === 1 ? "" : "s"}`,
-        status: dockerReachable ? "on" : "off",
-        statusText: dockerReachable ? "Docker engine running" : "Docker engine not detected",
-      }
-    : isDeveloperToolsActive
-      ? {
-          name: "Developer Toolbox",
-          meta: "Local utilities",
-          status: "on",
-          statusText: "Private scratch tools — nothing leaves this app",
-        }
-    : {
-        name: session.isLocked
-          ? (lockedProfile ?? selectedProfile)?.displayName ?? activeProvider?.label ?? "Workspace"
-          : activeProvider?.label ?? "Getting started",
-        meta: session.isLocked
-          ? [activeProvider?.label, authLabel(session.lockedAuthMethod ?? session.selectedAuthMethod)]
-              .filter(Boolean)
-              .join(" · ") || "Workspace open"
-          : selectedProfile?.displayName ?? "Pick a profile to begin",
-        provider: activeProvider?.providerId,
-        status: activeProvider ? providerStatus(activeProvider) : "off",
-        statusText: session.isLocked
-          ? "Workspace open"
-          : activeProvider?.summary ?? "Choose a connection to start",
-      };
-
-  function buildNavGroups(): NavGroup[] {
-    if (isDeveloperToolsActive) {
-      return [
-        {
-          label: "Developer",
-          items: [{ id: "debug", label: "Debug console", icon: Bug }],
-        },
-      ];
-    }
-    if (isDeployActive) {
-      return [
-        {
-          label: "Deploy",
-          items: [
-            { id: "deploy", label: "Recipes", icon: Rocket },
-            { id: "debug", label: "Debug console", icon: Bug },
-          ],
-        },
-      ];
-    }
-    if (isLocalActive) {
-      return [
-        {
-          label: "Runtime",
-          items: [
-            { id: "virtualisation", label: "Emulators", icon: Server, count: emulatorCount },
-            { id: "debug", label: "Debug console", icon: Bug },
-          ],
-        },
-      ];
-    }
-    if (!session.isLocked) {
-      return [
-        { label: "Set up", items: [{ id: "overview", label: "Connect", icon: LayoutGrid }] },
-        { label: "Tools", items: [{ id: "debug", label: "Debug console", icon: Bug }] },
-      ];
-    }
-    // Mirror the prototype's split: Overview sits under "Workspace"; the
-    // provider resources sit under "Services". While the first inventory fetch
-    // is in flight, swap count badges for a spinner so empty counts do not read
-    // as "zero resources".
-    const countsPending = workspaceFetching || (workspaceLoading && !workspaceLoaded);
-    const tabCategory = (tab: WorkspaceTab): "workspace" | "service" | "tool" | "coming_soon" => {
-      if (
-        tab.category === "workspace" ||
-        tab.category === "service" ||
-        tab.category === "tool" ||
-        tab.category === "coming_soon"
-      ) {
-        return tab.category;
-      }
-      if (tab.tabId === "overview" || tab.tabId === "virtualisation" || tab.tabId === "actions") {
-        return "workspace";
-      }
-      if (
-        tab.tabId === "azure-tools" ||
-        tab.tabId === "azure-waf" ||
-        tab.tabId === "azure-log-analytics" ||
-        tab.tabId === "azure-front-door" ||
-        tab.tabId === "logs"
-      ) {
-        return "tool";
-      }
-      return "service";
-    };
-    const entries = session.workspaceTabs.map((tab) => {
-      const item = navItemForTab(tab, workspace);
-      const navItem =
-        countsPending && item.count != null
-          ? { ...item, count: undefined, countLoading: true }
-          : item;
-      return { item: navItem, category: tabCategory(tab) };
-    });
-    const workspaceItems = entries.filter((entry) => entry.category === "workspace").map((entry) => entry.item);
-    const toolItems = entries.filter((entry) => entry.category === "tool").map((entry) => entry.item);
-    const serviceItems = entries
-      .filter((entry) => entry.category === "service" || entry.category === "coming_soon")
-      .map((entry) => entry.item);
-    const groups: NavGroup[] = [];
-    if (workspaceItems.length > 0) {
-      groups.push({ label: "Workspace", items: workspaceItems });
-    }
-    if (toolItems.length > 0) {
-      groups.push({ label: "Tools", items: toolItems });
-    }
-    if (serviceItems.length > 0) {
-      groups.push({ label: "Services", items: serviceItems });
-    }
-    if (activeWorkspaceTabId === "s3") {
-      groups.push({
-        label: "Storage",
-        items: [
-          { id: "s3:buckets", label: "Buckets" },
-          { id: "s3:objects", label: "Objects" },
-          { id: "s3:upload", label: "Upload" },
-          { id: "s3:inspect", label: "Inspect URL" },
-        ],
-      });
-    }
-    if (activeWorkspaceTabId === "azure-storage") {
-      groups.push({
-        label: "Blob storage",
-        items: [
-          { id: "azure-storage:accounts", label: "Accounts" },
-          { id: "azure-storage:containers", label: "Containers" },
-          { id: "azure-storage:blobs", label: "Blobs" },
-          { id: "azure-storage:upload", label: "Upload" },
-        ],
-      });
-    }
-    groups.push({
-      label: "Developer",
-      items: [{ id: "debug", label: "Debug console", icon: Bug }],
-    });
-    return groups;
-  }
-
-  const navGroups = buildNavGroups();
-  const activeNavItemId =
-    activeWorkspaceTabId === "s3"
-      ? `s3:${activeS3PageId}`
-      : activeWorkspaceTabId === "azure-storage"
-        ? `azure-storage:${activeAzureStoragePageId}`
-        : activeWorkspaceTabId;
-  const viewLabel =
-    activeWorkspaceTabId === "settings"
-      ? "Services"
-      : !session.isLocked && activeWorkspaceTabId === "overview"
-        ? "Connect"
-        : viewLabelFor(activeWorkspaceTabId, session.workspaceTabs);
-  const activityEntries = toActivityEntries(logs);
-
-  const paletteCommands: Command[] = [
-    ...railConnections.map((connection) => ({
-      id: `conn:${connection.id}`,
-      group: "Go to",
-      label: connection.label,
-      keywords: "connection provider",
-      run: () => handleRailSelect(connection.id),
-    })),
-    ...navGroups.flatMap((group) =>
-      group.items
-        .filter((item) => !item.comingSoon)
-        .map((item) => ({
-          id: `nav:${group.label}:${item.id}`,
-          group: group.label,
-          label: item.label,
-          run: () => handleNavSelect(item.id),
-        })),
-    ),
-    {
-      id: "act:refresh",
-      group: "Actions",
-      label: "Refresh discovery",
-      keywords: "reload",
-      run: () => {
-        void refreshDiscovery();
-      },
-    },
-    {
-      id: "act:deploy",
-      group: "Actions",
-      label: "Deploy a recipe",
-      keywords: "iac opentofu recipe",
-      run: () => handleRailSelect("deploy"),
-    },
-    {
-      id: "act:debug",
-      group: "Actions",
-      label: "Open debug console",
-      keywords: "logs",
-      run: () => setActiveWorkspaceTabId("debug"),
-    },
-    {
-      id: "act:developer-tools",
-      group: "Actions",
-      label: "Open developer toolbox",
-      keywords: "json yaml diff encode arn azure resource id jwt",
-      run: () => setActiveWorkspaceTabId("developer-tools"),
-    },
-    {
-      id: "act:reset",
-      group: "Actions",
-      label: "Reset app data",
-      keywords: "clear wipe",
-      run: () => setResetModalOpen(true),
-    },
-  ];
-
-  function handleRailSelect(id: string): void {
-    if (id === "developer-tools") {
-      setActiveWorkspaceTabId("developer-tools");
-      return;
-    }
-    if (id === "local") {
-      setActiveWorkspaceTabId("virtualisation");
-      return;
-    }
-    if (id === "deploy") {
-      setActiveWorkspaceTabId("deploy");
-      return;
-    }
-    if (id !== session.currentProviderId) {
-      void mutateSession("session.selectProvider", { providerId: id });
-    }
-    setActiveWorkspaceTabId("overview");
-  }
-
-  function handleNavSelect(id: string): void {
-    const comingSoonTab = session.workspaceTabs.find(
-      (tab) => tab.tabId === id && tab.category === "coming_soon",
-    );
-    if (comingSoonTab) {
-      return;
-    }
-    const separator = id.indexOf(":");
-    if (separator >= 0) {
-      const tabId = id.slice(0, separator);
-      const pageId = id.slice(separator + 1);
-      setActiveWorkspaceTabId(tabId);
-      if (tabId === "s3") {
-        setActiveS3PageId(pageId);
-      } else if (tabId === "azure-overview") {
-        setActiveAzurePageId(pageId);
-      } else if (tabId === "azure-storage") {
-        setActiveAzureStoragePageId(pageId);
-      }
-      return;
-    }
-    setActiveWorkspaceTabId(id);
-    if (id === "azure-overview") {
-      setActiveAzurePageId("overview");
-    }
-  }
 
   return (
     <>
@@ -1872,7 +1323,7 @@ export default function App() {
                   () => notify("error", "Could not copy config paths"),
                 );
               },
-              onReset: () => setResetModalOpen(true),
+              onReset: openResetModal,
               onOpenCommandPalette: () => setCommandPaletteOpen(true),
             }}
           />
@@ -2003,66 +1454,7 @@ export default function App() {
           </AppErrorBoundary>
         </div>
       </AppShell>
-      <AlertDialog open={writeModeDialogOpen} onOpenChange={setWriteModeDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {writeModeDialogIntent === "incapable"
-                ? "This profile cannot enable write mode"
-                : "Enable write mode for this session?"}
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3 text-sm text-muted-foreground">
-                {writeModeDialogIntent === "incapable" ? (
-                  <p>
-                    {session.lockedProviderId === "azure"
-                      ? "Write mode needs the floci-az local profile or an Azure CLI sign-in. Real cloud profiles require the CLI to be available."
-                      : "Write mode needs a profile with a local endpoint_url and cloudsprocket_allow_writes = true in your AWS config. Real AWS endpoints stay read-only in this release."}
-                  </p>
-                ) : (
-                  <>
-                    <p>
-                      {session.lockedProviderId === "azure"
-                        ? "Mutating actions (resource group create/delete, blob upload/delete) will target the endpoint below for the rest of this locked session."
-                        : "Mutating actions (S3 uploads, EC2 start/stop/reboot, Lambda invoke/create) will be sent to the endpoint below for the rest of this locked session."}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-foreground">Profile:</span>{" "}
-                      {workspace.profile?.displayName || lockedProfile?.displayName || "Workspace"}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-foreground">Target:</span>{" "}
-                      {session.lockedProviderId === "azure"
-                        ? activeWorkspace.azureEndpointUrl || "Azure CLI"
-                        : activeWorkspace.awsEndpointUrl || "Default AWS endpoint"}
-                    </p>
-                  </>
-                )}
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <Button
-              variant="outline"
-              disabled={writeModePending}
-              onClick={() => setWriteModeDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            {writeModeDialogIntent === "enable" ? (
-              <Button
-                variant="destructive"
-                disabled={writeModePending}
-                onClick={() => {
-                  setWriteMode(true);
-                }}
-              >
-                {writeModePending ? "Enabling..." : "Enable writes"}
-              </Button>
-            ) : null}
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {writeModeDialog}
 
       <CommandPalette
         open={commandPaletteOpen}
