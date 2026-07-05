@@ -158,7 +158,7 @@ export function useServicePreferencesFlow(params: UseServicePreferencesFlowParam
       return;
     }
     void probeHiddenResources();
-  }, [probeHiddenResources, session.isLocked, session.lockedProviderId, session.lockedProfileId]);
+  }, [probeHiddenResources, session.isLocked]);
 
   return {
     preferencesSnapshot,

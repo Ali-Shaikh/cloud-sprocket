@@ -221,7 +221,7 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     session.selectedAuthMethod,
   ]);
 
-  const buildNavGroups = useCallback((): NavGroup[] => {
+  const navGroups = useMemo((): NavGroup[] => {
     if (isDeveloperToolsActive) {
       return [
         {
@@ -345,8 +345,6 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     workspaceLoaded,
     workspaceLoading,
   ]);
-
-  const navGroups = useMemo(() => buildNavGroups(), [buildNavGroups]);
 
   const activeNavItemId =
     activeWorkspaceTabId === "s3"
