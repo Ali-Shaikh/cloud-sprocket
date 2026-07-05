@@ -62,6 +62,10 @@ func (stubLambdaInventory) CreateFunction(context.Context, models.ProfileSummary
 	return models.AwsLambdaFunction{FunctionName: "created-fn", Runtime: "nodejs20.x", State: "Active"}, nil
 }
 
+func (stubLambdaInventory) DeleteFunction(context.Context, models.ProfileSummary, string, string) (models.AwsLambdaDeleteFunctionResult, error) {
+	return models.AwsLambdaDeleteFunctionResult{FunctionName: "deleted-fn", Summary: "Deleted Lambda function deleted-fn."}, nil
+}
+
 type stubDynamoDBInventory struct{}
 
 func (stubDynamoDBInventory) ListTables(context.Context, models.ProfileSummary, string) ([]models.AwsDynamoDBTable, error) {
@@ -130,6 +134,14 @@ func (stubRDSInventory) DescribeInstance(context.Context, models.ProfileSummary,
 	return models.AwsRdsInstance{}, nil
 }
 
+func (stubRDSInventory) StartDBInstance(context.Context, models.ProfileSummary, string, string) error {
+	return nil
+}
+
+func (stubRDSInventory) StopDBInstance(context.Context, models.ProfileSummary, string, string) error {
+	return nil
+}
+
 type stubECSInventory struct{}
 
 func (stubECSInventory) ListClusters(context.Context, models.ProfileSummary, string) ([]models.AwsEcsCluster, error) {
@@ -196,6 +208,18 @@ func (stubLogsInventory) DescribeLogGroup(context.Context, models.ProfileSummary
 	return models.AwsLogGroup{}, nil
 }
 
+func (stubLogsInventory) CreateLogGroup(context.Context, models.ProfileSummary, string, string) (models.AwsLogsCreateLogGroupResult, error) {
+	return models.AwsLogsCreateLogGroupResult{LogGroupName: "/aws/test/group", Region: "us-east-1"}, nil
+}
+
+func (stubLogsInventory) PutLogEvents(context.Context, models.ProfileSummary, string, string, string) (models.AwsLogsPutLogEventsResult, error) {
+	return models.AwsLogsPutLogEventsResult{
+		LogGroupName:  "/aws/test/group",
+		LogStreamName: "cloudsprocket-test",
+		Summary:       "Injected test event.",
+	}, nil
+}
+
 type stubIAMInventory struct{}
 
 func (stubIAMInventory) ListRoles(context.Context, models.ProfileSummary, string) ([]models.AwsIamRole, error) {
@@ -208,6 +232,13 @@ func (stubIAMInventory) DescribeRole(context.Context, models.ProfileSummary, str
 
 func (stubIAMInventory) ListPolicies(context.Context, models.ProfileSummary, string) ([]models.AwsIamPolicy, error) {
 	return nil, nil
+}
+
+func (stubIAMInventory) CreateRole(context.Context, models.ProfileSummary, string, string) (models.AwsIamCreateRoleResult, error) {
+	return models.AwsIamCreateRoleResult{
+		RoleName: "demo-lambda-role",
+		RoleArn:  "arn:aws:iam::000000000000:role/demo-lambda-role",
+	}, nil
 }
 
 func (s stubS3Inventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.AwsS3Bucket, error) {
@@ -242,6 +273,18 @@ func (s *stubS3Inventory) UploadFile(_ context.Context, _ models.ProfileSummary,
 	return result, nil
 }
 
+func (stubS3Inventory) DeleteObject(_ context.Context, _ models.ProfileSummary, bucketName string, objectKey string) (models.AwsS3DeleteObjectResult, error) {
+	return models.AwsS3DeleteObjectResult{
+		BucketName: bucketName,
+		ObjectKey:  objectKey,
+		Summary:    "Deleted object " + objectKey + ".",
+	}, nil
+}
+
+func (stubS3Inventory) CreateBucket(_ context.Context, _ models.ProfileSummary, bucketName string, region string) (models.AwsS3CreateBucketResult, error) {
+	return models.AwsS3CreateBucketResult{BucketName: bucketName, Region: region}, nil
+}
+
 func (s stubS3Inventory) PresignGetObject(_ context.Context, _ models.ProfileSummary, bucketName string, objectKey string, durationSeconds int) (models.AwsS3PresignResult, error) {
 	url := s.presignedURLs[bucketName+"|"+objectKey]
 	if url == "" {
@@ -272,6 +315,19 @@ func (s *stubEC2Inventory) StartInstance(_ context.Context, _ models.ProfileSumm
 func (s *stubEC2Inventory) StopInstance(_ context.Context, _ models.ProfileSummary, region string, instanceID string) error {
 	s.actionRequests = append(s.actionRequests, "stop|"+region+"|"+instanceID)
 	return s.actionErrors["stop"]
+}
+
+func (stubEC2Inventory) RunInstances(_ context.Context, _ models.ProfileSummary, region string, instanceType string) (models.AwsEc2RunInstancesResult, error) {
+	return models.AwsEc2RunInstancesResult{
+		InstanceID:   "i-launched00001",
+		Region:       region,
+		InstanceType: instanceType,
+		Summary:      "Launched EC2 instance i-launched00001.",
+	}, nil
+}
+
+func (stubEC2Inventory) TerminateInstances(_ context.Context, _ models.ProfileSummary, _ string, instanceID string) error {
+	return nil
 }
 
 func (s *stubEC2Inventory) RebootInstance(_ context.Context, _ models.ProfileSummary, region string, instanceID string) error {

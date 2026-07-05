@@ -160,6 +160,15 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     refreshRDSInventory,
     selectRDSRegion,
     selectRDSInstance,
+    deleteS3Object,
+    createS3Bucket,
+    runEC2Instances,
+    terminateEC2Instance,
+    deleteLambdaFunction,
+    invokeRDSLifecycleAction,
+    createLogGroup,
+    putLogEvents,
+    createIAMRole,
     refreshECSInventory,
     selectECSRegion,
     selectECSCluster,
@@ -254,6 +263,8 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
           await backendRequest("aws.s3.validateUrl", { url });
         })();
       }}
+      onDeleteObject={deleteS3Object}
+      onCreateBucket={createS3Bucket}
     />
   ) : session.isLocked && activeWorkspaceTabId === "ec2" ? (
     <ComputeView
@@ -265,6 +276,8 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onSelectRegion={selectEC2Region}
       onSelectInstance={selectEC2Instance}
       onInvokeAction={invokeEC2LifecycleAction}
+      onRunInstances={runEC2Instances}
+      onTerminateInstance={terminateEC2Instance}
     />
   ) : session.isLocked && activeWorkspaceTabId === "lambda" ? (
     <LambdaView
@@ -278,6 +291,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onSelectFunction={selectLambdaFunction}
       onInvoke={invokeLambda}
       onCreate={createLambda}
+      onDeleteFunction={deleteLambdaFunction}
       openCreateForm={lambdaCreateFormOpen}
       onCreateFormOpenChange={setLambdaCreateFormOpen}
     />
@@ -321,6 +335,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onRefresh={refreshRDSInventory}
       onSelectRegion={selectRDSRegion}
       onSelectEntity={selectRDSInstance}
+      onInvokeLifecycleAction={invokeRDSLifecycleAction}
     />
   ) : session.isLocked && activeWorkspaceTabId === "ecs" ? (
     <ECSView
@@ -368,6 +383,8 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onRefresh={refreshLogsInventory}
       onSelectRegion={selectLogsRegion}
       onSelectEntity={selectLogGroup}
+      onCreateLogGroup={createLogGroup}
+      onPutLogEvents={putLogEvents}
     />
   ) : session.isLocked && activeWorkspaceTabId === "iam" ? (
     <IAMView
@@ -376,6 +393,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onRefresh={refreshIAMInventory}
       onSelectRegion={selectSQSRegion}
       onSelectEntity={selectIAMRole}
+      onCreateRole={createIAMRole}
     />
   ) : null;
 }

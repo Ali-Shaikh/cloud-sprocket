@@ -177,6 +177,36 @@ func (l *LambdaInventory) CreateFunction(
 	return fn, nil
 }
 
+func (l *LambdaInventory) DeleteFunction(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	functionName string,
+) (models.AwsLambdaDeleteFunctionResult, error) {
+	functionName = strings.TrimSpace(functionName)
+	if functionName == "" {
+		return models.AwsLambdaDeleteFunctionResult{}, fmt.Errorf("function name is required")
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := l.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsLambdaDeleteFunctionResult{}, err
+	}
+	client := lambdaClient(cfg, profile)
+	_, err = client.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
+		FunctionName: aws.String(functionName),
+	})
+	if err != nil {
+		return models.AwsLambdaDeleteFunctionResult{}, err
+	}
+	return models.AwsLambdaDeleteFunctionResult{
+		FunctionName: functionName,
+		Summary:    fmt.Sprintf("Deleted Lambda function %s.", functionName),
+	}, nil
+}
+
 func (l *LambdaInventory) InvokeFunction(
 	ctx context.Context,
 	profile models.ProfileSummary,

@@ -70,15 +70,20 @@ func buildAWSActionCapabilities(
 	return map[string][]models.ActionCapability{
 		"s3": {
 			awsActionCapability(session, profile, "uploadObject", "Upload object"),
+			awsActionCapability(session, profile, "deleteObject", "Delete object"),
+			awsActionCapability(session, profile, "createBucket", "Create bucket"),
 		},
 		"ec2": {
 			awsActionCapability(session, profile, "start", "Start instance"),
 			awsActionCapability(session, profile, "stop", "Stop instance"),
 			awsActionCapability(session, profile, "reboot", "Reboot instance"),
+			awsActionCapability(session, profile, "runInstances", "Launch instance"),
+			awsActionCapability(session, profile, "terminateInstances", "Terminate instance"),
 		},
 		"lambda": {
 			awsActionCapability(session, profile, "invoke", "Invoke function"),
 			awsActionCapability(session, profile, "create", "Create function"),
+			awsActionCapability(session, profile, "deleteFunction", "Delete function"),
 		},
 		"sqs": {
 			awsActionCapability(session, profile, "peek", "Peek messages"),
@@ -95,6 +100,17 @@ func buildAWSActionCapabilities(
 		},
 		"secrets": {
 			awsActionCapability(session, profile, "reveal", "Reveal secret value"),
+		},
+		"rds": {
+			awsActionCapability(session, profile, "startInstance", "Start instance"),
+			awsActionCapability(session, profile, "stopInstance", "Stop instance"),
+		},
+		"logs": {
+			awsActionCapability(session, profile, "createLogGroup", "Create log group"),
+			awsActionCapability(session, profile, "putLogEvents", "Inject test event"),
+		},
+		"iam": {
+			awsActionCapability(session, profile, "createRole", "Create role"),
 		},
 	}
 }

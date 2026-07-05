@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/dustin/go-humanize"
 
 	"cloudsprocket/backend/daemon/internal/config"
@@ -305,6 +306,77 @@ func (s *S3Inventory) UploadFile(
 		BucketName:     bucketName,
 		ObjectKey:      objectKey,
 		DestinationURI: fmt.Sprintf("s3://%s/%s", bucketName, objectKey),
+	}, nil
+}
+
+func (s *S3Inventory) DeleteObject(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+	objectKey string,
+) (models.AwsS3DeleteObjectResult, error) {
+	if bucketName == "" || objectKey == "" {
+		return models.AwsS3DeleteObjectResult{}, fmt.Errorf("bucket and object key are required")
+	}
+	region, err := s.bucketRegion(ctx, profile, bucketName)
+	if err != nil {
+		return models.AwsS3DeleteObjectResult{}, err
+	}
+	cfg, err := s.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsS3DeleteObjectResult{}, err
+	}
+	client := s3Client(cfg, profile)
+	_, err = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(objectKey),
+	})
+	if err != nil {
+		return models.AwsS3DeleteObjectResult{}, err
+	}
+	return models.AwsS3DeleteObjectResult{
+		BucketName: bucketName,
+		ObjectKey:  objectKey,
+		Summary:    fmt.Sprintf("Deleted s3://%s/%s.", bucketName, objectKey),
+	}, nil
+}
+
+func (s *S3Inventory) CreateBucket(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+	region string,
+) (models.AwsS3CreateBucketResult, error) {
+	bucketName = strings.TrimSpace(bucketName)
+	if bucketName == "" {
+		return models.AwsS3CreateBucketResult{}, fmt.Errorf("bucket name is required")
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := s.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsS3CreateBucketResult{}, err
+	}
+	input := &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	}
+	if region != "" && region != "us-east-1" {
+		input.CreateBucketConfiguration = &types.CreateBucketConfiguration{
+			LocationConstraint: types.BucketLocationConstraint(region),
+		}
+	}
+	client := s3Client(cfg, profile)
+	_, err = client.CreateBucket(ctx, input)
+	if err != nil {
+		return models.AwsS3CreateBucketResult{}, err
+	}
+	s.mu.Lock()
+	s.bucketRegions[bucketName] = region
+	s.mu.Unlock()
+	return models.AwsS3CreateBucketResult{
+		BucketName: bucketName,
+		Region:     region,
 	}, nil
 }
 

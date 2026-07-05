@@ -29,6 +29,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/empty-state";
 import {
@@ -68,6 +78,8 @@ export type StorageViewProps = {
   onPresignObject: (durationSeconds: number) => void;
   onAnalyseUrl: (url: string) => void;
   onValidateUrl: (url: string) => void;
+  onDeleteObject?: (objectKey: string) => void;
+  onCreateBucket?: (bucketName: string, region?: string) => void;
 };
 
 function normalisePageId(pageId: string): StoragePageId {
@@ -164,12 +176,19 @@ export default function StorageView({
   onPresignObject,
   onAnalyseUrl,
   onValidateUrl,
+  onDeleteObject,
+  onCreateBucket,
 }: StorageViewProps) {
   const page = normalisePageId(activePageId);
 
   const [uploadSourcePath, setUploadSourcePath] = useState("");
   const [uploadObjectKey, setUploadObjectKey] = useState("");
   const [uploadAcknowledged, setUploadAcknowledged] = useState(false);
+  const [pendingDeleteKey, setPendingDeleteKey] = useState<string | undefined>(undefined);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [newBucketName, setNewBucketName] = useState("");
+  const deleteCapability = actionCapabilityState(workspace, "s3", "deleteObject");
+  const createBucketCapability = actionCapabilityState(workspace, "s3", "createBucket");
   const uploadCapability = actionCapabilityState(workspace, "s3", "uploadObject");
   const canUpload =
     uploadCapability.enabled &&
@@ -279,6 +298,16 @@ export default function StorageView({
 
   const bucketsPage = (
     <section className="space-y-4">
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          disabled={!createBucketCapability.enabled || !onCreateBucket}
+          title={createBucketCapability.enabled ? undefined : createBucketCapability.reason}
+          onClick={() => setCreateDialogOpen(true)}
+        >
+          Create bucket
+        </Button>
+      </div>
       {workspace.s3Buckets.length === 0 ? (
         <EmptyState
           icon={<Database />}
@@ -359,6 +388,17 @@ export default function StorageView({
           <Copy className="size-3.5" />
         </Button>
       </div>
+      {onDeleteObject ? (
+        <Button
+          variant="destructive"
+          size="sm"
+          disabled={!deleteCapability.enabled}
+          title={deleteCapability.enabled ? undefined : deleteCapability.reason}
+          onClick={() => setPendingDeleteKey(objectKey)}
+        >
+          Delete object
+        </Button>
+      ) : null}
 
       <Tabs defaultValue="overview" className="gap-3">
         <TabsList className="grid w-full grid-cols-4">
@@ -884,6 +924,57 @@ export default function StorageView({
       {page === "objects" ? objectsPage : null}
       {page === "upload" ? uploadPage : null}
       {page === "inspect" ? inspectPage : null}
+      <AlertDialog open={pendingDeleteKey !== undefined} onOpenChange={(open) => !open && setPendingDeleteKey(undefined)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete object?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes {pendingDeleteKey} from the bucket. This cannot be undone on LocalStack.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingDeleteKey && onDeleteObject) {
+                  onDeleteObject(pendingDeleteKey);
+                }
+                setPendingDeleteKey(undefined);
+              }}
+            >
+              Delete object
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create bucket</AlertDialogTitle>
+            <AlertDialogDescription>Enter a bucket name for your local endpoint profile.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={newBucketName}
+            placeholder="my-bucket"
+            onChange={(event) => setNewBucketName(event.target.value)}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!newBucketName.trim()}
+              onClick={() => {
+                if (onCreateBucket && newBucketName.trim()) {
+                  onCreateBucket(newBucketName.trim());
+                  setNewBucketName("");
+                  setCreateDialogOpen(false);
+                }
+              }}
+            >
+              Create bucket
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

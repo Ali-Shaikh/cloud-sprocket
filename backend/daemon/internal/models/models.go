@@ -486,6 +486,51 @@ type AwsDynamoDBWriteResult struct {
 	Summary   string `json:"summary"`
 }
 
+type AwsS3DeleteObjectResult struct {
+	BucketName string `json:"bucketName"`
+	ObjectKey  string `json:"objectKey"`
+	Summary    string `json:"summary"`
+}
+
+type AwsS3CreateBucketResult struct {
+	BucketName string `json:"bucketName"`
+	Region     string `json:"region"`
+}
+
+type AwsEc2RunInstancesResult struct {
+	InstanceID   string `json:"instanceId"`
+	Region       string `json:"region"`
+	InstanceType string `json:"instanceType"`
+	Summary      string `json:"summary"`
+}
+
+type AwsLambdaDeleteFunctionResult struct {
+	FunctionName string `json:"functionName"`
+	Summary      string `json:"summary"`
+}
+
+type AwsRdsLifecycleResult struct {
+	DBInstanceIdentifier string `json:"dbInstanceIdentifier"`
+	Action               string `json:"action"`
+	Summary              string `json:"summary"`
+}
+
+type AwsLogsCreateLogGroupResult struct {
+	LogGroupName string `json:"logGroupName"`
+	Region       string `json:"region"`
+}
+
+type AwsLogsPutLogEventsResult struct {
+	LogGroupName  string `json:"logGroupName"`
+	LogStreamName string `json:"logStreamName"`
+	Summary       string `json:"summary"`
+}
+
+type AwsIamCreateRoleResult struct {
+	RoleName string `json:"roleName"`
+	RoleArn  string `json:"roleArn"`
+}
+
 // AwsSnsSubscription models an SNS topic subscription.
 type AwsSnsSubscription struct {
 	SubscriptionArn string `json:"subscriptionArn"`

@@ -59,6 +59,8 @@ export type ComputeViewProps = {
   onSelectRegion: (region: string) => void;
   onSelectInstance: (instanceId: string) => void;
   onInvokeAction: (action: EC2LifecycleAction, instanceId: string) => void;
+  onRunInstances?: (instanceType?: string) => void;
+  onTerminateInstance?: (instanceId: string) => void;
 };
 
 type PendingEC2Action = {
@@ -141,6 +143,8 @@ export default function ComputeView({
   onSelectRegion,
   onSelectInstance,
   onInvokeAction,
+  onRunInstances,
+  onTerminateInstance,
 }: ComputeViewProps) {
   const [filterText, setFilterText] = useState("");
   const [pending, setPending] = useState<PendingEC2Action | undefined>(undefined);
@@ -181,6 +185,9 @@ export default function ComputeView({
   const startCapability = actionCapabilityState(workspace, "ec2", "start");
   const stopCapability = actionCapabilityState(workspace, "ec2", "stop");
   const rebootCapability = actionCapabilityState(workspace, "ec2", "reboot");
+  const runCapability = actionCapabilityState(workspace, "ec2", "runInstances");
+  const terminateCapability = actionCapabilityState(workspace, "ec2", "terminateInstances");
+  const [pendingTerminate, setPendingTerminate] = useState(false);
   const canStart =
     startCapability.enabled &&
     Boolean(selectedInstance) &&
@@ -487,6 +494,26 @@ export default function ComputeView({
             <RefreshCw />
             Refresh EC2
           </Button>
+          {onRunInstances ? (
+            <Button
+              variant="outline"
+              disabled={!runCapability.enabled || !workspace.selectedEc2Region || actionInFlight}
+              title={runCapability.enabled ? undefined : runCapability.reason}
+              onClick={() => onRunInstances("t3.micro")}
+            >
+              Launch instance
+            </Button>
+          ) : null}
+          {onTerminateInstance && selectedInstance ? (
+            <Button
+              variant="destructive"
+              disabled={!terminateCapability.enabled || actionInFlight}
+              title={terminateCapability.enabled ? undefined : terminateCapability.reason}
+              onClick={() => setPendingTerminate(true)}
+            >
+              Terminate
+            </Button>
+          ) : null}
           <div className="min-w-56 flex-1">
             <div className={cn(fieldLabel, "mb-1")}>Filter</div>
             <Input
@@ -642,6 +669,32 @@ export default function ComputeView({
               }}
             >
               Confirm {pendingLabel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={pendingTerminate} onOpenChange={setPendingTerminate}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Terminate EC2 instance?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Termination is destructive. Confirm again to terminate{" "}
+              {selectedInstance?.instanceId ?? "the selected instance"}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (selectedInstance && onTerminateInstance) {
+                  onTerminateInstance(selectedInstance.instanceId);
+                }
+                setPendingTerminate(false);
+              }}
+            >
+              Terminate instance
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

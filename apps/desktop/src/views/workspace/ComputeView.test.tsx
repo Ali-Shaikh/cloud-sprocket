@@ -172,9 +172,11 @@ function renderComputeView(overrides?: {
   actionInFlight?: boolean;
   actionHistory?: EC2ActionHistoryItem[];
   workspace?: Partial<WorkspaceSnapshot>;
+  onRunInstances?: (instanceType?: string) => void;
 }) {
   const onSelectInstance = vi.fn();
   const onInvokeAction = vi.fn();
+  const onRunInstances = overrides?.onRunInstances ?? vi.fn();
   const workspace = { ...workspaceFixture, ...overrides?.workspace };
   render(
     <ThemeProvider>
@@ -187,10 +189,11 @@ function renderComputeView(overrides?: {
         onSelectRegion={vi.fn()}
         onSelectInstance={onSelectInstance}
         onInvokeAction={onInvokeAction}
+        onRunInstances={onRunInstances}
       />
     </ThemeProvider>,
   );
-  return { onSelectInstance, onInvokeAction };
+  return { onSelectInstance, onInvokeAction, onRunInstances };
 }
 
 describe("ComputeView", () => {
@@ -248,6 +251,16 @@ describe("ComputeView", () => {
 
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
+  });
+
+  it("launches an instance when write mode allows it", () => {
+    mockMatchMedia(true);
+    const onRunInstances = vi.fn();
+    renderComputeView({ onRunInstances });
+
+    fireEvent.click(screen.getByRole("button", { name: "Launch instance" }));
+
+    expect(onRunInstances).toHaveBeenCalledWith("t3.micro");
   });
 
   it("shows action history entries", () => {
