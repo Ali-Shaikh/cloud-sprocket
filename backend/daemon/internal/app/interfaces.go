@@ -17,8 +17,6 @@ type S3Inventory interface {
 	HeadObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string) ([]models.DetailField, error)
 	UploadFile(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, sourcePath string) (models.AwsS3UploadResult, error)
 	PresignGetObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, durationSeconds int) (models.AwsS3PresignResult, error)
-	DeleteObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string) (models.AwsS3DeleteObjectResult, error)
-	CreateBucket(ctx context.Context, profile models.ProfileSummary, bucketName string, region string) (models.AwsS3CreateBucketResult, error)
 }
 
 type EC2Inventory interface {
@@ -27,8 +25,6 @@ type EC2Inventory interface {
 	StartInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
 	StopInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
 	RebootInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
-	RunInstances(ctx context.Context, profile models.ProfileSummary, region string, instanceType string) (models.AwsEc2RunInstancesResult, error)
-	TerminateInstances(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
 }
 
 type LambdaInventory interface {
@@ -36,7 +32,6 @@ type LambdaInventory interface {
 	DescribeFunction(ctx context.Context, profile models.ProfileSummary, region string, functionName string) (models.AwsLambdaFunction, error)
 	InvokeFunction(ctx context.Context, profile models.ProfileSummary, region string, functionName string, payload []byte) (models.AwsLambdaInvokeResult, error)
 	CreateFunction(ctx context.Context, profile models.ProfileSummary, region string, input models.AwsLambdaCreateInput) (models.AwsLambdaFunction, error)
-	DeleteFunction(ctx context.Context, profile models.ProfileSummary, region string, functionName string) (models.AwsLambdaDeleteFunctionResult, error)
 }
 
 type DynamoDBInventory interface {
@@ -64,8 +59,6 @@ type SNSInventory interface {
 type RDSInventory interface {
 	ListInstances(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsRdsInstance, error)
 	DescribeInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) (models.AwsRdsInstance, error)
-	StartDBInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
-	StopDBInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
 }
 
 type ApiGatewayInventory interface {
@@ -105,15 +98,12 @@ type EventBridgeInventory interface {
 type LogsInventory interface {
 	ListLogGroups(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsLogGroup, error)
 	DescribeLogGroup(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string) (models.AwsLogGroup, error)
-	CreateLogGroup(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string) (models.AwsLogsCreateLogGroupResult, error)
-	PutLogEvents(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string, message string) (models.AwsLogsPutLogEventsResult, error)
 }
 
 type IAMInventory interface {
 	ListRoles(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsIamRole, error)
 	DescribeRole(ctx context.Context, profile models.ProfileSummary, region string, roleName string) (models.AwsIamRole, error)
 	ListPolicies(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsIamPolicy, error)
-	CreateRole(ctx context.Context, profile models.ProfileSummary, region string, roleName string) (models.AwsIamCreateRoleResult, error)
 }
 
 type AzureInventory interface {
