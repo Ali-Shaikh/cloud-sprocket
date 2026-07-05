@@ -40,6 +40,7 @@ export type UseAwsActionsParams = {
   setEventBridgeActionStatus: Dispatch<SetStateAction<string>>;
   setRoute53ActionStatus: Dispatch<SetStateAction<string>>;
   setElbActionStatus: Dispatch<SetStateAction<string>>;
+  setKmsActionStatus: Dispatch<SetStateAction<string>>;
   setApiGatewayActionStatus: Dispatch<SetStateAction<string>>;
   setSecretsManagerActionStatus: Dispatch<SetStateAction<string>>;
   setLogsActionStatus: Dispatch<SetStateAction<string>>;
@@ -72,6 +73,7 @@ export function useAwsActions(params: UseAwsActionsParams) {
     setEventBridgeActionStatus,
     setRoute53ActionStatus,
     setElbActionStatus,
+    setKmsActionStatus,
     setApiGatewayActionStatus,
     setSecretsManagerActionStatus,
     setLogsActionStatus,
@@ -908,6 +910,54 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setElbActionStatus, setWorkspace]);
 
+  const refreshKmsInventory = useCallback((): void => {
+    setKmsActionStatus("Refreshing KMS inventory.");
+    void requestWorkspaceSnapshot("aws.inventory.get", { scope: "kms" })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setKmsActionStatus(
+          workspaceResult.kmsStatusMessage || "KMS inventory refreshed.",
+        );
+      })
+      .catch((error: unknown) => {
+        setKmsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setKmsActionStatus, setWorkspace]);
+
+  const selectKmsRegion = useCallback((region: string): void => {
+    setKmsActionStatus(`Loading KMS keys for ${region}.`);
+    void requestWorkspaceSnapshot("aws.kms.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setKmsActionStatus(
+          workspaceResult.kmsStatusMessage || `Loaded KMS keys from ${region}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setKmsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setKmsActionStatus, setWorkspace]);
+
+  const selectKmsKey = useCallback((keyId: string): void => {
+    setKmsActionStatus("Loading key metadata and aliases.");
+    void requestWorkspaceSnapshot("aws.kms.selectKey", { keyId })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setKmsActionStatus(
+          workspaceResult.kmsStatusMessage || "Selected KMS key.",
+        );
+      })
+      .catch((error: unknown) => {
+        setKmsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setKmsActionStatus, setWorkspace]);
+
   const selectApiGatewayRegion = useCallback((region: string): void => {
     setApiGatewayActionStatus(`Loading API Gateway APIs for ${region}.`);
     void requestWorkspaceSnapshot("aws.apigateway.selectRegion", { region })
@@ -1120,6 +1170,9 @@ export function useAwsActions(params: UseAwsActionsParams) {
     refreshElbInventory,
     selectElbRegion,
     selectElbLoadBalancer,
+    refreshKmsInventory,
+    selectKmsRegion,
+    selectKmsKey,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,

@@ -160,6 +160,10 @@ const workspaceFixture: ElbWorkspaceSnapshot = {
       healthCheckPath: "/health",
     },
   ],
+  kmsRegions: [],
+  kmsKeys: [],
+  kmsAliases: [],
+
 };
 
 describe("ELBView", () => {

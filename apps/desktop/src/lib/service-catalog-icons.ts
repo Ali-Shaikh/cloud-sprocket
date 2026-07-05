@@ -11,6 +11,7 @@ import awsEksIconUrl from "@/assets/cloud-icons/aws-eks.svg";
 import awsEventbridgeIconUrl from "@/assets/cloud-icons/aws-eventbridge.svg";
 import awsRoute53IconUrl from "@/assets/cloud-icons/aws-route53.svg";
 import awsElbIconUrl from "@/assets/cloud-icons/aws-elb.svg";
+import awsKmsIconUrl from "@/assets/cloud-icons/aws-kms.svg";
 import awsIamIconUrl from "@/assets/cloud-icons/aws-iam.svg";
 import awsLambdaIconUrl from "@/assets/cloud-icons/aws-lambda.svg";
 import awsRdsIconUrl from "@/assets/cloud-icons/aws-rds.svg";
@@ -47,6 +48,7 @@ const SERVICE_ICON_URLS: Record<string, string> = {
   eventbridge: awsEventbridgeIconUrl,
   route53: awsRoute53IconUrl,
   elb: awsElbIconUrl,
+  kms: awsKmsIconUrl,
   apigateway: awsApigatewayIconUrl,
   secrets: awsSecretsManagerIconUrl,
   iam: awsIamIconUrl,

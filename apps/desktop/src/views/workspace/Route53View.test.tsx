@@ -154,6 +154,10 @@ const workspaceFixture: Route53WorkspaceSnapshot = {
   elbRegions: [],
   elbLoadBalancers: [],
   elbTargetGroups: [],
+  kmsRegions: [],
+  kmsKeys: [],
+  kmsAliases: [],
+
 };
 
 describe("Route53View", () => {

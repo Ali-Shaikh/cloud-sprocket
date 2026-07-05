@@ -253,6 +253,8 @@ export default function App() {
     setRoute53ActionStatus,
     elbActionStatus,
     setElbActionStatus,
+    kmsActionStatus,
+    setKmsActionStatus,
     apiGatewayActionStatus,
     setApiGatewayActionStatus,
     secretsManagerActionStatus,
@@ -383,6 +385,9 @@ export default function App() {
     refreshElbInventory,
     selectElbRegion,
     selectElbLoadBalancer,
+    refreshKmsInventory,
+    selectKmsRegion,
+    selectKmsKey,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
@@ -420,6 +425,7 @@ export default function App() {
     setEventBridgeActionStatus,
     setRoute53ActionStatus,
     setElbActionStatus,
+    setKmsActionStatus,
     setApiGatewayActionStatus,
     setSecretsManagerActionStatus,
     setLogsActionStatus,
@@ -1037,6 +1043,9 @@ export default function App() {
         if (workspaceResult.elbStatusMessage) {
           setElbActionStatus(workspaceResult.elbStatusMessage);
         }
+        if (workspaceResult.kmsStatusMessage) {
+          setKmsActionStatus(workspaceResult.kmsStatusMessage);
+        }
         if (workspaceResult.apiGatewayStatusMessage) {
           setApiGatewayActionStatus(workspaceResult.apiGatewayStatusMessage);
         }
@@ -1208,6 +1217,7 @@ export default function App() {
     eventBridgeActionStatus,
     route53ActionStatus,
     elbActionStatus,
+    kmsActionStatus,
     apiGatewayActionStatus,
     secretsManagerActionStatus,
     logsActionStatus,
@@ -1310,6 +1320,9 @@ export default function App() {
     refreshElbInventory,
     selectElbRegion,
     selectElbLoadBalancer,
+    refreshKmsInventory,
+    selectKmsRegion,
+    selectKmsKey,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,

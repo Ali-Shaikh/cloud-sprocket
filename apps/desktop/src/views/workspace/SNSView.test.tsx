@@ -149,6 +149,10 @@ const workspaceFixture: SnsWorkspaceSnapshot = {
   elbRegions: [],
   elbLoadBalancers: [],
   elbTargetGroups: [],
+  kmsRegions: [],
+  kmsKeys: [],
+  kmsAliases: [],
+
   eventBridgeRules: [],
 
   logsRegions: [],

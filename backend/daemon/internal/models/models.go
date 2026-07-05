@@ -305,6 +305,8 @@ type SessionSnapshot struct {
 	SelectedRoute53HostedZoneID       string             `json:"selectedRoute53HostedZoneId,omitempty"`
 	SelectedElbRegion                 string             `json:"selectedElbRegion,omitempty"`
 	SelectedElbLoadBalancerArn        string             `json:"selectedElbLoadBalancerArn,omitempty"`
+	SelectedKmsRegion                 string             `json:"selectedKmsRegion,omitempty"`
+	SelectedKmsKeyId                  string             `json:"selectedKmsKeyId,omitempty"`
 	SelectedApiGatewayRegion          string             `json:"selectedApiGatewayRegion,omitempty"`
 	SelectedApiGatewayApiKey          string             `json:"selectedApiGatewayApiKey,omitempty"`
 	SelectedSecretsManagerRegion      string             `json:"selectedSecretsManagerRegion,omitempty"`
@@ -723,6 +725,28 @@ type AwsElbTargetGroup struct {
 	TargetType      string `json:"targetType,omitempty"`
 	VpcID           string `json:"vpcId,omitempty"`
 	HealthCheckPath string `json:"healthCheckPath,omitempty"`
+}
+
+// AwsKmsKey models a KMS key for inventory.
+type AwsKmsKey struct {
+	KeyId        string `json:"keyId"`
+	Arn          string `json:"arn,omitempty"`
+	Description  string `json:"description,omitempty"`
+	KeyUsage     string `json:"keyUsage,omitempty"`
+	KeyState     string `json:"keyState,omitempty"`
+	KeySpec      string `json:"keySpec,omitempty"`
+	Origin       string `json:"origin,omitempty"`
+	CreationDate string `json:"creationDate,omitempty"`
+	DeletionDate string `json:"deletionDate,omitempty"`
+	MultiRegion  bool   `json:"multiRegion,omitempty"`
+	Enabled      bool   `json:"enabled,omitempty"`
+}
+
+// AwsKmsAlias models a KMS alias for inventory.
+type AwsKmsAlias struct {
+	AliasName   string `json:"aliasName"`
+	AliasArn    string `json:"aliasArn,omitempty"`
+	TargetKeyId string `json:"targetKeyId,omitempty"`
 }
 
 // AwsEksNodeGroup models an EKS managed node group summary.
@@ -1304,6 +1328,12 @@ type WorkspaceSnapshot struct {
 	ElbRegions                        []string                     `json:"elbRegions"`
 	ElbLoadBalancers                  []AwsElbLoadBalancer         `json:"elbLoadBalancers"`
 	ElbTargetGroups                   []AwsElbTargetGroup          `json:"elbTargetGroups"`
+	SelectedKmsRegion                 string                       `json:"selectedKmsRegion,omitempty"`
+	SelectedKmsKeyId                  string                       `json:"selectedKmsKeyId,omitempty"`
+	KmsStatusMessage                  string                       `json:"kmsStatusMessage,omitempty"`
+	KmsRegions                        []string                     `json:"kmsRegions"`
+	KmsKeys                           []AwsKmsKey                  `json:"kmsKeys"`
+	KmsAliases                        []AwsKmsAlias                `json:"kmsAliases"`
 	SelectedApiGatewayRegion          string                       `json:"selectedApiGatewayRegion,omitempty"`
 	SelectedApiGatewayApiKey          string                       `json:"selectedApiGatewayApiKey,omitempty"`
 	ApiGatewayStatusMessage           string                       `json:"apiGatewayStatusMessage,omitempty"`

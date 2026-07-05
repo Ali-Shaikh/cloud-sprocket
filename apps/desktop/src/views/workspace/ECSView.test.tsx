@@ -184,6 +184,10 @@ const workspaceFixture: EcsWorkspaceSnapshot = {
   elbRegions: [],
   elbLoadBalancers: [],
   elbTargetGroups: [],
+  kmsRegions: [],
+  kmsKeys: [],
+  kmsAliases: [],
+
   eventBridgeRules: [],
 
 };

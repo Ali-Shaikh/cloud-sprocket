@@ -87,6 +87,7 @@ export type WorkspaceTabRouterProps = {
   eventBridgeActionStatus: string;
   route53ActionStatus: string;
   elbActionStatus: string;
+  kmsActionStatus: string;
   apiGatewayActionStatus: string;
   secretsManagerActionStatus: string;
   logsActionStatus: string;
@@ -205,6 +206,9 @@ export type WorkspaceTabRouterProps = {
   refreshElbInventory: () => void;
   selectElbRegion: (region: string) => void;
   selectElbLoadBalancer: (loadBalancerArn: string) => void;
+  refreshKmsInventory: () => void;
+  selectKmsRegion: (region: string) => void;
+  selectKmsKey: (keyId: string) => void;
   refreshApiGatewayInventory: () => void;
   selectApiGatewayRegion: (region: string) => void;
   selectApiGatewayApi: (apiKey: string) => void;

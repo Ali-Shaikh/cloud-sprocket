@@ -21,6 +21,8 @@ import type {
   AwsRoute53ResourceRecordSet,
   AwsElbLoadBalancer,
   AwsElbTargetGroup,
+  AwsKmsAlias,
+  AwsKmsKey,
   AwsIamPolicy,
   AwsIamRole,
   AwsLambdaFunction,
@@ -175,6 +177,9 @@ export const emptyWorkspace: WorkspaceSnapshot = {
   elbRegions: [],
   elbLoadBalancers: [],
   elbTargetGroups: [],
+  kmsRegions: [],
+  kmsKeys: [],
+  kmsAliases: [],
   apiGatewayRegions: [],
   apiGatewayApis: [],
   apiGatewayStages: [],
@@ -468,6 +473,20 @@ function normaliseElbTargetGroup(targetGroup: AwsElbTargetGroup): AwsElbTargetGr
     ...targetGroup,
     targetGroupArn: targetGroup.targetGroupArn ?? "",
     targetGroupName: targetGroup.targetGroupName ?? "",
+  };
+}
+
+function normaliseKmsKey(key: AwsKmsKey): AwsKmsKey {
+  return {
+    ...key,
+    keyId: key.keyId ?? "",
+  };
+}
+
+function normaliseKmsAlias(alias: AwsKmsAlias): AwsKmsAlias {
+  return {
+    ...alias,
+    aliasName: alias.aliasName ?? "",
   };
 }
 
@@ -931,6 +950,16 @@ export function mergeAwsInventoryScope(
         elbTargetGroups: normalised.elbTargetGroups,
         elbStatusMessage: normalised.elbStatusMessage,
       });
+    case "kms":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedKmsRegion: normalised.selectedKmsRegion,
+        selectedKmsKeyId: normalised.selectedKmsKeyId,
+        kmsRegions: normalised.kmsRegions,
+        kmsKeys: normalised.kmsKeys,
+        kmsAliases: normalised.kmsAliases,
+        kmsStatusMessage: normalised.kmsStatusMessage,
+      });
     case "apigateway":
       return normaliseWorkspaceSnapshot({
         ...current,
@@ -1111,6 +1140,9 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     elbRegions: normaliseArray(source.elbRegions),
     elbLoadBalancers: normaliseArray(source.elbLoadBalancers).map(normaliseElbLoadBalancer),
     elbTargetGroups: normaliseArray(source.elbTargetGroups).map(normaliseElbTargetGroup),
+    kmsRegions: normaliseArray(source.kmsRegions),
+    kmsKeys: normaliseArray(source.kmsKeys).map(normaliseKmsKey),
+    kmsAliases: normaliseArray(source.kmsAliases).map(normaliseKmsAlias),
     apiGatewayRegions: normaliseArray(source.apiGatewayRegions),
     apiGatewayApis: normaliseArray(source.apiGatewayApis).map(normaliseApiGatewayApi),
     apiGatewayStages: normaliseArray(source.apiGatewayStages).map(normaliseApiGatewayStage),

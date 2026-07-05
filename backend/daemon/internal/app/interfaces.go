@@ -112,6 +112,12 @@ type Elbv2Inventory interface {
 	DescribeTargetGroups(ctx context.Context, profile models.ProfileSummary, region string, loadBalancerArn string) ([]models.AwsElbTargetGroup, error)
 }
 
+type KmsInventory interface {
+	ListKeys(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsKmsKey, error)
+	ListAliases(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsKmsAlias, error)
+	DescribeKey(ctx context.Context, profile models.ProfileSummary, region string, keyID string) (models.AwsKmsKey, error)
+}
+
 type LogsInventory interface {
 	ListLogGroups(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsLogGroup, error)
 	DescribeLogGroup(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string) (models.AwsLogGroup, error)

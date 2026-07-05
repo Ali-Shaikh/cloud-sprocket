@@ -151,6 +151,10 @@ const workspaceFixture: LogsWorkspaceSnapshot = {
   elbRegions: [],
   elbLoadBalancers: [],
   elbTargetGroups: [],
+  kmsRegions: [],
+  kmsKeys: [],
+  kmsAliases: [],
+
   eventBridgeRules: [],
 
   iamRoles: [],

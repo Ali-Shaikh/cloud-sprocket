@@ -69,6 +69,7 @@ func TestAwsScopedCloudFormationInventoryLoadsStacksAndEvents(t *testing.T) {
 		eventbridge:    stubEventBridgeInventory{},
 		route53:        stubRoute53Inventory{},
 		elbv2:          stubElbv2Inventory{},
+		kms:            stubKmsInventory{},
 		apigateway:     stubApiGatewayInventory{},
 		secretsManager: stubSecretsManagerInventory{},
 		logs:           stubLogsInventory{},

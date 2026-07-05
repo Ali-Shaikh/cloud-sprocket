@@ -197,6 +197,8 @@ export interface SessionSnapshot {
   selectedRoute53HostedZoneId?: string;
   selectedElbRegion?: string;
   selectedElbLoadBalancerArn?: string;
+  selectedKmsRegion?: string;
+  selectedKmsKeyId?: string;
   selectedApiGatewayRegion?: string;
   selectedApiGatewayApiKey?: string;
   selectedSecretsManagerRegion?: string;
@@ -567,6 +569,26 @@ export interface AwsElbTargetGroup {
   targetType?: string;
   vpcId?: string;
   healthCheckPath?: string;
+}
+
+export interface AwsKmsKey {
+  keyId: string;
+  arn?: string;
+  description?: string;
+  keyUsage?: string;
+  keyState?: string;
+  keySpec?: string;
+  origin?: string;
+  creationDate?: string;
+  deletionDate?: string;
+  multiRegion?: boolean;
+  enabled?: boolean;
+}
+
+export interface AwsKmsAlias {
+  aliasName: string;
+  aliasArn?: string;
+  targetKeyId?: string;
 }
 
 export interface AwsApiGatewayApi {
@@ -1162,10 +1184,16 @@ export interface WorkspaceSnapshot {
   route53ResourceRecordSets: AwsRoute53ResourceRecordSet[];
   selectedElbRegion?: string;
   selectedElbLoadBalancerArn?: string;
+  selectedKmsRegion?: string;
+  selectedKmsKeyId?: string;
   elbStatusMessage?: string;
   elbRegions: string[];
   elbLoadBalancers: AwsElbLoadBalancer[];
   elbTargetGroups: AwsElbTargetGroup[];
+  kmsStatusMessage?: string;
+  kmsRegions: string[];
+  kmsKeys: AwsKmsKey[];
+  kmsAliases: AwsKmsAlias[];
   apiGatewayStatusMessage?: string;
   apiGatewayRegions: string[];
   apiGatewayApis: AwsApiGatewayApi[];

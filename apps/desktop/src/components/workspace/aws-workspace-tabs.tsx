@@ -19,6 +19,7 @@ import {
   EventBridgeView,
   Route53View,
   ELBView,
+  KMSView,
   RDSView,
   SNSView,
   SQSView,
@@ -40,6 +41,7 @@ export const AWS_TAB_IDS = new Set([
   "eventbridge",
   "route53",
   "elb",
+  "kms",
   "apigateway",
   "secrets",
   "logs",
@@ -95,6 +97,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     eventBridgeActionStatus,
     route53ActionStatus,
     elbActionStatus,
+    kmsActionStatus,
     apiGatewayActionStatus,
     secretsManagerActionStatus,
     refreshSecretsManagerInventory,
@@ -200,6 +203,9 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     refreshElbInventory,
     selectElbRegion,
     selectElbLoadBalancer,
+    refreshKmsInventory,
+    selectKmsRegion,
+    selectKmsKey,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
@@ -408,6 +414,14 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onRefresh={refreshElbInventory}
       onSelectRegion={selectElbRegion}
       onSelectLoadBalancer={selectElbLoadBalancer}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "kms" ? (
+    <KMSView
+      workspace={activeWorkspace}
+      actionStatus={kmsActionStatus}
+      onRefresh={refreshKmsInventory}
+      onSelectRegion={selectKmsRegion}
+      onSelectKey={selectKmsKey}
     />
   ) : session.isLocked && activeWorkspaceTabId === "apigateway" ? (
     <ApiGatewayView

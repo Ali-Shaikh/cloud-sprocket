@@ -69,6 +69,7 @@ func TestAwsScopedRoute53InventoryLoadsHostedZonesAndRecords(t *testing.T) {
 		eventbridge:    stubEventBridgeInventory{},
 		route53:        route53Inventory,
 		elbv2:          stubElbv2Inventory{},
+		kms:            stubKmsInventory{},
 		apigateway:     stubApiGatewayInventory{},
 		secretsManager: stubSecretsManagerInventory{},
 		logs:           stubLogsInventory{},

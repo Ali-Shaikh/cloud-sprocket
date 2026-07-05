@@ -947,6 +947,9 @@ describe("App", () => {
   elbRegions: [],
   elbLoadBalancers: [],
   elbTargetGroups: [],
+  kmsRegions: [],
+  kmsKeys: [],
+  kmsAliases: [],
   eventBridgeRules: [],
 
       selectedLogsRegion: "us-east-1",

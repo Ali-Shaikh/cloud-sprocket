@@ -605,6 +605,29 @@ const mockWorkspaceElbTargetGroups = [
   },
 ];
 
+const mockWorkspaceKmsKeyId = "1234abcd-5678-90ef-ghij-klmnopqrstuv";
+
+const mockWorkspaceKmsKeys = [
+  {
+    keyId: mockWorkspaceKmsKeyId,
+    arn: `arn:aws:kms:us-east-1:123:key/${mockWorkspaceKmsKeyId}`,
+    description: "Demo encryption key",
+    keyUsage: "ENCRYPT_DECRYPT",
+    keyState: "Enabled",
+    keySpec: "SYMMETRIC_DEFAULT",
+    origin: "AWS_KMS",
+    enabled: true,
+  },
+];
+
+const mockWorkspaceKmsAliases = [
+  {
+    aliasName: "alias/demo-key",
+    aliasArn: "arn:aws:kms:us-east-1:123:alias/demo-key",
+    targetKeyId: mockWorkspaceKmsKeyId,
+  },
+];
+
 const mockWorkspaceApiGatewayApis = [
   {
     apiKey: "http:xyz789",
@@ -1396,6 +1419,8 @@ function countMockCatalogueResources(
         return workspace.route53HostedZones.length;
       case "elb":
         return workspace.elbLoadBalancers.length;
+      case "kms":
+        return workspace.kmsKeys.length;
       case "apigateway":
         return workspace.apiGatewayApis.length;
       case "secrets":
@@ -1988,6 +2013,18 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     elbRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
     elbLoadBalancers: isAWSWorkspace ? mockWorkspaceElbLoadBalancers : [],
     elbTargetGroups: isAWSWorkspace ? mockWorkspaceElbTargetGroups : [],
+    selectedKmsRegion: isAWSWorkspace
+      ? mockState.session.selectedKmsRegion ?? mockWorkspaceRegions[0]
+      : undefined,
+    selectedKmsKeyId: isAWSWorkspace
+      ? mockState.session.selectedKmsKeyId ?? mockWorkspaceKmsKeys[0]?.keyId
+      : undefined,
+    kmsStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceKmsKeys.length} KMS keys from ${mockState.session.selectedKmsRegion ?? mockWorkspaceRegions[0]}.`
+      : "KMS inventory is only available for open AWS workspaces.",
+    kmsRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
+    kmsKeys: isAWSWorkspace ? mockWorkspaceKmsKeys : [],
+    kmsAliases: isAWSWorkspace ? mockWorkspaceKmsAliases : [],
     selectedApiGatewayRegion: isAWSWorkspace
       ? mockState.session.selectedApiGatewayRegion ?? mockWorkspaceRegions[0]
       : undefined,
@@ -2678,6 +2715,15 @@ function handleMockRequest<T>(
     case "aws.elb.selectLoadBalancer":
       mockState.session.selectedElbLoadBalancerArn = String(params.loadBalancerArn ?? "");
       appendLog("info", `Selected load balancer ${params.loadBalancerArn}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.kms.selectRegion":
+      mockState.session.selectedKmsRegion = String(params.region ?? "");
+      mockState.session.selectedKmsKeyId = undefined;
+      appendLog("info", `Selected KMS region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.kms.selectKey":
+      mockState.session.selectedKmsKeyId = String(params.keyId ?? "");
+      appendLog("info", `Selected KMS key ${params.keyId}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     case "aws.apigateway.selectRegion":
       mockState.session.selectedApiGatewayRegion = String(params.region ?? "");

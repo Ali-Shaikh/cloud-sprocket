@@ -99,6 +99,9 @@ export function useWorkspaceState(session: SessionSnapshot) {
   const [elbActionStatus, setElbActionStatus] = useState(
     "Select a region before refreshing load balancers.",
   );
+  const [kmsActionStatus, setKmsActionStatus] = useState(
+    "Select a region before refreshing KMS keys.",
+  );
   const [apiGatewayActionStatus, setApiGatewayActionStatus] = useState(
     "Select a region before refreshing API Gateway APIs.",
   );
@@ -277,6 +280,8 @@ export function useWorkspaceState(session: SessionSnapshot) {
     setRoute53ActionStatus,
     elbActionStatus,
     setElbActionStatus,
+    kmsActionStatus,
+    setKmsActionStatus,
     apiGatewayActionStatus,
     setApiGatewayActionStatus,
     secretsManagerActionStatus,
