@@ -2,11 +2,28 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
 import IAMView from "./IAMView";
 import type { IamWorkspaceSnapshot } from "./IAMView";
+
+function mockMatchMedia(matches: boolean) {
+  return vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const workspaceFixture: IamWorkspaceSnapshot = {
   provider: {
@@ -173,7 +190,16 @@ function renderIAMView() {
 }
 
 describe("IAMView", () => {
+  it("docks role detail and policies in the inspector on wide viewports", () => {
+    mockMatchMedia(true);
+    renderIAMView();
+
+    expect(screen.getByLabelText("IAM role details")).toBeInTheDocument();
+    expect(screen.getByText("Copy actions")).toBeInTheDocument();
+  });
+
   it("renders inventory, role detail, and customer-managed policies", () => {
+    mockMatchMedia(true);
     renderIAMView();
 
     expect(screen.getByText("Role Fleet")).toBeInTheDocument();

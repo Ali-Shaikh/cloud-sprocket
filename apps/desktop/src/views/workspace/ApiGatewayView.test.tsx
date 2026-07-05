@@ -2,11 +2,28 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
 import ApiGatewayView from "./ApiGatewayView";
 import type { ApiGatewayWorkspaceSnapshot } from "./ApiGatewayView";
+
+function mockMatchMedia(matches: boolean) {
+  return vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const workspaceFixture: ApiGatewayWorkspaceSnapshot = {
   provider: {
@@ -173,9 +190,19 @@ function renderApiGatewayView() {
 }
 
 describe("ApiGatewayView", () => {
-  it("renders API and stage inventory", () => {
+  it("docks API detail and stages in the inspector on wide viewports", () => {
+    mockMatchMedia(true);
     renderApiGatewayView();
 
+    expect(screen.getByLabelText("API Gateway details")).toBeInTheDocument();
+    expect(screen.getByText("Copy invoke URL")).toBeInTheDocument();
+  });
+
+  it("renders API and stage inventory", () => {
+    mockMatchMedia(true);
+    renderApiGatewayView();
+
+    expect(screen.getByText("API Fleet")).toBeInTheDocument();
     expect(screen.getByText("API Inventory")).toBeInTheDocument();
     expect(screen.getAllByText("orders-http-api").length).toBeGreaterThan(0);
     expect(screen.getByText("legacy-rest-api")).toBeInTheDocument();

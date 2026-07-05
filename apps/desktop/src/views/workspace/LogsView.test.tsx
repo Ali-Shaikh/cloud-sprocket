@@ -2,11 +2,28 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
 import LogsView from "./LogsView";
 import type { LogsWorkspaceSnapshot } from "./LogsView";
+
+function mockMatchMedia(matches: boolean) {
+  return vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const workspaceFixture: LogsWorkspaceSnapshot = {
   provider: {
@@ -169,7 +186,16 @@ function renderLogsView() {
 }
 
 describe("LogsView", () => {
+  it("docks log group detail and event tail in the inspector on wide viewports", () => {
+    mockMatchMedia(true);
+    renderLogsView();
+
+    expect(screen.getByLabelText("CloudWatch log group details")).toBeInTheDocument();
+    expect(screen.getByText("Copy actions")).toBeInTheDocument();
+  });
+
   it("renders inventory and recent event tail", () => {
+    mockMatchMedia(true);
     renderLogsView();
 
     expect(screen.getByText("Log Group Fleet")).toBeInTheDocument();

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Boxes, Copy, RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -15,17 +15,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
+import {
+  ResourceInspectorHeader,
+  ResourceInspectorPanel,
+  ResourceInventoryShell,
+} from "@/components/inventory/resource-inspector";
+import { ResourceTable } from "@/components/inventory/resource-table";
 import { DetailFieldList } from "./detail-fields";
 import type {
   AwsEcsCluster,
@@ -98,6 +96,14 @@ function copyToClipboard(value: string, label = "Copied to clipboard"): void {
   }
 }
 
+function ecsSelectionKey(workspace: EcsWorkspaceSnapshot): string {
+  return [
+    workspace.selectedEcsClusterArn || "",
+    workspace.selectedEcsServiceArn || "",
+    workspace.selectedEcsTaskArn || "",
+  ].join("|");
+}
+
 export default function ECSView({
   workspace,
   actionStatus,
@@ -108,6 +114,8 @@ export default function ECSView({
   onSelectTask,
 }: ECSViewProps) {
   const [clusterFilter, setClusterFilter] = useState("");
+  const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedEcsClusterArn));
+  const lastSelectionRef = useRef(ecsSelectionKey(workspace));
 
   const regions =
     workspace.ecsRegions.length > 0
@@ -118,19 +126,17 @@ export default function ECSView({
           ? workspace.lambdaRegions
           : workspace.ec2Regions;
 
-  const selectedCluster =
-    workspace.ecsClusters.find(
-      (cluster) => cluster.clusterArn === workspace.selectedEcsClusterArn,
-    ) ?? workspace.ecsClusters[0];
+  const selectedCluster = workspace.ecsClusters.find(
+    (cluster) => cluster.clusterArn === workspace.selectedEcsClusterArn,
+  );
 
-  const selectedService =
-    workspace.ecsServices.find(
-      (service) => service.serviceArn === workspace.selectedEcsServiceArn,
-    ) ?? undefined;
+  const selectedService = workspace.ecsServices.find(
+    (service) => service.serviceArn === workspace.selectedEcsServiceArn,
+  );
 
-  const selectedTask =
-    workspace.ecsTasks.find((task) => task.taskArn === workspace.selectedEcsTaskArn) ??
-    workspace.ecsTasks[0];
+  const selectedTask = workspace.ecsTasks.find(
+    (task) => task.taskArn === workspace.selectedEcsTaskArn,
+  );
 
   const filteredClusters = useMemo(() => {
     const query = clusterFilter.trim().toLowerCase();
@@ -209,6 +215,14 @@ export default function ECSView({
       ]
     : [];
 
+  useEffect(() => {
+    const nextSelection = ecsSelectionKey(workspace);
+    if (nextSelection !== lastSelectionRef.current) {
+      lastSelectionRef.current = nextSelection;
+      setInspectorOpen(Boolean(workspace.selectedEcsClusterArn));
+    }
+  }, [workspace.selectedEcsClusterArn, workspace.selectedEcsServiceArn, workspace.selectedEcsTaskArn]);
+
   if (workspace.provider?.providerId && workspace.provider.providerId !== "aws") {
     return (
       <div className="p-6">
@@ -220,6 +234,206 @@ export default function ECSView({
       </div>
     );
   }
+
+  const tableEmptyState =
+    workspace.ecsClusters.length === 0 ? (
+      <EmptyState
+        icon={<Boxes />}
+        title="No clusters"
+        description={
+          workspace.selectedEcsRegion
+            ? `No ECS clusters were returned for ${workspace.selectedEcsRegion}.`
+            : "Select a region to list ECS clusters."
+        }
+        className="border-0"
+      />
+    ) : (
+      <EmptyState
+        icon={<Boxes />}
+        title="No matches"
+        description="No ECS clusters match the current filter."
+        className="border-0"
+      />
+    );
+
+  const servicesEmptyState = (
+    <EmptyState
+      icon={<Boxes />}
+      title="No services"
+      description={
+        selectedCluster
+          ? `No services were returned for ${selectedCluster.clusterName}.`
+          : "Select a cluster to list services."
+      }
+      className="border-0"
+    />
+  );
+
+  const tasksEmptyState = (
+    <EmptyState
+      icon={<Boxes />}
+      title="No tasks"
+      description={
+        selectedService
+          ? `No tasks were returned for ${selectedService.serviceName}.`
+          : selectedCluster
+            ? `No tasks were returned for ${selectedCluster.clusterName}.`
+            : "Select a cluster to list tasks."
+      }
+      className="border-0"
+    />
+  );
+
+  const inspectorEyebrow = selectedTask ? "Task" : selectedService ? "Service" : "Cluster";
+  const inspectorTitle = selectedTask
+    ? shortArn(selectedTask.taskArn)
+    : selectedService
+      ? selectedService.serviceName
+      : selectedCluster?.clusterName || "";
+  const inspectorSubtitle = selectedTask
+    ? selectedTask.taskArn
+    : selectedService
+      ? selectedService.serviceArn
+      : selectedCluster?.clusterArn;
+
+  const inspectorContent = selectedCluster ? (
+    <ResourceInspectorPanel>
+      <ResourceInspectorHeader
+        icon={Boxes}
+        eyebrow={inspectorEyebrow}
+        title={inspectorTitle}
+        subtitle={inspectorSubtitle}
+        onClose={() => setInspectorOpen(false)}
+      />
+
+      {detailFields.length > 0 ? (
+        <DetailFieldList fields={detailFields} emptyText="No ECS selection details are available." />
+      ) : null}
+
+      {selectedTask?.containers && selectedTask.containers.length > 0 ? (
+        <div>
+          <div className={fieldLabel}>Containers</div>
+          <div className="mt-2 space-y-2">
+            {selectedTask.containers.map((container) => (
+              <div key={container.name} className={snippetCard}>
+                <p className="text-sm font-medium">{container.name}</p>
+                <p className="text-xs text-muted-foreground">{container.image || "Unknown image"}</p>
+                <p className="text-xs text-muted-foreground">{container.lastStatus || "Unknown status"}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div>
+        <div className={fieldLabel}>Services</div>
+        <div className="mt-2">
+          <ResourceTable
+            columns={[
+              { id: "service", label: "Service" },
+              { id: "status", label: "Status" },
+              { id: "desired", label: "Desired" },
+              { id: "running", label: "Running" },
+            ]}
+            rows={workspace.ecsServices}
+            selectedKey={workspace.selectedEcsServiceArn}
+            getRowKey={(service) => service.serviceArn}
+            onRowClick={(service) => {
+              onSelectService(service.serviceArn);
+            }}
+            renderCell={(service, columnId) => {
+              if (columnId === "service") {
+                return <span className="font-medium">{service.serviceName}</span>;
+              }
+              if (columnId === "status") {
+                return (
+                  <StatusPill
+                    status={resourceStatus(service.status)}
+                    label={service.status || "Unknown"}
+                  />
+                );
+              }
+              if (columnId === "desired") {
+                return service.desiredCount ?? 0;
+              }
+              if (columnId === "running") {
+                return service.runningCount ?? 0;
+              }
+              return null;
+            }}
+            emptyState={servicesEmptyState}
+          />
+        </div>
+      </div>
+
+      <div>
+        <div className={fieldLabel}>Tasks</div>
+        <div className="mt-2">
+          <ResourceTable
+            columns={[
+              { id: "task", label: "Task", cellClassName: "font-mono text-xs" },
+              { id: "status", label: "Status" },
+              { id: "launch", label: "Launch" },
+            ]}
+            rows={workspace.ecsTasks}
+            selectedKey={workspace.selectedEcsTaskArn}
+            getRowKey={(task) => task.taskArn}
+            onRowClick={(task) => {
+              onSelectTask(task.taskArn);
+            }}
+            renderCell={(task, columnId) => {
+              if (columnId === "task") {
+                return shortArn(task.taskArn);
+              }
+              if (columnId === "status") {
+                return (
+                  <StatusPill
+                    status={resourceStatus(task.lastStatus)}
+                    label={task.lastStatus || "Unknown"}
+                  />
+                );
+              }
+              if (columnId === "launch") {
+                return task.launchType || "Unknown";
+              }
+              return null;
+            }}
+            emptyState={tasksEmptyState}
+          />
+        </div>
+      </div>
+
+      {copySnippets.length > 0 ? (
+        <div>
+          <div className={fieldLabel}>Copy helpers</div>
+          <div className="mt-2 space-y-2">
+            {copySnippets.map((snippet) => (
+              <div key={snippet.label} className={snippetCard}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {snippet.label}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Copy ${snippet.label}`}
+                    onClick={() => {
+                      copyToClipboard(snippet.value);
+                    }}
+                  >
+                    <Copy />
+                  </Button>
+                </div>
+                <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-xs">
+                  {snippet.value}
+                </pre>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </ResourceInspectorPanel>
+  ) : null;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -308,197 +522,56 @@ export default function ECSView({
               }}
             />
           </div>
+          <div className="pb-2 text-xs text-muted-foreground">
+            {filteredClusters.length}/{workspace.ecsClusters.length} shown
+          </div>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border">
-          {workspace.ecsClusters.length === 0 ? (
-            <EmptyState
-              icon={<Boxes />}
-              title="No clusters"
-              description={
-                workspace.selectedEcsRegion
-                  ? `No ECS clusters were returned for ${workspace.selectedEcsRegion}.`
-                  : "Select a region to list ECS clusters."
-              }
-              className="border-0"
+        <ResourceInventoryShell
+          table={
+            <ResourceTable
+              columns={[
+                { id: "cluster", label: "Cluster" },
+                { id: "status", label: "Status" },
+                { id: "services", label: "Services" },
+                { id: "tasks", label: "Running tasks" },
+              ]}
+              rows={filteredClusters}
+              selectedKey={workspace.selectedEcsClusterArn}
+              getRowKey={(cluster) => cluster.clusterArn}
+              onRowClick={(cluster) => {
+                onSelectCluster(cluster.clusterArn);
+                setInspectorOpen(true);
+              }}
+              renderCell={(cluster, columnId) => {
+                if (columnId === "cluster") {
+                  return <span className="font-medium">{cluster.clusterName}</span>;
+                }
+                if (columnId === "status") {
+                  return (
+                    <StatusPill
+                      status={resourceStatus(cluster.status)}
+                      label={cluster.status || "Unknown"}
+                    />
+                  );
+                }
+                if (columnId === "services") {
+                  return cluster.activeServicesCount ?? 0;
+                }
+                if (columnId === "tasks") {
+                  return cluster.runningTasksCount ?? 0;
+                }
+                return null;
+              }}
+              emptyState={tableEmptyState}
             />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Cluster</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Services</TableHead>
-                  <TableHead>Running tasks</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredClusters.map((cluster) => (
-                  <TableRow
-                    key={cluster.clusterArn}
-                    className={cn(
-                      "cursor-pointer",
-                      cluster.clusterArn === workspace.selectedEcsClusterArn && "bg-muted/50",
-                    )}
-                    onClick={() => {
-                      onSelectCluster(cluster.clusterArn);
-                    }}
-                  >
-                    <TableCell className="font-medium">{cluster.clusterName}</TableCell>
-                    <TableCell>
-                      <StatusPill status={resourceStatus(cluster.status)} label={cluster.status || "Unknown"} />
-                    </TableCell>
-                    <TableCell>{cluster.activeServicesCount ?? 0}</TableCell>
-                    <TableCell>{cluster.runningTasksCount ?? 0}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </div>
+          }
+          inspectorContent={inspectorContent}
+          inspectorOpen={inspectorOpen}
+          onInspectorOpenChange={setInspectorOpen}
+          inspectorAriaLabel="ECS cluster details"
+        />
       </section>
-
-      {selectedCluster ? (
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className={sectionCard}>
-            <h2 className="text-base font-bold">Services</h2>
-            <div className="overflow-hidden rounded-lg border border-border">
-              {workspace.ecsServices.length === 0 ? (
-                <EmptyState
-                  icon={<Boxes />}
-                  title="No services"
-                  description={`No services were returned for ${selectedCluster.clusterName}.`}
-                  className="border-0"
-                />
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Service</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Desired</TableHead>
-                      <TableHead>Running</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {workspace.ecsServices.map((service) => (
-                      <TableRow
-                        key={service.serviceArn}
-                        className={cn(
-                          "cursor-pointer",
-                          service.serviceArn === workspace.selectedEcsServiceArn && "bg-muted/50",
-                        )}
-                        onClick={() => {
-                          onSelectService(service.serviceArn);
-                        }}
-                      >
-                        <TableCell className="font-medium">{service.serviceName}</TableCell>
-                        <TableCell>
-                          <StatusPill status={resourceStatus(service.status)} label={service.status || "Unknown"} />
-                        </TableCell>
-                        <TableCell>{service.desiredCount ?? 0}</TableCell>
-                        <TableCell>{service.runningCount ?? 0}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-          </div>
-
-          <div className={sectionCard}>
-            <h2 className="text-base font-bold">Tasks</h2>
-            <div className="overflow-hidden rounded-lg border border-border">
-              {workspace.ecsTasks.length === 0 ? (
-                <EmptyState
-                  icon={<Boxes />}
-                  title="No tasks"
-                  description={
-                    selectedService
-                      ? `No tasks were returned for ${selectedService.serviceName}.`
-                      : `No tasks were returned for ${selectedCluster.clusterName}.`
-                  }
-                  className="border-0"
-                />
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Task</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Launch</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {workspace.ecsTasks.map((task) => (
-                      <TableRow
-                        key={task.taskArn}
-                        className={cn(
-                          "cursor-pointer",
-                          task.taskArn === workspace.selectedEcsTaskArn && "bg-muted/50",
-                        )}
-                        onClick={() => {
-                          onSelectTask(task.taskArn);
-                        }}
-                      >
-                        <TableCell className="font-mono text-xs">{shortArn(task.taskArn)}</TableCell>
-                        <TableCell>
-                          <StatusPill status={resourceStatus(task.lastStatus)} label={task.lastStatus || "Unknown"} />
-                        </TableCell>
-                        <TableCell>{task.launchType || "Unknown"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {detailFields.length > 0 ? (
-        <section className={sectionCard}>
-          <h2 className="text-base font-bold">Selection Detail</h2>
-          <DetailFieldList fields={detailFields} emptyText="No ECS selection details are available." />
-          {selectedTask?.containers && selectedTask.containers.length > 0 ? (
-            <div className="space-y-2">
-              <div className={fieldLabel}>Containers</div>
-              {selectedTask.containers.map((container) => (
-                <div key={container.name} className={snippetCard}>
-                  <p className="text-sm font-medium">{container.name}</p>
-                  <p className="text-xs text-muted-foreground">{container.image || "Unknown image"}</p>
-                  <p className="text-xs text-muted-foreground">{container.lastStatus || "Unknown status"}</p>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          {copySnippets.length > 0 ? (
-            <div className="space-y-2">
-              <div className={fieldLabel}>Copy helpers</div>
-              {copySnippets.map((snippet) => (
-                <div key={snippet.label} className={snippetCard}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {snippet.label}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Copy ${snippet.label}`}
-                      onClick={() => {
-                        copyToClipboard(snippet.value);
-                      }}
-                    >
-                      <Copy />
-                    </Button>
-                  </div>
-                  <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-xs">{snippet.value}</pre>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </section>
-      ) : null}
     </div>
   );
 }

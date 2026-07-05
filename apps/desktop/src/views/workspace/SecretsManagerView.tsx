@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff, KeyRound, RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -16,15 +16,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
+import {
+  ResourceInspectorHeader,
+  ResourceInspectorPanel,
+  ResourceInventoryShell,
+} from "@/components/inventory/resource-inspector";
+import { ResourceTable } from "@/components/inventory/resource-table";
 import { DetailFieldList } from "./detail-fields";
 import type { AwsSecretsManagerSecret, WorkspaceSnapshot } from "@/types/backend";
 
@@ -66,6 +64,8 @@ export default function SecretsManagerView({
   const [revealedValue, setRevealedValue] = useState<string | null>(null);
   const [revealError, setRevealError] = useState<string | null>(null);
   const [revealing, setRevealing] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedSecretsManagerName));
+  const lastSelectedSecretRef = useRef(workspace.selectedSecretsManagerName || "");
 
   const regions =
     workspace.secretsManagerRegions.length > 0
@@ -79,10 +79,9 @@ export default function SecretsManagerView({
   const revealCapability = actionCapabilityState(workspace, "secrets", "reveal", "aws");
   const canReveal = revealCapability.enabled;
 
-  const selectedSecret =
-    workspace.secretsManagerSecrets.find(
-      (secret) => secret.name === workspace.selectedSecretsManagerName,
-    ) ?? workspace.secretsManagerSecrets[0];
+  const selectedSecret = workspace.secretsManagerSecrets.find(
+    (secret) => secret.name === workspace.selectedSecretsManagerName,
+  );
 
   const filteredSecrets = useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -100,6 +99,16 @@ export default function SecretsManagerView({
     actionStatus ||
     workspace.secretsManagerStatusMessage ||
     "Secrets Manager inventory is waiting for an open AWS workspace.";
+
+  useEffect(() => {
+    const nextSecretName = workspace.selectedSecretsManagerName || "";
+    if (nextSecretName !== lastSelectedSecretRef.current) {
+      lastSelectedSecretRef.current = nextSecretName;
+      setInspectorOpen(Boolean(nextSecretName));
+      setRevealedValue(null);
+      setRevealError(null);
+    }
+  }, [workspace.selectedSecretsManagerName]);
 
   async function revealSelected(): Promise<void> {
     if (!workspace.selectedSecretsManagerRegion || !selectedSecret?.name) {
@@ -131,6 +140,92 @@ export default function SecretsManagerView({
     );
   }
 
+  const tableEmptyState =
+    workspace.secretsManagerSecrets.length === 0 ? (
+      <EmptyState
+        icon={<KeyRound />}
+        title="No secrets"
+        description={
+          workspace.selectedSecretsManagerRegion
+            ? `No secrets were returned for ${workspace.selectedSecretsManagerRegion}.`
+            : "Select a region to list secrets."
+        }
+        className="border-0"
+      />
+    ) : (
+      <EmptyState
+        icon={<KeyRound />}
+        title="No matches"
+        description="No secrets match the current filter."
+        className="border-0"
+      />
+    );
+
+  const inspectorContent = selectedSecret ? (
+    <ResourceInspectorPanel>
+      <ResourceInspectorHeader
+        icon={KeyRound}
+        eyebrow="Secret"
+        title={selectedSecret.name}
+        onClose={() => setInspectorOpen(false)}
+      />
+
+      <DetailFieldList
+        fields={[
+          { label: "Name", value: selectedSecret.name },
+          { label: "ARN", value: selectedSecret.arn || "Unknown" },
+          { label: "Description", value: selectedSecret.description || "—" },
+          { label: "Last changed", value: selectedSecret.lastChangedDate || "—" },
+          { label: "Last accessed", value: selectedSecret.lastAccessedDate || "—" },
+          {
+            label: "Rotation",
+            value: selectedSecret.rotationEnabled ? "Enabled" : "—",
+          },
+        ]}
+        emptyText="No secret details are available."
+      />
+
+      <div>
+        <div className={fieldLabel}>Reveal value</div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!canReveal || revealing}
+            title={revealCapability.reason}
+            onClick={() => {
+              void revealSelected();
+            }}
+          >
+            <Eye />
+            Reveal value
+          </Button>
+          {revealedValue !== null ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setRevealedValue(null);
+              }}
+            >
+              <EyeOff />
+              Hide value
+            </Button>
+          ) : null}
+        </div>
+        {!canReveal && revealCapability.reason ? (
+          <p className="mt-2 text-xs text-muted-foreground">{revealCapability.reason}</p>
+        ) : null}
+        {revealError ? <p className="mt-2 text-sm text-destructive">{revealError}</p> : null}
+        {revealedValue !== null ? (
+          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border bg-muted/40 p-3 text-xs">
+            {revealedValue}
+          </pre>
+        ) : null}
+      </div>
+    </ResourceInspectorPanel>
+  ) : null;
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header>
@@ -143,12 +238,45 @@ export default function SecretsManagerView({
 
       <section className={sectionCard}>
         <div>
-          <h2 className="text-base font-bold">Secret Inventory</h2>
+          <h2 className="text-base font-bold">Secret Fleet</h2>
           <p className="text-sm text-muted-foreground">
             Metadata only until you reveal a value with write mode enabled.
           </p>
         </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <div className={fieldLabel}>Selected Region</div>
+            <p className="truncate text-sm">
+              {workspace.selectedSecretsManagerRegion || "No region selected"}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <div className={fieldLabel}>Selected Secret</div>
+            <p className="truncate text-sm font-mono">
+              {selectedSecret?.name || "No secret selected"}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <div className={fieldLabel}>Secrets</div>
+            <p className="truncate text-sm">
+              {countLabel(workspace.secretsManagerSecrets.length, "secret", "secrets")}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <div className={fieldLabel}>Write Mode</div>
+            <p className="truncate text-sm">{canReveal ? "Writes enabled" : "Read-only"}</p>
+          </div>
+        </div>
         <p className="text-sm text-muted-foreground">{statusMessage}</p>
+      </section>
+
+      <section className={sectionCard}>
+        <div>
+          <h2 className="text-base font-bold">Secret Inventory</h2>
+          <p className="text-sm text-muted-foreground">
+            Select a region, filter secrets, then choose one for metadata and reveal.
+          </p>
+        </div>
 
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-56">
@@ -196,107 +324,52 @@ export default function SecretsManagerView({
               }}
             />
           </div>
-        </div>
-
-        <div className="overflow-hidden rounded-lg border border-border">
-          {workspace.secretsManagerSecrets.length === 0 ? (
-            <EmptyState
-              icon={<KeyRound />}
-              title="No secrets"
-              description={
-                workspace.selectedSecretsManagerRegion
-                  ? `No secrets were returned for ${workspace.selectedSecretsManagerRegion}.`
-                  : "Select a region to list secrets."
-              }
-              className="border-0"
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Last changed</TableHead>
-                  <TableHead>Rotation</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredSecrets.map((secret) => (
-                  <TableRow
-                    key={secret.name}
-                    className={cn(
-                      "cursor-pointer",
-                      secret.name === workspace.selectedSecretsManagerName && "bg-muted/50",
-                    )}
-                    onClick={() => {
-                      setRevealedValue(null);
-                      onSelectSecret(secret.name);
-                    }}
-                  >
-                    <TableCell className="font-medium">{secret.name}</TableCell>
-                    <TableCell className="max-w-xs truncate text-sm">
-                      {secret.description || "—"}
-                    </TableCell>
-                    <TableCell className="text-xs">{secret.lastChangedDate || "—"}</TableCell>
-                    <TableCell className="text-xs">
-                      {secret.rotationEnabled ? "Enabled" : "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </div>
-      </section>
-
-      {selectedSecret ? (
-        <section className={sectionCard}>
-          <h2 className="text-base font-bold">Secret detail</h2>
-          <DetailFieldList
-            fields={[
-              { label: "Name", value: selectedSecret.name },
-              { label: "ARN", value: selectedSecret.arn || "Unknown" },
-              { label: "Description", value: selectedSecret.description || "—" },
-              { label: "Last changed", value: selectedSecret.lastChangedDate || "—" },
-              { label: "Last accessed", value: selectedSecret.lastAccessedDate || "—" },
-            ]}
-            emptyText="No secret details are available."
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              disabled={!canReveal || revealing}
-              title={revealCapability.reason}
-              onClick={() => {
-                void revealSelected();
-              }}
-            >
-              <Eye />
-              Reveal value
-            </Button>
-            {revealedValue !== null ? (
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setRevealedValue(null);
-                }}
-              >
-                <EyeOff />
-                Hide value
-              </Button>
-            ) : null}
+          <div className="pb-2 text-xs text-muted-foreground">
+            {filteredSecrets.length}/{workspace.secretsManagerSecrets.length} shown
           </div>
-          {!canReveal && revealCapability.reason ? (
-            <p className="text-sm text-muted-foreground">{revealCapability.reason}</p>
-          ) : null}
-          {revealError ? <p className="text-sm text-destructive">{revealError}</p> : null}
-          {revealedValue !== null ? (
-            <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border bg-muted/40 p-3 text-xs">
-              {revealedValue}
-            </pre>
-          ) : null}
-        </section>
-      ) : null}
+        </div>
+
+        <ResourceInventoryShell
+          table={
+            <ResourceTable
+              columns={[
+                { id: "name", label: "Name" },
+                { id: "description", label: "Description", cellClassName: "max-w-xs truncate text-sm" },
+                { id: "lastChanged", label: "Last changed", cellClassName: "text-xs" },
+                { id: "rotation", label: "Rotation", cellClassName: "text-xs" },
+              ]}
+              rows={filteredSecrets}
+              selectedKey={workspace.selectedSecretsManagerName}
+              getRowKey={(secret) => secret.name}
+              onRowClick={(secret) => {
+                setRevealedValue(null);
+                onSelectSecret(secret.name);
+                setInspectorOpen(true);
+              }}
+              renderCell={(secret, columnId) => {
+                if (columnId === "name") {
+                  return <span className="font-medium">{secret.name}</span>;
+                }
+                if (columnId === "description") {
+                  return secret.description || "—";
+                }
+                if (columnId === "lastChanged") {
+                  return secret.lastChangedDate || "—";
+                }
+                if (columnId === "rotation") {
+                  return secret.rotationEnabled ? "Enabled" : "—";
+                }
+                return null;
+              }}
+              emptyState={tableEmptyState}
+            />
+          }
+          inspectorContent={inspectorContent}
+          inspectorOpen={inspectorOpen}
+          onInspectorOpenChange={setInspectorOpen}
+          inspectorAriaLabel="Secrets Manager details"
+        />
+      </section>
     </div>
   );
 }
