@@ -9,6 +9,33 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.8.31] - 2026-07-05
+
+### Added
+
+- AWS CloudFormation tab with stack inventory, recent events, and copy helpers
+  (#109)
+- AWS EventBridge tab with event bus and rule listing (#109)
+- AWS write operations Phases 2–3 (LocalStack / local endpoints only): S3 delete
+  object and create bucket; EC2 run and terminate instances; Lambda delete
+  function; RDS start and stop instance; CloudWatch Logs create log group and
+  put log events; IAM create role (#110)
+
+### Changed
+
+- Nine AWS views migrated to the shared `ResourceInventoryShell` +
+  `ResourceTable` split-pane pattern: SQS, SNS, RDS (#108); ECS, API Gateway,
+  Secrets Manager, IAM, CloudWatch Logs, and EKS (#107)
+- Official AWS service icons for ECS, EKS, API Gateway, and Secrets Manager in
+  the sidebar and Services settings (`1d607c24`)
+
+### Fixed
+
+- EKS cluster row selection now keys on `clusterName` so the inspector stays in
+  sync with the table (#107)
+- RDS inspector copy actions no longer include an unreachable empty-state branch
+  (#108)
+
 ## [0.8.30] - 2026-07-05
 
 ### Added
@@ -605,7 +632,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.29...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.31...HEAD
+[0.8.31]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.30...v0.8.31
 [0.8.30]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.29...v0.8.30
 [0.8.29]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.28...v0.8.29
 [0.8.28]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.27...v0.8.28
