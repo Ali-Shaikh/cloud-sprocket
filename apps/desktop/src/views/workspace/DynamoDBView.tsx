@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Database, RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -17,14 +17,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -35,11 +27,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/empty-state";
+import {
+  ResourceInspectorHeader,
+  ResourceInspectorPanel,
+  ResourceInventoryShell,
+} from "@/components/inventory/resource-inspector";
+import { ResourceTable } from "@/components/inventory/resource-table";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { DetailFieldList } from "./detail-fields";
-import type { AwsDynamoDBTable, WorkspaceSnapshot } from "@/types/backend";
+import type { WorkspaceSnapshot } from "@/types/backend";
 
 export type DynamoDBViewProps = {
   workspace: WorkspaceSnapshot;
@@ -115,6 +113,8 @@ export default function DynamoDBView({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemJson, setItemJson] = useState('{\n  "id": "item-001",\n  "payload": "hello"\n}');
   const [keyJson, setKeyJson] = useState('{\n  "id": "item-001"\n}');
+  const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedDynamodbTableName));
+  const lastSelectedTableRef = useRef(workspace.selectedDynamodbTableName || "");
 
   const regions =
     workspace.dynamodbRegions.length > 0
@@ -188,6 +188,14 @@ export default function DynamoDBView({
       ]
     : [];
 
+  useEffect(() => {
+    const nextTableName = workspace.selectedDynamodbTableName || "";
+    if (nextTableName !== lastSelectedTableRef.current) {
+      lastSelectedTableRef.current = nextTableName;
+      setInspectorOpen(Boolean(nextTableName));
+    }
+  }, [workspace.selectedDynamodbTableName]);
+
   if (workspace.provider?.providerId && workspace.provider.providerId !== "aws") {
     return (
       <div className="p-6">
@@ -199,6 +207,169 @@ export default function DynamoDBView({
       </div>
     );
   }
+
+  const tableEmptyState =
+    workspace.dynamodbTables.length === 0 ? (
+      <EmptyState
+        icon={<Database />}
+        title="No tables"
+        description={
+          workspace.selectedDynamodbRegion
+            ? `No DynamoDB tables were returned for ${workspace.selectedDynamodbRegion}.`
+            : "Select a region to list DynamoDB tables."
+        }
+        className="border-0"
+      />
+    ) : (
+      <EmptyState
+        icon={<Database />}
+        title="No matches"
+        description="No DynamoDB tables match the current filter."
+        className="border-0"
+      />
+    );
+
+  const inspectorContent = selectedTable ? (
+    <ResourceInspectorPanel>
+      <ResourceInspectorHeader
+        icon={Database}
+        eyebrow="Table"
+        title={selectedTable.tableName}
+        onClose={() => setInspectorOpen(false)}
+      />
+
+      <DetailFieldList
+        fields={[
+          { label: "Status", value: selectedTable.status || "Unknown" },
+          { label: "Billing mode", value: selectedTable.billingMode || "Unknown" },
+          { label: "Item count", value: String(selectedTable.itemCount ?? "Unknown") },
+          { label: "Table size", value: formatBytes(selectedTable.tableSizeBytes) },
+          { label: "Hash key", value: selectedTable.hashKey || "Unknown" },
+          { label: "Range key", value: selectedTable.rangeKey || "None" },
+        ]}
+        emptyText="No table details are available."
+      />
+
+      {selectedTable.globalSecondaryIndexes &&
+      selectedTable.globalSecondaryIndexes.length > 0 ? (
+        <div>
+          <div className={fieldLabel}>Global secondary indexes</div>
+          <div className="space-y-2">
+            {selectedTable.globalSecondaryIndexes.map((gsi) => (
+              <div key={gsi.indexName} className={snippetCard}>
+                <div className="text-sm font-semibold">{gsi.indexName}</div>
+                <div className="text-xs text-muted-foreground">
+                  {gsi.hashKey}
+                  {gsi.rangeKey ? ` · ${gsi.rangeKey}` : ""}
+                  {gsi.status ? ` · ${gsi.status}` : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">No global secondary indexes.</p>
+      )}
+
+      {selectedTable.sampleItems && selectedTable.sampleItems.length > 0 ? (
+        <div>
+          <div className={fieldLabel}>Sample items (read-only scan)</div>
+          <div className="space-y-2">
+            {selectedTable.sampleItems.map((item, index) => (
+              <div key={`${selectedTable.tableName}-item-${index}`} className={snippetCard}>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">Item {index + 1}</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-1 text-[10px]"
+                    onClick={() => {
+                      copyToClipboard(item, "Item copied");
+                    }}
+                  >
+                    <Copy className="mr-1 h-3 w-3" />
+                    Copy
+                  </Button>
+                </div>
+                <pre className="max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[10px]">
+                  {item}
+                </pre>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          No sample items were returned for this table.
+        </p>
+      )}
+
+      <div>
+        <div className={fieldLabel}>Write actions</div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!canPutItem}
+            title={putDisabledReason}
+            onClick={() => {
+              setPutDialogOpen(true);
+            }}
+          >
+            Put item
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!canDeleteItem}
+            title={deleteDisabledReason}
+            onClick={() => {
+              setDeleteDialogOpen(true);
+            }}
+          >
+            Delete item
+          </Button>
+        </div>
+        {putDisabledReason || deleteDisabledReason ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {putDisabledReason || deleteDisabledReason}
+          </p>
+        ) : null}
+      </div>
+
+      <div>
+        <div className={fieldLabel}>Copy actions</div>
+        {copySnippets.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Select a table to generate copy actions.
+          </p>
+        ) : (
+          <div className="mt-2 space-y-3">
+            {copySnippets.map((snippet) => (
+              <div key={snippet.label} className={snippetCard}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className={fieldLabel}>{snippet.label}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      copyToClipboard(snippet.value, `${snippet.label} copied`);
+                    }}
+                  >
+                    <Copy />
+                    Copy
+                  </Button>
+                </div>
+                <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                  {snippet.value}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </ResourceInspectorPanel>
+  ) : null;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -300,214 +471,52 @@ export default function DynamoDBView({
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border">
-          {workspace.dynamodbTables.length === 0 ? (
-            <EmptyState
-              icon={<Database />}
-              title="No tables"
-              description={
-                workspace.selectedDynamodbRegion
-                  ? `No DynamoDB tables were returned for ${workspace.selectedDynamodbRegion}.`
-                  : "Select a region to list DynamoDB tables."
-              }
-              className="border-0"
-            />
-          ) : filteredTables.length === 0 ? (
-            <EmptyState
-              icon={<Database />}
-              title="No matches"
-              description="No DynamoDB tables match the current filter."
-              className="border-0"
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Items</TableHead>
-                  <TableHead>Hash key</TableHead>
-                  <TableHead>Range key</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTables.map((table) => {
-                  const active = table.tableName === selectedTable?.tableName;
+        <ResourceInventoryShell
+          table={
+            <ResourceTable
+              columns={[
+                { id: "name", label: "Name" },
+                { id: "status", label: "Status" },
+                { id: "items", label: "Items" },
+                { id: "hashKey", label: "Hash key" },
+                { id: "rangeKey", label: "Range key" },
+              ]}
+              rows={filteredTables}
+              selectedKey={selectedTable?.tableName}
+              getRowKey={(table) => table.tableName}
+              onRowClick={(table) => {
+                onSelectTable(table.tableName);
+                setInspectorOpen(true);
+              }}
+              renderCell={(table, columnId) => {
+                if (columnId === "name") {
+                  return <span className="font-mono text-sm">{table.tableName}</span>;
+                }
+                if (columnId === "status") {
                   return (
-                    <TableRow
-                      key={table.tableName}
-                      data-state={active ? "selected" : undefined}
-                      className="cursor-pointer"
-                      onClick={() => {
-                        onSelectTable(table.tableName);
-                      }}
-                    >
-                      <TableCell className="font-mono text-sm">{table.tableName}</TableCell>
-                      <TableCell>
-                        <StatusPill
-                          status={tableStatus(table.status)}
-                          label={table.status || "Unknown"}
-                        />
-                      </TableCell>
-                      <TableCell>{table.itemCount ?? "Unknown"}</TableCell>
-                      <TableCell>{table.hashKey || "Unknown"}</TableCell>
-                      <TableCell>{table.rangeKey || "None"}</TableCell>
-                    </TableRow>
+                    <StatusPill
+                      status={tableStatus(table.status)}
+                      label={table.status || "Unknown"}
+                    />
                   );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </div>
+                }
+                if (columnId === "items") {
+                  return table.itemCount ?? "Unknown";
+                }
+                if (columnId === "hashKey") {
+                  return table.hashKey || "Unknown";
+                }
+                return table.rangeKey || "None";
+              }}
+              emptyState={tableEmptyState}
+            />
+          }
+          inspectorContent={inspectorContent}
+          inspectorOpen={inspectorOpen}
+          onInspectorOpenChange={setInspectorOpen}
+          inspectorAriaLabel="DynamoDB table details"
+        />
       </section>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className={sectionCard}>
-          <div>
-            <h2 className="text-base font-bold">Table Detail</h2>
-            <p className="text-sm text-muted-foreground">
-              {selectedTable?.tableName || "Select a table for schema and sample items."}
-            </p>
-          </div>
-          {selectedTable ? (
-            <>
-              <DetailFieldList
-                fields={[
-                  { label: "Status", value: selectedTable.status || "Unknown" },
-                  { label: "Billing mode", value: selectedTable.billingMode || "Unknown" },
-                  { label: "Item count", value: String(selectedTable.itemCount ?? "Unknown") },
-                  { label: "Table size", value: formatBytes(selectedTable.tableSizeBytes) },
-                  { label: "Hash key", value: selectedTable.hashKey || "Unknown" },
-                  { label: "Range key", value: selectedTable.rangeKey || "None" },
-                ]}
-                emptyText="No table details are available."
-              />
-
-              {selectedTable.globalSecondaryIndexes &&
-              selectedTable.globalSecondaryIndexes.length > 0 ? (
-                <div>
-                  <div className={fieldLabel}>Global secondary indexes</div>
-                  <div className="space-y-2">
-                    {selectedTable.globalSecondaryIndexes.map((gsi) => (
-                      <div key={gsi.indexName} className={snippetCard}>
-                        <div className="text-sm font-semibold">{gsi.indexName}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {gsi.hashKey}
-                          {gsi.rangeKey ? ` · ${gsi.rangeKey}` : ""}
-                          {gsi.status ? ` · ${gsi.status}` : ""}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No global secondary indexes.</p>
-              )}
-
-              {selectedTable.sampleItems && selectedTable.sampleItems.length > 0 ? (
-                <div>
-                  <div className={fieldLabel}>Sample items (read-only scan)</div>
-                  <div className="space-y-2">
-                    {selectedTable.sampleItems.map((item, index) => (
-                      <div key={`${selectedTable.tableName}-item-${index}`} className={snippetCard}>
-                        <div className="mb-1 flex items-center justify-between gap-2">
-                          <span className="text-xs text-muted-foreground">Item {index + 1}</span>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 px-1 text-[10px]"
-                            onClick={() => {
-                              copyToClipboard(item, "Item copied");
-                            }}
-                          >
-                            <Copy className="mr-1 h-3 w-3" />
-                            Copy
-                          </Button>
-                        </div>
-                        <pre className="max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[10px]">
-                          {item}
-                        </pre>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No sample items were returned for this table.
-                </p>
-              )}
-
-              <div>
-                <div className={fieldLabel}>Write actions</div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    disabled={!canPutItem}
-                    title={putDisabledReason}
-                    onClick={() => {
-                      setPutDialogOpen(true);
-                    }}
-                  >
-                    Put item
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={!canDeleteItem}
-                    title={deleteDisabledReason}
-                    onClick={() => {
-                      setDeleteDialogOpen(true);
-                    }}
-                  >
-                    Delete item
-                  </Button>
-                </div>
-                {putDisabledReason || deleteDisabledReason ? (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {putDisabledReason || deleteDisabledReason}
-                  </p>
-                ) : null}
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">No DynamoDB table selected.</p>
-          )}
-        </section>
-
-        <section className={sectionCard}>
-          <div>
-            <h2 className="text-base font-bold">Copy Actions</h2>
-            <p className="text-sm text-muted-foreground">
-              Generated locally from the selected region and table. No snippet is stored.
-            </p>
-          </div>
-          {copySnippets.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Select a table to generate copy actions.</p>
-          ) : (
-            <div className="space-y-3">
-              {copySnippets.map((snippet) => (
-                <div key={snippet.label} className={snippetCard}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={fieldLabel}>{snippet.label}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        copyToClipboard(snippet.value, `${snippet.label} copied`);
-                      }}
-                    >
-                      <Copy />
-                      Copy
-                    </Button>
-                  </div>
-                  <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                    {snippet.value}
-                  </pre>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
 
       <AlertDialog open={putDialogOpen} onOpenChange={setPutDialogOpen}>
         <AlertDialogContent>

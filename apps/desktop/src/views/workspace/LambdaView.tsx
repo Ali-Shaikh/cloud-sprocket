@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { Copy, Loader2, Play, Plus, RefreshCw, Server, Upload } from "lucide-react";
 
@@ -18,14 +18,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -36,13 +28,18 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/empty-state";
+import {
+  ResourceInspectorHeader,
+  ResourceInspectorPanel,
+  ResourceInventoryShell,
+} from "@/components/inventory/resource-inspector";
+import { ResourceTable } from "@/components/inventory/resource-table";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
 import { DetailFieldList } from "./detail-fields";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import type {
   AwsLambdaCreateInput,
-  AwsLambdaFunction,
   AwsLambdaInvokeResult,
   LambdaCreateCodeSource,
   WorkspaceSnapshot,
@@ -224,6 +221,8 @@ export default function LambdaView({
   const [createError, setCreateError] = useState<string | undefined>(undefined);
   const [payloadText, setPayloadText] = useState(defaultPayload);
   const [payloadError, setPayloadError] = useState<string | undefined>(undefined);
+  const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedLambdaFunctionName));
+  const lastSelectedFunctionRef = useRef(workspace.selectedLambdaFunctionName || "");
 
   const regions =
     workspace.lambdaRegions.length > 0 ? workspace.lambdaRegions : workspace.ec2Regions;
@@ -285,6 +284,14 @@ export default function LambdaView({
       onCreateFormOpenChange?.(false);
     }
   }, [openCreateForm, onCreateFormOpenChange]);
+
+  useEffect(() => {
+    const nextFunctionName = workspace.selectedLambdaFunctionName || "";
+    if (nextFunctionName !== lastSelectedFunctionRef.current) {
+      lastSelectedFunctionRef.current = nextFunctionName;
+      setInspectorOpen(Boolean(nextFunctionName));
+    }
+  }, [workspace.selectedLambdaFunctionName]);
 
   const copySnippets = selectedFunction
     ? [
@@ -450,6 +457,190 @@ export default function LambdaView({
     );
   }
 
+  const tableEmptyState =
+    workspace.lambdaFunctions.length === 0 ? (
+      <EmptyState
+        icon={<Server />}
+        title="No functions"
+        description={
+          workspace.selectedLambdaRegion
+            ? `No Lambda functions were returned for ${workspace.selectedLambdaRegion}.`
+            : "Select a region to list Lambda functions."
+        }
+        className="border-0"
+      />
+    ) : (
+      <EmptyState
+        icon={<Server />}
+        title="No matches"
+        description="No Lambda functions match the current filter."
+        className="border-0"
+      />
+    );
+
+  const inspectorContent = selectedFunction ? (
+    <ResourceInspectorPanel>
+      <ResourceInspectorHeader
+        icon={Server}
+        eyebrow="Function"
+        title={selectedFunction.functionName}
+        onClose={() => setInspectorOpen(false)}
+      />
+
+      <DetailFieldList
+        fields={[
+          { label: "Runtime", value: selectedFunction.runtime || "Unknown" },
+          {
+            label: "Memory (MB)",
+            value: selectedFunction.memorySize ? String(selectedFunction.memorySize) : "Unknown",
+          },
+          {
+            label: "Timeout (s)",
+            value: selectedFunction.timeout ? String(selectedFunction.timeout) : "Unknown",
+          },
+          { label: "Handler", value: selectedFunction.handler || "Unknown" },
+          { label: "State", value: selectedFunction.state || "Unknown" },
+          { label: "Last Modified", value: selectedFunction.lastModified || "Unknown" },
+          { label: "Log Group", value: selectedFunction.logGroup || "Unknown" },
+          { label: "Description", value: selectedFunction.description || "No description" },
+        ]}
+        emptyText="No function details are available."
+      />
+
+      {selectedFunction.recentLogs && selectedFunction.recentLogs.length > 0 ? (
+        <div>
+          <div className={fieldLabel}>Recent CloudWatch Logs</div>
+          <div
+            className={cn(
+              snippetCard,
+              "max-h-48 overflow-auto whitespace-pre-wrap font-mono text-[11px]",
+            )}
+          >
+            {selectedFunction.recentLogs.join("\n")}
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          No recent CloudWatch log events were returned for this function.
+        </p>
+      )}
+
+      <div>
+        <div className={fieldLabel}>Test invoke (safe write action)</div>
+        <Textarea
+          className="mt-1 h-28 font-mono text-xs"
+          value={payloadText}
+          onChange={(event) => {
+            setPayloadText(event.target.value);
+            setPayloadError(undefined);
+          }}
+          placeholder='{"key": "value"}'
+        />
+        {payloadError ? (
+          <p className="mt-1 text-xs text-destructive">{payloadError}</p>
+        ) : null}
+        {invokeDisabledReason ? (
+          <p className="mt-1 text-xs text-muted-foreground">{invokeDisabledReason}</p>
+        ) : null}
+        <div className="mt-2 flex gap-2">
+          <Button
+            size="sm"
+            disabled={!canInvoke}
+            title={invokeDisabledReason}
+            onClick={handleInvokeClick}
+          >
+            <Play className="mr-1 h-3 w-3" />
+            Invoke
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setPayloadText(defaultPayload);
+              setPayloadError(undefined);
+            }}
+          >
+            Reset payload
+          </Button>
+        </div>
+      </div>
+
+      {invokeResult ? (
+        <div>
+          <div className={fieldLabel}>Last invoke result</div>
+          <div className={snippetCard}>
+            {invokeResult.error ? (
+              <div className="text-xs text-destructive">Error: {invokeResult.error}</div>
+            ) : (
+              <div className="text-xs">
+                Status: {invokeResult.statusCode}
+                {invokeResult.executedVersion ? ` (v${invokeResult.executedVersion})` : ""}
+              </div>
+            )}
+            {invokeResult.functionError ? (
+              <div className="text-xs text-destructive">Error: {invokeResult.functionError}</div>
+            ) : null}
+            {invokeResult.logResult ? (
+              <div className="mt-1 border-t pt-1 font-mono text-[10px] whitespace-pre-wrap">
+                {invokeResult.logResult}
+              </div>
+            ) : null}
+            {invokeResult.payload ? (
+              <div className="mt-1">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-1 text-[10px]"
+                  onClick={() => {
+                    copyToClipboard(formatPayload(invokeResult.payload), "Response copied");
+                  }}
+                >
+                  <Copy className="mr-1 h-3 w-3" />
+                  Copy response
+                </Button>
+                <pre className="mt-1 max-h-32 overflow-auto rounded bg-background p-2 text-[10px]">
+                  {formatPayload(invokeResult.payload)}
+                </pre>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      <div>
+        <div className={fieldLabel}>Copy actions</div>
+        {copySnippets.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Select a function to generate copy actions.
+          </p>
+        ) : (
+          <div className="mt-2 space-y-3">
+            {copySnippets.map((snippet) => (
+              <div key={snippet.label} className={snippetCard}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className={fieldLabel}>{snippet.label}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      copyToClipboard(snippet.value, `${snippet.label} copied`);
+                    }}
+                  >
+                    <Copy />
+                    Copy
+                  </Button>
+                </div>
+                <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                  {snippet.value}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </ResourceInspectorPanel>
+  ) : null;
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header>
@@ -570,247 +761,56 @@ export default function LambdaView({
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border">
-          {workspace.lambdaFunctions.length === 0 ? (
-            <EmptyState
-              icon={<Server />}
-              title="No functions"
-              description={
-                workspace.selectedLambdaRegion
-                  ? `No Lambda functions were returned for ${workspace.selectedLambdaRegion}.`
-                  : "Select a region to list Lambda functions."
-              }
-              className="border-0"
+        <ResourceInventoryShell
+          table={
+            <ResourceTable
+              columns={[
+                { id: "name", label: "Name" },
+                { id: "runtime", label: "Runtime" },
+                { id: "memory", label: "Memory" },
+                { id: "lastModified", label: "Last Modified", cellClassName: "text-xs text-muted-foreground" },
+                { id: "state", label: "State" },
+              ]}
+              rows={filteredFunctions}
+              selectedKey={selectedFunction?.functionName}
+              getRowKey={(fn) => fn.functionName}
+              onRowClick={(fn) => {
+                onSelectFunction(fn.functionName);
+                setInspectorOpen(true);
+              }}
+              renderCell={(fn, columnId) => {
+                if (columnId === "name") {
+                  return <span className="font-mono text-sm">{fn.functionName}</span>;
+                }
+                if (columnId === "runtime") {
+                  return fn.runtime || "Unknown";
+                }
+                if (columnId === "memory") {
+                  return fn.memorySize ? `${fn.memorySize} MB` : "Unknown";
+                }
+                if (columnId === "lastModified") {
+                  return fn.lastModified || "Unknown";
+                }
+                return (
+                  <StatusPill
+                    status={lambdaStateStatus(fn.state)}
+                    label={fn.state || "Unknown"}
+                  />
+                );
+              }}
+              emptyState={tableEmptyState}
             />
-          ) : filteredFunctions.length === 0 ? (
-            <EmptyState
-              icon={<Server />}
-              title="No matches"
-              description="No Lambda functions match the current filter."
-              className="border-0"
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Runtime</TableHead>
-                  <TableHead>Memory</TableHead>
-                  <TableHead>Last Modified</TableHead>
-                  <TableHead>State</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredFunctions.map((fn) => {
-                  const active = fn.functionName === selectedFunction?.functionName;
-                  return (
-                    <TableRow
-                      key={fn.functionName}
-                      data-state={active ? "selected" : undefined}
-                      className="cursor-pointer"
-                      onClick={() => {
-                        onSelectFunction(fn.functionName);
-                      }}
-                    >
-                      <TableCell className="font-mono text-sm">{fn.functionName}</TableCell>
-                      <TableCell>{fn.runtime || "Unknown"}</TableCell>
-                      <TableCell>{fn.memorySize ? `${fn.memorySize} MB` : "Unknown"}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {fn.lastModified || "Unknown"}
-                      </TableCell>
-                      <TableCell>
-                        <StatusPill
-                          status={lambdaStateStatus(fn.state)}
-                          label={fn.state || "Unknown"}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </div>
+          }
+          inspectorContent={inspectorContent}
+          inspectorOpen={inspectorOpen}
+          onInspectorOpenChange={setInspectorOpen}
+          inspectorAriaLabel="Lambda function details"
+        />
 
         {!invokeInFlight ? (
           <p className="text-sm text-muted-foreground">{statusMessage}</p>
         ) : null}
       </section>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className={sectionCard}>
-          <div>
-            <h2 className="text-base font-bold">Function Detail</h2>
-            <p className="text-sm text-muted-foreground">
-              {selectedFunction?.functionName || "Select a function for configuration and logs."}
-            </p>
-          </div>
-          {selectedFunction ? (
-            <>
-              <DetailFieldList
-                fields={[
-                  { label: "Runtime", value: selectedFunction.runtime || "Unknown" },
-                  {
-                    label: "Memory (MB)",
-                    value: selectedFunction.memorySize ? String(selectedFunction.memorySize) : "Unknown",
-                  },
-                  {
-                    label: "Timeout (s)",
-                    value: selectedFunction.timeout ? String(selectedFunction.timeout) : "Unknown",
-                  },
-                  { label: "Handler", value: selectedFunction.handler || "Unknown" },
-                  { label: "State", value: selectedFunction.state || "Unknown" },
-                  { label: "Last Modified", value: selectedFunction.lastModified || "Unknown" },
-                  { label: "Log Group", value: selectedFunction.logGroup || "Unknown" },
-                  { label: "Description", value: selectedFunction.description || "No description" },
-                ]}
-                emptyText="No function details are available."
-              />
-
-              {selectedFunction.recentLogs && selectedFunction.recentLogs.length > 0 ? (
-                <div>
-                  <div className={fieldLabel}>Recent CloudWatch Logs</div>
-                  <div
-                    className={cn(
-                      snippetCard,
-                      "max-h-48 overflow-auto whitespace-pre-wrap font-mono text-[11px]",
-                    )}
-                  >
-                    {selectedFunction.recentLogs.join("\n")}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No recent CloudWatch log events were returned for this function.
-                </p>
-              )}
-
-              <div>
-                <div className={fieldLabel}>Test invoke (safe write action)</div>
-                <Textarea
-                  className="mt-1 h-28 font-mono text-xs"
-                  value={payloadText}
-                  onChange={(event) => {
-                    setPayloadText(event.target.value);
-                    setPayloadError(undefined);
-                  }}
-                  placeholder='{"key": "value"}'
-                />
-                {payloadError ? (
-                  <p className="mt-1 text-xs text-destructive">{payloadError}</p>
-                ) : null}
-                {invokeDisabledReason ? (
-                  <p className="mt-1 text-xs text-muted-foreground">{invokeDisabledReason}</p>
-                ) : null}
-                <div className="mt-2 flex gap-2">
-                  <Button
-                    size="sm"
-                    disabled={!canInvoke}
-                    title={invokeDisabledReason}
-                    onClick={handleInvokeClick}
-                  >
-                    <Play className="mr-1 h-3 w-3" />
-                    Invoke
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setPayloadText(defaultPayload);
-                      setPayloadError(undefined);
-                    }}
-                  >
-                    Reset payload
-                  </Button>
-                </div>
-              </div>
-
-              {invokeResult ? (
-                <div>
-                  <div className={fieldLabel}>Last invoke result</div>
-                  <div className={snippetCard}>
-                    {invokeResult.error ? (
-                      <div className="text-xs text-destructive">Error: {invokeResult.error}</div>
-                    ) : (
-                      <div className="text-xs">
-                        Status: {invokeResult.statusCode}
-                        {invokeResult.executedVersion ? ` (v${invokeResult.executedVersion})` : ""}
-                      </div>
-                    )}
-                    {invokeResult.functionError ? (
-                      <div className="text-xs text-destructive">
-                        Error: {invokeResult.functionError}
-                      </div>
-                    ) : null}
-                    {invokeResult.logResult ? (
-                      <div className="mt-1 border-t pt-1 font-mono text-[10px] whitespace-pre-wrap">
-                        {invokeResult.logResult}
-                      </div>
-                    ) : null}
-                    {invokeResult.payload ? (
-                      <div className="mt-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 px-1 text-[10px]"
-                          onClick={() => {
-                            copyToClipboard(formatPayload(invokeResult.payload), "Response copied");
-                          }}
-                        >
-                          <Copy className="mr-1 h-3 w-3" />
-                          Copy response
-                        </Button>
-                        <pre className="mt-1 max-h-32 overflow-auto rounded bg-background p-2 text-[10px]">
-                          {formatPayload(invokeResult.payload)}
-                        </pre>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">No Lambda function selected.</p>
-          )}
-        </section>
-
-        <section className={sectionCard}>
-          <div>
-            <h2 className="text-base font-bold">Copy Actions</h2>
-            <p className="text-sm text-muted-foreground">
-              Generated locally from the selected region and function. No snippet is stored.
-            </p>
-          </div>
-          {copySnippets.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Select a function to generate copy actions.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {copySnippets.map((snippet) => (
-                <div key={snippet.label} className={snippetCard}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={fieldLabel}>{snippet.label}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        copyToClipboard(snippet.value, `${snippet.label} copied`);
-                      }}
-                    >
-                      <Copy />
-                      Copy
-                    </Button>
-                  </div>
-                  <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                    {snippet.value}
-                  </pre>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
 
       <AlertDialog
         open={createFormOpen}

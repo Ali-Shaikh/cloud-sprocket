@@ -2,11 +2,28 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
 import DynamoDBView from "./DynamoDBView";
 import type { WorkspaceSnapshot } from "@/types/backend";
+
+function mockMatchMedia(matches: boolean) {
+  return vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const workspaceFixture: WorkspaceSnapshot = {
   provider: {
@@ -178,7 +195,17 @@ function renderDynamoDBView() {
 }
 
 describe("DynamoDBView", () => {
+  it("docks table detail in the inspector on wide viewports", () => {
+    mockMatchMedia(true);
+    renderDynamoDBView();
+
+    expect(screen.getByLabelText("DynamoDB table details")).toBeInTheDocument();
+    expect(screen.getByText("Table")).toBeInTheDocument();
+    expect(screen.getByText("Copy actions")).toBeInTheDocument();
+  });
+
   it("renders inventory, schema detail, and sample items", () => {
+    mockMatchMedia(true);
     renderDynamoDBView();
 
     expect(screen.getByText("Table Fleet")).toBeInTheDocument();
@@ -217,6 +244,7 @@ describe("DynamoDBView", () => {
   }
 
   it("puts an item into the selected table through the put dialog", () => {
+    mockMatchMedia(true);
     const { onPutItem } = renderWritableDynamoDBView();
 
     fireEvent.click(screen.getByRole("button", { name: "Put item" }));
@@ -230,6 +258,7 @@ describe("DynamoDBView", () => {
   });
 
   it("deletes an item from the selected table through the delete dialog", () => {
+    mockMatchMedia(true);
     const { onDeleteItem } = renderWritableDynamoDBView();
 
     fireEvent.click(screen.getByRole("button", { name: "Delete item" }));
@@ -243,6 +272,7 @@ describe("DynamoDBView", () => {
   });
 
   it("disables write actions when write mode is off", () => {
+    mockMatchMedia(true);
     renderDynamoDBView();
 
     expect(screen.getByRole("button", { name: "Put item" })).toBeDisabled();
