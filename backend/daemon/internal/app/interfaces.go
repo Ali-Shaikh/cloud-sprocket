@@ -79,6 +79,12 @@ type ECSInventory interface {
 	DescribeTask(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, taskArn string) (models.AwsEcsTask, error)
 }
 
+type EKSInventory interface {
+	ListClusters(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsEksCluster, error)
+	DescribeCluster(ctx context.Context, profile models.ProfileSummary, region string, clusterName string) (models.AwsEksCluster, error)
+	ListNodeGroups(ctx context.Context, profile models.ProfileSummary, region string, clusterName string) ([]models.AwsEksNodeGroup, error)
+}
+
 type LogsInventory interface {
 	ListLogGroups(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsLogGroup, error)
 	DescribeLogGroup(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string) (models.AwsLogGroup, error)

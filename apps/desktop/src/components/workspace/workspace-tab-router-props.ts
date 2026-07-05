@@ -82,6 +82,7 @@ export type WorkspaceTabRouterProps = {
   snsActionStatus: string;
   rdsActionStatus: string;
   ecsActionStatus: string;
+  eksActionStatus: string;
   apiGatewayActionStatus: string;
   secretsManagerActionStatus: string;
   logsActionStatus: string;
@@ -177,6 +178,9 @@ export type WorkspaceTabRouterProps = {
   selectECSCluster: (clusterArn: string) => void;
   selectECSService: (serviceArn: string) => void;
   selectECSTask: (taskArn: string) => void;
+  refreshEKSInventory: () => void;
+  selectEKSRegion: (region: string) => void;
+  selectEKSCluster: (clusterName: string) => void;
   refreshApiGatewayInventory: () => void;
   selectApiGatewayRegion: (region: string) => void;
   selectApiGatewayApi: (apiKey: string) => void;

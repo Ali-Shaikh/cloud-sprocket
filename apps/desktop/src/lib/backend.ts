@@ -506,6 +506,28 @@ const mockWorkspaceECSTasks = [
   },
 ];
 
+const mockWorkspaceEKSClusters = [
+  {
+    clusterArn: "arn:aws:eks:us-east-1:000000000000:cluster/demo",
+    clusterName: "demo",
+    status: "ACTIVE",
+    version: "1.29",
+    platformVersion: "eks.5",
+    endpoint: "https://demo.eks.us-east-1.amazonaws.com",
+  },
+];
+
+const mockWorkspaceEKSNodeGroups = [
+  {
+    nodeGroupArn: "arn:aws:eks:us-east-1:000000000000:nodegroup/demo/workers",
+    nodeGroupName: "workers",
+    status: "ACTIVE",
+    desiredSize: 2,
+    instanceTypes: ["m5.large"],
+    capacityType: "ON_DEMAND",
+  },
+];
+
 const mockWorkspaceApiGatewayApis = [
   {
     apiKey: "http:xyz789",
@@ -1287,6 +1309,8 @@ function countMockCatalogueResources(
         return workspace.rdsInstances.length;
       case "ecs":
         return workspace.ecsClusters.length;
+      case "eks":
+        return workspace.eksClusters.length;
       case "apigateway":
         return workspace.apiGatewayApis.length;
       case "secrets":
@@ -1823,6 +1847,18 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     ecsClusters: isAWSWorkspace ? mockWorkspaceECSClusters : [],
     ecsServices: isAWSWorkspace ? mockWorkspaceECSServices : [],
     ecsTasks: isAWSWorkspace ? mockWorkspaceECSTasks : [],
+    selectedEksRegion: isAWSWorkspace
+      ? mockState.session.selectedEksRegion ?? mockWorkspaceRegions[0]
+      : undefined,
+    selectedEksClusterName: isAWSWorkspace
+      ? mockState.session.selectedEksClusterName ?? mockWorkspaceEKSClusters[0]?.clusterName
+      : undefined,
+    eksStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceEKSClusters.length} EKS clusters from ${mockState.session.selectedEksRegion ?? mockWorkspaceRegions[0]}.`
+      : "EKS inventory is only available for open AWS workspaces.",
+    eksRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
+    eksClusters: isAWSWorkspace ? mockWorkspaceEKSClusters : [],
+    eksNodeGroups: isAWSWorkspace ? mockWorkspaceEKSNodeGroups : [],
     selectedApiGatewayRegion: isAWSWorkspace
       ? mockState.session.selectedApiGatewayRegion ?? mockWorkspaceRegions[0]
       : undefined,
@@ -2377,6 +2413,15 @@ function handleMockRequest<T>(
     case "aws.ecs.selectTask":
       mockState.session.selectedEcsTaskArn = String(params.taskArn ?? "");
       appendLog("info", `Selected ECS task ${params.taskArn}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.eks.selectRegion":
+      mockState.session.selectedEksRegion = String(params.region ?? "");
+      mockState.session.selectedEksClusterName = undefined;
+      appendLog("info", `Selected EKS region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.eks.selectCluster":
+      mockState.session.selectedEksClusterName = String(params.clusterName ?? "");
+      appendLog("info", `Selected EKS cluster ${params.clusterName}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     case "aws.apigateway.selectRegion":
       mockState.session.selectedApiGatewayRegion = String(params.region ?? "");

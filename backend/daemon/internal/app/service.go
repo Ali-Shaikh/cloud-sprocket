@@ -35,6 +35,7 @@ type Service struct {
 	sns                   SNSInventory
 	rds                   RDSInventory
 	ecs                   ECSInventory
+	eks                   EKSInventory
 	apigateway            ApiGatewayInventory
 	secretsManager        SecretsManagerInventory
 	logs                  LogsInventory
@@ -69,6 +70,7 @@ func New(
 	snsInventory SNSInventory,
 	rdsInventory RDSInventory,
 	ecsInventory ECSInventory,
+	eksInventory EKSInventory,
 	apigatewayInventory ApiGatewayInventory,
 	secretsManagerInventory SecretsManagerInventory,
 	logsInventory LogsInventory,
@@ -78,7 +80,7 @@ func New(
 ) *Service {
 	localStackMgr := localstack.NewManager(settings)
 	azureRuntime := flociaz.NewManager(settings)
-	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, apigatewayInventory, secretsManagerInventory, logsInventory, iamInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
+	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, eksInventory, apigatewayInventory, secretsManagerInventory, logsInventory, iamInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
 }
 
 func NewWithRuntimes(
@@ -93,6 +95,7 @@ func NewWithRuntimes(
 	snsInventory SNSInventory,
 	rdsInventory RDSInventory,
 	ecsInventory ECSInventory,
+	eksInventory EKSInventory,
 	apigatewayInventory ApiGatewayInventory,
 	secretsManagerInventory SecretsManagerInventory,
 	logsInventory LogsInventory,
@@ -116,6 +119,7 @@ func NewWithRuntimes(
 		sns:                   snsInventory,
 		rds:                   rdsInventory,
 		ecs:                   ecsInventory,
+		eks:                   eksInventory,
 		apigateway:            apigatewayInventory,
 		secretsManager:        secretsManagerInventory,
 		logs:                  logsInventory,
@@ -219,6 +223,10 @@ func (s *Service) Handle(
 		return s.handleAwsEcsSelectService(ctx, params, notifier)
 	case "aws.ecs.selectTask":
 		return s.handleAwsEcsSelectTask(ctx, params, notifier)
+	case "aws.eks.selectRegion":
+		return s.handleAwsEksSelectRegion(ctx, params, notifier)
+	case "aws.eks.selectCluster":
+		return s.handleAwsEksSelectCluster(ctx, params, notifier)
 	case "aws.apigateway.selectRegion":
 		return s.handleAwsApiGatewaySelectRegion(ctx, params, notifier)
 	case "aws.apigateway.selectApi":

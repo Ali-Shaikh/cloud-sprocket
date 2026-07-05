@@ -99,6 +99,8 @@ func (s *Service) runAwsInventoryEnricher(
 		s.enrichRDSInventory(workspace, session, opts, mu)
 	case "ecs":
 		s.enrichECSInventory(workspace, session, opts, mu)
+	case "eks":
+		s.enrichEKSInventory(workspace, session, opts, mu)
 	case "apigateway":
 		s.enrichApiGatewayInventory(workspace, session, opts, mu)
 	case "secrets":

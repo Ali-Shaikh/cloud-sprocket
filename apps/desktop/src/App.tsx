@@ -278,6 +278,8 @@ export default function App() {
     setRdsActionStatus,
     ecsActionStatus,
     setEcsActionStatus,
+    eksActionStatus,
+    setEksActionStatus,
     apiGatewayActionStatus,
     setApiGatewayActionStatus,
     secretsManagerActionStatus,
@@ -392,6 +394,9 @@ export default function App() {
     selectECSCluster,
     selectECSService,
     selectECSTask,
+    refreshEKSInventory,
+    selectEKSRegion,
+    selectEKSCluster,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
@@ -423,6 +428,7 @@ export default function App() {
     setSnsActionStatus,
     setRdsActionStatus,
     setEcsActionStatus,
+    setEksActionStatus,
     setApiGatewayActionStatus,
     setSecretsManagerActionStatus,
     setLogsActionStatus,
@@ -1134,6 +1140,9 @@ export default function App() {
         if (workspaceResult.ecsStatusMessage) {
           setEcsActionStatus(workspaceResult.ecsStatusMessage);
         }
+        if (workspaceResult.eksStatusMessage) {
+          setEksActionStatus(workspaceResult.eksStatusMessage);
+        }
         if (workspaceResult.apiGatewayStatusMessage) {
           setApiGatewayActionStatus(workspaceResult.apiGatewayStatusMessage);
         }
@@ -1301,6 +1310,7 @@ export default function App() {
     snsActionStatus,
     rdsActionStatus,
     ecsActionStatus,
+    eksActionStatus,
     apiGatewayActionStatus,
     secretsManagerActionStatus,
     logsActionStatus,
@@ -1380,6 +1390,9 @@ export default function App() {
     selectECSCluster,
     selectECSService,
     selectECSTask,
+    refreshEKSInventory,
+    selectEKSRegion,
+    selectEKSCluster,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,

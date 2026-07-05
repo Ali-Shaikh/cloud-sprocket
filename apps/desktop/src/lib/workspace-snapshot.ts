@@ -11,6 +11,8 @@ import type {
   AwsEcsCluster,
   AwsEcsService,
   AwsEcsTask,
+  AwsEksCluster,
+  AwsEksNodeGroup,
   AwsIamPolicy,
   AwsIamRole,
   AwsLambdaFunction,
@@ -151,6 +153,9 @@ export const emptyWorkspace: WorkspaceSnapshot = {
   ecsClusters: [],
   ecsServices: [],
   ecsTasks: [],
+  eksRegions: [],
+  eksClusters: [],
+  eksNodeGroups: [],
   apiGatewayRegions: [],
   apiGatewayApis: [],
   apiGatewayStages: [],
@@ -364,6 +369,17 @@ function normaliseEcsTask(task: AwsEcsTask): AwsEcsTask {
   return {
     ...task,
     containers: normaliseArray(task.containers),
+  };
+}
+
+function normaliseEksCluster(cluster: AwsEksCluster): AwsEksCluster {
+  return { ...cluster };
+}
+
+function normaliseEksNodeGroup(nodeGroup: AwsEksNodeGroup): AwsEksNodeGroup {
+  return {
+    ...nodeGroup,
+    instanceTypes: normaliseArray(nodeGroup.instanceTypes),
   };
 }
 
@@ -779,6 +795,16 @@ export function mergeAwsInventoryScope(
         ecsTasks: normalised.ecsTasks,
         ecsStatusMessage: normalised.ecsStatusMessage,
       });
+    case "eks":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedEksRegion: normalised.selectedEksRegion,
+        selectedEksClusterName: normalised.selectedEksClusterName,
+        eksRegions: normalised.eksRegions,
+        eksClusters: normalised.eksClusters,
+        eksNodeGroups: normalised.eksNodeGroups,
+        eksStatusMessage: normalised.eksStatusMessage,
+      });
     case "apigateway":
       return normaliseWorkspaceSnapshot({
         ...current,
@@ -941,6 +967,9 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     ecsClusters: normaliseArray(source.ecsClusters).map(normaliseEcsCluster),
     ecsServices: normaliseArray(source.ecsServices).map(normaliseEcsService),
     ecsTasks: normaliseArray(source.ecsTasks).map(normaliseEcsTask),
+    eksRegions: normaliseArray(source.eksRegions),
+    eksClusters: normaliseArray(source.eksClusters).map(normaliseEksCluster),
+    eksNodeGroups: normaliseArray(source.eksNodeGroups).map(normaliseEksNodeGroup),
     apiGatewayRegions: normaliseArray(source.apiGatewayRegions),
     apiGatewayApis: normaliseArray(source.apiGatewayApis).map(normaliseApiGatewayApi),
     apiGatewayStages: normaliseArray(source.apiGatewayStages).map(normaliseApiGatewayStage),

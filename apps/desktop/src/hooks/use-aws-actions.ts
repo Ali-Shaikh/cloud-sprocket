@@ -34,6 +34,7 @@ export type UseAwsActionsParams = {
   setSnsActionStatus: Dispatch<SetStateAction<string>>;
   setRdsActionStatus: Dispatch<SetStateAction<string>>;
   setEcsActionStatus: Dispatch<SetStateAction<string>>;
+  setEksActionStatus: Dispatch<SetStateAction<string>>;
   setApiGatewayActionStatus: Dispatch<SetStateAction<string>>;
   setSecretsManagerActionStatus: Dispatch<SetStateAction<string>>;
   setLogsActionStatus: Dispatch<SetStateAction<string>>;
@@ -60,6 +61,7 @@ export function useAwsActions(params: UseAwsActionsParams) {
     setSnsActionStatus,
     setRdsActionStatus,
     setEcsActionStatus,
+    setEksActionStatus,
     setApiGatewayActionStatus,
     setSecretsManagerActionStatus,
     setLogsActionStatus,
@@ -574,6 +576,44 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setEcsActionStatus, setWorkspace]);
 
+  const selectEKSRegion = useCallback((region: string): void => {
+    setEksActionStatus(`Loading EKS clusters for ${region}.`);
+    void requestWorkspaceSnapshot("aws.eks.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setEksActionStatus(
+          workspaceResult.eksStatusMessage || `Loaded EKS clusters from ${region}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setEksActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setEksActionStatus, setWorkspace]);
+
+  const refreshEKSInventory = useCallback((): void => {
+    const region = workspace.selectedEksRegion;
+    if (!region) {
+      setEksActionStatus("Select a region before refreshing EKS inventory.");
+      return;
+    }
+    selectEKSRegion(region);
+  }, [selectEKSRegion, setEksActionStatus, workspace.selectedEksRegion]);
+
+  const selectEKSCluster = useCallback((clusterName: string): void => {
+    void requestWorkspaceSnapshot("aws.eks.selectCluster", { clusterName })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setEksActionStatus(workspaceResult.eksStatusMessage || "Selected EKS cluster.");
+      })
+      .catch((error: unknown) => {
+        setEksActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setEksActionStatus, setWorkspace]);
+
   const selectApiGatewayRegion = useCallback((region: string): void => {
     setApiGatewayActionStatus(`Loading API Gateway APIs for ${region}.`);
     void requestWorkspaceSnapshot("aws.apigateway.selectRegion", { region })
@@ -763,6 +803,9 @@ export function useAwsActions(params: UseAwsActionsParams) {
     selectECSCluster,
     selectECSService,
     selectECSTask,
+    refreshEKSInventory,
+    selectEKSRegion,
+    selectEKSCluster,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,

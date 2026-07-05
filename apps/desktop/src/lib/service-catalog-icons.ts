@@ -35,6 +35,7 @@ const SERVICE_ICON_URLS: Record<string, string> = {
   sns: awsSnsIconUrl,
   rds: awsRdsIconUrl,
   ecs: awsEc2IconUrl,
+  eks: awsEc2IconUrl,
   apigateway: awsLambdaIconUrl,
   secrets: awsSystemsManagerIconUrl,
   iam: awsIamIconUrl,

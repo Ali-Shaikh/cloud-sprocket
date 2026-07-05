@@ -296,6 +296,8 @@ type SessionSnapshot struct {
 	SelectedECSClusterArn             string             `json:"selectedEcsClusterArn,omitempty"`
 	SelectedECSServiceArn             string             `json:"selectedEcsServiceArn,omitempty"`
 	SelectedECSTaskArn                string             `json:"selectedEcsTaskArn,omitempty"`
+	SelectedEKSRegion                 string             `json:"selectedEksRegion,omitempty"`
+	SelectedEKSClusterName            string             `json:"selectedEksClusterName,omitempty"`
 	SelectedApiGatewayRegion          string             `json:"selectedApiGatewayRegion,omitempty"`
 	SelectedApiGatewayApiKey          string             `json:"selectedApiGatewayApiKey,omitempty"`
 	SelectedSecretsManagerRegion      string             `json:"selectedSecretsManagerRegion,omitempty"`
@@ -580,6 +582,31 @@ type AwsEcsTask struct {
 	StartedAt         string            `json:"startedAt,omitempty"`
 	Group             string            `json:"group,omitempty"`
 	Containers        []AwsEcsContainer `json:"containers,omitempty"`
+}
+
+// AwsEksCluster models an EKS cluster for inventory.
+type AwsEksCluster struct {
+	ClusterArn      string `json:"clusterArn"`
+	ClusterName     string `json:"clusterName"`
+	Status          string `json:"status,omitempty"`
+	Version         string `json:"version,omitempty"`
+	Endpoint        string `json:"endpoint,omitempty"`
+	PlatformVersion string `json:"platformVersion,omitempty"`
+	RoleArn         string `json:"roleArn,omitempty"`
+}
+
+// AwsEksNodeGroup models an EKS managed node group summary.
+type AwsEksNodeGroup struct {
+	NodeGroupArn  string   `json:"nodeGroupArn"`
+	NodeGroupName string   `json:"nodeGroupName"`
+	Status        string   `json:"status,omitempty"`
+	InstanceTypes []string `json:"instanceTypes,omitempty"`
+	DesiredSize   int32    `json:"desiredSize,omitempty"`
+	MinSize       int32    `json:"minSize,omitempty"`
+	MaxSize       int32    `json:"maxSize,omitempty"`
+	DiskSize      int32    `json:"diskSize,omitempty"`
+	AmiType       string   `json:"amiType,omitempty"`
+	CapacityType  string   `json:"capacityType,omitempty"`
 }
 
 // AwsRdsInstance models an RDS DB instance for inventory.
@@ -1119,6 +1146,12 @@ type WorkspaceSnapshot struct {
 	ECSClusters                       []AwsEcsCluster              `json:"ecsClusters"`
 	ECSServices                       []AwsEcsService              `json:"ecsServices"`
 	ECSTasks                          []AwsEcsTask                 `json:"ecsTasks"`
+	SelectedEKSRegion                 string                       `json:"selectedEksRegion,omitempty"`
+	SelectedEKSClusterName            string                       `json:"selectedEksClusterName,omitempty"`
+	EKSStatusMessage                  string                       `json:"eksStatusMessage,omitempty"`
+	EKSRegions                        []string                     `json:"eksRegions"`
+	EKSClusters                       []AwsEksCluster              `json:"eksClusters"`
+	EKSNodeGroups                     []AwsEksNodeGroup            `json:"eksNodeGroups"`
 	SelectedApiGatewayRegion          string                       `json:"selectedApiGatewayRegion,omitempty"`
 	SelectedApiGatewayApiKey          string                       `json:"selectedApiGatewayApiKey,omitempty"`
 	ApiGatewayStatusMessage           string                       `json:"apiGatewayStatusMessage,omitempty"`
