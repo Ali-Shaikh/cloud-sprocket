@@ -2,11 +2,28 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
 import RDSView from "./RDSView";
 import type { RdsWorkspaceSnapshot } from "./RDSView";
+
+function mockMatchMedia(matches: boolean) {
+  return vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const workspaceFixture: RdsWorkspaceSnapshot = {
   provider: {
@@ -71,31 +88,31 @@ const workspaceFixture: RdsWorkspaceSnapshot = {
   azureBlobContainers: [],
   azureBlobs: [],
   azureBlobMetadata: [],
-      azureWebApps: [],
-      azureAppServicePlans: [],
-      azureWebAppSettings: [],
-      azureWebAppDeploymentSlots: [],
-      azureLogAnalyticsWorkspaces: [],
-      azureWafPolicies: [],
-      azureWafRuleFireCounts: [],
-      azureFunctionApps: [],
-      azureFunctions: [],
-      azureKeyVaults: [],
-      azureKeyVaultSecrets: [],
-      azureCosmosAccounts: [],
-      azurePostgresServers: [],
-      azureCosmosDatabases: [],
-      azureCosmosContainers: [],
+  azureWebApps: [],
+  azureAppServicePlans: [],
+  azureWebAppSettings: [],
+  azureWebAppDeploymentSlots: [],
+  azureLogAnalyticsWorkspaces: [],
+  azureWafPolicies: [],
+  azureWafRuleFireCounts: [],
+  azureFunctionApps: [],
+  azureFunctions: [],
+  azureKeyVaults: [],
+  azureKeyVaultSecrets: [],
+  azureCosmosAccounts: [],
+  azurePostgresServers: [],
+  azureCosmosDatabases: [],
+  azureCosmosContainers: [],
   azureCosmosItems: [],
   azureFrontDoorProfiles: [],
   azureFrontDoorEndpoints: [],
   azureFrontDoorOriginGroups: [],
   azureFrontDoorOrigins: [],
   azureStorageQueues: [],
-      azureQueueMessages: [],
-      azureEntraUsers: [],
-      azureEntraGroups: [],
-      azureEntraApps: [],
+  azureQueueMessages: [],
+  azureEntraUsers: [],
+  azureEntraGroups: [],
+  azureEntraApps: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -154,14 +171,15 @@ const workspaceFixture: RdsWorkspaceSnapshot = {
   secretsManagerSecrets: [],
 };
 
-function renderRDSView() {
+function renderRDSView(overrides?: { workspace?: Partial<RdsWorkspaceSnapshot> }) {
   const onSelectRegion = vi.fn();
   const onSelectEntity = vi.fn();
   const onRefresh = vi.fn();
+  const workspace = { ...workspaceFixture, ...overrides?.workspace };
   render(
     <ThemeProvider>
       <RDSView
-        workspace={workspaceFixture}
+        workspace={workspace}
         actionStatus="Ready to browse instances."
         onRefresh={onRefresh}
         onSelectRegion={onSelectRegion}
@@ -173,22 +191,42 @@ function renderRDSView() {
 }
 
 describe("RDSView", () => {
-  it("renders inventory and endpoint detail", () => {
+  it("renders fleet summary and instance inventory table", () => {
+    mockMatchMedia(true);
     renderRDSView();
 
     expect(screen.getByText("Instance Fleet")).toBeInTheDocument();
     expect(screen.getByText("Instance Inventory")).toBeInTheDocument();
     expect(screen.getAllByText("cloudsprocket-app-db").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("cloudsprocket-app-db.rds.localhost:5432").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/postgres 15\.4/).length).toBeGreaterThan(0);
+    expect(screen.getByText("cloudsprocket-analytics-db")).toBeInTheDocument();
+  });
+
+  it("does not highlight a row when no instance is selected", () => {
+    mockMatchMedia(true);
+    renderRDSView({ workspace: { selectedRdsInstanceId: undefined } });
+
+    const selectedRows = document.querySelectorAll('[data-state="selected"]');
+    expect(selectedRows).toHaveLength(0);
   });
 
   it("selects an instance when a row is clicked", () => {
+    mockMatchMedia(true);
     const { onSelectEntity } = renderRDSView();
 
     fireEvent.click(screen.getByText("cloudsprocket-analytics-db"));
 
     expect(onSelectEntity).toHaveBeenCalledWith("cloudsprocket-analytics-db");
+  });
+
+  it("docks instance detail in the inspector on wide viewports", () => {
+    mockMatchMedia(true);
+    renderRDSView();
+
+    expect(screen.getByLabelText("RDS instance details")).toBeInTheDocument();
+    expect(screen.getByText("Instance")).toBeInTheDocument();
+    expect(screen.getAllByText("cloudsprocket-app-db.rds.localhost:5432").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/postgres 15\.4/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Copy actions")).toBeInTheDocument();
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {

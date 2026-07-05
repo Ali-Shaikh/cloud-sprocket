@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Database, RefreshCw } from "lucide-react";
 
 import { actionCapabilityState } from "@/lib/action-capabilities";
@@ -17,17 +17,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
+import {
+  ResourceInspectorHeader,
+  ResourceInspectorPanel,
+  ResourceInventoryShell,
+} from "@/components/inventory/resource-inspector";
+import { ResourceTable } from "@/components/inventory/resource-table";
 import { DetailFieldList } from "./detail-fields";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
@@ -125,6 +123,8 @@ export default function RDSView({
   onInvokeLifecycleAction,
 }: RDSViewProps) {
   const [filterText, setFilterText] = useState("");
+  const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedRdsInstanceId));
+  const lastSelectedInstanceRef = useRef(workspace.selectedRdsInstanceId || "");
   const startCapability = actionCapabilityState(workspace, "rds", "startInstance");
   const stopCapability = actionCapabilityState(workspace, "rds", "stopInstance");
 
@@ -137,10 +137,9 @@ export default function RDSView({
           ? workspace.lambdaRegions
           : workspace.ec2Regions;
 
-  const selectedInstance =
-    workspace.rdsInstances.find(
-      (instance) => instance.dbInstanceIdentifier === workspace.selectedRdsInstanceId,
-    ) ?? workspace.rdsInstances[0];
+  const selectedInstance = workspace.rdsInstances.find(
+    (instance) => instance.dbInstanceIdentifier === workspace.selectedRdsInstanceId,
+  );
 
   const filteredInstances = useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -187,6 +186,14 @@ export default function RDSView({
       ]
     : [];
 
+  useEffect(() => {
+    const nextInstanceId = workspace.selectedRdsInstanceId || "";
+    if (nextInstanceId !== lastSelectedInstanceRef.current) {
+      lastSelectedInstanceRef.current = nextInstanceId;
+      setInspectorOpen(Boolean(nextInstanceId));
+    }
+  }, [workspace.selectedRdsInstanceId]);
+
   if (workspace.provider?.providerId && workspace.provider.providerId !== "aws") {
     return (
       <div className="p-6">
@@ -198,6 +205,101 @@ export default function RDSView({
       </div>
     );
   }
+
+  const tableEmptyState =
+    workspace.rdsInstances.length === 0 ? (
+      <EmptyState
+        icon={<Database />}
+        title="No instances"
+        description={
+          workspace.selectedRdsRegion
+            ? `No RDS instances were returned for ${workspace.selectedRdsRegion}.`
+            : "Select a region to list RDS instances."
+        }
+        className="border-0"
+      />
+    ) : (
+      <EmptyState
+        icon={<Database />}
+        title="No matches"
+        description="No RDS instances match the current filter."
+        className="border-0"
+      />
+    );
+
+  const inspectorContent = selectedInstance ? (
+    <ResourceInspectorPanel>
+      <ResourceInspectorHeader
+        icon={Database}
+        eyebrow="Instance"
+        title={selectedInstance.dbInstanceIdentifier}
+        onClose={() => setInspectorOpen(false)}
+      />
+
+      <DetailFieldList
+        fields={[
+          { label: "Status", value: selectedInstance.status || "Unknown" },
+          {
+            label: "Engine",
+            value: selectedInstance.engine
+              ? `${selectedInstance.engine}${selectedInstance.engineVersion ? ` ${selectedInstance.engineVersion}` : ""}`
+              : "Unknown",
+          },
+          { label: "Instance class", value: selectedInstance.instanceClass || "Unknown" },
+          { label: "Endpoint", value: formatEndpoint(selectedInstance) },
+          {
+            label: "Availability zone",
+            value: selectedInstance.availabilityZone || "Unknown",
+          },
+          {
+            label: "Allocated storage",
+            value:
+              selectedInstance.allocatedStorage != null
+                ? `${selectedInstance.allocatedStorage} GB`
+                : "Unknown",
+          },
+          {
+            label: "Multi-AZ",
+            value: selectedInstance.multiAz != null ? String(selectedInstance.multiAz) : "Unknown",
+          },
+          {
+            label: "Storage encrypted",
+            value:
+              selectedInstance.storageEncrypted != null
+                ? String(selectedInstance.storageEncrypted)
+                : "Unknown",
+          },
+        ]}
+        emptyText="No instance details are available."
+      />
+
+      <div>
+        <div className={fieldLabel}>Copy actions</div>
+        <div className="mt-2 space-y-3">
+          {copySnippets.map((snippet) => (
+              <div key={snippet.label} className={snippetCard}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className={fieldLabel}>{snippet.label}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      copyToClipboard(snippet.value, `${snippet.label} copied`);
+                    }}
+                  >
+                    <Copy />
+                    Copy
+                  </Button>
+                </div>
+                <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                  {snippet.value}
+                </pre>
+              </div>
+            ))}
+        </div>
+      </div>
+    </ResourceInspectorPanel>
+  ) : null;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -319,157 +421,55 @@ export default function RDSView({
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border">
-          {workspace.rdsInstances.length === 0 ? (
-            <EmptyState
-              icon={<Database />}
-              title="No instances"
-              description={
-                workspace.selectedRdsRegion
-                  ? `No RDS instances were returned for ${workspace.selectedRdsRegion}.`
-                  : "Select a region to list RDS instances."
-              }
-              className="border-0"
-            />
-          ) : filteredInstances.length === 0 ? (
-            <EmptyState
-              icon={<Database />}
-              title="No matches"
-              description="No RDS instances match the current filter."
-              className="border-0"
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Identifier</TableHead>
-                  <TableHead>Engine</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Class</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredInstances.map((instance) => {
-                  const active =
-                    instance.dbInstanceIdentifier === selectedInstance?.dbInstanceIdentifier;
-                  return (
-                    <TableRow
-                      key={instance.dbInstanceIdentifier}
-                      data-state={active ? "selected" : undefined}
-                      className="cursor-pointer"
-                      onClick={() => {
-                        onSelectEntity(instance.dbInstanceIdentifier);
-                      }}
-                    >
-                      <TableCell className="font-mono text-sm">
-                        {instance.dbInstanceIdentifier}
-                      </TableCell>
-                      <TableCell>
-                        {instance.engine
-                          ? `${instance.engine}${instance.engineVersion ? ` ${instance.engineVersion}` : ""}`
-                          : "Unknown"}
-                      </TableCell>
-                      <TableCell>
-                        <StatusPill
-                          status={instanceStatus(instance.status)}
-                          label={instance.status || "Unknown"}
-                        />
-                      </TableCell>
-                      <TableCell>{instance.instanceClass || "Unknown"}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </div>
-      </section>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className={sectionCard}>
-          <div>
-            <h2 className="text-base font-bold">Instance Detail</h2>
-            <p className="text-sm text-muted-foreground">
-              {selectedInstance?.dbInstanceIdentifier || "Select an instance for engine and endpoint detail."}
-            </p>
-          </div>
-          {selectedInstance ? (
-            <DetailFieldList
-              fields={[
-                { label: "Status", value: selectedInstance.status || "Unknown" },
-                {
-                  label: "Engine",
-                  value: selectedInstance.engine
-                    ? `${selectedInstance.engine}${selectedInstance.engineVersion ? ` ${selectedInstance.engineVersion}` : ""}`
-                    : "Unknown",
-                },
-                { label: "Instance class", value: selectedInstance.instanceClass || "Unknown" },
-                { label: "Endpoint", value: formatEndpoint(selectedInstance) },
-                {
-                  label: "Availability zone",
-                  value: selectedInstance.availabilityZone || "Unknown",
-                },
-                {
-                  label: "Allocated storage",
-                  value:
-                    selectedInstance.allocatedStorage != null
-                      ? `${selectedInstance.allocatedStorage} GB`
-                      : "Unknown",
-                },
-                {
-                  label: "Multi-AZ",
-                  value: selectedInstance.multiAz != null ? String(selectedInstance.multiAz) : "Unknown",
-                },
-                {
-                  label: "Storage encrypted",
-                  value:
-                    selectedInstance.storageEncrypted != null
-                      ? String(selectedInstance.storageEncrypted)
-                      : "Unknown",
-                },
+        <ResourceInventoryShell
+          table={
+            <ResourceTable
+              columns={[
+                { id: "identifier", label: "Identifier" },
+                { id: "engine", label: "Engine" },
+                { id: "status", label: "Status" },
+                { id: "class", label: "Class" },
               ]}
-              emptyText="No instance details are available."
+              rows={filteredInstances}
+              selectedKey={workspace.selectedRdsInstanceId}
+              getRowKey={(instance) => instance.dbInstanceIdentifier}
+              onRowClick={(instance) => {
+                onSelectEntity(instance.dbInstanceIdentifier);
+                setInspectorOpen(true);
+              }}
+              renderCell={(instance, columnId) => {
+                if (columnId === "identifier") {
+                  return (
+                    <span className="font-mono text-sm">{instance.dbInstanceIdentifier}</span>
+                  );
+                }
+                if (columnId === "engine") {
+                  return instance.engine
+                    ? `${instance.engine}${instance.engineVersion ? ` ${instance.engineVersion}` : ""}`
+                    : "Unknown";
+                }
+                if (columnId === "status") {
+                  return (
+                    <StatusPill
+                      status={instanceStatus(instance.status)}
+                      label={instance.status || "Unknown"}
+                    />
+                  );
+                }
+                if (columnId === "class") {
+                  return instance.instanceClass || "Unknown";
+                }
+                return null;
+              }}
+              emptyState={tableEmptyState}
             />
-          ) : (
-            <p className="text-sm text-muted-foreground">No RDS instance selected.</p>
-          )}
-        </section>
-
-        <section className={sectionCard}>
-          <div>
-            <h2 className="text-base font-bold">Copy Actions</h2>
-            <p className="text-sm text-muted-foreground">
-              Generated locally from the selected region and instance. No snippet is stored.
-            </p>
-          </div>
-          {copySnippets.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Select an instance to generate copy actions.</p>
-          ) : (
-            <div className="space-y-3">
-              {copySnippets.map((snippet) => (
-                <div key={snippet.label} className={snippetCard}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={fieldLabel}>{snippet.label}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        copyToClipboard(snippet.value, `${snippet.label} copied`);
-                      }}
-                    >
-                      <Copy />
-                      Copy
-                    </Button>
-                  </div>
-                  <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                    {snippet.value}
-                  </pre>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
+          }
+          inspectorContent={inspectorContent}
+          inspectorOpen={inspectorOpen}
+          onInspectorOpenChange={setInspectorOpen}
+          inspectorAriaLabel="RDS instance details"
+        />
+      </section>
     </div>
   );
 }
