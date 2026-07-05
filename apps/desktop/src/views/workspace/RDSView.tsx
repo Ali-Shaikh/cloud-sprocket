@@ -275,13 +275,8 @@ export default function RDSView({
 
       <div>
         <div className={fieldLabel}>Copy actions</div>
-        {copySnippets.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">
-            Select an instance to generate copy actions.
-          </p>
-        ) : (
-          <div className="mt-2 space-y-3">
-            {copySnippets.map((snippet) => (
+        <div className="mt-2 space-y-3">
+          {copySnippets.map((snippet) => (
               <div key={snippet.label} className={snippetCard}>
                 <div className="flex items-center justify-between gap-2">
                   <span className={fieldLabel}>{snippet.label}</span>
@@ -301,8 +296,7 @@ export default function RDSView({
                 </pre>
               </div>
             ))}
-          </div>
-        )}
+        </div>
       </div>
     </ResourceInspectorPanel>
   ) : null;
