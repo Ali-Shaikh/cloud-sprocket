@@ -141,6 +141,8 @@ const workspaceFixture: SecretsManagerWorkspaceSnapshot = {
   cloudFormationStackEvents: [],
   eventBridgeRegions: [],
   eventBridgeBuses: [],
+  route53HostedZones: [],
+  route53ResourceRecordSets: [],
   eventBridgeRules: [],
 
   apiGatewayRegions: [],

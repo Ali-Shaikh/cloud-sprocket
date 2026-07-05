@@ -105,6 +105,8 @@ func (s *Service) runAwsInventoryEnricher(
 		s.enrichCloudFormationInventory(workspace, session, opts, mu)
 	case "eventbridge":
 		s.enrichEventBridgeInventory(workspace, session, opts, mu)
+	case "route53":
+		s.enrichRoute53Inventory(workspace, session, opts, mu)
 	case "apigateway":
 		s.enrichApiGatewayInventory(workspace, session, opts, mu)
 	case "secrets":

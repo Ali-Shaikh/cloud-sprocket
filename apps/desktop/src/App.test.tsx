@@ -942,6 +942,8 @@ describe("App", () => {
   cloudFormationStackEvents: [],
   eventBridgeRegions: [],
   eventBridgeBuses: [],
+  route53HostedZones: [],
+  route53ResourceRecordSets: [],
   eventBridgeRules: [],
 
       selectedLogsRegion: "us-east-1",

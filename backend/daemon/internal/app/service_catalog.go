@@ -123,6 +123,12 @@ func awsServiceCatalog() []serviceCatalogEntry {
 			Category: workspaceTabCategoryService, InventoryScope: "eventbridge",
 		},
 		{
+			ProviderID: "aws", ServiceID: "route53", Label: "Route 53",
+			Summary: "Hosted zone and record inventory.",
+			Detail:  "List Route 53 hosted zones with record previews for the selected zone.",
+			Category: workspaceTabCategoryService, InventoryScope: "route53",
+		},
+		{
 			ProviderID: "aws", ServiceID: "apigateway", Label: "API Gateway",
 			Summary: "REST and HTTP API inventory.",
 			Detail:  "List REST and HTTP/WebSocket APIs by region with stage invoke URLs.",

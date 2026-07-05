@@ -41,6 +41,8 @@ const workspace = {
   cloudFormationStackEvents: [],
   eventBridgeRegions: [],
   eventBridgeBuses: [],
+  route53HostedZones: [],
+  route53ResourceRecordSets: [],
   eventBridgeRules: [],
 
   logGroups: [],

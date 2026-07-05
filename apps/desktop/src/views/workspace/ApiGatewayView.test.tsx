@@ -143,6 +143,8 @@ const workspaceFixture: ApiGatewayWorkspaceSnapshot = {
   cloudFormationStackEvents: [],
   eventBridgeRegions: [],
   eventBridgeBuses: [],
+  route53HostedZones: [],
+  route53ResourceRecordSets: [],
   eventBridgeRules: [],
 
   logsRegions: [],

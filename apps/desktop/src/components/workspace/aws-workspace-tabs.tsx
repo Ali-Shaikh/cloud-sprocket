@@ -17,6 +17,7 @@ import {
   EKSView,
   CloudFormationView,
   EventBridgeView,
+  Route53View,
   RDSView,
   SNSView,
   SQSView,
@@ -36,6 +37,7 @@ export const AWS_TAB_IDS = new Set([
   "eks",
   "cloudformation",
   "eventbridge",
+  "route53",
   "apigateway",
   "secrets",
   "logs",
@@ -89,6 +91,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     eksActionStatus,
     cloudFormationActionStatus,
     eventBridgeActionStatus,
+    route53ActionStatus,
     apiGatewayActionStatus,
     secretsManagerActionStatus,
     refreshSecretsManagerInventory,
@@ -189,6 +192,8 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     refreshEventBridgeInventory,
     selectEventBridgeRegion,
     selectEventBridgeBus,
+    refreshRoute53Inventory,
+    selectRoute53HostedZone,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
@@ -382,6 +387,13 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onRefresh={refreshEventBridgeInventory}
       onSelectRegion={selectEventBridgeRegion}
       onSelectBus={selectEventBridgeBus}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "route53" ? (
+    <Route53View
+      workspace={activeWorkspace}
+      actionStatus={route53ActionStatus}
+      onRefresh={refreshRoute53Inventory}
+      onSelectHostedZone={selectRoute53HostedZone}
     />
   ) : session.isLocked && activeWorkspaceTabId === "apigateway" ? (
     <ApiGatewayView

@@ -4,10 +4,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@/lib/theme";
-import CloudFormationView from "./CloudFormationView";
-import type { CloudFormationWorkspaceSnapshot } from "./CloudFormationView";
+import Route53View from "./Route53View";
+import type { Route53WorkspaceSnapshot } from "./Route53View";
 
-const workspaceFixture: CloudFormationWorkspaceSnapshot = {
+const workspaceFixture: Route53WorkspaceSnapshot = {
   provider: {
     providerId: "aws",
     label: "AWS",
@@ -127,64 +127,62 @@ const workspaceFixture: CloudFormationWorkspaceSnapshot = {
   apiGatewayStages: [],
   secretsManagerRegions: [],
   secretsManagerSecrets: [],
+  cloudFormationRegions: [],
+  cloudFormationStacks: [],
+  cloudFormationStackEvents: [],
   eventBridgeRegions: [],
   eventBridgeBuses: [],
-  route53HostedZones: [],
-  route53ResourceRecordSets: [],
   eventBridgeRules: [],
-  selectedCloudFormationRegion: "us-east-1",
-  selectedCloudFormationStackName: "demo",
-  cloudFormationRegions: ["us-east-1"],
-  cloudFormationStacks: [
+  selectedRoute53HostedZoneId: "/hostedzone/Z123",
+  route53HostedZones: [
     {
-      stackId: "arn:stack/demo",
-      stackName: "demo",
-      stackStatus: "CREATE_COMPLETE",
-      creationTime: "2026-03-01T12:00:00Z",
+      hostedZoneId: "/hostedzone/Z123",
+      name: "example.com.",
+      recordCount: 2,
+      privateZone: false,
+      comment: "Demo zone",
     },
   ],
-  cloudFormationStackEvents: [
+  route53ResourceRecordSets: [
     {
-      eventId: "evt-1",
-      logicalResourceId: "MyBucket",
-      resourceStatus: "CREATE_COMPLETE",
-      resourceType: "AWS::S3::Bucket",
+      name: "www.example.com.",
+      type: "A",
+      ttl: 300,
+      values: ["203.0.113.10"],
     },
   ],
 };
 
-describe("CloudFormationView", () => {
-  it("renders stack inventory", () => {
+describe("Route53View", () => {
+  it("renders hosted zone and record inventory", () => {
     render(
       <ThemeProvider>
-        <CloudFormationView
+        <Route53View
           workspace={workspaceFixture}
           actionStatus=""
           onRefresh={vi.fn()}
-          onSelectRegion={vi.fn()}
-          onSelectStack={vi.fn()}
+          onSelectHostedZone={vi.fn()}
         />
       </ThemeProvider>,
     );
-    expect(screen.getByText("CloudFormation")).toBeInTheDocument();
-    expect(screen.getAllByText("demo").length).toBeGreaterThan(0);
-    expect(screen.getByText("MyBucket")).toBeInTheDocument();
+    expect(screen.getByText("Route 53")).toBeInTheDocument();
+    expect(screen.getAllByText("example.com.").length).toBeGreaterThan(0);
+    expect(screen.getByText("www.example.com.")).toBeInTheDocument();
   });
 
-  it("selects a stack when a row is clicked", () => {
-    const onSelectStack = vi.fn();
+  it("selects a hosted zone when a row is clicked", () => {
+    const onSelectHostedZone = vi.fn();
     render(
       <ThemeProvider>
-        <CloudFormationView
+        <Route53View
           workspace={workspaceFixture}
           actionStatus=""
           onRefresh={vi.fn()}
-          onSelectRegion={vi.fn()}
-          onSelectStack={onSelectStack}
+          onSelectHostedZone={onSelectHostedZone}
         />
       </ThemeProvider>,
     );
-    fireEvent.click(screen.getAllByText("demo")[0]);
-    expect(onSelectStack).toHaveBeenCalledWith("demo");
+    fireEvent.click(screen.getAllByText("example.com.")[0]);
+    expect(onSelectHostedZone).toHaveBeenCalledWith("/hostedzone/Z123");
   });
 });

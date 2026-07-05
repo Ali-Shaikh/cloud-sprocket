@@ -137,6 +137,8 @@ const workspaceFixture: EventBridgeWorkspaceSnapshot = {
   eventBridgeRules: [
     { name: "daily-sync", state: "ENABLED", scheduleExpression: "rate(1 day)", description: "Nightly sync" },
   ],
+  route53HostedZones: [],
+  route53ResourceRecordSets: [],
 };
 
 describe("EventBridgeView", () => {

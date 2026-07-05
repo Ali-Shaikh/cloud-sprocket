@@ -194,6 +194,7 @@ export interface SessionSnapshot {
   selectedCloudFormationStackName?: string;
   selectedEventBridgeRegion?: string;
   selectedEventBridgeBusName?: string;
+  selectedRoute53HostedZoneId?: string;
   selectedApiGatewayRegion?: string;
   selectedApiGatewayApiKey?: string;
   selectedSecretsManagerRegion?: string;
@@ -526,6 +527,23 @@ export interface AwsEventBridgeRule {
   description?: string;
   scheduleExpression?: string;
   eventPattern?: string;
+}
+
+export interface AwsRoute53HostedZone {
+  hostedZoneId: string;
+  name: string;
+  recordCount?: number;
+  privateZone?: boolean;
+  comment?: string;
+}
+
+export interface AwsRoute53ResourceRecordSet {
+  name: string;
+  type?: string;
+  setIdentifier?: string;
+  ttl?: number;
+  values?: string[];
+  aliasTarget?: string;
 }
 
 export interface AwsApiGatewayApi {
@@ -1115,6 +1133,10 @@ export interface WorkspaceSnapshot {
   eventBridgeRegions: string[];
   eventBridgeBuses: AwsEventBridgeBus[];
   eventBridgeRules: AwsEventBridgeRule[];
+  selectedRoute53HostedZoneId?: string;
+  route53StatusMessage?: string;
+  route53HostedZones: AwsRoute53HostedZone[];
+  route53ResourceRecordSets: AwsRoute53ResourceRecordSet[];
   apiGatewayStatusMessage?: string;
   apiGatewayRegions: string[];
   apiGatewayApis: AwsApiGatewayApi[];

@@ -249,6 +249,8 @@ export default function App() {
     setCloudFormationActionStatus,
     eventBridgeActionStatus,
     setEventBridgeActionStatus,
+    route53ActionStatus,
+    setRoute53ActionStatus,
     apiGatewayActionStatus,
     setApiGatewayActionStatus,
     secretsManagerActionStatus,
@@ -374,6 +376,8 @@ export default function App() {
     refreshEventBridgeInventory,
     selectEventBridgeRegion,
     selectEventBridgeBus,
+    refreshRoute53Inventory,
+    selectRoute53HostedZone,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
@@ -409,6 +413,7 @@ export default function App() {
     setEksActionStatus,
     setCloudFormationActionStatus,
     setEventBridgeActionStatus,
+    setRoute53ActionStatus,
     setApiGatewayActionStatus,
     setSecretsManagerActionStatus,
     setLogsActionStatus,
@@ -1020,6 +1025,9 @@ export default function App() {
         if (workspaceResult.eventBridgeStatusMessage) {
           setEventBridgeActionStatus(workspaceResult.eventBridgeStatusMessage);
         }
+        if (workspaceResult.route53StatusMessage) {
+          setRoute53ActionStatus(workspaceResult.route53StatusMessage);
+        }
         if (workspaceResult.apiGatewayStatusMessage) {
           setApiGatewayActionStatus(workspaceResult.apiGatewayStatusMessage);
         }
@@ -1189,6 +1197,7 @@ export default function App() {
     eksActionStatus,
     cloudFormationActionStatus,
     eventBridgeActionStatus,
+    route53ActionStatus,
     apiGatewayActionStatus,
     secretsManagerActionStatus,
     logsActionStatus,
@@ -1286,6 +1295,8 @@ export default function App() {
     refreshEventBridgeInventory,
     selectEventBridgeRegion,
     selectEventBridgeBus,
+    refreshRoute53Inventory,
+    selectRoute53HostedZone,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,

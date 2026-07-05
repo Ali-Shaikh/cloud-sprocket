@@ -146,6 +146,8 @@ const workspaceFixture: IamWorkspaceSnapshot = {
   cloudFormationStackEvents: [],
   eventBridgeRegions: [],
   eventBridgeBuses: [],
+  route53HostedZones: [],
+  route53ResourceRecordSets: [],
   eventBridgeRules: [],
 
   logsRegions: [],

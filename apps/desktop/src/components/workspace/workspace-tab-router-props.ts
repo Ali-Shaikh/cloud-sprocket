@@ -85,6 +85,7 @@ export type WorkspaceTabRouterProps = {
   eksActionStatus: string;
   cloudFormationActionStatus: string;
   eventBridgeActionStatus: string;
+  route53ActionStatus: string;
   apiGatewayActionStatus: string;
   secretsManagerActionStatus: string;
   logsActionStatus: string;
@@ -198,6 +199,8 @@ export type WorkspaceTabRouterProps = {
   refreshEventBridgeInventory: () => void;
   selectEventBridgeRegion: (region: string) => void;
   selectEventBridgeBus: (busName: string) => void;
+  refreshRoute53Inventory: () => void;
+  selectRoute53HostedZone: (hostedZoneId: string) => void;
   refreshApiGatewayInventory: () => void;
   selectApiGatewayRegion: (region: string) => void;
   selectApiGatewayApi: (apiKey: string) => void;

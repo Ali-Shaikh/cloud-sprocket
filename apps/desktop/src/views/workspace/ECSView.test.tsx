@@ -179,6 +179,8 @@ const workspaceFixture: EcsWorkspaceSnapshot = {
   cloudFormationStackEvents: [],
   eventBridgeRegions: [],
   eventBridgeBuses: [],
+  route53HostedZones: [],
+  route53ResourceRecordSets: [],
   eventBridgeRules: [],
 
 };

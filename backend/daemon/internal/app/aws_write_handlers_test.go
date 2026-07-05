@@ -64,6 +64,7 @@ func TestServiceRejectsPhase2And3WriteRPCsWithoutWriteMode(t *testing.T) {
 		stubEKSInventory{},
 		stubCloudFormationInventory{},
 		stubEventBridgeInventory{},
+		stubRoute53Inventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},

@@ -15,6 +15,7 @@ export type AwsInventoryScope =
   | "eks"
   | "cloudformation"
   | "eventbridge"
+  | "route53"
   | "apigateway"
   | "secrets"
   | "logs"
@@ -32,6 +33,7 @@ const TAB_SCOPE_MAP: Record<string, AwsInventoryScope | undefined> = {
   eks: "eks",
   cloudformation: "cloudformation",
   eventbridge: "eventbridge",
+  route53: "route53",
   apigateway: "apigateway",
   secrets: "secrets",
   logs: "logs",
@@ -69,6 +71,8 @@ export function awsInventoryStatusMessage(
       return workspace.cloudFormationStatusMessage;
     case "eventbridge":
       return workspace.eventBridgeStatusMessage;
+    case "route53":
+      return workspace.route53StatusMessage;
     case "apigateway":
       return workspace.apiGatewayStatusMessage;
     case "secrets":
@@ -94,6 +98,7 @@ const DEFAULT_INVENTORY_LOADING_LABELS: Record<AwsInventoryScope, string> = {
   eks: "Loading EKS clusters...",
   cloudformation: "Loading CloudFormation stacks...",
   eventbridge: "Loading EventBridge buses...",
+  route53: "Loading Route 53 hosted zones...",
   apigateway: "Loading API Gateway APIs...",
   secrets: "Loading Secrets Manager secrets...",
   logs: "Loading CloudWatch log groups...",
@@ -149,6 +154,9 @@ export function awsInventoryLoaded(
     case "eventbridge":
       return (workspace.eventBridgeRegions?.length ?? 0) > 0 ||
         (workspace.eventBridgeStatusMessage ?? "").length > 0;
+    case "route53":
+      return (workspace.route53HostedZones?.length ?? 0) > 0 ||
+        (workspace.route53StatusMessage ?? "").length > 0;
     case "apigateway":
       return (workspace.apiGatewayRegions?.length ?? 0) > 0 ||
         (workspace.apiGatewayStatusMessage ?? "").length > 0;

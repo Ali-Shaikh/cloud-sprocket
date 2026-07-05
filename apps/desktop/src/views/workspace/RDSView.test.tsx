@@ -174,6 +174,8 @@ const workspaceFixture: RdsWorkspaceSnapshot = {
   cloudFormationStackEvents: [],
   eventBridgeRegions: [],
   eventBridgeBuses: [],
+  route53HostedZones: [],
+  route53ResourceRecordSets: [],
   eventBridgeRules: [],
 
 };

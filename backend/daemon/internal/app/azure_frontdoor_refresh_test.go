@@ -55,6 +55,7 @@ func TestHandleAzureFrontDoorRefreshReturnsTopology(t *testing.T) {
 		stubEKSInventory{},
 		stubCloudFormationInventory{},
 		stubEventBridgeInventory{},
+		stubRoute53Inventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},

@@ -102,6 +102,11 @@ type EventBridgeInventory interface {
 	ListRules(ctx context.Context, profile models.ProfileSummary, region string, busName string) ([]models.AwsEventBridgeRule, error)
 }
 
+type Route53Inventory interface {
+	ListHostedZones(ctx context.Context, profile models.ProfileSummary) ([]models.AwsRoute53HostedZone, error)
+	ListResourceRecordSets(ctx context.Context, profile models.ProfileSummary, hostedZoneID string) ([]models.AwsRoute53ResourceRecordSet, error)
+}
+
 type LogsInventory interface {
 	ListLogGroups(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsLogGroup, error)
 	DescribeLogGroup(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string) (models.AwsLogGroup, error)

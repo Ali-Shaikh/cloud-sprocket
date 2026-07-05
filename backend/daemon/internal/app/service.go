@@ -38,6 +38,7 @@ type Service struct {
 	eks                   EKSInventory
 	cloudformation        CloudFormationInventory
 	eventbridge           EventBridgeInventory
+	route53               Route53Inventory
 	apigateway            ApiGatewayInventory
 	secretsManager        SecretsManagerInventory
 	logs                  LogsInventory
@@ -75,6 +76,7 @@ func New(
 	eksInventory EKSInventory,
 	cloudformationInventory CloudFormationInventory,
 	eventbridgeInventory EventBridgeInventory,
+	route53Inventory Route53Inventory,
 	apigatewayInventory ApiGatewayInventory,
 	secretsManagerInventory SecretsManagerInventory,
 	logsInventory LogsInventory,
@@ -84,7 +86,7 @@ func New(
 ) *Service {
 	localStackMgr := localstack.NewManager(settings)
 	azureRuntime := flociaz.NewManager(settings)
-	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, eksInventory, cloudformationInventory, eventbridgeInventory, apigatewayInventory, secretsManagerInventory, logsInventory, iamInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
+	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, eksInventory, cloudformationInventory, eventbridgeInventory, route53Inventory, apigatewayInventory, secretsManagerInventory, logsInventory, iamInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
 }
 
 func NewWithRuntimes(
@@ -102,6 +104,7 @@ func NewWithRuntimes(
 	eksInventory EKSInventory,
 	cloudformationInventory CloudFormationInventory,
 	eventbridgeInventory EventBridgeInventory,
+	route53Inventory Route53Inventory,
 	apigatewayInventory ApiGatewayInventory,
 	secretsManagerInventory SecretsManagerInventory,
 	logsInventory LogsInventory,
@@ -128,6 +131,7 @@ func NewWithRuntimes(
 		eks:                   eksInventory,
 		cloudformation:        cloudformationInventory,
 		eventbridge:           eventbridgeInventory,
+		route53:               route53Inventory,
 		apigateway:            apigatewayInventory,
 		secretsManager:        secretsManagerInventory,
 		logs:                  logsInventory,
@@ -243,6 +247,8 @@ func (s *Service) Handle(
 		return s.handleAwsEventBridgeSelectRegion(ctx, params, notifier)
 	case "aws.eventbridge.selectBus":
 		return s.handleAwsEventBridgeSelectBus(ctx, params, notifier)
+	case "aws.route53.selectHostedZone":
+		return s.handleAwsRoute53SelectHostedZone(ctx, params, notifier)
 	case "aws.apigateway.selectRegion":
 		return s.handleAwsApiGatewaySelectRegion(ctx, params, notifier)
 	case "aws.apigateway.selectApi":
