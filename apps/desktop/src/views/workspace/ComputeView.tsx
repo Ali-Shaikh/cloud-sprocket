@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Loader2, RefreshCw, Server } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -15,14 +15,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -35,6 +27,12 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
+import {
+  ResourceInspectorHeader,
+  ResourceInspectorPanel,
+  ResourceInventoryShell,
+} from "@/components/inventory/resource-inspector";
+import { ResourceTable } from "@/components/inventory/resource-table";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { DetailFieldList } from "./detail-fields";
 import type {
@@ -146,11 +144,12 @@ export default function ComputeView({
 }: ComputeViewProps) {
   const [filterText, setFilterText] = useState("");
   const [pending, setPending] = useState<PendingEC2Action | undefined>(undefined);
+  const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedEc2InstanceId));
+  const lastSelectedInstanceRef = useRef(workspace.selectedEc2InstanceId || "");
 
-  const selectedInstance =
-    workspace.ec2Instances.find(
-      (instance) => instance.instanceId === workspace.selectedEc2InstanceId,
-    ) ?? workspace.ec2Instances[0];
+  const selectedInstance = workspace.ec2Instances.find(
+    (instance) => instance.instanceId === workspace.selectedEc2InstanceId,
+  );
 
   const filteredInstances = useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -169,6 +168,14 @@ export default function ComputeView({
       ].some((value) => value?.toLowerCase().includes(query)),
     );
   }, [filterText, workspace.ec2Instances]);
+
+  useEffect(() => {
+    const nextInstanceId = workspace.selectedEc2InstanceId || "";
+    if (nextInstanceId !== lastSelectedInstanceRef.current) {
+      lastSelectedInstanceRef.current = nextInstanceId;
+      setInspectorOpen(Boolean(nextInstanceId));
+    }
+  }, [workspace.selectedEc2InstanceId]);
 
   const selectedState = selectedInstance?.state?.toLowerCase();
   const startCapability = actionCapabilityState(workspace, "ec2", "start");
@@ -290,6 +297,99 @@ export default function ComputeView({
         },
       ]
     : [];
+
+  const tableEmptyState =
+    workspace.ec2Instances.length === 0 ? (
+      <EmptyState
+        icon={<Server />}
+        title="No instances"
+        description="No EC2 instances loaded for this region."
+        className="border-0"
+      />
+    ) : (
+      <EmptyState
+        icon={<Server />}
+        title="No matches"
+        description="No EC2 instances match the current filter."
+        className="border-0"
+      />
+    );
+
+  const inspectorContent = selectedInstance ? (
+    <ResourceInspectorPanel>
+      <ResourceInspectorHeader
+        icon={Server}
+        eyebrow="Instance"
+        title={selectedInstance.name || selectedInstance.instanceId}
+        subtitle={selectedInstance.instanceId}
+        onClose={() => setInspectorOpen(false)}
+      />
+
+      <DetailFieldList
+        fields={[
+          { label: "Name", value: selectedInstance.name || "Unnamed" },
+          { label: "State", value: selectedInstance.state || "Unknown" },
+          { label: "Instance Type", value: selectedInstance.instanceType || "Unknown" },
+          {
+            label: "Availability Zone",
+            value: selectedInstance.availabilityZone || "Unknown",
+          },
+          { label: "VPC", value: selectedInstance.vpcId || "Unavailable" },
+          { label: "Subnet", value: selectedInstance.subnetId || "Unavailable" },
+          {
+            label: "Security Groups",
+            value: joinedValues(selectedInstance.securityGroups),
+          },
+          { label: "Key Pair", value: selectedInstance.keyName || "Unavailable" },
+          {
+            label: "Platform",
+            value: selectedInstance.platformDetails || "Unavailable",
+          },
+          {
+            label: "Architecture",
+            value: selectedInstance.architecture || "Unavailable",
+          },
+          { label: "Launch Time", value: selectedInstance.launchTime || "Unavailable" },
+          { label: "Private IP", value: selectedInstance.privateIp || "Unavailable" },
+          { label: "Public IP", value: selectedInstance.publicIp || "Unavailable" },
+          { label: "Tags", value: ec2TagValues(selectedInstance.tags) },
+        ]}
+        emptyText="No instance details are available."
+      />
+
+      <div>
+        <div className={fieldLabel}>Copy actions</div>
+        {copySnippets.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Select an instance to generate copy actions.
+          </p>
+        ) : (
+          <div className="mt-2 space-y-3">
+            {copySnippets.map((snippet) => (
+              <div key={snippet.label} className={snippetCard}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className={fieldLabel}>{snippet.label}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      copyToClipboard(snippet.value);
+                    }}
+                  >
+                    <Copy />
+                    Copy
+                  </Button>
+                </div>
+                <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                  {snippet.value}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </ResourceInspectorPanel>
+  ) : null;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -439,67 +539,62 @@ export default function ComputeView({
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border">
-          {workspace.ec2Instances.length === 0 ? (
-            <EmptyState
-              icon={<Server />}
-              title="No instances"
-              description="No EC2 instances loaded for this region."
-              className="border-0"
-            />
-          ) : filteredInstances.length === 0 ? (
-            <EmptyState
-              icon={<Server />}
-              title="No matches"
-              description="No EC2 instances match the current filter."
-              className="border-0"
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Instance ID</TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Zone</TableHead>
-                  <TableHead>Private IP</TableHead>
-                  <TableHead>Public IP</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredInstances.map((instance) => {
-                  const active = instance.instanceId === selectedInstance?.instanceId;
+        <ResourceInventoryShell
+          table={
+            <ResourceTable
+              columns={[
+                { id: "name", label: "Name" },
+                { id: "instanceId", label: "Instance ID" },
+                { id: "state", label: "State" },
+                { id: "type", label: "Type" },
+                { id: "zone", label: "Zone" },
+                { id: "privateIp", label: "Private IP" },
+                { id: "publicIp", label: "Public IP" },
+              ]}
+              rows={filteredInstances}
+              selectedKey={workspace.selectedEc2InstanceId}
+              getRowKey={(instance) => instance.instanceId}
+              onRowClick={(instance) => {
+                onSelectInstance(instance.instanceId);
+                setInspectorOpen(true);
+              }}
+              renderCell={(instance, columnId) => {
+                if (columnId === "name") {
+                  return <span className="font-medium">{instance.name || "Unnamed"}</span>;
+                }
+                if (columnId === "instanceId") {
+                  return instance.instanceId;
+                }
+                if (columnId === "state") {
                   return (
-                    <TableRow
-                      key={instance.instanceId}
-                      data-state={active ? "selected" : undefined}
-                      className="cursor-pointer"
-                      onClick={() => {
-                        onSelectInstance(instance.instanceId);
-                      }}
-                    >
-                      <TableCell className="font-medium">
-                        {instance.name || "Unnamed"}
-                      </TableCell>
-                      <TableCell>{instance.instanceId}</TableCell>
-                      <TableCell>
-                        <StatusPill
-                          status={instanceStateStatus(instance.state)}
-                          label={instance.state || "Unknown"}
-                        />
-                      </TableCell>
-                      <TableCell>{instance.instanceType || "Unknown"}</TableCell>
-                      <TableCell>{instance.availabilityZone || "Unknown"}</TableCell>
-                      <TableCell>{instance.privateIp || "Unavailable"}</TableCell>
-                      <TableCell>{instance.publicIp || "Unavailable"}</TableCell>
-                    </TableRow>
+                    <StatusPill
+                      status={instanceStateStatus(instance.state)}
+                      label={instance.state || "Unknown"}
+                    />
                   );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </div>
+                }
+                if (columnId === "type") {
+                  return instance.instanceType || "Unknown";
+                }
+                if (columnId === "zone") {
+                  return instance.availabilityZone || "Unknown";
+                }
+                if (columnId === "privateIp") {
+                  return instance.privateIp || "Unavailable";
+                }
+                if (columnId === "publicIp") {
+                  return instance.publicIp || "Unavailable";
+                }
+                return null;
+              }}
+              emptyState={tableEmptyState}
+            />
+          }
+          inspectorContent={inspectorContent}
+          inspectorOpen={inspectorOpen}
+          onInspectorOpenChange={setInspectorOpen}
+          inspectorAriaLabel="EC2 instance details"
+        />
 
         <p className="text-sm text-muted-foreground">{actionStatus}</p>
       </section>
@@ -551,87 +646,6 @@ export default function ComputeView({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className={sectionCard}>
-          <div>
-            <h2 className="text-base font-bold">Instance Detail</h2>
-            <p className="text-sm text-muted-foreground">
-              {selectedInstance?.instanceId || "Select an instance for details."}
-            </p>
-          </div>
-          {selectedInstance ? (
-            <DetailFieldList
-              fields={[
-                { label: "Name", value: selectedInstance.name || "Unnamed" },
-                { label: "State", value: selectedInstance.state || "Unknown" },
-                { label: "Instance Type", value: selectedInstance.instanceType || "Unknown" },
-                {
-                  label: "Availability Zone",
-                  value: selectedInstance.availabilityZone || "Unknown",
-                },
-                { label: "VPC", value: selectedInstance.vpcId || "Unavailable" },
-                { label: "Subnet", value: selectedInstance.subnetId || "Unavailable" },
-                {
-                  label: "Security Groups",
-                  value: joinedValues(selectedInstance.securityGroups),
-                },
-                { label: "Key Pair", value: selectedInstance.keyName || "Unavailable" },
-                {
-                  label: "Platform",
-                  value: selectedInstance.platformDetails || "Unavailable",
-                },
-                {
-                  label: "Architecture",
-                  value: selectedInstance.architecture || "Unavailable",
-                },
-                { label: "Launch Time", value: selectedInstance.launchTime || "Unavailable" },
-                { label: "Private IP", value: selectedInstance.privateIp || "Unavailable" },
-                { label: "Public IP", value: selectedInstance.publicIp || "Unavailable" },
-                { label: "Tags", value: ec2TagValues(selectedInstance.tags) },
-              ]}
-              emptyText="No instance details are available."
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">No EC2 instance selected.</p>
-          )}
-        </section>
-
-        <section className={sectionCard}>
-          <div>
-            <h2 className="text-base font-bold">Copy Actions</h2>
-            <p className="text-sm text-muted-foreground">
-              Generated locally from the selected region and instance. No snippet is stored.
-            </p>
-          </div>
-          {copySnippets.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Select an instance to generate copy actions.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {copySnippets.map((snippet) => (
-                <div key={snippet.label} className={snippetCard}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={fieldLabel}>{snippet.label}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        copyToClipboard(snippet.value);
-                      }}
-                    >
-                      <Copy />
-                      Copy
-                    </Button>
-                  </div>
-                  <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">{snippet.value}</pre>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
 
       <section className={sectionCard}>
         <div>
