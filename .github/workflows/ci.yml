@@ -148,7 +148,7 @@ jobs:
       contents: write
     steps:
       - name: Download release bundles
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: cloudsprocket-*-release
           merge-multiple: true
