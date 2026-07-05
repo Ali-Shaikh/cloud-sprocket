@@ -77,6 +77,38 @@ func TestPreferencesRoundTripPersistsSanitisedState(t *testing.T) {
 	}
 }
 
+func TestDefaultServicePreferencesEncodeEmptyProviderList(t *testing.T) {
+	raw, err := json.Marshal(defaultServicePreferences())
+	if err != nil {
+		t.Fatalf("marshal default preferences: %v", err)
+	}
+	if string(raw) == `{"disabledProviders":null,"disabledServices":{}}` {
+		t.Fatalf("default providers must not encode as null: %s", raw)
+	}
+
+	var decoded models.ServicePreferences
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("unmarshal default preferences: %v", err)
+	}
+	if decoded.DisabledProviders == nil {
+		t.Fatal("decoded disabled providers should not be nil")
+	}
+}
+
+func TestBuildPreferencesSnapshotNormalisesNilProviders(t *testing.T) {
+	service := &Service{preferences: models.ServicePreferences{
+		DisabledProviders: nil,
+		DisabledServices:  nil,
+	}}
+	snapshot := service.buildPreferencesSnapshotLocked()
+	if snapshot.Preferences.DisabledProviders == nil {
+		t.Fatal("snapshot providers should not be nil")
+	}
+	if snapshot.Preferences.DisabledServices == nil {
+		t.Fatal("snapshot services map should not be nil")
+	}
+}
+
 func TestBuildPreferencesSnapshotMarksDisabledServices(t *testing.T) {
 	service := &Service{
 		preferences: models.ServicePreferences{

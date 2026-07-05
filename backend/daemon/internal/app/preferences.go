@@ -51,7 +51,7 @@ func (s *Service) savePreferencesLocked() error {
 
 func defaultServicePreferences() models.ServicePreferences {
 	return models.ServicePreferences{
-		DisabledProviders: nil,
+		DisabledProviders: []string{},
 		DisabledServices:  map[string][]string{},
 	}
 }
@@ -163,7 +163,7 @@ func (s *Service) buildPreferencesSnapshotLocked() models.PreferencesSnapshot {
 		))
 	}
 	return models.PreferencesSnapshot{
-		Preferences: s.preferences,
+		Preferences: sanitizeServicePreferences(s.preferences),
 		Catalogue:   catalogue,
 	}
 }

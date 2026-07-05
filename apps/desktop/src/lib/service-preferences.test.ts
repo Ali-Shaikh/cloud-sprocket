@@ -5,7 +5,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   groupCatalogueByProvider,
+  isProviderEnabled,
   isServiceEnabled,
+  normaliseServicePreferences,
   setAllProviderServices,
   toggleProvider,
   toggleService,
@@ -56,5 +58,20 @@ describe("service-preferences", () => {
     const next = setAllProviderServices(initial, "aws", ["s3", "ec2"], false);
     expect(isServiceEnabled(next, "aws", "s3")).toBe(false);
     expect(isServiceEnabled(next, "aws", "ec2")).toBe(false);
+  });
+
+  it("treats null disabledProviders from the backend as an empty list", () => {
+    const malformed = {
+      disabledProviders: null,
+      disabledServices: null,
+    } as unknown as ServicePreferences;
+
+    expect(normaliseServicePreferences(malformed)).toEqual({
+      disabledProviders: [],
+      disabledServices: {},
+    });
+    expect(isProviderEnabled(malformed, "aws")).toBe(true);
+    expect(isServiceEnabled(malformed, "aws", "s3")).toBe(true);
+    expect(toggleProvider(malformed, "aws", false).disabledProviders).toEqual(["aws"]);
   });
 });
