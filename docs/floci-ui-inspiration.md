@@ -236,9 +236,28 @@ The remaining bulk of `App.tsx` is per-service selection/mutation handlers. Extr
 
 Per `docs/aws-services-expansion-plan.md` Phase 2 and its per-service checklist: `feat/aws-ecs`, then `feat/aws-apigateway`, then `feat/aws-secrets`. Each service: `awsadapter/<service>.go`, enricher + `enrichAwsScoped` case + `validAwsInventoryScopes` entry in `aws_inventory.go`, scope entry in `lib/aws-inventory.ts`, lazy view under `views/workspace/`, tab wiring through the Step 4d tab routers (`components/workspace/aws-workspace-tabs.tsx`), action capabilities for any write actions, tests per the checklist.
 
-### Target C — TanStack Query decision (after Target A) — **next**
+### Target C — TanStack Query decision (after Target A) — **spike shipped (branch `feat/tanstack-query-spike`)**
 
-A short spike, not a migration: pilot `@tanstack/react-query` on `runtime.get` polling and `deployments.list` only, behind the existing hooks. Write the outcome (adopt narrowly / decline) into this doc and remove the question from the backlog.
+**Verdict: adopt narrowly** for idempotent read/poll paths only. Do not migrate workspace snapshot loading, session state, or mutation handlers to React Query.
+
+**Pilot (implemented):**
+
+| Surface | Before | After |
+|---------|--------|-------|
+| Local Runtime poll (`runtime.get` + emulator logs via `fetchVirtualisationSnapshot`) | `setInterval` in `use-virtualisation-poll.ts` | `useQuery` with `refetchInterval: 5000` when `virtualisation` tab active; existing `refreshVirtualisationState` remains the `queryFn` |
+| Deploy recipe list (`deployments.list`) | `useState` + `useEffect` in `DeployView` | `useDeploymentsQuery` with cache updates on `deployment.changed` and delete |
+
+**Infrastructure:** `@tanstack/react-query` 5.x, `AppProviders` (`QueryClientProvider` + `ThemeProvider`), `lib/query-keys.ts`, `lib/query-client.ts`.
+
+**Decline for now:**
+
+- `workspace.get` / locked-session inventory (complex scoped merges, preference gates, tab activation)
+- AWS/Azure inventory scopes (`aws.inventory.get`, `azure.inventory.get`)
+- Any write/mutation flow (keep imperative `backendRequest` + local status setters)
+
+**Why narrow adoption wins:** removes hand-rolled polling and duplicate list-fetch boilerplate without fighting the existing workspace snapshot model. A full migration would duplicate state (query cache vs `useWorkspaceState`) and slow App.tsx decomposition.
+
+**Next if adopted further:** `deployments.list` pattern for read-mostly logs tails only after measuring cache benefit; still no workspace migration.
 
 ### Service enablement (Phases 1–3) — **shipped v0.8.27 (#82)**
 
