@@ -93,6 +93,9 @@ export function useWorkspaceState(session: SessionSnapshot) {
   const [eventBridgeActionStatus, setEventBridgeActionStatus] = useState(
     "Select a region before refreshing EventBridge buses.",
   );
+  const [route53ActionStatus, setRoute53ActionStatus] = useState(
+    "Route 53 inventory loads when you open the tab.",
+  );
   const [apiGatewayActionStatus, setApiGatewayActionStatus] = useState(
     "Select a region before refreshing API Gateway APIs.",
   );
@@ -267,6 +270,8 @@ export function useWorkspaceState(session: SessionSnapshot) {
     setCloudFormationActionStatus,
     eventBridgeActionStatus,
     setEventBridgeActionStatus,
+    route53ActionStatus,
+    setRoute53ActionStatus,
     apiGatewayActionStatus,
     setApiGatewayActionStatus,
     secretsManagerActionStatus,

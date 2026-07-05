@@ -302,6 +302,7 @@ type SessionSnapshot struct {
 	SelectedCloudFormationStackName   string             `json:"selectedCloudFormationStackName,omitempty"`
 	SelectedEventBridgeRegion         string             `json:"selectedEventBridgeRegion,omitempty"`
 	SelectedEventBridgeBusName        string             `json:"selectedEventBridgeBusName,omitempty"`
+	SelectedRoute53HostedZoneID       string             `json:"selectedRoute53HostedZoneId,omitempty"`
 	SelectedApiGatewayRegion          string             `json:"selectedApiGatewayRegion,omitempty"`
 	SelectedApiGatewayApiKey          string             `json:"selectedApiGatewayApiKey,omitempty"`
 	SelectedSecretsManagerRegion      string             `json:"selectedSecretsManagerRegion,omitempty"`
@@ -678,6 +679,24 @@ type AwsEventBridgeRule struct {
 	Description        string `json:"description,omitempty"`
 	ScheduleExpression string `json:"scheduleExpression,omitempty"`
 	EventPattern       string `json:"eventPattern,omitempty"`
+}
+
+// AwsRoute53HostedZone models a Route 53 hosted zone for inventory.
+type AwsRoute53HostedZone struct {
+	HostedZoneID string `json:"hostedZoneId"`
+	Name         string `json:"name"`
+	RecordCount  int64  `json:"recordCount,omitempty"`
+	PrivateZone  bool   `json:"privateZone,omitempty"`
+	Comment      string `json:"comment,omitempty"`
+}
+
+// AwsRoute53ResourceRecordSet models a Route 53 record preview for inventory.
+type AwsRoute53ResourceRecordSet struct {
+	Name        string   `json:"name"`
+	Type        string   `json:"type,omitempty"`
+	TTL         int64    `json:"ttl,omitempty"`
+	Values      []string `json:"values,omitempty"`
+	AliasTarget string   `json:"aliasTarget,omitempty"`
 }
 
 // AwsEksNodeGroup models an EKS managed node group summary.
@@ -1249,6 +1268,10 @@ type WorkspaceSnapshot struct {
 	EventBridgeRegions                []string                     `json:"eventBridgeRegions"`
 	EventBridgeBuses                  []AwsEventBridgeBus          `json:"eventBridgeBuses"`
 	EventBridgeRules                  []AwsEventBridgeRule         `json:"eventBridgeRules"`
+	SelectedRoute53HostedZoneID       string                       `json:"selectedRoute53HostedZoneId,omitempty"`
+	Route53StatusMessage              string                       `json:"route53StatusMessage,omitempty"`
+	Route53HostedZones                []AwsRoute53HostedZone       `json:"route53HostedZones"`
+	Route53ResourceRecordSets         []AwsRoute53ResourceRecordSet `json:"route53ResourceRecordSets"`
 	SelectedApiGatewayRegion          string                       `json:"selectedApiGatewayRegion,omitempty"`
 	SelectedApiGatewayApiKey          string                       `json:"selectedApiGatewayApiKey,omitempty"`
 	ApiGatewayStatusMessage           string                       `json:"apiGatewayStatusMessage,omitempty"`

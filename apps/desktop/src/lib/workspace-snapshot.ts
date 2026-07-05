@@ -17,6 +17,8 @@ import type {
   AwsCloudFormationStackEvent,
   AwsEventBridgeBus,
   AwsEventBridgeRule,
+  AwsRoute53HostedZone,
+  AwsRoute53ResourceRecordSet,
   AwsIamPolicy,
   AwsIamRole,
   AwsLambdaFunction,
@@ -166,6 +168,8 @@ export const emptyWorkspace: WorkspaceSnapshot = {
   eventBridgeRegions: [],
   eventBridgeBuses: [],
   eventBridgeRules: [],
+  route53HostedZones: [],
+  route53ResourceRecordSets: [],
   apiGatewayRegions: [],
   apiGatewayApis: [],
   apiGatewayStages: [],
@@ -425,6 +429,24 @@ function normaliseEventBridgeRule(rule: AwsEventBridgeRule): AwsEventBridgeRule 
   return {
     ...rule,
     name: rule.name ?? "",
+  };
+}
+
+function normaliseRoute53HostedZone(zone: AwsRoute53HostedZone): AwsRoute53HostedZone {
+  return {
+    ...zone,
+    hostedZoneId: zone.hostedZoneId ?? "",
+    name: zone.name ?? "",
+  };
+}
+
+function normaliseRoute53ResourceRecordSet(
+  record: AwsRoute53ResourceRecordSet,
+): AwsRoute53ResourceRecordSet {
+  return {
+    ...record,
+    name: record.name ?? "",
+    values: normaliseArray(record.values),
   };
 }
 
@@ -870,6 +892,14 @@ export function mergeAwsInventoryScope(
         eventBridgeRules: normalised.eventBridgeRules,
         eventBridgeStatusMessage: normalised.eventBridgeStatusMessage,
       });
+    case "route53":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedRoute53HostedZoneId: normalised.selectedRoute53HostedZoneId,
+        route53HostedZones: normalised.route53HostedZones,
+        route53ResourceRecordSets: normalised.route53ResourceRecordSets,
+        route53StatusMessage: normalised.route53StatusMessage,
+      });
     case "apigateway":
       return normaliseWorkspaceSnapshot({
         ...current,
@@ -1043,6 +1073,10 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     eventBridgeRegions: normaliseArray(source.eventBridgeRegions),
     eventBridgeBuses: normaliseArray(source.eventBridgeBuses).map(normaliseEventBridgeBus),
     eventBridgeRules: normaliseArray(source.eventBridgeRules).map(normaliseEventBridgeRule),
+    route53HostedZones: normaliseArray(source.route53HostedZones).map(normaliseRoute53HostedZone),
+    route53ResourceRecordSets: normaliseArray(source.route53ResourceRecordSets).map(
+      normaliseRoute53ResourceRecordSet,
+    ),
     apiGatewayRegions: normaliseArray(source.apiGatewayRegions),
     apiGatewayApis: normaliseArray(source.apiGatewayApis).map(normaliseApiGatewayApi),
     apiGatewayStages: normaliseArray(source.apiGatewayStages).map(normaliseApiGatewayStage),

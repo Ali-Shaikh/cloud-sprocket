@@ -218,6 +218,7 @@ func (s *Service) emptyProbeWorkspace(
 		CloudFormationStacks:   []models.AwsCloudFormationStack{},
 		EventBridgeRegions:     []string{},
 		EventBridgeBuses:       []models.AwsEventBridgeBus{},
+		Route53HostedZones:     []models.AwsRoute53HostedZone{},
 		ApiGatewayRegions:      []string{},
 		ApiGatewayApis:         []models.AwsApiGatewayApi{},
 		SecretsManagerRegions:  []string{},
@@ -282,6 +283,8 @@ func countCatalogueResources(
 			return len(workspace.CloudFormationStacks), true
 		case "eventbridge":
 			return len(workspace.EventBridgeBuses), true
+		case "route53":
+			return len(workspace.Route53HostedZones), true
 		case "apigateway":
 			return len(workspace.ApiGatewayApis), true
 		case "secrets":

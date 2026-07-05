@@ -158,6 +158,8 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     refreshEventBridgeInventory,
     selectEventBridgeRegion,
     selectEventBridgeBus,
+    refreshRoute53Inventory,
+    selectRoute53HostedZone,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,

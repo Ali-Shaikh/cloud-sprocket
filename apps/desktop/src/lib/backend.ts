@@ -563,6 +563,25 @@ const mockWorkspaceEventBridgeRules = [
   },
 ];
 
+const mockWorkspaceRoute53HostedZones = [
+  {
+    hostedZoneId: "/hostedzone/Z123",
+    name: "example.com.",
+    recordCount: 2,
+    privateZone: false,
+    comment: "Demo zone",
+  },
+];
+
+const mockWorkspaceRoute53ResourceRecordSets = [
+  {
+    name: "www.example.com.",
+    type: "A",
+    ttl: 300,
+    values: ["203.0.113.10"],
+  },
+];
+
 const mockWorkspaceApiGatewayApis = [
   {
     apiKey: "http:xyz789",
@@ -1350,6 +1369,8 @@ function countMockCatalogueResources(
         return workspace.cloudFormationStacks.length;
       case "eventbridge":
         return workspace.eventBridgeBuses.length;
+      case "route53":
+        return workspace.route53HostedZones.length;
       case "apigateway":
         return workspace.apiGatewayApis.length;
       case "secrets":
@@ -1922,6 +1943,14 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     eventBridgeRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
     eventBridgeBuses: isAWSWorkspace ? mockWorkspaceEventBridgeBuses : [],
     eventBridgeRules: isAWSWorkspace ? mockWorkspaceEventBridgeRules : [],
+    selectedRoute53HostedZoneId: isAWSWorkspace
+      ? mockState.session.selectedRoute53HostedZoneId ?? mockWorkspaceRoute53HostedZones[0]?.hostedZoneId
+      : undefined,
+    route53StatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceRoute53HostedZones.length} Route 53 hosted zones.`
+      : "Route 53 inventory is only available for open AWS workspaces.",
+    route53HostedZones: isAWSWorkspace ? mockWorkspaceRoute53HostedZones : [],
+    route53ResourceRecordSets: isAWSWorkspace ? mockWorkspaceRoute53ResourceRecordSets : [],
     selectedApiGatewayRegion: isAWSWorkspace
       ? mockState.session.selectedApiGatewayRegion ?? mockWorkspaceRegions[0]
       : undefined,
@@ -2599,6 +2628,10 @@ function handleMockRequest<T>(
     case "aws.eventbridge.selectBus":
       mockState.session.selectedEventBridgeBusName = String(params.busName ?? "");
       appendLog("info", `Selected EventBridge bus ${params.busName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.route53.selectHostedZone":
+      mockState.session.selectedRoute53HostedZoneId = String(params.hostedZoneId ?? "");
+      appendLog("info", `Selected Route 53 hosted zone ${params.hostedZoneId}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     case "aws.apigateway.selectRegion":
       mockState.session.selectedApiGatewayRegion = String(params.region ?? "");

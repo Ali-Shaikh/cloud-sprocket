@@ -65,6 +65,7 @@ func TestAwsScopedEventBridgeInventoryLoadsBusesAndRules(t *testing.T) {
 		eks:            stubEKSInventory{},
 		cloudformation: stubCloudFormationInventory{},
 		eventbridge:    eventbridge,
+		route53:        stubRoute53Inventory{},
 		apigateway:     stubApiGatewayInventory{},
 		secretsManager: stubSecretsManagerInventory{},
 		logs:           stubLogsInventory{},

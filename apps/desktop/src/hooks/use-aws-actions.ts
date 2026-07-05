@@ -38,6 +38,7 @@ export type UseAwsActionsParams = {
   setEksActionStatus: Dispatch<SetStateAction<string>>;
   setCloudFormationActionStatus: Dispatch<SetStateAction<string>>;
   setEventBridgeActionStatus: Dispatch<SetStateAction<string>>;
+  setRoute53ActionStatus: Dispatch<SetStateAction<string>>;
   setApiGatewayActionStatus: Dispatch<SetStateAction<string>>;
   setSecretsManagerActionStatus: Dispatch<SetStateAction<string>>;
   setLogsActionStatus: Dispatch<SetStateAction<string>>;
@@ -68,6 +69,7 @@ export function useAwsActions(params: UseAwsActionsParams) {
     setEksActionStatus,
     setCloudFormationActionStatus,
     setEventBridgeActionStatus,
+    setRoute53ActionStatus,
     setApiGatewayActionStatus,
     setSecretsManagerActionStatus,
     setLogsActionStatus,
@@ -824,6 +826,38 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setEventBridgeActionStatus, setWorkspace]);
 
+  const refreshRoute53Inventory = useCallback((): void => {
+    setRoute53ActionStatus("Refreshing Route 53 hosted zones.");
+    void requestWorkspaceSnapshot("aws.inventory.get", { scope: "route53" })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setRoute53ActionStatus(
+          workspaceResult.route53StatusMessage || "Route 53 inventory refreshed.",
+        );
+      })
+      .catch((error: unknown) => {
+        setRoute53ActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setRoute53ActionStatus, setWorkspace]);
+
+  const selectRoute53HostedZone = useCallback((hostedZoneId: string): void => {
+    setRoute53ActionStatus(`Loading record previews for ${hostedZoneId}.`);
+    void requestWorkspaceSnapshot("aws.route53.selectHostedZone", { hostedZoneId })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setRoute53ActionStatus(
+          workspaceResult.route53StatusMessage || "Selected Route 53 hosted zone.",
+        );
+      })
+      .catch((error: unknown) => {
+        setRoute53ActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setRoute53ActionStatus, setWorkspace]);
+
   const selectApiGatewayRegion = useCallback((region: string): void => {
     setApiGatewayActionStatus(`Loading API Gateway APIs for ${region}.`);
     void requestWorkspaceSnapshot("aws.apigateway.selectRegion", { region })
@@ -1031,6 +1065,8 @@ export function useAwsActions(params: UseAwsActionsParams) {
     refreshEventBridgeInventory,
     selectEventBridgeRegion,
     selectEventBridgeBus,
+    refreshRoute53Inventory,
+    selectRoute53HostedZone,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
