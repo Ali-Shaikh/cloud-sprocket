@@ -298,6 +298,10 @@ type SessionSnapshot struct {
 	SelectedECSTaskArn                string             `json:"selectedEcsTaskArn,omitempty"`
 	SelectedEKSRegion                 string             `json:"selectedEksRegion,omitempty"`
 	SelectedEKSClusterName            string             `json:"selectedEksClusterName,omitempty"`
+	SelectedCloudFormationRegion      string             `json:"selectedCloudFormationRegion,omitempty"`
+	SelectedCloudFormationStackName   string             `json:"selectedCloudFormationStackName,omitempty"`
+	SelectedEventBridgeRegion         string             `json:"selectedEventBridgeRegion,omitempty"`
+	SelectedEventBridgeBusName        string             `json:"selectedEventBridgeBusName,omitempty"`
 	SelectedApiGatewayRegion          string             `json:"selectedApiGatewayRegion,omitempty"`
 	SelectedApiGatewayApiKey          string             `json:"selectedApiGatewayApiKey,omitempty"`
 	SelectedSecretsManagerRegion      string             `json:"selectedSecretsManagerRegion,omitempty"`
@@ -638,6 +642,42 @@ type AwsEksCluster struct {
 	Endpoint        string `json:"endpoint,omitempty"`
 	PlatformVersion string `json:"platformVersion,omitempty"`
 	RoleArn         string `json:"roleArn,omitempty"`
+}
+
+// AwsCloudFormationStack models a CloudFormation stack for inventory.
+type AwsCloudFormationStack struct {
+	StackId         string `json:"stackId"`
+	StackName       string `json:"stackName"`
+	StackStatus     string `json:"stackStatus,omitempty"`
+	CreationTime    string `json:"creationTime,omitempty"`
+	LastUpdatedTime string `json:"lastUpdatedTime,omitempty"`
+	Description     string `json:"description,omitempty"`
+}
+
+// AwsCloudFormationStackEvent models a recent CloudFormation stack event.
+type AwsCloudFormationStackEvent struct {
+	EventId              string `json:"eventId"`
+	Timestamp            string `json:"timestamp,omitempty"`
+	LogicalResourceId    string `json:"logicalResourceId,omitempty"`
+	ResourceStatus       string `json:"resourceStatus,omitempty"`
+	ResourceType         string `json:"resourceType,omitempty"`
+	ResourceStatusReason string `json:"resourceStatusReason,omitempty"`
+}
+
+// AwsEventBridgeBus models an EventBridge event bus for inventory.
+type AwsEventBridgeBus struct {
+	Name string `json:"name"`
+	Arn  string `json:"arn,omitempty"`
+}
+
+// AwsEventBridgeRule models an EventBridge rule for inventory.
+type AwsEventBridgeRule struct {
+	Name               string `json:"name"`
+	Arn                string `json:"arn,omitempty"`
+	State              string `json:"state,omitempty"`
+	Description        string `json:"description,omitempty"`
+	ScheduleExpression string `json:"scheduleExpression,omitempty"`
+	EventPattern       string `json:"eventPattern,omitempty"`
 }
 
 // AwsEksNodeGroup models an EKS managed node group summary.
@@ -1197,6 +1237,18 @@ type WorkspaceSnapshot struct {
 	EKSRegions                        []string                     `json:"eksRegions"`
 	EKSClusters                       []AwsEksCluster              `json:"eksClusters"`
 	EKSNodeGroups                     []AwsEksNodeGroup            `json:"eksNodeGroups"`
+	SelectedCloudFormationRegion      string                       `json:"selectedCloudFormationRegion,omitempty"`
+	SelectedCloudFormationStackName   string                       `json:"selectedCloudFormationStackName,omitempty"`
+	CloudFormationStatusMessage       string                       `json:"cloudFormationStatusMessage,omitempty"`
+	CloudFormationRegions             []string                     `json:"cloudFormationRegions"`
+	CloudFormationStacks              []AwsCloudFormationStack     `json:"cloudFormationStacks"`
+	CloudFormationStackEvents         []AwsCloudFormationStackEvent `json:"cloudFormationStackEvents"`
+	SelectedEventBridgeRegion         string                       `json:"selectedEventBridgeRegion,omitempty"`
+	SelectedEventBridgeBusName        string                       `json:"selectedEventBridgeBusName,omitempty"`
+	EventBridgeStatusMessage          string                       `json:"eventBridgeStatusMessage,omitempty"`
+	EventBridgeRegions                []string                     `json:"eventBridgeRegions"`
+	EventBridgeBuses                  []AwsEventBridgeBus          `json:"eventBridgeBuses"`
+	EventBridgeRules                  []AwsEventBridgeRule         `json:"eventBridgeRules"`
 	SelectedApiGatewayRegion          string                       `json:"selectedApiGatewayRegion,omitempty"`
 	SelectedApiGatewayApiKey          string                       `json:"selectedApiGatewayApiKey,omitempty"`
 	ApiGatewayStatusMessage           string                       `json:"apiGatewayStatusMessage,omitempty"`

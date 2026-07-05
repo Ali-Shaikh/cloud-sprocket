@@ -6,7 +6,9 @@ import awsCloudwatchIconUrl from "@/assets/cloud-icons/aws-cloudwatch.svg";
 import awsDynamodbIconUrl from "@/assets/cloud-icons/aws-dynamodb.svg";
 import awsEc2IconUrl from "@/assets/cloud-icons/aws-ec2.svg";
 import awsEcsIconUrl from "@/assets/cloud-icons/aws-ecs.svg";
+import awsCloudformationIconUrl from "@/assets/cloud-icons/aws-cloudformation.svg";
 import awsEksIconUrl from "@/assets/cloud-icons/aws-eks.svg";
+import awsEventbridgeIconUrl from "@/assets/cloud-icons/aws-eventbridge.svg";
 import awsIamIconUrl from "@/assets/cloud-icons/aws-iam.svg";
 import awsLambdaIconUrl from "@/assets/cloud-icons/aws-lambda.svg";
 import awsRdsIconUrl from "@/assets/cloud-icons/aws-rds.svg";
@@ -39,6 +41,8 @@ const SERVICE_ICON_URLS: Record<string, string> = {
   rds: awsRdsIconUrl,
   ecs: awsEcsIconUrl,
   eks: awsEksIconUrl,
+  cloudformation: awsCloudformationIconUrl,
+  eventbridge: awsEventbridgeIconUrl,
   apigateway: awsApigatewayIconUrl,
   secrets: awsSecretsManagerIconUrl,
   iam: awsIamIconUrl,

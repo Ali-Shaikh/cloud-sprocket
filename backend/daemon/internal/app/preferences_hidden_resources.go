@@ -212,6 +212,12 @@ func (s *Service) emptyProbeWorkspace(
 		RDSInstances:           []models.AwsRdsInstance{},
 		ECSRegions:             []string{},
 		ECSClusters:            []models.AwsEcsCluster{},
+		EKSRegions:             []string{},
+		EKSClusters:            []models.AwsEksCluster{},
+		CloudFormationRegions:  []string{},
+		CloudFormationStacks:   []models.AwsCloudFormationStack{},
+		EventBridgeRegions:     []string{},
+		EventBridgeBuses:       []models.AwsEventBridgeBus{},
 		ApiGatewayRegions:      []string{},
 		ApiGatewayApis:         []models.AwsApiGatewayApi{},
 		SecretsManagerRegions:  []string{},
@@ -272,6 +278,10 @@ func countCatalogueResources(
 			return len(workspace.ECSClusters), true
 		case "eks":
 			return len(workspace.EKSClusters), true
+		case "cloudformation":
+			return len(workspace.CloudFormationStacks), true
+		case "eventbridge":
+			return len(workspace.EventBridgeBuses), true
 		case "apigateway":
 			return len(workspace.ApiGatewayApis), true
 		case "secrets":

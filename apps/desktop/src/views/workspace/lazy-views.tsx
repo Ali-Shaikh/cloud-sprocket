@@ -11,6 +11,8 @@ export const SNSView = lazy(() => import("./SNSView"));
 export const RDSView = lazy(() => import("./RDSView"));
 export const ECSView = lazy(() => import("./ECSView"));
 export const EKSView = lazy(() => import("./EKSView"));
+export const CloudFormationView = lazy(() => import("./CloudFormationView"));
+export const EventBridgeView = lazy(() => import("./EventBridgeView"));
 export const ApiGatewayView = lazy(() => import("./ApiGatewayView"));
 export const SecretsManagerView = lazy(() => import("./SecretsManagerView"));
 export const LogsView = lazy(() => import("./LogsView"));

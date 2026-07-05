@@ -36,6 +36,8 @@ type Service struct {
 	rds                   RDSInventory
 	ecs                   ECSInventory
 	eks                   EKSInventory
+	cloudformation        CloudFormationInventory
+	eventbridge           EventBridgeInventory
 	apigateway            ApiGatewayInventory
 	secretsManager        SecretsManagerInventory
 	logs                  LogsInventory
@@ -71,6 +73,8 @@ func New(
 	rdsInventory RDSInventory,
 	ecsInventory ECSInventory,
 	eksInventory EKSInventory,
+	cloudformationInventory CloudFormationInventory,
+	eventbridgeInventory EventBridgeInventory,
 	apigatewayInventory ApiGatewayInventory,
 	secretsManagerInventory SecretsManagerInventory,
 	logsInventory LogsInventory,
@@ -80,7 +84,7 @@ func New(
 ) *Service {
 	localStackMgr := localstack.NewManager(settings)
 	azureRuntime := flociaz.NewManager(settings)
-	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, eksInventory, apigatewayInventory, secretsManagerInventory, logsInventory, iamInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
+	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, eksInventory, cloudformationInventory, eventbridgeInventory, apigatewayInventory, secretsManagerInventory, logsInventory, iamInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
 }
 
 func NewWithRuntimes(
@@ -96,6 +100,8 @@ func NewWithRuntimes(
 	rdsInventory RDSInventory,
 	ecsInventory ECSInventory,
 	eksInventory EKSInventory,
+	cloudformationInventory CloudFormationInventory,
+	eventbridgeInventory EventBridgeInventory,
 	apigatewayInventory ApiGatewayInventory,
 	secretsManagerInventory SecretsManagerInventory,
 	logsInventory LogsInventory,
@@ -120,6 +126,8 @@ func NewWithRuntimes(
 		rds:                   rdsInventory,
 		ecs:                   ecsInventory,
 		eks:                   eksInventory,
+		cloudformation:        cloudformationInventory,
+		eventbridge:           eventbridgeInventory,
 		apigateway:            apigatewayInventory,
 		secretsManager:        secretsManagerInventory,
 		logs:                  logsInventory,
@@ -175,20 +183,12 @@ func (s *Service) Handle(
 		return s.handleAwsS3AnalyseUrl(params)
 	case "aws.s3.validateUrl":
 		return s.handleAwsS3ValidateUrl(params, notifier)
-	case "aws.s3.deleteObject":
-		return s.handleAwsS3DeleteObject(ctx, params, notifier)
-	case "aws.s3.createBucket":
-		return s.handleAwsS3CreateBucket(ctx, params, notifier)
 	case "aws.ec2.selectRegion":
 		return s.handleAwsEc2SelectRegion(ctx, params, notifier)
 	case "aws.ec2.selectInstance":
 		return s.handleAwsEc2SelectInstance(ctx, params, notifier)
 	case "aws.ec2.invokeAction":
 		return s.handleAwsEc2InvokeAction(ctx, params, notifier)
-	case "aws.ec2.runInstances":
-		return s.handleAwsEc2RunInstances(ctx, params, notifier)
-	case "aws.ec2.terminateInstances":
-		return s.handleAwsEc2TerminateInstances(ctx, params, notifier)
 	case "aws.lambda.selectRegion":
 		return s.handleAwsLambdaSelectRegion(ctx, params, notifier)
 	case "aws.lambda.selectFunction":
@@ -223,10 +223,6 @@ func (s *Service) Handle(
 		return s.handleAwsRdsSelectRegion(ctx, params, notifier)
 	case "aws.rds.selectInstance":
 		return s.handleAwsRdsSelectInstance(ctx, params, notifier)
-	case "aws.rds.startInstance":
-		return s.handleAwsRdsStartInstance(ctx, params, notifier)
-	case "aws.rds.stopInstance":
-		return s.handleAwsRdsStopInstance(ctx, params, notifier)
 	case "aws.ecs.selectRegion":
 		return s.handleAwsEcsSelectRegion(ctx, params, notifier)
 	case "aws.ecs.selectCluster":
@@ -239,6 +235,14 @@ func (s *Service) Handle(
 		return s.handleAwsEksSelectRegion(ctx, params, notifier)
 	case "aws.eks.selectCluster":
 		return s.handleAwsEksSelectCluster(ctx, params, notifier)
+	case "aws.cloudformation.selectRegion":
+		return s.handleAwsCloudFormationSelectRegion(ctx, params, notifier)
+	case "aws.cloudformation.selectStack":
+		return s.handleAwsCloudFormationSelectStack(ctx, params, notifier)
+	case "aws.eventbridge.selectRegion":
+		return s.handleAwsEventBridgeSelectRegion(ctx, params, notifier)
+	case "aws.eventbridge.selectBus":
+		return s.handleAwsEventBridgeSelectBus(ctx, params, notifier)
 	case "aws.apigateway.selectRegion":
 		return s.handleAwsApiGatewaySelectRegion(ctx, params, notifier)
 	case "aws.apigateway.selectApi":
@@ -253,10 +257,6 @@ func (s *Service) Handle(
 		return s.handleAwsLogsSelectRegion(ctx, params, notifier)
 	case "aws.logs.selectLogGroup":
 		return s.handleAwsLogsSelectLogGroup(ctx, params, notifier)
-	case "aws.logs.createLogGroup":
-		return s.handleAwsLogsCreateLogGroup(ctx, params, notifier)
-	case "aws.logs.putLogEvents":
-		return s.handleAwsLogsPutLogEvents(ctx, params, notifier)
 	case "aws.iam.selectRole":
 		return s.handleAwsIamSelectRole(ctx, params, notifier)
 	case "aws.lambda.describe":
@@ -265,10 +265,6 @@ func (s *Service) Handle(
 		return s.handleAwsLambdaInvoke(ctx, params, notifier)
 	case "aws.lambda.create":
 		return s.handleAwsLambdaCreate(ctx, params, notifier)
-	case "aws.lambda.deleteFunction":
-		return s.handleAwsLambdaDeleteFunction(ctx, params, notifier)
-	case "aws.iam.createRole":
-		return s.handleAwsIamCreateRole(ctx, params, notifier)
 	case "aws.inventory.get":
 		return s.handleAwsInventoryGet(ctx, params, notifier)
 	case "azure.inventory.get":

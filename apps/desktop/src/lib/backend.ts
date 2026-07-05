@@ -528,6 +528,41 @@ const mockWorkspaceEKSNodeGroups = [
   },
 ];
 
+const mockWorkspaceCloudFormationStacks = [
+  {
+    stackId: "arn:aws:cloudformation:us-east-1:000000000000:stack/demo/abc",
+    stackName: "demo",
+    stackStatus: "CREATE_COMPLETE",
+    creationTime: "2026-03-01T12:00:00Z",
+  },
+];
+
+const mockWorkspaceCloudFormationStackEvents = [
+  {
+    eventId: "evt-1",
+    timestamp: "2026-03-01T12:05:00Z",
+    logicalResourceId: "MyBucket",
+    resourceStatus: "CREATE_COMPLETE",
+    resourceType: "AWS::S3::Bucket",
+  },
+];
+
+const mockWorkspaceEventBridgeBuses = [
+  {
+    name: "default",
+    arn: "arn:aws:events:us-east-1:000000000000:event-bus/default",
+  },
+];
+
+const mockWorkspaceEventBridgeRules = [
+  {
+    name: "hourly",
+    state: "ENABLED",
+    scheduleExpression: "rate(1 hour)",
+    description: "Hourly trigger",
+  },
+];
+
 const mockWorkspaceApiGatewayApis = [
   {
     apiKey: "http:xyz789",
@@ -1311,6 +1346,10 @@ function countMockCatalogueResources(
         return workspace.ecsClusters.length;
       case "eks":
         return workspace.eksClusters.length;
+      case "cloudformation":
+        return workspace.cloudFormationStacks.length;
+      case "eventbridge":
+        return workspace.eventBridgeBuses.length;
       case "apigateway":
         return workspace.apiGatewayApis.length;
       case "secrets":
@@ -1859,6 +1898,30 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     eksRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
     eksClusters: isAWSWorkspace ? mockWorkspaceEKSClusters : [],
     eksNodeGroups: isAWSWorkspace ? mockWorkspaceEKSNodeGroups : [],
+    selectedCloudFormationRegion: isAWSWorkspace
+      ? mockState.session.selectedCloudFormationRegion ?? mockWorkspaceRegions[0]
+      : undefined,
+    selectedCloudFormationStackName: isAWSWorkspace
+      ? mockState.session.selectedCloudFormationStackName ?? mockWorkspaceCloudFormationStacks[0]?.stackName
+      : undefined,
+    cloudFormationStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceCloudFormationStacks.length} CloudFormation stacks from ${mockState.session.selectedCloudFormationRegion ?? mockWorkspaceRegions[0]}.`
+      : "CloudFormation inventory is only available for open AWS workspaces.",
+    cloudFormationRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
+    cloudFormationStacks: isAWSWorkspace ? mockWorkspaceCloudFormationStacks : [],
+    cloudFormationStackEvents: isAWSWorkspace ? mockWorkspaceCloudFormationStackEvents : [],
+    selectedEventBridgeRegion: isAWSWorkspace
+      ? mockState.session.selectedEventBridgeRegion ?? mockWorkspaceRegions[0]
+      : undefined,
+    selectedEventBridgeBusName: isAWSWorkspace
+      ? mockState.session.selectedEventBridgeBusName ?? mockWorkspaceEventBridgeBuses[0]?.name
+      : undefined,
+    eventBridgeStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceEventBridgeBuses.length} EventBridge buses from ${mockState.session.selectedEventBridgeRegion ?? mockWorkspaceRegions[0]}.`
+      : "EventBridge inventory is only available for open AWS workspaces.",
+    eventBridgeRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
+    eventBridgeBuses: isAWSWorkspace ? mockWorkspaceEventBridgeBuses : [],
+    eventBridgeRules: isAWSWorkspace ? mockWorkspaceEventBridgeRules : [],
     selectedApiGatewayRegion: isAWSWorkspace
       ? mockState.session.selectedApiGatewayRegion ?? mockWorkspaceRegions[0]
       : undefined,
@@ -2518,6 +2581,24 @@ function handleMockRequest<T>(
     case "aws.eks.selectCluster":
       mockState.session.selectedEksClusterName = String(params.clusterName ?? "");
       appendLog("info", `Selected EKS cluster ${params.clusterName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.cloudformation.selectRegion":
+      mockState.session.selectedCloudFormationRegion = String(params.region ?? "");
+      mockState.session.selectedCloudFormationStackName = undefined;
+      appendLog("info", `Selected CloudFormation region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.cloudformation.selectStack":
+      mockState.session.selectedCloudFormationStackName = String(params.stackName ?? "");
+      appendLog("info", `Selected CloudFormation stack ${params.stackName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.eventbridge.selectRegion":
+      mockState.session.selectedEventBridgeRegion = String(params.region ?? "");
+      mockState.session.selectedEventBridgeBusName = undefined;
+      appendLog("info", `Selected EventBridge region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.eventbridge.selectBus":
+      mockState.session.selectedEventBridgeBusName = String(params.busName ?? "");
+      appendLog("info", `Selected EventBridge bus ${params.busName}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     case "aws.apigateway.selectRegion":
       mockState.session.selectedApiGatewayRegion = String(params.region ?? "");

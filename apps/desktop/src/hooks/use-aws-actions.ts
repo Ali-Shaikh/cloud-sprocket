@@ -36,6 +36,8 @@ export type UseAwsActionsParams = {
   setRdsActionStatus: Dispatch<SetStateAction<string>>;
   setEcsActionStatus: Dispatch<SetStateAction<string>>;
   setEksActionStatus: Dispatch<SetStateAction<string>>;
+  setCloudFormationActionStatus: Dispatch<SetStateAction<string>>;
+  setEventBridgeActionStatus: Dispatch<SetStateAction<string>>;
   setApiGatewayActionStatus: Dispatch<SetStateAction<string>>;
   setSecretsManagerActionStatus: Dispatch<SetStateAction<string>>;
   setLogsActionStatus: Dispatch<SetStateAction<string>>;
@@ -64,6 +66,8 @@ export function useAwsActions(params: UseAwsActionsParams) {
     setRdsActionStatus,
     setEcsActionStatus,
     setEksActionStatus,
+    setCloudFormationActionStatus,
+    setEventBridgeActionStatus,
     setApiGatewayActionStatus,
     setSecretsManagerActionStatus,
     setLogsActionStatus,
@@ -738,6 +742,88 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setEksActionStatus, setWorkspace]);
 
+  const selectCloudFormationRegion = useCallback((region: string): void => {
+    setCloudFormationActionStatus(`Loading CloudFormation stacks for ${region}.`);
+    void requestWorkspaceSnapshot("aws.cloudformation.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setCloudFormationActionStatus(
+          workspaceResult.cloudFormationStatusMessage || `Loaded CloudFormation stacks from ${region}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setCloudFormationActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setCloudFormationActionStatus, setWorkspace]);
+
+  const refreshCloudFormationInventory = useCallback((): void => {
+    const region = workspace.selectedCloudFormationRegion;
+    if (!region) {
+      setCloudFormationActionStatus("Select a region before refreshing CloudFormation inventory.");
+      return;
+    }
+    selectCloudFormationRegion(region);
+  }, [selectCloudFormationRegion, setCloudFormationActionStatus, workspace.selectedCloudFormationRegion]);
+
+  const selectCloudFormationStack = useCallback((stackName: string): void => {
+    setCloudFormationActionStatus(`Loading stack events for ${stackName}.`);
+    void requestWorkspaceSnapshot("aws.cloudformation.selectStack", { stackName })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setCloudFormationActionStatus(
+          workspaceResult.cloudFormationStatusMessage || "Selected CloudFormation stack.",
+        );
+      })
+      .catch((error: unknown) => {
+        setCloudFormationActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setCloudFormationActionStatus, setWorkspace]);
+
+  const selectEventBridgeRegion = useCallback((region: string): void => {
+    setEventBridgeActionStatus(`Loading EventBridge buses for ${region}.`);
+    void requestWorkspaceSnapshot("aws.eventbridge.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setEventBridgeActionStatus(
+          workspaceResult.eventBridgeStatusMessage || `Loaded EventBridge buses from ${region}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setEventBridgeActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setEventBridgeActionStatus, setWorkspace]);
+
+  const refreshEventBridgeInventory = useCallback((): void => {
+    const region = workspace.selectedEventBridgeRegion;
+    if (!region) {
+      setEventBridgeActionStatus("Select a region before refreshing EventBridge inventory.");
+      return;
+    }
+    selectEventBridgeRegion(region);
+  }, [selectEventBridgeRegion, setEventBridgeActionStatus, workspace.selectedEventBridgeRegion]);
+
+  const selectEventBridgeBus = useCallback((busName: string): void => {
+    setEventBridgeActionStatus(`Loading rules for ${busName}.`);
+    void requestWorkspaceSnapshot("aws.eventbridge.selectBus", { busName })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setEventBridgeActionStatus(
+          workspaceResult.eventBridgeStatusMessage || "Selected EventBridge bus.",
+        );
+      })
+      .catch((error: unknown) => {
+        setEventBridgeActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setEventBridgeActionStatus, setWorkspace]);
+
   const selectApiGatewayRegion = useCallback((region: string): void => {
     setApiGatewayActionStatus(`Loading API Gateway APIs for ${region}.`);
     void requestWorkspaceSnapshot("aws.apigateway.selectRegion", { region })
@@ -939,6 +1025,12 @@ export function useAwsActions(params: UseAwsActionsParams) {
     refreshEKSInventory,
     selectEKSRegion,
     selectEKSCluster,
+    refreshCloudFormationInventory,
+    selectCloudFormationRegion,
+    selectCloudFormationStack,
+    refreshEventBridgeInventory,
+    selectEventBridgeRegion,
+    selectEventBridgeBus,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,

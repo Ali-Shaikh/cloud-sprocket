@@ -190,6 +190,10 @@ export interface SessionSnapshot {
   selectedEcsTaskArn?: string;
   selectedEksRegion?: string;
   selectedEksClusterName?: string;
+  selectedCloudFormationRegion?: string;
+  selectedCloudFormationStackName?: string;
+  selectedEventBridgeRegion?: string;
+  selectedEventBridgeBusName?: string;
   selectedApiGatewayRegion?: string;
   selectedApiGatewayApiKey?: string;
   selectedSecretsManagerRegion?: string;
@@ -490,6 +494,38 @@ export interface AwsEksNodeGroup {
   diskSize?: number;
   amiType?: string;
   capacityType?: string;
+}
+
+export interface AwsCloudFormationStack {
+  stackId: string;
+  stackName: string;
+  stackStatus?: string;
+  creationTime?: string;
+  lastUpdatedTime?: string;
+  description?: string;
+}
+
+export interface AwsCloudFormationStackEvent {
+  eventId: string;
+  timestamp?: string;
+  logicalResourceId?: string;
+  resourceStatus?: string;
+  resourceType?: string;
+  resourceStatusReason?: string;
+}
+
+export interface AwsEventBridgeBus {
+  name: string;
+  arn?: string;
+}
+
+export interface AwsEventBridgeRule {
+  name: string;
+  arn?: string;
+  state?: string;
+  description?: string;
+  scheduleExpression?: string;
+  eventPattern?: string;
 }
 
 export interface AwsApiGatewayApi {
@@ -1067,6 +1103,18 @@ export interface WorkspaceSnapshot {
   eksRegions: string[];
   eksClusters: AwsEksCluster[];
   eksNodeGroups: AwsEksNodeGroup[];
+  selectedCloudFormationRegion?: string;
+  selectedCloudFormationStackName?: string;
+  cloudFormationStatusMessage?: string;
+  cloudFormationRegions: string[];
+  cloudFormationStacks: AwsCloudFormationStack[];
+  cloudFormationStackEvents: AwsCloudFormationStackEvent[];
+  selectedEventBridgeRegion?: string;
+  selectedEventBridgeBusName?: string;
+  eventBridgeStatusMessage?: string;
+  eventBridgeRegions: string[];
+  eventBridgeBuses: AwsEventBridgeBus[];
+  eventBridgeRules: AwsEventBridgeRule[];
   apiGatewayStatusMessage?: string;
   apiGatewayRegions: string[];
   apiGatewayApis: AwsApiGatewayApi[];

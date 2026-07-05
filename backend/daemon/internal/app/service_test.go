@@ -178,6 +178,26 @@ func (stubEKSInventory) ListNodeGroups(context.Context, models.ProfileSummary, s
 	return nil, nil
 }
 
+type stubCloudFormationInventory struct{}
+
+func (stubCloudFormationInventory) DescribeStacks(context.Context, models.ProfileSummary, string) ([]models.AwsCloudFormationStack, error) {
+	return nil, nil
+}
+
+func (stubCloudFormationInventory) DescribeStackEvents(context.Context, models.ProfileSummary, string, string) ([]models.AwsCloudFormationStackEvent, error) {
+	return nil, nil
+}
+
+type stubEventBridgeInventory struct{}
+
+func (stubEventBridgeInventory) ListEventBuses(context.Context, models.ProfileSummary, string) ([]models.AwsEventBridgeBus, error) {
+	return nil, nil
+}
+
+func (stubEventBridgeInventory) ListRules(context.Context, models.ProfileSummary, string, string) ([]models.AwsEventBridgeRule, error) {
+	return nil, nil
+}
+
 type stubApiGatewayInventory struct{}
 
 func (stubApiGatewayInventory) ListApis(context.Context, models.ProfileSummary, string) (models.AwsApiGatewayListResult, error) {
@@ -756,6 +776,8 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubEKSInventory{},
+		stubCloudFormationInventory{},
+		stubEventBridgeInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1044,6 +1066,8 @@ func TestServiceReportsFailedEC2ActionJob(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubEKSInventory{},
+		stubCloudFormationInventory{},
+		stubEventBridgeInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1125,6 +1149,8 @@ func TestServiceRejectsEC2ActionWithoutLocalEndpoint(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubEKSInventory{},
+		stubCloudFormationInventory{},
+		stubEventBridgeInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1192,6 +1218,8 @@ func TestServiceRejectsWriteActionsWithoutWriteMode(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubEKSInventory{},
+		stubCloudFormationInventory{},
+		stubEventBridgeInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1267,6 +1295,8 @@ func TestServiceRejectsEC2ActionWithoutWriteOptIn(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubEKSInventory{},
+		stubCloudFormationInventory{},
+		stubEventBridgeInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1341,6 +1371,8 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubEKSInventory{},
+		stubCloudFormationInventory{},
+		stubEventBridgeInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1374,6 +1406,8 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubEKSInventory{},
+		stubCloudFormationInventory{},
+		stubEventBridgeInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1450,6 +1484,8 @@ func TestServiceResetClearsOnlyAppOwnedState(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubEKSInventory{},
+		stubCloudFormationInventory{},
+		stubEventBridgeInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1590,6 +1626,8 @@ func TestPrepareProfileWritesDiscoverableLocalProfiles(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubEKSInventory{},
+		stubCloudFormationInventory{},
+		stubEventBridgeInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1698,6 +1736,8 @@ func TestDockerRuntimeProbeIsBoundedWhenEngineBlocks(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubEKSInventory{},
+		stubCloudFormationInventory{},
+		stubEventBridgeInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1766,6 +1806,8 @@ func TestUnlockNotBlockedBySlowWorkspaceFetch(t *testing.T) {
 		stubRDSInventory{},
 		stubECSInventory{},
 		stubEKSInventory{},
+		stubCloudFormationInventory{},
+		stubEventBridgeInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},

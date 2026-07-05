@@ -245,6 +245,10 @@ export default function App() {
     setEcsActionStatus,
     eksActionStatus,
     setEksActionStatus,
+    cloudFormationActionStatus,
+    setCloudFormationActionStatus,
+    eventBridgeActionStatus,
+    setEventBridgeActionStatus,
     apiGatewayActionStatus,
     setApiGatewayActionStatus,
     secretsManagerActionStatus,
@@ -364,6 +368,12 @@ export default function App() {
     refreshEKSInventory,
     selectEKSRegion,
     selectEKSCluster,
+    refreshCloudFormationInventory,
+    selectCloudFormationRegion,
+    selectCloudFormationStack,
+    refreshEventBridgeInventory,
+    selectEventBridgeRegion,
+    selectEventBridgeBus,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
@@ -397,6 +407,8 @@ export default function App() {
     setRdsActionStatus,
     setEcsActionStatus,
     setEksActionStatus,
+    setCloudFormationActionStatus,
+    setEventBridgeActionStatus,
     setApiGatewayActionStatus,
     setSecretsManagerActionStatus,
     setLogsActionStatus,
@@ -1002,6 +1014,12 @@ export default function App() {
         if (workspaceResult.eksStatusMessage) {
           setEksActionStatus(workspaceResult.eksStatusMessage);
         }
+        if (workspaceResult.cloudFormationStatusMessage) {
+          setCloudFormationActionStatus(workspaceResult.cloudFormationStatusMessage);
+        }
+        if (workspaceResult.eventBridgeStatusMessage) {
+          setEventBridgeActionStatus(workspaceResult.eventBridgeStatusMessage);
+        }
         if (workspaceResult.apiGatewayStatusMessage) {
           setApiGatewayActionStatus(workspaceResult.apiGatewayStatusMessage);
         }
@@ -1169,6 +1187,8 @@ export default function App() {
     rdsActionStatus,
     ecsActionStatus,
     eksActionStatus,
+    cloudFormationActionStatus,
+    eventBridgeActionStatus,
     apiGatewayActionStatus,
     secretsManagerActionStatus,
     logsActionStatus,
@@ -1260,6 +1280,12 @@ export default function App() {
     refreshEKSInventory,
     selectEKSRegion,
     selectEKSCluster,
+    refreshCloudFormationInventory,
+    selectCloudFormationRegion,
+    selectCloudFormationStack,
+    refreshEventBridgeInventory,
+    selectEventBridgeRegion,
+    selectEventBridgeBus,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,

@@ -15,6 +15,8 @@ import {
   SecretsManagerView,
   ECSView,
   EKSView,
+  CloudFormationView,
+  EventBridgeView,
   RDSView,
   SNSView,
   SQSView,
@@ -32,6 +34,8 @@ export const AWS_TAB_IDS = new Set([
   "rds",
   "ecs",
   "eks",
+  "cloudformation",
+  "eventbridge",
   "apigateway",
   "secrets",
   "logs",
@@ -83,6 +87,8 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     rdsActionStatus,
     ecsActionStatus,
     eksActionStatus,
+    cloudFormationActionStatus,
+    eventBridgeActionStatus,
     apiGatewayActionStatus,
     secretsManagerActionStatus,
     refreshSecretsManagerInventory,
@@ -177,6 +183,12 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     refreshEKSInventory,
     selectEKSRegion,
     selectEKSCluster,
+    refreshCloudFormationInventory,
+    selectCloudFormationRegion,
+    selectCloudFormationStack,
+    refreshEventBridgeInventory,
+    selectEventBridgeRegion,
+    selectEventBridgeBus,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
@@ -354,6 +366,22 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onRefresh={refreshEKSInventory}
       onSelectRegion={selectEKSRegion}
       onSelectCluster={selectEKSCluster}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "cloudformation" ? (
+    <CloudFormationView
+      workspace={activeWorkspace}
+      actionStatus={cloudFormationActionStatus}
+      onRefresh={refreshCloudFormationInventory}
+      onSelectRegion={selectCloudFormationRegion}
+      onSelectStack={selectCloudFormationStack}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "eventbridge" ? (
+    <EventBridgeView
+      workspace={activeWorkspace}
+      actionStatus={eventBridgeActionStatus}
+      onRefresh={refreshEventBridgeInventory}
+      onSelectRegion={selectEventBridgeRegion}
+      onSelectBus={selectEventBridgeBus}
     />
   ) : session.isLocked && activeWorkspaceTabId === "apigateway" ? (
     <ApiGatewayView

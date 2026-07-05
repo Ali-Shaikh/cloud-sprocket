@@ -83,6 +83,8 @@ export type WorkspaceTabRouterProps = {
   rdsActionStatus: string;
   ecsActionStatus: string;
   eksActionStatus: string;
+  cloudFormationActionStatus: string;
+  eventBridgeActionStatus: string;
   apiGatewayActionStatus: string;
   secretsManagerActionStatus: string;
   logsActionStatus: string;
@@ -190,6 +192,12 @@ export type WorkspaceTabRouterProps = {
   refreshEKSInventory: () => void;
   selectEKSRegion: (region: string) => void;
   selectEKSCluster: (clusterName: string) => void;
+  refreshCloudFormationInventory: () => void;
+  selectCloudFormationRegion: (region: string) => void;
+  selectCloudFormationStack: (stackName: string) => void;
+  refreshEventBridgeInventory: () => void;
+  selectEventBridgeRegion: (region: string) => void;
+  selectEventBridgeBus: (busName: string) => void;
   refreshApiGatewayInventory: () => void;
   selectApiGatewayRegion: (region: string) => void;
   selectApiGatewayApi: (apiKey: string) => void;
