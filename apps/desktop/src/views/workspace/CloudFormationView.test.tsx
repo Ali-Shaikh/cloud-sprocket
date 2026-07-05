@@ -3,12 +3,11 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-
 import { ThemeProvider } from "@/lib/theme";
-import EKSView from "./EKSView";
-import type { EksWorkspaceSnapshot } from "./EKSView";
+import CloudFormationView from "./CloudFormationView";
+import type { CloudFormationWorkspaceSnapshot } from "./CloudFormationView";
 
-const workspaceFixture: EksWorkspaceSnapshot = {
+const workspaceFixture: CloudFormationWorkspaceSnapshot = {
   provider: {
     providerId: "aws",
     label: "AWS",
@@ -116,108 +115,74 @@ const workspaceFixture: EksWorkspaceSnapshot = {
   logGroups: [],
   iamRoles: [],
   iamPolicies: [],
-  selectedEksRegion: "us-east-1",
-  selectedEksClusterName: "demo",
-  eksStatusMessage: "Loaded 1 clusters and 1 node groups from us-east-1.",
-  eksRegions: ["us-east-1"],
-  eksClusters: [
-    {
-      clusterArn: "arn:aws:eks:us-east-1:123:cluster/demo",
-      clusterName: "demo",
-      status: "ACTIVE",
-      version: "1.29",
-      platformVersion: "eks.5",
-      endpoint: "https://demo.eks.us-east-1.amazonaws.com",
-    },
-  ],
-  eksNodeGroups: [
-    {
-      nodeGroupArn: "arn:aws:eks:us-east-1:123:nodegroup/demo/workers",
-      nodeGroupName: "workers",
-      status: "ACTIVE",
-      desiredSize: 2,
-      instanceTypes: ["m5.large"],
-      capacityType: "ON_DEMAND",
-    },
-  ],
   ecsRegions: [],
   ecsClusters: [],
   ecsServices: [],
   ecsTasks: [],
+  eksRegions: [],
+  eksClusters: [],
+  eksNodeGroups: [],
   apiGatewayRegions: [],
   apiGatewayApis: [],
   apiGatewayStages: [],
   secretsManagerRegions: [],
   secretsManagerSecrets: [],
-  cloudFormationRegions: [],
-  cloudFormationStacks: [],
-  cloudFormationStackEvents: [],
   eventBridgeRegions: [],
   eventBridgeBuses: [],
   eventBridgeRules: [],
-
+  selectedCloudFormationRegion: "us-east-1",
+  selectedCloudFormationStackName: "demo",
+  cloudFormationRegions: ["us-east-1"],
+  cloudFormationStacks: [
+    {
+      stackId: "arn:stack/demo",
+      stackName: "demo",
+      stackStatus: "CREATE_COMPLETE",
+      creationTime: "2026-03-01T12:00:00Z",
+    },
+  ],
+  cloudFormationStackEvents: [
+    {
+      eventId: "evt-1",
+      logicalResourceId: "MyBucket",
+      resourceStatus: "CREATE_COMPLETE",
+      resourceType: "AWS::S3::Bucket",
+    },
+  ],
 };
 
-function renderEKSView() {
-  const onSelectRegion = vi.fn();
-  const onSelectCluster = vi.fn();
-  const onRefresh = vi.fn();
-  render(
-    <ThemeProvider>
-      <EKSView
-        workspace={workspaceFixture}
-        actionStatus="Ready to browse EKS inventory."
-        onRefresh={onRefresh}
-        onSelectRegion={onSelectRegion}
-        onSelectCluster={onSelectCluster}
-      />
-    </ThemeProvider>,
-  );
-  return { onSelectRegion, onSelectCluster, onRefresh };
-}
-
-describe("EKSView", () => {
-  it("renders cluster and node group inventory", () => {
-    renderEKSView();
-
-    expect(screen.getByText("Kubernetes Fleet")).toBeInTheDocument();
-    expect(screen.getByText("Cluster Inventory")).toBeInTheDocument();
-    expect(screen.getAllByText("demo").length).toBeGreaterThan(0);
-    expect(screen.getByText("workers")).toBeInTheDocument();
-    expect(screen.getByText("m5.large")).toBeInTheDocument();
-  });
-
-  it("selects a cluster when a row is clicked", () => {
-    const { onSelectCluster } = renderEKSView();
-
-    fireEvent.click(screen.getByRole("cell", { name: "demo" }));
-
-    expect(onSelectCluster).toHaveBeenCalledWith("demo");
-  });
-
-  it("shows the AWS workspace empty state for non-AWS providers", () => {
+describe("CloudFormationView", () => {
+  it("renders stack inventory", () => {
     render(
       <ThemeProvider>
-        <EKSView
-          workspace={{
-            ...workspaceFixture,
-            provider: {
-              providerId: "azure",
-              label: "Azure",
-              state: "configured",
-              summary: "Azure profile cache detected.",
-              profileCount: 1,
-              locations: [],
-            },
-          }}
+        <CloudFormationView
+          workspace={workspaceFixture}
           actionStatus=""
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
-          onSelectCluster={vi.fn()}
+          onSelectStack={vi.fn()}
         />
       </ThemeProvider>,
     );
+    expect(screen.getByText("CloudFormation")).toBeInTheDocument();
+    expect(screen.getAllByText("demo").length).toBeGreaterThan(0);
+    expect(screen.getByText("MyBucket")).toBeInTheDocument();
+  });
 
-    expect(screen.getByText("EKS requires an AWS workspace")).toBeInTheDocument();
+  it("selects a stack when a row is clicked", () => {
+    const onSelectStack = vi.fn();
+    render(
+      <ThemeProvider>
+        <CloudFormationView
+          workspace={workspaceFixture}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectStack={onSelectStack}
+        />
+      </ThemeProvider>,
+    );
+    fireEvent.click(screen.getAllByText("demo")[0]);
+    expect(onSelectStack).toHaveBeenCalledWith("demo");
   });
 });

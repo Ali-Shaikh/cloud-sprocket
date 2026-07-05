@@ -3,12 +3,11 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-
 import { ThemeProvider } from "@/lib/theme";
-import EKSView from "./EKSView";
-import type { EksWorkspaceSnapshot } from "./EKSView";
+import EventBridgeView from "./EventBridgeView";
+import type { EventBridgeWorkspaceSnapshot } from "./EventBridgeView";
 
-const workspaceFixture: EksWorkspaceSnapshot = {
+const workspaceFixture: EventBridgeWorkspaceSnapshot = {
   provider: {
     providerId: "aws",
     label: "AWS",
@@ -116,34 +115,13 @@ const workspaceFixture: EksWorkspaceSnapshot = {
   logGroups: [],
   iamRoles: [],
   iamPolicies: [],
-  selectedEksRegion: "us-east-1",
-  selectedEksClusterName: "demo",
-  eksStatusMessage: "Loaded 1 clusters and 1 node groups from us-east-1.",
-  eksRegions: ["us-east-1"],
-  eksClusters: [
-    {
-      clusterArn: "arn:aws:eks:us-east-1:123:cluster/demo",
-      clusterName: "demo",
-      status: "ACTIVE",
-      version: "1.29",
-      platformVersion: "eks.5",
-      endpoint: "https://demo.eks.us-east-1.amazonaws.com",
-    },
-  ],
-  eksNodeGroups: [
-    {
-      nodeGroupArn: "arn:aws:eks:us-east-1:123:nodegroup/demo/workers",
-      nodeGroupName: "workers",
-      status: "ACTIVE",
-      desiredSize: 2,
-      instanceTypes: ["m5.large"],
-      capacityType: "ON_DEMAND",
-    },
-  ],
   ecsRegions: [],
   ecsClusters: [],
   ecsServices: [],
   ecsTasks: [],
+  eksRegions: [],
+  eksClusters: [],
+  eksNodeGroups: [],
   apiGatewayRegions: [],
   apiGatewayApis: [],
   apiGatewayStages: [],
@@ -152,72 +130,47 @@ const workspaceFixture: EksWorkspaceSnapshot = {
   cloudFormationRegions: [],
   cloudFormationStacks: [],
   cloudFormationStackEvents: [],
-  eventBridgeRegions: [],
-  eventBridgeBuses: [],
-  eventBridgeRules: [],
-
+  selectedEventBridgeRegion: "us-east-1",
+  selectedEventBridgeBusName: "default",
+  eventBridgeRegions: ["us-east-1"],
+  eventBridgeBuses: [{ name: "default", arn: "arn:aws:events:us-east-1:123:event-bus/default" }],
+  eventBridgeRules: [
+    { name: "daily-sync", state: "ENABLED", scheduleExpression: "rate(1 day)", description: "Nightly sync" },
+  ],
 };
 
-function renderEKSView() {
-  const onSelectRegion = vi.fn();
-  const onSelectCluster = vi.fn();
-  const onRefresh = vi.fn();
-  render(
-    <ThemeProvider>
-      <EKSView
-        workspace={workspaceFixture}
-        actionStatus="Ready to browse EKS inventory."
-        onRefresh={onRefresh}
-        onSelectRegion={onSelectRegion}
-        onSelectCluster={onSelectCluster}
-      />
-    </ThemeProvider>,
-  );
-  return { onSelectRegion, onSelectCluster, onRefresh };
-}
-
-describe("EKSView", () => {
-  it("renders cluster and node group inventory", () => {
-    renderEKSView();
-
-    expect(screen.getByText("Kubernetes Fleet")).toBeInTheDocument();
-    expect(screen.getByText("Cluster Inventory")).toBeInTheDocument();
-    expect(screen.getAllByText("demo").length).toBeGreaterThan(0);
-    expect(screen.getByText("workers")).toBeInTheDocument();
-    expect(screen.getByText("m5.large")).toBeInTheDocument();
-  });
-
-  it("selects a cluster when a row is clicked", () => {
-    const { onSelectCluster } = renderEKSView();
-
-    fireEvent.click(screen.getByRole("cell", { name: "demo" }));
-
-    expect(onSelectCluster).toHaveBeenCalledWith("demo");
-  });
-
-  it("shows the AWS workspace empty state for non-AWS providers", () => {
+describe("EventBridgeView", () => {
+  it("renders bus and rule inventory", () => {
     render(
       <ThemeProvider>
-        <EKSView
-          workspace={{
-            ...workspaceFixture,
-            provider: {
-              providerId: "azure",
-              label: "Azure",
-              state: "configured",
-              summary: "Azure profile cache detected.",
-              profileCount: 1,
-              locations: [],
-            },
-          }}
+        <EventBridgeView
+          workspace={workspaceFixture}
           actionStatus=""
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
-          onSelectCluster={vi.fn()}
+          onSelectBus={vi.fn()}
         />
       </ThemeProvider>,
     );
+    expect(screen.getByText("EventBridge")).toBeInTheDocument();
+    expect(screen.getAllByText("default").length).toBeGreaterThan(0);
+    expect(screen.getByText("daily-sync")).toBeInTheDocument();
+  });
 
-    expect(screen.getByText("EKS requires an AWS workspace")).toBeInTheDocument();
+  it("selects a bus when a row is clicked", () => {
+    const onSelectBus = vi.fn();
+    render(
+      <ThemeProvider>
+        <EventBridgeView
+          workspace={workspaceFixture}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectBus={onSelectBus}
+        />
+      </ThemeProvider>,
+    );
+    fireEvent.click(screen.getAllByText("default")[0]);
+    expect(onSelectBus).toHaveBeenCalledWith("default");
   });
 });

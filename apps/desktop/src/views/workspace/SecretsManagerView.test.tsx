@@ -119,6 +119,13 @@ const workspaceFixture: SecretsManagerWorkspaceSnapshot = {
   eksRegions: [],
   eksClusters: [],
   eksNodeGroups: [],
+  cloudFormationRegions: [],
+  cloudFormationStacks: [],
+  cloudFormationStackEvents: [],
+  eventBridgeRegions: [],
+  eventBridgeBuses: [],
+  eventBridgeRules: [],
+
   apiGatewayRegions: [],
   apiGatewayApis: [],
   apiGatewayStages: [],

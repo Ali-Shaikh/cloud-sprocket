@@ -92,6 +92,16 @@ type EKSInventory interface {
 	ListNodeGroups(ctx context.Context, profile models.ProfileSummary, region string, clusterName string) ([]models.AwsEksNodeGroup, error)
 }
 
+type CloudFormationInventory interface {
+	DescribeStacks(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsCloudFormationStack, error)
+	DescribeStackEvents(ctx context.Context, profile models.ProfileSummary, region string, stackName string) ([]models.AwsCloudFormationStackEvent, error)
+}
+
+type EventBridgeInventory interface {
+	ListEventBuses(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsEventBridgeBus, error)
+	ListRules(ctx context.Context, profile models.ProfileSummary, region string, busName string) ([]models.AwsEventBridgeRule, error)
+}
+
 type LogsInventory interface {
 	ListLogGroups(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsLogGroup, error)
 	DescribeLogGroup(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string) (models.AwsLogGroup, error)

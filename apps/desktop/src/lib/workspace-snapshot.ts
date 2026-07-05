@@ -13,6 +13,10 @@ import type {
   AwsEcsTask,
   AwsEksCluster,
   AwsEksNodeGroup,
+  AwsCloudFormationStack,
+  AwsCloudFormationStackEvent,
+  AwsEventBridgeBus,
+  AwsEventBridgeRule,
   AwsIamPolicy,
   AwsIamRole,
   AwsLambdaFunction,
@@ -156,6 +160,12 @@ export const emptyWorkspace: WorkspaceSnapshot = {
   eksRegions: [],
   eksClusters: [],
   eksNodeGroups: [],
+  cloudFormationRegions: [],
+  cloudFormationStacks: [],
+  cloudFormationStackEvents: [],
+  eventBridgeRegions: [],
+  eventBridgeBuses: [],
+  eventBridgeRules: [],
   apiGatewayRegions: [],
   apiGatewayApis: [],
   apiGatewayStages: [],
@@ -384,6 +394,37 @@ function normaliseEksNodeGroup(nodeGroup: AwsEksNodeGroup): AwsEksNodeGroup {
   return {
     ...nodeGroup,
     instanceTypes: normaliseArray(nodeGroup.instanceTypes),
+  };
+}
+
+function normaliseCloudFormationStack(stack: AwsCloudFormationStack): AwsCloudFormationStack {
+  return {
+    ...stack,
+    stackId: stack.stackId ?? "",
+    stackName: stack.stackName ?? "",
+  };
+}
+
+function normaliseCloudFormationStackEvent(
+  event: AwsCloudFormationStackEvent,
+): AwsCloudFormationStackEvent {
+  return {
+    ...event,
+    eventId: event.eventId ?? "",
+  };
+}
+
+function normaliseEventBridgeBus(bus: AwsEventBridgeBus): AwsEventBridgeBus {
+  return {
+    ...bus,
+    name: bus.name ?? "",
+  };
+}
+
+function normaliseEventBridgeRule(rule: AwsEventBridgeRule): AwsEventBridgeRule {
+  return {
+    ...rule,
+    name: rule.name ?? "",
   };
 }
 
@@ -809,6 +850,26 @@ export function mergeAwsInventoryScope(
         eksNodeGroups: normalised.eksNodeGroups,
         eksStatusMessage: normalised.eksStatusMessage,
       });
+    case "cloudformation":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedCloudFormationRegion: normalised.selectedCloudFormationRegion,
+        selectedCloudFormationStackName: normalised.selectedCloudFormationStackName,
+        cloudFormationRegions: normalised.cloudFormationRegions,
+        cloudFormationStacks: normalised.cloudFormationStacks,
+        cloudFormationStackEvents: normalised.cloudFormationStackEvents,
+        cloudFormationStatusMessage: normalised.cloudFormationStatusMessage,
+      });
+    case "eventbridge":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedEventBridgeRegion: normalised.selectedEventBridgeRegion,
+        selectedEventBridgeBusName: normalised.selectedEventBridgeBusName,
+        eventBridgeRegions: normalised.eventBridgeRegions,
+        eventBridgeBuses: normalised.eventBridgeBuses,
+        eventBridgeRules: normalised.eventBridgeRules,
+        eventBridgeStatusMessage: normalised.eventBridgeStatusMessage,
+      });
     case "apigateway":
       return normaliseWorkspaceSnapshot({
         ...current,
@@ -974,6 +1035,14 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     eksRegions: normaliseArray(source.eksRegions),
     eksClusters: normaliseArray(source.eksClusters).map(normaliseEksCluster),
     eksNodeGroups: normaliseArray(source.eksNodeGroups).map(normaliseEksNodeGroup),
+    cloudFormationRegions: normaliseArray(source.cloudFormationRegions),
+    cloudFormationStacks: normaliseArray(source.cloudFormationStacks).map(normaliseCloudFormationStack),
+    cloudFormationStackEvents: normaliseArray(source.cloudFormationStackEvents).map(
+      normaliseCloudFormationStackEvent,
+    ),
+    eventBridgeRegions: normaliseArray(source.eventBridgeRegions),
+    eventBridgeBuses: normaliseArray(source.eventBridgeBuses).map(normaliseEventBridgeBus),
+    eventBridgeRules: normaliseArray(source.eventBridgeRules).map(normaliseEventBridgeRule),
     apiGatewayRegions: normaliseArray(source.apiGatewayRegions),
     apiGatewayApis: normaliseArray(source.apiGatewayApis).map(normaliseApiGatewayApi),
     apiGatewayStages: normaliseArray(source.apiGatewayStages).map(normaliseApiGatewayStage),

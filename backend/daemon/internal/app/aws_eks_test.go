@@ -74,6 +74,8 @@ func TestAwsScopedEKSInventoryLoadsClustersAndNodeGroups(t *testing.T) {
 		rds:      stubRDSInventory{},
 		ecs:      stubECSInventory{},
 		eks:            eks,
+		cloudformation: stubCloudFormationInventory{},
+		eventbridge:    stubEventBridgeInventory{},
 		apigateway:     stubApiGatewayInventory{},
 		secretsManager: stubSecretsManagerInventory{},
 		logs:           stubLogsInventory{},

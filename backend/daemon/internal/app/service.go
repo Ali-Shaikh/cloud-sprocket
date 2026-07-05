@@ -36,6 +36,8 @@ type Service struct {
 	rds                   RDSInventory
 	ecs                   ECSInventory
 	eks                   EKSInventory
+	cloudformation        CloudFormationInventory
+	eventbridge           EventBridgeInventory
 	apigateway            ApiGatewayInventory
 	secretsManager        SecretsManagerInventory
 	logs                  LogsInventory
@@ -71,6 +73,8 @@ func New(
 	rdsInventory RDSInventory,
 	ecsInventory ECSInventory,
 	eksInventory EKSInventory,
+	cloudformationInventory CloudFormationInventory,
+	eventbridgeInventory EventBridgeInventory,
 	apigatewayInventory ApiGatewayInventory,
 	secretsManagerInventory SecretsManagerInventory,
 	logsInventory LogsInventory,
@@ -80,7 +84,7 @@ func New(
 ) *Service {
 	localStackMgr := localstack.NewManager(settings)
 	azureRuntime := flociaz.NewManager(settings)
-	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, eksInventory, apigatewayInventory, secretsManagerInventory, logsInventory, iamInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
+	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, eksInventory, cloudformationInventory, eventbridgeInventory, apigatewayInventory, secretsManagerInventory, logsInventory, iamInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
 }
 
 func NewWithRuntimes(
@@ -96,6 +100,8 @@ func NewWithRuntimes(
 	rdsInventory RDSInventory,
 	ecsInventory ECSInventory,
 	eksInventory EKSInventory,
+	cloudformationInventory CloudFormationInventory,
+	eventbridgeInventory EventBridgeInventory,
 	apigatewayInventory ApiGatewayInventory,
 	secretsManagerInventory SecretsManagerInventory,
 	logsInventory LogsInventory,
@@ -120,6 +126,8 @@ func NewWithRuntimes(
 		rds:                   rdsInventory,
 		ecs:                   ecsInventory,
 		eks:                   eksInventory,
+		cloudformation:        cloudformationInventory,
+		eventbridge:           eventbridgeInventory,
 		apigateway:            apigatewayInventory,
 		secretsManager:        secretsManagerInventory,
 		logs:                  logsInventory,
@@ -239,6 +247,14 @@ func (s *Service) Handle(
 		return s.handleAwsEksSelectRegion(ctx, params, notifier)
 	case "aws.eks.selectCluster":
 		return s.handleAwsEksSelectCluster(ctx, params, notifier)
+	case "aws.cloudformation.selectRegion":
+		return s.handleAwsCloudFormationSelectRegion(ctx, params, notifier)
+	case "aws.cloudformation.selectStack":
+		return s.handleAwsCloudFormationSelectStack(ctx, params, notifier)
+	case "aws.eventbridge.selectRegion":
+		return s.handleAwsEventBridgeSelectRegion(ctx, params, notifier)
+	case "aws.eventbridge.selectBus":
+		return s.handleAwsEventBridgeSelectBus(ctx, params, notifier)
 	case "aws.apigateway.selectRegion":
 		return s.handleAwsApiGatewaySelectRegion(ctx, params, notifier)
 	case "aws.apigateway.selectApi":

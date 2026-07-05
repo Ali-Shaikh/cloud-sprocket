@@ -161,6 +161,13 @@ const workspaceFixture: WorkspaceSnapshot = {
   apiGatewayStages: [],
   secretsManagerRegions: [],
   secretsManagerSecrets: [],
+  cloudFormationRegions: [],
+  cloudFormationStacks: [],
+  cloudFormationStackEvents: [],
+  eventBridgeRegions: [],
+  eventBridgeBuses: [],
+  eventBridgeRules: [],
+
   logsRegions: [],
   logGroups: [],
   iamRoles: [],

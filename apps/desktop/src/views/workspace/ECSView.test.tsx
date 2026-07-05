@@ -157,6 +157,13 @@ const workspaceFixture: EcsWorkspaceSnapshot = {
   apiGatewayStages: [],
   secretsManagerRegions: [],
   secretsManagerSecrets: [],
+  cloudFormationRegions: [],
+  cloudFormationStacks: [],
+  cloudFormationStackEvents: [],
+  eventBridgeRegions: [],
+  eventBridgeBuses: [],
+  eventBridgeRules: [],
+
 };
 
 function renderECSView() {

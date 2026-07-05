@@ -111,6 +111,18 @@ func awsServiceCatalog() []serviceCatalogEntry {
 			Category: workspaceTabCategoryService, InventoryScope: "eks",
 		},
 		{
+			ProviderID: "aws", ServiceID: "cloudformation", Label: "CloudFormation",
+			Summary: "Stack inventory and events.",
+			Detail:  "List CloudFormation stacks by region with recent stack events.",
+			Category: workspaceTabCategoryService, InventoryScope: "cloudformation",
+		},
+		{
+			ProviderID: "aws", ServiceID: "eventbridge", Label: "EventBridge",
+			Summary: "Event bus and rule inventory.",
+			Detail:  "List EventBridge buses by region with rules for the selected bus.",
+			Category: workspaceTabCategoryService, InventoryScope: "eventbridge",
+		},
+		{
 			ProviderID: "aws", ServiceID: "apigateway", Label: "API Gateway",
 			Summary: "REST and HTTP API inventory.",
 			Detail:  "List REST and HTTP/WebSocket APIs by region with stage invoke URLs.",

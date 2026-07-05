@@ -13,7 +13,9 @@ import awsApigatewayIconUrl from "@/assets/cloud-icons/aws-apigateway.svg";
 import awsEc2IconUrl from "@/assets/cloud-icons/aws-ec2.svg";
 import awsDynamodbIconUrl from "@/assets/cloud-icons/aws-dynamodb.svg";
 import awsEcsIconUrl from "@/assets/cloud-icons/aws-ecs.svg";
+import awsCloudformationIconUrl from "@/assets/cloud-icons/aws-cloudformation.svg";
 import awsEksIconUrl from "@/assets/cloud-icons/aws-eks.svg";
+import awsEventbridgeIconUrl from "@/assets/cloud-icons/aws-eventbridge.svg";
 import awsLambdaIconUrl from "@/assets/cloud-icons/aws-lambda.svg";
 import awsS3IconUrl from "@/assets/cloud-icons/aws-s3.svg";
 import awsSecretsManagerIconUrl from "@/assets/cloud-icons/aws-secrets-manager.svg";
@@ -150,6 +152,18 @@ export function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): 
       return { ...base, iconUrl: awsEcsIconUrl, count: workspace.ecsClusters.length };
     case "eks":
       return { ...base, iconUrl: awsEksIconUrl, count: workspace.eksClusters.length };
+    case "cloudformation":
+      return {
+        ...base,
+        iconUrl: awsCloudformationIconUrl,
+        count: workspace.cloudFormationStacks.length,
+      };
+    case "eventbridge":
+      return {
+        ...base,
+        iconUrl: awsEventbridgeIconUrl,
+        count: workspace.eventBridgeBuses.length,
+      };
     case "apigateway":
       return { ...base, iconUrl: awsApigatewayIconUrl, count: workspace.apiGatewayApis.length };
     case "secrets":

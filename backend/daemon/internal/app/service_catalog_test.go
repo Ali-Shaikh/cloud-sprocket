@@ -13,7 +13,7 @@ import (
 func TestAwsWorkspaceTabsIncludePhaseTwoServices(t *testing.T) {
 	tabs := workspaceTabs("aws")
 	ids := workspaceTabIDs(tabs)
-	for _, expected := range []string{"ecs", "eks", "apigateway", "secrets"} {
+	for _, expected := range []string{"ecs", "eks", "cloudformation", "eventbridge", "apigateway", "secrets"} {
 		if !slices.Contains(ids, expected) {
 			t.Fatalf("aws workspace tabs missing %s: %v", expected, ids)
 		}

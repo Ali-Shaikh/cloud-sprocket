@@ -124,6 +124,13 @@ const workspaceFixture: IamWorkspaceSnapshot = {
   apiGatewayStages: [],
   secretsManagerRegions: [],
   secretsManagerSecrets: [],
+  cloudFormationRegions: [],
+  cloudFormationStacks: [],
+  cloudFormationStackEvents: [],
+  eventBridgeRegions: [],
+  eventBridgeBuses: [],
+  eventBridgeRules: [],
+
   logsRegions: [],
   logGroups: [],
   selectedIamRoleName: "cloudsprocket-lambda-role",

@@ -121,6 +121,13 @@ const workspaceFixture: ApiGatewayWorkspaceSnapshot = {
   eksNodeGroups: [],
   secretsManagerRegions: [],
   secretsManagerSecrets: [],
+  cloudFormationRegions: [],
+  cloudFormationStacks: [],
+  cloudFormationStackEvents: [],
+  eventBridgeRegions: [],
+  eventBridgeBuses: [],
+  eventBridgeRules: [],
+
   logsRegions: [],
   logGroups: [],
   iamRoles: [],

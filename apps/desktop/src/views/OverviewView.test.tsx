@@ -36,6 +36,13 @@ const workspace = {
   apiGatewayStages: [],
   secretsManagerRegions: [],
   secretsManagerSecrets: [],
+  cloudFormationRegions: [],
+  cloudFormationStacks: [],
+  cloudFormationStackEvents: [],
+  eventBridgeRegions: [],
+  eventBridgeBuses: [],
+  eventBridgeRules: [],
+
   logGroups: [],
   iamRoles: [],
   azureVirtualMachines: [],
