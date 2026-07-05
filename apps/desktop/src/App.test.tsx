@@ -1968,7 +1968,8 @@ describe("App", () => {
     fireEvent.click(await screen.findByText("EC2"));
 
     expect(await screen.findByRole("button", { name: "Read-only mode" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Stop" })).toBeDisabled();
+    expect(await screen.findByText("Instance Inventory")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Stop" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Reboot" })).toBeDisabled();
   }, 15000);
 
@@ -2012,10 +2013,11 @@ describe("App", () => {
 
     fireEvent.click(await screen.findByText("EC2"));
 
+    expect(await screen.findByText("Instance Inventory")).toBeInTheDocument();
     expect(await screen.findByText(/No EC2 region is available for this AWS workspace/)).toBeInTheDocument();
     expect(await screen.findByText("No EC2 instances loaded for this region.")).toBeInTheDocument();
-    expect(await screen.findByText("No EC2 instance selected.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+    expect(await screen.findByText("No instance selected")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Start" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Stop" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Reboot" })).toBeDisabled();
   }, 15000);
