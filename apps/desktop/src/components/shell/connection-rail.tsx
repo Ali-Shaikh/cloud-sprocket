@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { Plus, Rocket, Server } from "lucide-react";
+import { Code2, Plus, Rocket, Server } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { PROVIDER_ACCENTS, ProviderIcon } from "@/components/provider-icon";
@@ -87,6 +87,15 @@ function ConnectionRail({
                       )}
                     >
                       <Rocket className="size-5 text-violet-400" />
+                    </span>
+                  ) : c.kind === "tools" ? (
+                    <span
+                      className={cn(
+                        "grid size-8 place-items-center rounded-[9px] bg-white/[0.08] transition-colors",
+                        active && "bg-white/[0.12] shadow-[0_0_0_1.5px_rgba(255,255,255,0.35)]",
+                      )}
+                    >
+                      <Code2 className="size-5 text-amber-300" />
                     </span>
                   ) : (
                     <ProviderIcon

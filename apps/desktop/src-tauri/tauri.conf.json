@@ -35,6 +35,7 @@
       "icons/icon.ico"
     ],
     "targets": ["msi", "dmg", "appimage", "deb"],
-    "externalBin": ["binaries/cloudsprocketd"]
+    "externalBin": ["binaries/cloudsprocketd"],
+    "resources": ["../../../THIRD_PARTY_NOTICES.md"]
   }
 }
