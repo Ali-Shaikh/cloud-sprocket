@@ -28,8 +28,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.44.2
 	github.com/dustin/go-humanize v1.0.1
 	github.com/hashicorp/terraform-config-inspect v0.0.0-20260224005459-813a97530220
-	github.com/moby/moby/api v1.54.2
-	github.com/moby/moby/client v0.4.1
+	github.com/moby/moby/api v1.55.0
+	github.com/moby/moby/client v0.5.0
 	golang.org/x/sys v0.46.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.50.1
