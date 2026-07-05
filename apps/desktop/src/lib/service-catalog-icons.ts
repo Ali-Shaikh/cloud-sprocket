@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
+import awsApigatewayIconUrl from "@/assets/cloud-icons/aws-apigateway.svg";
 import awsCloudwatchIconUrl from "@/assets/cloud-icons/aws-cloudwatch.svg";
 import awsDynamodbIconUrl from "@/assets/cloud-icons/aws-dynamodb.svg";
 import awsEc2IconUrl from "@/assets/cloud-icons/aws-ec2.svg";
+import awsEcsIconUrl from "@/assets/cloud-icons/aws-ecs.svg";
+import awsEksIconUrl from "@/assets/cloud-icons/aws-eks.svg";
 import awsIamIconUrl from "@/assets/cloud-icons/aws-iam.svg";
 import awsLambdaIconUrl from "@/assets/cloud-icons/aws-lambda.svg";
 import awsRdsIconUrl from "@/assets/cloud-icons/aws-rds.svg";
 import awsS3IconUrl from "@/assets/cloud-icons/aws-s3.svg";
+import awsSecretsManagerIconUrl from "@/assets/cloud-icons/aws-secrets-manager.svg";
 import awsSnsIconUrl from "@/assets/cloud-icons/aws-sns.svg";
 import awsSqsIconUrl from "@/assets/cloud-icons/aws-sqs.svg";
-import awsSystemsManagerIconUrl from "@/assets/cloud-icons/aws-systems-manager.svg";
 import azureAppServiceIconUrl from "@/assets/cloud-icons/azure-app-service.svg";
 import azureCosmosIconUrl from "@/assets/cloud-icons/azure-cosmos.svg";
 import azureEntraIconUrl from "@/assets/cloud-icons/azure-entra.svg";
@@ -34,10 +37,10 @@ const SERVICE_ICON_URLS: Record<string, string> = {
   sqs: awsSqsIconUrl,
   sns: awsSnsIconUrl,
   rds: awsRdsIconUrl,
-  ecs: awsEc2IconUrl,
-  eks: awsEc2IconUrl,
-  apigateway: awsLambdaIconUrl,
-  secrets: awsSystemsManagerIconUrl,
+  ecs: awsEcsIconUrl,
+  eks: awsEksIconUrl,
+  apigateway: awsApigatewayIconUrl,
+  secrets: awsSecretsManagerIconUrl,
   iam: awsIamIconUrl,
   "azure-overview": azureIconUrl,
   "azure-resource-groups": azureResourceGroupsIconUrl,

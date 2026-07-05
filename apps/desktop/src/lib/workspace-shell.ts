@@ -9,10 +9,14 @@ import {
   Server,
   Wrench,
 } from "lucide-react";
+import awsApigatewayIconUrl from "@/assets/cloud-icons/aws-apigateway.svg";
 import awsEc2IconUrl from "@/assets/cloud-icons/aws-ec2.svg";
 import awsDynamodbIconUrl from "@/assets/cloud-icons/aws-dynamodb.svg";
+import awsEcsIconUrl from "@/assets/cloud-icons/aws-ecs.svg";
+import awsEksIconUrl from "@/assets/cloud-icons/aws-eks.svg";
 import awsLambdaIconUrl from "@/assets/cloud-icons/aws-lambda.svg";
 import awsS3IconUrl from "@/assets/cloud-icons/aws-s3.svg";
+import awsSecretsManagerIconUrl from "@/assets/cloud-icons/aws-secrets-manager.svg";
 import awsSqsIconUrl from "@/assets/cloud-icons/aws-sqs.svg";
 import awsSnsIconUrl from "@/assets/cloud-icons/aws-sns.svg";
 import awsRdsIconUrl from "@/assets/cloud-icons/aws-rds.svg";
@@ -142,6 +146,18 @@ export function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): 
       return { ...base, iconUrl: awsSnsIconUrl, count: workspace.snsTopics.length };
     case "rds":
       return { ...base, iconUrl: awsRdsIconUrl, count: workspace.rdsInstances.length };
+    case "ecs":
+      return { ...base, iconUrl: awsEcsIconUrl, count: workspace.ecsClusters.length };
+    case "eks":
+      return { ...base, iconUrl: awsEksIconUrl, count: workspace.eksClusters.length };
+    case "apigateway":
+      return { ...base, iconUrl: awsApigatewayIconUrl, count: workspace.apiGatewayApis.length };
+    case "secrets":
+      return {
+        ...base,
+        iconUrl: awsSecretsManagerIconUrl,
+        count: workspace.secretsManagerSecrets.length,
+      };
     case "logs":
       return { ...base, iconUrl: awsCloudwatchIconUrl, count: workspace.logGroups.length };
     case "iam":
