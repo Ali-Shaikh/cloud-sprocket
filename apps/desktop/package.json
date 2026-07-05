@@ -17,7 +17,7 @@
     "dev:desktop:local": "pnpm run build:sidecar && tauri dev --config src-tauri/tauri.local.conf.json",
     "build:desktop:exe": "pnpm run build && pnpm run build:sidecar && tauri build --no-bundle && pnpm run verify:windows-subsystem",
     "build:desktop:local": "pnpm run build && pnpm run build:sidecar && tauri build --config src-tauri/tauri.local.conf.json --no-bundle",
-    "build:desktop": "pnpm run generate:notices && pnpm run build && pnpm run build:sidecar && tauri build && pnpm run verify:windows-subsystem",
+    "build:desktop": "pnpm run build && pnpm run build:sidecar && tauri build && pnpm run verify:windows-subsystem",
     "bundle:macos:local:app": "pnpm run build && pnpm run build:sidecar && tauri build --config src-tauri/tauri.local.conf.json --bundles app --no-sign",
     "bundle:macos:local:dmg": "pnpm run build && pnpm run build:sidecar && tauri build --config src-tauri/tauri.local.conf.json --bundles dmg --no-sign",
     "bundle:macos:release:dmg": "pnpm run build && pnpm run build:sidecar && tauri build --bundles dmg"
@@ -42,7 +42,6 @@
     "@radix-ui/react-switch": "^1.3.0",
     "@radix-ui/react-tabs": "^1.1.14",
     "@radix-ui/react-tooltip": "^1.2.9",
-    "@tailwindcss/vite": "^4.3.0",
     "@tanstack/react-virtual": "^3.14.3",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
@@ -55,10 +54,10 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "sonner": "^2.0.7",
-    "tailwind-merge": "^3.6.0",
-    "tailwindcss": "^4.3.0"
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
     "@tauri-apps/cli": "^2.11.1",
     "@testing-library/jest-dom": "^6.0.0",
     "@testing-library/react": "^16.0.0",
@@ -67,6 +66,7 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.0.2",
     "jsdom": "^29.1.1",
+    "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.13",
     "vitest": "^4.1.6"
