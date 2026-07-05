@@ -168,13 +168,15 @@ const workspaceFixture: WorkspaceSnapshot = {
 function renderComputeView(overrides?: {
   actionInFlight?: boolean;
   actionHistory?: EC2ActionHistoryItem[];
+  workspace?: Partial<WorkspaceSnapshot>;
 }) {
   const onSelectInstance = vi.fn();
   const onInvokeAction = vi.fn();
+  const workspace = { ...workspaceFixture, ...overrides?.workspace };
   render(
     <ThemeProvider>
       <ComputeView
-        workspace={workspaceFixture}
+        workspace={workspace}
         actionStatus="Ready for lifecycle actions."
         actionInFlight={overrides?.actionInFlight ?? false}
         actionHistory={overrides?.actionHistory ?? []}
@@ -197,6 +199,14 @@ describe("ComputeView", () => {
     expect(screen.getByText("Instance Inventory")).toBeInTheDocument();
     expect(screen.getAllByText("sandbox-api-1").length).toBeGreaterThan(0);
     expect(screen.getByText("sandbox-worker")).toBeInTheDocument();
+  });
+
+  it("does not highlight a row when no instance is selected", () => {
+    mockMatchMedia(true);
+    renderComputeView({ workspace: { selectedEc2InstanceId: undefined } });
+
+    const selectedRows = document.querySelectorAll('[data-state="selected"]');
+    expect(selectedRows).toHaveLength(0);
   });
 
   it("selects an instance when a row is clicked", () => {

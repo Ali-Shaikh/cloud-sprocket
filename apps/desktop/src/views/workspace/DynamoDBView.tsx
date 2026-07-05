@@ -123,10 +123,9 @@ export default function DynamoDBView({
         ? workspace.lambdaRegions
         : workspace.ec2Regions;
 
-  const selectedTable =
-    workspace.dynamodbTables.find(
-      (table) => table.tableName === workspace.selectedDynamodbTableName,
-    ) ?? workspace.dynamodbTables[0];
+  const selectedTable = workspace.dynamodbTables.find(
+    (table) => table.tableName === workspace.selectedDynamodbTableName,
+  );
 
   const filteredTables = useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -482,7 +481,7 @@ export default function DynamoDBView({
                 { id: "rangeKey", label: "Range key" },
               ]}
               rows={filteredTables}
-              selectedKey={selectedTable?.tableName}
+              selectedKey={workspace.selectedDynamodbTableName}
               getRowKey={(table) => table.tableName}
               onRowClick={(table) => {
                 onSelectTable(table.tableName);
@@ -506,7 +505,10 @@ export default function DynamoDBView({
                 if (columnId === "hashKey") {
                   return table.hashKey || "Unknown";
                 }
-                return table.rangeKey || "None";
+                if (columnId === "rangeKey") {
+                  return table.rangeKey || "None";
+                }
+                return null;
               }}
               emptyState={tableEmptyState}
             />
