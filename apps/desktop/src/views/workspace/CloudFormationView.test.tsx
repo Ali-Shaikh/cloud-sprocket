@@ -129,6 +129,8 @@ const workspaceFixture: CloudFormationWorkspaceSnapshot = {
   secretsManagerSecrets: [],
   eventBridgeRegions: [],
   eventBridgeBuses: [],
+  route53HostedZones: [],
+  route53ResourceRecordSets: [],
   eventBridgeRules: [],
   selectedCloudFormationRegion: "us-east-1",
   selectedCloudFormationStackName: "demo",

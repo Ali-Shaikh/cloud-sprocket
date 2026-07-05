@@ -61,6 +61,7 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     eksActionStatus,
     cloudFormationActionStatus,
     eventBridgeActionStatus,
+    route53ActionStatus,
     apiGatewayActionStatus,
     secretsManagerActionStatus,
     logsActionStatus,

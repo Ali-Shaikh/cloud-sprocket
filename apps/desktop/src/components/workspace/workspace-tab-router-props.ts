@@ -85,6 +85,7 @@ export type WorkspaceTabRouterProps = {
   eksActionStatus: string;
   cloudFormationActionStatus: string;
   eventBridgeActionStatus: string;
+  route53ActionStatus: string;
   apiGatewayActionStatus: string;
   secretsManagerActionStatus: string;
   logsActionStatus: string;
