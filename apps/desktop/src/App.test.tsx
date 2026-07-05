@@ -990,6 +990,21 @@ describe("App", () => {
     expect(screen.queryByRole("button", { name: "Open workspace" })).not.toBeInTheDocument();
   });
 
+  it("opens the developer toolbox before a workspace is locked", async () => {
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Developer Toolbox · JSON, YAML, diff, encoders/i }),
+    );
+
+    expect(await screen.findByRole("heading", { name: "Developer Toolbox" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /json/i })).toBeInTheDocument();
+  });
+
   it("opens the workspace in one click when a profile has a single usable auth path", async () => {
     render(
       <ThemeProvider>

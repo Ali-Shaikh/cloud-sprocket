@@ -4,6 +4,7 @@
 import {
   Boxes,
   Bug,
+  Code2,
   LayoutGrid,
   Server,
   Wrench,
@@ -81,6 +82,7 @@ export function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     overview: "Overview",
     virtualisation: "Local Runtime",
     debug: "Debug console",
+    "developer-tools": "Developer Toolbox",
     settings: "Services",
     ecs: "ECS",
     apigateway: "API Gateway",
@@ -189,6 +191,8 @@ export function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): 
       return { ...base, iconUrl: gcpIconUrl };
     case "debug":
       return { ...base, icon: Bug };
+    case "developer-tools":
+      return { ...base, icon: Code2 };
     default:
       return { ...base, icon: Boxes };
   }

@@ -9,6 +9,7 @@
     "dev:desktop": "pnpm --dir apps/desktop dev:desktop",
     "dev:desktop:local": "pnpm --dir apps/desktop dev:desktop:local",
     "build": "pnpm --dir apps/desktop build",
+    "generate:notices": "pnpm --dir apps/desktop generate:notices",
     "build:desktop:exe": "pnpm --dir apps/desktop build:desktop:exe",
     "build:desktop": "pnpm --dir apps/desktop build:desktop",
     "build:desktop:local": "pnpm --dir apps/desktop build:desktop:local",

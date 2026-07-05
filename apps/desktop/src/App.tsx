@@ -630,6 +630,7 @@ export default function App() {
       session.workspaceTabs.length > 0 &&
       activeWorkspaceTabId !== "virtualisation" &&
       activeWorkspaceTabId !== "debug" &&
+      activeWorkspaceTabId !== "developer-tools" &&
       activeWorkspaceTabId !== "settings" &&
       activeWorkspaceTabId !== "deploy" &&
       !session.workspaceTabs.some((tab) => tab.tabId === activeWorkspaceTabId)
@@ -1218,6 +1219,7 @@ export default function App() {
         normalisedSession.isLocked &&
         activeWorkspaceTabId !== "settings" &&
         activeWorkspaceTabId !== "debug" &&
+        activeWorkspaceTabId !== "developer-tools" &&
         activeWorkspaceTabId !== "deploy" &&
         activeWorkspaceTabId !== "virtualisation" &&
         !normalisedSession.workspaceTabs.some((tab) => tab.tabId === activeWorkspaceTabId)
@@ -1470,11 +1472,14 @@ export default function App() {
   const dockerReachable = workspace.dockerRuntime.reachable;
   const isLocalActive = activeWorkspaceTabId === "virtualisation";
   const isDeployActive = activeWorkspaceTabId === "deploy";
+  const isDeveloperToolsActive = activeWorkspaceTabId === "developer-tools";
   const activeConnectionId = isDeployActive
     ? "deploy"
     : isLocalActive
       ? "local"
-      : session.currentProviderId ?? null;
+      : isDeveloperToolsActive
+        ? "developer-tools"
+        : session.currentProviderId ?? null;
 
   const railConnections: RailConnection[] = [
     ...providers.map((provider) => {
@@ -1520,6 +1525,13 @@ export default function App() {
       };
     }),
     {
+      id: "developer-tools",
+      label: "Developer Toolbox",
+      tooltip: "Developer Toolbox · JSON, YAML, diff, encoders",
+      status: "on" as Status,
+      kind: "tools" as const,
+    },
+    {
       id: "local",
       label: "Local Runtime",
       tooltip: dockerReachable
@@ -1551,6 +1563,13 @@ export default function App() {
         status: dockerReachable ? "on" : "off",
         statusText: dockerReachable ? "Docker engine running" : "Docker engine not detected",
       }
+    : isDeveloperToolsActive
+      ? {
+          name: "Developer Toolbox",
+          meta: "Local utilities",
+          status: "on",
+          statusText: "Private scratch tools — nothing leaves this app",
+        }
     : {
         name: session.isLocked
           ? (lockedProfile ?? selectedProfile)?.displayName ?? activeProvider?.label ?? "Workspace"
@@ -1568,6 +1587,14 @@ export default function App() {
       };
 
   function buildNavGroups(): NavGroup[] {
+    if (isDeveloperToolsActive) {
+      return [
+        {
+          label: "Developer",
+          items: [{ id: "debug", label: "Debug console", icon: Bug }],
+        },
+      ];
+    }
     if (isDeployActive) {
       return [
         {
@@ -1669,7 +1696,10 @@ export default function App() {
         ],
       });
     }
-    groups.push({ label: "Developer", items: [{ id: "debug", label: "Debug console", icon: Bug }] });
+    groups.push({
+      label: "Developer",
+      items: [{ id: "debug", label: "Debug console", icon: Bug }],
+    });
     return groups;
   }
 
@@ -1730,6 +1760,13 @@ export default function App() {
       run: () => setActiveWorkspaceTabId("debug"),
     },
     {
+      id: "act:developer-tools",
+      group: "Actions",
+      label: "Open developer toolbox",
+      keywords: "json yaml diff encode arn azure resource id jwt",
+      run: () => setActiveWorkspaceTabId("developer-tools"),
+    },
+    {
       id: "act:reset",
       group: "Actions",
       label: "Reset app data",
@@ -1739,6 +1776,10 @@ export default function App() {
   ];
 
   function handleRailSelect(id: string): void {
+    if (id === "developer-tools") {
+      setActiveWorkspaceTabId("developer-tools");
+      return;
+    }
     if (id === "local") {
       setActiveWorkspaceTabId("virtualisation");
       return;
@@ -1791,7 +1832,7 @@ export default function App() {
         visibleToasts={4}
       />
       <AppShell
-        navCollapsed={sidebarCollapsed || isTablet}
+        navCollapsed={sidebarCollapsed || isTablet || isDeveloperToolsActive}
         rail={
           <ConnectionRail
             connections={railConnections}

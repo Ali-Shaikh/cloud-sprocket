@@ -50,7 +50,13 @@ export const emptySession: SessionSnapshot = {
 
 // Tabs that do not render provider inventory, so they never show the
 // first-load skeleton (they have their own content regardless of the fetch).
-export const NON_INVENTORY_TABS = new Set(["debug", "deploy", "actions", "virtualisation"]);
+export const NON_INVENTORY_TABS = new Set([
+  "debug",
+  "developer-tools",
+  "deploy",
+  "actions",
+  "virtualisation",
+]);
 
 export const emptySettings: AppSettingsSnapshot = {
   platformName: "",

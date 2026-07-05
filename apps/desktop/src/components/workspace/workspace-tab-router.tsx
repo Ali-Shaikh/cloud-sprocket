@@ -8,7 +8,7 @@ import ConnectView from "@/views/ConnectView";
 import OverviewView from "@/views/OverviewView";
 import DeployView from "@/views/DeployView";
 import DebugView from "@/views/DebugView";
-import { ActivityView, RuntimeView, PlaceholderView } from "@/views/workspace/lazy-views";
+import { ActivityView, RuntimeView, PlaceholderView, DeveloperToolsView } from "@/views/workspace/lazy-views";
 import SettingsView from "@/views/SettingsView";
 import { AwsWorkspaceTabs, AWS_TAB_IDS } from "./aws-workspace-tabs";
 import { AzureWorkspaceTabs } from "./azure-workspace-tabs";
@@ -166,6 +166,9 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
 
   if (activeWorkspaceTabId === "debug") {
     return <DebugView />;
+  }
+  if (activeWorkspaceTabId === "developer-tools") {
+    return <DeveloperToolsView />;
   }
   if (activeWorkspaceTabId === "settings" && props.preferencesSnapshot) {
     return (
@@ -353,4 +356,3 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     />
   );
 }
-

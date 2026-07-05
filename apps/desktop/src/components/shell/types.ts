@@ -31,8 +31,8 @@ export interface RailConnection {
   profileBadge?: string;
   /** Connection health, shown as a small status dot on the rail item. */
   status: Status;
-  /** Distinguishes the local-runtime and deploy rail items from providers. */
-  kind: "provider" | "local" | "deploy";
+  /** Distinguishes non-provider rail items from cloud connections. */
+  kind: "provider" | "local" | "deploy" | "tools";
 }
 
 /** Rail footer app menu (connection info, preferences, diagnostics, about). */
