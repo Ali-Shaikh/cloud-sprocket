@@ -1039,6 +1039,10 @@ export default function App() {
         setSession(emptySession);
         resetWorkspaceUiState();
         setLogs([]);
+        setPreferencesSnapshot(null);
+        setHiddenResourceHits([]);
+        setHiddenResourceEnablingServiceId(null);
+        hiddenResourcesProbeKeyRef.current = null;
         setActiveWorkspaceTabId("overview");
         setSplitPanelOpen(false);
         setNotificationsOpen(false);

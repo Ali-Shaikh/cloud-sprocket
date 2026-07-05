@@ -49,6 +49,14 @@ func (s *Service) savePreferencesLocked() error {
 	return os.WriteFile(s.preferencesPath(), encoded, 0o600)
 }
 
+func (s *Service) resetServicePreferencesLocked() error {
+	s.preferences = defaultServicePreferences()
+	if err := os.Remove(s.preferencesPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
 func defaultServicePreferences() models.ServicePreferences {
 	return models.ServicePreferences{
 		DisabledProviders: []string{},

@@ -3140,6 +3140,10 @@ function handleMockRequest<T>(
         availableAuthMethods: [...initialMockSession.availableAuthMethods],
         workspaceTabs: [],
       };
+      mockState.preferences = {
+        disabledProviders: [],
+        disabledServices: {},
+      };
       mockState.logs = [];
       mockState.localStackStatus = "not-configured";
       mockState.flociAzStatus = "not-configured";

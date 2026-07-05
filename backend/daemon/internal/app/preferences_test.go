@@ -5,6 +5,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -106,6 +107,31 @@ func TestBuildPreferencesSnapshotNormalisesNilProviders(t *testing.T) {
 	}
 	if snapshot.Preferences.DisabledServices == nil {
 		t.Fatal("snapshot services map should not be nil")
+	}
+}
+
+func TestResetServicePreferencesLockedClearsStoredState(t *testing.T) {
+	dir := t.TempDir()
+	settings := config.Settings{ConfigDir: dir}
+	service := &Service{settings: settings, preferences: defaultServicePreferences()}
+	service.preferences = sanitizeServicePreferences(models.ServicePreferences{
+		DisabledProviders: []string{"gcp"},
+		DisabledServices: map[string][]string{
+			"aws": {"s3"},
+		},
+	})
+	if err := service.savePreferencesLocked(); err != nil {
+		t.Fatalf("save preferences: %v", err)
+	}
+
+	if err := service.resetServicePreferencesLocked(); err != nil {
+		t.Fatalf("reset preferences: %v", err)
+	}
+	if len(service.preferences.DisabledProviders) != 0 || len(service.preferences.DisabledServices) != 0 {
+		t.Fatalf("in-memory preferences = %#v", service.preferences)
+	}
+	if _, err := os.Stat(filepath.Join(dir, preferencesFileName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected preferences file to be removed, got err=%v", err)
 	}
 }
 
