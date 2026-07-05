@@ -2,11 +2,28 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
 import SQSView from "./SQSView";
 import type { WorkspaceSnapshot } from "@/types/backend";
+
+function mockMatchMedia(matches: boolean) {
+  return vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const workspaceFixture: WorkspaceSnapshot = {
   provider: {
@@ -71,31 +88,31 @@ const workspaceFixture: WorkspaceSnapshot = {
   azureBlobContainers: [],
   azureBlobs: [],
   azureBlobMetadata: [],
-      azureWebApps: [],
-      azureAppServicePlans: [],
-      azureWebAppSettings: [],
-      azureWebAppDeploymentSlots: [],
-      azureLogAnalyticsWorkspaces: [],
-      azureWafPolicies: [],
-      azureWafRuleFireCounts: [],
-      azureFunctionApps: [],
-      azureFunctions: [],
-      azureKeyVaults: [],
-      azureKeyVaultSecrets: [],
-      azureCosmosAccounts: [],
-      azurePostgresServers: [],
-      azureCosmosDatabases: [],
-      azureCosmosContainers: [],
+  azureWebApps: [],
+  azureAppServicePlans: [],
+  azureWebAppSettings: [],
+  azureWebAppDeploymentSlots: [],
+  azureLogAnalyticsWorkspaces: [],
+  azureWafPolicies: [],
+  azureWafRuleFireCounts: [],
+  azureFunctionApps: [],
+  azureFunctions: [],
+  azureKeyVaults: [],
+  azureKeyVaultSecrets: [],
+  azureCosmosAccounts: [],
+  azurePostgresServers: [],
+  azureCosmosDatabases: [],
+  azureCosmosContainers: [],
   azureCosmosItems: [],
   azureFrontDoorProfiles: [],
   azureFrontDoorEndpoints: [],
   azureFrontDoorOriginGroups: [],
   azureFrontDoorOrigins: [],
   azureStorageQueues: [],
-      azureQueueMessages: [],
-      azureEntraUsers: [],
-      azureEntraGroups: [],
-      azureEntraApps: [],
+  azureQueueMessages: [],
+  azureEntraUsers: [],
+  azureEntraGroups: [],
+  azureEntraApps: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -147,17 +164,18 @@ const workspaceFixture: WorkspaceSnapshot = {
   ],
 };
 
-function renderSQSView() {
+function renderSQSView(overrides?: { workspace?: Partial<WorkspaceSnapshot> }) {
   const onSelectRegion = vi.fn();
   const onSelectQueue = vi.fn();
   const onRefresh = vi.fn();
   const onPeek = vi.fn();
   const onSendMessage = vi.fn();
   const onCreateQueue = vi.fn();
+  const workspace = { ...workspaceFixture, ...overrides?.workspace };
   render(
     <ThemeProvider>
       <SQSView
-        workspace={workspaceFixture}
+        workspace={workspace}
         actionStatus="Ready to browse queues."
         peekResult={null}
         peekInFlight={false}
@@ -174,16 +192,26 @@ function renderSQSView() {
 }
 
 describe("SQSView", () => {
-  it("renders inventory and queue depth detail", () => {
+  it("renders fleet summary and queue inventory table", () => {
+    mockMatchMedia(true);
     renderSQSView();
 
     expect(screen.getByText("Queue Fleet")).toBeInTheDocument();
     expect(screen.getByText("Queue Inventory")).toBeInTheDocument();
     expect(screen.getAllByText("process-order").length).toBeGreaterThan(0);
-    expect(screen.getByText("Peek messages")).toBeInTheDocument();
+    expect(screen.getByText("cloudsprocket-events")).toBeInTheDocument();
+  });
+
+  it("does not highlight a row when no queue is selected", () => {
+    mockMatchMedia(true);
+    renderSQSView({ workspace: { selectedSqsQueueUrl: undefined } });
+
+    const selectedRows = document.querySelectorAll('[data-state="selected"]');
+    expect(selectedRows).toHaveLength(0);
   });
 
   it("selects a queue when a row is clicked", () => {
+    mockMatchMedia(true);
     const { onSelectQueue } = renderSQSView();
 
     fireEvent.click(screen.getByText("cloudsprocket-events"));
@@ -193,7 +221,18 @@ describe("SQSView", () => {
     );
   });
 
+  it("docks queue detail in the inspector on wide viewports", () => {
+    mockMatchMedia(true);
+    renderSQSView();
+
+    expect(screen.getByLabelText("SQS queue details")).toBeInTheDocument();
+    expect(screen.getByText("Queue")).toBeInTheDocument();
+    expect(screen.getByText("Peek messages")).toBeInTheDocument();
+    expect(screen.getByText("Copy actions")).toBeInTheDocument();
+  });
+
   it("sends a message to the selected queue through the send dialog", () => {
+    mockMatchMedia(true);
     const { onSendMessage } = renderSQSView();
 
     fireEvent.click(screen.getByRole("button", { name: "Send message" }));
@@ -207,6 +246,7 @@ describe("SQSView", () => {
   });
 
   it("creates a queue through the create dialog", () => {
+    mockMatchMedia(true);
     const { onCreateQueue } = renderSQSView();
 
     fireEvent.click(screen.getByRole("button", { name: "Create queue" }));
@@ -220,6 +260,7 @@ describe("SQSView", () => {
   });
 
   it("disables write actions when write mode is off", () => {
+    mockMatchMedia(true);
     render(
       <ThemeProvider>
         <SQSView

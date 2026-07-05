@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Bell, Copy, RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -17,14 +17,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -35,6 +27,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/empty-state";
+import {
+  ResourceInspectorHeader,
+  ResourceInspectorPanel,
+  ResourceInventoryShell,
+} from "@/components/inventory/resource-inspector";
+import { ResourceTable } from "@/components/inventory/resource-table";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { DetailFieldList } from "./detail-fields";
 import type { WorkspaceSnapshot } from "@/types/backend";
@@ -110,6 +108,8 @@ export default function SNSView({
   const [publishBody, setPublishBody] = useState('{"event":"test"}');
   const [newTopicName, setNewTopicName] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedSnsTopicArn));
+  const lastSelectedTopicRef = useRef(workspace.selectedSnsTopicArn || "");
 
   const regions =
     workspace.snsRegions.length > 0
@@ -120,9 +120,9 @@ export default function SNSView({
           ? workspace.lambdaRegions
           : workspace.ec2Regions;
 
-  const selectedTopic =
-    workspace.snsTopics.find((topic) => topic.topicArn === workspace.selectedSnsTopicArn) ??
-    workspace.snsTopics[0];
+  const selectedTopic = workspace.snsTopics.find(
+    (topic) => topic.topicArn === workspace.selectedSnsTopicArn,
+  );
 
   const filteredTopics = useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -185,6 +185,14 @@ export default function SNSView({
       ]
     : [];
 
+  useEffect(() => {
+    const nextTopicArn = workspace.selectedSnsTopicArn || "";
+    if (nextTopicArn !== lastSelectedTopicRef.current) {
+      lastSelectedTopicRef.current = nextTopicArn;
+      setInspectorOpen(Boolean(nextTopicArn));
+    }
+  }, [workspace.selectedSnsTopicArn]);
+
   if (workspace.provider?.providerId && workspace.provider.providerId !== "aws") {
     return (
       <div className="p-6">
@@ -196,6 +204,129 @@ export default function SNSView({
       </div>
     );
   }
+
+  const tableEmptyState =
+    workspace.snsTopics.length === 0 ? (
+      <EmptyState
+        icon={<Bell />}
+        title="No topics"
+        description={
+          workspace.selectedSnsRegion
+            ? `No SNS topics were returned for ${workspace.selectedSnsRegion}.`
+            : "Select a region to list SNS topics."
+        }
+        className="border-0"
+      />
+    ) : (
+      <EmptyState
+        icon={<Bell />}
+        title="No matches"
+        description="No SNS topics match the current filter."
+        className="border-0"
+      />
+    );
+
+  const inspectorContent = selectedTopic ? (
+    <ResourceInspectorPanel>
+      <ResourceInspectorHeader
+        icon={Bell}
+        eyebrow="Topic"
+        title={selectedTopic.topicName}
+        subtitle={selectedTopic.topicArn}
+        onClose={() => setInspectorOpen(false)}
+      />
+
+      <DetailFieldList
+        fields={[
+          { label: "Display name", value: selectedTopic.displayName || "None" },
+          { label: "Owner", value: selectedTopic.owner || "Unknown" },
+          {
+            label: "Confirmed subscriptions",
+            value: selectedTopic.subscriptionsConfirmed ?? "Unknown",
+          },
+          {
+            label: "Pending subscriptions",
+            value: selectedTopic.subscriptionsPending ?? "Unknown",
+          },
+          { label: "Topic ARN", value: selectedTopic.topicArn },
+        ]}
+        emptyText="No topic details are available."
+      />
+
+      {selectedTopic.subscriptions && selectedTopic.subscriptions.length > 0 ? (
+        <div>
+          <div className={fieldLabel}>Subscriptions</div>
+          <div className="space-y-2">
+            {selectedTopic.subscriptions.map((subscription) => (
+              <div key={subscription.subscriptionArn} className={snippetCard}>
+                <div className="text-sm font-semibold">
+                  {subscription.protocol || "Unknown protocol"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {subscription.endpoint || "No endpoint"}
+                  {subscription.owner ? ` · ${subscription.owner}` : ""}
+                </div>
+                <div className="mt-1 font-mono text-[10px] text-muted-foreground">
+                  {subscription.subscriptionArn}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">No subscriptions were returned for this topic.</p>
+      )}
+
+      <div>
+        <div className={fieldLabel}>Publish message (write action)</div>
+        <Button
+          variant="outline"
+          disabled={!canPublish}
+          title={publishDisabledReason}
+          onClick={() => {
+            setPublishDialogOpen(true);
+          }}
+        >
+          Publish message
+        </Button>
+        {publishDisabledReason ? (
+          <p className="mt-2 text-xs text-muted-foreground">{publishDisabledReason}</p>
+        ) : null}
+      </div>
+
+      <div>
+        <div className={fieldLabel}>Copy actions</div>
+        {copySnippets.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Select a topic to generate copy actions.
+          </p>
+        ) : (
+          <div className="mt-2 space-y-3">
+            {copySnippets.map((snippet) => (
+              <div key={snippet.label} className={snippetCard}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className={fieldLabel}>{snippet.label}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      copyToClipboard(snippet.value, `${snippet.label} copied`);
+                    }}
+                  >
+                    <Copy />
+                    Copy
+                  </Button>
+                </div>
+                <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                  {snippet.value}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </ResourceInspectorPanel>
+  ) : null;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -307,166 +438,42 @@ export default function SNSView({
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border">
-          {workspace.snsTopics.length === 0 ? (
-            <EmptyState
-              icon={<Bell />}
-              title="No topics"
-              description={
-                workspace.selectedSnsRegion
-                  ? `No SNS topics were returned for ${workspace.selectedSnsRegion}.`
-                  : "Select a region to list SNS topics."
-              }
-              className="border-0"
+        <ResourceInventoryShell
+          table={
+            <ResourceTable
+              columns={[
+                { id: "name", label: "Name" },
+                { id: "confirmed", label: "Confirmed" },
+                { id: "pending", label: "Pending" },
+              ]}
+              rows={filteredTopics}
+              selectedKey={workspace.selectedSnsTopicArn}
+              getRowKey={(topic) => topic.topicArn}
+              onRowClick={(topic) => {
+                onSelectEntity(topic.topicArn);
+                setInspectorOpen(true);
+              }}
+              renderCell={(topic, columnId) => {
+                if (columnId === "name") {
+                  return <span className="font-mono text-sm">{topic.topicName}</span>;
+                }
+                if (columnId === "confirmed") {
+                  return topic.subscriptionsConfirmed ?? "Unknown";
+                }
+                if (columnId === "pending") {
+                  return topic.subscriptionsPending ?? "Unknown";
+                }
+                return null;
+              }}
+              emptyState={tableEmptyState}
             />
-          ) : filteredTopics.length === 0 ? (
-            <EmptyState
-              icon={<Bell />}
-              title="No matches"
-              description="No SNS topics match the current filter."
-              className="border-0"
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Confirmed</TableHead>
-                  <TableHead>Pending</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTopics.map((topic) => {
-                  const active = topic.topicArn === selectedTopic?.topicArn;
-                  return (
-                    <TableRow
-                      key={topic.topicArn}
-                      data-state={active ? "selected" : undefined}
-                      className="cursor-pointer"
-                      onClick={() => {
-                        onSelectEntity(topic.topicArn);
-                      }}
-                    >
-                      <TableCell className="font-mono text-sm">{topic.topicName}</TableCell>
-                      <TableCell>{topic.subscriptionsConfirmed ?? "Unknown"}</TableCell>
-                      <TableCell>{topic.subscriptionsPending ?? "Unknown"}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </div>
+          }
+          inspectorContent={inspectorContent}
+          inspectorOpen={inspectorOpen}
+          onInspectorOpenChange={setInspectorOpen}
+          inspectorAriaLabel="SNS topic details"
+        />
       </section>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className={sectionCard}>
-          <div>
-            <h2 className="text-base font-bold">Topic Detail</h2>
-            <p className="text-sm text-muted-foreground">
-              {selectedTopic?.topicName || "Select a topic for subscriptions and attributes."}
-            </p>
-          </div>
-          {selectedTopic ? (
-            <>
-              <DetailFieldList
-                fields={[
-                  { label: "Display name", value: selectedTopic.displayName || "None" },
-                  { label: "Owner", value: selectedTopic.owner || "Unknown" },
-                  {
-                    label: "Confirmed subscriptions",
-                    value: selectedTopic.subscriptionsConfirmed ?? "Unknown",
-                  },
-                  {
-                    label: "Pending subscriptions",
-                    value: selectedTopic.subscriptionsPending ?? "Unknown",
-                  },
-                  { label: "Topic ARN", value: selectedTopic.topicArn },
-                ]}
-                emptyText="No topic details are available."
-              />
-
-              {selectedTopic.subscriptions && selectedTopic.subscriptions.length > 0 ? (
-                <div>
-                  <div className={fieldLabel}>Subscriptions</div>
-                  <div className="space-y-2">
-                    {selectedTopic.subscriptions.map((subscription) => (
-                      <div key={subscription.subscriptionArn} className={snippetCard}>
-                        <div className="text-sm font-semibold">
-                          {subscription.protocol || "Unknown protocol"}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {subscription.endpoint || "No endpoint"}
-                          {subscription.owner ? ` · ${subscription.owner}` : ""}
-                        </div>
-                        <div className="mt-1 font-mono text-[10px] text-muted-foreground">
-                          {subscription.subscriptionArn}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No subscriptions were returned for this topic.</p>
-              )}
-
-              <div>
-                <div className={fieldLabel}>Publish message (write action)</div>
-                <Button
-                  variant="outline"
-                  disabled={!canPublish}
-                  title={publishDisabledReason}
-                  onClick={() => {
-                    setPublishDialogOpen(true);
-                  }}
-                >
-                  Publish message
-                </Button>
-                {publishDisabledReason ? (
-                  <p className="mt-2 text-xs text-muted-foreground">{publishDisabledReason}</p>
-                ) : null}
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">No SNS topic selected.</p>
-          )}
-        </section>
-
-        <section className={sectionCard}>
-          <div>
-            <h2 className="text-base font-bold">Copy Actions</h2>
-            <p className="text-sm text-muted-foreground">
-              Generated locally from the selected region and topic. No snippet is stored.
-            </p>
-          </div>
-          {copySnippets.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Select a topic to generate copy actions.</p>
-          ) : (
-            <div className="space-y-3">
-              {copySnippets.map((snippet) => (
-                <div key={snippet.label} className={snippetCard}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={fieldLabel}>{snippet.label}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        copyToClipboard(snippet.value, `${snippet.label} copied`);
-                      }}
-                    >
-                      <Copy />
-                      Copy
-                    </Button>
-                  </div>
-                  <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                    {snippet.value}
-                  </pre>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
 
       <AlertDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <AlertDialogContent>

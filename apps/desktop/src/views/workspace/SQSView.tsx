@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Inbox, RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -17,14 +17,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -35,6 +27,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/empty-state";
+import {
+  ResourceInspectorHeader,
+  ResourceInspectorPanel,
+  ResourceInventoryShell,
+} from "@/components/inventory/resource-inspector";
+import { ResourceTable } from "@/components/inventory/resource-table";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { DetailFieldList } from "./detail-fields";
 import type { AwsSqsPeekResult, WorkspaceSnapshot } from "@/types/backend";
@@ -100,6 +98,8 @@ export default function SQSView({
   const [sendBody, setSendBody] = useState('{"event":"test"}');
   const [newQueueName, setNewQueueName] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedSqsQueueUrl));
+  const lastSelectedQueueRef = useRef(workspace.selectedSqsQueueUrl || "");
 
   const regions =
     workspace.sqsRegions.length > 0
@@ -110,9 +110,9 @@ export default function SQSView({
           ? workspace.lambdaRegions
           : workspace.ec2Regions;
 
-  const selectedQueue =
-    workspace.sqsQueues.find((queue) => queue.queueUrl === workspace.selectedSqsQueueUrl) ??
-    workspace.sqsQueues[0];
+  const selectedQueue = workspace.sqsQueues.find(
+    (queue) => queue.queueUrl === workspace.selectedSqsQueueUrl,
+  );
 
   const filteredQueues = useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -185,6 +185,14 @@ export default function SQSView({
       ]
     : [];
 
+  useEffect(() => {
+    const nextQueueUrl = workspace.selectedSqsQueueUrl || "";
+    if (nextQueueUrl !== lastSelectedQueueRef.current) {
+      lastSelectedQueueRef.current = nextQueueUrl;
+      setInspectorOpen(Boolean(nextQueueUrl));
+    }
+  }, [workspace.selectedSqsQueueUrl]);
+
   if (workspace.provider?.providerId && workspace.provider.providerId !== "aws") {
     return (
       <div className="p-6">
@@ -196,6 +204,176 @@ export default function SQSView({
       </div>
     );
   }
+
+  const tableEmptyState =
+    workspace.sqsQueues.length === 0 ? (
+      <EmptyState
+        icon={<Inbox />}
+        title="No queues"
+        description={
+          workspace.selectedSqsRegion
+            ? `No SQS queues were returned for ${workspace.selectedSqsRegion}.`
+            : "Select a region to list SQS queues."
+        }
+        className="border-0"
+      />
+    ) : (
+      <EmptyState
+        icon={<Inbox />}
+        title="No matches"
+        description="No SQS queues match the current filter."
+        className="border-0"
+      />
+    );
+
+  const inspectorContent = selectedQueue ? (
+    <ResourceInspectorPanel>
+      <ResourceInspectorHeader
+        icon={Inbox}
+        eyebrow="Queue"
+        title={selectedQueue.queueName}
+        subtitle={selectedQueue.queueUrl}
+        onClose={() => setInspectorOpen(false)}
+      />
+
+      <DetailFieldList
+        fields={[
+          {
+            label: "Visible messages",
+            value: String(selectedQueue.approximateNumberOfMessages ?? "Unknown"),
+          },
+          {
+            label: "In flight",
+            value: String(selectedQueue.approximateNumberOfMessagesNotVisible ?? "Unknown"),
+          },
+          {
+            label: "Delayed",
+            value: String(selectedQueue.approximateNumberOfMessagesDelayed ?? "Unknown"),
+          },
+          {
+            label: "Visibility timeout",
+            value:
+              selectedQueue.visibilityTimeout != null
+                ? `${selectedQueue.visibilityTimeout}s`
+                : "Unknown",
+          },
+          {
+            label: "Long polling",
+            value:
+              selectedQueue.receiveMessageWaitTimeSeconds != null
+                ? `${selectedQueue.receiveMessageWaitTimeSeconds}s`
+                : "Unknown",
+          },
+          {
+            label: "Created",
+            value: formatTimestamp(selectedQueue.createdTimestamp),
+          },
+          { label: "Queue ARN", value: selectedQueue.queueArn || "Unknown" },
+        ]}
+        emptyText="No queue details are available."
+      />
+
+      <div>
+        <div className={fieldLabel}>Peek messages (safe write action)</div>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Receives up to 10 messages with visibility timeout 0. Messages stay on the queue.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            disabled={!canPeek}
+            title={peekDisabledReason}
+            onClick={() => {
+              setPeekDialogOpen(true);
+            }}
+          >
+            Peek messages
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!canSend}
+            title={sendDisabledReason}
+            onClick={() => {
+              setSendDialogOpen(true);
+            }}
+          >
+            Send message
+          </Button>
+        </div>
+        {peekDisabledReason || sendDisabledReason ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {peekDisabledReason || sendDisabledReason}
+          </p>
+        ) : null}
+      </div>
+
+      {peekResult ? (
+        <div>
+          <div className={fieldLabel}>Last peek result</div>
+          <p className="mb-2 text-sm text-muted-foreground">{peekResult.summary}</p>
+          {peekResult.messages.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No messages were returned.</p>
+          ) : (
+            <div className="space-y-2">
+              {peekResult.messages.map((message, index) => (
+                <div key={`${message.messageId}-${index}`} className={snippetCard}>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs">{message.messageId}</span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-1 text-[10px]"
+                      onClick={() => {
+                        copyToClipboard(message.body, "Message copied");
+                      }}
+                    >
+                      <Copy className="mr-1 h-3 w-3" />
+                      Copy
+                    </Button>
+                  </div>
+                  <pre className="max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[10px]">
+                    {message.body}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      <div>
+        <div className={fieldLabel}>Copy actions</div>
+        {copySnippets.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Select a queue to generate copy actions.
+          </p>
+        ) : (
+          <div className="mt-2 space-y-3">
+            {copySnippets.map((snippet) => (
+              <div key={snippet.label} className={snippetCard}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className={fieldLabel}>{snippet.label}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      copyToClipboard(snippet.value, `${snippet.label} copied`);
+                    }}
+                  >
+                    <Copy />
+                    Copy
+                  </Button>
+                </div>
+                <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                  {snippet.value}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </ResourceInspectorPanel>
+  ) : null;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -314,215 +492,46 @@ export default function SQSView({
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border">
-          {workspace.sqsQueues.length === 0 ? (
-            <EmptyState
-              icon={<Inbox />}
-              title="No queues"
-              description={
-                workspace.selectedSqsRegion
-                  ? `No SQS queues were returned for ${workspace.selectedSqsRegion}.`
-                  : "Select a region to list SQS queues."
-              }
-              className="border-0"
+        <ResourceInventoryShell
+          table={
+            <ResourceTable
+              columns={[
+                { id: "name", label: "Name" },
+                { id: "visible", label: "Visible" },
+                { id: "inFlight", label: "In flight" },
+                { id: "delayed", label: "Delayed" },
+              ]}
+              rows={filteredQueues}
+              selectedKey={workspace.selectedSqsQueueUrl}
+              getRowKey={(queue) => queue.queueUrl}
+              onRowClick={(queue) => {
+                onSelectQueue(queue.queueUrl);
+                setInspectorOpen(true);
+              }}
+              renderCell={(queue, columnId) => {
+                if (columnId === "name") {
+                  return <span className="font-mono text-sm">{queue.queueName}</span>;
+                }
+                if (columnId === "visible") {
+                  return queue.approximateNumberOfMessages ?? "Unknown";
+                }
+                if (columnId === "inFlight") {
+                  return queue.approximateNumberOfMessagesNotVisible ?? "Unknown";
+                }
+                if (columnId === "delayed") {
+                  return queue.approximateNumberOfMessagesDelayed ?? "Unknown";
+                }
+                return null;
+              }}
+              emptyState={tableEmptyState}
             />
-          ) : filteredQueues.length === 0 ? (
-            <EmptyState
-              icon={<Inbox />}
-              title="No matches"
-              description="No SQS queues match the current filter."
-              className="border-0"
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Visible</TableHead>
-                  <TableHead>In flight</TableHead>
-                  <TableHead>Delayed</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredQueues.map((queue) => {
-                  const active = queue.queueUrl === selectedQueue?.queueUrl;
-                  return (
-                    <TableRow
-                      key={queue.queueUrl}
-                      data-state={active ? "selected" : undefined}
-                      className="cursor-pointer"
-                      onClick={() => {
-                        onSelectQueue(queue.queueUrl);
-                      }}
-                    >
-                      <TableCell className="font-mono text-sm">{queue.queueName}</TableCell>
-                      <TableCell>{queue.approximateNumberOfMessages ?? "Unknown"}</TableCell>
-                      <TableCell>{queue.approximateNumberOfMessagesNotVisible ?? "Unknown"}</TableCell>
-                      <TableCell>{queue.approximateNumberOfMessagesDelayed ?? "Unknown"}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </div>
+          }
+          inspectorContent={inspectorContent}
+          inspectorOpen={inspectorOpen}
+          onInspectorOpenChange={setInspectorOpen}
+          inspectorAriaLabel="SQS queue details"
+        />
       </section>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className={sectionCard}>
-          <div>
-            <h2 className="text-base font-bold">Queue Detail</h2>
-            <p className="text-sm text-muted-foreground">
-              {selectedQueue?.queueName || "Select a queue for attributes and peek."}
-            </p>
-          </div>
-          {selectedQueue ? (
-            <>
-              <DetailFieldList
-                fields={[
-                  {
-                    label: "Visible messages",
-                    value: String(selectedQueue.approximateNumberOfMessages ?? "Unknown"),
-                  },
-                  {
-                    label: "In flight",
-                    value: String(selectedQueue.approximateNumberOfMessagesNotVisible ?? "Unknown"),
-                  },
-                  {
-                    label: "Delayed",
-                    value: String(selectedQueue.approximateNumberOfMessagesDelayed ?? "Unknown"),
-                  },
-                  {
-                    label: "Visibility timeout",
-                    value:
-                      selectedQueue.visibilityTimeout != null
-                        ? `${selectedQueue.visibilityTimeout}s`
-                        : "Unknown",
-                  },
-                  {
-                    label: "Long polling",
-                    value:
-                      selectedQueue.receiveMessageWaitTimeSeconds != null
-                        ? `${selectedQueue.receiveMessageWaitTimeSeconds}s`
-                        : "Unknown",
-                  },
-                  {
-                    label: "Created",
-                    value: formatTimestamp(selectedQueue.createdTimestamp),
-                  },
-                  { label: "Queue ARN", value: selectedQueue.queueArn || "Unknown" },
-                ]}
-                emptyText="No queue details are available."
-              />
-
-              <div>
-                <div className={fieldLabel}>Peek messages (safe write action)</div>
-                <p className="mb-3 text-sm text-muted-foreground">
-                  Receives up to 10 messages with visibility timeout 0. Messages stay on the queue.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    disabled={!canPeek}
-                    title={peekDisabledReason}
-                    onClick={() => {
-                      setPeekDialogOpen(true);
-                    }}
-                  >
-                    Peek messages
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={!canSend}
-                    title={sendDisabledReason}
-                    onClick={() => {
-                      setSendDialogOpen(true);
-                    }}
-                  >
-                    Send message
-                  </Button>
-                </div>
-                {peekDisabledReason || sendDisabledReason ? (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {peekDisabledReason || sendDisabledReason}
-                  </p>
-                ) : null}
-              </div>
-
-              {peekResult ? (
-                <div>
-                  <div className={fieldLabel}>Last peek result</div>
-                  <p className="mb-2 text-sm text-muted-foreground">{peekResult.summary}</p>
-                  {peekResult.messages.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No messages were returned.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {peekResult.messages.map((message, index) => (
-                        <div key={`${message.messageId}-${index}`} className={snippetCard}>
-                          <div className="mb-1 flex items-center justify-between gap-2">
-                            <span className="font-mono text-xs">{message.messageId}</span>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 px-1 text-[10px]"
-                              onClick={() => {
-                                copyToClipboard(message.body, "Message copied");
-                              }}
-                            >
-                              <Copy className="mr-1 h-3 w-3" />
-                              Copy
-                            </Button>
-                          </div>
-                          <pre className="max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[10px]">
-                            {message.body}
-                          </pre>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">No SQS queue selected.</p>
-          )}
-        </section>
-
-        <section className={sectionCard}>
-          <div>
-            <h2 className="text-base font-bold">Copy Actions</h2>
-            <p className="text-sm text-muted-foreground">
-              Generated locally from the selected region and queue. No snippet is stored.
-            </p>
-          </div>
-          {copySnippets.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Select a queue to generate copy actions.</p>
-          ) : (
-            <div className="space-y-3">
-              {copySnippets.map((snippet) => (
-                <div key={snippet.label} className={snippetCard}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={fieldLabel}>{snippet.label}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        copyToClipboard(snippet.value, `${snippet.label} copied`);
-                      }}
-                    >
-                      <Copy />
-                      Copy
-                    </Button>
-                  </div>
-                  <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                    {snippet.value}
-                  </pre>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
 
       <AlertDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <AlertDialogContent>

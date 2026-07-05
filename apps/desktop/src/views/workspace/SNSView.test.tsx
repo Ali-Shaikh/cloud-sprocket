@@ -2,11 +2,28 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
 import SNSView from "./SNSView";
 import type { SnsWorkspaceSnapshot } from "./SNSView";
+
+function mockMatchMedia(matches: boolean) {
+  return vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const workspaceFixture: SnsWorkspaceSnapshot = {
   provider: {
@@ -71,31 +88,31 @@ const workspaceFixture: SnsWorkspaceSnapshot = {
   azureBlobContainers: [],
   azureBlobs: [],
   azureBlobMetadata: [],
-      azureWebApps: [],
-      azureAppServicePlans: [],
-      azureWebAppSettings: [],
-      azureWebAppDeploymentSlots: [],
-      azureLogAnalyticsWorkspaces: [],
-      azureWafPolicies: [],
-      azureWafRuleFireCounts: [],
-      azureFunctionApps: [],
-      azureFunctions: [],
-      azureKeyVaults: [],
-      azureKeyVaultSecrets: [],
-      azureCosmosAccounts: [],
-      azurePostgresServers: [],
-      azureCosmosDatabases: [],
-      azureCosmosContainers: [],
+  azureWebApps: [],
+  azureAppServicePlans: [],
+  azureWebAppSettings: [],
+  azureWebAppDeploymentSlots: [],
+  azureLogAnalyticsWorkspaces: [],
+  azureWafPolicies: [],
+  azureWafRuleFireCounts: [],
+  azureFunctionApps: [],
+  azureFunctions: [],
+  azureKeyVaults: [],
+  azureKeyVaultSecrets: [],
+  azureCosmosAccounts: [],
+  azurePostgresServers: [],
+  azureCosmosDatabases: [],
+  azureCosmosContainers: [],
   azureCosmosItems: [],
   azureFrontDoorProfiles: [],
   azureFrontDoorEndpoints: [],
   azureFrontDoorOriginGroups: [],
   azureFrontDoorOrigins: [],
   azureStorageQueues: [],
-      azureQueueMessages: [],
-      azureEntraUsers: [],
-      azureEntraGroups: [],
-      azureEntraApps: [],
+  azureQueueMessages: [],
+  azureEntraUsers: [],
+  azureEntraGroups: [],
+  azureEntraApps: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -153,14 +170,15 @@ const workspaceFixture: SnsWorkspaceSnapshot = {
   ],
 };
 
-function renderSNSView() {
+function renderSNSView(overrides?: { workspace?: Partial<SnsWorkspaceSnapshot> }) {
   const onSelectRegion = vi.fn();
   const onSelectEntity = vi.fn();
   const onRefresh = vi.fn();
+  const workspace = { ...workspaceFixture, ...overrides?.workspace };
   render(
     <ThemeProvider>
       <SNSView
-        workspace={workspaceFixture}
+        workspace={workspace}
         actionStatus="Ready to browse topics."
         onRefresh={onRefresh}
         onSelectRegion={onSelectRegion}
@@ -174,17 +192,26 @@ function renderSNSView() {
 }
 
 describe("SNSView", () => {
-  it("renders inventory and subscription detail", () => {
+  it("renders fleet summary and topic inventory table", () => {
+    mockMatchMedia(true);
     renderSNSView();
 
     expect(screen.getByText("Topic Fleet")).toBeInTheDocument();
     expect(screen.getByText("Topic Inventory")).toBeInTheDocument();
     expect(screen.getAllByText("order-events").length).toBeGreaterThan(0);
-    expect(screen.getByText("Subscriptions")).toBeInTheDocument();
-    expect(screen.getByText("sqs")).toBeInTheDocument();
+    expect(screen.getByText("cloudsprocket-alerts")).toBeInTheDocument();
+  });
+
+  it("does not highlight a row when no topic is selected", () => {
+    mockMatchMedia(true);
+    renderSNSView({ workspace: { selectedSnsTopicArn: undefined } });
+
+    const selectedRows = document.querySelectorAll('[data-state="selected"]');
+    expect(selectedRows).toHaveLength(0);
   });
 
   it("selects a topic when a row is clicked", () => {
+    mockMatchMedia(true);
     const { onSelectEntity } = renderSNSView();
 
     fireEvent.click(screen.getByText("cloudsprocket-alerts"));
@@ -192,6 +219,17 @@ describe("SNSView", () => {
     expect(onSelectEntity).toHaveBeenCalledWith(
       "arn:aws:sns:us-east-1:000000000000:cloudsprocket-alerts",
     );
+  });
+
+  it("docks topic detail in the inspector on wide viewports", () => {
+    mockMatchMedia(true);
+    renderSNSView();
+
+    expect(screen.getByLabelText("SNS topic details")).toBeInTheDocument();
+    expect(screen.getByText("Topic")).toBeInTheDocument();
+    expect(screen.getByText("Subscriptions")).toBeInTheDocument();
+    expect(screen.getByText("sqs")).toBeInTheDocument();
+    expect(screen.getByText("Copy actions")).toBeInTheDocument();
   });
 
   function renderWritableSNSView() {
@@ -214,6 +252,7 @@ describe("SNSView", () => {
   }
 
   it("publishes a message to the selected topic through the publish dialog", () => {
+    mockMatchMedia(true);
     const { onPublish } = renderWritableSNSView();
 
     fireEvent.click(screen.getByRole("button", { name: "Publish message" }));
@@ -227,6 +266,7 @@ describe("SNSView", () => {
   });
 
   it("creates a topic through the create dialog", () => {
+    mockMatchMedia(true);
     const { onCreateTopic } = renderWritableSNSView();
 
     fireEvent.click(screen.getByRole("button", { name: "Create topic" }));
@@ -240,6 +280,7 @@ describe("SNSView", () => {
   });
 
   it("disables write actions when write mode is off", () => {
+    mockMatchMedia(true);
     renderSNSView();
 
     expect(screen.getByRole("button", { name: "Publish message" })).toBeDisabled();
