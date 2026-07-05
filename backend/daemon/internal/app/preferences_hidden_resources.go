@@ -270,6 +270,8 @@ func countCatalogueResources(
 			return len(workspace.RDSInstances), true
 		case "ecs":
 			return len(workspace.ECSClusters), true
+		case "eks":
+			return len(workspace.EKSClusters), true
 		case "apigateway":
 			return len(workspace.ApiGatewayApis), true
 		case "secrets":

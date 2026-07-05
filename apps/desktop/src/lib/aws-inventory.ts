@@ -12,6 +12,7 @@ export type AwsInventoryScope =
   | "sns"
   | "rds"
   | "ecs"
+  | "eks"
   | "apigateway"
   | "secrets"
   | "logs"
@@ -26,6 +27,7 @@ const TAB_SCOPE_MAP: Record<string, AwsInventoryScope | undefined> = {
   sns: "sns",
   rds: "rds",
   ecs: "ecs",
+  eks: "eks",
   apigateway: "apigateway",
   secrets: "secrets",
   logs: "logs",
@@ -57,6 +59,8 @@ export function awsInventoryStatusMessage(
       return workspace.rdsStatusMessage;
     case "ecs":
       return workspace.ecsStatusMessage;
+    case "eks":
+      return workspace.eksStatusMessage;
     case "apigateway":
       return workspace.apiGatewayStatusMessage;
     case "secrets":
@@ -79,6 +83,7 @@ const DEFAULT_INVENTORY_LOADING_LABELS: Record<AwsInventoryScope, string> = {
   sns: "Loading SNS topics...",
   rds: "Loading RDS instances...",
   ecs: "Loading ECS clusters...",
+  eks: "Loading EKS clusters...",
   apigateway: "Loading API Gateway APIs...",
   secrets: "Loading Secrets Manager secrets...",
   logs: "Loading CloudWatch log groups...",
@@ -125,6 +130,9 @@ export function awsInventoryLoaded(
     case "ecs":
       return (workspace.ecsRegions?.length ?? 0) > 0 ||
         (workspace.ecsStatusMessage ?? "").length > 0;
+    case "eks":
+      return (workspace.eksRegions?.length ?? 0) > 0 ||
+        (workspace.eksStatusMessage ?? "").length > 0;
     case "apigateway":
       return (workspace.apiGatewayRegions?.length ?? 0) > 0 ||
         (workspace.apiGatewayStatusMessage ?? "").length > 0;

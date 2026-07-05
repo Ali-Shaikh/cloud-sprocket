@@ -105,6 +105,12 @@ func awsServiceCatalog() []serviceCatalogEntry {
 			Category: workspaceTabCategoryService, InventoryScope: "ecs",
 		},
 		{
+			ProviderID: "aws", ServiceID: "eks", Label: "EKS",
+			Summary: "Kubernetes cluster inventory.",
+			Detail:  "List EKS clusters by region with version, endpoint, and managed node group summaries.",
+			Category: workspaceTabCategoryService, InventoryScope: "eks",
+		},
+		{
 			ProviderID: "aws", ServiceID: "apigateway", Label: "API Gateway",
 			Summary: "REST and HTTP API inventory.",
 			Detail:  "List REST and HTTP/WebSocket APIs by region with stage invoke URLs.",

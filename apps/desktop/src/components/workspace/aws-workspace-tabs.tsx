@@ -14,6 +14,7 @@ import {
   ApiGatewayView,
   SecretsManagerView,
   ECSView,
+  EKSView,
   RDSView,
   SNSView,
   SQSView,
@@ -30,6 +31,7 @@ export const AWS_TAB_IDS = new Set([
   "sns",
   "rds",
   "ecs",
+  "eks",
   "apigateway",
   "secrets",
   "logs",
@@ -80,6 +82,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     snsActionStatus,
     rdsActionStatus,
     ecsActionStatus,
+    eksActionStatus,
     apiGatewayActionStatus,
     secretsManagerActionStatus,
     refreshSecretsManagerInventory,
@@ -162,6 +165,9 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     selectECSCluster,
     selectECSService,
     selectECSTask,
+    refreshEKSInventory,
+    selectEKSRegion,
+    selectEKSCluster,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
@@ -325,6 +331,14 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onSelectCluster={selectECSCluster}
       onSelectService={selectECSService}
       onSelectTask={selectECSTask}
+    />
+  ) : session.isLocked && activeWorkspaceTabId === "eks" ? (
+    <EKSView
+      workspace={activeWorkspace}
+      actionStatus={eksActionStatus}
+      onRefresh={refreshEKSInventory}
+      onSelectRegion={selectEKSRegion}
+      onSelectCluster={selectEKSCluster}
     />
   ) : session.isLocked && activeWorkspaceTabId === "apigateway" ? (
     <ApiGatewayView

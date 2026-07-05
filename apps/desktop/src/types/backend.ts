@@ -188,6 +188,8 @@ export interface SessionSnapshot {
   selectedEcsClusterArn?: string;
   selectedEcsServiceArn?: string;
   selectedEcsTaskArn?: string;
+  selectedEksRegion?: string;
+  selectedEksClusterName?: string;
   selectedApiGatewayRegion?: string;
   selectedApiGatewayApiKey?: string;
   selectedSecretsManagerRegion?: string;
@@ -465,6 +467,29 @@ export interface AwsEcsTask {
   startedAt?: string;
   group?: string;
   containers?: AwsEcsContainer[];
+}
+
+export interface AwsEksCluster {
+  clusterArn: string;
+  clusterName: string;
+  status?: string;
+  version?: string;
+  endpoint?: string;
+  platformVersion?: string;
+  roleArn?: string;
+}
+
+export interface AwsEksNodeGroup {
+  nodeGroupArn: string;
+  nodeGroupName: string;
+  status?: string;
+  instanceTypes?: string[];
+  desiredSize?: number;
+  minSize?: number;
+  maxSize?: number;
+  diskSize?: number;
+  amiType?: string;
+  capacityType?: string;
 }
 
 export interface AwsApiGatewayApi {
@@ -1014,6 +1039,8 @@ export interface WorkspaceSnapshot {
   selectedEcsClusterArn?: string;
   selectedEcsServiceArn?: string;
   selectedEcsTaskArn?: string;
+  selectedEksRegion?: string;
+  selectedEksClusterName?: string;
   selectedApiGatewayRegion?: string;
   selectedApiGatewayApiKey?: string;
   selectedLogsRegion?: string;
@@ -1036,6 +1063,10 @@ export interface WorkspaceSnapshot {
   ecsClusters: AwsEcsCluster[];
   ecsServices: AwsEcsService[];
   ecsTasks: AwsEcsTask[];
+  eksStatusMessage?: string;
+  eksRegions: string[];
+  eksClusters: AwsEksCluster[];
+  eksNodeGroups: AwsEksNodeGroup[];
   apiGatewayStatusMessage?: string;
   apiGatewayRegions: string[];
   apiGatewayApis: AwsApiGatewayApi[];

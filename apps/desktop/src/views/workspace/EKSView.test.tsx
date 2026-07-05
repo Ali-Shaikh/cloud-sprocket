@@ -5,10 +5,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
-import SecretsManagerView from "./SecretsManagerView";
-import type { SecretsManagerWorkspaceSnapshot } from "./SecretsManagerView";
+import EKSView from "./EKSView";
+import type { EksWorkspaceSnapshot } from "./EKSView";
 
-const workspaceFixture: SecretsManagerWorkspaceSnapshot = {
+const workspaceFixture: EksWorkspaceSnapshot = {
   provider: {
     providerId: "aws",
     label: "AWS",
@@ -58,9 +58,9 @@ const workspaceFixture: SecretsManagerWorkspaceSnapshot = {
   dockerResources: [],
   emulatorSummaries: [],
   localConfigArtifacts: [],
-  awsWriteCapable: true,
-  awsWriteModeEnabled: true,
-  awsWritesEnabled: true,
+  awsWriteCapable: false,
+  awsWriteModeEnabled: false,
+  awsWritesEnabled: false,
   awsEndpointUrl: "http://localhost:4566",
   azureWriteCapable: false,
   azureWriteModeEnabled: false,
@@ -112,85 +112,86 @@ const workspaceFixture: SecretsManagerWorkspaceSnapshot = {
   snsTopics: [],
   rdsRegions: [],
   rdsInstances: [],
-  ecsRegions: [],
-  ecsClusters: [],
-  ecsServices: [],
-  ecsTasks: [],
-  eksRegions: [],
-  eksClusters: [],
-  eksNodeGroups: [],
-  apiGatewayRegions: [],
-  apiGatewayApis: [],
-  apiGatewayStages: [],
-  secretsManagerRegions: ["us-east-1"],
-  secretsManagerSecrets: [
-    {
-      arn: "arn:aws:secretsmanager:us-east-1:123:secret:cloudsprocket/db-password-abc",
-      name: "cloudsprocket/db-password",
-      description: "Application database password",
-      lastChangedDate: "2026-07-01T10:00:00Z",
-    },
-    {
-      arn: "arn:aws:secretsmanager:us-east-1:123:secret:cloudsprocket/api-key-xyz",
-      name: "cloudsprocket/api-key",
-      description: "Outbound API credentials",
-      rotationEnabled: true,
-    },
-  ],
   logsRegions: [],
   logGroups: [],
   iamRoles: [],
   iamPolicies: [],
-  selectedSecretsManagerRegion: "us-east-1",
-  selectedSecretsManagerName: "cloudsprocket/db-password",
-  secretsManagerStatusMessage: "Loaded 2 secrets from us-east-1.",
-  actionCapabilities: {
-    secrets: [{ actionId: "reveal", label: "Reveal secret value", enabled: true, reason: "" }],
-  },
+  selectedEksRegion: "us-east-1",
+  selectedEksClusterName: "demo",
+  eksStatusMessage: "Loaded 1 clusters and 1 node groups from us-east-1.",
+  eksRegions: ["us-east-1"],
+  eksClusters: [
+    {
+      clusterArn: "arn:aws:eks:us-east-1:123:cluster/demo",
+      clusterName: "demo",
+      status: "ACTIVE",
+      version: "1.29",
+      platformVersion: "eks.5",
+      endpoint: "https://demo.eks.us-east-1.amazonaws.com",
+    },
+  ],
+  eksNodeGroups: [
+    {
+      nodeGroupArn: "arn:aws:eks:us-east-1:123:nodegroup/demo/workers",
+      nodeGroupName: "workers",
+      status: "ACTIVE",
+      desiredSize: 2,
+      instanceTypes: ["m5.large"],
+      capacityType: "ON_DEMAND",
+    },
+  ],
+  ecsRegions: [],
+  ecsClusters: [],
+  ecsServices: [],
+  ecsTasks: [],
+  apiGatewayRegions: [],
+  apiGatewayApis: [],
+  apiGatewayStages: [],
+  secretsManagerRegions: [],
+  secretsManagerSecrets: [],
 };
 
-function renderSecretsManagerView() {
+function renderEKSView() {
   const onSelectRegion = vi.fn();
-  const onSelectSecret = vi.fn();
-  const onReveal = vi.fn().mockResolvedValue("postgres://app:local-dev@localhost:5432/cloudsprocket");
+  const onSelectCluster = vi.fn();
   const onRefresh = vi.fn();
   render(
     <ThemeProvider>
-      <SecretsManagerView
+      <EKSView
         workspace={workspaceFixture}
-        actionStatus="Ready to browse secrets."
+        actionStatus="Ready to browse EKS inventory."
         onRefresh={onRefresh}
         onSelectRegion={onSelectRegion}
-        onSelectSecret={onSelectSecret}
-        onReveal={onReveal}
+        onSelectCluster={onSelectCluster}
       />
     </ThemeProvider>,
   );
-  return { onSelectRegion, onSelectSecret, onReveal, onRefresh };
+  return { onSelectRegion, onSelectCluster, onRefresh };
 }
 
-describe("SecretsManagerView", () => {
-  it("renders secret inventory", () => {
-    renderSecretsManagerView();
+describe("EKSView", () => {
+  it("renders cluster and node group inventory", () => {
+    renderEKSView();
 
-    expect(screen.getByText("Secret Inventory")).toBeInTheDocument();
-    expect(screen.getAllByText("cloudsprocket/db-password").length).toBeGreaterThan(0);
-    expect(screen.getByText("cloudsprocket/api-key")).toBeInTheDocument();
-    expect(screen.getAllByText("Application database password").length).toBeGreaterThan(0);
+    expect(screen.getByText("Kubernetes Fleet")).toBeInTheDocument();
+    expect(screen.getByText("Cluster Inventory")).toBeInTheDocument();
+    expect(screen.getAllByText("demo").length).toBeGreaterThan(0);
+    expect(screen.getByText("workers")).toBeInTheDocument();
+    expect(screen.getByText("m5.large")).toBeInTheDocument();
   });
 
-  it("selects a secret when a row is clicked", () => {
-    const { onSelectSecret } = renderSecretsManagerView();
+  it("selects a cluster when a row is clicked", () => {
+    const { onSelectCluster } = renderEKSView();
 
-    fireEvent.click(screen.getByText("cloudsprocket/api-key"));
+    fireEvent.click(screen.getByRole("cell", { name: "demo" }));
 
-    expect(onSelectSecret).toHaveBeenCalledWith("cloudsprocket/api-key");
+    expect(onSelectCluster).toHaveBeenCalledWith("demo");
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {
     render(
       <ThemeProvider>
-        <SecretsManagerView
+        <EKSView
           workspace={{
             ...workspaceFixture,
             provider: {
@@ -205,12 +206,11 @@ describe("SecretsManagerView", () => {
           actionStatus=""
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
-          onSelectSecret={vi.fn()}
-          onReveal={vi.fn()}
+          onSelectCluster={vi.fn()}
         />
       </ThemeProvider>,
     );
 
-    expect(screen.getByText("Secrets Manager requires an AWS workspace")).toBeInTheDocument();
+    expect(screen.getByText("EKS requires an AWS workspace")).toBeInTheDocument();
   });
 });
