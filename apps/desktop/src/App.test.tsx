@@ -992,9 +992,9 @@ describe("App", () => {
 
   it("opens the developer toolbox before a workspace is locked", async () => {
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     fireEvent.click(
