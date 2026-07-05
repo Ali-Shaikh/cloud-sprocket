@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
+
+import { useDeploymentsQuery } from "@/hooks/use-deployments-query";
+import { queryKeys } from "@/lib/query-keys";
 import { Boxes, Download, FlaskConical, Loader2, Rocket, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -23,7 +27,6 @@ import {
   getRecipe,
   getTofuStatus,
   installTofu,
-  listDeployments,
   listRecipes,
   planDeployment,
   retryPostApplyDeployment,
@@ -55,7 +58,9 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
   const [recipes, setRecipes] = useState<RecipeManifest[]>([]);
   const [tofu, setTofu] = useState<TofuStatus | null>(null);
   const [installing, setInstalling] = useState(false);
-  const [deployments, setDeployments] = useState<Deployment[]>([]);
+  const queryClient = useQueryClient();
+  const deploymentsQuery = useDeploymentsQuery();
+  const deployments = deploymentsQuery.data ?? [];
 
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>({});
@@ -71,13 +76,8 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
   useEffect(() => {
     void listRecipes().then(setRecipes).catch(() => setRecipes([]));
     void getTofuStatus().then(setTofu).catch(() => setTofu(null));
-    void listDeployments().then(setDeployments).catch(() => setDeployments([]));
 
     const unsubChanged = subscribeToBackendEvent("deployment.changed", (deployment) => {
-      setDeployments((current) => {
-        const next = current.filter((entry) => entry.id !== deployment.id);
-        return [deployment, ...next];
-      });
       setActive((current) => (current && current.id === deployment.id ? deployment : current));
     });
     const unsubLog = subscribeToBackendEvent("deployment.log", (event) => {
@@ -276,7 +276,9 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
   async function handleDelete(id: string) {
     try {
       await deleteDeployment(id);
-      setDeployments((current) => current.filter((entry) => entry.id !== id));
+      queryClient.setQueryData<Deployment[]>(queryKeys.deployments.list, (current = []) =>
+        current.filter((entry) => entry.id !== id),
+      );
       if (active?.id === id) {
         setActive(null);
         setMode("list");

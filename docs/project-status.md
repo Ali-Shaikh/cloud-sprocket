@@ -141,7 +141,7 @@ Low urgency; mostly Renovate bumps.
 
 Revised 5 July 2026 after v0.8.27 (Targets A–B and service enablement Phases 1–3 delivered):
 
-1. TanStack Query decision (`docs/floci-ui-inspiration.md` Target C): pilot on idempotent reads only (`runtime.get`, logs, `deployments.list`), or explicitly decline
+1. TanStack Query narrow adoption (**PR #84**): `runtime.get` poll + `deployments.list` only; workspace snapshots stay on existing hooks
 2. Step 5 shared inventory shell (`ResourceTable` + `ResourceInspector`, frontend only)
 3. AWS expansion Phase 3: EKS, CloudFormation, EventBridge (`docs/aws-services-expansion-plan.md`)
 4. Service enablement Phase 4: first-run onboarding wizard (thin skin over existing preferences; deferred from v0.8.27)

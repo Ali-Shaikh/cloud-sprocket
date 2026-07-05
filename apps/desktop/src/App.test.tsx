@@ -5,8 +5,8 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { AppProviders } from "./components/app-providers";
 import { backendRequest } from "./lib/backend";
-import { ThemeProvider } from "./lib/theme";
 import { __resetNotifications } from "./lib/notify";
 import type {
   ActivityLogEntry,
@@ -976,9 +976,9 @@ describe("App", () => {
 
   it("renders the connect view while unlocked", async () => {
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     expect(await screen.findByRole("heading", { name: "Your clouds" })).toBeInTheDocument();
@@ -992,9 +992,9 @@ describe("App", () => {
 
   it("opens the developer toolbox before a workspace is locked", async () => {
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     fireEvent.click(
@@ -1007,9 +1007,9 @@ describe("App", () => {
 
   it("opens the workspace in one click when a profile has a single usable auth path", async () => {
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     // The prod profile has only CLI usable, so clicking it opens directly with
@@ -1026,9 +1026,9 @@ describe("App", () => {
 
   it("shows auth chips for a multi-path profile and opens after a chip click", async () => {
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     // The sandbox profile has CLI, SSO, and Local Files all usable, so clicking
@@ -1062,9 +1062,9 @@ describe("App", () => {
     } as unknown as ProfileSummary;
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     expect(await screen.findByRole("heading", { name: "Your clouds" })).toBeInTheDocument();
@@ -1095,9 +1095,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "Profile" }));
@@ -1192,9 +1192,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     // Locked landing is now the Tailwind OverviewView: safety banner reflects
@@ -1258,9 +1258,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
@@ -1300,9 +1300,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     const createCta = await screen.findByRole("button", { name: "Create your first function" });
@@ -1346,9 +1346,9 @@ describe("App", () => {
     } as WorkspaceSnapshot;
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     expect(await screen.findByText(/This profile does not support write mode/)).toBeInTheDocument();
@@ -1392,9 +1392,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     fireEvent.click(await screen.findByText("Local Runtime"));
@@ -1420,9 +1420,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
@@ -1454,9 +1454,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
@@ -1498,9 +1498,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     fireEvent.click(await screen.findByText("Local Runtime"));
@@ -1560,9 +1560,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     fireEvent.click(await screen.findByText("Local Runtime"));
@@ -1624,9 +1624,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     fireEvent.click(await screen.findByText("Local Runtime"));
@@ -1659,9 +1659,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     fireEvent.click(await screen.findByText("S3"));
@@ -1709,9 +1709,9 @@ describe("App", () => {
     s3PrefixDelays.set("l", 650);
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     fireEvent.click(await screen.findByText("S3"));
@@ -1772,9 +1772,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     fireEvent.click(await screen.findByText("S3"));
@@ -1841,9 +1841,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     fireEvent.click(await screen.findByText("EC2"));
@@ -1893,9 +1893,9 @@ describe("App", () => {
 
   it("badges the bell and lists job notifications in the notification centre", async () => {
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     const bell = await screen.findByRole("button", { name: "Notifications" });
@@ -1960,9 +1960,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     fireEvent.click(await screen.findByText("EC2"));
@@ -2005,9 +2005,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     fireEvent.click(await screen.findByText("EC2"));
@@ -2044,9 +2044,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "Activity" }));
@@ -2201,9 +2201,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     expect(await screen.findByText("Resource groups")).toBeInTheDocument();
@@ -2276,9 +2276,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     expect(await screen.findByText("S3 buckets")).toBeInTheDocument();
@@ -2366,9 +2366,9 @@ describe("App", () => {
     };
 
     render(
-      <ThemeProvider>
+      <AppProviders>
         <App />
-      </ThemeProvider>,
+      </AppProviders>,
     );
 
     expect(await screen.findByText("Resource groups")).toBeInTheDocument();
