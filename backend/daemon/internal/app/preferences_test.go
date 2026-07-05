@@ -5,6 +5,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -74,6 +75,63 @@ func TestPreferencesRoundTripPersistsSanitisedState(t *testing.T) {
 	}
 	if _, ok := onDisk.DisabledServices["aws"]; !ok || onDisk.DisabledServices["aws"][0] != "secrets" {
 		t.Fatalf("on-disk preferences = %#v", onDisk)
+	}
+}
+
+func TestDefaultServicePreferencesEncodeEmptyProviderList(t *testing.T) {
+	raw, err := json.Marshal(defaultServicePreferences())
+	if err != nil {
+		t.Fatalf("marshal default preferences: %v", err)
+	}
+	if string(raw) == `{"disabledProviders":null,"disabledServices":{}}` {
+		t.Fatalf("default providers must not encode as null: %s", raw)
+	}
+
+	var decoded models.ServicePreferences
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("unmarshal default preferences: %v", err)
+	}
+	if decoded.DisabledProviders == nil {
+		t.Fatal("decoded disabled providers should not be nil")
+	}
+}
+
+func TestBuildPreferencesSnapshotNormalisesNilProviders(t *testing.T) {
+	service := &Service{preferences: models.ServicePreferences{
+		DisabledProviders: nil,
+		DisabledServices:  nil,
+	}}
+	snapshot := service.buildPreferencesSnapshotLocked()
+	if snapshot.Preferences.DisabledProviders == nil {
+		t.Fatal("snapshot providers should not be nil")
+	}
+	if snapshot.Preferences.DisabledServices == nil {
+		t.Fatal("snapshot services map should not be nil")
+	}
+}
+
+func TestResetServicePreferencesLockedClearsStoredState(t *testing.T) {
+	dir := t.TempDir()
+	settings := config.Settings{ConfigDir: dir}
+	service := &Service{settings: settings, preferences: defaultServicePreferences()}
+	service.preferences = sanitizeServicePreferences(models.ServicePreferences{
+		DisabledProviders: []string{"gcp"},
+		DisabledServices: map[string][]string{
+			"aws": {"s3"},
+		},
+	})
+	if err := service.savePreferencesLocked(); err != nil {
+		t.Fatalf("save preferences: %v", err)
+	}
+
+	if err := service.resetServicePreferencesLocked(); err != nil {
+		t.Fatalf("reset preferences: %v", err)
+	}
+	if len(service.preferences.DisabledProviders) != 0 || len(service.preferences.DisabledServices) != 0 {
+		t.Fatalf("in-memory preferences = %#v", service.preferences)
+	}
+	if _, err := os.Stat(filepath.Join(dir, preferencesFileName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected preferences file to be removed, got err=%v", err)
 	}
 }
 

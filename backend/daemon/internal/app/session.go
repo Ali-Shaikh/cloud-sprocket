@@ -42,6 +42,10 @@ func (s *Service) resetAppData(ctx context.Context, notifier Notifier) (models.A
 		s.mu.Unlock()
 		return models.AppResetResult{}, err
 	}
+	if err := s.resetServicePreferencesLocked(); err != nil {
+		s.mu.Unlock()
+		return models.AppResetResult{}, err
+	}
 	s.mu.Unlock()
 
 	resetPaths := []string{}

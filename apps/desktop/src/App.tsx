@@ -31,7 +31,7 @@ import { useWorkspaceState } from "./hooks/use-workspace-state";
 import { WorkspaceTabRouter } from "./components/workspace/workspace-tab-router";
 import type { WorkspaceTabRouterProps } from "./components/workspace/workspace-tab-router-props";
 import { backendRequest, subscribeToBackendEvent, addDebugLog, clearDebugLogs } from "./lib/backend";
-import { toggleService } from "./lib/service-preferences";
+import { normalisePreferencesSnapshot, toggleService } from "./lib/service-preferences";
 import { normaliseWorkspaceFromUnknown, requestWorkspaceSnapshot } from "./lib/workspace-request";
 
 import { awsInventoryLoaded, awsInventoryScopeForTab } from "./lib/aws-inventory";
@@ -1039,6 +1039,10 @@ export default function App() {
         setSession(emptySession);
         resetWorkspaceUiState();
         setLogs([]);
+        setPreferencesSnapshot(null);
+        setHiddenResourceHits([]);
+        setHiddenResourceEnablingServiceId(null);
+        hiddenResourcesProbeKeyRef.current = null;
         setActiveWorkspaceTabId("overview");
         setSplitPanelOpen(false);
         setNotificationsOpen(false);
@@ -1196,7 +1200,7 @@ export default function App() {
       backendRequest<PreferencesSnapshot>("preferences.get"),
       probeHiddenResources(true),
     ]);
-    setPreferencesSnapshot(snapshot);
+    setPreferencesSnapshot(normalisePreferencesSnapshot(snapshot));
     setActiveWorkspaceTabId("settings");
   }
 
@@ -1207,7 +1211,7 @@ export default function App() {
         "preferences.update",
         preferences as unknown as Record<string, unknown>,
       );
-      setPreferencesSnapshot(snapshot);
+      setPreferencesSnapshot(normalisePreferencesSnapshot(snapshot));
       const [providersResult, sessionResult] = await Promise.all([
         backendRequest<ProviderSummary[]>("providers.list"),
         backendRequest<SessionSnapshot>("session.get"),
@@ -1240,7 +1244,7 @@ export default function App() {
         preferencesSnapshot ??
         (await backendRequest<PreferencesSnapshot>("preferences.get"));
       if (!preferencesSnapshot) {
-        setPreferencesSnapshot(snapshot);
+        setPreferencesSnapshot(normalisePreferencesSnapshot(snapshot));
       }
       const nextPreferences = toggleService(
         snapshot.preferences,

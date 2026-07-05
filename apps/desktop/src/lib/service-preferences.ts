@@ -20,6 +20,29 @@ export type ProviderCatalogueGroup = {
   totalCount: number;
 };
 
+export function normaliseServicePreferences(
+  preferences?: Partial<ServicePreferences> | null,
+): ServicePreferences {
+  return {
+    disabledProviders: Array.isArray(preferences?.disabledProviders)
+      ? preferences.disabledProviders
+      : [],
+    disabledServices:
+      preferences?.disabledServices && typeof preferences.disabledServices === "object"
+        ? preferences.disabledServices
+        : {},
+  };
+}
+
+export function normalisePreferencesSnapshot(
+  snapshot: PreferencesSnapshot,
+): PreferencesSnapshot {
+  return {
+    ...snapshot,
+    preferences: normaliseServicePreferences(snapshot.preferences),
+  };
+}
+
 export function groupCatalogueByProvider(
   catalogue: ServiceCatalogEntry[],
 ): ProviderCatalogueGroup[] {
@@ -48,7 +71,8 @@ export function groupCatalogueByProvider(
 }
 
 export function isProviderEnabled(preferences: ServicePreferences, providerId: string): boolean {
-  return !preferences.disabledProviders.includes(providerId);
+  const normalised = normaliseServicePreferences(preferences);
+  return !normalised.disabledProviders.includes(providerId);
 }
 
 export function isServiceEnabled(
@@ -56,10 +80,11 @@ export function isServiceEnabled(
   providerId: string,
   serviceId: string,
 ): boolean {
-  if (!isProviderEnabled(preferences, providerId)) {
+  const normalised = normaliseServicePreferences(preferences);
+  if (!isProviderEnabled(normalised, providerId)) {
     return false;
   }
-  return !(preferences.disabledServices[providerId] ?? []).includes(serviceId);
+  return !(normalised.disabledServices[providerId] ?? []).includes(serviceId);
 }
 
 export function toggleProvider(
@@ -67,14 +92,15 @@ export function toggleProvider(
   providerId: string,
   enabled: boolean,
 ): ServicePreferences {
-  const disabledProviders = new Set(preferences.disabledProviders);
+  const normalised = normaliseServicePreferences(preferences);
+  const disabledProviders = new Set(normalised.disabledProviders);
   if (enabled) {
     disabledProviders.delete(providerId);
   } else {
     disabledProviders.add(providerId);
   }
   return {
-    ...preferences,
+    ...normalised,
     disabledProviders: [...disabledProviders].sort(),
   };
 }
@@ -85,20 +111,21 @@ export function toggleService(
   serviceId: string,
   enabled: boolean,
 ): ServicePreferences {
-  const disabled = new Set(preferences.disabledServices[providerId] ?? []);
+  const normalised = normaliseServicePreferences(preferences);
+  const disabled = new Set(normalised.disabledServices[providerId] ?? []);
   if (enabled) {
     disabled.delete(serviceId);
   } else {
     disabled.add(serviceId);
   }
-  const disabledServices = { ...preferences.disabledServices };
+  const disabledServices = { ...normalised.disabledServices };
   const next = [...disabled].sort();
   if (next.length === 0) {
     delete disabledServices[providerId];
   } else {
     disabledServices[providerId] = next;
   }
-  return { ...preferences, disabledServices };
+  return { ...normalised, disabledServices };
 }
 
 export function setAllProviderServices(
@@ -107,13 +134,14 @@ export function setAllProviderServices(
   serviceIds: string[],
   enabled: boolean,
 ): ServicePreferences {
-  const disabledServices = { ...preferences.disabledServices };
+  const normalised = normaliseServicePreferences(preferences);
+  const disabledServices = { ...normalised.disabledServices };
   if (enabled) {
     delete disabledServices[providerId];
   } else {
     disabledServices[providerId] = [...serviceIds].sort();
   }
-  return { ...preferences, disabledServices };
+  return { ...normalised, disabledServices };
 }
 
 export function filterCatalogueEntries(

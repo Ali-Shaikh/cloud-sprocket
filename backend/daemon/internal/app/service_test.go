@@ -1383,6 +1383,12 @@ func TestServiceResetClearsOnlyAppOwnedState(t *testing.T) {
 	if _, err := service.Handle(ctx, "session.lock", nil, nil); err != nil {
 		t.Fatalf("expected session.lock before reset to succeed, got %v", err)
 	}
+	if _, err := service.Handle(ctx, "preferences.update", []byte(`{
+		"disabledProviders":["gcp"],
+		"disabledServices":{"aws":["s3","ecs"]}
+	}`), nil); err != nil {
+		t.Fatalf("expected preferences.update before reset to succeed, got %v", err)
+	}
 
 	result, err := service.Handle(ctx, "app.reset", []byte(`{"confirmation":"RESET"}`), nil)
 	if err != nil {
@@ -1410,6 +1416,20 @@ func TestServiceResetClearsOnlyAppOwnedState(t *testing.T) {
 	}
 	if session.IsLocked || session.LockedProfileID != "" || len(session.WorkspaceTabs) != 0 {
 		t.Fatalf("expected reset session to return to setup state, got %+v", session)
+	}
+	preferencesResult, err := service.Handle(ctx, "preferences.get", nil, nil)
+	if err != nil {
+		t.Fatalf("expected preferences.get after reset to succeed, got %v", err)
+	}
+	preferences := preferencesResult.(models.PreferencesSnapshot)
+	if len(preferences.Preferences.DisabledProviders) != 0 {
+		t.Fatalf("expected service preferences to reset, got providers=%#v", preferences.Preferences.DisabledProviders)
+	}
+	if len(preferences.Preferences.DisabledServices) != 0 {
+		t.Fatalf("expected service preferences to reset, got services=%#v", preferences.Preferences.DisabledServices)
+	}
+	if _, err := os.Stat(filepath.Join(settings.ConfigDir, preferencesFileName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected preferences file to be removed on reset, got err=%v", err)
 	}
 }
 
