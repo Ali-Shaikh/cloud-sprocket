@@ -9,6 +9,26 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.8.30] - 2026-07-05
+
+### Added
+
+- AWS EKS inventory tab with deferred region and cluster loading, node group
+  summary, and copy helpers for ARNs and CLI commands (#106)
+
+### Changed
+
+- `App.tsx` further decomposed: service preferences, app reset, write mode, and
+  shell navigation extracted into dedicated hooks (#105)
+- EC2, Lambda, and DynamoDB views migrated to the shared `ResourceInventoryShell`
+  + `ResourceTable` split-pane pattern (#105); `App.tsx` reduced from about 2,009
+  to about 1,466 lines
+
+### Fixed
+
+- EKS cluster listing skips clusters the caller cannot describe, so partial IAM
+  access no longer returns an empty inventory (#106)
+
 ## [0.8.29] - 2026-07-05
 
 ### Fixed
@@ -586,6 +606,7 @@ Initial public release.
 - Automated Windows and macOS CI builds
 
 [Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.29...HEAD
+[0.8.30]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.29...v0.8.30
 [0.8.29]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.28...v0.8.29
 [0.8.28]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.27...v0.8.28
 [0.8.27]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.26...v0.8.27
