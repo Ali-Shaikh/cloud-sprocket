@@ -19,6 +19,8 @@ import type {
   AwsEventBridgeRule,
   AwsRoute53HostedZone,
   AwsRoute53ResourceRecordSet,
+  AwsElbLoadBalancer,
+  AwsElbTargetGroup,
   AwsIamPolicy,
   AwsIamRole,
   AwsLambdaFunction,
@@ -170,6 +172,9 @@ export const emptyWorkspace: WorkspaceSnapshot = {
   eventBridgeRules: [],
   route53HostedZones: [],
   route53ResourceRecordSets: [],
+  elbRegions: [],
+  elbLoadBalancers: [],
+  elbTargetGroups: [],
   apiGatewayRegions: [],
   apiGatewayApis: [],
   apiGatewayStages: [],
@@ -447,6 +452,22 @@ function normaliseRoute53ResourceRecordSet(
     ...record,
     name: record.name ?? "",
     values: normaliseArray(record.values),
+  };
+}
+
+function normaliseElbLoadBalancer(loadBalancer: AwsElbLoadBalancer): AwsElbLoadBalancer {
+  return {
+    ...loadBalancer,
+    loadBalancerArn: loadBalancer.loadBalancerArn ?? "",
+    loadBalancerName: loadBalancer.loadBalancerName ?? "",
+  };
+}
+
+function normaliseElbTargetGroup(targetGroup: AwsElbTargetGroup): AwsElbTargetGroup {
+  return {
+    ...targetGroup,
+    targetGroupArn: targetGroup.targetGroupArn ?? "",
+    targetGroupName: targetGroup.targetGroupName ?? "",
   };
 }
 
@@ -900,6 +921,16 @@ export function mergeAwsInventoryScope(
         route53ResourceRecordSets: normalised.route53ResourceRecordSets,
         route53StatusMessage: normalised.route53StatusMessage,
       });
+    case "elb":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedElbRegion: normalised.selectedElbRegion,
+        selectedElbLoadBalancerArn: normalised.selectedElbLoadBalancerArn,
+        elbRegions: normalised.elbRegions,
+        elbLoadBalancers: normalised.elbLoadBalancers,
+        elbTargetGroups: normalised.elbTargetGroups,
+        elbStatusMessage: normalised.elbStatusMessage,
+      });
     case "apigateway":
       return normaliseWorkspaceSnapshot({
         ...current,
@@ -1077,6 +1108,9 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     route53ResourceRecordSets: normaliseArray(source.route53ResourceRecordSets).map(
       normaliseRoute53ResourceRecordSet,
     ),
+    elbRegions: normaliseArray(source.elbRegions),
+    elbLoadBalancers: normaliseArray(source.elbLoadBalancers).map(normaliseElbLoadBalancer),
+    elbTargetGroups: normaliseArray(source.elbTargetGroups).map(normaliseElbTargetGroup),
     apiGatewayRegions: normaliseArray(source.apiGatewayRegions),
     apiGatewayApis: normaliseArray(source.apiGatewayApis).map(normaliseApiGatewayApi),
     apiGatewayStages: normaliseArray(source.apiGatewayStages).map(normaliseApiGatewayStage),

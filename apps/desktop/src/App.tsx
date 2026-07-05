@@ -251,6 +251,8 @@ export default function App() {
     setEventBridgeActionStatus,
     route53ActionStatus,
     setRoute53ActionStatus,
+    elbActionStatus,
+    setElbActionStatus,
     apiGatewayActionStatus,
     setApiGatewayActionStatus,
     secretsManagerActionStatus,
@@ -378,6 +380,9 @@ export default function App() {
     selectEventBridgeBus,
     refreshRoute53Inventory,
     selectRoute53HostedZone,
+    refreshElbInventory,
+    selectElbRegion,
+    selectElbLoadBalancer,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
@@ -414,6 +419,7 @@ export default function App() {
     setCloudFormationActionStatus,
     setEventBridgeActionStatus,
     setRoute53ActionStatus,
+    setElbActionStatus,
     setApiGatewayActionStatus,
     setSecretsManagerActionStatus,
     setLogsActionStatus,
@@ -1028,6 +1034,9 @@ export default function App() {
         if (workspaceResult.route53StatusMessage) {
           setRoute53ActionStatus(workspaceResult.route53StatusMessage);
         }
+        if (workspaceResult.elbStatusMessage) {
+          setElbActionStatus(workspaceResult.elbStatusMessage);
+        }
         if (workspaceResult.apiGatewayStatusMessage) {
           setApiGatewayActionStatus(workspaceResult.apiGatewayStatusMessage);
         }
@@ -1198,6 +1207,7 @@ export default function App() {
     cloudFormationActionStatus,
     eventBridgeActionStatus,
     route53ActionStatus,
+    elbActionStatus,
     apiGatewayActionStatus,
     secretsManagerActionStatus,
     logsActionStatus,
@@ -1297,6 +1307,9 @@ export default function App() {
     selectEventBridgeBus,
     refreshRoute53Inventory,
     selectRoute53HostedZone,
+    refreshElbInventory,
+    selectElbRegion,
+    selectElbLoadBalancer,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,

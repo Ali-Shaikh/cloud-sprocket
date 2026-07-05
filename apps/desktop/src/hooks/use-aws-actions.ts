@@ -39,6 +39,7 @@ export type UseAwsActionsParams = {
   setCloudFormationActionStatus: Dispatch<SetStateAction<string>>;
   setEventBridgeActionStatus: Dispatch<SetStateAction<string>>;
   setRoute53ActionStatus: Dispatch<SetStateAction<string>>;
+  setElbActionStatus: Dispatch<SetStateAction<string>>;
   setApiGatewayActionStatus: Dispatch<SetStateAction<string>>;
   setSecretsManagerActionStatus: Dispatch<SetStateAction<string>>;
   setLogsActionStatus: Dispatch<SetStateAction<string>>;
@@ -70,6 +71,7 @@ export function useAwsActions(params: UseAwsActionsParams) {
     setCloudFormationActionStatus,
     setEventBridgeActionStatus,
     setRoute53ActionStatus,
+    setElbActionStatus,
     setApiGatewayActionStatus,
     setSecretsManagerActionStatus,
     setLogsActionStatus,
@@ -858,6 +860,54 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setRoute53ActionStatus, setWorkspace]);
 
+  const refreshElbInventory = useCallback((): void => {
+    setElbActionStatus("Refreshing load balancer inventory.");
+    void requestWorkspaceSnapshot("aws.inventory.get", { scope: "elb" })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setElbActionStatus(
+          workspaceResult.elbStatusMessage || "Load balancer inventory refreshed.",
+        );
+      })
+      .catch((error: unknown) => {
+        setElbActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setElbActionStatus, setWorkspace]);
+
+  const selectElbRegion = useCallback((region: string): void => {
+    setElbActionStatus(`Loading load balancers for ${region}.`);
+    void requestWorkspaceSnapshot("aws.elb.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setElbActionStatus(
+          workspaceResult.elbStatusMessage || `Loaded load balancers from ${region}.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setElbActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setElbActionStatus, setWorkspace]);
+
+  const selectElbLoadBalancer = useCallback((loadBalancerArn: string): void => {
+    setElbActionStatus("Loading target group previews.");
+    void requestWorkspaceSnapshot("aws.elb.selectLoadBalancer", { loadBalancerArn })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setElbActionStatus(
+          workspaceResult.elbStatusMessage || "Selected load balancer.",
+        );
+      })
+      .catch((error: unknown) => {
+        setElbActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setElbActionStatus, setWorkspace]);
+
   const selectApiGatewayRegion = useCallback((region: string): void => {
     setApiGatewayActionStatus(`Loading API Gateway APIs for ${region}.`);
     void requestWorkspaceSnapshot("aws.apigateway.selectRegion", { region })
@@ -1067,6 +1117,9 @@ export function useAwsActions(params: UseAwsActionsParams) {
     selectEventBridgeBus,
     refreshRoute53Inventory,
     selectRoute53HostedZone,
+    refreshElbInventory,
+    selectElbRegion,
+    selectElbLoadBalancer,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,

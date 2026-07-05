@@ -582,6 +582,29 @@ const mockWorkspaceRoute53ResourceRecordSets = [
   },
 ];
 
+const mockWorkspaceElbLoadBalancers = [
+  {
+    loadBalancerArn: "arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/demo-alb/abc",
+    loadBalancerName: "demo-alb",
+    dnsName: "demo-alb.elb.localhost:4566",
+    type: "application",
+    scheme: "internet-facing",
+    state: "active",
+    vpcId: "vpc-123",
+  },
+];
+
+const mockWorkspaceElbTargetGroups = [
+  {
+    targetGroupArn: "arn:aws:elasticloadbalancing:us-east-1:123:targetgroup/demo-tg/abc",
+    targetGroupName: "demo-tg",
+    protocol: "HTTP",
+    port: 8080,
+    targetType: "ip",
+    healthCheckPath: "/health",
+  },
+];
+
 const mockWorkspaceApiGatewayApis = [
   {
     apiKey: "http:xyz789",
@@ -1371,6 +1394,8 @@ function countMockCatalogueResources(
         return workspace.eventBridgeBuses.length;
       case "route53":
         return workspace.route53HostedZones.length;
+      case "elb":
+        return workspace.elbLoadBalancers.length;
       case "apigateway":
         return workspace.apiGatewayApis.length;
       case "secrets":
@@ -1951,6 +1976,18 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       : "Route 53 inventory is only available for open AWS workspaces.",
     route53HostedZones: isAWSWorkspace ? mockWorkspaceRoute53HostedZones : [],
     route53ResourceRecordSets: isAWSWorkspace ? mockWorkspaceRoute53ResourceRecordSets : [],
+    selectedElbRegion: isAWSWorkspace
+      ? mockState.session.selectedElbRegion ?? mockWorkspaceRegions[0]
+      : undefined,
+    selectedElbLoadBalancerArn: isAWSWorkspace
+      ? mockState.session.selectedElbLoadBalancerArn ?? mockWorkspaceElbLoadBalancers[0]?.loadBalancerArn
+      : undefined,
+    elbStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceElbLoadBalancers.length} load balancers from ${mockState.session.selectedElbRegion ?? mockWorkspaceRegions[0]}.`
+      : "Load balancer inventory is only available for open AWS workspaces.",
+    elbRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
+    elbLoadBalancers: isAWSWorkspace ? mockWorkspaceElbLoadBalancers : [],
+    elbTargetGroups: isAWSWorkspace ? mockWorkspaceElbTargetGroups : [],
     selectedApiGatewayRegion: isAWSWorkspace
       ? mockState.session.selectedApiGatewayRegion ?? mockWorkspaceRegions[0]
       : undefined,
@@ -2632,6 +2669,15 @@ function handleMockRequest<T>(
     case "aws.route53.selectHostedZone":
       mockState.session.selectedRoute53HostedZoneId = String(params.hostedZoneId ?? "");
       appendLog("info", `Selected Route 53 hosted zone ${params.hostedZoneId}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.elb.selectRegion":
+      mockState.session.selectedElbRegion = String(params.region ?? "");
+      mockState.session.selectedElbLoadBalancerArn = undefined;
+      appendLog("info", `Selected load balancer region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.elb.selectLoadBalancer":
+      mockState.session.selectedElbLoadBalancerArn = String(params.loadBalancerArn ?? "");
+      appendLog("info", `Selected load balancer ${params.loadBalancerArn}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     case "aws.apigateway.selectRegion":
       mockState.session.selectedApiGatewayRegion = String(params.region ?? "");

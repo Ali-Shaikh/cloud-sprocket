@@ -181,6 +181,9 @@ const workspaceFixture: EcsWorkspaceSnapshot = {
   eventBridgeBuses: [],
   route53HostedZones: [],
   route53ResourceRecordSets: [],
+  elbRegions: [],
+  elbLoadBalancers: [],
+  elbTargetGroups: [],
   eventBridgeRules: [],
 
 };

@@ -139,6 +139,9 @@ const workspaceFixture: EventBridgeWorkspaceSnapshot = {
   ],
   route53HostedZones: [],
   route53ResourceRecordSets: [],
+  elbRegions: [],
+  elbLoadBalancers: [],
+  elbTargetGroups: [],
 };
 
 describe("EventBridgeView", () => {

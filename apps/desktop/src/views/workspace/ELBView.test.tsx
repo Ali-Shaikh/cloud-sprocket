@@ -4,10 +4,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@/lib/theme";
-import Route53View from "./Route53View";
-import type { Route53WorkspaceSnapshot } from "./Route53View";
+import ELBView from "./ELBView";
+import type { ElbWorkspaceSnapshot } from "./ELBView";
 
-const workspaceFixture: Route53WorkspaceSnapshot = {
+const loadBalancerArn = "arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/demo-alb/abc";
+
+const workspaceFixture: ElbWorkspaceSnapshot = {
   provider: {
     providerId: "aws",
     label: "AWS",
@@ -99,7 +101,7 @@ const workspaceFixture: Route53WorkspaceSnapshot = {
   s3Objects: [],
   s3ObjectMetadata: [],
   s3ExportSnippets: [],
-  ec2Regions: [],
+  ec2Regions: ["us-east-1"],
   ec2Instances: [],
   lambdaRegions: [],
   lambdaFunctions: [],
@@ -109,7 +111,7 @@ const workspaceFixture: Route53WorkspaceSnapshot = {
   sqsQueues: [],
   snsRegions: [],
   snsTopics: [],
-  rdsRegions: [],
+  rdsRegions: ["us-east-1"],
   rdsInstances: [],
   logsRegions: [],
   logGroups: [],
@@ -133,59 +135,65 @@ const workspaceFixture: Route53WorkspaceSnapshot = {
   eventBridgeRegions: [],
   eventBridgeBuses: [],
   eventBridgeRules: [],
-  selectedRoute53HostedZoneId: "/hostedzone/Z123",
-  route53HostedZones: [
+  route53HostedZones: [],
+  route53ResourceRecordSets: [],
+  selectedElbRegion: "us-east-1",
+  selectedElbLoadBalancerArn: loadBalancerArn,
+  elbRegions: ["us-east-1"],
+  elbLoadBalancers: [
     {
-      hostedZoneId: "/hostedzone/Z123",
-      name: "example.com.",
-      recordCount: 2,
-      privateZone: false,
-      comment: "Demo zone",
+      loadBalancerArn,
+      loadBalancerName: "demo-alb",
+      dnsName: "demo-alb.elb.localhost:4566",
+      type: "application",
+      scheme: "internet-facing",
+      state: "active",
     },
   ],
-  route53ResourceRecordSets: [
+  elbTargetGroups: [
     {
-      name: "www.example.com.",
-      type: "A",
-      ttl: 300,
-      values: ["203.0.113.10"],
+      targetGroupArn: "arn:aws:elasticloadbalancing:us-east-1:123:targetgroup/demo-tg/abc",
+      targetGroupName: "demo-tg",
+      protocol: "HTTP",
+      port: 8080,
+      targetType: "ip",
+      healthCheckPath: "/health",
     },
   ],
-  elbRegions: [],
-  elbLoadBalancers: [],
-  elbTargetGroups: [],
 };
 
-describe("Route53View", () => {
-  it("renders hosted zone and record inventory", () => {
+describe("ELBView", () => {
+  it("renders load balancer and target group inventory", () => {
     render(
       <ThemeProvider>
-        <Route53View
+        <ELBView
           workspace={workspaceFixture}
           actionStatus=""
           onRefresh={vi.fn()}
-          onSelectHostedZone={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectLoadBalancer={vi.fn()}
         />
       </ThemeProvider>,
     );
-    expect(screen.getByText("Route 53")).toBeInTheDocument();
-    expect(screen.getAllByText("example.com.").length).toBeGreaterThan(0);
-    expect(screen.getByText("www.example.com.")).toBeInTheDocument();
+    expect(screen.getByText("Load Balancers")).toBeInTheDocument();
+    expect(screen.getAllByText("demo-alb").length).toBeGreaterThan(0);
+    expect(screen.getByText("demo-tg")).toBeInTheDocument();
   });
 
-  it("selects a hosted zone when a row is clicked", () => {
-    const onSelectHostedZone = vi.fn();
+  it("selects a load balancer when a row is clicked", () => {
+    const onSelectLoadBalancer = vi.fn();
     render(
       <ThemeProvider>
-        <Route53View
+        <ELBView
           workspace={workspaceFixture}
           actionStatus=""
           onRefresh={vi.fn()}
-          onSelectHostedZone={onSelectHostedZone}
+          onSelectRegion={vi.fn()}
+          onSelectLoadBalancer={onSelectLoadBalancer}
         />
       </ThemeProvider>,
     );
-    fireEvent.click(screen.getAllByText("example.com.")[0]);
-    expect(onSelectHostedZone).toHaveBeenCalledWith("/hostedzone/Z123");
+    fireEvent.click(screen.getAllByText("demo-alb")[0]);
+    expect(onSelectLoadBalancer).toHaveBeenCalledWith(loadBalancerArn);
   });
 });

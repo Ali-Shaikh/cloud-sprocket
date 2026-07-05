@@ -107,6 +107,11 @@ type Route53Inventory interface {
 	ListResourceRecordSets(ctx context.Context, profile models.ProfileSummary, hostedZoneID string) ([]models.AwsRoute53ResourceRecordSet, error)
 }
 
+type Elbv2Inventory interface {
+	DescribeLoadBalancers(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsElbLoadBalancer, error)
+	DescribeTargetGroups(ctx context.Context, profile models.ProfileSummary, region string, loadBalancerArn string) ([]models.AwsElbTargetGroup, error)
+}
+
 type LogsInventory interface {
 	ListLogGroups(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsLogGroup, error)
 	DescribeLogGroup(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string) (models.AwsLogGroup, error)

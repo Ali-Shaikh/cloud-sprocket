@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64px" height="64px" viewBox="0 0 64 64" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>Icon-Architecture/48/Arch_Elastic-Load-Balancing_48</title>
+    <g id="Icon-Architecture/48/Arch_Elastic-Load-Balancing_48" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="Icon-Architecture-BG/48/Networking-Content-Delivery" fill="#8C4FFF">
+            <rect id="Rectangle" x="0" y="0" width="64" height="64"></rect>
+        </g>
+        <path d="M32,14 C38.0751322,14 43,18.9248678 43,25 C43,31.0751322 38.0751322,36 32,36 C25.9248678,36 21,31.0751322 21,25 C21,18.9248678 25.9248678,14 32,14 Z M32,16 C27.0294373,16 23,20.0294373 23,25 C23,29.9705627 27.0294373,34 32,34 C36.9705627,34 41,29.9705627 41,25 C41,20.0294373 36.9705627,16 32,16 Z M18,40 L46,40 C47.1045695,40 48,40.8954305 48,42 L48,46 C48,47.1045695 47.1045695,48 46,48 L18,48 C16.8954305,48 16,47.1045695 16,46 L16,42 C16,40.8954305 16.8954305,40 18,40 Z M20,42 L20,46 L44,46 L44,42 L20,42 Z M26,50 L38,50 C39.1045695,50 40,50.8954305 40,52 L40,54 C40,55.1045695 39.1045695,56 38,56 L26,56 C24.8954305,56 24,55.1045695 24,54 L24,52 C24,50.8954305 24.8954305,50 26,50 Z M28,52 L28,54 L36,54 L36,52 L28,52 Z" id="Elastic-Load-Balancing-Icon_48_Squid" fill="#FFFFFF"></path>
+    </g>
+</svg>

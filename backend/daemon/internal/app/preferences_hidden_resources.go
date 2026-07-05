@@ -285,6 +285,8 @@ func countCatalogueResources(
 			return len(workspace.EventBridgeBuses), true
 		case "route53":
 			return len(workspace.Route53HostedZones), true
+		case "elb":
+			return len(workspace.ElbLoadBalancers), true
 		case "apigateway":
 			return len(workspace.ApiGatewayApis), true
 		case "secrets":

@@ -46,13 +46,14 @@ func main() {
 	cloudformationInventory := awsadapter.NewCloudFormationInventory(settings)
 	eventbridgeInventory := awsadapter.NewEventBridgeInventory(settings)
 	route53Inventory := awsadapter.NewRoute53Inventory(settings)
+	elbv2Inventory := awsadapter.NewElbv2Inventory(settings)
 	apigatewayInventory := awsadapter.NewApiGatewayInventory(settings)
 	secretsManagerInventory := awsadapter.NewSecretsManagerInventory(settings)
 	logsInventory := awsadapter.NewLogsInventory(settings)
 	iamInventory := awsadapter.NewIAMInventory(settings)
 	azureInventory := azureadapter.NewInventory(settings)
 	dockerRuntime := dockerruntime.New(settings)
-	service := app.New(settings, dataStore, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, eksInventory, cloudformationInventory, eventbridgeInventory, route53Inventory, apigatewayInventory, secretsManagerInventory, logsInventory, iamInventory, azureInventory, dockerRuntime)
+	service := app.New(settings, dataStore, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, eksInventory, cloudformationInventory, eventbridgeInventory, route53Inventory, elbv2Inventory, apigatewayInventory, secretsManagerInventory, logsInventory, iamInventory, azureInventory, dockerRuntime)
 	server := rpc.New(service)
 
 	if err := server.Serve(context.Background(), os.Stdin, os.Stdout); err != nil {

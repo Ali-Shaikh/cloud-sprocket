@@ -17,6 +17,7 @@ import awsCloudformationIconUrl from "@/assets/cloud-icons/aws-cloudformation.sv
 import awsEksIconUrl from "@/assets/cloud-icons/aws-eks.svg";
 import awsEventbridgeIconUrl from "@/assets/cloud-icons/aws-eventbridge.svg";
 import awsRoute53IconUrl from "@/assets/cloud-icons/aws-route53.svg";
+import awsElbIconUrl from "@/assets/cloud-icons/aws-elb.svg";
 import awsLambdaIconUrl from "@/assets/cloud-icons/aws-lambda.svg";
 import awsS3IconUrl from "@/assets/cloud-icons/aws-s3.svg";
 import awsSecretsManagerIconUrl from "@/assets/cloud-icons/aws-secrets-manager.svg";
@@ -170,6 +171,12 @@ export function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): 
         ...base,
         iconUrl: awsRoute53IconUrl,
         count: workspace.route53HostedZones.length,
+      };
+    case "elb":
+      return {
+        ...base,
+        iconUrl: awsElbIconUrl,
+        count: workspace.elbLoadBalancers.length,
       };
     case "apigateway":
       return { ...base, iconUrl: awsApigatewayIconUrl, count: workspace.apiGatewayApis.length };

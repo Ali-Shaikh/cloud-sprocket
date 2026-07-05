@@ -303,6 +303,8 @@ type SessionSnapshot struct {
 	SelectedEventBridgeRegion         string             `json:"selectedEventBridgeRegion,omitempty"`
 	SelectedEventBridgeBusName        string             `json:"selectedEventBridgeBusName,omitempty"`
 	SelectedRoute53HostedZoneID       string             `json:"selectedRoute53HostedZoneId,omitempty"`
+	SelectedElbRegion                 string             `json:"selectedElbRegion,omitempty"`
+	SelectedElbLoadBalancerArn        string             `json:"selectedElbLoadBalancerArn,omitempty"`
 	SelectedApiGatewayRegion          string             `json:"selectedApiGatewayRegion,omitempty"`
 	SelectedApiGatewayApiKey          string             `json:"selectedApiGatewayApiKey,omitempty"`
 	SelectedSecretsManagerRegion      string             `json:"selectedSecretsManagerRegion,omitempty"`
@@ -698,6 +700,29 @@ type AwsRoute53ResourceRecordSet struct {
 	TTL            int64    `json:"ttl,omitempty"`
 	Values         []string `json:"values,omitempty"`
 	AliasTarget    string   `json:"aliasTarget,omitempty"`
+}
+
+// AwsElbLoadBalancer models an ELBv2 load balancer for inventory.
+type AwsElbLoadBalancer struct {
+	LoadBalancerArn  string `json:"loadBalancerArn"`
+	LoadBalancerName string `json:"loadBalancerName"`
+	DNSName          string `json:"dnsName,omitempty"`
+	Type             string `json:"type,omitempty"`
+	Scheme           string `json:"scheme,omitempty"`
+	State            string `json:"state,omitempty"`
+	VpcID            string `json:"vpcId,omitempty"`
+	CreatedTime      string `json:"createdTime,omitempty"`
+}
+
+// AwsElbTargetGroup models an ELBv2 target group for inventory.
+type AwsElbTargetGroup struct {
+	TargetGroupArn  string `json:"targetGroupArn"`
+	TargetGroupName string `json:"targetGroupName"`
+	Protocol        string `json:"protocol,omitempty"`
+	Port            int32  `json:"port,omitempty"`
+	TargetType      string `json:"targetType,omitempty"`
+	VpcID           string `json:"vpcId,omitempty"`
+	HealthCheckPath string `json:"healthCheckPath,omitempty"`
 }
 
 // AwsEksNodeGroup models an EKS managed node group summary.
@@ -1273,6 +1298,12 @@ type WorkspaceSnapshot struct {
 	Route53StatusMessage              string                       `json:"route53StatusMessage,omitempty"`
 	Route53HostedZones                []AwsRoute53HostedZone       `json:"route53HostedZones"`
 	Route53ResourceRecordSets         []AwsRoute53ResourceRecordSet `json:"route53ResourceRecordSets"`
+	SelectedElbRegion                 string                       `json:"selectedElbRegion,omitempty"`
+	SelectedElbLoadBalancerArn        string                       `json:"selectedElbLoadBalancerArn,omitempty"`
+	ElbStatusMessage                  string                       `json:"elbStatusMessage,omitempty"`
+	ElbRegions                        []string                     `json:"elbRegions"`
+	ElbLoadBalancers                  []AwsElbLoadBalancer         `json:"elbLoadBalancers"`
+	ElbTargetGroups                   []AwsElbTargetGroup          `json:"elbTargetGroups"`
 	SelectedApiGatewayRegion          string                       `json:"selectedApiGatewayRegion,omitempty"`
 	SelectedApiGatewayApiKey          string                       `json:"selectedApiGatewayApiKey,omitempty"`
 	ApiGatewayStatusMessage           string                       `json:"apiGatewayStatusMessage,omitempty"`

@@ -96,6 +96,9 @@ export function useWorkspaceState(session: SessionSnapshot) {
   const [route53ActionStatus, setRoute53ActionStatus] = useState(
     "Route 53 inventory loads when you open the tab.",
   );
+  const [elbActionStatus, setElbActionStatus] = useState(
+    "Select a region before refreshing load balancers.",
+  );
   const [apiGatewayActionStatus, setApiGatewayActionStatus] = useState(
     "Select a region before refreshing API Gateway APIs.",
   );
@@ -272,6 +275,8 @@ export function useWorkspaceState(session: SessionSnapshot) {
     setEventBridgeActionStatus,
     route53ActionStatus,
     setRoute53ActionStatus,
+    elbActionStatus,
+    setElbActionStatus,
     apiGatewayActionStatus,
     setApiGatewayActionStatus,
     secretsManagerActionStatus,

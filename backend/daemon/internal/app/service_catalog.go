@@ -129,6 +129,12 @@ func awsServiceCatalog() []serviceCatalogEntry {
 			Category: workspaceTabCategoryService, InventoryScope: "route53",
 		},
 		{
+			ProviderID: "aws", ServiceID: "elb", Label: "Load Balancers",
+			Summary: "Application and network load balancer inventory.",
+			Detail:  "List ELBv2 load balancers by region with target group previews for the selected load balancer.",
+			Category: workspaceTabCategoryService, InventoryScope: "elb",
+		},
+		{
 			ProviderID: "aws", ServiceID: "apigateway", Label: "API Gateway",
 			Summary: "REST and HTTP API inventory.",
 			Detail:  "List REST and HTTP/WebSocket APIs by region with stage invoke URLs.",

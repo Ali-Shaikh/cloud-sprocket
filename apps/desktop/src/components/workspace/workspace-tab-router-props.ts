@@ -86,6 +86,7 @@ export type WorkspaceTabRouterProps = {
   cloudFormationActionStatus: string;
   eventBridgeActionStatus: string;
   route53ActionStatus: string;
+  elbActionStatus: string;
   apiGatewayActionStatus: string;
   secretsManagerActionStatus: string;
   logsActionStatus: string;
@@ -201,6 +202,9 @@ export type WorkspaceTabRouterProps = {
   selectEventBridgeBus: (busName: string) => void;
   refreshRoute53Inventory: () => void;
   selectRoute53HostedZone: (hostedZoneId: string) => void;
+  refreshElbInventory: () => void;
+  selectElbRegion: (region: string) => void;
+  selectElbLoadBalancer: (loadBalancerArn: string) => void;
   refreshApiGatewayInventory: () => void;
   selectApiGatewayRegion: (region: string) => void;
   selectApiGatewayApi: (apiKey: string) => void;
