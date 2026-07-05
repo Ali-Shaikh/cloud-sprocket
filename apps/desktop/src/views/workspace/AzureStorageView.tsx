@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Database, Trash2, Upload } from "lucide-react";
+import { Database, FileIcon, Trash2, Upload } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { actionCapabilityState } from "@/lib/action-capabilities";
@@ -39,6 +39,12 @@ import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { azureInventoryLoadingLabel } from "@/lib/azure-inventory";
 import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
+import {
+  ResourceInspectorHeader,
+  ResourceInspectorPanel,
+  ResourceInventoryShell,
+} from "@/components/inventory/resource-inspector";
+import { ResourceTable } from "@/components/inventory/resource-table";
 import { DetailFieldList } from "./detail-fields";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
@@ -71,6 +77,11 @@ const fieldLabel =
 
 const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] shadow-sm";
 
+function blobFileName(name: string): string {
+  const segments = name.split("/").filter(Boolean);
+  return segments.length > 0 ? segments[segments.length - 1] : name;
+}
+
 export default function AzureStorageView({
   workspace,
   activePageId,
@@ -101,6 +112,16 @@ export default function AzureStorageView({
   const [uploadSourcePath, setUploadSourcePath] = useState("");
   const [uploadBlobName, setUploadBlobName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedAzureBlobName));
+  const lastSelectedBlobRef = useRef(workspace.selectedAzureBlobName || "");
+
+  useEffect(() => {
+    const nextBlob = workspace.selectedAzureBlobName || "";
+    if (nextBlob !== lastSelectedBlobRef.current) {
+      lastSelectedBlobRef.current = nextBlob;
+      setInspectorOpen(Boolean(nextBlob));
+    }
+  }, [workspace.selectedAzureBlobName]);
 
   const selectedBlob = workspace.azureBlobs.find(
     (blob) => blob.name === workspace.selectedAzureBlobName,
@@ -279,9 +300,25 @@ export default function AzureStorageView({
     </section>
   );
 
+  const blobInspectorContent = selectedBlob ? (
+    <ResourceInspectorPanel>
+      <ResourceInspectorHeader
+        icon={FileIcon}
+        eyebrow="Blob"
+        title={blobFileName(selectedBlob.name)}
+        subtitle={selectedBlob.name}
+        onClose={() => setInspectorOpen(false)}
+      />
+      <DetailFieldList
+        fields={workspace.azureBlobMetadata}
+        emptyText="No blob metadata available."
+      />
+    </ResourceInspectorPanel>
+  ) : null;
+
   const blobsPage = (
-    <>
-      <section className={sectionCard}>
+    <section className="space-y-4">
+      <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm">
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-52">
             <div className={cn(fieldLabel, "mb-1")}>Container</div>
@@ -313,85 +350,74 @@ export default function AzureStorageView({
                 onChange={(event) => setPrefixInput(event.target.value)}
                 placeholder="optional/prefix/"
               />
-              <Button
-                variant="outline"
-                onClick={() => onSetPrefixFilter(prefixInput)}
-              >
+              <Button variant="outline" onClick={() => onSetPrefixFilter(prefixInput)}>
                 Apply
               </Button>
             </div>
           </div>
         </div>
-        <p className="text-sm text-muted-foreground">{workspace.azureStorageStatusMessage}</p>
-        {actionStatus ? (
-          <p className="text-sm text-muted-foreground">{actionStatus}</p>
-        ) : null}
-        <div className="overflow-hidden rounded-lg border border-border">
-          {workspace.azureBlobs.length === 0 ? (
-            <EmptyState
-              icon={<Database />}
-              title="No blobs"
-              description="No blobs were returned for the selected container."
-              className="border-0"
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Modified</TableHead>
-                  {canWrite ? <TableHead className="w-20" /> : null}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {workspace.azureBlobs.map((blob) => {
-                  const active = blob.name === workspace.selectedAzureBlobName;
-                  return (
-                    <TableRow
-                      key={blob.name}
-                      data-state={active ? "selected" : undefined}
-                      className="cursor-pointer"
-                      onClick={() => onSelectBlob(blob.name)}
+      </div>
+
+      <p className="text-sm text-muted-foreground">{workspace.azureStorageStatusMessage}</p>
+      {actionStatus ? <p className="text-sm text-muted-foreground">{actionStatus}</p> : null}
+
+      <ResourceInventoryShell
+        table={
+          <ResourceTable
+            columns={[
+              { id: "name", label: "Name" },
+              { id: "size", label: "Size" },
+              { id: "modified", label: "Modified" },
+            ]}
+            rows={workspace.azureBlobs}
+            selectedKey={workspace.selectedAzureBlobName}
+            getRowKey={(blob) => blob.name}
+            onRowClick={(blob) => {
+              onSelectBlob(blob.name);
+              setInspectorOpen(true);
+            }}
+            renderCell={(blob, columnId) => {
+              if (columnId === "name") {
+                return <span className="font-medium">{blob.name}</span>;
+              }
+              if (columnId === "size") {
+                return blob.size || "Unknown";
+              }
+              return blob.modifiedAt || "Unknown";
+            }}
+            renderTrailingCell={
+              canWrite
+                ? (blob) => (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Delete ${blob.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setDeleteTarget(blob.name);
+                      }}
                     >
-                      <TableCell className="font-medium">{blob.name}</TableCell>
-                      <TableCell>{blob.size || "Unknown"}</TableCell>
-                      <TableCell>{blob.modifiedAt || "Unknown"}</TableCell>
-                      {canWrite ? (
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            aria-label={`Delete ${blob.name}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setDeleteTarget(blob.name);
-                            }}
-                          >
-                            <Trash2 />
-                          </Button>
-                        </TableCell>
-                      ) : null}
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </div>
-      </section>
-      <section className={sectionCard}>
-        <h2 className="text-base font-bold">Blob detail</h2>
-        {selectedBlob ? (
-          <DetailFieldList
-            fields={workspace.azureBlobMetadata}
-            emptyText="No blob metadata available."
+                      <Trash2 />
+                    </Button>
+                  )
+                : undefined
+            }
+            emptyState={
+              <EmptyState
+                icon={<Database />}
+                title="No blobs"
+                description="No blobs were returned for the selected container."
+                className="border-0"
+              />
+            }
           />
-        ) : (
-          <p className="text-sm text-muted-foreground">Select a blob to inspect metadata.</p>
-        )}
-      </section>
-    </>
+        }
+        inspectorContent={blobInspectorContent}
+        inspectorOpen={inspectorOpen}
+        onInspectorOpenChange={setInspectorOpen}
+        inspectorAriaLabel="Azure blob details"
+      />
+    </section>
   );
 
   const uploadPage = (

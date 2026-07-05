@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   Copy,
@@ -13,7 +13,6 @@ import {
   FileText,
   FolderOpen,
   Upload,
-  X,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -29,20 +28,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-} from "@/components/ui/sheet";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/empty-state";
+import {
+  ResourceInspectorHeader,
+  ResourceInspectorPanel,
+  ResourceInventoryShell,
+} from "@/components/inventory/resource-inspector";
+import { ResourceTable } from "@/components/inventory/resource-table";
 import { StatusPill } from "@/components/status-pill";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { DetailFieldList } from "./detail-fields";
@@ -127,27 +121,6 @@ function objectFileIcon(key: string) {
   return FileIcon;
 }
 
-/**
- * Tracks whether the viewport is wide enough (>= Tailwind's xl breakpoint) to
- * dock the object details inline beside the table. Below it we float the same
- * panel in a Sheet so the table is never crushed.
- */
-function useIsWideViewport(): boolean {
-  const [isWide, setIsWide] = useState(() =>
-    typeof window === "undefined" ? true : window.innerWidth >= 1280,
-  );
-  useEffect(() => {
-    const onResize = () => {
-      setIsWide(window.innerWidth >= 1280);
-    };
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-    };
-  }, []);
-  return isWide;
-}
-
 type DurationUnit = "minutes" | "hours" | "days";
 
 const UNIT_SECONDS: Record<DurationUnit, number> = {
@@ -193,7 +166,6 @@ export default function StorageView({
   onValidateUrl,
 }: StorageViewProps) {
   const page = normalisePageId(activePageId);
-  const isWideViewport = useIsWideViewport();
 
   const [uploadSourcePath, setUploadSourcePath] = useState("");
   const [uploadObjectKey, setUploadObjectKey] = useState("");
@@ -362,28 +334,13 @@ export default function StorageView({
   };
 
   const drawerBody = selectedObject ? (
-    <div className="space-y-4">
-      {/* Shared header: file icon, name (wraps), full key, close. */}
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-[10px] bg-muted [&_svg]:size-5 [&_svg]:text-muted-foreground">
-          <FileTypeIcon />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className={fieldLabel}>Object</div>
-          <h2 className="break-words text-[15px] font-bold leading-tight" title={objectFileName(objectKey)}>
-            {objectFileName(objectKey)}
-          </h2>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="shrink-0"
-          aria-label="Close object detail"
-          onClick={closeDrawer}
-        >
-          <X />
-        </Button>
-      </div>
+    <ResourceInspectorPanel>
+      <ResourceInspectorHeader
+        icon={FileTypeIcon}
+        eyebrow="Object"
+        title={objectFileName(objectKey)}
+        onClose={closeDrawer}
+      />
 
       <div className="flex items-start gap-1 rounded-lg border border-border bg-muted/40 py-1.5 pl-3 pr-1.5">
         <code
@@ -615,37 +572,8 @@ export default function StorageView({
           )}
         </TabsContent>
       </Tabs>
-    </div>
+    </ResourceInspectorPanel>
   ) : null;
-
-  // On wide viewports the panel docks beside the table; otherwise it floats in
-  // a Sheet so the objects table is never squeezed.
-  const inlineDrawer =
-    isWideViewport && selectedObject && drawerOpen ? (
-      <aside
-        aria-label="S3 object details"
-        className="sticky top-4 max-h-[calc(100vh-7rem)] w-[360px] shrink-0 self-start overflow-y-auto rounded-lg border border-border bg-card p-[18px] shadow-sm"
-      >
-        {drawerBody}
-      </aside>
-    ) : null;
-
-  const sheetDrawer =
-    !isWideViewport && selectedObject ? (
-      <Sheet
-        open={drawerOpen}
-        onOpenChange={(open) => {
-          setDrawerOpen(open);
-        }}
-      >
-        <SheetContent
-          aria-label="S3 object details"
-          className="w-full gap-0 overflow-y-auto p-[18px] sm:max-w-md [&>button]:hidden"
-        >
-          {drawerBody}
-        </SheetContent>
-      </Sheet>
-    ) : null;
 
   const objectsPage = (
     <section className="space-y-4">
@@ -701,54 +629,59 @@ export default function StorageView({
         {workspace.s3StatusMessage || "S3 inventory is waiting for an open AWS workspace."}
       </p>
 
-      <div className="flex items-start gap-4">
-        <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-          {workspace.s3Objects.length === 0 ? (
-            <EmptyState
-              icon={<Database />}
-              title="No objects"
-              description="No S3 objects loaded for the selected bucket."
-              className="border-0"
-            />
-          ) : (
-            <Table className="table-fixed">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Object Key</TableHead>
-                  <TableHead className="w-28">Size</TableHead>
-                  <TableHead className="w-44">Modified</TableHead>
-                  <TableHead className="w-36">Storage Class</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {workspace.s3Objects.map((object) => {
-                  const active = object.key === workspace.selectedS3ObjectKey;
-                  return (
-                    <TableRow
-                      key={object.key}
-                      data-state={active ? "selected" : undefined}
-                      className="cursor-pointer"
-                      onClick={() => {
-                        onSelectObject(object.key);
-                        setDrawerOpen(true);
-                      }}
-                    >
-                      <TableCell className="max-w-0 truncate font-medium" title={object.key}>
-                        {object.key}
-                      </TableCell>
-                      <TableCell className="truncate">{object.size || "Unknown"}</TableCell>
-                      <TableCell className="truncate">{object.modifiedAt || "Unknown"}</TableCell>
-                      <TableCell className="truncate">{object.storageClass || "STANDARD"}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </div>
-        {inlineDrawer}
-      </div>
-      {sheetDrawer}
+      <ResourceInventoryShell
+        table={
+          <ResourceTable
+            columns={[
+              {
+                id: "key",
+                label: "Object Key",
+                cellClassName: "max-w-0 truncate font-medium",
+              },
+              { id: "size", label: "Size", headerClassName: "w-28", cellClassName: "truncate" },
+              { id: "modified", label: "Modified", headerClassName: "w-44", cellClassName: "truncate" },
+              {
+                id: "storageClass",
+                label: "Storage Class",
+                headerClassName: "w-36",
+                cellClassName: "truncate",
+              },
+            ]}
+            rows={workspace.s3Objects}
+            selectedKey={workspace.selectedS3ObjectKey}
+            getRowKey={(object) => object.key}
+            onRowClick={(object) => {
+              onSelectObject(object.key);
+              setDrawerOpen(true);
+            }}
+            getCellTitle={(object, columnId) => (columnId === "key" ? object.key : undefined)}
+            renderCell={(object, columnId) => {
+              if (columnId === "key") {
+                return object.key;
+              }
+              if (columnId === "size") {
+                return object.size || "Unknown";
+              }
+              if (columnId === "modified") {
+                return object.modifiedAt || "Unknown";
+              }
+              return object.storageClass || "STANDARD";
+            }}
+            emptyState={
+              <EmptyState
+                icon={<Database />}
+                title="No objects"
+                description="No S3 objects loaded for the selected bucket."
+                className="border-0"
+              />
+            }
+          />
+        }
+        inspectorContent={drawerBody}
+        inspectorOpen={drawerOpen}
+        onInspectorOpenChange={setDrawerOpen}
+        inspectorAriaLabel="S3 object details"
+      />
     </section>
   );
 
