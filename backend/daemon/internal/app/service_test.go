@@ -208,6 +208,30 @@ func (stubRoute53Inventory) ListResourceRecordSets(context.Context, models.Profi
 	return nil, nil
 }
 
+type stubElbv2Inventory struct{}
+
+func (stubElbv2Inventory) DescribeLoadBalancers(context.Context, models.ProfileSummary, string) ([]models.AwsElbLoadBalancer, error) {
+	return nil, nil
+}
+
+func (stubElbv2Inventory) DescribeTargetGroups(context.Context, models.ProfileSummary, string, string) ([]models.AwsElbTargetGroup, error) {
+	return nil, nil
+}
+
+type stubKmsInventory struct{}
+
+func (stubKmsInventory) ListKeys(context.Context, models.ProfileSummary, string) ([]models.AwsKmsKey, error) {
+	return nil, nil
+}
+
+func (stubKmsInventory) ListAliases(context.Context, models.ProfileSummary, string) ([]models.AwsKmsAlias, error) {
+	return nil, nil
+}
+
+func (stubKmsInventory) DescribeKey(context.Context, models.ProfileSummary, string, string) (models.AwsKmsKey, error) {
+	return models.AwsKmsKey{}, nil
+}
+
 type stubApiGatewayInventory struct{}
 
 func (stubApiGatewayInventory) ListApis(context.Context, models.ProfileSummary, string) (models.AwsApiGatewayListResult, error) {
@@ -789,6 +813,8 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 		stubCloudFormationInventory{},
 		stubEventBridgeInventory{},
 		stubRoute53Inventory{},
+		stubElbv2Inventory{},
+		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1080,6 +1106,8 @@ func TestServiceReportsFailedEC2ActionJob(t *testing.T) {
 		stubCloudFormationInventory{},
 		stubEventBridgeInventory{},
 		stubRoute53Inventory{},
+		stubElbv2Inventory{},
+		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1164,6 +1192,8 @@ func TestServiceRejectsEC2ActionWithoutLocalEndpoint(t *testing.T) {
 		stubCloudFormationInventory{},
 		stubEventBridgeInventory{},
 		stubRoute53Inventory{},
+		stubElbv2Inventory{},
+		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1234,6 +1264,8 @@ func TestServiceRejectsWriteActionsWithoutWriteMode(t *testing.T) {
 		stubCloudFormationInventory{},
 		stubEventBridgeInventory{},
 		stubRoute53Inventory{},
+		stubElbv2Inventory{},
+		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1312,6 +1344,8 @@ func TestServiceRejectsEC2ActionWithoutWriteOptIn(t *testing.T) {
 		stubCloudFormationInventory{},
 		stubEventBridgeInventory{},
 		stubRoute53Inventory{},
+		stubElbv2Inventory{},
+		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1389,6 +1423,8 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 		stubCloudFormationInventory{},
 		stubEventBridgeInventory{},
 		stubRoute53Inventory{},
+		stubElbv2Inventory{},
+		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1425,6 +1461,8 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 		stubCloudFormationInventory{},
 		stubEventBridgeInventory{},
 		stubRoute53Inventory{},
+		stubElbv2Inventory{},
+		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1504,6 +1542,8 @@ func TestServiceResetClearsOnlyAppOwnedState(t *testing.T) {
 		stubCloudFormationInventory{},
 		stubEventBridgeInventory{},
 		stubRoute53Inventory{},
+		stubElbv2Inventory{},
+		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1647,6 +1687,8 @@ func TestPrepareProfileWritesDiscoverableLocalProfiles(t *testing.T) {
 		stubCloudFormationInventory{},
 		stubEventBridgeInventory{},
 		stubRoute53Inventory{},
+		stubElbv2Inventory{},
+		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1758,6 +1800,8 @@ func TestDockerRuntimeProbeIsBoundedWhenEngineBlocks(t *testing.T) {
 		stubCloudFormationInventory{},
 		stubEventBridgeInventory{},
 		stubRoute53Inventory{},
+		stubElbv2Inventory{},
+		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},
@@ -1829,6 +1873,8 @@ func TestUnlockNotBlockedBySlowWorkspaceFetch(t *testing.T) {
 		stubCloudFormationInventory{},
 		stubEventBridgeInventory{},
 		stubRoute53Inventory{},
+		stubElbv2Inventory{},
+		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
 		stubLogsInventory{},

@@ -582,6 +582,52 @@ const mockWorkspaceRoute53ResourceRecordSets = [
   },
 ];
 
+const mockWorkspaceElbLoadBalancers = [
+  {
+    loadBalancerArn: "arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/demo-alb/abc",
+    loadBalancerName: "demo-alb",
+    dnsName: "demo-alb.elb.localhost:4566",
+    type: "application",
+    scheme: "internet-facing",
+    state: "active",
+    vpcId: "vpc-123",
+  },
+];
+
+const mockWorkspaceElbTargetGroups = [
+  {
+    targetGroupArn: "arn:aws:elasticloadbalancing:us-east-1:123:targetgroup/demo-tg/abc",
+    targetGroupName: "demo-tg",
+    protocol: "HTTP",
+    port: 8080,
+    targetType: "ip",
+    healthCheckPath: "/health",
+  },
+];
+
+const mockWorkspaceKmsKeyId = "1234abcd-5678-90ef-ghij-klmnopqrstuv";
+
+const mockWorkspaceKmsKeys = [
+  {
+    keyId: mockWorkspaceKmsKeyId,
+    arn: `arn:aws:kms:us-east-1:123:key/${mockWorkspaceKmsKeyId}`,
+    description: "Demo encryption key",
+    keyUsage: "ENCRYPT_DECRYPT",
+    keyState: "Enabled",
+    keySpec: "SYMMETRIC_DEFAULT",
+    origin: "AWS_KMS",
+    enabled: true,
+  },
+];
+
+const mockWorkspaceKmsAliases = [
+  {
+    aliasName: "alias/demo-key",
+    aliasArn: "arn:aws:kms:us-east-1:123:alias/demo-key",
+    targetKeyId: mockWorkspaceKmsKeyId,
+  },
+];
+
 const mockWorkspaceApiGatewayApis = [
   {
     apiKey: "http:xyz789",
@@ -1371,6 +1417,10 @@ function countMockCatalogueResources(
         return workspace.eventBridgeBuses.length;
       case "route53":
         return workspace.route53HostedZones.length;
+      case "elb":
+        return workspace.elbLoadBalancers.length;
+      case "kms":
+        return workspace.kmsKeys.length;
       case "apigateway":
         return workspace.apiGatewayApis.length;
       case "secrets":
@@ -1951,6 +2001,30 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       : "Route 53 inventory is only available for open AWS workspaces.",
     route53HostedZones: isAWSWorkspace ? mockWorkspaceRoute53HostedZones : [],
     route53ResourceRecordSets: isAWSWorkspace ? mockWorkspaceRoute53ResourceRecordSets : [],
+    selectedElbRegion: isAWSWorkspace
+      ? mockState.session.selectedElbRegion ?? mockWorkspaceRegions[0]
+      : undefined,
+    selectedElbLoadBalancerArn: isAWSWorkspace
+      ? mockState.session.selectedElbLoadBalancerArn ?? mockWorkspaceElbLoadBalancers[0]?.loadBalancerArn
+      : undefined,
+    elbStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceElbLoadBalancers.length} load balancers from ${mockState.session.selectedElbRegion ?? mockWorkspaceRegions[0]}.`
+      : "Load balancer inventory is only available for open AWS workspaces.",
+    elbRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
+    elbLoadBalancers: isAWSWorkspace ? mockWorkspaceElbLoadBalancers : [],
+    elbTargetGroups: isAWSWorkspace ? mockWorkspaceElbTargetGroups : [],
+    selectedKmsRegion: isAWSWorkspace
+      ? mockState.session.selectedKmsRegion ?? mockWorkspaceRegions[0]
+      : undefined,
+    selectedKmsKeyId: isAWSWorkspace
+      ? mockState.session.selectedKmsKeyId ?? mockWorkspaceKmsKeys[0]?.keyId
+      : undefined,
+    kmsStatusMessage: isAWSWorkspace
+      ? `Loaded ${mockWorkspaceKmsKeys.length} KMS keys from ${mockState.session.selectedKmsRegion ?? mockWorkspaceRegions[0]}.`
+      : "KMS inventory is only available for open AWS workspaces.",
+    kmsRegions: isAWSWorkspace ? mockWorkspaceRegions : [],
+    kmsKeys: isAWSWorkspace ? mockWorkspaceKmsKeys : [],
+    kmsAliases: isAWSWorkspace ? mockWorkspaceKmsAliases : [],
     selectedApiGatewayRegion: isAWSWorkspace
       ? mockState.session.selectedApiGatewayRegion ?? mockWorkspaceRegions[0]
       : undefined,
@@ -2632,6 +2706,24 @@ function handleMockRequest<T>(
     case "aws.route53.selectHostedZone":
       mockState.session.selectedRoute53HostedZoneId = String(params.hostedZoneId ?? "");
       appendLog("info", `Selected Route 53 hosted zone ${params.hostedZoneId}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.elb.selectRegion":
+      mockState.session.selectedElbRegion = String(params.region ?? "");
+      mockState.session.selectedElbLoadBalancerArn = undefined;
+      appendLog("info", `Selected load balancer region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.elb.selectLoadBalancer":
+      mockState.session.selectedElbLoadBalancerArn = String(params.loadBalancerArn ?? "");
+      appendLog("info", `Selected load balancer ${params.loadBalancerArn}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.kms.selectRegion":
+      mockState.session.selectedKmsRegion = String(params.region ?? "");
+      mockState.session.selectedKmsKeyId = undefined;
+      appendLog("info", `Selected KMS region ${params.region}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.kms.selectKey":
+      mockState.session.selectedKmsKeyId = String(params.keyId ?? "");
+      appendLog("info", `Selected KMS key ${params.keyId}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     case "aws.apigateway.selectRegion":
       mockState.session.selectedApiGatewayRegion = String(params.region ?? "");

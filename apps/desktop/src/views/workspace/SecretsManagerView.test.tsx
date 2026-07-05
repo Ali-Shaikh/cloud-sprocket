@@ -143,6 +143,13 @@ const workspaceFixture: SecretsManagerWorkspaceSnapshot = {
   eventBridgeBuses: [],
   route53HostedZones: [],
   route53ResourceRecordSets: [],
+  elbRegions: [],
+  elbLoadBalancers: [],
+  elbTargetGroups: [],
+  kmsRegions: [],
+  kmsKeys: [],
+  kmsAliases: [],
+
   eventBridgeRules: [],
 
   apiGatewayRegions: [],

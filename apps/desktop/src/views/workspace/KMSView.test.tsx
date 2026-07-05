@@ -4,10 +4,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@/lib/theme";
-import EventBridgeView from "./EventBridgeView";
-import type { EventBridgeWorkspaceSnapshot } from "./EventBridgeView";
+import KMSView from "./KMSView";
+import type { KmsWorkspaceSnapshot } from "./KMSView";
 
-const workspaceFixture: EventBridgeWorkspaceSnapshot = {
+const keyId = "1234abcd-5678-90ef-ghij-klmnopqrstuv";
+
+const workspaceFixture: KmsWorkspaceSnapshot = {
   provider: {
     providerId: "aws",
     label: "AWS",
@@ -99,7 +101,7 @@ const workspaceFixture: EventBridgeWorkspaceSnapshot = {
   s3Objects: [],
   s3ObjectMetadata: [],
   s3ExportSnippets: [],
-  ec2Regions: [],
+  ec2Regions: ["us-east-1"],
   ec2Instances: [],
   lambdaRegions: [],
   lambdaFunctions: [],
@@ -109,7 +111,7 @@ const workspaceFixture: EventBridgeWorkspaceSnapshot = {
   sqsQueues: [],
   snsRegions: [],
   snsTopics: [],
-  rdsRegions: [],
+  rdsRegions: ["us-east-1"],
   rdsInstances: [],
   logsRegions: [],
   logGroups: [],
@@ -130,56 +132,70 @@ const workspaceFixture: EventBridgeWorkspaceSnapshot = {
   cloudFormationRegions: [],
   cloudFormationStacks: [],
   cloudFormationStackEvents: [],
-  selectedEventBridgeRegion: "us-east-1",
-  selectedEventBridgeBusName: "default",
-  eventBridgeRegions: ["us-east-1"],
-  eventBridgeBuses: [{ name: "default", arn: "arn:aws:events:us-east-1:123:event-bus/default" }],
-  eventBridgeRules: [
-    { name: "daily-sync", state: "ENABLED", scheduleExpression: "rate(1 day)", description: "Nightly sync" },
-  ],
+  eventBridgeRegions: [],
+  eventBridgeBuses: [],
+  eventBridgeRules: [],
   route53HostedZones: [],
   route53ResourceRecordSets: [],
   elbRegions: [],
   elbLoadBalancers: [],
   elbTargetGroups: [],
-  kmsRegions: [],
-  kmsKeys: [],
-  kmsAliases: [],
-
+  selectedKmsRegion: "us-east-1",
+  selectedKmsKeyId: keyId,
+  kmsRegions: ["us-east-1"],
+  kmsKeys: [
+    {
+      keyId,
+      arn: `arn:aws:kms:us-east-1:123:key/${keyId}`,
+      description: "Demo encryption key",
+      keyUsage: "ENCRYPT_DECRYPT",
+      keyState: "Enabled",
+      keySpec: "SYMMETRIC_DEFAULT",
+      origin: "AWS_KMS",
+      enabled: true,
+    },
+  ],
+  kmsAliases: [
+    {
+      aliasName: "alias/demo-key",
+      aliasArn: "arn:aws:kms:us-east-1:123:alias/demo-key",
+      targetKeyId: keyId,
+    },
+  ],
 };
 
-describe("EventBridgeView", () => {
-  it("renders bus and rule inventory", () => {
+describe("KMSView", () => {
+  it("renders key and alias inventory", () => {
     render(
       <ThemeProvider>
-        <EventBridgeView
+        <KMSView
           workspace={workspaceFixture}
           actionStatus=""
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
-          onSelectBus={vi.fn()}
+          onSelectKey={vi.fn()}
         />
       </ThemeProvider>,
     );
-    expect(screen.getByText("EventBridge")).toBeInTheDocument();
-    expect(screen.getAllByText("default").length).toBeGreaterThan(0);
-    expect(screen.getByText("daily-sync")).toBeInTheDocument();
+    expect(screen.getByText("Key inventory")).toBeInTheDocument();
+    expect(screen.getAllByText(keyId).length).toBeGreaterThan(0);
+    expect(screen.getByText("alias/demo-key")).toBeInTheDocument();
   });
 
-  it("selects a bus when a row is clicked", () => {
-    const onSelectBus = vi.fn();
+  it("selects a key when a row is clicked", () => {
+    const onSelectKey = vi.fn();
     render(
       <ThemeProvider>
-        <EventBridgeView
+        <KMSView
           workspace={workspaceFixture}
           actionStatus=""
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
-          onSelectBus={onSelectBus}
+          onSelectKey={onSelectKey}
         />
       </ThemeProvider>,
     );
-    fireEvent.click(screen.getAllByText("default")[0]);
-    expect(onSelectBus).toHaveBeenCalledWith("default");
+    fireEvent.click(screen.getAllByText(keyId)[0]);
+    expect(onSelectKey).toHaveBeenCalledWith(keyId);
   });
 });

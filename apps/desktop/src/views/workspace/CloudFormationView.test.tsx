@@ -131,6 +131,13 @@ const workspaceFixture: CloudFormationWorkspaceSnapshot = {
   eventBridgeBuses: [],
   route53HostedZones: [],
   route53ResourceRecordSets: [],
+  elbRegions: [],
+  elbLoadBalancers: [],
+  elbTargetGroups: [],
+  kmsRegions: [],
+  kmsKeys: [],
+  kmsAliases: [],
+
   eventBridgeRules: [],
   selectedCloudFormationRegion: "us-east-1",
   selectedCloudFormationStackName: "demo",

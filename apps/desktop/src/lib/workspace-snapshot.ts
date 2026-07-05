@@ -19,6 +19,10 @@ import type {
   AwsEventBridgeRule,
   AwsRoute53HostedZone,
   AwsRoute53ResourceRecordSet,
+  AwsElbLoadBalancer,
+  AwsElbTargetGroup,
+  AwsKmsAlias,
+  AwsKmsKey,
   AwsIamPolicy,
   AwsIamRole,
   AwsLambdaFunction,
@@ -170,6 +174,12 @@ export const emptyWorkspace: WorkspaceSnapshot = {
   eventBridgeRules: [],
   route53HostedZones: [],
   route53ResourceRecordSets: [],
+  elbRegions: [],
+  elbLoadBalancers: [],
+  elbTargetGroups: [],
+  kmsRegions: [],
+  kmsKeys: [],
+  kmsAliases: [],
   apiGatewayRegions: [],
   apiGatewayApis: [],
   apiGatewayStages: [],
@@ -447,6 +457,36 @@ function normaliseRoute53ResourceRecordSet(
     ...record,
     name: record.name ?? "",
     values: normaliseArray(record.values),
+  };
+}
+
+function normaliseElbLoadBalancer(loadBalancer: AwsElbLoadBalancer): AwsElbLoadBalancer {
+  return {
+    ...loadBalancer,
+    loadBalancerArn: loadBalancer.loadBalancerArn ?? "",
+    loadBalancerName: loadBalancer.loadBalancerName ?? "",
+  };
+}
+
+function normaliseElbTargetGroup(targetGroup: AwsElbTargetGroup): AwsElbTargetGroup {
+  return {
+    ...targetGroup,
+    targetGroupArn: targetGroup.targetGroupArn ?? "",
+    targetGroupName: targetGroup.targetGroupName ?? "",
+  };
+}
+
+function normaliseKmsKey(key: AwsKmsKey): AwsKmsKey {
+  return {
+    ...key,
+    keyId: key.keyId ?? "",
+  };
+}
+
+function normaliseKmsAlias(alias: AwsKmsAlias): AwsKmsAlias {
+  return {
+    ...alias,
+    aliasName: alias.aliasName ?? "",
   };
 }
 
@@ -900,6 +940,26 @@ export function mergeAwsInventoryScope(
         route53ResourceRecordSets: normalised.route53ResourceRecordSets,
         route53StatusMessage: normalised.route53StatusMessage,
       });
+    case "elb":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedElbRegion: normalised.selectedElbRegion,
+        selectedElbLoadBalancerArn: normalised.selectedElbLoadBalancerArn,
+        elbRegions: normalised.elbRegions,
+        elbLoadBalancers: normalised.elbLoadBalancers,
+        elbTargetGroups: normalised.elbTargetGroups,
+        elbStatusMessage: normalised.elbStatusMessage,
+      });
+    case "kms":
+      return normaliseWorkspaceSnapshot({
+        ...current,
+        selectedKmsRegion: normalised.selectedKmsRegion,
+        selectedKmsKeyId: normalised.selectedKmsKeyId,
+        kmsRegions: normalised.kmsRegions,
+        kmsKeys: normalised.kmsKeys,
+        kmsAliases: normalised.kmsAliases,
+        kmsStatusMessage: normalised.kmsStatusMessage,
+      });
     case "apigateway":
       return normaliseWorkspaceSnapshot({
         ...current,
@@ -1077,6 +1137,12 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     route53ResourceRecordSets: normaliseArray(source.route53ResourceRecordSets).map(
       normaliseRoute53ResourceRecordSet,
     ),
+    elbRegions: normaliseArray(source.elbRegions),
+    elbLoadBalancers: normaliseArray(source.elbLoadBalancers).map(normaliseElbLoadBalancer),
+    elbTargetGroups: normaliseArray(source.elbTargetGroups).map(normaliseElbTargetGroup),
+    kmsRegions: normaliseArray(source.kmsRegions),
+    kmsKeys: normaliseArray(source.kmsKeys).map(normaliseKmsKey),
+    kmsAliases: normaliseArray(source.kmsAliases).map(normaliseKmsAlias),
     apiGatewayRegions: normaliseArray(source.apiGatewayRegions),
     apiGatewayApis: normaliseArray(source.apiGatewayApis).map(normaliseApiGatewayApi),
     apiGatewayStages: normaliseArray(source.apiGatewayStages).map(normaliseApiGatewayStage),

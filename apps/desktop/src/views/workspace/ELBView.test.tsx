@@ -4,10 +4,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@/lib/theme";
-import EventBridgeView from "./EventBridgeView";
-import type { EventBridgeWorkspaceSnapshot } from "./EventBridgeView";
+import ELBView from "./ELBView";
+import type { ElbWorkspaceSnapshot } from "./ELBView";
 
-const workspaceFixture: EventBridgeWorkspaceSnapshot = {
+const loadBalancerArn = "arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/demo-alb/abc";
+
+const workspaceFixture: ElbWorkspaceSnapshot = {
   provider: {
     providerId: "aws",
     label: "AWS",
@@ -99,7 +101,7 @@ const workspaceFixture: EventBridgeWorkspaceSnapshot = {
   s3Objects: [],
   s3ObjectMetadata: [],
   s3ExportSnippets: [],
-  ec2Regions: [],
+  ec2Regions: ["us-east-1"],
   ec2Instances: [],
   lambdaRegions: [],
   lambdaFunctions: [],
@@ -109,7 +111,7 @@ const workspaceFixture: EventBridgeWorkspaceSnapshot = {
   sqsQueues: [],
   snsRegions: [],
   snsTopics: [],
-  rdsRegions: [],
+  rdsRegions: ["us-east-1"],
   rdsInstances: [],
   logsRegions: [],
   logGroups: [],
@@ -130,56 +132,72 @@ const workspaceFixture: EventBridgeWorkspaceSnapshot = {
   cloudFormationRegions: [],
   cloudFormationStacks: [],
   cloudFormationStackEvents: [],
-  selectedEventBridgeRegion: "us-east-1",
-  selectedEventBridgeBusName: "default",
-  eventBridgeRegions: ["us-east-1"],
-  eventBridgeBuses: [{ name: "default", arn: "arn:aws:events:us-east-1:123:event-bus/default" }],
-  eventBridgeRules: [
-    { name: "daily-sync", state: "ENABLED", scheduleExpression: "rate(1 day)", description: "Nightly sync" },
-  ],
+  eventBridgeRegions: [],
+  eventBridgeBuses: [],
+  eventBridgeRules: [],
   route53HostedZones: [],
   route53ResourceRecordSets: [],
-  elbRegions: [],
-  elbLoadBalancers: [],
-  elbTargetGroups: [],
+  selectedElbRegion: "us-east-1",
+  selectedElbLoadBalancerArn: loadBalancerArn,
+  elbRegions: ["us-east-1"],
+  elbLoadBalancers: [
+    {
+      loadBalancerArn,
+      loadBalancerName: "demo-alb",
+      dnsName: "demo-alb.elb.localhost:4566",
+      type: "application",
+      scheme: "internet-facing",
+      state: "active",
+    },
+  ],
+  elbTargetGroups: [
+    {
+      targetGroupArn: "arn:aws:elasticloadbalancing:us-east-1:123:targetgroup/demo-tg/abc",
+      targetGroupName: "demo-tg",
+      protocol: "HTTP",
+      port: 8080,
+      targetType: "ip",
+      healthCheckPath: "/health",
+    },
+  ],
   kmsRegions: [],
   kmsKeys: [],
   kmsAliases: [],
 
 };
 
-describe("EventBridgeView", () => {
-  it("renders bus and rule inventory", () => {
+describe("ELBView", () => {
+  it("renders load balancer and target group inventory", () => {
     render(
       <ThemeProvider>
-        <EventBridgeView
+        <ELBView
           workspace={workspaceFixture}
           actionStatus=""
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
-          onSelectBus={vi.fn()}
+          onSelectLoadBalancer={vi.fn()}
         />
       </ThemeProvider>,
     );
-    expect(screen.getByText("EventBridge")).toBeInTheDocument();
-    expect(screen.getAllByText("default").length).toBeGreaterThan(0);
-    expect(screen.getByText("daily-sync")).toBeInTheDocument();
+    expect(screen.getByText("Load Balancers")).toBeInTheDocument();
+    expect(screen.getAllByText("demo-alb").length).toBeGreaterThan(0);
+    expect(screen.getByText("demo-tg")).toBeInTheDocument();
   });
 
-  it("selects a bus when a row is clicked", () => {
-    const onSelectBus = vi.fn();
+  it("selects a load balancer when a row is clicked", () => {
+    const onSelectLoadBalancer = vi.fn();
     render(
       <ThemeProvider>
-        <EventBridgeView
+        <ELBView
           workspace={workspaceFixture}
           actionStatus=""
           onRefresh={vi.fn()}
           onSelectRegion={vi.fn()}
-          onSelectBus={onSelectBus}
+          onSelectLoadBalancer={onSelectLoadBalancer}
         />
       </ThemeProvider>,
     );
-    fireEvent.click(screen.getAllByText("default")[0]);
-    expect(onSelectBus).toHaveBeenCalledWith("default");
+    fireEvent.click(screen.getAllByText("demo-alb")[0]);
+    expect(onSelectLoadBalancer).toHaveBeenCalledWith(loadBalancerArn);
   });
 });

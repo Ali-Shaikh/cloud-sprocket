@@ -251,6 +251,10 @@ export default function App() {
     setEventBridgeActionStatus,
     route53ActionStatus,
     setRoute53ActionStatus,
+    elbActionStatus,
+    setElbActionStatus,
+    kmsActionStatus,
+    setKmsActionStatus,
     apiGatewayActionStatus,
     setApiGatewayActionStatus,
     secretsManagerActionStatus,
@@ -378,6 +382,12 @@ export default function App() {
     selectEventBridgeBus,
     refreshRoute53Inventory,
     selectRoute53HostedZone,
+    refreshElbInventory,
+    selectElbRegion,
+    selectElbLoadBalancer,
+    refreshKmsInventory,
+    selectKmsRegion,
+    selectKmsKey,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
@@ -414,6 +424,8 @@ export default function App() {
     setCloudFormationActionStatus,
     setEventBridgeActionStatus,
     setRoute53ActionStatus,
+    setElbActionStatus,
+    setKmsActionStatus,
     setApiGatewayActionStatus,
     setSecretsManagerActionStatus,
     setLogsActionStatus,
@@ -1028,6 +1040,12 @@ export default function App() {
         if (workspaceResult.route53StatusMessage) {
           setRoute53ActionStatus(workspaceResult.route53StatusMessage);
         }
+        if (workspaceResult.elbStatusMessage) {
+          setElbActionStatus(workspaceResult.elbStatusMessage);
+        }
+        if (workspaceResult.kmsStatusMessage) {
+          setKmsActionStatus(workspaceResult.kmsStatusMessage);
+        }
         if (workspaceResult.apiGatewayStatusMessage) {
           setApiGatewayActionStatus(workspaceResult.apiGatewayStatusMessage);
         }
@@ -1198,6 +1216,8 @@ export default function App() {
     cloudFormationActionStatus,
     eventBridgeActionStatus,
     route53ActionStatus,
+    elbActionStatus,
+    kmsActionStatus,
     apiGatewayActionStatus,
     secretsManagerActionStatus,
     logsActionStatus,
@@ -1297,6 +1317,12 @@ export default function App() {
     selectEventBridgeBus,
     refreshRoute53Inventory,
     selectRoute53HostedZone,
+    refreshElbInventory,
+    selectElbRegion,
+    selectElbLoadBalancer,
+    refreshKmsInventory,
+    selectKmsRegion,
+    selectKmsKey,
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,

@@ -151,6 +151,13 @@ const workspaceFixture: Route53WorkspaceSnapshot = {
       values: ["203.0.113.10"],
     },
   ],
+  elbRegions: [],
+  elbLoadBalancers: [],
+  elbTargetGroups: [],
+  kmsRegions: [],
+  kmsKeys: [],
+  kmsAliases: [],
+
 };
 
 describe("Route53View", () => {

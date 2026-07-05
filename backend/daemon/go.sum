@@ -66,6 +66,8 @@ github.com/aws/aws-sdk-go-v2/service/ecs v1.86.2 h1:t3eGwX8zYsFSEvWiRNG4KN+pMgYy
 github.com/aws/aws-sdk-go-v2/service/ecs v1.86.2/go.mod h1:FZTiizNr2CG5myXP2I8pyCWM0/k4uwAnZXMkmjxgE3o=
 github.com/aws/aws-sdk-go-v2/service/eks v1.88.1 h1:Z05Ct9QXAZXKbC1wNLQln0/6FDzTcWPqI1YTWqs/pRY=
 github.com/aws/aws-sdk-go-v2/service/eks v1.88.1/go.mod h1:MSAmCaKIo6Ph/yg73tj8/HZnILwyk4Px2tXfL4PO/HQ=
+github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.55.6 h1:5obpUisAJuLjJBLHVfIWi8uEzyaeArb4MDBYYjoJ/xw=
+github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.55.6/go.mod h1:qNnJkZTDHDL2sO8hyVH2yILcfSEkjP/pIns2JsF1g1o=
 github.com/aws/aws-sdk-go-v2/service/eventbridge v1.46.8 h1:NBWE7K3lk+VBFycPeW1rud0klPku6whowORYpzqnrXE=
 github.com/aws/aws-sdk-go-v2/service/eventbridge v1.46.8/go.mod h1:3g/foYPw/4CT8yV7/A1QsbvnhDZW/2x2uzl4vkqX49o=
 github.com/aws/aws-sdk-go-v2/service/iam v1.54.7 h1:undHpuVUg25wS2CpeXNqVjIcJComV2RE5AZ7mJGth2U=
@@ -80,6 +82,8 @@ github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.30 h1:/Z5jmNrK
 github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.30/go.mod h1:lEzEZnOosE7zi8Z6royW1cFJTD9fpab4Ul1SBrllewk=
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.31 h1:uao4A3QZ5UmB326V6KF+qRpv9Tjz7IlnlnTbbANntlU=
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.31/go.mod h1:I/1+z0VwL1GhQyLgkoHDlygpUZ+iTAwOQ/NsftiUL2I=
+github.com/aws/aws-sdk-go-v2/service/kms v1.53.6 h1:udpfx3CG5T0eLYXiJMFdN7bBAXKPdb71A2cSDqlcw8c=
+github.com/aws/aws-sdk-go-v2/service/kms v1.53.6/go.mod h1:0RXNc6Yf3AvSMldGD6Lcch96Ojlw2TtGnHsqfD/L4u8=
 github.com/aws/aws-sdk-go-v2/service/lambda v1.94.1 h1:GLkCSQiEUNjCCDb39BuFVaMwfbwUr4kqYHk4PcJzpPY=
 github.com/aws/aws-sdk-go-v2/service/lambda v1.94.1/go.mod h1:gKWVtxlMTgoLU9m6FDw7z6FAEFh8u8CoaPJx0zWk5J8=
 github.com/aws/aws-sdk-go-v2/service/rds v1.119.5 h1:1/qGMaWmjbeOTaufLLqjLnrjhemH1eM74iVWVWWg+Zc=
