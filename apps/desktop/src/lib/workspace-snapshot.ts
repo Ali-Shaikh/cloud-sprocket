@@ -373,7 +373,11 @@ function normaliseEcsTask(task: AwsEcsTask): AwsEcsTask {
 }
 
 function normaliseEksCluster(cluster: AwsEksCluster): AwsEksCluster {
-  return { ...cluster };
+  return {
+    ...cluster,
+    clusterArn: cluster.clusterArn ?? "",
+    clusterName: cluster.clusterName ?? "",
+  };
 }
 
 function normaliseEksNodeGroup(nodeGroup: AwsEksNodeGroup): AwsEksNodeGroup {

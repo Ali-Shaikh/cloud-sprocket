@@ -602,6 +602,7 @@ export function useAwsActions(params: UseAwsActionsParams) {
   }, [selectEKSRegion, setEksActionStatus, workspace.selectedEksRegion]);
 
   const selectEKSCluster = useCallback((clusterName: string): void => {
+    setEksActionStatus(`Loading node groups for ${clusterName}.`);
     void requestWorkspaceSnapshot("aws.eks.selectCluster", { clusterName })
       .then((workspaceResult) => {
         startTransition(() => {

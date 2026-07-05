@@ -59,7 +59,7 @@ func (e *EKSInventory) ListClusters(
 			Name: aws.String(clusterName),
 		})
 		if err != nil {
-			return nil, err
+			continue
 		}
 		if res.Cluster != nil {
 			clusters = append(clusters, eksClusterSummary(*res.Cluster))
@@ -143,7 +143,7 @@ func (e *EKSInventory) ListNodeGroups(
 			NodegroupName: aws.String(nodeGroupName),
 		})
 		if err != nil {
-			return nil, err
+			continue
 		}
 		if res.Nodegroup != nil {
 			nodeGroups = append(nodeGroups, eksNodeGroupSummary(*res.Nodegroup))
