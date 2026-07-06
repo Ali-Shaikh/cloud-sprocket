@@ -760,6 +760,7 @@ describe("App", () => {
       ],
       awsEndpointUrl: "http://192.168.50.168:4566",
       awsWriteCapable: true,
+      awsWriteTargetIsLocal: true,
       awsWriteModeEnabled: false,
       awsWritesEnabled: false,
       azureWriteCapable: false,
@@ -1358,7 +1359,8 @@ describe("App", () => {
         reachable: true,
         summary: "Docker is reachable.",
       },
-      awsWriteCapable: false,
+      awsWriteCapable: true,
+      awsWriteTargetIsLocal: true,
       awsWriteModeEnabled: false,
       awsWritesEnabled: false,
     } as WorkspaceSnapshot;
@@ -1369,7 +1371,7 @@ describe("App", () => {
       </AppProviders>,
     );
 
-    expect(await screen.findByText(/This profile does not support write mode/)).toBeInTheDocument();
+    expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^Local Runtime/ }));
     expect(await screen.findByText("Docker Runtime")).toBeInTheDocument();
     expect(await screen.findByText("Local Runtimes")).toBeInTheDocument();
@@ -1972,7 +1974,8 @@ describe("App", () => {
     workspaceFixture = {
       ...workspaceFixture,
       awsEndpointUrl: undefined,
-      awsWriteCapable: false,
+      awsWriteCapable: true,
+      awsWriteTargetIsLocal: false,
       awsWriteModeEnabled: false,
       awsWritesEnabled: false,
     };
