@@ -9,12 +9,10 @@ func awsActionGate(
 	session models.SessionSnapshot,
 	profile models.ProfileSummary,
 ) (enabled bool, reason string) {
-	if !profileAllowsAWSWrites(profile) {
-		return false, "This profile does not support write mode. Use a local endpoint profile with cloudsprocket_allow_writes enabled."
-	}
 	if !session.AWSWriteModeEnabled {
-		return false, "Turn on write mode from the top bar to run mutating actions."
+		return false, awsWriteModeRequiredMessage
 	}
+	_ = profile
 	return true, ""
 }
 

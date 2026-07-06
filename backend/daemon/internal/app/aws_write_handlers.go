@@ -98,7 +98,7 @@ func (s *Service) handleAwsS3DeleteObject(ctx context.Context, params json.RawMe
 	}
 	profile, bucketName, objectKey, err := s.authorizeAWSWriteSelection(
 		ctx, snapshot,
-		"S3 delete requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true",
+		"S3 delete requires write mode to be enabled",
 		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
 			return s.activeS3ObjectSelection(snap, session, request.ObjectKey)
 		},
@@ -153,7 +153,7 @@ func (s *Service) handleAwsS3CreateBucket(ctx context.Context, params json.RawMe
 	_, profile, err := s.authorizeAWSWrite(
 		ctx, snapshot,
 		"open an AWS workspace before creating an S3 bucket",
-		"S3 create requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true",
+		"S3 create requires write mode to be enabled",
 	)
 	if err != nil {
 		return nil, err
@@ -195,7 +195,7 @@ func (s *Service) handleAwsEc2RunInstances(ctx context.Context, params json.RawM
 	session, profile, err := s.authorizeAWSWrite(
 		ctx, snapshot,
 		"open an AWS workspace before launching EC2 instances",
-		"EC2 launch requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true",
+		"EC2 launch requires write mode to be enabled",
 	)
 	if err != nil {
 		return nil, err
@@ -248,7 +248,7 @@ func (s *Service) handleAwsEc2TerminateInstances(ctx context.Context, params jso
 	}
 	if !effectiveAWSWritesEnabled(session, profile) {
 		s.mu.Unlock()
-		return nil, errors.New("EC2 terminate requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true")
+		return nil, errors.New("EC2 terminate requires write mode to be enabled")
 	}
 	s.mu.Unlock()
 
@@ -284,7 +284,7 @@ func (s *Service) handleAwsLambdaDeleteFunction(ctx context.Context, params json
 	}
 	profile, region, functionName, err := s.authorizeAWSWriteSelection(
 		ctx, snapshot,
-		"Lambda delete requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true",
+		"Lambda delete requires write mode to be enabled",
 		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
 			return s.activeLambdaSelection(snap, session, request.FunctionName)
 		},
@@ -336,7 +336,7 @@ func (s *Service) handleAwsRdsLifecycleInstance(ctx context.Context, params json
 	}
 	if !effectiveAWSWritesEnabled(session, profile) {
 		s.mu.Unlock()
-		return nil, errors.New("RDS lifecycle actions require write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true")
+		return nil, errors.New("RDS lifecycle actions require write mode to be enabled")
 	}
 	s.mu.Unlock()
 
@@ -385,7 +385,7 @@ func (s *Service) handleAwsLogsCreateLogGroup(ctx context.Context, params json.R
 	session, profile, err := s.authorizeAWSWrite(
 		ctx, snapshot,
 		"open an AWS workspace before creating a log group",
-		"CloudWatch Logs create requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true",
+		"CloudWatch Logs create requires write mode to be enabled",
 	)
 	if err != nil {
 		return nil, err
@@ -431,7 +431,7 @@ func (s *Service) handleAwsLogsPutLogEvents(ctx context.Context, params json.Raw
 	session, profile, err := s.authorizeAWSWrite(
 		ctx, snapshot,
 		"open an AWS workspace before injecting log events",
-		"CloudWatch Logs put requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true",
+		"CloudWatch Logs put requires write mode to be enabled",
 	)
 	if err != nil {
 		return nil, err
@@ -468,7 +468,7 @@ func (s *Service) handleAwsIamCreateRole(ctx context.Context, params json.RawMes
 	_, profile, err := s.authorizeAWSWrite(
 		ctx, snapshot,
 		"open an AWS workspace before creating an IAM role",
-		"IAM create requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true",
+		"IAM create requires write mode to be enabled",
 	)
 	if err != nil {
 		return nil, err

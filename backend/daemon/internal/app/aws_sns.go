@@ -54,7 +54,7 @@ func (s *Service) handleAwsSnsPublish(ctx context.Context, params json.RawMessag
 	}
 	profile, region, topicArn, err := s.authorizeAWSWriteSelection(
 		ctx, snapshot,
-		"SNS publish requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true",
+		"SNS publish requires write mode to be enabled",
 		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
 			return s.activeSNSSelection(snap, session, request.TopicArn)
 		},
@@ -85,7 +85,7 @@ func (s *Service) handleAwsSnsCreateTopic(ctx context.Context, params json.RawMe
 	session, profile, err := s.authorizeAWSWrite(
 		ctx, snapshot,
 		"open an AWS workspace before creating an SNS topic",
-		"SNS create requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true",
+		"SNS create requires write mode to be enabled",
 	)
 	if err != nil {
 		return nil, err

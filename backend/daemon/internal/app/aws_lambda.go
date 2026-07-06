@@ -287,7 +287,7 @@ func (s *Service) handleAwsLambdaInvoke(ctx context.Context, params json.RawMess
 	}
 	if !effectiveAWSWritesEnabled(session, profile) {
 		s.mu.Unlock()
-		return nil, errors.New("Lambda invoke requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true")
+		return nil, errors.New("Lambda invoke requires write mode to be enabled")
 	}
 	s.mu.Unlock()
 	payload := []byte(request.Payload)
@@ -330,7 +330,7 @@ func (s *Service) handleAwsLambdaCreate(ctx context.Context, params json.RawMess
 	}
 	if !effectiveAWSWritesEnabled(session, profile) {
 		s.mu.Unlock()
-		return nil, errors.New("Lambda create requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true")
+		return nil, errors.New("Lambda create requires write mode to be enabled")
 	}
 	s.mu.Unlock()
 

@@ -1146,7 +1146,7 @@ func TestServiceReportsFailedEC2ActionJob(t *testing.T) {
 	}
 }
 
-func TestServiceRejectsEC2ActionWithoutLocalEndpoint(t *testing.T) {
+func TestServiceAllowsEC2ActionOnRealCloudWithWriteMode(t *testing.T) {
 	tempDir := t.TempDir()
 	home := filepath.Join(tempDir, "home")
 
@@ -1206,14 +1206,26 @@ func TestServiceRejectsEC2ActionWithoutLocalEndpoint(t *testing.T) {
 	if _, err := service.Handle(ctx, "session.lock", nil, nil); err != nil {
 		t.Fatalf("expected session.lock to succeed, got %v", err)
 	}
+	if _, err := service.Handle(ctx, "session.setWriteMode", []byte(`{"enabled":true}`), nil); err != nil {
+		t.Fatalf("expected session.setWriteMode to succeed on real cloud profile, got %v", err)
+	}
 	if _, err := service.Handle(ctx, "aws.ec2.selectInstance", []byte(`{"instanceId":"i-0123456789abcdef0"}`), nil); err != nil {
 		t.Fatalf("expected aws.ec2.selectInstance to succeed, got %v", err)
 	}
-	if _, err := service.Handle(ctx, "aws.ec2.invokeAction", []byte(`{"action":"stop"}`), recordingNotifier{events: make(chan models.JobStatus, 1)}); err == nil {
-		t.Fatalf("expected EC2 write action to be rejected without a local endpoint")
+	notifier := recordingNotifier{events: make(chan models.JobStatus, 4)}
+	result, err := service.Handle(ctx, "aws.ec2.invokeAction", []byte(`{"action":"reboot"}`), notifier)
+	if err != nil {
+		t.Fatalf("expected EC2 write action to queue on real cloud with write mode enabled, got %v", err)
 	}
-	if len(ec2Inventory.actionRequests) != 0 {
-		t.Fatalf("expected rejected action to avoid EC2 adapter calls, got %+v", ec2Inventory.actionRequests)
+	if result.(models.JobStatus).Status != "queued" {
+		t.Fatalf("expected queued EC2 job, got %+v", result)
+	}
+	completedJob := waitForJobStatus(t, notifier.events, "completed")
+	if !strings.Contains(completedJob.Message, "Desired state reached: running") {
+		t.Fatalf("expected completed EC2 job on real cloud, got %+v", completedJob)
+	}
+	if len(ec2Inventory.actionRequests) != 1 || ec2Inventory.actionRequests[0] != "reboot|us-east-1|i-0123456789abcdef0" {
+		t.Fatalf("expected reboot request to hit EC2 inventory, got %+v", ec2Inventory.actionRequests)
 	}
 }
 
@@ -1298,7 +1310,7 @@ func TestServiceRejectsWriteActionsWithoutWriteMode(t *testing.T) {
 	}
 }
 
-func TestServiceRejectsEC2ActionWithoutWriteOptIn(t *testing.T) {
+func TestServiceAllowsEC2ActionOnLocalEndpointWithWriteMode(t *testing.T) {
 	tempDir := t.TempDir()
 	home := filepath.Join(tempDir, "home")
 
@@ -1358,14 +1370,26 @@ func TestServiceRejectsEC2ActionWithoutWriteOptIn(t *testing.T) {
 	if _, err := service.Handle(ctx, "session.lock", nil, nil); err != nil {
 		t.Fatalf("expected session.lock to succeed, got %v", err)
 	}
+	if _, err := service.Handle(ctx, "session.setWriteMode", []byte(`{"enabled":true}`), nil); err != nil {
+		t.Fatalf("expected session.setWriteMode to succeed on local endpoint profile, got %v", err)
+	}
 	if _, err := service.Handle(ctx, "aws.ec2.selectInstance", []byte(`{"instanceId":"i-0123456789abcdef0"}`), nil); err != nil {
 		t.Fatalf("expected aws.ec2.selectInstance to succeed, got %v", err)
 	}
-	if _, err := service.Handle(ctx, "aws.ec2.invokeAction", []byte(`{"action":"stop"}`), recordingNotifier{events: make(chan models.JobStatus, 1)}); err == nil {
-		t.Fatalf("expected EC2 write action to be rejected without explicit profile write opt-in")
+	notifier := recordingNotifier{events: make(chan models.JobStatus, 4)}
+	result, err := service.Handle(ctx, "aws.ec2.invokeAction", []byte(`{"action":"reboot"}`), notifier)
+	if err != nil {
+		t.Fatalf("expected EC2 write action to queue on local endpoint with write mode enabled, got %v", err)
 	}
-	if len(ec2Inventory.actionRequests) != 0 {
-		t.Fatalf("expected rejected action to avoid EC2 adapter calls, got %+v", ec2Inventory.actionRequests)
+	if result.(models.JobStatus).Status != "queued" {
+		t.Fatalf("expected queued EC2 job, got %+v", result)
+	}
+	completedJob := waitForJobStatus(t, notifier.events, "completed")
+	if !strings.Contains(completedJob.Message, "Desired state reached: running") {
+		t.Fatalf("expected completed EC2 job on local endpoint, got %+v", completedJob)
+	}
+	if len(ec2Inventory.actionRequests) != 1 || ec2Inventory.actionRequests[0] != "reboot|us-east-1|i-0123456789abcdef0" {
+		t.Fatalf("expected reboot request to hit EC2 inventory, got %+v", ec2Inventory.actionRequests)
 	}
 }
 

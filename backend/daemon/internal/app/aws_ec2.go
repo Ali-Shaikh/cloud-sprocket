@@ -395,7 +395,7 @@ func (s *Service) handleAwsEc2InvokeAction(ctx context.Context, params json.RawM
 	}
 	if !effectiveAWSWritesEnabled(session, profile) {
 		s.mu.Unlock()
-		return nil, errors.New("EC2 write actions require write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true")
+		return nil, errors.New("EC2 write actions require write mode to be enabled")
 	}
 	s.mu.Unlock()
 

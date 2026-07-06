@@ -30,14 +30,14 @@ func TestBuildAWSActionCapabilitiesWriteModeOff(t *testing.T) {
 func TestBuildAWSActionCapabilitiesRealCloudProfile(t *testing.T) {
 	profile := models.ProfileSummary{
 		Attributes: []models.DetailField{
-			{Label: "endpoint_url", Value: "https://s3.amazonaws.com"},
+			{Label: "Region", Value: "eu-west-2"},
 		},
 	}
 	session := models.SessionSnapshot{AWSWriteModeEnabled: true}
 	caps := buildAWSActionCapabilities(session, profile)
 	create := caps["lambda"][1]
-	if create.Enabled {
-		t.Fatal("expected create disabled for real-cloud profile")
+	if !create.Enabled {
+		t.Fatal("expected create enabled for real-cloud profile when write mode is on")
 	}
 }
 

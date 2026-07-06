@@ -393,7 +393,11 @@ export default function OverviewView({
         <InlineBanner
           tone="warning"
           icon={ShieldAlert}
-          title={`Write mode is on. Mutating actions target ${workspace.awsEndpointUrl || "the configured endpoint"}.`}
+          title={
+            workspace.awsWriteTargetIsLocal === true
+              ? `Write mode is on. Mutating actions target ${workspace.awsEndpointUrl || "the local endpoint"}.`
+              : `Write mode is on. Mutating actions target the live AWS account${workspace.awsEndpointUrl ? ` (${workspace.awsEndpointUrl})` : ""}.`
+          }
         />
       ) : (
         <InlineBanner
@@ -401,8 +405,10 @@ export default function OverviewView({
           icon={ShieldCheck}
           title={
             writeCapable
-              ? "Write mode is off. Enable it from the top bar when you need mutating actions."
-              : "Read-only mode keeps you safe. This profile does not support write mode."
+              ? workspace.awsWriteTargetIsLocal
+                ? "Write mode is off. Enable it from the top bar when you need mutating actions against the local endpoint."
+                : "Write mode is off. Enable it from the top bar when you need mutating actions; live AWS accounts require an extra confirmation."
+              : "Read-only mode keeps you safe until you open a locked workspace."
           }
         />
       )}

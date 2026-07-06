@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { backendRequest } from "@/lib/backend";
+import { awsWriteEnableDialogIntent, awsWriteTargetSummary } from "@/lib/aws-write-policy";
 import { notify } from "@/lib/notify";
 import { applySessionWriteModeToWorkspace, normaliseSessionSnapshot } from "@/lib/workspace-snapshot";
 import type { ProfileSummary, SessionSnapshot, WorkspaceSnapshot } from "@/types/backend";
@@ -34,12 +35,15 @@ export type UseWriteModeFlowParams = {
   setWorkspace: Dispatch<SetStateAction<WorkspaceSnapshot>>;
 };
 
+type WriteModeDialogIntent = "enable-local" | "enable-cloud" | "incapable";
+
 export function useWriteModeFlow(params: UseWriteModeFlowParams) {
   const { session, activeWorkspace, workspace, lockedProfile, setSession, setWorkspace } = params;
 
   const [writeModeDialogOpen, setWriteModeDialogOpen] = useState(false);
-  const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<"enable" | "incapable">("enable");
+  const [writeModeDialogIntent, setWriteModeDialogIntent] = useState<WriteModeDialogIntent>("enable-local");
   const [writeModePending, setWriteModePending] = useState(false);
+  const [cloudWriteAcknowledged, setCloudWriteAcknowledged] = useState(false);
   const writeModeRequestRef = useRef(0);
 
   const writeModeEnabled =
@@ -68,6 +72,7 @@ export function useWriteModeFlow(params: UseWriteModeFlowParams) {
             );
           });
           setWriteModeDialogOpen(false);
+          setCloudWriteAcknowledged(false);
         })
         .catch((error: unknown) => {
           if (token !== writeModeRequestRef.current) {
@@ -92,18 +97,49 @@ export function useWriteModeFlow(params: UseWriteModeFlowParams) {
       void setWriteMode(false);
       return;
     }
-    setWriteModeDialogIntent(writeModeCapable ? "enable" : "incapable");
+    if (!writeModeCapable) {
+      setWriteModeDialogIntent("incapable");
+    } else if (session.lockedProviderId === "aws") {
+      setWriteModeDialogIntent(awsWriteEnableDialogIntent(activeWorkspace));
+      setCloudWriteAcknowledged(false);
+    } else {
+      setWriteModeDialogIntent("enable-local");
+    }
     setWriteModeDialogOpen(true);
-  }, [setWriteMode, writeModeCapable, writeModeEnabled, writeModePending]);
+  }, [
+    activeWorkspace,
+    session.lockedProviderId,
+    setWriteMode,
+    writeModeCapable,
+    writeModeEnabled,
+    writeModePending,
+  ]);
+
+  const profileLabel =
+    workspace.profile?.displayName || lockedProfile?.displayName || "Workspace";
+  const targetLabel =
+    session.lockedProviderId === "azure"
+      ? activeWorkspace.azureEndpointUrl || "Azure CLI"
+      : awsWriteTargetSummary(activeWorkspace);
 
   const writeModeDialog: ReactNode = (
-    <AlertDialog open={writeModeDialogOpen} onOpenChange={setWriteModeDialogOpen}>
+    <AlertDialog
+      open={writeModeDialogOpen}
+      onOpenChange={(open) => {
+        setWriteModeDialogOpen(open);
+        if (!open) {
+          setCloudWriteAcknowledged(false);
+        }
+      }}
+    >
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
             {writeModeDialogIntent === "incapable"
               ? "This profile cannot enable write mode"
-              : "Enable write mode for this session?"}
+              : writeModeDialogIntent === "enable-cloud"
+                ? "Enable write mode on live AWS?"
+                : "Enable write mode for this session?"}
           </AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-3 text-sm text-muted-foreground">
@@ -111,8 +147,38 @@ export function useWriteModeFlow(params: UseWriteModeFlowParams) {
                 <p>
                   {session.lockedProviderId === "azure"
                     ? "Write mode needs the floci-az local profile or an Azure CLI sign-in. Real cloud profiles require the CLI to be available."
-                    : "Write mode needs a profile with a local endpoint_url and cloudsprocket_allow_writes = true in your AWS config. Real AWS endpoints stay read-only in this release."}
+                    : "Open a locked AWS workspace before changing write mode."}
                 </p>
+              ) : writeModeDialogIntent === "enable-cloud" ? (
+                <>
+                  <p className="font-medium text-destructive">
+                    Mutating actions will hit your live AWS account for the rest of this locked
+                    session.
+                  </p>
+                  <ul className="list-disc space-y-1 pl-5">
+                    <li>Creates, updates, and deletes are real and may be irreversible.</li>
+                    <li>Billing, quotas, and IAM permissions apply as in the AWS console.</li>
+                    <li>Prefer a local endpoint profile when you are experimenting.</li>
+                  </ul>
+                  <p>
+                    <span className="font-semibold text-foreground">Profile:</span> {profileLabel}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-foreground">Target:</span> {targetLabel}
+                  </p>
+                  <label className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={cloudWriteAcknowledged}
+                      onChange={(event) => setCloudWriteAcknowledged(event.target.checked)}
+                      className="mt-0.5 size-4 shrink-0 accent-destructive"
+                    />
+                    <span>
+                      I understand write mode will send mutating API calls to the live AWS account
+                      for profile <span className="font-semibold">{profileLabel}</span>.
+                    </span>
+                  </label>
+                </>
               ) : (
                 <>
                   <p>
@@ -121,14 +187,10 @@ export function useWriteModeFlow(params: UseWriteModeFlowParams) {
                       : "Mutating actions (S3 uploads, EC2 start/stop/reboot, Lambda invoke/create) will be sent to the endpoint below for the rest of this locked session."}
                   </p>
                   <p>
-                    <span className="font-semibold text-foreground">Profile:</span>{" "}
-                    {workspace.profile?.displayName || lockedProfile?.displayName || "Workspace"}
+                    <span className="font-semibold text-foreground">Profile:</span> {profileLabel}
                   </p>
                   <p>
-                    <span className="font-semibold text-foreground">Target:</span>{" "}
-                    {session.lockedProviderId === "azure"
-                      ? activeWorkspace.azureEndpointUrl || "Azure CLI"
-                      : activeWorkspace.awsEndpointUrl || "Default AWS endpoint"}
+                    <span className="font-semibold text-foreground">Target:</span> {targetLabel}
                   </p>
                 </>
               )}
@@ -143,15 +205,22 @@ export function useWriteModeFlow(params: UseWriteModeFlowParams) {
           >
             Cancel
           </Button>
-          {writeModeDialogIntent === "enable" ? (
+          {writeModeDialogIntent !== "incapable" ? (
             <Button
               variant="destructive"
-              disabled={writeModePending}
+              disabled={
+                writeModePending ||
+                (writeModeDialogIntent === "enable-cloud" && !cloudWriteAcknowledged)
+              }
               onClick={() => {
                 setWriteMode(true);
               }}
             >
-              {writeModePending ? "Enabling..." : "Enable writes"}
+              {writeModePending
+                ? "Enabling..."
+                : writeModeDialogIntent === "enable-cloud"
+                  ? "Enable live AWS writes"
+                  : "Enable writes"}
             </Button>
           ) : null}
         </AlertDialogFooter>
