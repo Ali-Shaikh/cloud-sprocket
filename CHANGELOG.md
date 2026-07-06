@@ -9,6 +9,24 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.8.33] - 2026-07-06
+
+### Changed
+
+- AWS write mode can be enabled on any locked AWS profile; live cloud profiles
+  require an extra acknowledgement before mutating actions (#114)
+- Inventory tables restored to full width with the inspector stacked below the
+  table (#113)
+
+### Fixed
+
+- KMS sidebar icon now uses the official AWS KMS asset instead of a generic
+  fallback (#114)
+- S3 delete and other mutating actions stayed disabled after enabling write mode
+  because action capabilities were not refreshed on toggle (#114)
+- ResourceTable layout regression that crushed wide tables beside a fixed side
+  inspector (#113)
+
 ## [0.8.32] - 2026-07-05
 
 ### Added
@@ -650,7 +668,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.32...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.33...HEAD
+[0.8.33]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.32...v0.8.33
 [0.8.32]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.31...v0.8.32
 [0.8.31]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.30...v0.8.31
 [0.8.30]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.29...v0.8.30

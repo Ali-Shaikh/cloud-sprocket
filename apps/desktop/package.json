@@ -1,6 +1,6 @@
 {
   "name": "@cloudsprocket/desktop",
-  "version": "0.8.32",
+  "version": "0.8.33",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "type": "module",
