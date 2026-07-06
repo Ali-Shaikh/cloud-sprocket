@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
+import { syncActionCapabilitiesForWriteMode } from "@/lib/action-capabilities";
 import type {
   AppSettingsSnapshot,
   AwsDynamoDBTable,
@@ -1011,18 +1012,30 @@ export function applySessionWriteModeToWorkspace(
   }
   if (session.lockedProviderId === "azure") {
     const writeMode = Boolean(session.azureWriteModeEnabled);
+    const azureWritesEnabled = writeMode && workspace.azureWriteCapable;
     return {
       ...workspace,
       azureWriteModeEnabled: writeMode,
-      azureWritesEnabled: writeMode && workspace.azureWriteCapable,
+      azureWritesEnabled,
+      actionCapabilities: syncActionCapabilitiesForWriteMode(
+        workspace.actionCapabilities,
+        "azure",
+        azureWritesEnabled,
+      ),
     };
   }
   if (session.lockedProviderId === "aws") {
     const writeMode = Boolean(session.awsWriteModeEnabled);
+    const awsWritesEnabled = writeMode && workspace.awsWriteCapable;
     return {
       ...workspace,
       awsWriteModeEnabled: writeMode,
-      awsWritesEnabled: writeMode && workspace.awsWriteCapable,
+      awsWritesEnabled,
+      actionCapabilities: syncActionCapabilitiesForWriteMode(
+        workspace.actionCapabilities,
+        "aws",
+        awsWritesEnabled,
+      ),
     };
   }
   return workspace;
