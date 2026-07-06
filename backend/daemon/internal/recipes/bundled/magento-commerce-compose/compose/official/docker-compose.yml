@@ -15,7 +15,7 @@ services:
     env_file: env/phpfpm.env
 
   db:
-    image: mariadb:11.4
+    image: mariadb:12.3
     command:
       --max_allowed_packet=64M
       --optimizer_use_condition_selectivity=1
@@ -26,7 +26,7 @@ services:
       - dbdata:/var/lib/mysql
 
   redis:
-    image: valkey/valkey:8.1-alpine
+    image: valkey/valkey:9.1-alpine
 
   opensearch:
     image: markoshust/magento-opensearch:3-0
