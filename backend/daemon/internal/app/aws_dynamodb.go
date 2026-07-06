@@ -230,7 +230,7 @@ func (s *Service) handleAwsDynamodbPutItem(ctx context.Context, params json.RawM
 	}
 	profile, region, tableName, err := s.authorizeAWSWriteSelection(
 		ctx, snapshot,
-		"DynamoDB put requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true",
+		"DynamoDB put requires write mode to be enabled",
 		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
 			return s.activeDynamoDBSelection(snap, session, request.TableName)
 		},
@@ -268,7 +268,7 @@ func (s *Service) handleAwsDynamodbDeleteItem(ctx context.Context, params json.R
 	}
 	profile, region, tableName, err := s.authorizeAWSWriteSelection(
 		ctx, snapshot,
-		"DynamoDB delete requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true",
+		"DynamoDB delete requires write mode to be enabled",
 		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
 			return s.activeDynamoDBSelection(snap, session, request.TableName)
 		},

@@ -43,10 +43,9 @@ func profileEndpointURL(profile models.ProfileSummary) string {
 	return ""
 }
 
-func profileAllowsAWSWrites(profile models.ProfileSummary) bool {
-	if !profileAllowsWriteOptIn(profile) {
-		return false
-	}
+const awsWriteModeRequiredMessage = "Turn on write mode from the top bar to run mutating actions."
+
+func profileIsLocalAWSEndpoint(profile models.ProfileSummary) bool {
 	endpointURL := profileEndpointURL(profile)
 	if endpointURL == "" {
 		return false
@@ -56,11 +55,17 @@ func profileAllowsAWSWrites(profile models.ProfileSummary) bool {
 		return false
 	}
 	host := parsed.Hostname()
-	if strings.Contains(strings.ToLower(host), "localstack") || host == "localhost" {
+	if strings.Contains(strings.ToLower(host), "localstack") || host == "localhost" || host == "127.0.0.1" {
 		return true
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsPrivate()
+}
+
+// profileAllowsAWSWrites reports whether the profile targets a local emulator
+// endpoint. It is used for UI copy and policy summaries, not for gating writes.
+func profileAllowsAWSWrites(profile models.ProfileSummary) bool {
+	return profileIsLocalAWSEndpoint(profile)
 }
 
 func profileAllowsWriteOptIn(profile models.ProfileSummary) bool {
@@ -73,8 +78,8 @@ func profileAllowsWriteOptIn(profile models.ProfileSummary) bool {
 	return false
 }
 
-func effectiveAWSWritesEnabled(session models.SessionSnapshot, profile models.ProfileSummary) bool {
-	return session.AWSWriteModeEnabled && profileAllowsAWSWrites(profile)
+func effectiveAWSWritesEnabled(session models.SessionSnapshot, _ models.ProfileSummary) bool {
+	return session.IsLocked && session.AWSWriteModeEnabled
 }
 
 func validateLambdaCreateInput(input models.AwsLambdaCreateInput) error {

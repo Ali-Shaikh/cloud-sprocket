@@ -1252,6 +1252,25 @@ function nextMockLogId(): number {
   return mockState.logs.reduce((max, entry) => Math.max(max, entry.id), 0) + 1;
 }
 
+function mockAwsWriteTargetIsLocal(profile: ProfileSummary | undefined): boolean {
+  if (!profile) {
+    return false;
+  }
+  const endpoint = profile.attributes
+    .find((field) => field.label.toLowerCase().includes("endpoint"))
+    ?.value?.trim()
+    .toLowerCase();
+  if (!endpoint) {
+    return false;
+  }
+  return (
+    endpoint.includes("localstack") ||
+    endpoint.includes("localhost") ||
+    endpoint.includes("127.0.0.1") ||
+    /https?:\/\/192\.168\./.test(endpoint)
+  );
+}
+
 function currentProfile(): ProfileSummary | undefined {
   const providerId = mockState.session.isLocked
     ? mockState.session.lockedProviderId
@@ -1706,6 +1725,8 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     ],
     awsEndpointUrl: isAWSWorkspace ? "http://192.168.50.168:4566" : undefined,
     awsWriteCapable: isAWSWorkspace && mockState.session.isLocked,
+    awsWriteTargetIsLocal:
+      isAWSWorkspace && mockState.session.isLocked && mockAwsWriteTargetIsLocal(profile),
     awsWriteModeEnabled:
       isAWSWorkspace && mockState.session.isLocked && Boolean(mockState.session.awsWriteModeEnabled),
     awsWritesEnabled:
@@ -3452,11 +3473,7 @@ function handleMockRequest<T>(
       }
       if (mockState.session.lockedProviderId === "aws") {
         if (params.enabled && !buildMockWorkspace().awsWriteCapable) {
-          return Promise.reject(
-            new Error(
-              "this profile cannot enable write mode: configure a local endpoint_url and cloudsprocket_allow_writes = true",
-            ),
-          );
+          return Promise.reject(new Error("open a locked workspace before changing write mode"));
         }
         mockState.session.awsWriteModeEnabled = Boolean(params.enabled);
       } else if (mockState.session.lockedProviderId === "azure") {

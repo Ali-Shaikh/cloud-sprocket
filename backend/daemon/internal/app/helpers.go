@@ -289,13 +289,10 @@ func writePolicySummary(profile models.ProfileSummary) string {
 	if isLocalFlociProfile(profile) {
 		return "Writes enabled for floci-az local profile"
 	}
-	if profileAllowsAWSWrites(profile) {
-		return "Writes enabled for local endpoint profile"
+	if profileIsLocalAWSEndpoint(profile) {
+		return "Local endpoint profile. Enable write mode from the top bar for mutating actions."
 	}
-	if profileAllowsWriteOptIn(profile) {
-		return "Write opt-in present, but endpoint is not local"
-	}
-	return "Read-only until cloudsprocket_allow_writes and a local endpoint_url are configured"
+	return "Live AWS profile. Enable write mode from the top bar; mutations hit the real account."
 }
 
 func writeTargetSummary(profile models.ProfileSummary) string {

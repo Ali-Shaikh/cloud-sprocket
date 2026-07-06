@@ -374,7 +374,7 @@ func (s *Service) handleAwsS3UploadObject(ctx context.Context, params json.RawMe
 	}
 	if !effectiveAWSWritesEnabled(session, profile) {
 		s.mu.Unlock()
-		return nil, errors.New("S3 uploads require write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true")
+		return nil, errors.New("S3 uploads require write mode to be enabled")
 	}
 	if err := validateS3UploadRequest(request.SourcePath, request.ObjectKey); err != nil {
 		s.mu.Unlock()

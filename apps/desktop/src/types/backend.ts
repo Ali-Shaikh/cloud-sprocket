@@ -1031,6 +1031,7 @@ export interface WorkspaceSnapshot {
   localConfigArtifacts: LocalConfigArtifact[];
   awsEndpointUrl?: string;
   awsWriteCapable: boolean;
+  awsWriteTargetIsLocal?: boolean;
   awsWriteModeEnabled: boolean;
   awsWritesEnabled: boolean;
   actionCapabilities?: Record<string, ActionCapability[]>;

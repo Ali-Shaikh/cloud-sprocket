@@ -368,10 +368,6 @@ func (s *Service) handleSessionSetWriteMode(ctx context.Context, params json.Raw
 	}
 	switch session.CurrentProviderID {
 	case "aws":
-		if request.Enabled && !profileAllowsAWSWrites(profile) {
-			s.mu.Unlock()
-			return nil, errors.New("this profile cannot enable write mode: configure a local endpoint_url and cloudsprocket_allow_writes = true")
-		}
 		session.AWSWriteModeEnabled = request.Enabled
 	case "azure":
 		if request.Enabled && !profileAllowsAzureWrites(profile, s.azureProviderCommandPath(snapshot)) {
@@ -402,11 +398,19 @@ func (s *Service) handleSessionSetWriteMode(ctx context.Context, params json.Raw
 					azureWriteTargetSummary(profile, s.settings.FlociAZEndpoint),
 				)
 			default:
-				message = fmt.Sprintf(
-					"Write mode enabled for %s (target: %s).",
-					profile.DisplayName,
-					writeTargetSummary(profile),
-				)
+				if profileIsLocalAWSEndpoint(profile) {
+					message = fmt.Sprintf(
+						"Write mode enabled for %s (local target: %s).",
+						profile.DisplayName,
+						writeTargetSummary(profile),
+					)
+				} else {
+					message = fmt.Sprintf(
+						"Write mode enabled for %s (live AWS target: %s). Mutating actions will hit the real account.",
+						profile.DisplayName,
+						writeTargetSummary(profile),
+					)
+				}
 			}
 		}
 		_ = notifier.Notify("log.appended", models.ActivityLogEntry{

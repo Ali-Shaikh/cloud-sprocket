@@ -222,7 +222,7 @@ func (s *Service) handleAwsSqsPeek(ctx context.Context, params json.RawMessage, 
 	}
 	profile, region, queueURL, err := s.authorizeAWSWriteSelection(
 		ctx, snapshot,
-		"SQS peek requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true",
+		"SQS peek requires write mode to be enabled",
 		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
 			return s.activeSQSSelection(snap, session, request.QueueURL)
 		},
@@ -249,7 +249,7 @@ func (s *Service) handleAwsSqsSendMessage(ctx context.Context, params json.RawMe
 	}
 	profile, region, queueURL, err := s.authorizeAWSWriteSelection(
 		ctx, snapshot,
-		"SQS send requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true",
+		"SQS send requires write mode to be enabled",
 		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
 			return s.activeSQSSelection(snap, session, request.QueueURL)
 		},
@@ -280,7 +280,7 @@ func (s *Service) handleAwsSqsCreateQueue(ctx context.Context, params json.RawMe
 	session, profile, err := s.authorizeAWSWrite(
 		ctx, snapshot,
 		"open an AWS workspace before creating an SQS queue",
-		"SQS create requires write mode to be enabled and a profile with local endpoint_url and cloudsprocket_allow_writes = true",
+		"SQS create requires write mode to be enabled",
 	)
 	if err != nil {
 		return nil, err

@@ -1250,6 +1250,7 @@ type WorkspaceSnapshot struct {
 	LocalConfigArtifacts              []LocalConfigArtifact        `json:"localConfigArtifacts"`
 	AWSEndpointURL                    string                       `json:"awsEndpointUrl,omitempty"`
 	AWSWriteCapable                   bool                         `json:"awsWriteCapable"`
+	AWSWriteTargetIsLocal             bool                         `json:"awsWriteTargetIsLocal"`
 	AWSWriteModeEnabled               bool                         `json:"awsWriteModeEnabled"`
 	AWSWritesEnabled                  bool                         `json:"awsWritesEnabled"`
 	ActionCapabilities                map[string][]ActionCapability `json:"actionCapabilities,omitempty"`

@@ -108,7 +108,8 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 		}
 		if session.CurrentProviderID == "aws" {
 			workspace.AWSEndpointURL = profileEndpointURL(profile)
-			workspace.AWSWriteCapable = profileAllowsAWSWrites(profile)
+			workspace.AWSWriteCapable = session.IsLocked
+			workspace.AWSWriteTargetIsLocal = profileIsLocalAWSEndpoint(profile)
 			workspace.AWSWriteModeEnabled = session.AWSWriteModeEnabled && session.IsLocked
 			workspace.AWSWritesEnabled = effectiveAWSWritesEnabled(session, profile)
 			workspace.ActionCapabilities = buildAWSActionCapabilities(session, profile)
