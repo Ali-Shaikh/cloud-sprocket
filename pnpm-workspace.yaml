@@ -1,4 +1,8 @@
 packages:
   - "apps/*"
+overrides:
+  "@codemirror/view": "6.43.6"
 allowBuilds:
   esbuild: true
+minimumReleaseAgeExclude:
+  - '@codemirror/view@6.43.6'

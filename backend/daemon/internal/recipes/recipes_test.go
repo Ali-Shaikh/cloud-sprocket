@@ -371,8 +371,8 @@ func TestLoadMagentoComposeRecipe(t *testing.T) {
 		t.Fatalf("read simple compose file: %v", err)
 	}
 	for _, want := range []string{
-		"mariadb:11.8",
-		"redis:7.4-alpine",
+		"mariadb:12.3",
+		"redis:8.8-alpine",
 		"shinsenter/magento:${MAGENTO_IMAGE_TAG",
 		"127.0.0.1:8080:80",
 	} {
