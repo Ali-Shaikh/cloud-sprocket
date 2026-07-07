@@ -1,11 +1,26 @@
 # CloudSprocket
 
+> **Developer Preview** — not production-ready. Expect breaking changes between
+> releases. Use local emulators and non-critical accounts until v1.0.
+
 CloudSprocket is a local-first desktop cloud workbench for browsing, operating, and
 deploying against AWS and Azure from one workspace. The app pairs a **Tauri v2**
 shell (`React`, `TypeScript`) with a **Go** sidecar daemon that handles discovery,
 inventory, JSON-RPC, and SQLite-backed session state.
 
-**Latest release:** [v0.8.27](https://github.com/Ali-Shaikh/cloud-sprocket/releases/latest)
+**Latest release:** [v0.8.33](https://github.com/Ali-Shaikh/cloud-sprocket/releases/latest)
+
+## Developer preview {#developer-preview}
+
+CloudSprocket is actively evolving toward v1.0. Builds are intended for evaluation
+and local development, not production operations:
+
+- Behaviour, workspace data formats, and RPC contracts may change without a major
+  version bump while the app remains on `0.x`.
+- Write mode can target live cloud accounts; treat that as opt-in and high risk.
+- Prefer LocalStack, floci-az, and disposable profiles when experimenting.
+
+Feedback and issues are welcome on [GitHub](https://github.com/Ali-Shaikh/cloud-sprocket/issues).
 
 ## What you get
 
