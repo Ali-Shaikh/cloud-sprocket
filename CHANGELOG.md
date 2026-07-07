@@ -9,6 +9,19 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.8.34] - 2026-07-07
+
+### Added
+
+- Developer Preview channel labelling in the README, connect screen, workspace
+  strip, app menu, and window title (#119)
+- Shared `release-channel` module for consistent pre-1.0 messaging (#119)
+
+### Fixed
+
+- README Developer Preview heading no longer renders Pandoc `{#id}` anchor syntax
+  literally (#120)
+
 ## [0.8.33] - 2026-07-06
 
 ### Changed
@@ -668,7 +681,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.33...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.34...HEAD
+[0.8.34]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.33...v0.8.34
 [0.8.33]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.32...v0.8.33
 [0.8.32]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.31...v0.8.32
 [0.8.31]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.30...v0.8.31
