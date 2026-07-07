@@ -3,6 +3,7 @@
 
 import { ChevronRight, Loader2, RefreshCw, Server } from "lucide-react";
 
+import { DeveloperPreviewNotice } from "@/components/developer-preview-notice";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ProviderIcon } from "@/components/provider-icon";
@@ -94,6 +95,7 @@ export default function ConnectView({
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
+      <DeveloperPreviewNotice />
       <header className="flex items-start gap-4">
         <div>
           <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">Your clouds</h1>
