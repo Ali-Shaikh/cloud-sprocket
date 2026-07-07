@@ -10,7 +10,7 @@ inventory, JSON-RPC, and SQLite-backed session state.
 
 **Latest release:** [v0.8.33](https://github.com/Ali-Shaikh/cloud-sprocket/releases/latest)
 
-## Developer preview {#developer-preview}
+## Developer Preview
 
 CloudSprocket is actively evolving toward v1.0. Builds are intended for evaluation
 and local development, not production operations:
