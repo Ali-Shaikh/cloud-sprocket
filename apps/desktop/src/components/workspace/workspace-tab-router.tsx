@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import type { ReactNode } from "react";
-import { mergeAwsS3Selection, normaliseWorkspaceSnapshot } from "@/lib/workspace-snapshot";
+import { overviewNavigateToParams, resolveOverviewProvider } from "@/lib/navigate-to-resource";
 import { toActivityEntries } from "@/lib/workspace-shell";
+import { useNavigateToResource } from "@/hooks/use-navigate-to-resource";
 import ConnectView from "@/views/ConnectView";
 import OverviewView from "@/views/OverviewView";
 import DeployView from "@/views/deploy/DeployView";
@@ -33,7 +34,9 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     activeS3PageId,
     setActiveS3PageId,
     activeAzurePageId,
+    setActiveAzurePageId,
     activeAzureStoragePageId,
+    setActiveAzureStoragePageId,
     s3UploadStatus,
     setS3UploadStatus,
     s3SignedUrlStatus,
@@ -198,6 +201,26 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     chooseAuthMethod,
   } = props;
 
+  const navigateToResource = useNavigateToResource({
+    setActiveWorkspaceTabId,
+    setActiveS3PageId,
+    setActiveAzurePageId,
+    setActiveAzureStoragePageId,
+    setLambdaCreateFormOpen,
+    mutateWorkspaceSelection,
+    setWorkspace,
+    selectLambdaFunction,
+    selectDynamoDBTable,
+    selectSQSQueue,
+    selectSNSTopic,
+    selectRDSInstance,
+    selectLogGroup,
+    selectIAMRole,
+    selectEC2Instance,
+    selectAzureResourceGroup,
+    selectAzureVirtualMachine,
+  });
+
   if (activeWorkspaceTabId === "debug") {
     return <DebugView />;
   }
@@ -216,7 +239,7 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     );
   }
   if (activeWorkspaceTabId === "deploy") {
-    return <DeployView profiles={profiles} />;
+    return <DeployView profiles={profiles} navigateToResource={navigateToResource} />;
   }
   if (session.isLocked && activeWorkspaceTabId === "overview") {
     return (
@@ -248,48 +271,12 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
           void props.onEnableHiddenService(hit);
         }}
         onNavigate={(tabId, context) => {
-          setActiveWorkspaceTabId(tabId);
-          if (context?.lambdaFunctionName) {
-            selectLambdaFunction(context.lambdaFunctionName);
-          }
-          if (context?.dynamodbTableName) {
-            selectDynamoDBTable(context.dynamodbTableName);
-          }
-          if (context?.sqsQueueUrl) {
-            selectSQSQueue(context.sqsQueueUrl);
-          }
-          if (context?.snsTopicArn) {
-            selectSNSTopic(context.snsTopicArn);
-          }
-          if (context?.rdsInstanceId) {
-            selectRDSInstance(context.rdsInstanceId);
-          }
-          if (context?.logGroupName) {
-            selectLogGroup(context.logGroupName);
-          }
-          if (context?.iamRoleName) {
-            selectIAMRole(context.iamRoleName);
-          }
-          if (context?.ec2InstanceId) {
-            selectEC2Instance(context.ec2InstanceId);
-          }
-          if (context?.s3BucketName) {
-            void mutateWorkspaceSelection("aws.s3.selectBucket", { bucketName: context.s3BucketName }, {
-              merge: mergeAwsS3Selection,
-              onOptimistic: () => {
-                setWorkspace((current) =>
-                  normaliseWorkspaceSnapshot({
-                    ...current,
-                    selectedS3BucketName: context.s3BucketName,
-                    selectedS3ObjectKey: undefined,
-                  }),
-                );
-              },
-            });
-          }
-          if (context?.openLambdaCreate) {
-            setLambdaCreateFormOpen(true);
-          }
+          const provider = resolveOverviewProvider(tabId, {
+            lockedProviderId: session.lockedProviderId,
+            workspaceProviderId: workspace.provider?.providerId,
+            selectedProviderId: selectedProvider?.providerId,
+          });
+          navigateToResource(overviewNavigateToParams(tabId, context, provider));
         }}
       />
     );

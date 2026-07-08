@@ -37,6 +37,14 @@ export type OverviewNavigateContext = {
   iamRoleName?: string;
   ec2InstanceId?: string;
   s3BucketName?: string;
+  resourceGroup?: string;
+  vmId?: string;
+  accountName?: string;
+  appName?: string;
+  server?: string;
+  vaultName?: string;
+  workspaceName?: string;
+  policyName?: string;
   openLambdaCreate?: boolean;
 };
 
@@ -348,7 +356,8 @@ export default function OverviewView({
           [group.location, group.provisioningState].filter(Boolean).join(" · ") ||
           "Resource group",
         iconUrl: azureResourceGroupsIconUrl,
-        tabId: "azure-overview",
+        tabId: "azure-resource-groups",
+        navigateContext: { resourceGroup: group.name },
       }),
     );
     workspace.azureVirtualMachines.slice(0, 3).forEach((vm) =>
@@ -360,6 +369,7 @@ export default function OverviewView({
         status: isRunning(vm.powerState) ? "on" : "off",
         statusLabel: vm.powerState || "unknown",
         tabId: "azure-vms",
+        navigateContext: { vmId: vm.vmId },
       }),
     );
   }

@@ -13,8 +13,13 @@ import { recipeLocalRuntimeIds } from "@/lib/deploy-gallery-filter";
 
 import { manifestRequiresPro } from "./shared";
 
+function difficultyLabel(difficulty: NonNullable<RecipeManifest["lab"]>["difficulty"]): string {
+  return difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
+}
+
 export function RecipeCard({ manifest, onConfigure }: { manifest: RecipeManifest; onConfigure: () => void }) {
   const isLab = manifest.kind === "service-lab";
+  const lab = manifest.lab;
   return (
     <Card className="flex flex-col gap-3 p-5">
       <div className="flex items-start justify-between gap-2">
@@ -41,6 +46,16 @@ export function RecipeCard({ manifest, onConfigure }: { manifest: RecipeManifest
               title="IAM Policy Stream available after a local run"
             >
               <Shield className="size-3" /> IAM
+            </span>
+          )}
+          {lab && (
+            <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-600 dark:text-sky-400">
+              {difficultyLabel(lab.difficulty)}
+            </span>
+          )}
+          {lab && (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+              ~{lab.estimatedMinutes} min
             </span>
           )}
           <span className="text-xs text-muted-foreground">v{manifest.version}</span>
