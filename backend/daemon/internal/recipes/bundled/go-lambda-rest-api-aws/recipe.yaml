@@ -1,0 +1,77 @@
+apiVersion: cloudsprocket.recipe/v1
+id: go-lambda-rest-api-aws
+kind: app-deploy
+version: 0.1.0
+name: Go Lambda REST API (AWS)
+summary: A simple REST API using Go Lambda behind API Gateway (compute variant).
+description: |
+  Compute pattern using Go: builds a Go Lambda for API Gateway HTTP API.
+  Demonstrates Go serverless. Build step compiles before plan.
+
+  LocalStack supported for Go runtimes.
+providers:
+  - aws
+tags:
+  - compute
+  - go
+  - lambda
+  - api
+  - aws
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+build:
+  - name: Build Go binary for Lambda
+    dirVar: backend_source_dir
+    requires: go.mod
+    command: ["go", "build", "-o", "bootstrap", "."]
+  - name: Install any extra if needed (noop for sample)
+    dirVar: backend_source_dir
+    command: ["echo", "Go build complete"]
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase prefix.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Code
+    variables:
+      - name: backend_source_dir
+        widget: directory
+        help: Go module dir with main.go . Default sample (will build bootstrap).
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+outputs:
+  - name: api_endpoint
+    primary: true
+  - name: lambda_function_name
+lab:
+  difficulty: intermediate
+  estimatedMinutes: 25
+  objectives:
+    - Build and deploy Go Lambda API
+    - Call endpoint
+  steps:
+    - id: call
+      title: Call the Go API
+      body: GET the api_endpoint .
+      verify:
+        - type: http.get
+          url: "{{ outputs.api_endpoint }}"
+    - id: inspect
+      title: Inspect Lambda
+      body: View in Lambda tab.
+      actions:
+        - type: open-tab
+          tab: aws-lambda
+          focus: "{{ outputs.lambda_function_name }}"

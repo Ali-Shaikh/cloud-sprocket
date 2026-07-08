@@ -1,0 +1,93 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-key-vault-azure
+kind: service-lab
+version: 0.1.0
+name: Azure Key Vault lab
+summary: An Azure Key Vault with a secret demonstrating secure secret lifecycle.
+description: |
+  A focused service lab for Azure Key Vault: vault + secret. Learn to store,
+  retrieve, and rotate secrets. Pairs with Functions or App Service via
+  managed identity or connection strings.
+
+  Open azure-key-vault tab. Local via floci-az.
+providers:
+  - azure
+tags:
+  - azure
+  - keyvault
+  - secrets
+  - security
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: floci-az
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: azure_location
+        widget: text
+      - name: secret_value
+        widget: password
+        help: Initial secret value stored in the vault.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: key_vault_name
+    primary: true
+  - name: secret_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 15
+  objectives:
+    - Provision a Key Vault and secret via recipe
+    - Use the Key Vault tab to view and reveal secrets (write mode)
+    - Understand secret rotation simulation and access policies
+    - Recognise Key Vault as central for Azure secret management
+  steps:
+    - id: explore-vault
+      title: Open the Key Vault
+      body: |
+        Open the Azure Key Vault tab and select the vault. Review properties
+        and secrets list.
+      actions:
+        - type: open-tab
+          tab: azure-key-vault
+          focus: "{{ outputs.key_vault_name }}"
+      hints:
+        - Vault names must be globally unique; recipe derives safe name.
+    - id: view-secret
+      title: Inspect the secret
+      body: |
+        Select the secret in the vault view. The initial value was set at
+        deploy time. In write mode you can update it.
+      actions:
+        - type: open-tab
+          tab: azure-key-vault
+          focus: "{{ outputs.secret_name }}"
+    - id: rotation-sim
+      title: Simulate rotation
+      body: |
+        Update the secret value via the UI (write mode) to simulate an
+        application rotating credentials without redeploy.
+      hints:
+        - Real apps listen for secret version changes or poll.
+    - id: access-patterns
+      title: Access and drift
+      body: |
+        Vaults use access policies or RBAC. Manual secret add outside recipe
+        is visible as drift on plan. Prefer managing via recipes for
+        reproducibility.
+      hints:
+        - Use managed identities for Functions/App Service to avoid keys.

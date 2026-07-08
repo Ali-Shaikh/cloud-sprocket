@@ -1,0 +1,7 @@
+{
+  "name": "lab-s3-lambda-sample",
+  "version": "0.1.0",
+  "private": true,
+  "main": "handler.js",
+  "type": "commonjs"
+}

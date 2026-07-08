@@ -1,0 +1,63 @@
+apiVersion: cloudsprocket.recipe/v1
+id: azure-blob-event-function-azure
+kind: app-deploy
+version: 0.1.0
+name: Blob event Functions (Azure)
+summary: Storage blob events triggering Azure Functions (event-driven Azure).
+description: |
+  Event-driven Azure: blob create triggers function. Uses Event Grid or storage
+  events under the hood in real, sample shows pattern.
+
+  floci-az friendly.
+providers:
+  - azure
+tags:
+  - event-driven
+  - azure
+  - storage
+  - functions
+  - blob
+  - floci-az
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: floci-az
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase prefix.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: azure_location
+        widget: text
+  - title: Code
+    variables:
+      - name: backend_source_dir
+        widget: directory
+        help: Default sample.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+outputs:
+  - name: storage_account_name
+    primary: true
+  - name: function_app_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 18
+  objectives:
+    - Blob create -> function trigger
+  steps:
+    - id: storage
+      title: Explore storage
+      body: View blob container.
+      actions:
+        - type: open-tab
+          tab: azure-storage
+          focus: "{{ outputs.storage_account_name }}"
