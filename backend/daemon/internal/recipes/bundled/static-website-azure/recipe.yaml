@@ -1,0 +1,62 @@
+apiVersion: cloudsprocket.recipe/v1
+id: static-website-azure
+kind: app-deploy
+version: 0.1.0
+name: Static website (Azure Storage)
+summary: Static website hosted on Azure Blob Storage with floci-az support.
+description: |
+  Storage + web pattern on Azure: storage account configured for static website
+  hosting. Uploads sample or your dist. Good Azure balance to S3 static.
+
+  Uses Azure Storage. floci-az friendly.
+providers:
+  - azure
+tags:
+  - azure
+  - storage
+  - static
+  - website
+  - floci-az
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: floci-az
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase prefix.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: azure_location
+        widget: text
+  - title: Content
+    variables:
+      - name: frontend_dist_dir
+        widget: directory
+        help: Built static files. Default sample.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+outputs:
+  - name: website_url
+    primary: true
+  - name: storage_account_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 10
+  objectives:
+    - Deploy Azure static website
+  steps:
+    - id: check
+      title: Check storage static site
+      body: Open Azure storage tab.
+      actions:
+        - type: open-tab
+          tab: azure-storage
+          focus: "{{ outputs.storage_account_name }}"
