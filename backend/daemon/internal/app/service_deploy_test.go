@@ -90,6 +90,13 @@ func (f *fakeDeployer) CheckDrift(_ context.Context, _ *deploy.Deployment, _ tof
 
 func (f *fakeDeployer) RemoveWorkspace(string) error { return nil }
 
+func (f *fakeDeployer) CheckDrift(ctx context.Context, _ *deploy.Deployment, onLine tofu.LogFunc) (deploy.DriftReport, error) {
+	if onLine != nil {
+		onLine("Checking for drift...")
+	}
+	return deploy.DriftReport{HasDrift: false}, nil
+}
+
 type captureNotifier struct {
 	mu     sync.Mutex
 	events []capturedEvent
