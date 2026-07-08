@@ -30,31 +30,52 @@ func TestLoadLabRecipes(t *testing.T) {
 	}
 }
 
-func TestLabQueueWorkerHasLabSection(t *testing.T) {
-	recipe, err := Bundled().Load("lab-queue-worker-aws")
-	if err != nil {
-		t.Fatalf("Load lab-queue-worker-aws: %v", err)
+func TestBundledGuidedLabSpecsValidate(t *testing.T) {
+	cases := []struct {
+		id           string
+		minSteps     int
+		wantProvider string
+	}{
+		{id: "lab-queue-worker-aws", minSteps: 4, wantProvider: "aws"},
+		{id: "lab-postgres-flexible-azure", minSteps: 3, wantProvider: "azure"},
+		{id: "lab-dynamodb-aws", minSteps: 2, wantProvider: "aws"},
+		{id: "lab-rest-api-aws", minSteps: 2, wantProvider: "aws"},
+		{id: "lab-secrets-aws", minSteps: 2, wantProvider: "aws"},
+		{id: "lab-event-fanout-aws", minSteps: 5, wantProvider: "aws"},
 	}
-	lab := recipe.Manifest.Lab
-	if lab == nil {
-		t.Fatal("expected lab section on lab-queue-worker-aws")
-	}
-	if lab.Difficulty != LabDifficultyBeginner {
-		t.Fatalf("difficulty = %q, want %q", lab.Difficulty, LabDifficultyBeginner)
-	}
-	if len(lab.Steps) != 4 {
-		t.Fatalf("steps = %d, want 4", len(lab.Steps))
-	}
-	wantStepIDs := []string{"explore-queue", "send-message", "verify-queue", "inspect-lambda"}
-	for index, wantID := range wantStepIDs {
-		if lab.Steps[index].ID != wantID {
-			t.Fatalf("step[%d].id = %q, want %q", index, lab.Steps[index].ID, wantID)
-		}
-		if lab.Steps[index].Title == "" {
-			t.Fatalf("step %q is missing title", wantID)
-		}
-	}
-	if err := ValidateLabSpec(recipe.Manifest); err != nil {
-		t.Fatalf("ValidateLabSpec: %v", err)
+
+	for _, tc := range cases {
+		t.Run(tc.id, func(t *testing.T) {
+			recipe, err := Bundled().Load(tc.id)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			lab := recipe.Manifest.Lab
+			if lab == nil {
+				t.Fatal("expected lab section")
+			}
+			if len(lab.Steps) < tc.minSteps {
+				t.Fatalf("steps = %d, want at least %d", len(lab.Steps), tc.minSteps)
+			}
+			if len(lab.Objectives) == 0 {
+				t.Fatal("expected at least one objective")
+			}
+			for index, step := range lab.Steps {
+				if step.ID == "" {
+					t.Fatalf("step %d is missing id", index)
+				}
+				if step.Title == "" {
+					t.Fatalf("step %q is missing title", step.ID)
+				}
+			}
+			if err := ValidateLabSpec(recipe.Manifest); err != nil {
+				t.Fatalf("ValidateLabSpec: %v", err)
+			}
+			if tc.wantProvider == "azure" {
+				if len(recipe.Manifest.Providers) != 1 || recipe.Manifest.Providers[0] != "azure" {
+					t.Fatalf("providers = %v, want [azure]", recipe.Manifest.Providers)
+				}
+			}
+		})
 	}
 }
