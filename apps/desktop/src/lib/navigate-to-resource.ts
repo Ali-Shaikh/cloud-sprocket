@@ -70,7 +70,7 @@ const AZURE_TAB_ALIASES: Record<string, TabResourceMapping> = {
     paramKey: "accountName",
     subPageParent: "azure-storage",
   },
-  "azure-app-service": { tabId: "azure-app-service", method: "azure.appService.selectWebApp", paramKey: "appName" },
+  "azure-app-service": { tabId: "azure-app-service", method: "azure.webApps.select", paramKey: "appName" },
   "azure-postgres": {
     tabId: "azure-postgres",
     method: "azure.postgres.selectServer",

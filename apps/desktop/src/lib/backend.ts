@@ -3874,8 +3874,14 @@ export async function runLabAction(
   deploymentId: string,
   stepId: string,
   action: LabStepAction,
+  actionIndex?: number,
 ): Promise<LabRunActionResult> {
-  return backendRequest<LabRunActionResult>("labs.runAction", { deploymentId, stepId, action });
+  return backendRequest<LabRunActionResult>("labs.runAction", {
+    deploymentId,
+    stepId,
+    actionIndex,
+    action,
+  });
 }
 
 export async function resetLabSession(deploymentId: string): Promise<LabSession> {

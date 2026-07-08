@@ -48,6 +48,22 @@ describe("planNavigateToResource", () => {
     expect(plan.uiFlags).toEqual({ openLambdaCreate: true });
   });
 
+  it("maps Azure app service tab selection RPCs", () => {
+    const plan = planNavigateToResource({
+      provider: "azure",
+      tab: "azure-app-service",
+      resourceKey: "lab-webapp",
+    });
+
+    expect(plan.tabId).toBe("azure-app-service");
+    expect(plan.selections).toEqual([
+      {
+        method: "azure.webApps.select",
+        params: { appName: "lab-webapp" },
+      },
+    ]);
+  });
+
   it("maps Azure postgres tab selection RPCs", () => {
     const plan = planNavigateToResource({
       provider: "azure",

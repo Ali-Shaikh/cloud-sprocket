@@ -101,6 +101,9 @@ func TestRunnerStartVerifyAndReset(t *testing.T) {
 	if started.CurrentStepID != "send-message" {
 		t.Fatalf("CurrentStepID = %q", started.CurrentStepID)
 	}
+	if started.Status != SessionStatusInProgress {
+		t.Fatalf("Status = %q, want in_progress", started.Status)
+	}
 
 	verified, err := runner.VerifyStep(
 		ctx,
@@ -116,15 +119,18 @@ func TestRunnerStartVerifyAndReset(t *testing.T) {
 	if verified.CurrentStepID != "inspect" {
 		t.Fatalf("CurrentStepID = %q, want inspect", verified.CurrentStepID)
 	}
-	if verified.Completed {
+	if verified.Status == SessionStatusCompleted {
 		t.Fatal("lab should not be completed after first step")
+	}
+	if verified.Steps[0].Status != StepStatusPassed {
+		t.Fatalf("first step status = %q, want passed", verified.Steps[0].Status)
 	}
 
 	reset, err := runner.Reset(ctx, lab, deployment)
 	if err != nil {
 		t.Fatalf("Reset: %v", err)
 	}
-	if reset.Completed {
+	if reset.Status == SessionStatusCompleted {
 		t.Fatal("reset session should not be completed")
 	}
 	if reset.CurrentStepID != "send-message" {

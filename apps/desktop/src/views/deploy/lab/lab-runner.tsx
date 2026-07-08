@@ -80,8 +80,8 @@ export function LabRunner({
     labSpec.steps.find((step) => step.id === activeStepId) ?? labSpec.steps[0] ?? null;
   const activeStepSession = session?.steps.find((step) => step.stepId === activeStep?.id);
 
-  async function handleAction(step: LabStepSpec, action: LabStepAction) {
-    const returned = await runAction(step.id, action);
+  async function handleAction(step: LabStepSpec, action: LabStepAction, actionIndex: number) {
+    const returned = await runAction(step.id, action, actionIndex);
     const openTab = returned && isOpenTabAction(returned) ? returned : isOpenTabAction(action) ? action : null;
     if (openTab && navigateToResource) {
       navigateToResource(openTabActionToParams(providerId, openTab.tab, openTab.focus));
@@ -185,7 +185,7 @@ export function LabRunner({
                       variant="outline"
                       size="sm"
                       disabled={loading}
-                      onClick={() => void handleAction(activeStep, action)}
+                      onClick={() => void handleAction(activeStep, action, index)}
                     >
                       {isOpenTabAction(action) ? <ExternalLink className="size-4" /> : null}
                       {actionLabel(action)}

@@ -157,14 +157,23 @@ func (s *Service) handleLabsVerifyStep(ctx context.Context, params json.RawMessa
 
 func (s *Service) handleLabsRunAction(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
-		DeploymentID string `json:"deploymentId"`
-		StepID       string `json:"stepId"`
-		ActionIndex  int    `json:"actionIndex"`
+		DeploymentID string          `json:"deploymentId"`
+		StepID       string          `json:"stepId"`
+		ActionIndex  *int            `json:"actionIndex"`
+		Action       json.RawMessage `json:"action"`
 	}
 	if err := json.Unmarshal(params, &request); err != nil {
 		return nil, err
 	}
 	deployment, labSpec, err := s.loadDeploymentLab(ctx, request.DeploymentID)
+	if err != nil {
+		return nil, err
+	}
+	stepSpec, ok := findLabStepSpec(labSpec, request.StepID)
+	if !ok {
+		return nil, fmt.Errorf("lab step %q was not found", request.StepID)
+	}
+	actionIndex, err := resolveLabActionIndex(stepSpec, request.ActionIndex, request.Action)
 	if err != nil {
 		return nil, err
 	}
@@ -181,12 +190,12 @@ func (s *Service) handleLabsRunAction(ctx context.Context, params json.RawMessag
 		return nil, err
 	}
 	region := s.deploymentAWSRegion(deployment, profile)
-	result, err := s.labRunner().RunAction(
+	actionResult, err := s.labRunner().RunAction(
 		ctx,
 		labSpec,
 		deployment,
 		request.StepID,
-		request.ActionIndex,
+		actionIndex,
 		profile,
 		region,
 		func(actionCtx context.Context, op string, actionParams map[string]string) (any, error) {
@@ -196,10 +205,68 @@ func (s *Service) handleLabsRunAction(ctx context.Context, params json.RawMessag
 	if err != nil {
 		return nil, err
 	}
-	if sessionState, found, getErr := s.labRunner().Get(ctx, deployment.ID); getErr == nil && found {
-		s.emitLabChanged(notifier, sessionState)
+	sessionState, found, getErr := s.labRunner().Get(ctx, deployment.ID)
+	if getErr != nil {
+		return nil, getErr
 	}
-	return result, nil
+	if !found {
+		return nil, errors.New("lab session has not been started for this deployment")
+	}
+	s.emitLabChanged(notifier, sessionState)
+	return labs.LabRunActionResult{
+		Session: sessionState,
+		Action:  actionResult,
+	}, nil
+}
+
+func findLabStepSpec(labSpec *recipes.LabSpec, stepID string) (recipes.LabStep, bool) {
+	if labSpec == nil {
+		return recipes.LabStep{}, false
+	}
+	for _, step := range labSpec.Steps {
+		if step.ID == stepID {
+			return step, true
+		}
+	}
+	return recipes.LabStep{}, false
+}
+
+func resolveLabActionIndex(step recipes.LabStep, actionIndex *int, action json.RawMessage) (int, error) {
+	if actionIndex != nil {
+		if *actionIndex < 0 || *actionIndex >= len(step.Actions) {
+			return 0, fmt.Errorf("lab action index %d is out of range", *actionIndex)
+		}
+		return *actionIndex, nil
+	}
+	if len(action) == 0 {
+		return 0, errors.New("lab action index is required")
+	}
+	var payload struct {
+		Type string `json:"type"`
+		Tab  string `json:"tab"`
+		Op   string `json:"op"`
+	}
+	if err := json.Unmarshal(action, &payload); err != nil {
+		return 0, err
+	}
+	for index, candidate := range step.Actions {
+		if strings.TrimSpace(candidate.Type) != strings.TrimSpace(payload.Type) {
+			continue
+		}
+		switch strings.TrimSpace(candidate.Type) {
+		case recipes.LabActionOpenTab:
+			if strings.TrimSpace(candidate.Tab) == strings.TrimSpace(payload.Tab) {
+				return index, nil
+			}
+		case recipes.LabActionInvokeWrite:
+			if strings.TrimSpace(candidate.Op) == strings.TrimSpace(payload.Op) {
+				return index, nil
+			}
+		default:
+			return index, nil
+		}
+	}
+	return 0, errors.New("lab action was not found in this step")
 }
 
 func (s *Service) handleLabsReset(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

@@ -271,7 +271,11 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
           void props.onEnableHiddenService(hit);
         }}
         onNavigate={(tabId, context) => {
-          navigateToResource(overviewNavigateToParams(tabId, context, "aws"));
+          const provider =
+            workspace.provider?.providerId === "azure" || selectedProvider?.providerId === "azure"
+              ? "azure"
+              : "aws";
+          navigateToResource(overviewNavigateToParams(tabId, context, provider));
         }}
       />
     );

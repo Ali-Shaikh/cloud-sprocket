@@ -83,10 +83,10 @@ export function useLabSession(deploymentId: string, labSpec?: LabSpec) {
   );
 
   const runAction = useCallback(
-    async (stepId: string, action: LabStepAction) => {
+    async (stepId: string, action: LabStepAction, actionIndex?: number) => {
       setLoading(true);
       try {
-        const result = await runLabAction(deploymentId, stepId, action);
+        const result = await runLabAction(deploymentId, stepId, action, actionIndex);
         setSession(result.session);
         setError(null);
         return result.action;

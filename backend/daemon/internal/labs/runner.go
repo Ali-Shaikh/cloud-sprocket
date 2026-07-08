@@ -56,7 +56,7 @@ func (r *Runner) Start(ctx context.Context, lab *recipes.LabSpec, deployment *de
 			status = StepStatusInProgress
 		}
 		steps = append(steps, StepState{
-			ID:     step.ID,
+			StepID: step.ID,
 			Status: status,
 		})
 	}
@@ -64,6 +64,7 @@ func (r *Runner) Start(ctx context.Context, lab *recipes.LabSpec, deployment *de
 	session := LabSession{
 		DeploymentID:  deployment.ID,
 		RecipeID:      deployment.RecipeID,
+		Status:        SessionStatusInProgress,
 		StartedAt:     now,
 		UpdatedAt:     now,
 		CurrentStepID: lab.Steps[0].ID,
@@ -125,15 +126,15 @@ func (r *Runner) VerifyStep(
 
 	now := r.timestamp()
 	for index := range session.Steps {
-		if session.Steps[index].ID != stepID {
+		if session.Steps[index].StepID != stepID {
 			continue
 		}
 		if session.Steps[index].StartedAt == "" {
 			session.Steps[index].StartedAt = now
 		}
-		session.Steps[index].VerificationResults = results
+		session.Steps[index].VerifyResults = normaliseVerifyResults(results)
 		if allPassed {
-			session.Steps[index].Status = StepStatusCompleted
+			session.Steps[index].Status = StepStatusPassed
 			session.Steps[index].CompletedAt = now
 		} else {
 			session.Steps[index].Status = StepStatusFailed
@@ -147,7 +148,7 @@ func (r *Runner) VerifyStep(
 			session.CurrentStepID = nextStepID
 			markStepInProgress(&session, nextStepID, now)
 		} else {
-			session.Completed = true
+			session.Status = SessionStatusCompleted
 			session.CompletedAt = now
 			session.CurrentStepID = ""
 		}
@@ -245,7 +246,7 @@ func markStepInProgress(session *LabSession, stepID, now string) {
 		return
 	}
 	for index := range session.Steps {
-		if session.Steps[index].ID != stepID {
+		if session.Steps[index].StepID != stepID {
 			continue
 		}
 		if session.Steps[index].Status == StepStatusPending {
@@ -256,4 +257,18 @@ func markStepInProgress(session *LabSession, stepID, now string) {
 		}
 		break
 	}
+}
+
+func normaliseVerifyResults(results []VerifyResult) []VerifyResult {
+	if len(results) == 0 {
+		return nil
+	}
+	normalised := make([]VerifyResult, len(results))
+	for index, result := range results {
+		normalised[index] = result
+		if strings.TrimSpace(normalised[index].Detail) == "" {
+			normalised[index].Detail = strings.TrimSpace(result.Message)
+		}
+	}
+	return normalised
 }

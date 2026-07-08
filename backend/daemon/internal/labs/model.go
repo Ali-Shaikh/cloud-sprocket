@@ -10,37 +10,51 @@ type StepStatus string
 const (
 	StepStatusPending    StepStatus = "pending"
 	StepStatusInProgress StepStatus = "in_progress"
-	StepStatusCompleted  StepStatus = "completed"
+	StepStatusPassed     StepStatus = "passed"
 	StepStatusFailed     StepStatus = "failed"
+)
+
+// SessionStatus is the overall progress state of a lab session.
+type SessionStatus string
+
+const (
+	SessionStatusInProgress SessionStatus = "in_progress"
+	SessionStatusCompleted  SessionStatus = "completed"
 )
 
 // VerifyResult is the outcome of one verification check.
 type VerifyResult struct {
 	Type    string `json:"type"`
 	Passed  bool   `json:"passed"`
-	Message string `json:"message,omitempty"`
-	Detail  string `json:"detail,omitempty"`
+	Detail  string `json:"detail"`
+	Message string `json:"-"`
 }
 
 // StepState tracks one lab step in a session.
 type StepState struct {
-	ID                  string         `json:"id"`
+	StepID              string         `json:"stepId"`
 	Status              StepStatus     `json:"status"`
-	StartedAt           string         `json:"startedAt,omitempty"`
-	CompletedAt         string         `json:"completedAt,omitempty"`
-	VerificationResults []VerifyResult `json:"verificationResults,omitempty"`
+	StartedAt           string         `json:"-"`
+	CompletedAt         string         `json:"-"`
+	VerifyResults       []VerifyResult `json:"verifyResults,omitempty"`
 }
 
 // LabSession is the persisted progress for a deployment lab run.
 type LabSession struct {
-	DeploymentID  string      `json:"deploymentId"`
-	RecipeID      string      `json:"recipeId"`
-	StartedAt     string      `json:"startedAt"`
-	UpdatedAt     string      `json:"updatedAt"`
-	CurrentStepID string      `json:"currentStepId,omitempty"`
-	Steps         []StepState `json:"steps"`
-	Completed     bool        `json:"completed"`
-	CompletedAt   string      `json:"completedAt,omitempty"`
+	DeploymentID  string        `json:"deploymentId"`
+	RecipeID      string        `json:"recipeId"`
+	Status        SessionStatus `json:"status"`
+	StartedAt     string        `json:"startedAt"`
+	CompletedAt   string        `json:"completedAt,omitempty"`
+	UpdatedAt     string        `json:"-"`
+	CurrentStepID string        `json:"-"`
+	Steps         []StepState   `json:"steps"`
+}
+
+// LabRunActionResult is returned by labs.runAction.
+type LabRunActionResult struct {
+	Session LabSession `json:"session"`
+	Action  any        `json:"action,omitempty"`
 }
 
 // OpenTabAction is the resolved payload for an open-tab lab action.
