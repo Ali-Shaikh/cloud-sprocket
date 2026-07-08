@@ -104,6 +104,9 @@ func TestRunnerStartVerifyAndReset(t *testing.T) {
 	if started.Status != SessionStatusInProgress {
 		t.Fatalf("Status = %q, want in_progress", started.Status)
 	}
+	if len(started.Steps) == 0 || started.Steps[0].VerifyResults == nil {
+		t.Fatal("fresh lab steps should include an empty verifyResults slice")
+	}
 
 	verified, err := runner.VerifyStep(
 		ctx,

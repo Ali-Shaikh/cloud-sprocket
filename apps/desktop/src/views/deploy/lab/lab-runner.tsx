@@ -201,11 +201,11 @@ export function LabRunner({
                 </Button>
               </div>
 
-              {activeStepSession && activeStepSession.verifyResults.length > 0 && (
+              {activeStepSession && (activeStepSession.verifyResults ?? []).length > 0 && (
                 <div className="rounded-lg border bg-card p-4">
                   <p className="mb-2 text-sm font-medium text-foreground">Verification results</p>
                   <ul className="space-y-2">
-                    {activeStepSession.verifyResults.map((result, index) => (
+                    {(activeStepSession.verifyResults ?? []).map((result, index) => (
                       <li
                         key={`${result.type}-${index}`}
                         className={cn(

@@ -48,6 +48,22 @@ describe("planNavigateToResource", () => {
     expect(plan.uiFlags).toEqual({ openLambdaCreate: true });
   });
 
+  it("maps Azure overview context keys to selection RPCs", () => {
+    const plan = planNavigateToResource(
+      overviewNavigateToParams("azure-vms", { vmId: "/subscriptions/demo/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/demo-vm" }, "azure"),
+    );
+
+    expect(plan.tabId).toBe("azure-vms");
+    expect(plan.selections).toEqual([
+      {
+        method: "azure.virtualMachines.select",
+        params: {
+          vmId: "/subscriptions/demo/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/demo-vm",
+        },
+      },
+    ]);
+  });
+
   it("maps Azure app service tab selection RPCs", () => {
     const plan = planNavigateToResource({
       provider: "azure",

@@ -86,7 +86,9 @@ const AZURE_TAB_ALIASES: Record<string, TabResourceMapping> = {
   "azure-waf": { tabId: "azure-waf", method: "azure.waf.selectPolicy", paramKey: "policyName" },
 };
 
-const AWS_CONTEXT_KEYS: Record<string, { method: string; paramKey: string; tabId: string }> = {
+type ContextKeyMapping = { method: string; paramKey: string; tabId: string };
+
+const AWS_CONTEXT_KEYS: Record<string, ContextKeyMapping> = {
   lambdaFunctionName: { tabId: "lambda", method: "aws.lambda.selectFunction", paramKey: "functionName" },
   dynamodbTableName: { tabId: "dynamodb", method: "aws.dynamodb.selectTable", paramKey: "tableName" },
   sqsQueueUrl: { tabId: "sqs", method: "aws.sqs.selectQueue", paramKey: "queueUrl" },
@@ -97,6 +99,25 @@ const AWS_CONTEXT_KEYS: Record<string, { method: string; paramKey: string; tabId
   ec2InstanceId: { tabId: "ec2", method: "aws.ec2.selectInstance", paramKey: "instanceId" },
   s3BucketName: { tabId: "s3", method: "aws.s3.selectBucket", paramKey: "bucketName" },
 };
+
+const AZURE_CONTEXT_KEYS: Record<string, ContextKeyMapping> = {
+  resourceGroup: { tabId: "azure-resource-groups", method: "azure.resourceGroups.select", paramKey: "resourceGroup" },
+  vmId: { tabId: "azure-vms", method: "azure.virtualMachines.select", paramKey: "vmId" },
+  accountName: { tabId: "azure-storage", method: "azure.storage.selectAccount", paramKey: "accountName" },
+  appName: { tabId: "azure-app-service", method: "azure.webApps.select", paramKey: "appName" },
+  server: { tabId: "azure-postgres", method: "azure.postgres.selectServer", paramKey: "server" },
+  vaultName: { tabId: "azure-key-vault", method: "azure.keyVault.selectVault", paramKey: "vaultName" },
+  workspaceName: {
+    tabId: "azure-log-analytics",
+    method: "azure.logAnalytics.selectWorkspace",
+    paramKey: "workspaceName",
+  },
+  policyName: { tabId: "azure-waf", method: "azure.waf.selectPolicy", paramKey: "policyName" },
+};
+
+function contextKeyMappings(provider: NavigateToResourceParams["provider"]): Record<string, ContextKeyMapping> {
+  return provider === "azure" ? AZURE_CONTEXT_KEYS : AWS_CONTEXT_KEYS;
+}
 
 function normaliseTabId(provider: NavigateToResourceParams["provider"], tab: string): string {
   const trimmed = tab.trim();
@@ -135,7 +156,7 @@ export function planNavigateToResource(params: NavigateToResourceParams): Naviga
         uiFlags.openLambdaCreate = true;
         continue;
       }
-      const contextMapping = AWS_CONTEXT_KEYS[key];
+      const contextMapping = contextKeyMappings(params.provider)[key];
       if (contextMapping && value) {
         selections.push({
           method: contextMapping.method,

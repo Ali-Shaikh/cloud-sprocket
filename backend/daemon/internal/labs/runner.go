@@ -56,8 +56,9 @@ func (r *Runner) Start(ctx context.Context, lab *recipes.LabSpec, deployment *de
 			status = StepStatusInProgress
 		}
 		steps = append(steps, StepState{
-			StepID: step.ID,
-			Status: status,
+			StepID:        step.ID,
+			Status:        status,
+			VerifyResults: make([]VerifyResult, 0),
 		})
 	}
 

@@ -36,7 +36,7 @@ type StepState struct {
 	Status              StepStatus     `json:"status"`
 	StartedAt           string         `json:"-"`
 	CompletedAt         string         `json:"-"`
-	VerifyResults       []VerifyResult `json:"verifyResults,omitempty"`
+	VerifyResults       []VerifyResult `json:"verifyResults"`
 }
 
 // LabSession is the persisted progress for a deployment lab run.
