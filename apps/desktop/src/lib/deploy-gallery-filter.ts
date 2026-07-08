@@ -17,7 +17,7 @@ export const GALLERY_PROVIDER_ALL = "all";
 export const GALLERY_RUNTIME_ALL = "all";
 
 export function inferRecipeKind(manifest: RecipeManifest): GallerySection {
-  if (manifest.kind) {
+  if (manifest.kind === "app-deploy" || manifest.kind === "service-lab") {
     return manifest.kind;
   }
   if (manifest.id.startsWith("lab-") || manifest.id === "scheduled-job-aws") {

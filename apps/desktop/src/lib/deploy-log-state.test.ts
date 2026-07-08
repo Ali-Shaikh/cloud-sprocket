@@ -8,6 +8,7 @@ import {
   clearDeploymentLogs,
   DEPLOY_LOG_LINE_CAP,
   deploymentLogTruncated,
+  type DeploymentLogMap,
 } from "./deploy-log-state";
 
 describe("deploy-log-state", () => {
@@ -17,7 +18,7 @@ describe("deploy-log-state", () => {
   });
 
   it("caps retained lines at DEPLOY_LOG_LINE_CAP", () => {
-    let logs = {};
+    let logs: DeploymentLogMap = {};
     for (let index = 0; index < DEPLOY_LOG_LINE_CAP + 25; index += 1) {
       logs = appendDeploymentLogLine(logs, "dep-1", `line-${index}`);
     }

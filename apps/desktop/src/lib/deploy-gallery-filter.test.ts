@@ -13,12 +13,14 @@ import {
 } from "./deploy-gallery-filter";
 
 function manifest(partial: Partial<RecipeManifest> & Pick<RecipeManifest, "id" | "name">): RecipeManifest {
+  const { local, ...rest } = partial;
   return {
     apiVersion: "cloudsprocket.recipe/v1",
     version: "0.1.0",
     engine: { type: "opentofu", minVersion: "1.6.0" },
     providers: ["aws"],
-    ...partial,
+    local: local ?? {},
+    ...rest,
   };
 }
 
