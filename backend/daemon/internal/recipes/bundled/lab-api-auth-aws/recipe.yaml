@@ -1,0 +1,116 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-api-auth-aws
+kind: service-lab
+version: 0.1.0
+name: API auth lab (API Gateway usage plans and keys)
+summary: A REST API protected with usage plan and API key for rate limiting and auth patterns.
+description: |
+  A focused service lab for API Gateway auth: a REST API fronting a Lambda,
+  wired to a usage plan and API key. Demonstrates throttling, quotas, and
+  requiring keys for callers.
+
+  The verify step calls the stage URL without a key (allowed for lab). In
+  production callers pass x-api-key. Emulates on LocalStack.
+providers:
+  - aws
+tags:
+  - api
+  - apigateway
+  - auth
+  - lambda
+  - aws
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+build:
+  - name: Install API dependencies
+    dirVar: backend_source_dir
+    requires: package.json
+    command: ["npm", "install", "--omit=dev"]
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: API code
+    variables:
+      - name: backend_source_dir
+        widget: directory
+        help: Folder with your Node API handler.handler export. Leave default for the sample API.
+      - name: lambda_memory_mb
+        widget: number
+        help: Memory for the API Lambda, in megabytes.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: api_endpoint
+    primary: true
+  - name: api_key_value
+  - name: usage_plan_id
+  - name: lambda_function_name
+lab:
+  difficulty: intermediate
+  estimatedMinutes: 25
+  objectives:
+    - Deploy an API Gateway REST API with attached usage plan and key
+    - Call the endpoint and inspect throttling configuration
+    - Understand how API keys enable per-client quotas and rate limits
+    - View the backing Lambda and API resources in the workspace tabs
+  steps:
+    - id: call-api
+      title: Call the API endpoint
+      body: |
+        Run the check to GET the deployed stage URL. It responds without a key
+        in this lab configuration (to allow verification). Note the response.
+      verify:
+        - type: http.get
+          url: "{{ outputs.api_endpoint }}"
+      hints:
+        - LocalStack API Gateway may need a few seconds to be ready for invoke.
+    - id: explore-api
+      title: Inspect the API Gateway
+      body: |
+        Open the API Gateway tab (or relevant inventory) and locate the REST API
+        and its stage. Review usage plan association.
+      actions:
+        - type: open-tab
+          tab: aws-apigateway
+          focus: "{{ outputs.api_endpoint }}"
+      hints:
+        - The primary output is the invoke URL for the stage.
+    - id: view-key
+      title: Review the API key
+      body: |
+        The api_key_value output holds the key. In real callers you would pass
+        it as the x-api-key header to identify the client for the usage plan.
+      hints:
+        - Keys can be associated with multiple usage plans for different quotas.
+    - id: inspect-lambda
+      title: Inspect the backing Lambda
+      body: |
+        Open the Lambda tab to see the function integrated with the API.
+      actions:
+        - type: open-tab
+          tab: aws-lambda
+          focus: "{{ outputs.lambda_function_name }}"
+    - id: auth-patterns
+      title: Auth and throttling patterns
+      body: |
+        Usage plans provide rate limiting (requests per second) and quotas
+        (daily/monthly). Combine with Lambda authorizers or Cognito for full
+        auth. Keys are one simple mechanism for identification.
+      hints:
+        - For production, rotate keys and monitor usage via CloudWatch.

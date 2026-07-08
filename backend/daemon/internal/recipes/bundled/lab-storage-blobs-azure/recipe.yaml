@@ -1,0 +1,84 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-storage-blobs-azure
+kind: service-lab
+version: 0.1.0
+name: Azure Storage blobs lab
+summary: Storage account and blob container for object storage patterns.
+description: |
+  A focused service lab for Azure Blob storage: account + container. Covers
+  upload, download, metadata, and lifecycle awareness. Use with Functions for
+  event processing (Event Grid).
+
+  Open azure-storage tab. floci-az supported.
+providers:
+  - azure
+tags:
+  - azure
+  - storage
+  - blobs
+  - objects
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: floci-az
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: azure_location
+        widget: text
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+outputs:
+  - name: storage_account_name
+    primary: true
+  - name: container_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 15
+  objectives:
+    - Create blob storage container and account
+    - Use Storage tab to upload and browse blobs
+    - Understand containers vs accounts vs blobs
+    - Note metadata and access tier options
+  steps:
+    - id: explore-account
+      title: Explore storage account
+      body: |
+        Open azure-storage and select the account. View containers and
+        upload blade.
+      actions:
+        - type: open-tab
+          tab: azure-storage
+          focus: "{{ outputs.storage_account_name }}"
+    - id: explore-container
+      title: Inspect the container
+      body: |
+        Browse into the container created by the recipe.
+      actions:
+        - type: open-tab
+          tab: azure-storage
+          focus: "{{ outputs.container_name }}"
+    - id: upload-guidance
+      title: Upload a blob
+      body: |
+        With write mode on, upload a file via the UI. Inspect properties and
+        download it back.
+      hints:
+        - Blobs support metadata, tags, and tiers (hot/cool).
+    - id: event-extension
+      title: Events extension note
+      body: |
+        Add Event Grid subscription on the container for change events (see
+        related Azure event labs).
+      hints:
+        - Drift on container properties is caught on re-plan.

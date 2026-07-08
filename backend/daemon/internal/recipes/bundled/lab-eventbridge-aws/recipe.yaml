@@ -1,0 +1,124 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-eventbridge-aws
+kind: service-lab
+version: 0.1.0
+name: EventBridge lab (AWS)
+summary: A custom EventBridge bus with a rule routing matching events to SQS.
+description: |
+  A focused service lab for EventBridge routing: a custom event bus, a rule
+  with a simple event pattern, and an SQS target. Teaches decoupling publishers
+  from consumers with content-based routing.
+
+  Works on LocalStack. Open the EventBridge and SQS tabs to inspect. Use notes
+  to understand how to publish test events (aws events put-events).
+providers:
+  - aws
+tags:
+  - eventbridge
+  - events
+  - sqs
+  - routing
+  - aws
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: event_bus_name
+    primary: true
+  - name: rule_name
+  - name: queue_url
+    primary: true
+lab:
+  difficulty: intermediate
+  estimatedMinutes: 25
+  objectives:
+    - Create and inspect a custom EventBridge bus and rule
+    - Understand event pattern matching and target delivery to SQS
+    - Route a test event (via guidance) and verify arrival on the queue
+    - Recognise EventBridge as a central event router beyond simple SNS
+  steps:
+    - id: explore-bus
+      title: Explore the EventBridge bus
+      body: |
+        Open the EventBridge tab and select the custom bus created for the lab.
+        Inspect its rules.
+      actions:
+        - type: open-tab
+          tab: aws-eventbridge
+          focus: "{{ outputs.event_bus_name }}"
+      hints:
+        - Default bus is always present; custom buses isolate lab events.
+    - id: explore-rule
+      title: Inspect the routing rule
+      body: |
+        In the EventBridge tab, select the rule and review the event pattern and
+        SQS target configuration.
+      actions:
+        - type: open-tab
+          tab: aws-eventbridge
+          focus: "{{ outputs.rule_name }}"
+      hints:
+        - The pattern matches events with source "lab.events".
+    - id: explore-queue
+      title: View the target SQS queue
+      body: |
+        Open the SQS tab to see the queue that acts as the rule target.
+      actions:
+        - type: open-tab
+          tab: aws-sqs
+          focus: "{{ outputs.queue_url }}"
+    - id: send-test-event
+      title: Send a test event simulation
+      body: |
+        To simulate publishing, use the SQS send below (or in a real environment
+        use put-events against the bus). A matching event would be delivered by
+        the rule.
+      actions:
+        - type: invoke-write
+          op: sqs.send
+          params:
+            queueUrl: "{{ outputs.queue_url }}"
+            messageBody: '{"lab":"eventbridge","source":"lab.events","detail":{"demo":true}}'
+      hints:
+        - In production, use AWS SDK put-events with EventBusName and Detail.
+    - id: verify-delivery
+      title: Verify delivery to queue
+      body: |
+        Check that a message arrived. The rule target delivers the event as the
+        message body.
+      verify:
+        - type: sqs.queue-attribute
+          queue: "{{ outputs.queue_url }}"
+          attribute: ApproximateNumberOfMessagesNotVisible
+          compare: gte
+          value: "0"
+      hints:
+        - Delivery may be near instant on the emulator.
+    - id: drift-note
+      title: Drift and rule changes
+      body: |
+        Changing a rule pattern outside the recipe (for example adding extra
+        filters in the console) will be detected as drift on the next plan.
+        Recipes give you reproducible event wiring.
+      hints:
+        - Prefer editing the recipe over console for long lived event routers.

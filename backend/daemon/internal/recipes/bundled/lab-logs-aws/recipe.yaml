@@ -1,0 +1,76 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-logs-aws
+kind: service-lab
+version: 0.1.0
+name: CloudWatch Logs lab (AWS)
+summary: A CloudWatch log group for learning log aggregation and querying.
+description: |
+  A focused service lab for logs: creates a log group. Use to explore
+  subscription filters, metric filters, and tailing events. Ties into
+  Lambda and other emitters.
+
+  Open the Logs tab.
+providers:
+  - aws
+tags:
+  - logs
+  - cloudwatch
+  - observability
+  - aws
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+outputs:
+  - name: log_group_name
+    primary: true
+lab:
+  difficulty: beginner
+  estimatedMinutes: 10
+  objectives:
+    - Locate the log group in the workspace Logs tool
+    - Understand log streams and retention
+    - Emit a test event (guidance) and tail
+    - Recognise logs as first class for debugging events and functions
+  steps:
+    - id: explore-group
+      title: Open the log group
+      body: |
+        Open the Logs tab and select the group. View recent streams and events.
+      actions:
+        - type: open-tab
+          tab: aws-logs
+          focus: "{{ outputs.log_group_name }}"
+      hints:
+        - Groups are often named after /aws/lambda/... or custom.
+    - id: emit-guidance
+      title: Emit log events
+      body: |
+        Use a Lambda or other emitter to put events, or the emulator tools.
+        Tail the group.
+      hints:
+        - Retention is set at group level; default may be never expire.
+    - id: observability
+      title: Observability tie in
+      body: |
+        Logs feed metrics, alarms, and dashboards. Combine with X-Ray or
+        EventBridge for full tracing.
+      hints:
+        - Drift on retention is detectable.
