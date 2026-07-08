@@ -7,8 +7,8 @@ import { Card } from "@/components/ui/card";
 import { openExternalUrl } from "@/lib/backend";
 import type { Deployment, RecipeManifest } from "@/types/backend";
 
-import { logCommandsForDeployment } from "./deployOutputLinks";
-import { CopyButton } from "./deployShared";
+import { logCommandsForDeployment } from "./output-links";
+import { CopyButton } from "./shared";
 
 export function AppHandoffCard({ deployment }: { deployment: Deployment }) {
   const apiOutput =

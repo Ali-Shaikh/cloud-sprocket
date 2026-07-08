@@ -28,7 +28,7 @@ import {
   manifestCloudOnlyAzure,
   manifestRequiresPro,
   type TargetOption,
-} from "./deployShared";
+} from "./shared";
 
 export function ConfigureRecipe({
   recipe,
@@ -67,8 +67,8 @@ export function ConfigureRecipe({
       {manifestRequiresPro(recipe.manifest) && (
         <Card className="flex items-center gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-400">
           <Crown className="size-4 shrink-0" />
-          Uses services that only emulate on LocalStack Pro. Use a LocalStack Pro/Team token for a local
-          dry-run, or pick a real AWS profile to deploy to the cloud.
+          This recipe needs services that are not fully emulated on the community local runtime. Use a
+          licensed local runtime where available, or pick a cloud profile to deploy unchanged.
         </Card>
       )}
 

@@ -7,8 +7,10 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { Deployment, ProfileSummary, RecipeManifest, RecipeVariable } from "@/types/backend";
 
+import type { GallerySection } from "@/lib/deploy-gallery-filter";
+
+export type { GallerySection };
 export type DeployMode = "list" | "configure" | "deployment";
-export type GallerySection = "app-deploy" | "service-lab";
 
 export const SCENARIO_TAGS = ["webhooks", "saas", "marketing", "async", "internal-tool", "staging", "ci", "ecommerce"] as const;
 

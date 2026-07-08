@@ -158,7 +158,7 @@ export default function ConnectView({
             </div>
             <div className="min-w-0">
               <div className="truncate font-bold">Local Runtime</div>
-              <div className="truncate text-xs text-muted-foreground">LocalStack + floci-az</div>
+              <div className="truncate text-xs text-muted-foreground">AWS and Azure local runtimes</div>
             </div>
             <StatusPill
               className="ml-auto shrink-0"

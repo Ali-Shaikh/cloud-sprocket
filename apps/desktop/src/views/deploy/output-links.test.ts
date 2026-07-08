@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { deploymentOutputLink, localDeploymentOutputLink, logCommandsForDeployment, toLocalStackUrl } from "./deployOutputLinks";
+import { deploymentOutputLink, localDeploymentOutputLink, logCommandsForDeployment, toLocalStackUrl } from "./output-links";
 
 describe("toLocalStackUrl", () => {
   it("rewrites AWS-format load balancer URLs to LocalStack", () => {

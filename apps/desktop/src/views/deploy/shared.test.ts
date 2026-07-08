@@ -16,7 +16,7 @@ import {
   manifestCloudOnlyAWS,
   manifestCloudOnlyAzure,
   normaliseMagentoComposeValues,
-} from "./deployShared";
+} from "./shared";
 
 describe("deployShared helpers", () => {
   it("detects the floci-az local Azure profile", () => {
