@@ -35,9 +35,6 @@ resource "aws_cloudformation_stack" "drift_lab" {
         Type = "AWS::SQS::Queue"
         Properties = {
           QueueName = "${local.name}-cf-drift-q"
-          Tags = [
-            for k, v in local.tags : { Key = k, Value = v }
-          ]
         }
       }
     }
