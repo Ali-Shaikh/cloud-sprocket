@@ -189,6 +189,14 @@ func (s *Service) Handle(
 		return s.handleAwsS3SetPrefixFilter(ctx, params, notifier)
 	case "aws.s3.uploadObject":
 		return s.handleAwsS3UploadObject(ctx, params, notifier)
+	case "aws.s3.deleteObject":
+		return s.handleAwsS3DeleteObject(ctx, params, notifier)
+	case "aws.s3.createBucket":
+		return s.handleAwsS3CreateBucket(ctx, params, notifier)
+	case "aws.s3.copyObject":
+		return s.handleAwsS3CopyObject(ctx, params, notifier)
+	case "aws.s3.createFolderPrefix":
+		return s.handleAwsS3CreateFolderPrefix(ctx, params, notifier)
 	case "aws.s3.presignObject":
 		return s.handleAwsS3PresignObject(ctx, params, notifier)
 	case "aws.s3.analyseUrl":
@@ -201,6 +209,10 @@ func (s *Service) Handle(
 		return s.handleAwsEc2SelectInstance(ctx, params, notifier)
 	case "aws.ec2.invokeAction":
 		return s.handleAwsEc2InvokeAction(ctx, params, notifier)
+	case "aws.ec2.runInstances":
+		return s.handleAwsEc2RunInstances(ctx, params, notifier)
+	case "aws.ec2.terminateInstances":
+		return s.handleAwsEc2TerminateInstances(ctx, params, notifier)
 	case "aws.lambda.selectRegion":
 		return s.handleAwsLambdaSelectRegion(ctx, params, notifier)
 	case "aws.lambda.selectFunction":
@@ -287,6 +299,18 @@ func (s *Service) Handle(
 		return s.handleAwsLambdaInvoke(ctx, params, notifier)
 	case "aws.lambda.create":
 		return s.handleAwsLambdaCreate(ctx, params, notifier)
+	case "aws.lambda.deleteFunction":
+		return s.handleAwsLambdaDeleteFunction(ctx, params, notifier)
+	case "aws.rds.startInstance":
+		return s.handleAwsRdsStartInstance(ctx, params, notifier)
+	case "aws.rds.stopInstance":
+		return s.handleAwsRdsStopInstance(ctx, params, notifier)
+	case "aws.logs.createLogGroup":
+		return s.handleAwsLogsCreateLogGroup(ctx, params, notifier)
+	case "aws.logs.putLogEvents":
+		return s.handleAwsLogsPutLogEvents(ctx, params, notifier)
+	case "aws.iam.createRole":
+		return s.handleAwsIamCreateRole(ctx, params, notifier)
 	case "aws.inventory.get":
 		return s.handleAwsInventoryGet(ctx, params, notifier)
 	case "azure.inventory.get":
@@ -333,6 +357,10 @@ func (s *Service) Handle(
 		return s.handleAzureStorageUploadBlob(ctx, params, notifier)
 	case "azure.storage.deleteBlob":
 		return s.handleAzureStorageDeleteBlob(ctx, params, notifier)
+	case "azure.storage.copyBlob":
+		return s.handleAzureStorageCopyBlob(ctx, params, notifier)
+	case "azure.storage.createFolderPrefix":
+		return s.handleAzureStorageCreateFolderPrefix(ctx, params, notifier)
 	case "azure.logAnalytics.selectWorkspace":
 		return s.handleAzureLogAnalyticsSelectWorkspace(ctx, params, notifier)
 	case "azure.logAnalytics.query":

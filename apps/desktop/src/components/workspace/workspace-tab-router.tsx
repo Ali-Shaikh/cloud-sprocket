@@ -140,6 +140,8 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     selectRDSInstance,
     deleteS3Object,
     createS3Bucket,
+    copyS3Object,
+    createS3FolderPrefix,
     runEC2Instances,
     terminateEC2Instance,
     deleteLambdaFunction,

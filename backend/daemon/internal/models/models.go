@@ -506,6 +506,18 @@ type AwsS3CreateBucketResult struct {
 	Region     string `json:"region"`
 }
 
+type AwsS3CopyObjectResult struct {
+	BucketName            string `json:"bucketName"`
+	SourceObjectKey       string `json:"sourceObjectKey"`
+	DestinationObjectKey  string `json:"destinationObjectKey"`
+	DestinationURI        string `json:"destinationUri"`
+}
+
+type AwsS3CreateFolderPrefixResult struct {
+	BucketName   string `json:"bucketName"`
+	FolderPrefix string `json:"folderPrefix"`
+}
+
 type AwsEc2RunInstancesResult struct {
 	InstanceID   string `json:"instanceId"`
 	Region       string `json:"region"`
@@ -884,6 +896,20 @@ type AzureBlobUploadResult struct {
 	ContainerName string `json:"containerName"`
 	BlobName      string `json:"blobName"`
 	BlobURL       string `json:"blobUrl"`
+}
+
+type AzureBlobCopyResult struct {
+	AccountName         string `json:"accountName"`
+	ContainerName       string `json:"containerName"`
+	SourceBlobName      string `json:"sourceBlobName"`
+	DestinationBlobName string `json:"destinationBlobName"`
+	BlobURL             string `json:"blobUrl"`
+}
+
+type AzureBlobCreateFolderPrefixResult struct {
+	AccountName   string `json:"accountName"`
+	ContainerName string `json:"containerName"`
+	FolderPrefix  string `json:"folderPrefix"`
 }
 
 type AzureWebApp struct {

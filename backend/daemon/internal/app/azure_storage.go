@@ -608,6 +608,151 @@ func (s *Service) handleAzureStorageDeleteBlob(ctx context.Context, params json.
 	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Deleted blob %s from %s/%s.", blobName, accountName, containerName))
 }
 
+func (s *Service) handleAzureStorageCopyBlob(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		SourceBlobName      string `json:"sourceBlobName"`
+		DestinationBlobName string `json:"destinationBlobName"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	destinationBlobName := strings.TrimSpace(request.DestinationBlobName)
+	if destinationBlobName == "" {
+		return nil, errors.New("destination blob name is required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	profile, accountName, containerName, err := s.activeAzureStorageSelection(snapshot, session, true)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !effectiveAzureWritesEnabled(session, profile, s.azureProviderCommandPath(snapshot)) {
+		s.mu.Unlock()
+		return nil, errors.New("blob copy requires write mode to be enabled for this Azure workspace")
+	}
+	sourceBlobName := strings.TrimSpace(request.SourceBlobName)
+	if sourceBlobName == "" {
+		sourceBlobName = session.SelectedAzureBlobName
+	}
+	if sourceBlobName == "" {
+		s.mu.Unlock()
+		return nil, errors.New("select a source blob before copying")
+	}
+	prefix := session.AzureBlobPrefixFilter
+	s.mu.Unlock()
+
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+	result, err := s.azure.CopyBlob(timeoutCtx, profile, accountName, containerName, sourceBlobName, destinationBlobName)
+	if err != nil {
+		return nil, err
+	}
+	s.invalidateResourceCache(ctx, "azure.storage.blobs", profile.ProfileID+"|"+accountName+"|"+containerName+"|"+prefix)
+	s.mu.Lock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	session.SelectedAzureStorageAccount = accountName
+	session.SelectedAzureBlobContainer = containerName
+	session.SelectedAzureBlobName = destinationBlobName
+	session.AzureBlobPrefixFilter = prefix
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.mu.Unlock()
+	workspace, notifyErr := s.finishAzureWorkspace(
+		ctx,
+		snapshot,
+		session,
+		notifier,
+		"success",
+		fmt.Sprintf("Copied blob %s to %s in %s/%s.", sourceBlobName, destinationBlobName, accountName, containerName),
+	)
+	if notifyErr != nil {
+		return nil, notifyErr
+	}
+	return map[string]any{
+		"workspace": workspace,
+		"result":    result,
+	}, nil
+}
+
+func (s *Service) handleAzureStorageCreateFolderPrefix(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		FolderPrefix string `json:"folderPrefix"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	folderPrefix := strings.TrimSpace(request.FolderPrefix)
+	if folderPrefix == "" {
+		return nil, errors.New("folder prefix is required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	profile, accountName, containerName, err := s.activeAzureStorageSelection(snapshot, session, true)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !effectiveAzureWritesEnabled(session, profile, s.azureProviderCommandPath(snapshot)) {
+		s.mu.Unlock()
+		return nil, errors.New("folder create requires write mode to be enabled for this Azure workspace")
+	}
+	s.mu.Unlock()
+
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+	result, err := s.azure.CreateFolderPrefix(timeoutCtx, profile, accountName, containerName, folderPrefix)
+	if err != nil {
+		return nil, err
+	}
+	s.invalidateResourceCacheScope(ctx, "azure.storage.blobs")
+	s.mu.Lock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	session.SelectedAzureStorageAccount = accountName
+	session.SelectedAzureBlobContainer = containerName
+	session.AzureBlobPrefixFilter = result.FolderPrefix
+	session.SelectedAzureBlobName = ""
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.mu.Unlock()
+	return s.finishAzureWorkspace(
+		ctx,
+		snapshot,
+		session,
+		notifier,
+		"success",
+		fmt.Sprintf("Created folder prefix %s in %s/%s.", result.FolderPrefix, accountName, containerName),
+	)
+}
+
 func validateAzureBlobUploadRequest(sourcePath string, blobName string) error {
 	sourcePath = strings.TrimSpace(sourcePath)
 	blobName = strings.TrimSpace(blobName)

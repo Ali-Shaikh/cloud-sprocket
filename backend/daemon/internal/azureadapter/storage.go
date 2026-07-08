@@ -13,6 +13,9 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
 	"github.com/dustin/go-humanize"
 
 	"cloudsprocket/backend/daemon/internal/models"
@@ -212,6 +215,85 @@ func (i *Inventory) UploadBlob(
 	}, nil
 }
 
+func (i *Inventory) CopyBlob(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	accountName string,
+	containerName string,
+	sourceBlobName string,
+	destinationBlobName string,
+) (models.AzureBlobCopyResult, error) {
+	accountName = strings.TrimSpace(accountName)
+	containerName = strings.TrimSpace(containerName)
+	sourceBlobName = strings.TrimSpace(sourceBlobName)
+	destinationBlobName = strings.TrimSpace(destinationBlobName)
+	if accountName == "" || containerName == "" || sourceBlobName == "" || destinationBlobName == "" {
+		return models.AzureBlobCopyResult{}, fmt.Errorf("account, container, source blob, and destination blob are required")
+	}
+	client, err := i.blobServiceClient(ctx, profile, accountName)
+	if err != nil {
+		return models.AzureBlobCopyResult{}, err
+	}
+	containerClient := client.ServiceClient().NewContainerClient(containerName)
+	sourceClient := containerClient.NewBlobClient(sourceBlobName)
+	sourceURL, err := sourceClient.GetSASURL(
+		sas.BlobPermissions{Read: true},
+		time.Now().UTC().Add(15*time.Minute),
+		nil,
+	)
+	if err != nil {
+		return models.AzureBlobCopyResult{}, fmt.Errorf("authorise source blob for copy: %w", err)
+	}
+	destinationClient := containerClient.NewBlockBlobClient(destinationBlobName)
+	copyResponse, err := destinationClient.StartCopyFromURL(ctx, sourceURL, nil)
+	if err != nil {
+		return models.AzureBlobCopyResult{}, fmt.Errorf("copy blob: %w", err)
+	}
+	if err := waitForBlobCopyCompletion(ctx, destinationClient, copyResponse.CopyStatus); err != nil {
+		return models.AzureBlobCopyResult{}, err
+	}
+	blobURL := client.URL() + "/" + containerName + "/" + destinationBlobName
+	return models.AzureBlobCopyResult{
+		AccountName:         accountName,
+		ContainerName:       containerName,
+		SourceBlobName:      sourceBlobName,
+		DestinationBlobName: destinationBlobName,
+		BlobURL:             blobURL,
+	}, nil
+}
+
+func (i *Inventory) CreateFolderPrefix(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	accountName string,
+	containerName string,
+	folderPrefix string,
+) (models.AzureBlobCreateFolderPrefixResult, error) {
+	accountName = strings.TrimSpace(accountName)
+	containerName = strings.TrimSpace(containerName)
+	folderPrefix = strings.TrimSpace(folderPrefix)
+	if accountName == "" || containerName == "" || folderPrefix == "" {
+		return models.AzureBlobCreateFolderPrefixResult{}, fmt.Errorf("account, container, and folder prefix are required")
+	}
+	if !strings.HasSuffix(folderPrefix, "/") {
+		folderPrefix += "/"
+	}
+	client, err := i.blobServiceClient(ctx, profile, accountName)
+	if err != nil {
+		return models.AzureBlobCreateFolderPrefixResult{}, err
+	}
+	blobClient := client.ServiceClient().NewContainerClient(containerName).NewBlockBlobClient(folderPrefix)
+	_, err = blobClient.UploadBuffer(ctx, []byte{}, nil)
+	if err != nil {
+		return models.AzureBlobCreateFolderPrefixResult{}, fmt.Errorf("create folder prefix: %w", err)
+	}
+	return models.AzureBlobCreateFolderPrefixResult{
+		AccountName:   accountName,
+		ContainerName: containerName,
+		FolderPrefix:  folderPrefix,
+	}, nil
+}
+
 func (i *Inventory) DeleteBlob(
 	ctx context.Context,
 	profile models.ProfileSummary,
@@ -260,6 +342,47 @@ func (i *Inventory) blobServiceClient(
 		return nil, fmt.Errorf("azure storage credential: %w", err)
 	}
 	return azblob.NewClientWithSharedKeyCredential(endpoint, credential, nil)
+}
+
+func waitForBlobCopyCompletion(
+	ctx context.Context,
+	destinationClient *blockblob.Client,
+	initialStatus *blob.CopyStatusType,
+) error {
+	status := blob.CopyStatusTypePending
+	if initialStatus != nil {
+		status = *initialStatus
+	}
+	if status == blob.CopyStatusTypeSuccess {
+		return nil
+	}
+	deadline := time.Now().Add(2 * time.Minute)
+	for status == blob.CopyStatusTypePending {
+		if time.Now().After(deadline) {
+			return fmt.Errorf("blob copy timed out")
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+		properties, err := destinationClient.GetProperties(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("copy status: %w", err)
+		}
+		if properties.CopyStatus == nil {
+			return fmt.Errorf("copy status missing from blob properties")
+		}
+		status = *properties.CopyStatus
+	}
+	switch status {
+	case blob.CopyStatusTypeSuccess:
+		return nil
+	case blob.CopyStatusTypeFailed, blob.CopyStatusTypeAborted:
+		return fmt.Errorf("blob copy %s", status)
+	default:
+		return fmt.Errorf("blob copy ended in unexpected state: %s", status)
+	}
 }
 
 func optionalString(value string) *string {

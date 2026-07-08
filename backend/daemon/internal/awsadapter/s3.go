@@ -6,6 +6,7 @@ package awsadapter
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -378,6 +379,93 @@ func (s *S3Inventory) CreateBucket(
 		BucketName: bucketName,
 		Region:     region,
 	}, nil
+}
+
+func (s *S3Inventory) CopyObject(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+	sourceObjectKey string,
+	destinationObjectKey string,
+) (models.AwsS3CopyObjectResult, error) {
+	bucketName = strings.TrimSpace(bucketName)
+	sourceObjectKey = strings.TrimSpace(sourceObjectKey)
+	destinationObjectKey = strings.TrimSpace(destinationObjectKey)
+	if bucketName == "" || sourceObjectKey == "" || destinationObjectKey == "" {
+		return models.AwsS3CopyObjectResult{}, fmt.Errorf("bucket, source key, and destination key are required")
+	}
+	region, err := s.bucketRegion(ctx, profile, bucketName)
+	if err != nil {
+		return models.AwsS3CopyObjectResult{}, err
+	}
+	cfg, err := s.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsS3CopyObjectResult{}, err
+	}
+	client := s3Client(cfg, profile)
+	copySource := encodeS3CopySource(bucketName, sourceObjectKey)
+	_, err = client.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:     aws.String(bucketName),
+		Key:        aws.String(destinationObjectKey),
+		CopySource: aws.String(copySource),
+	})
+	if err != nil {
+		return models.AwsS3CopyObjectResult{}, err
+	}
+	return models.AwsS3CopyObjectResult{
+		BucketName:           bucketName,
+		SourceObjectKey:      sourceObjectKey,
+		DestinationObjectKey: destinationObjectKey,
+		DestinationURI:       fmt.Sprintf("s3://%s/%s", bucketName, destinationObjectKey),
+	}, nil
+}
+
+func (s *S3Inventory) CreateFolderPrefix(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+	folderPrefix string,
+) (models.AwsS3CreateFolderPrefixResult, error) {
+	bucketName = strings.TrimSpace(bucketName)
+	folderPrefix = strings.TrimSpace(folderPrefix)
+	if bucketName == "" || folderPrefix == "" {
+		return models.AwsS3CreateFolderPrefixResult{}, fmt.Errorf("bucket and folder prefix are required")
+	}
+	if !strings.HasSuffix(folderPrefix, "/") {
+		folderPrefix += "/"
+	}
+	region, err := s.bucketRegion(ctx, profile, bucketName)
+	if err != nil {
+		return models.AwsS3CreateFolderPrefixResult{}, err
+	}
+	cfg, err := s.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsS3CreateFolderPrefixResult{}, err
+	}
+	client := s3Client(cfg, profile)
+	_, err = client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(folderPrefix),
+		Body:   strings.NewReader(""),
+	})
+	if err != nil {
+		return models.AwsS3CreateFolderPrefixResult{}, err
+	}
+	return models.AwsS3CreateFolderPrefixResult{
+		BucketName:   bucketName,
+		FolderPrefix: folderPrefix,
+	}, nil
+}
+
+func encodeS3CopySource(bucketName, objectKey string) string {
+	encodeSegment := func(segment string) string {
+		return strings.ReplaceAll(url.QueryEscape(segment), "+", "%20")
+	}
+	segments := strings.Split(objectKey, "/")
+	for index, segment := range segments {
+		segments[index] = encodeSegment(segment)
+	}
+	return encodeSegment(bucketName) + "/" + strings.Join(segments, "/")
 }
 
 func (s *S3Inventory) PresignGetObject(
