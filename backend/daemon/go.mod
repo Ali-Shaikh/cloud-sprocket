@@ -36,7 +36,7 @@ require (
 	github.com/hashicorp/terraform-config-inspect v0.0.0-20260224005459-813a97530220
 	github.com/moby/moby/api v1.55.0
 	github.com/moby/moby/client v0.5.0
-	golang.org/x/sys v0.46.0
+	golang.org/x/sys v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.53.0
 )
