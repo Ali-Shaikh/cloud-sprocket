@@ -72,10 +72,11 @@ resource "aws_api_gateway_resource" "root" {
 }
 
 resource "aws_api_gateway_method" "get" {
-  rest_api_id   = aws_api_gateway_rest_api.lab.id
-  resource_id   = aws_api_gateway_resource.root.id
-  http_method   = "GET"
-  authorization = "NONE"
+  rest_api_id      = aws_api_gateway_rest_api.lab.id
+  resource_id      = aws_api_gateway_resource.root.id
+  http_method      = "GET"
+  authorization    = "NONE"
+  api_key_required = true
 }
 
 resource "aws_api_gateway_integration" "lambda" {
@@ -146,9 +147,10 @@ resource "aws_api_gateway_usage_plan" "lab" {
 }
 
 resource "aws_api_gateway_api_key" "lab" {
-  name  = "${local.name}-key"
-  value = "lab-demo-key-12345" # fixed for lab predictability; rotate in real use
-  tags  = local.tags
+  name = "${local.name}-key"
+  # AWS will generate a key; do not hardcode in state for real use.
+  # For lab predictability the usage plan key is associated.
+  tags = local.tags
 }
 
 resource "aws_api_gateway_usage_plan_key" "lab" {
