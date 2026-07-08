@@ -63,8 +63,10 @@ type Deployment struct {
 	// post-apply build step failed (e.g. database migrations). The deployment
 	// stays in StatusApplied so outputs remain usable and steps can be retried.
 	PostApplyError string `json:"postApplyError,omitempty"`
-	CreatedAt      string `json:"createdAt"`
-	UpdatedAt      string `json:"updatedAt"`
+	// Drift holds the last drift check result (populated by CheckDrift for applied deployments).
+	Drift     *DriftReport `json:"drift,omitempty"`
+	CreatedAt string       `json:"createdAt"`
+	UpdatedAt string       `json:"updatedAt"`
 }
 
 // ApplyResult is the outcome of a successful tofu apply. PostApplyError is
@@ -95,6 +97,12 @@ type PlanSummary struct {
 	Change  int              `json:"change"`
 	Destroy int              `json:"destroy"`
 	Changes []ResourceChange `json:"changes"`
+}
+
+// DriftReport is the result of a drift check (manual "Check drift" on an applied deployment).
+type DriftReport struct {
+	HasDrift bool        `json:"hasDrift"`
+	Drift    *PlanSummary `json:"drift,omitempty"` // reuses PlanSummary shape for drifted resources
 }
 
 const (
@@ -327,6 +335,83 @@ func (e *Engine) Destroy(ctx context.Context, deployment *Deployment, onLine tof
 	env := e.env(deployment)
 	_, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, OnLine: onLine, Args: []string{"destroy", "-input=false", "-auto-approve", "-no-color"}})
 	return err
+}
+
+// CheckDrift performs a refresh-only plan with -detailed-exitcode to detect
+// configuration drift on an already-applied deployment. It is intentionally
+// manual (button-driven) for v0.9.1; a scheduled local-only sweep can be added later.
+func (e *Engine) CheckDrift(ctx context.Context, deployment *Deployment, onLine tofu.LogFunc) (DriftReport, error) {
+	if err := e.requireRunner(); err != nil {
+		return DriftReport{}, err
+	}
+	if err := e.SyncWorkspace(deployment); err != nil {
+		return DriftReport{}, err
+	}
+	// Skip heavy build/image steps for a pure drift check.
+	dir := e.WorkspaceDir(deployment.ID)
+	env := e.env(deployment)
+
+	// Use -detailed-exitcode so exit 2 means "drift detected".
+	_, exitCode, runErr := e.runner.RunWithExitCode(ctx, tofu.RunOptions{
+		Dir:    dir,
+		Env:    env,
+		OnLine: onLine,
+		Args:   []string{"plan", "-input=false", "-no-color", "-refresh-only", "-detailed-exitcode", "-out=" + planFile},
+	})
+	if runErr != nil {
+		// Non-zero but not the drift sentinel is a real error.
+		if exitCode != 2 {
+			return DriftReport{}, runErr
+		}
+	}
+
+	raw, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, Args: []string{"show", "-json", planFile}})
+	if err != nil {
+		return DriftReport{}, err
+	}
+
+	report, err := parseDrift(raw)
+	if err != nil {
+		return DriftReport{}, err
+	}
+	report.HasDrift = report.HasDrift || exitCode == 2
+	return report, nil
+}
+
+// parseDrift extracts drift information from `tofu show -json` output.
+// Prefers the dedicated `resource_drift` array (OpenTofu 1.x); falls back to
+// resource_changes that represent out-of-band modifications.
+func parseDrift(raw []byte) (DriftReport, error) {
+	var plan struct {
+		ResourceDrift    []ResourceChange `json:"resource_drift"`
+		ResourceChanges  []ResourceChange `json:"resource_changes"`
+	}
+	if err := json.Unmarshal(raw, &plan); err != nil {
+		return DriftReport{}, fmt.Errorf("parse plan JSON: %w", err)
+	}
+
+	drifted := plan.ResourceDrift
+	if len(drifted) == 0 {
+		for _, ch := range plan.ResourceChanges {
+			// Heuristic: changes that are not pure no-op or create/destroy in the plan
+			// but represent real drift are already filtered by tofu in refresh-only.
+			if len(ch.Actions) > 0 && !isNoOp(ch.Actions) {
+				drifted = append(drifted, ch)
+			}
+		}
+	}
+
+	return DriftReport{
+		HasDrift: len(drifted) > 0,
+		Drift: &PlanSummary{
+			Changes: drifted,
+			// counts left as 0 for drift view; UI can use len(Changes)
+		},
+	}, nil
+}
+
+func isNoOp(actions []string) bool {
+	return len(actions) == 0 || (len(actions) == 1 && actions[0] == "no-op")
 }
 
 // runBuildSteps runs a recipe's build commands (e.g. `npm ci`) to package

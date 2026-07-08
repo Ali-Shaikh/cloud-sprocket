@@ -239,5 +239,6 @@ type Deployer interface {
 	Apply(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) (deploy.ApplyResult, error)
 	RetryPostApply(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) error
 	Destroy(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) error
+	CheckDrift(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) (deploy.DriftReport, error)
 	RemoveWorkspace(id string) error
 }
