@@ -44,10 +44,10 @@ variableGroups:
     variables:
       - name: event_pattern
         widget: textarea
-        help: JSON event pattern to match (or leave for schedule). Example: {"source": ["my.app"]}
+        help: 'JSON event pattern to match (or leave for schedule). Example: {"source": ["my.app"]}'
       - name: schedule_expression
         widget: text
-        help: Optional schedule e.g. rate(1 minute). Use when no custom pattern.
+        help: 'Optional schedule e.g. rate(1 minute). Use when no custom pattern.'
   - title: Processor code
     variables:
       - name: backend_source_dir
