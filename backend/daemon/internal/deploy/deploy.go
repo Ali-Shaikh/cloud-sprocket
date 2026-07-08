@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ali Shaikh
+
 // Package deploy orchestrates recipe deployments through the OpenTofu engine:
 // it prepares a per-deployment workspace (materialised recipe + tfvars + an
 // optional LocalStack endpoint override), then runs init/plan/apply/destroy and
@@ -18,6 +21,7 @@ import (
 
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/recipes"
+	"cloudsprocket/backend/daemon/internal/sysproc"
 	"cloudsprocket/backend/daemon/internal/tofu"
 )
 
@@ -33,6 +37,7 @@ const (
 	StatusDestroying Status = "destroying"
 	StatusDestroyed  Status = "destroyed"
 	StatusFailed     Status = "failed"
+	StatusCancelled  Status = "cancelled"
 )
 
 // Deployment is one instantiation of a recipe against a connection profile.
@@ -43,13 +48,32 @@ type Deployment struct {
 	ProviderID string         `json:"providerId"`
 	ProfileID  string         `json:"profileId"`
 	Local      bool           `json:"local"`
+	// RuntimeID names the local emulator when Local is true (e.g. "localstack").
+	// Empty means the default for the provider (localstack for local AWS).
+	RuntimeID  string         `json:"runtimeId,omitempty"`
 	Variables  map[string]any `json:"variables"`
 	Status     Status         `json:"status"`
 	Plan       *PlanSummary   `json:"plan,omitempty"`
 	Outputs    []Output       `json:"outputs,omitempty"`
-	Error      string         `json:"error,omitempty"`
-	CreatedAt  string         `json:"createdAt"`
-	UpdatedAt  string         `json:"updatedAt"`
+	// SensitiveVars names the variables whose values are secret (from the
+	// recipe), so they can be sealed at rest in the persisted record.
+	SensitiveVars []string `json:"sensitiveVars,omitempty"`
+	Error          string `json:"error,omitempty"`
+	// PostApplyError is set when infrastructure applied successfully but a
+	// post-apply build step failed (e.g. database migrations). The deployment
+	// stays in StatusApplied so outputs remain usable and steps can be retried.
+	PostApplyError string `json:"postApplyError,omitempty"`
+	// Drift holds the last drift check result (populated by CheckDrift for applied deployments).
+	Drift     *DriftReport `json:"drift,omitempty"`
+	CreatedAt string       `json:"createdAt"`
+	UpdatedAt string       `json:"updatedAt"`
+}
+
+// ApplyResult is the outcome of a successful tofu apply. PostApplyError is
+// non-empty when infra landed but a post-apply step failed.
+type ApplyResult struct {
+	Outputs        []Output
+	PostApplyError string
 }
 
 // Output is a resolved Terraform output value.
@@ -75,11 +99,16 @@ type PlanSummary struct {
 	Changes []ResourceChange `json:"changes"`
 }
 
+// DriftReport is the result of a drift check (manual "Check drift" on an applied deployment).
+type DriftReport struct {
+	HasDrift bool        `json:"hasDrift"`
+	Drift    *PlanSummary `json:"drift,omitempty"` // reuses PlanSummary shape for drifted resources
+}
+
 const (
 	tfvarsFile    = "cloudsprocket.auto.tfvars.json"
-	overrideFile  = "cloudsprocket_localstack_override.tf"
-	planFile      = "cloudsprocket.tfplan"
-	localStackURL = "http://localhost:4566"
+	overrideFile = "cloudsprocket_localstack_override.tf"
+	planFile     = "cloudsprocket.tfplan"
 )
 
 // Engine runs deployments via a tofu runner.
@@ -87,18 +116,17 @@ type Engine struct {
 	runner   *tofu.Runner
 	settings config.Settings
 	loader   *recipes.Loader
-	// localStackEndpoint is overridable for tests.
-	localStackEndpoint string
+	registry *Registry
 }
 
 // NewEngine builds an engine bound to a runner, settings and recipe loader.
 // The runner may be unresolved; it is (re)resolved lazily and on install.
 func NewEngine(runner *tofu.Runner, settings config.Settings, loader *recipes.Loader) *Engine {
 	return &Engine{
-		runner:             runner,
-		settings:           settings,
-		loader:             loader,
-		localStackEndpoint: localStackURL,
+		runner:   runner,
+		settings: settings,
+		loader:   loader,
+		registry: NewRegistry(settings, TargetOptions{LocalStackEndpoint: DefaultLocalStackEndpoint}),
 	}
 }
 
@@ -158,10 +186,21 @@ func (e *Engine) WorkspaceDir(id string) string {
 	return filepath.Join(e.settings.DeploymentsDir, id)
 }
 
+// RemoveWorkspace deletes a deployment's on-disk workspace (materialised recipe,
+// tfvars, tfstate, plan). Used when a deployment record is removed so stale
+// workspaces do not accumulate. A missing directory is not an error.
+func (e *Engine) RemoveWorkspace(id string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("deployment id is required")
+	}
+	return os.RemoveAll(e.WorkspaceDir(id))
+}
+
 // Prepare materialises the recipe into the deployment workspace, writes the
 // variables as tfvars, and, for a local AWS deployment, drops a LocalStack
 // endpoint override so the unchanged recipe targets the emulator.
 func (e *Engine) Prepare(deployment *Deployment) error {
+	NormaliseDeploymentTarget(deployment)
 	dir := e.WorkspaceDir(deployment.ID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -169,12 +208,38 @@ func (e *Engine) Prepare(deployment *Deployment) error {
 	if err := e.loader.Materialise(deployment.RecipeID, dir); err != nil {
 		return fmt.Errorf("materialise recipe: %w", err)
 	}
+	return e.writeWorkspaceFiles(dir, deployment)
+}
+
+// SyncWorkspace ensures the deployment workspace exists and that tfvars plus
+// provider overrides match the current target wiring. Plan, apply, and destroy
+// call this so a rebuilt daemon or retried apply cannot reuse stale floci-az
+// provider configuration from an earlier prepare.
+func (e *Engine) SyncWorkspace(deployment *Deployment) error {
+	NormaliseDeploymentTarget(deployment)
+	dir := e.WorkspaceDir(deployment.ID)
+	if _, err := os.Stat(filepath.Join(dir, "main.tf")); err != nil {
+		return e.Prepare(deployment)
+	}
+	return e.writeWorkspaceFiles(dir, deployment)
+}
+
+func (e *Engine) writeWorkspaceFiles(dir string, deployment *Deployment) error {
 	if err := writeTfvars(dir, deployment.Variables); err != nil {
 		return fmt.Errorf("write tfvars: %w", err)
 	}
-	if deployment.Local && deployment.ProviderID == "aws" {
-		if err := os.WriteFile(filepath.Join(dir, overrideFile), []byte(localStackOverride(e.localStackEndpoint)), 0o644); err != nil {
-			return fmt.Errorf("write localstack override: %w", err)
+	target, err := e.registry.ResolveTarget(deployment)
+	if err != nil {
+		return err
+	}
+	if target != nil {
+		if err := target.WriteOverrides(dir, deployment, e.registry.opts); err != nil {
+			return fmt.Errorf("write provider overrides: %w", err)
+		}
+	}
+	if deployment.RecipeID == magentoComposeRecipeID {
+		if err := renderMagentoComposeWorkspace(dir, deployment.Variables); err != nil {
+			return fmt.Errorf("render magento compose workspace: %w", err)
 		}
 	}
 	return nil
@@ -185,8 +250,14 @@ func (e *Engine) Plan(ctx context.Context, deployment *Deployment, onLine tofu.L
 	if err := e.requireRunner(); err != nil {
 		return PlanSummary{}, err
 	}
+	if err := e.SyncWorkspace(deployment); err != nil {
+		return PlanSummary{}, err
+	}
 	if recipe, err := e.loader.Load(deployment.RecipeID); err == nil {
-		if err := e.runBuildSteps(ctx, deployment, recipe.Manifest.Build, onLine); err != nil {
+		if err := e.runBuildSteps(ctx, deployment, recipe.Manifest.Build, nil, onLine); err != nil {
+			return PlanSummary{}, err
+		}
+		if err := e.runImagePipeline(ctx, deployment, recipe.Manifest.ImageBuild, onLine); err != nil {
 			return PlanSummary{}, err
 		}
 	}
@@ -205,26 +276,59 @@ func (e *Engine) Plan(ctx context.Context, deployment *Deployment, onLine tofu.L
 	return parsePlan(raw)
 }
 
-// Apply applies the previously saved plan and returns the captured outputs.
-func (e *Engine) Apply(ctx context.Context, deployment *Deployment, onLine tofu.LogFunc) ([]Output, error) {
+// Apply applies the previously saved plan and returns captured outputs. When
+// post-apply steps fail the result still carries outputs and PostApplyError.
+func (e *Engine) Apply(ctx context.Context, deployment *Deployment, onLine tofu.LogFunc) (ApplyResult, error) {
 	if err := e.requireRunner(); err != nil {
-		return nil, err
+		return ApplyResult{}, err
+	}
+	if err := e.SyncWorkspace(deployment); err != nil {
+		return ApplyResult{}, err
 	}
 	dir := e.WorkspaceDir(deployment.ID)
 	env := e.env(deployment)
 	if _, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, OnLine: onLine, Args: []string{"apply", "-input=false", "-no-color", planFile}}); err != nil {
-		return nil, err
+		return ApplyResult{}, err
 	}
 	raw, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, Args: []string{"output", "-json"}})
 	if err != nil {
-		return nil, err
+		return ApplyResult{}, err
 	}
-	return parseOutputs(raw)
+	outputs, err := parseOutputs(raw)
+	if err != nil {
+		return ApplyResult{}, err
+	}
+	result := ApplyResult{Outputs: outputs}
+	if recipe, loadErr := e.loader.Load(deployment.RecipeID); loadErr == nil && len(recipe.Manifest.PostApply) > 0 {
+		if err := e.runBuildSteps(ctx, deployment, recipe.Manifest.PostApply, outputEnvVars(outputs), onLine); err != nil {
+			result.PostApplyError = err.Error()
+		}
+	}
+	return result, nil
+}
+
+// RetryPostApply re-runs post-apply steps for an already-applied deployment
+// using the stored outputs as environment injection. Tofu is not invoked.
+func (e *Engine) RetryPostApply(ctx context.Context, deployment *Deployment, onLine tofu.LogFunc) error {
+	if len(deployment.Outputs) == 0 {
+		return fmt.Errorf("deployment has no outputs; apply infrastructure first")
+	}
+	recipe, err := e.loader.Load(deployment.RecipeID)
+	if err != nil {
+		return err
+	}
+	if len(recipe.Manifest.PostApply) == 0 {
+		return fmt.Errorf("recipe %q has no post-apply steps", deployment.RecipeID)
+	}
+	return e.runBuildSteps(ctx, deployment, recipe.Manifest.PostApply, outputEnvVars(deployment.Outputs), onLine)
 }
 
 // Destroy tears the deployment down.
 func (e *Engine) Destroy(ctx context.Context, deployment *Deployment, onLine tofu.LogFunc) error {
 	if err := e.requireRunner(); err != nil {
+		return err
+	}
+	if err := e.SyncWorkspace(deployment); err != nil {
 		return err
 	}
 	dir := e.WorkspaceDir(deployment.ID)
@@ -233,10 +337,105 @@ func (e *Engine) Destroy(ctx context.Context, deployment *Deployment, onLine tof
 	return err
 }
 
+// CheckDrift performs a refresh-only plan with -detailed-exitcode to detect
+// configuration drift on an already-applied deployment. It is intentionally
+// manual (button-driven) for v0.9.1; a scheduled local-only sweep can be added later.
+func (e *Engine) CheckDrift(ctx context.Context, deployment *Deployment, onLine tofu.LogFunc) (DriftReport, error) {
+	if err := e.requireRunner(); err != nil {
+		return DriftReport{}, err
+	}
+	if err := e.SyncWorkspace(deployment); err != nil {
+		return DriftReport{}, err
+	}
+	// Skip heavy build/image steps for a pure drift check.
+	dir := e.WorkspaceDir(deployment.ID)
+	env := e.env(deployment)
+
+	// Use -detailed-exitcode so exit 2 means "drift detected".
+	_, exitCode, runErr := e.runner.RunWithExitCode(ctx, tofu.RunOptions{
+		Dir:    dir,
+		Env:    env,
+		OnLine: onLine,
+		Args:   []string{"plan", "-input=false", "-no-color", "-refresh-only", "-detailed-exitcode", "-out=" + planFile},
+	})
+	if runErr != nil {
+		// Non-zero but not the drift sentinel is a real error.
+		if exitCode != 2 {
+			return DriftReport{}, runErr
+		}
+	}
+
+	raw, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, Args: []string{"show", "-json", planFile}})
+	if err != nil {
+		return DriftReport{}, err
+	}
+
+	report, err := parseDrift(raw)
+	if err != nil {
+		return DriftReport{}, err
+	}
+	report.HasDrift = report.HasDrift || exitCode == 2
+	return report, nil
+}
+
+// parseDrift extracts drift information from `tofu show -json` output.
+// Prefers the dedicated `resource_drift` array (OpenTofu 1.x); falls back to
+// resource_changes that represent out-of-band modifications.
+func parseDrift(raw []byte) (DriftReport, error) {
+	var plan struct {
+		ResourceDrift    []ResourceChange `json:"resource_drift"`
+		ResourceChanges  []ResourceChange `json:"resource_changes"`
+	}
+	if err := json.Unmarshal(raw, &plan); err != nil {
+		return DriftReport{}, fmt.Errorf("parse plan JSON: %w", err)
+	}
+
+	drifted := plan.ResourceDrift
+	if len(drifted) == 0 {
+		for _, ch := range plan.ResourceChanges {
+			// Heuristic: changes that are not pure no-op or create/destroy in the plan
+			// but represent real drift are already filtered by tofu in refresh-only.
+			if len(ch.Actions) > 0 && !isNoOp(ch.Actions) {
+				drifted = append(drifted, ch)
+			}
+		}
+	}
+
+	return DriftReport{
+		HasDrift: len(drifted) > 0,
+		Drift: &PlanSummary{
+			Changes: drifted,
+			// counts left as 0 for drift view; UI can use len(Changes)
+		},
+	}, nil
+}
+
 // runBuildSteps runs a recipe's build commands (e.g. `npm ci`) to package
 // application code before planning. A step is skipped when its DirVar is empty
 // or its Requires file is absent (so the bundled stub directory is left alone).
-func (e *Engine) runBuildSteps(ctx context.Context, deployment *Deployment, steps []recipes.BuildStep, onLine tofu.LogFunc) error {
+// outputEnvVars maps deployment outputs to process environment variables so
+// post-apply steps can read live infrastructure values (database_url → DATABASE_URL).
+func outputEnvVars(outputs []Output) []string {
+	env := make([]string, 0, len(outputs))
+	for _, output := range outputs {
+		key := outputToEnvKey(output.Name)
+		if key == "" {
+			continue
+		}
+		env = append(env, key+"="+fmt.Sprint(output.Value))
+	}
+	return env
+}
+
+func outputToEnvKey(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	return strings.ToUpper(strings.ReplaceAll(name, "-", "_"))
+}
+
+func (e *Engine) runBuildSteps(ctx context.Context, deployment *Deployment, steps []recipes.BuildStep, extraEnv []string, onLine tofu.LogFunc) error {
 	for _, step := range steps {
 		dir := ""
 		if step.DirVar != "" {
@@ -266,12 +465,22 @@ func (e *Engine) runBuildSteps(ctx context.Context, deployment *Deployment, step
 		}
 		cmd := exec.CommandContext(ctx, step.Command[0], step.Command[1:]...)
 		cmd.Dir = dir
+		if len(extraEnv) > 0 {
+			cmd.Env = append(os.Environ(), extraEnv...)
+		}
+		sysproc.Hide(cmd)
 		writer := &buildLineWriter{onLine: onLine}
 		cmd.Stdout = writer
 		cmd.Stderr = writer
 		err := cmd.Run()
 		writer.flush()
 		if err != nil {
+			if step.ContinueOnError {
+				if onLine != nil {
+					onLine(fmt.Sprintf("Build step %q failed (continuing): %v", step.Name, err))
+				}
+				continue
+			}
 			return fmt.Errorf("build step %q failed: %w", step.Name, err)
 		}
 	}
@@ -316,24 +525,39 @@ func (w *buildLineWriter) flush() {
 	}
 }
 
-// env builds the provider environment: dummy credentials for a local emulator,
-// otherwise the user's real profile and config files.
+// env builds the provider environment via the resolved deployment target.
+// Target-less deployments (no runtime) contribute no environment.
 func (e *Engine) env(deployment *Deployment) []string {
-	if deployment.Local && deployment.ProviderID == "aws" {
-		return []string{
-			"AWS_ACCESS_KEY_ID=test",
-			"AWS_SECRET_ACCESS_KEY=test",
-			"AWS_DEFAULT_REGION=us-east-1",
-		}
+	target, err := e.registry.ResolveTarget(deployment)
+	if err != nil || target == nil {
+		return nil
 	}
-	if deployment.ProviderID == "aws" {
-		return []string{
-			"AWS_PROFILE=" + deployment.ProfileID,
-			"AWS_CONFIG_FILE=" + e.settings.AWSConfigPath,
-			"AWS_SHARED_CREDENTIALS_FILE=" + e.settings.AWSCredentialsPath,
-		}
+	return target.Env(deployment, e.settings)
+}
+
+// TargetLabel names a deployment's target for log lines.
+func (e *Engine) TargetLabel(deployment *Deployment) string {
+	target, err := e.registry.ResolveTarget(deployment)
+	if err != nil || target == nil {
+		return fallbackTargetLabel(deployment)
 	}
-	return nil
+	return target.Label(deployment)
+}
+
+// fallbackTargetLabel names a deployment when no concrete target resolves (a
+// target-less provider or an unknown runtime). It avoids guessing a specific
+// emulator so the log line cannot mislabel, say, a non-AWS local run "LocalStack".
+func fallbackTargetLabel(deployment *Deployment) string {
+	if deployment.Local {
+		return "local emulator"
+	}
+	if profile := strings.TrimSpace(deployment.ProfileID); profile != "" {
+		return strings.ToUpper(deployment.ProviderID) + " profile " + profile
+	}
+	if strings.TrimSpace(deployment.ProviderID) == "" {
+		return "deployment target"
+	}
+	return strings.ToUpper(deployment.ProviderID)
 }
 
 func writeTfvars(dir string, variables map[string]any) error {
