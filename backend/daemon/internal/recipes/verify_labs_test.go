@@ -19,6 +19,7 @@ func TestLoadLabRecipes(t *testing.T) {
 		"lab-queue-storage-azure",
 		"lab-key-vault-azure",
 		"lab-functions-http-azure",
+		"lab-storage-blobs-azure",
 	} {
 		recipe, err := Bundled().Load(id)
 		if err != nil {
@@ -58,6 +59,7 @@ func TestBundledGuidedLabSpecsValidate(t *testing.T) {
 		{id: "lab-queue-storage-azure", minSteps: 4, wantProvider: "azure"},
 		{id: "lab-key-vault-azure", minSteps: 4, wantProvider: "azure"},
 		{id: "lab-functions-http-azure", minSteps: 4, wantProvider: "azure"},
+		{id: "lab-storage-blobs-azure", minSteps: 4, wantProvider: "azure"},
 	}
 
 	for _, tc := range cases {
