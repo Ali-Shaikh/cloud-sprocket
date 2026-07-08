@@ -1,0 +1,105 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-step-functions-aws
+kind: service-lab
+version: 0.1.0
+name: Step Functions order flow lab (AWS)
+summary: Orchestrate an order process with AWS Step Functions state machine.
+description: |
+  A service lab for AWS Step Functions: a state machine implementing a
+  simplified order flow (receive, validate, pay, ship, notify) using Pass
+  states for teaching the ASL definition and execution model.
+
+  Inspect the role and machine. Start executions using the emulator or AWS
+  tools (no direct invoke-write for SFN yet). Works on LocalStack (add service
+  if needed for full proxy).
+
+  Local runtime friendly; demonstrates orchestration without heavy samples.
+
+providers:
+  - aws
+tags:
+  - stepfunctions
+  - orchestration
+  - serverless
+  - aws
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: state_machine_arn
+    primary: true
+  - name: state_machine_name
+  - name: role_name
+lab:
+  difficulty: intermediate
+  estimatedMinutes: 22
+  objectives:
+    - Define and deploy a Step Functions state machine via recipe
+    - Walk through a multi step order processing flow expressed in ASL
+    - Inspect IAM role and execution permissions for the machine
+    - Recognise use cases for orchestration vs simple eventing
+  steps:
+    - id: explore-role
+      title: Inspect the execution role
+      body: |
+        Open the IAM tab and review the role assumed by the state machine.
+        It grants basic invoke rights (extend for real Lambda/SQS targets).
+      actions:
+        - type: open-tab
+          tab: aws-iam
+          focus: "{{ outputs.role_name }}"
+      hints:
+        - In production tighten the policy to specific ARNs only.
+    - id: review-machine
+      title: Review the state machine
+      body: |
+        The primary output is the state machine ARN. In a full featured
+        Step Functions tab you would load its definition graph and start
+        executions with sample input like {"orderId":"lab-123"}.
+      hints:
+        - The definition uses only Pass states so it executes instantly with
+          no external dependencies for this lab.
+    - id: understand-flow
+      title: Understand the order flow states
+      body: |
+        ReceiveOrder -> ValidateOrder -> ProcessPayment -> ShipOrder ->
+        NotifyCustomer. Each step transforms state. Real flows add Task
+        states, Choice, Wait, Parallel, and error handling (Retry/Catch).
+      hints:
+        - Use the definition in outputs or recipe to visualise.
+    - id: execution-guidance
+      title: Start an execution (guided)
+      body: |
+        After apply, use LocalStack or AWS CLI to start an execution:
+        aws stepfunctions start-execution --state-machine-arn <arn> --input '{"orderId":"demo-1"}'
+        Observe the history and final output status notified.
+      hints:
+        - Executions are cheap and fast for Pass only flows.
+    - id: orchestration-lessons
+      title: Orchestration patterns and drift
+      body: |
+        Step Functions centralise workflow logic. Changes to definition
+        outside the recipe will drift. Combine with SQS/Lambda/EventBridge
+        for production order systems.
+      hints:
+        - The recipe keeps the authoritative definition.

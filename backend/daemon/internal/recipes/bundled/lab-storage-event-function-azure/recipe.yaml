@@ -1,0 +1,109 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-storage-event-function-azure
+kind: service-lab
+version: 0.1.0
+name: Azure Storage event + Function lab
+summary: Storage blob events wired to trigger an Azure Function (event driven Azure).
+description: |
+  A focused service lab for Azure event driven patterns: storage account with
+  container, plus a function app configured for blob triggers.
+
+  Demonstrates the wiring for storage events to serverless functions. Inspect
+  using Azure tabs. Emulates on floci-az. The sample function binding (in real
+  usage) would react to new blobs.
+
+  Pure infra lab; no build step needed.
+
+providers:
+  - azure
+tags:
+  - event-driven
+  - azure
+  - storage
+  - functions
+  - blob
+  - floci-az
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: floci-az
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase prefix.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: azure_location
+        widget: text
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: storage_account_name
+    primary: true
+  - name: function_app_name
+  - name: container_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 18
+  objectives:
+    - Provision Azure storage with a container for events
+    - Deploy a function app ready for storage triggers
+    - Recognise the event driven pattern using blob bindings
+    - Inspect resources via the Azure tabs in the workbench
+  steps:
+    - id: explore-storage
+      title: Explore the storage account
+      body: |
+        Open the Azure storage tab and locate the account. Review the private
+        container created for event sources.
+      actions:
+        - type: open-tab
+          tab: azure-storage
+          focus: "{{ outputs.storage_account_name }}"
+      hints:
+        - In real Azure this account would emit events via Event Grid or direct
+          storage notifications to the function.
+    - id: explore-function
+      title: Inspect the function app
+      body: |
+        Switch to the functions tab. The app is provisioned and linked to the
+        same storage for bindings.
+      actions:
+        - type: open-tab
+          tab: azure-functions
+          focus: "{{ outputs.function_app_name }}"
+      hints:
+        - Function code (not included here) would declare a blobTrigger binding
+          on the container path.
+    - id: event-pattern
+      title: Understand the storage event flow
+      body: |
+        When a blob is added to the container, the function can be invoked
+        automatically. This decouples producers from processors.
+      hints:
+        - On floci-az the trigger emulation may be limited to http/timer; the
+          lab focuses on the declared infra pattern.
+    - id: simulate-event
+      title: Simulate an event (guidance)
+      body: |
+        In write mode, use the storage UI or tools to upload a small blob to
+        the container. Observe logs or behaviour if the emulator executes the
+        binding.
+      hints:
+        - Use the function app logs view if available in your runtime.
+    - id: drift-and-lifecycle
+      title: Note drift risks for event wiring
+      body: |
+        Changing bindings or container config outside the recipe will surface
+        as drift on next plan or update. Keep the recipe as source of truth.
+      hints:
+        - Re-apply or use drift tools to reconcile.
