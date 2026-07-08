@@ -181,6 +181,109 @@ func (s *Service) handleAwsS3CreateBucket(ctx context.Context, params json.RawMe
 	)
 }
 
+func (s *Service) handleAwsS3CopyObject(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		SourceObjectKey      string `json:"sourceObjectKey"`
+		DestinationObjectKey string `json:"destinationObjectKey"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	destinationObjectKey := strings.TrimSpace(request.DestinationObjectKey)
+	if destinationObjectKey == "" {
+		return nil, errors.New("destination object key is required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	profile, bucketName, sourceObjectKey, err := s.authorizeAWSWriteSelection(
+		ctx, snapshot,
+		"S3 copy requires write mode to be enabled",
+		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
+			return s.activeS3ObjectSelection(snap, session, request.SourceObjectKey)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	prefix := ""
+	s.mu.Lock()
+	session, sessionErr := s.currentState(ctx, snapshot)
+	if sessionErr == nil {
+		prefix = session.S3PrefixFilter
+	}
+	s.mu.Unlock()
+
+	actionCtx, cancel := s.withAWSTimeout(ctx)
+	copied, err := s.s3.CopyObject(actionCtx, profile, bucketName, sourceObjectKey, destinationObjectKey)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	s.invalidateResourceCache(ctx, "aws.s3.objects", profile.ProfileID+"|"+bucketName+"|"+prefix)
+
+	return s.finishAWSWriteAction(
+		ctx, snapshot, notifier, "s3",
+		fmt.Sprintf("Copied %s to %s in bucket %s.", sourceObjectKey, destinationObjectKey, bucketName),
+		func(session *models.SessionSnapshot) {
+			session.SelectedS3ObjectKey = copied.DestinationObjectKey
+		},
+	)
+}
+
+func (s *Service) handleAwsS3CreateFolderPrefix(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		FolderPrefix string `json:"folderPrefix"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	folderPrefix := strings.TrimSpace(request.FolderPrefix)
+	if folderPrefix == "" {
+		return nil, errors.New("folder prefix is required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	_, profile, err := s.authorizeAWSWrite(
+		ctx, snapshot,
+		"open an AWS workspace before creating an S3 folder prefix",
+		"S3 folder create requires write mode to be enabled",
+	)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, sessionErr := s.currentState(ctx, snapshot)
+	s.mu.Unlock()
+	if sessionErr != nil {
+		return nil, sessionErr
+	}
+	_, bucketName, bucketErr := s.activeS3Selection(snapshot, session, true)
+	if bucketErr != nil {
+		return nil, bucketErr
+	}
+	prefix := session.S3PrefixFilter
+
+	actionCtx, cancel := s.withAWSTimeout(ctx)
+	created, err := s.s3.CreateFolderPrefix(actionCtx, profile, bucketName, folderPrefix)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	s.invalidateResourceCache(ctx, "aws.s3.objects", profile.ProfileID+"|"+bucketName+"|"+prefix)
+
+	return s.finishAWSWriteAction(
+		ctx, snapshot, notifier, "s3",
+		fmt.Sprintf("Created folder prefix %s in bucket %s.", created.FolderPrefix, bucketName),
+		func(session *models.SessionSnapshot) {
+			session.S3PrefixFilter = created.FolderPrefix
+		},
+	)
+}
+
 func (s *Service) handleAwsEc2RunInstances(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		InstanceType string `json:"instanceType"`

@@ -212,6 +212,75 @@ func (i *Inventory) UploadBlob(
 	}, nil
 }
 
+func (i *Inventory) CopyBlob(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	accountName string,
+	containerName string,
+	sourceBlobName string,
+	destinationBlobName string,
+) (models.AzureBlobCopyResult, error) {
+	accountName = strings.TrimSpace(accountName)
+	containerName = strings.TrimSpace(containerName)
+	sourceBlobName = strings.TrimSpace(sourceBlobName)
+	destinationBlobName = strings.TrimSpace(destinationBlobName)
+	if accountName == "" || containerName == "" || sourceBlobName == "" || destinationBlobName == "" {
+		return models.AzureBlobCopyResult{}, fmt.Errorf("account, container, source blob, and destination blob are required")
+	}
+	client, err := i.blobServiceClient(ctx, profile, accountName)
+	if err != nil {
+		return models.AzureBlobCopyResult{}, err
+	}
+	containerClient := client.ServiceClient().NewContainerClient(containerName)
+	sourceClient := containerClient.NewBlobClient(sourceBlobName)
+	sourceURL := sourceClient.URL()
+	destinationClient := containerClient.NewBlockBlobClient(destinationBlobName)
+	_, err = destinationClient.StartCopyFromURL(ctx, sourceURL, nil)
+	if err != nil {
+		return models.AzureBlobCopyResult{}, fmt.Errorf("copy blob: %w", err)
+	}
+	blobURL := client.URL() + "/" + containerName + "/" + destinationBlobName
+	return models.AzureBlobCopyResult{
+		AccountName:         accountName,
+		ContainerName:       containerName,
+		SourceBlobName:      sourceBlobName,
+		DestinationBlobName: destinationBlobName,
+		BlobURL:             blobURL,
+	}, nil
+}
+
+func (i *Inventory) CreateFolderPrefix(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	accountName string,
+	containerName string,
+	folderPrefix string,
+) (models.AzureBlobCreateFolderPrefixResult, error) {
+	accountName = strings.TrimSpace(accountName)
+	containerName = strings.TrimSpace(containerName)
+	folderPrefix = strings.TrimSpace(folderPrefix)
+	if accountName == "" || containerName == "" || folderPrefix == "" {
+		return models.AzureBlobCreateFolderPrefixResult{}, fmt.Errorf("account, container, and folder prefix are required")
+	}
+	if !strings.HasSuffix(folderPrefix, "/") {
+		folderPrefix += "/"
+	}
+	client, err := i.blobServiceClient(ctx, profile, accountName)
+	if err != nil {
+		return models.AzureBlobCreateFolderPrefixResult{}, err
+	}
+	blobClient := client.ServiceClient().NewContainerClient(containerName).NewBlockBlobClient(folderPrefix)
+	_, err = blobClient.UploadBuffer(ctx, []byte{}, nil)
+	if err != nil {
+		return models.AzureBlobCreateFolderPrefixResult{}, fmt.Errorf("create folder prefix: %w", err)
+	}
+	return models.AzureBlobCreateFolderPrefixResult{
+		AccountName:   accountName,
+		ContainerName: containerName,
+		FolderPrefix:  folderPrefix,
+	}, nil
+}
+
 func (i *Inventory) DeleteBlob(
 	ctx context.Context,
 	profile models.ProfileSummary,

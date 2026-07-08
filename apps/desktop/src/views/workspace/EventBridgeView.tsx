@@ -1,16 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GitBranch, RefreshCw } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
+import {
+  ResourceInspectorHeader,
+  ResourceInspectorPanel,
+  ResourceInventoryShell,
+} from "@/components/inventory/resource-inspector";
+import { ResourceTable } from "@/components/inventory/resource-table";
 import { DetailFieldList } from "./detail-fields";
 import type { AwsEventBridgeBus, AwsEventBridgeRule, WorkspaceSnapshot } from "@/types/backend";
 
@@ -31,7 +43,9 @@ export type EventBridgeViewProps = {
   onSelectBus: (busName: string) => void;
 };
 
-const fieldLabel = "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
+const fieldLabel =
+  "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
+
 const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] shadow-sm";
 
 function ruleStatus(state?: string): Status {
@@ -53,15 +67,20 @@ export default function EventBridgeView({
   onSelectBus,
 }: EventBridgeViewProps) {
   const [ruleFilter, setRuleFilter] = useState("");
+  const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedEventBridgeBusName));
+  const lastSelectedBusRef = useRef(workspace.selectedEventBridgeBusName || "");
+
   const regions =
     workspace.eventBridgeRegions.length > 0
       ? workspace.eventBridgeRegions
       : workspace.eksRegions.length > 0
         ? workspace.eksRegions
         : workspace.ec2Regions;
+
   const selectedBus =
     workspace.eventBridgeBuses.find((bus) => bus.name === workspace.selectedEventBridgeBusName) ??
     workspace.eventBridgeBuses[0];
+
   const filteredRules = useMemo(() => {
     const query = ruleFilter.trim().toLowerCase();
     if (!query) return workspace.eventBridgeRules;
@@ -71,10 +90,19 @@ export default function EventBridgeView({
       ),
     );
   }, [ruleFilter, workspace.eventBridgeRules]);
+
   const statusMessage =
     actionStatus ||
     workspace.eventBridgeStatusMessage ||
     "EventBridge inventory is waiting for an open AWS workspace.";
+
+  useEffect(() => {
+    const nextBusName = workspace.selectedEventBridgeBusName || "";
+    if (nextBusName !== lastSelectedBusRef.current) {
+      lastSelectedBusRef.current = nextBusName;
+      setInspectorOpen(Boolean(nextBusName));
+    }
+  }, [workspace.selectedEventBridgeBusName]);
 
   if (!workspace.provider || workspace.provider.providerId !== "aws") {
     return (
@@ -88,18 +116,115 @@ export default function EventBridgeView({
     );
   }
 
-  return (
-    <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
+  const tableEmptyState =
+    workspace.eventBridgeBuses.length === 0 ? (
+      <EmptyState
+        icon={<GitBranch />}
+        title="No event buses"
+        description="Select a region to list EventBridge buses."
+        className="border-0"
+      />
+    ) : (
+      <EmptyState
+        icon={<GitBranch />}
+        title="No matches"
+        description="No event buses match the current filter."
+        className="border-0"
+      />
+    );
+
+  const rulesEmptyState = (
+    <EmptyState
+      icon={<GitBranch />}
+      title="No rules"
+      description={
+        selectedBus
+          ? `No rules were returned for bus ${selectedBus.name}.`
+          : "Select an event bus to list rules."
+      }
+      className="border-0"
+    />
+  );
+
+  const inspectorContent = selectedBus ? (
+    <ResourceInspectorPanel>
+      <ResourceInspectorHeader
+        icon={GitBranch}
+        eyebrow="Event bus"
+        title={selectedBus.name}
+        subtitle={selectedBus.arn || "ARN unavailable"}
+        onClose={() => setInspectorOpen(false)}
+      />
+
+      <DetailFieldList
+        fields={[
+          { label: "Bus", value: selectedBus.name },
+          { label: "ARN", value: selectedBus.arn || "Not available" },
+          { label: "Rules", value: String(workspace.eventBridgeRules.length) },
+        ]}
+        emptyText="No EventBridge selection details are available."
+      />
+
       <div>
-        <h1 className="text-[1.375rem] font-[750]">EventBridge</h1>
+        <div className={fieldLabel}>Rules on {selectedBus.name}</div>
+        <div className="mt-2 space-y-3">
+          <Input
+            placeholder="Filter rules"
+            value={ruleFilter}
+            onChange={(event) => setRuleFilter(event.target.value)}
+          />
+          <ResourceTable
+            columns={[
+              { id: "name", label: "Name" },
+              { id: "state", label: "State" },
+              { id: "schedule", label: "Schedule" },
+              { id: "description", label: "Description" },
+            ]}
+            rows={filteredRules}
+            getRowKey={(rule) => rule.name}
+            renderCell={(rule, columnId) => {
+              if (columnId === "name") {
+                return <span className="font-medium">{rule.name}</span>;
+              }
+              if (columnId === "state") {
+                return (
+                  <StatusPill status={ruleStatus(rule.state)} label={rule.state || "Unknown"} />
+                );
+              }
+              if (columnId === "schedule") {
+                return rule.scheduleExpression || rule.eventPattern || "—";
+              }
+              if (columnId === "description") {
+                return rule.description || "—";
+              }
+              return null;
+            }}
+            emptyState={rulesEmptyState}
+          />
+        </div>
+      </div>
+    </ResourceInspectorPanel>
+  ) : null;
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-6">
+      <header>
+        <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">EventBridge</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {countLabel(workspace.eventBridgeBuses.length, "bus", "buses")} ·{" "}
           {workspace.selectedEventBridgeRegion || "no region selected"}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">{statusMessage}</p>
-      </div>
+      </header>
 
-      <div className={sectionCard}>
+      <section className={sectionCard}>
+        <div>
+          <h2 className="text-base font-bold">Event bus inventory</h2>
+          <p className="text-sm text-muted-foreground">
+            Browse regional event buses and inspect rules for the selected bus.
+          </p>
+        </div>
+
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-56">
             <div className={cn(fieldLabel, "mb-1")}>Region</div>
@@ -119,93 +244,48 @@ export default function EventBridgeView({
               </SelectContent>
             </Select>
           </div>
-          <Button variant="outline" disabled={!workspace.selectedEventBridgeRegion} onClick={onRefresh}>
+          <Button
+            variant="outline"
+            disabled={!workspace.selectedEventBridgeRegion}
+            onClick={onRefresh}
+          >
             <RefreshCw />
             Refresh inventory
           </Button>
         </div>
-        {workspace.eventBridgeBuses.length === 0 ? (
-          <EmptyState
-            icon={<GitBranch />}
-            title="No event buses"
-            description="Select a region to list EventBridge buses."
-            className="border-0"
-          />
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Bus</TableHead>
-                <TableHead>ARN</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {workspace.eventBridgeBuses.map((bus) => (
-                <TableRow
-                  key={bus.name}
-                  className={cn(
-                    "cursor-pointer",
-                    bus.name === workspace.selectedEventBridgeBusName && "bg-muted/50",
-                  )}
-                  onClick={() => onSelectBus(bus.name)}
-                >
-                  <TableCell>{bus.name}</TableCell>
-                  <TableCell className="font-mono text-xs">{bus.arn || "—"}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </div>
 
-      {selectedBus ? (
-        <div className={sectionCard}>
-          <h2 className="text-sm font-semibold">Rules on {selectedBus.name}</h2>
-          <Input
-            placeholder="Filter rules"
-            value={ruleFilter}
-            onChange={(event) => setRuleFilter(event.target.value)}
-          />
-          {workspace.eventBridgeRules.length === 0 ? (
-            <EmptyState
-              icon={<GitBranch />}
-              title="No rules"
-              description={`No rules were returned for bus ${selectedBus.name}.`}
-              className="border-0"
+        <ResourceInventoryShell
+          table={
+            <ResourceTable
+              columns={[
+                { id: "name", label: "Bus" },
+                { id: "arn", label: "ARN", cellClassName: "font-mono text-xs" },
+              ]}
+              rows={workspace.eventBridgeBuses}
+              selectedKey={workspace.selectedEventBridgeBusName}
+              getRowKey={(bus) => bus.name}
+              onRowClick={(bus) => {
+                onSelectBus(bus.name);
+                setInspectorOpen(true);
+              }}
+              renderCell={(bus, columnId) => {
+                if (columnId === "name") {
+                  return <span className="font-medium">{bus.name}</span>;
+                }
+                if (columnId === "arn") {
+                  return bus.arn || "—";
+                }
+                return null;
+              }}
+              emptyState={tableEmptyState}
             />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead>Schedule</TableHead>
-                  <TableHead>Description</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredRules.map((rule) => (
-                  <TableRow key={rule.name}>
-                    <TableCell>{rule.name}</TableCell>
-                    <TableCell>
-                      <StatusPill status={ruleStatus(rule.state)} label={rule.state || "Unknown"} />
-                    </TableCell>
-                    <TableCell>{rule.scheduleExpression || rule.eventPattern || "—"}</TableCell>
-                    <TableCell>{rule.description || "—"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-          <DetailFieldList
-            fields={[
-              { label: "Bus", value: selectedBus.name },
-              { label: "ARN", value: selectedBus.arn || "Not available" },
-            ]}
-            emptyText="No EventBridge selection details are available."
-          />
-        </div>
-      ) : null}
+          }
+          inspectorContent={inspectorContent}
+          inspectorOpen={inspectorOpen}
+          onInspectorOpenChange={setInspectorOpen}
+          inspectorAriaLabel="EventBridge bus details"
+        />
+      </section>
     </div>
   );
 }

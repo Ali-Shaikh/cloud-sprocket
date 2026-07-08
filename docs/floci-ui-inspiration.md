@@ -194,17 +194,21 @@ Matches `docs/aws-services-expansion-plan.md` Phase 1. File-level scope:
 
 ### Step 5 — Shared inventory shell (frontend only)
 
+**Status:** Shipped pre-v0.9 (v0.8.28–v0.8.32 ResourceTable rollout; CloudFormation + EventBridge migrated on `feat/pre-v09-backlog`).
+
 1. `ResourceTable` + `ResourceInspector` components (match Floci's split-pane)
 2. Migrate AWS S3 buckets view and Azure Storage to the shared shell
 3. Keep the typed snapshot fields; no backend `CloudResource` normalisation
 
-**Exit:** Two storage tabs share one layout; less duplicated table code.
+**Exit:** All AWS inventory tabs and Azure Storage share one layout; less duplicated table code.
 
 ### Step 6 — Depth workflows
 
+**Status:** Partial — S3 copy + folder prefix and Azure blob copy + folder prefix shipped pre-v0.9. Cosmos SQL and VPC wizard remain.
+
 Pick high-impact Floci flows to port:
 
-- S3/Azure object copy + folder-prefix create (first: smallest, immediately useful)
+- S3/Azure object copy + folder-prefix create — **shipped pre-v0.9**
 - Cosmos SQL query panel (CloudSprocket's Cosmos tab is read-only browse today)
 - VPC wizard: only after AWS networking tabs exist (see expansion plan P2/P3)
 - GCP storage tab (when floci-gcp support is wired)

@@ -19,6 +19,8 @@ type S3Inventory interface {
 	PresignGetObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, durationSeconds int) (models.AwsS3PresignResult, error)
 	DeleteObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string) (models.AwsS3DeleteObjectResult, error)
 	CreateBucket(ctx context.Context, profile models.ProfileSummary, bucketName string, region string) (models.AwsS3CreateBucketResult, error)
+	CopyObject(ctx context.Context, profile models.ProfileSummary, bucketName string, sourceObjectKey string, destinationObjectKey string) (models.AwsS3CopyObjectResult, error)
+	CreateFolderPrefix(ctx context.Context, profile models.ProfileSummary, bucketName string, folderPrefix string) (models.AwsS3CreateFolderPrefixResult, error)
 }
 
 type EC2Inventory interface {
@@ -144,6 +146,8 @@ type AzureInventory interface {
 	CreateBlobContainer(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string) error
 	UploadBlob(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, blobName string, sourcePath string) (models.AzureBlobUploadResult, error)
 	DeleteBlob(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, blobName string) error
+	CopyBlob(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, sourceBlobName string, destinationBlobName string) (models.AzureBlobCopyResult, error)
+	CreateFolderPrefix(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, folderPrefix string) (models.AzureBlobCreateFolderPrefixResult, error)
 	InvokeVirtualMachineAction(ctx context.Context, profile models.ProfileSummary, resourceGroup string, vmName string, action string) error
 	GetVirtualMachine(ctx context.Context, profile models.ProfileSummary, resourceGroup string, vmName string) (models.AzureVirtualMachine, error)
 	ListBastionHosts(ctx context.Context, profile models.ProfileSummary) ([]models.AzureBastionHost, error)

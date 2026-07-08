@@ -177,6 +177,8 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     selectRDSInstance,
     deleteS3Object,
     createS3Bucket,
+    copyS3Object,
+    createS3FolderPrefix,
     runEC2Instances,
     terminateEC2Instance,
     deleteLambdaFunction,
@@ -294,6 +296,8 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       }}
       onDeleteObject={deleteS3Object}
       onCreateBucket={createS3Bucket}
+      onCopyObject={copyS3Object}
+      onCreateFolderPrefix={createS3FolderPrefix}
     />
   ) : session.isLocked && activeWorkspaceTabId === "ec2" ? (
     <ComputeView

@@ -552,6 +552,34 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setS3UploadStatus, setWorkspace]);
 
+  const copyS3Object = useCallback((sourceObjectKey: string, destinationObjectKey: string): void => {
+    setS3UploadStatus(`Copying object to ${destinationObjectKey}.`);
+    void requestWorkspaceSnapshot("aws.s3.copyObject", { sourceObjectKey, destinationObjectKey })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setS3UploadStatus(workspaceResult.s3StatusMessage || `Copied object to ${destinationObjectKey}.`);
+      })
+      .catch((error: unknown) => {
+        setS3UploadStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setS3UploadStatus, setWorkspace]);
+
+  const createS3FolderPrefix = useCallback((folderPrefix: string): void => {
+    setS3UploadStatus(`Creating folder prefix ${folderPrefix}.`);
+    void requestWorkspaceSnapshot("aws.s3.createFolderPrefix", { folderPrefix })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setS3UploadStatus(workspaceResult.s3StatusMessage || `Created folder prefix ${folderPrefix}.`);
+      })
+      .catch((error: unknown) => {
+        setS3UploadStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setS3UploadStatus, setWorkspace]);
+
   const runEC2Instances = useCallback((instanceType?: string): void => {
     setEC2ActionStatus("Launching EC2 instance.");
     void requestWorkspaceSnapshot("aws.ec2.runInstances", { instanceType })
@@ -1144,6 +1172,8 @@ export function useAwsActions(params: UseAwsActionsParams) {
     selectRDSInstance,
     deleteS3Object,
     createS3Bucket,
+    copyS3Object,
+    createS3FolderPrefix,
     runEC2Instances,
     terminateEC2Instance,
     deleteLambdaFunction,

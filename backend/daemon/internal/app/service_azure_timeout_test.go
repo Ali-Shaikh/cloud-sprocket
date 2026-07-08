@@ -72,6 +72,16 @@ func (blockingAzure) DeleteBlob(ctx context.Context, _ models.ProfileSummary, _ 
 	return ctx.Err()
 }
 
+func (blockingAzure) CopyBlob(ctx context.Context, _ models.ProfileSummary, accountName string, containerName string, sourceBlobName string, destinationBlobName string) (models.AzureBlobCopyResult, error) {
+	<-ctx.Done()
+	return models.AzureBlobCopyResult{}, ctx.Err()
+}
+
+func (blockingAzure) CreateFolderPrefix(ctx context.Context, _ models.ProfileSummary, accountName string, containerName string, folderPrefix string) (models.AzureBlobCreateFolderPrefixResult, error) {
+	<-ctx.Done()
+	return models.AzureBlobCreateFolderPrefixResult{}, ctx.Err()
+}
+
 func (blockingAzure) InvokeVirtualMachineAction(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) error {
 	<-ctx.Done()
 	return ctx.Err()

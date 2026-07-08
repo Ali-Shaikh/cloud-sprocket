@@ -57,6 +57,8 @@ func TestBuildAWSActionCapabilitiesIncludePhase2And3Writes(t *testing.T) {
 	}{
 		{"s3", "deleteObject"},
 		{"s3", "createBucket"},
+		{"s3", "copyObject"},
+		{"s3", "createFolderPrefix"},
 		{"ec2", "runInstances"},
 		{"ec2", "terminateInstances"},
 		{"lambda", "deleteFunction"},

@@ -339,6 +339,19 @@ func (stubS3Inventory) CreateBucket(_ context.Context, _ models.ProfileSummary, 
 	return models.AwsS3CreateBucketResult{BucketName: bucketName, Region: region}, nil
 }
 
+func (stubS3Inventory) CopyObject(_ context.Context, _ models.ProfileSummary, bucketName string, sourceObjectKey string, destinationObjectKey string) (models.AwsS3CopyObjectResult, error) {
+	return models.AwsS3CopyObjectResult{
+		BucketName:           bucketName,
+		SourceObjectKey:      sourceObjectKey,
+		DestinationObjectKey: destinationObjectKey,
+		DestinationURI:       "s3://" + bucketName + "/" + destinationObjectKey,
+	}, nil
+}
+
+func (stubS3Inventory) CreateFolderPrefix(_ context.Context, _ models.ProfileSummary, bucketName string, folderPrefix string) (models.AwsS3CreateFolderPrefixResult, error) {
+	return models.AwsS3CreateFolderPrefixResult{BucketName: bucketName, FolderPrefix: folderPrefix}, nil
+}
+
 func (s stubS3Inventory) PresignGetObject(_ context.Context, _ models.ProfileSummary, bucketName string, objectKey string, durationSeconds int) (models.AwsS3PresignResult, error) {
 	url := s.presignedURLs[bucketName+"|"+objectKey]
 	if url == "" {
@@ -431,6 +444,24 @@ func (stubAzureInventory) UploadBlob(context.Context, models.ProfileSummary, str
 
 func (stubAzureInventory) DeleteBlob(context.Context, models.ProfileSummary, string, string, string) error {
 	return nil
+}
+
+func (stubAzureInventory) CopyBlob(_ context.Context, _ models.ProfileSummary, accountName string, containerName string, sourceBlobName string, destinationBlobName string) (models.AzureBlobCopyResult, error) {
+	return models.AzureBlobCopyResult{
+		AccountName:         accountName,
+		ContainerName:       containerName,
+		SourceBlobName:      sourceBlobName,
+		DestinationBlobName: destinationBlobName,
+		BlobURL:             "https://example.invalid/" + containerName + "/" + destinationBlobName,
+	}, nil
+}
+
+func (stubAzureInventory) CreateFolderPrefix(_ context.Context, _ models.ProfileSummary, accountName string, containerName string, folderPrefix string) (models.AzureBlobCreateFolderPrefixResult, error) {
+	return models.AzureBlobCreateFolderPrefixResult{
+		AccountName:   accountName,
+		ContainerName: containerName,
+		FolderPrefix:  folderPrefix,
+	}, nil
 }
 
 func (stubAzureInventory) InvokeVirtualMachineAction(context.Context, models.ProfileSummary, string, string, string) error {

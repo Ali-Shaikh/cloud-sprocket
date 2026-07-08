@@ -2387,6 +2387,37 @@ function handleMockRequest<T>(
       appendLog("success", `Created S3 bucket ${bucketName}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     }
+    case "aws.s3.copyObject": {
+      const sourceObjectKey = String(params.sourceObjectKey ?? mockState.session.selectedS3ObjectKey ?? "");
+      const destinationObjectKey = String(params.destinationObjectKey ?? `${sourceObjectKey}-copy`);
+      const bucketName = mockState.session.selectedS3BucketName ?? mockWorkspaceBuckets[0]?.name;
+      if (bucketName) {
+        mockWorkspaceObjects.push({
+          key: destinationObjectKey,
+          size: "12 MB",
+          modifiedAt: "2026-07-08T12:00:00Z",
+          storageClass: "STANDARD",
+        });
+        mockState.session.selectedS3ObjectKey = destinationObjectKey;
+      }
+      appendLog("success", `Copied ${sourceObjectKey} to ${destinationObjectKey}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "aws.s3.createFolderPrefix": {
+      const folderPrefix = String(params.folderPrefix ?? "folder/");
+      const bucketName = mockState.session.selectedS3BucketName ?? mockWorkspaceBuckets[0]?.name;
+      if (bucketName) {
+        mockWorkspaceObjects.push({
+          key: folderPrefix.endsWith("/") ? folderPrefix : `${folderPrefix}/`,
+          size: "0 B",
+          modifiedAt: "2026-07-08T12:00:00Z",
+          storageClass: "STANDARD",
+        });
+        mockState.session.s3PrefixFilter = folderPrefix.endsWith("/") ? folderPrefix : `${folderPrefix}/`;
+      }
+      appendLog("success", `Created folder prefix ${folderPrefix}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "aws.s3.presignObject": {
       const objectKey = mockState.session.selectedS3ObjectKey ?? mockWorkspaceObjects[0]?.key;
       const bucketName = mockState.session.selectedS3BucketName ?? mockWorkspaceBuckets[0]?.name;
@@ -3447,6 +3478,39 @@ function handleMockRequest<T>(
       if (mockState.session.selectedAzureBlobName === blobName) {
         mockState.session.selectedAzureBlobName = undefined;
       }
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.storage.copyBlob": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("blob copy requires write mode to be enabled for this Azure workspace"));
+      }
+      const sourceBlobName = String(params.sourceBlobName ?? mockState.session.selectedAzureBlobName ?? "");
+      const destinationBlobName = String(params.destinationBlobName ?? `${sourceBlobName}-copy`);
+      mockAzureBlobs.push({
+        name: destinationBlobName,
+        size: "1 KiB",
+        modifiedAt: new Date().toISOString(),
+        contentType: "application/octet-stream",
+      });
+      mockState.session.selectedAzureBlobName = destinationBlobName;
+      appendLog("success", `Copied blob ${sourceBlobName} to ${destinationBlobName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.storage.createFolderPrefix": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("folder create requires write mode to be enabled for this Azure workspace"));
+      }
+      const folderPrefix = String(params.folderPrefix ?? "folder/");
+      const markerName = folderPrefix.endsWith("/") ? folderPrefix : `${folderPrefix}/`;
+      mockAzureBlobs.push({
+        name: markerName,
+        size: "0 B",
+        modifiedAt: new Date().toISOString(),
+        contentType: "application/octet-stream",
+      });
+      mockState.session.azureBlobPrefixFilter = markerName;
+      mockState.session.selectedAzureBlobName = undefined;
+      appendLog("success", `Created folder prefix ${markerName}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     }
     case "session.selectProvider":

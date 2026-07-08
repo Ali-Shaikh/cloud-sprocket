@@ -12,6 +12,7 @@ import {
   FileImage,
   FileText,
   FolderOpen,
+  FolderPlus,
   Upload,
 } from "lucide-react";
 
@@ -80,6 +81,8 @@ export type StorageViewProps = {
   onValidateUrl: (url: string) => void;
   onDeleteObject?: (objectKey: string) => void;
   onCreateBucket?: (bucketName: string, region?: string) => void;
+  onCopyObject?: (sourceObjectKey: string, destinationObjectKey: string) => void;
+  onCreateFolderPrefix?: (folderPrefix: string) => void;
 };
 
 function normalisePageId(pageId: string): StoragePageId {
@@ -178,6 +181,8 @@ export default function StorageView({
   onValidateUrl,
   onDeleteObject,
   onCreateBucket,
+  onCopyObject,
+  onCreateFolderPrefix,
 }: StorageViewProps) {
   const page = normalisePageId(activePageId);
 
@@ -185,10 +190,16 @@ export default function StorageView({
   const [uploadObjectKey, setUploadObjectKey] = useState("");
   const [uploadAcknowledged, setUploadAcknowledged] = useState(false);
   const [pendingDeleteKey, setPendingDeleteKey] = useState<string | undefined>(undefined);
+  const [copyDestinationKey, setCopyDestinationKey] = useState("");
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
+  const [folderPrefixDraft, setFolderPrefixDraft] = useState("");
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newBucketName, setNewBucketName] = useState("");
   const deleteCapability = actionCapabilityState(workspace, "s3", "deleteObject");
   const createBucketCapability = actionCapabilityState(workspace, "s3", "createBucket");
+  const copyCapability = actionCapabilityState(workspace, "s3", "copyObject");
+  const folderCapability = actionCapabilityState(workspace, "s3", "createFolderPrefix");
   const uploadCapability = actionCapabilityState(workspace, "s3", "uploadObject");
   const canUpload =
     uploadCapability.enabled &&
@@ -388,17 +399,34 @@ export default function StorageView({
           <Copy className="size-3.5" />
         </Button>
       </div>
-      {onDeleteObject ? (
-        <Button
-          variant="destructive"
-          size="sm"
-          disabled={!deleteCapability.enabled}
-          title={deleteCapability.enabled ? undefined : deleteCapability.reason}
-          onClick={() => setPendingDeleteKey(objectKey)}
-        >
-          Delete object
-        </Button>
-      ) : null}
+      <div className="flex flex-wrap gap-2">
+        {onCopyObject ? (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!copyCapability.enabled}
+            title={copyCapability.enabled ? undefined : copyCapability.reason}
+            onClick={() => {
+              setCopyDestinationKey(`${objectKey}-copy`);
+              setCopyDialogOpen(true);
+            }}
+          >
+            <Copy />
+            Copy object
+          </Button>
+        ) : null}
+        {onDeleteObject ? (
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={!deleteCapability.enabled}
+            title={deleteCapability.enabled ? undefined : deleteCapability.reason}
+            onClick={() => setPendingDeleteKey(objectKey)}
+          >
+            Delete object
+          </Button>
+        ) : null}
+      </div>
 
       <Tabs defaultValue="overview" className="gap-3">
         <TabsList className="grid w-full grid-cols-4">
@@ -662,6 +690,20 @@ export default function StorageView({
               ? " · updating after typing pauses"
               : ""}
           </div>
+          {onCreateFolderPrefix ? (
+            <Button
+              variant="outline"
+              disabled={!folderCapability.enabled || !workspace.selectedS3BucketName}
+              title={folderCapability.enabled ? undefined : folderCapability.reason}
+              onClick={() => {
+                setFolderPrefixDraft(workspace.s3PrefixFilter || "");
+                setFolderDialogOpen(true);
+              }}
+            >
+              <FolderPlus />
+              Create folder
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -971,6 +1013,64 @@ export default function StorageView({
               }}
             >
               Create bucket
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={copyDialogOpen} onOpenChange={setCopyDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Copy object</AlertDialogTitle>
+            <AlertDialogDescription>
+              Copy {workspace.selectedS3ObjectKey} to a new key in the same bucket.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={copyDestinationKey}
+            placeholder="archive/readme-copy.txt"
+            onChange={(event) => setCopyDestinationKey(event.target.value)}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!copyDestinationKey.trim() || !workspace.selectedS3ObjectKey}
+              onClick={() => {
+                if (onCopyObject && workspace.selectedS3ObjectKey && copyDestinationKey.trim()) {
+                  onCopyObject(workspace.selectedS3ObjectKey, copyDestinationKey.trim());
+                  setCopyDialogOpen(false);
+                }
+              }}
+            >
+              Copy object
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create folder prefix</AlertDialogTitle>
+            <AlertDialogDescription>
+              Creates a zero-byte folder marker in the selected bucket. Use forward slashes, for example reports/2026/.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={folderPrefixDraft}
+            placeholder="reports/2026/"
+            onChange={(event) => setFolderPrefixDraft(event.target.value)}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!folderPrefixDraft.trim()}
+              onClick={() => {
+                if (onCreateFolderPrefix && folderPrefixDraft.trim()) {
+                  onCreateFolderPrefix(folderPrefixDraft.trim());
+                  setFolderDialogOpen(false);
+                }
+              }}
+            >
+              Create folder
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,18 +1,34 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Layers, RefreshCw } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { EmptyState } from "@/components/empty-state";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
+import {
+  ResourceInspectorHeader,
+  ResourceInspectorPanel,
+  ResourceInventoryShell,
+} from "@/components/inventory/resource-inspector";
+import { ResourceTable } from "@/components/inventory/resource-table";
 import { DetailFieldList } from "./detail-fields";
-import type { AwsCloudFormationStack, AwsCloudFormationStackEvent, WorkspaceSnapshot } from "@/types/backend";
+import type {
+  AwsCloudFormationStack,
+  AwsCloudFormationStackEvent,
+  WorkspaceSnapshot,
+} from "@/types/backend";
 
 export type CloudFormationWorkspaceSnapshot = WorkspaceSnapshot & {
   selectedCloudFormationRegion?: string;
@@ -31,7 +47,9 @@ export type CloudFormationViewProps = {
   onSelectStack: (stackName: string) => void;
 };
 
-const fieldLabel = "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
+const fieldLabel =
+  "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
+
 const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] shadow-sm";
 
 function resourceStatus(status?: string): Status {
@@ -55,16 +73,23 @@ export default function CloudFormationView({
   onSelectStack,
 }: CloudFormationViewProps) {
   const [stackFilter, setStackFilter] = useState("");
+  const [inspectorOpen, setInspectorOpen] = useState(
+    Boolean(workspace.selectedCloudFormationStackName),
+  );
+  const lastSelectedStackRef = useRef(workspace.selectedCloudFormationStackName || "");
+
   const regions =
     workspace.cloudFormationRegions.length > 0
       ? workspace.cloudFormationRegions
       : workspace.eksRegions.length > 0
         ? workspace.eksRegions
         : workspace.ec2Regions;
+
   const selectedStack =
     workspace.cloudFormationStacks.find(
       (stack) => stack.stackName === workspace.selectedCloudFormationStackName,
     ) ?? workspace.cloudFormationStacks[0];
+
   const filteredStacks = useMemo(() => {
     const query = stackFilter.trim().toLowerCase();
     if (!query) return workspace.cloudFormationStacks;
@@ -74,10 +99,19 @@ export default function CloudFormationView({
       ),
     );
   }, [stackFilter, workspace.cloudFormationStacks]);
+
   const statusMessage =
     actionStatus ||
     workspace.cloudFormationStatusMessage ||
     "CloudFormation inventory is waiting for an open AWS workspace.";
+
+  useEffect(() => {
+    const nextStackName = workspace.selectedCloudFormationStackName || "";
+    if (nextStackName !== lastSelectedStackRef.current) {
+      lastSelectedStackRef.current = nextStackName;
+      setInspectorOpen(Boolean(nextStackName));
+    }
+  }, [workspace.selectedCloudFormationStackName]);
 
   if (!workspace.provider || workspace.provider.providerId !== "aws") {
     return (
@@ -91,18 +125,109 @@ export default function CloudFormationView({
     );
   }
 
-  return (
-    <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
+  const tableEmptyState =
+    workspace.cloudFormationStacks.length === 0 ? (
+      <EmptyState
+        icon={<Layers />}
+        title="No stacks"
+        description="Select a region to list CloudFormation stacks."
+        className="border-0"
+      />
+    ) : (
+      <EmptyState
+        icon={<Layers />}
+        title="No matches"
+        description="No stacks match the current filter."
+        className="border-0"
+      />
+    );
+
+  const eventsEmptyState = (
+    <EmptyState
+      icon={<Layers />}
+      title="No stack events"
+      description={
+        selectedStack
+          ? `No recent events for ${selectedStack.stackName}.`
+          : "Select a stack to preview recent events."
+      }
+      className="border-0"
+    />
+  );
+
+  const inspectorContent = selectedStack ? (
+    <ResourceInspectorPanel>
+      <ResourceInspectorHeader
+        icon={Layers}
+        eyebrow="Stack"
+        title={selectedStack.stackName}
+        subtitle={selectedStack.stackStatus || "Unknown status"}
+        onClose={() => setInspectorOpen(false)}
+      />
+
+      <DetailFieldList
+        fields={[
+          { label: "Stack", value: selectedStack.stackName },
+          { label: "Stack ID", value: selectedStack.stackId || "Not available" },
+          { label: "Status", value: selectedStack.stackStatus || "Unknown" },
+          { label: "Created", value: selectedStack.creationTime || "—" },
+        ]}
+        emptyText="No CloudFormation selection details are available."
+      />
+
       <div>
-        <h1 className="text-[1.375rem] font-[750]">CloudFormation</h1>
+        <div className={fieldLabel}>Recent stack events</div>
+        <div className="mt-2">
+          <ResourceTable
+            columns={[
+              { id: "timestamp", label: "Timestamp" },
+              { id: "logicalId", label: "Logical ID" },
+              { id: "status", label: "Status" },
+              { id: "type", label: "Type" },
+            ]}
+            rows={workspace.cloudFormationStackEvents}
+            getRowKey={(event) => event.eventId}
+            renderCell={(event, columnId) => {
+              if (columnId === "timestamp") {
+                return event.timestamp || "—";
+              }
+              if (columnId === "logicalId") {
+                return event.logicalResourceId || "—";
+              }
+              if (columnId === "status") {
+                return event.resourceStatus || "—";
+              }
+              if (columnId === "type") {
+                return event.resourceType || "—";
+              }
+              return null;
+            }}
+            emptyState={eventsEmptyState}
+          />
+        </div>
+      </div>
+    </ResourceInspectorPanel>
+  ) : null;
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-6">
+      <header>
+        <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">CloudFormation</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {countLabel(workspace.cloudFormationStacks.length, "stack", "stacks")} ·{" "}
           {workspace.selectedCloudFormationRegion || "no region selected"}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">{statusMessage}</p>
-      </div>
+      </header>
 
-      <div className={sectionCard}>
+      <section className={sectionCard}>
+        <div>
+          <h2 className="text-base font-bold">Stack inventory</h2>
+          <p className="text-sm text-muted-foreground">
+            Browse regional stacks and inspect recent events for the selected stack.
+          </p>
+        </div>
+
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-56">
             <div className={cn(fieldLabel, "mb-1")}>Region</div>
@@ -122,95 +247,68 @@ export default function CloudFormationView({
               </SelectContent>
             </Select>
           </div>
-          <Button variant="outline" disabled={!workspace.selectedCloudFormationRegion} onClick={onRefresh}>
+          <Button
+            variant="outline"
+            disabled={!workspace.selectedCloudFormationRegion}
+            onClick={onRefresh}
+          >
             <RefreshCw />
             Refresh inventory
           </Button>
-        </div>
-        <Input
-          placeholder="Filter stacks"
-          value={stackFilter}
-          onChange={(event) => setStackFilter(event.target.value)}
-        />
-        {workspace.cloudFormationStacks.length === 0 ? (
-          <EmptyState
-            icon={<Layers />}
-            title="No stacks"
-            description="Select a region to list CloudFormation stacks."
-            className="border-0"
-          />
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Stack</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredStacks.map((stack) => (
-                <TableRow
-                  key={stack.stackId}
-                  className={cn(
-                    "cursor-pointer",
-                    stack.stackName === workspace.selectedCloudFormationStackName && "bg-muted/50",
-                  )}
-                  onClick={() => onSelectStack(stack.stackName)}
-                >
-                  <TableCell>{stack.stackName}</TableCell>
-                  <TableCell>
-                    <StatusPill status={resourceStatus(stack.stackStatus)} label={stack.stackStatus || "Unknown"} />
-                  </TableCell>
-                  <TableCell>{stack.creationTime || "—"}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </div>
-
-      {selectedStack ? (
-        <div className={sectionCard}>
-          <h2 className="text-sm font-semibold">Recent stack events</h2>
-          {workspace.cloudFormationStackEvents.length === 0 ? (
-            <EmptyState
-              icon={<Layers />}
-              title="No stack events"
-              description={`No recent events for ${selectedStack.stackName}.`}
-              className="border-0"
+          <div className="min-w-56 flex-1">
+            <div className={cn(fieldLabel, "mb-1")}>Filter</div>
+            <Input
+              placeholder="Filter stacks"
+              value={stackFilter}
+              onChange={(event) => setStackFilter(event.target.value)}
             />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Timestamp</TableHead>
-                  <TableHead>Logical ID</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Type</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {workspace.cloudFormationStackEvents.map((event) => (
-                  <TableRow key={event.eventId}>
-                    <TableCell>{event.timestamp || "—"}</TableCell>
-                    <TableCell>{event.logicalResourceId || "—"}</TableCell>
-                    <TableCell>{event.resourceStatus || "—"}</TableCell>
-                    <TableCell>{event.resourceType || "—"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-          <DetailFieldList
-            fields={[
-              { label: "Stack", value: selectedStack.stackName },
-              { label: "Status", value: selectedStack.stackStatus || "Unknown" },
-            ]}
-            emptyText="No CloudFormation selection details are available."
-          />
+          </div>
+          <div className="pb-2 text-xs text-muted-foreground">
+            {filteredStacks.length}/{workspace.cloudFormationStacks.length} shown
+          </div>
         </div>
-      ) : null}
+
+        <ResourceInventoryShell
+          table={
+            <ResourceTable
+              columns={[
+                { id: "name", label: "Stack" },
+                { id: "status", label: "Status" },
+                { id: "created", label: "Created" },
+              ]}
+              rows={filteredStacks}
+              selectedKey={workspace.selectedCloudFormationStackName}
+              getRowKey={(stack) => stack.stackId}
+              onRowClick={(stack) => {
+                onSelectStack(stack.stackName);
+                setInspectorOpen(true);
+              }}
+              renderCell={(stack, columnId) => {
+                if (columnId === "name") {
+                  return <span className="font-medium">{stack.stackName}</span>;
+                }
+                if (columnId === "status") {
+                  return (
+                    <StatusPill
+                      status={resourceStatus(stack.stackStatus)}
+                      label={stack.stackStatus || "Unknown"}
+                    />
+                  );
+                }
+                if (columnId === "created") {
+                  return stack.creationTime || "—";
+                }
+                return null;
+              }}
+              emptyState={tableEmptyState}
+            />
+          }
+          inspectorContent={inspectorContent}
+          inspectorOpen={inspectorOpen}
+          onInspectorOpenChange={setInspectorOpen}
+          inspectorAriaLabel="CloudFormation stack details"
+        />
+      </section>
     </div>
   );
 }

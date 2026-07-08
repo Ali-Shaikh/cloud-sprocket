@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Database, FileIcon, Trash2, Upload } from "lucide-react";
+import { Copy, Database, FileIcon, FolderPlus, Trash2, Upload } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { actionCapabilityState } from "@/lib/action-capabilities";
@@ -63,6 +63,8 @@ export type AzureStorageViewProps = {
   onCreateContainer: (containerName: string) => void;
   onUploadBlob: (sourcePath: string, blobName: string) => void;
   onDeleteBlob: (blobName: string) => void;
+  onCopyBlob?: (sourceBlobName: string, destinationBlobName: string) => void;
+  onCreateFolderPrefix?: (folderPrefix: string) => void;
 };
 
 function normalisePageId(pageId: string): AzureStoragePageId {
@@ -95,9 +97,13 @@ export default function AzureStorageView({
   onCreateContainer,
   onUploadBlob,
   onDeleteBlob,
+  onCopyBlob,
+  onCreateFolderPrefix,
 }: AzureStorageViewProps) {
   const page = normalisePageId(activePageId);
   const writeCapability = actionCapabilityState(workspace, "storage", "uploadBlob", "azure");
+  const copyCapability = actionCapabilityState(workspace, "storage", "copyBlob", "azure");
+  const folderCapability = actionCapabilityState(workspace, "storage", "createFolderPrefix", "azure");
   const canWrite = writeCapability.enabled;
   const writeDisabledReason = writeCapability.reason;
   const inventoryLoadingLabel = azureInventoryLoadingLabel(workspace, "storage");
@@ -112,6 +118,10 @@ export default function AzureStorageView({
   const [uploadSourcePath, setUploadSourcePath] = useState("");
   const [uploadBlobName, setUploadBlobName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [copyDestinationName, setCopyDestinationName] = useState("");
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
+  const [folderPrefixDraft, setFolderPrefixDraft] = useState("");
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedAzureBlobName));
   const lastSelectedBlobRef = useRef(workspace.selectedAzureBlobName || "");
 
@@ -313,6 +323,23 @@ export default function AzureStorageView({
         fields={workspace.azureBlobMetadata}
         emptyText="No blob metadata available."
       />
+      <div className="flex flex-wrap gap-2">
+        {onCopyBlob ? (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!copyCapability.enabled}
+            title={copyCapability.enabled ? undefined : copyCapability.reason}
+            onClick={() => {
+              setCopyDestinationName(`${selectedBlob.name}-copy`);
+              setCopyDialogOpen(true);
+            }}
+          >
+            <Copy />
+            Copy blob
+          </Button>
+        ) : null}
+      </div>
     </ResourceInspectorPanel>
   ) : null;
 
@@ -355,6 +382,20 @@ export default function AzureStorageView({
               </Button>
             </div>
           </div>
+          {onCreateFolderPrefix ? (
+            <Button
+              variant="outline"
+              disabled={!folderCapability.enabled || !workspace.selectedAzureBlobContainer}
+              title={folderCapability.enabled ? undefined : folderCapability.reason}
+              onClick={() => {
+                setFolderPrefixDraft(workspace.azureBlobPrefixFilter || "");
+                setFolderDialogOpen(true);
+              }}
+            >
+              <FolderPlus />
+              Create folder
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -599,6 +640,66 @@ export default function AzureStorageView({
               }}
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={copyDialogOpen} onOpenChange={setCopyDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Copy blob</AlertDialogTitle>
+            <AlertDialogDescription>
+              Copy {workspace.selectedAzureBlobName} to a new blob name in the same container.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={copyDestinationName}
+            placeholder="archive/readme-copy.txt"
+            onChange={(event) => setCopyDestinationName(event.target.value)}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!copyDestinationName.trim() || !workspace.selectedAzureBlobName}
+              onClick={() => {
+                if (onCopyBlob && workspace.selectedAzureBlobName && copyDestinationName.trim()) {
+                  onCopyBlob(workspace.selectedAzureBlobName, copyDestinationName.trim());
+                  setCopyDialogOpen(false);
+                }
+              }}
+            >
+              Copy blob
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create folder prefix</AlertDialogTitle>
+            <AlertDialogDescription>
+              Creates a zero-byte folder marker in the selected container. Use forward slashes, for example reports/2026/.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={folderPrefixDraft}
+            placeholder="reports/2026/"
+            onChange={(event) => setFolderPrefixDraft(event.target.value)}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!folderPrefixDraft.trim()}
+              onClick={() => {
+                if (onCreateFolderPrefix && folderPrefixDraft.trim()) {
+                  onCreateFolderPrefix(folderPrefixDraft.trim());
+                  setFolderDialogOpen(false);
+                }
+              }}
+            >
+              Create folder
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
