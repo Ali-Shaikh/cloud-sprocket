@@ -388,3 +388,50 @@ func TestDeploymentPlanRejectsUnknownRecipe(t *testing.T) {
 		t.Fatal("expected an error for an unknown recipe")
 	}
 }
+
+// TestDeploymentUpdateFlow re-uses an applied deployment for B2 update: plan
+// request with updateDeploymentId seeds from stored values and produces a new
+// plan against the existing workspace/state.
+func TestDeploymentUpdateFlow(t *testing.T) {
+	deployer := &fakeDeployer{available: true, plan: deploy.PlanSummary{Add: 0, Change: 2, Destroy: 0}}
+	s := newDeployTestService(t, deployer)
+	notifier := &captureNotifier{}
+
+	// First, create and "apply" a base deployment via plan then simulate applied.
+	planParams := json.RawMessage(`{"recipeId":"serverless-fullstack-aws","name":"base","providerId":"aws","local":true,"variables":{"app_name":"base"}}`)
+	res, err := s.Handle(context.Background(), "deployments.plan", planParams, notifier)
+	if err != nil {
+		t.Fatalf("initial plan: %v", err)
+	}
+	initial := res.(deploymentJob)
+	planned := waitForStatus(t, s, notifier, initial.Deployment.ID, deploy.StatusPlanned)
+	// Simulate applied state (as if apply succeeded) + set recipe version manually for test.
+	planned.Status = deploy.StatusApplied
+	planned.Outputs = []deploy.Output{{Name: "bucket", Value: "b"}}
+	planned.RecipeVersion = "0.1.0"
+	now := s.timestamp()
+	if err := s.store.SaveDeployment(context.Background(), planned.ID, s.sealForStore(planned), now); err != nil {
+		t.Fatalf("seed applied: %v", err)
+	}
+
+	// Now request update plan on it (re-seed vars, e.g. change a value).
+	updateParams := json.RawMessage(`{"recipeId":"serverless-fullstack-aws","name":"base","providerId":"aws","local":true,"variables":{"app_name":"updated"},"updateDeploymentId":"` + planned.ID + `"}`)
+	upRes, err := s.Handle(context.Background(), "deployments.plan", updateParams, notifier)
+	if err != nil {
+		t.Fatalf("update plan: %v", err)
+	}
+	upJob := upRes.(deploymentJob)
+	if upJob.Deployment.ID != planned.ID {
+		t.Fatalf("update must reuse id, got %s", upJob.Deployment.ID)
+	}
+	updated := waitForStatus(t, s, notifier, planned.ID, deploy.StatusPlanned)
+	if updated.Plan == nil || updated.Plan.Change != 2 {
+		t.Fatalf("expected re-plan diff on update, got %+v", updated.Plan)
+	}
+	if len(updated.Revisions) != 1 {
+		t.Fatalf("expected one revision snapshot, got %d", len(updated.Revisions))
+	}
+	if updated.RecipeVersion == "" {
+		t.Fatal("expected recipeVersion to be recorded on update plan")
+	}
+}

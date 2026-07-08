@@ -74,6 +74,7 @@ export default function DeployView({
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [target, setTarget] = useState<string>("local");
   const [busy, setBusy] = useState(false);
+  const [updateTargetID, setUpdateTargetID] = useState<string | null>(null);
 
   const { active, setActive, logs, resetLogsForDeployment } = useDeploymentEvents();
   const logRef = useRef<HTMLDivElement | null>(null);
@@ -144,6 +145,7 @@ export default function DeployView({
   );
 
   async function openRecipe(id: string) {
+    setUpdateTargetID(null);
     try {
       const loaded = await getRecipe(id);
       setRecipe(loaded);
@@ -205,7 +207,7 @@ export default function DeployView({
     const option = targetOptions.find((entry) => entry.id === target) ?? targetOptions[0];
     setBusy(true);
     try {
-      const response = await planDeployment({
+      const planReq: any = {
         recipeId: recipe.manifest.id,
         name: recipe.manifest.name,
         providerId: option.providerId,
@@ -213,9 +215,14 @@ export default function DeployView({
         local: option.local,
         runtimeId: option.runtimeId,
         variables: coerceValues(recipe.variables, values),
-      });
+      };
+      if (updateTargetID) {
+        planReq.updateDeploymentId = updateTargetID;
+      }
+      const response = await planDeployment(planReq);
       setActive(response.deployment);
       resetLogsForDeployment(response.deployment.id);
+      setUpdateTargetID(null);
       setMode("deployment");
     } catch (error) {
       reportDeployError("Plan failed", error);
@@ -278,26 +285,22 @@ export default function DeployView({
 
   async function handleUpdate() {
     if (!active) return;
-    setBusy(true);
     try {
-      // B2 update flow: re-plan using current deployment's values as seed (backend re-uses record via updateDeploymentId)
-      const response = await planDeployment({
-        recipeId: active.recipeId,
-        name: active.name,
-        providerId: active.providerId,
-        profileId: active.profileId,
-        local: active.local,
-        runtimeId: active.runtimeId,
-        variables: active.variables ?? {},
-        updateDeploymentId: active.id,
-      });
-      setActive(response.deployment);
-      resetLogsForDeployment(response.deployment.id);
-      // stay in deployment mode to see the fresh plan
+      const loaded = await getRecipe(active.recipeId);
+      setRecipe(loaded);
+      // Re-seed form from the stored values on the applied deployment (B2).
+      const fromStored = { ...(active.variables || {}) };
+      setValues(
+        loaded.manifest.id === MAGENTO_COMPOSE_RECIPE_ID ? normaliseMagentoComposeValues(fromStored) : fromStored,
+      );
+      const t = active.local
+        ? `local:${active.runtimeId || "localstack"}`
+        : `profile:${active.profileId}`;
+      setTarget(t);
+      setUpdateTargetID(active.id);
+      setMode("configure");
     } catch (error) {
-      reportDeployError("Update plan failed", error);
-    } finally {
-      setBusy(false);
+      reportDeployError("Could not open update form", error);
     }
   }
 
@@ -335,6 +338,7 @@ export default function DeployView({
         busy={busy}
         onBack={() => {
           setActive(null);
+          setUpdateTargetID(null);
           setMode("list");
         }}
         onApply={handleApply}
@@ -367,7 +371,10 @@ export default function DeployView({
         targetOptions={targetOptions}
         onTargetChange={setTarget}
         busy={busy}
-        onBack={() => setMode("list")}
+        onBack={() => {
+          setUpdateTargetID(null);
+          setMode("list");
+        }}
         onPlan={handlePlan}
       />
     );

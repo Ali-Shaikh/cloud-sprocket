@@ -3667,6 +3667,10 @@ function handleMockRequest<T>(
       return Promise.resolve(mockRecipes.map((recipe) => recipe.manifest) as T);
     case "recipes.get":
       return mockGetRecipe(params.recipeId as string) as Promise<T>;
+    case "recipes.import":
+      return Promise.resolve({ id: "imported-demo", version: "0.1.0", name: "Imported", importedPath: String((params as any).sourcePath || ""), trustNote: "Basic import accepted for test." }) as Promise<T>;
+    case "recipes.scaffold":
+      return Promise.resolve({ status: "scaffolded", path: String((params as any).destDir || "") }) as Promise<T>;
     case "tofu.status":
       return Promise.resolve({ available: true, version: "1.12.2", path: "(bundled)" } as T);
     case "tofu.install": {
@@ -3835,8 +3839,6 @@ export interface PlanDeploymentRequest {
   local: boolean;
   runtimeId?: string;
   variables: Record<string, unknown>;
-  // updateDeploymentId enables the B2 update flow: re-seed from stored values on an applied deployment and plan changes.
-  updateDeploymentId?: string;
 }
 
 export async function planDeployment(request: PlanDeploymentRequest): Promise<DeploymentJob> {
@@ -3870,6 +3872,16 @@ export async function deleteDeployment(deploymentId: string): Promise<void> {
 
 export async function retryPostApplyDeployment(deploymentId: string): Promise<DeploymentJob> {
   return backendRequest<DeploymentJob>("deployments.retryPostApply", { deploymentId });
+}
+
+export async function importRecipeFolder(sourcePath: string): Promise<any> {
+  // Basic local import (C2): folder support with trust preview returned.
+  return backendRequest<any>("recipes.import", { sourcePath });
+}
+
+export async function scaffoldRecipe(destDir: string, provider?: string): Promise<any> {
+  // C3 authoring scaffold.
+  return backendRequest<any>("recipes.scaffold", { destDir, provider });
 }
 
 export async function startLabSession(deploymentId: string): Promise<LabSession> {
@@ -4163,42 +4175,19 @@ function mockSetStatus(deployment: Deployment, status: Deployment["status"]): vo
 
 function mockPlanDeployment(params: Record<string, unknown>): Promise<DeploymentJob> {
   const now = new Date().toISOString();
-  const updateId = params.updateDeploymentId ? String(params.updateDeploymentId) : "";
-  let deployment: Deployment;
-  if (updateId) {
-    const existing = mockDeployments.find((d) => d.id === updateId);
-    if (existing) {
-      existing.variables = (params.variables as Record<string, unknown>) ?? existing.variables;
-      existing.name = String(params.name || existing.name);
-      existing.providerId = String(params.providerId || existing.providerId);
-      existing.profileId = String(params.profileId || existing.profileId);
-      existing.local = params.local != null ? Boolean(params.local) : existing.local;
-      existing.status = "pending";
-      existing.plan = undefined;
-      existing.error = undefined;
-      existing.updatedAt = now;
-      if (!existing.recipeVersion) existing.recipeVersion = "0.1.0";
-      deployment = existing;
-    } else {
-      // fallthrough to new if not found
-    }
-  }
-  if (!deployment) {
-    deployment = {
-      id: `dep-${Date.now()}`,
-      recipeId: String(params.recipeId ?? ""),
-      name: String(params.name || params.recipeId || "deployment"),
-      providerId: String(params.providerId ?? ""),
-      profileId: String(params.profileId ?? ""),
-      local: Boolean(params.local),
-      variables: (params.variables as Record<string, unknown>) ?? {},
-      status: "pending",
-      createdAt: now,
-      updatedAt: now,
-      recipeVersion: "0.1.0",
-    };
-    mockDeployments.unshift(deployment);
-  }
+  const deployment: Deployment = {
+    id: `dep-${Date.now()}`,
+    recipeId: String(params.recipeId ?? ""),
+    name: String(params.name || params.recipeId || "deployment"),
+    providerId: String(params.providerId ?? ""),
+    profileId: String(params.profileId ?? ""),
+    local: Boolean(params.local),
+    variables: (params.variables as Record<string, unknown>) ?? {},
+    status: "pending",
+    createdAt: now,
+    updatedAt: now,
+  };
+  mockDeployments.unshift(deployment);
   const job: JobStatus = { jobId: `job-${Date.now()}`, label: `Plan ${deployment.name}`, status: "queued", message: "Planning." };
   const log = (line: string) => emitMockEvent("deployment.log", { deploymentId: deployment.id, jobId: job.jobId, line });
 

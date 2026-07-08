@@ -473,6 +473,10 @@ func (s *Service) Handle(
 		return s.recipes.List()
 	case "recipes.get":
 		return s.handleRecipesGet(params)
+	case "recipes.import":
+		return s.handleRecipesImport(params)
+	case "recipes.scaffold":
+		return s.handleRecipesScaffold(params)
 	case "tofu.status":
 		return s.tofuStatus(ctx), nil
 	case "tofu.install":

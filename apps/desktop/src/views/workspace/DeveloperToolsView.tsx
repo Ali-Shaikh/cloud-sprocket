@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { useMemo, useState } from "react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
   ArrowLeftRight,
   Braces,
@@ -57,6 +58,9 @@ import {
   type ToolResult,
 } from "@/lib/developer-tools";
 import { cn } from "@/lib/utils";
+import { importRecipeFolder, scaffoldRecipe } from "@/lib/backend";
+import { notify } from "@/lib/notify";
+import { formatBackendError } from "@/lib/workspace-snapshot";
 
 type TextLanguage = "plain" | "json" | "yaml" | "markdown" | "shell" | "env";
 type DiffLanguage = "plain" | "json" | "yaml";
@@ -733,6 +737,52 @@ function CloudIdWorkbench() {
   );
 }
 
+function RecipeAuthoring() {
+  const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function doImport() {
+    try {
+      const folder = await openDialog({ directory: true, multiple: false });
+      if (!folder) return;
+      setBusy(true);
+      const res = await importRecipeFolder(String(folder));
+      setStatus("Import preview: " + JSON.stringify(res));
+      notify("success", "Import prepared", "Review the returned preview; full enable on accept would copy to imported/.");
+    } catch (e) {
+      setStatus("Import error: " + formatBackendError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doScaffold() {
+    try {
+      const folder = await openDialog({ directory: true, multiple: false });
+      if (!folder) return;
+      setBusy(true);
+      const res = await scaffoldRecipe(String(folder), "aws");
+      setStatus("Scaffolded at " + (res?.path || folder));
+      notify("success", "Scaffold complete", "Starter recipe.yaml + tf files written. Open folder to edit.");
+    } catch (e) {
+      setStatus("Scaffold error: " + formatBackendError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <ToolSection title="Recipe Authoring (C3) + Import (C2)" icon={Wand2}>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={doImport} disabled={busy}>Import folder (trust preview)</Button>
+        <Button variant="outline" onClick={doScaffold} disabled={busy}>Scaffold starter to folder</Button>
+      </div>
+      {status && <p className="mt-2 text-xs text-muted-foreground break-all">{status}</p>}
+      <p className="mt-3 text-xs text-muted-foreground">Imported recipes materialise under app data; extend for zip/git + full trust gate + validate RPC (C1).</p>
+    </ToolSection>
+  );
+}
+
 export default function DeveloperToolsView() {
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -770,6 +820,10 @@ export default function DeveloperToolsView() {
             <Clipboard aria-hidden />
             Cloud IDs
           </TabsTrigger>
+          <TabsTrigger value="recipes">
+            <Wand2 aria-hidden />
+            Recipes
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="json">
@@ -786,6 +840,9 @@ export default function DeveloperToolsView() {
         </TabsContent>
         <TabsContent value="cloud">
           <CloudIdWorkbench />
+        </TabsContent>
+        <TabsContent value="recipes">
+          <RecipeAuthoring />
         </TabsContent>
       </Tabs>
     </div>
