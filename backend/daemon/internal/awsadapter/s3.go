@@ -6,6 +6,7 @@ package awsadapter
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -402,7 +403,7 @@ func (s *S3Inventory) CopyObject(
 		return models.AwsS3CopyObjectResult{}, err
 	}
 	client := s3Client(cfg, profile)
-	copySource := bucketName + "/" + sourceObjectKey
+	copySource := encodeS3CopySource(bucketName, sourceObjectKey)
 	_, err = client.CopyObject(ctx, &s3.CopyObjectInput{
 		Bucket:     aws.String(bucketName),
 		Key:        aws.String(destinationObjectKey),
@@ -454,6 +455,17 @@ func (s *S3Inventory) CreateFolderPrefix(
 		BucketName:   bucketName,
 		FolderPrefix: folderPrefix,
 	}, nil
+}
+
+func encodeS3CopySource(bucketName, objectKey string) string {
+	encodeSegment := func(segment string) string {
+		return strings.ReplaceAll(url.QueryEscape(segment), "+", "%20")
+	}
+	segments := strings.Split(objectKey, "/")
+	for index, segment := range segments {
+		segments[index] = encodeSegment(segment)
+	}
+	return encodeSegment(bucketName) + "/" + strings.Join(segments, "/")
 }
 
 func (s *S3Inventory) PresignGetObject(

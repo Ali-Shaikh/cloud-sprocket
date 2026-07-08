@@ -278,7 +278,7 @@ export default function CloudFormationView({
               ]}
               rows={filteredStacks}
               selectedKey={workspace.selectedCloudFormationStackName}
-              getRowKey={(stack) => stack.stackId}
+              getRowKey={(stack) => stack.stackName}
               onRowClick={(stack) => {
                 onSelectStack(stack.stackName);
                 setInspectorOpen(true);
