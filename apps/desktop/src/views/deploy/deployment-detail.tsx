@@ -51,7 +51,8 @@ export function DeploymentDetail({
     deployment.status === "planning" ||
     deployment.status === "applying" ||
     deployment.status === "destroying";
-  const canRemove = !isRunning && !canDestroy;
+  const hasLiveResources = deployment.status === "applied" || (deployment.status === "cancelled" && (deployment.outputs?.length ?? 0) > 0);
+  const canRemove = !isRunning && !hasLiveResources;
   const targetLabel = formatDeploymentTargetLabel(deployment);
 
   return (

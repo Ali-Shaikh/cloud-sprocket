@@ -368,11 +368,13 @@ export default function DeployView({
         ) : (
           <div className="flex flex-col gap-2">
             {deployments.map((deployment) => {
+              const hasOutputs = (deployment.outputs?.length ?? 0) > 0;
               const removable =
                 deployment.status !== "applied" &&
                 deployment.status !== "planning" &&
                 deployment.status !== "applying" &&
-                deployment.status !== "destroying";
+                deployment.status !== "destroying" &&
+                !(deployment.status === "cancelled" && hasOutputs);
               return (
                 <div
                   key={deployment.id}

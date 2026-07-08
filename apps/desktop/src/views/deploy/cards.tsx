@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { openExternalUrl } from "@/lib/backend";
 import type { Deployment, RecipeManifest } from "@/types/backend";
 
-import { logCommandsForDeployment } from "./output-links";
+import { getNoRuntimeLogsMessage, logCommandsForDeployment } from "./output-links";
 import { CopyButton } from "./shared";
 
 export function AppHandoffCard({ deployment }: { deployment: Deployment }) {
@@ -138,8 +138,7 @@ export function LogCommandsCard({ deployment }: { deployment: Deployment }) {
       </div>
       {commands.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          This recipe does not produce application runtime logs by default. Static S3 sites need S3 or CloudFront access
-          logging configured separately.
+          {getNoRuntimeLogsMessage(deployment.recipeId)}
         </p>
       ) : (
         <div className="flex flex-col gap-3">

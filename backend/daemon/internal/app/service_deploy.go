@@ -119,16 +119,24 @@ func (s *Service) deleteDeployment(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	switch deployment.Status {
-	case deploy.StatusPlanning, deploy.StatusApplying, deploy.StatusDestroying:
-		return fmt.Errorf("this deployment is still running; stop it before removing it")
-	case deploy.StatusApplied:
-		return fmt.Errorf("this deployment still has live resources; destroy it before removing it")
+
+	s.deployCancelsMu.Lock()
+	hasActiveOperation := s.deployCancels[id] != nil
+	s.deployCancelsMu.Unlock()
+
+	if hasActiveOperation || deployment.Status == deploy.StatusPlanning || deployment.Status == deploy.StatusApplying || deployment.Status == deploy.StatusDestroying {
+		return fmt.Errorf("this deployment is still running or stopping; wait for the current operation (or stop) to fully complete before removing it")
 	}
-	if err := s.store.DeleteDeployment(ctx, id); err != nil {
+	if deployment.Status == deploy.StatusApplied || (deployment.Status == deploy.StatusCancelled && len(deployment.Outputs) > 0) {
+		return fmt.Errorf("this deployment still has (or had) live resources; destroy it before removing the record")
+	}
+	// Remove workspace first. If it fails (e.g. files still in use by a just-stopped operation),
+	// we keep the record so user can retry or investigate. Guard above already prevents delete
+	// while an operation (or its stop) is in flight.
+	if err := s.deployer.RemoveWorkspace(id); err != nil {
 		return err
 	}
-	if err := s.deployer.RemoveWorkspace(id); err != nil {
+	if err := s.store.DeleteDeployment(ctx, id); err != nil {
 		return err
 	}
 	return nil
@@ -277,6 +285,14 @@ func (s *Service) runDeploymentAction(deployment *deploy.Deployment, action depl
 		s.setDeploymentStatus(ctx, deployment, deploy.StatusDestroying, notifier)
 		s.emitJobStatus(notifier, job, "running", "Destroying "+deployment.Name+".")
 		if err := s.deployer.Destroy(runCtx, deployment, onLine); err != nil {
+			if runCtx.Err() == context.Canceled {
+				// User stopped the destroy. Resources are likely still present (or partially destroyed).
+				// Revert to applied so the Destroy button is available again and delete is blocked.
+				deployment.Error = ""
+				s.setDeploymentStatus(ctx, deployment, deploy.StatusApplied, notifier)
+				s.emitJobStatus(notifier, job, "failed", deployment.Name+" destroy was stopped. Resources may still exist — destroy again to clean up.")
+				return
+			}
 			s.finishWithError(ctx, runCtx, deployment, job, notifier, err)
 			return
 		}
