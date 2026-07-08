@@ -29,3 +29,32 @@ func TestLoadLabRecipes(t *testing.T) {
 		}
 	}
 }
+
+func TestLabQueueWorkerHasLabSection(t *testing.T) {
+	recipe, err := Bundled().Load("lab-queue-worker-aws")
+	if err != nil {
+		t.Fatalf("Load lab-queue-worker-aws: %v", err)
+	}
+	lab := recipe.Manifest.Lab
+	if lab == nil {
+		t.Fatal("expected lab section on lab-queue-worker-aws")
+	}
+	if lab.Difficulty != LabDifficultyBeginner {
+		t.Fatalf("difficulty = %q, want %q", lab.Difficulty, LabDifficultyBeginner)
+	}
+	if len(lab.Steps) != 4 {
+		t.Fatalf("steps = %d, want 4", len(lab.Steps))
+	}
+	wantStepIDs := []string{"explore-queue", "send-message", "verify-queue", "inspect-lambda"}
+	for index, wantID := range wantStepIDs {
+		if lab.Steps[index].ID != wantID {
+			t.Fatalf("step[%d].id = %q, want %q", index, lab.Steps[index].ID, wantID)
+		}
+		if lab.Steps[index].Title == "" {
+			t.Fatalf("step %q is missing title", wantID)
+		}
+	}
+	if err := ValidateLabSpec(recipe.Manifest); err != nil {
+		t.Fatalf("ValidateLabSpec: %v", err)
+	}
+}

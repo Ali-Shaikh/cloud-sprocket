@@ -493,6 +493,16 @@ func (s *Service) Handle(
 		return s.handleDeploymentsDelete(ctx, params)
 	case "deployments.retryPostApply":
 		return s.handleDeploymentsRetryPostApply(params, notifier)
+	case "labs.start":
+		return s.handleLabsStart(ctx, params, notifier)
+	case "labs.get":
+		return s.handleLabsGet(ctx, params, notifier)
+	case "labs.verifyStep":
+		return s.handleLabsVerifyStep(ctx, params, notifier)
+	case "labs.runAction":
+		return s.handleLabsRunAction(ctx, params, notifier)
+	case "labs.reset":
+		return s.handleLabsReset(ctx, params, notifier)
 	default:
 		return nil, fmt.Errorf("unknown backend method: %s", method)
 	}

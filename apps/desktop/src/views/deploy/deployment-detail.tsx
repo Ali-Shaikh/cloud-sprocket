@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { openExternalUrl } from "@/lib/backend";
+import type { NavigateToResourceParams } from "@/lib/navigate-to-resource";
 import type { Deployment, DeploymentOutput, RecipeManifest } from "@/types/backend";
 
 import { formatDeploymentTargetLabel } from "@/lib/local-runtime-labels";
@@ -15,6 +16,7 @@ import { AppHandoffCard, LogCommandsCard, PostApplyWarningCard, SuperpowersCard 
 import { deploymentOutputLink } from "./output-links";
 import { CopyButton, RevealButton, StatusBadge } from "./shared";
 import { VirtualizedLogPane } from "./components/virtualized-log-pane";
+import { LabRunner } from "./lab/lab-runner";
 
 export function DeploymentDetail({
   deployment,
@@ -28,6 +30,7 @@ export function DeploymentDetail({
   onCancel,
   onDelete,
   onRetryPostApply,
+  navigateToResource,
 }: {
   deployment: Deployment;
   recipeManifest: RecipeManifest | null;
@@ -40,6 +43,7 @@ export function DeploymentDetail({
   onCancel: () => void;
   onDelete: () => void;
   onRetryPostApply: () => void;
+  navigateToResource?: (params: NavigateToResourceParams) => void;
 }) {
   const canApply = deployment.status === "planned";
   const canDestroy = deployment.status === "applied";
@@ -131,6 +135,15 @@ export function DeploymentDetail({
 
       {deployment.status === "applied" && recipeManifest?.superpowers && (
         <SuperpowersCard deployment={deployment} superpowers={recipeManifest.superpowers} />
+      )}
+
+      {deployment.status === "applied" && recipeManifest?.lab && (
+        <LabRunner
+          deployment={deployment}
+          labSpec={recipeManifest.lab}
+          providerId={deployment.providerId === "azure" ? "azure" : "aws"}
+          navigateToResource={navigateToResource}
+        />
       )}
 
       <LogCommandsCard deployment={deployment} />

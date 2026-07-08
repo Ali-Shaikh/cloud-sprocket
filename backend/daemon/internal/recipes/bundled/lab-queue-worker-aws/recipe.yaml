@@ -61,3 +61,56 @@ outputs:
   - name: queue_url
     primary: true
   - name: lambda_function_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 20
+  objectives:
+    - Understand how an SQS queue triggers a Lambda worker
+    - Send a message and verify queue activity
+    - Inspect the consumer function in the workspace
+  steps:
+    - id: explore-queue
+      title: Explore the SQS queue
+      body: |
+        Open the SQS tab and inspect the main queue created by this deployment.
+        Note the queue URL and approximate message counts.
+      actions:
+        - type: open-tab
+          tab: aws-sqs
+          focus: "{{ outputs.queue_url }}"
+      hints:
+        - The queue name is prefixed with your app name and environment.
+    - id: send-message
+      title: Send a test message
+      body: |
+        Send a JSON message to the queue so the worker Lambda can process it.
+      actions:
+        - type: invoke-write
+          op: sqs.send
+          params:
+            queueUrl: "{{ outputs.queue_url }}"
+            messageBody: '{"lab":"queue-worker","demo":1}'
+      hints:
+        - Use the action button below to send the bundled sample payload.
+    - id: verify-queue
+      title: Verify queue activity
+      body: |
+        Run the check to confirm messages are visible or in flight while the worker runs.
+      verify:
+        - type: sqs.queue-attribute
+          queue: "{{ outputs.queue_url }}"
+          attribute: ApproximateNumberOfMessagesNotVisible
+          compare: gte
+          value: "0"
+      hints:
+        - Messages may move to "in flight" quickly when the Lambda polls the queue.
+    - id: inspect-lambda
+      title: Inspect the worker Lambda
+      body: |
+        Open the Lambda tab to view the consumer function wired to the queue.
+      actions:
+        - type: open-tab
+          tab: aws-lambda
+          focus: "{{ outputs.lambda_function_name }}"
+      hints:
+        - The function name matches the deployment output `lambda_function_name`.

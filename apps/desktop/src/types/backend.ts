@@ -1303,6 +1303,7 @@ export interface RecipeManifest {
   };
   superpowers?: RecipeSuperpowers;
   imageBuild?: RecipeImageBuild;
+  lab?: LabSpec;
 }
 
 export interface RecipeVisibleWhen {
@@ -1401,4 +1402,73 @@ export interface DeploymentLogEvent {
   deploymentId: string;
   jobId: string;
   line: string;
+}
+
+// --- Guided labs -------------------------------------------------------------
+
+export type LabDifficulty = "beginner" | "intermediate" | "advanced";
+
+export type LabStepStatus = "pending" | "in_progress" | "passed" | "failed" | "skipped";
+
+export type LabSessionStatus = "not_started" | "in_progress" | "completed" | "abandoned";
+
+export interface LabActionOpenTab {
+  type: "open-tab";
+  tab: string;
+  focus?: string;
+}
+
+export interface LabActionInvokeWrite {
+  type: "invoke-write";
+  op: string;
+  params?: Record<string, unknown>;
+}
+
+export type LabStepAction = LabActionOpenTab | LabActionInvokeWrite | { type: string; [key: string]: unknown };
+
+export interface LabVerifyCheck {
+  type: string;
+  [key: string]: unknown;
+}
+
+export interface LabStepSpec {
+  id: string;
+  title: string;
+  body: string;
+  actions?: LabStepAction[];
+  verify?: LabVerifyCheck[];
+  hints?: string[];
+}
+
+export interface LabSpec {
+  difficulty: LabDifficulty;
+  estimatedMinutes: number;
+  objectives: string[];
+  steps: LabStepSpec[];
+}
+
+export interface LabVerifyResult {
+  type: string;
+  passed: boolean;
+  detail: string;
+}
+
+export interface LabStepSession {
+  stepId: string;
+  status: LabStepStatus;
+  verifyResults: LabVerifyResult[];
+}
+
+export interface LabSession {
+  deploymentId: string;
+  recipeId: string;
+  status: LabSessionStatus;
+  startedAt: string;
+  completedAt?: string;
+  steps: LabStepSession[];
+}
+
+export interface LabRunActionResult {
+  session: LabSession;
+  action?: LabStepAction;
 }

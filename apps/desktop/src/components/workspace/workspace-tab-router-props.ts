@@ -52,7 +52,9 @@ export type WorkspaceTabRouterProps = {
   activeS3PageId: string;
   setActiveS3PageId: Dispatch<SetStateAction<string>>;
   activeAzurePageId: string;
+  setActiveAzurePageId: Dispatch<SetStateAction<string>>;
   activeAzureStoragePageId: string;
+  setActiveAzureStoragePageId: Dispatch<SetStateAction<string>>;
   s3UploadStatus: string;
   setS3UploadStatus: Dispatch<SetStateAction<string>>;
   s3SignedUrlStatus: string;

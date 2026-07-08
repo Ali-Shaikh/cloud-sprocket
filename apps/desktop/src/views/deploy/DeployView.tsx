@@ -31,6 +31,7 @@ import {
   planDeployment,
   retryPostApplyDeployment,
 } from "@/lib/backend";
+import type { NavigateToResourceParams } from "@/lib/navigate-to-resource";
 import type { Deployment, ProfileSummary, Recipe, RecipeManifest, TofuStatus } from "@/types/backend";
 import { Download, Loader2, Rocket, Trash2 } from "lucide-react";
 
@@ -52,7 +53,13 @@ function reportDeployError(title: string, error: unknown): void {
   notify("error", title, formatBackendError(error));
 }
 
-export default function DeployView({ profiles }: { profiles: ProfileSummary[] }) {
+export default function DeployView({
+  profiles,
+  navigateToResource,
+}: {
+  profiles: ProfileSummary[];
+  navigateToResource?: (params: NavigateToResourceParams) => void;
+}) {
   const [mode, setMode] = useState<"list" | "configure" | "deployment">("list");
   const [recipes, setRecipes] = useState<RecipeManifest[]>([]);
   const [tofu, setTofu] = useState<TofuStatus | null>(null);
@@ -293,6 +300,7 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
         onCancel={handleCancel}
         onDelete={() => void handleDelete(active.id)}
         onRetryPostApply={handleRetryPostApply}
+        navigateToResource={navigateToResource}
       />
     );
   }
