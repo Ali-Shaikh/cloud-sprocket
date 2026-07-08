@@ -1,0 +1,79 @@
+apiVersion: cloudsprocket.recipe/v1
+id: sns-fanout-lambda-aws
+kind: app-deploy
+version: 0.1.0
+name: SNS fanout to Lambda (AWS)
+summary: An SNS topic that fans out notifications to a subscribed Lambda function.
+description: |
+  Additional messaging pattern: publish to an SNS topic and the Lambda is
+  invoked. Supports fan-out to multiple subscribers in extensions. Sample or
+  custom handler.
+
+  Free tier services in LocalStack. Portable to AWS.
+providers:
+  - aws
+tags:
+  - messaging
+  - sns
+  - lambda
+  - fanout
+  - aws
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+build:
+  - name: Install backend dependencies
+    dirVar: backend_source_dir
+    requires: package.json
+    command: ["npm", "install", "--omit=dev"]
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Publisher code
+    variables:
+      - name: backend_source_dir
+        widget: directory
+        help: Folder with Node handler for SNS events. Default for sample.
+      - name: lambda_memory_mb
+        widget: number
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as JSON object.
+outputs:
+  - name: sns_topic_arn
+    primary: true
+  - name: lambda_function_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 12
+  objectives:
+    - Deploy SNS topic subscribed to Lambda
+    - Use outputs to publish test messages
+  steps:
+    - id: inspect-lambda
+      title: Inspect subscriber Lambda
+      body: Open Lambda tab to see the function subscribed to the topic.
+      actions:
+        - type: open-tab
+          tab: aws-lambda
+          focus: "{{ outputs.lambda_function_name }}"
+    - id: review-topic
+      title: Review SNS topic
+      body: Open SNS tab and locate the topic by ARN from outputs.
+      actions:
+        - type: open-tab
+          tab: aws-sns
+          focus: "{{ outputs.sns_topic_arn }}"

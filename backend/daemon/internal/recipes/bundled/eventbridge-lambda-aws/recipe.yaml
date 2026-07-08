@@ -1,0 +1,92 @@
+apiVersion: cloudsprocket.recipe/v1
+id: eventbridge-lambda-aws
+kind: app-deploy
+version: 0.1.0
+name: EventBridge processor (AWS Lambda)
+summary: An EventBridge rule that invokes a Node Lambda on custom or scheduled events.
+description: |
+  Messaging and scheduling pattern using EventBridge: send custom events or
+  use a schedule to trigger Lambda processing. Useful for decoupled workflows,
+  audits or cron jobs. Bundled sample or supply your own handler.
+
+  Emulates on LocalStack free tier. Switch profile to run on real AWS.
+providers:
+  - aws
+tags:
+  - event-driven
+  - eventbridge
+  - lambda
+  - messaging
+  - aws
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+build:
+  - name: Install backend dependencies
+    dirVar: backend_source_dir
+    requires: package.json
+    command: ["npm", "install", "--omit=dev"]
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Event rule
+    variables:
+      - name: event_pattern
+        widget: textarea
+        help: JSON event pattern to match (or leave for schedule). Example: {"source": ["my.app"]}
+      - name: schedule_expression
+        widget: text
+        help: Optional schedule e.g. rate(1 minute). Use when no custom pattern.
+  - title: Processor code
+    variables:
+      - name: backend_source_dir
+        widget: directory
+        help: Folder with your Node handler.handler. Leave default for sample.
+      - name: lambda_memory_mb
+        widget: number
+        help: Memory for the Lambda, in megabytes.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: lambda_function_name
+    primary: true
+  - name: event_rule_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 15
+  objectives:
+    - See EventBridge rule wired to a Lambda target
+    - Inspect rule and function in workspace
+  steps:
+    - id: inspect-lambda
+      title: Inspect the EventBridge target Lambda
+      body: |
+        Open the Lambda tab and find the processor function.
+      actions:
+        - type: open-tab
+          tab: aws-lambda
+          focus: "{{ outputs.lambda_function_name }}"
+    - id: inspect-rule
+      title: Review the EventBridge rule
+      body: |
+        Switch to EventBridge tab to see the rule (name matches output).
+      actions:
+        - type: open-tab
+          tab: aws-eventbridge
+          focus: "{{ outputs.event_rule_name }}"
+      hints:
+        - Rule may use either schedule or event pattern depending on variables.

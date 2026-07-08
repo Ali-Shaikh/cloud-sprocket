@@ -1,0 +1,9 @@
+{
+  "name": "s3-event-processor",
+  "version": "0.1.0",
+  "private": true,
+  "main": "handler.js",
+  "scripts": {
+    "start": "node handler.js"
+  }
+}
