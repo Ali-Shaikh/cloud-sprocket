@@ -9,6 +9,31 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.8.35] - 2026-07-08
+
+### Added
+
+- CloudFormation and EventBridge inventory tabs migrated to shared
+  `ResourceInventoryShell` + `ResourceTable` (#121)
+- S3 copy object and create folder prefix workflows (write-gated) (#121)
+- Azure Storage blob copy and folder prefix create workflows (write-gated) (#121)
+
+### Fixed
+
+- AWS write ops Phases 2–3 handlers were implemented but not registered in
+  `service.go`; delete/create/run/terminate/RDS/Logs/IAM RPCs now route correctly
+  (#121)
+- S3 `CopyObject` URL-encodes copy-source keys with spaces and special characters
+  (#121)
+- Azure blob copy authorises the source with a read SAS and polls until the async
+  copy completes (#121)
+- CloudFormation stack row selection highlights the active stack again (#121)
+- S3 copy preserves object key whitespace instead of trimming it (#121)
+
+### Changed
+
+- `docs/project-status.md` brought current; pre-v0.9 backlog marked complete (#121)
+
 ## [0.8.34] - 2026-07-07
 
 ### Added
@@ -682,6 +707,7 @@ Initial public release.
 - Automated Windows and macOS CI builds
 
 [Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.34...HEAD
+[0.8.35]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.34...v0.8.35
 [0.8.34]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.33...v0.8.34
 [0.8.33]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.32...v0.8.33
 [0.8.32]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.31...v0.8.32
