@@ -14,14 +14,17 @@ import (
 )
 
 // deploymentPlanRequest is the payload for deployments.plan.
+// UpdateDeploymentID, when supplied for an applied deployment, re-uses that
+// record (re-seeding variables) and produces a fresh plan for re-apply (B2 update flow).
 type deploymentPlanRequest struct {
-	RecipeID   string         `json:"recipeId"`
-	Name       string         `json:"name"`
-	ProviderID string         `json:"providerId"`
-	ProfileID  string         `json:"profileId"`
-	Local      bool           `json:"local"`
-	RuntimeID  string         `json:"runtimeId,omitempty"`
-	Variables  map[string]any `json:"variables"`
+	RecipeID           string         `json:"recipeId"`
+	Name               string         `json:"name"`
+	ProviderID         string         `json:"providerId"`
+	ProfileID          string         `json:"profileId"`
+	Local              bool           `json:"local"`
+	RuntimeID          string         `json:"runtimeId,omitempty"`
+	Variables          map[string]any `json:"variables"`
+	UpdateDeploymentID string         `json:"updateDeploymentId,omitempty"`
 }
 
 // deploymentJob is returned by plan/apply/destroy: the deployment record plus
@@ -161,19 +164,55 @@ func (s *Service) startDeploymentPlan(ctx context.Context, request deploymentPla
 		name = request.RecipeID
 	}
 	now := s.timestamp()
-	deployment := &deploy.Deployment{
-		ID:            deploy.NewID(),
-		RecipeID:      request.RecipeID,
-		Name:          name,
-		ProviderID:    request.ProviderID,
-		ProfileID:     request.ProfileID,
-		Local:         request.Local,
-		RuntimeID:     request.RuntimeID,
-		Variables:     request.Variables,
-		SensitiveVars: sensitiveVariableNames(recipe),
-		Status:        deploy.StatusPending,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+
+	var deployment *deploy.Deployment
+	if request.UpdateDeploymentID != "" {
+		// Update flow (B2): reuse existing deployment record for re-seed + re-plan against live state.
+		existing, getErr := s.deploymentGet(context.Background(), request.UpdateDeploymentID)
+		if getErr != nil {
+			return deploymentJob{}, fmt.Errorf("update target deployment not found: %w", getErr)
+		}
+		if existing.Status != deploy.StatusApplied && existing.Status != deploy.StatusPlanned && existing.Status != deploy.StatusFailed {
+			return deploymentJob{}, fmt.Errorf("update is only supported for applied (or planned/failed) deployments")
+		}
+		// Snapshot prior state into revisions for history (values at time of update initiation).
+		prior := deploy.DeploymentRevision{
+			At:            now,
+			RecipeVersion: existing.RecipeVersion,
+			Variables:     cloneVariables(existing.Variables),
+			Plan:          existing.Plan,
+		}
+		deployment = existing
+		deployment.Variables = cloneVariables(request.Variables)
+		deployment.Name = name
+		deployment.ProviderID = request.ProviderID
+		deployment.ProfileID = request.ProfileID
+		deployment.Local = request.Local
+		deployment.RuntimeID = request.RuntimeID
+		deployment.SensitiveVars = sensitiveVariableNames(recipe)
+		deployment.Plan = nil
+		deployment.Error = ""
+		deployment.Drift = nil
+		deployment.Status = deploy.StatusPending
+		deployment.UpdatedAt = now
+		deployment.Revisions = append(deployment.Revisions, prior)
+		deployment.RecipeVersion = recipe.Manifest.Version
+	} else {
+		deployment = &deploy.Deployment{
+			ID:            deploy.NewID(),
+			RecipeID:      request.RecipeID,
+			Name:          name,
+			ProviderID:    request.ProviderID,
+			ProfileID:     request.ProfileID,
+			Local:         request.Local,
+			RuntimeID:     request.RuntimeID,
+			Variables:     request.Variables,
+			SensitiveVars: sensitiveVariableNames(recipe),
+			Status:        deploy.StatusPending,
+			CreatedAt:     now,
+			UpdatedAt:     now,
+			RecipeVersion: recipe.Manifest.Version,
+		}
 	}
 	deploy.NormaliseDeploymentTarget(deployment)
 	if err := s.store.SaveDeployment(ctx, deployment.ID, s.sealForStore(deployment), now); err != nil {
@@ -183,6 +222,17 @@ func (s *Service) startDeploymentPlan(ctx context.Context, request deploymentPla
 	job := models.JobStatus{JobID: s.newJobID(), Label: "Plan " + name, Status: "queued", Message: "Planning deployment."}
 	go s.runDeploymentPlan(deployment, job, notifier)
 	return deploymentJob{Deployment: deployment, Job: job}, nil
+}
+
+func cloneVariables(src map[string]any) map[string]any {
+	if src == nil {
+		return nil
+	}
+	dst := make(map[string]any, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }
 
 func (s *Service) startDeploymentAction(id string, action deploymentAction, notifier Notifier) (deploymentJob, error) {

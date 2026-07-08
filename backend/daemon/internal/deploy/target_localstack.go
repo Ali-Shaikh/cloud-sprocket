@@ -22,7 +22,7 @@ var localStackServices = []string{
 	"apigateway", "apigatewayv2", "cloudformation", "cloudfront", "cloudwatch",
 	"dynamodb", "ec2", "ecr", "ecs", "elasticache", "elbv2", "events", "iam", "kinesis", "kms",
 	"lambda", "logs", "rds", "route53", "s3", "secretsmanager", "sns", "sqs",
-	"ssm", "sts",
+	"ssm", "states", "stepfunctions", "sts",
 }
 
 type localStackTarget struct {

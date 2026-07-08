@@ -65,6 +65,10 @@ type Deployment struct {
 	PostApplyError string `json:"postApplyError,omitempty"`
 	// Drift holds the last drift check result (populated by CheckDrift for applied deployments).
 	Drift     *DriftReport `json:"drift,omitempty"`
+	// RecipeVersion records the manifest version at creation or last update (for B3 upgrade detection).
+	RecipeVersion string `json:"recipeVersion,omitempty"`
+	// Revisions holds prior snapshots for history (backend support for revisioned deployments).
+	Revisions []DeploymentRevision `json:"revisions,omitempty"`
 	CreatedAt string       `json:"createdAt"`
 	UpdatedAt string       `json:"updatedAt"`
 }
@@ -103,6 +107,15 @@ type PlanSummary struct {
 type DriftReport struct {
 	HasDrift bool        `json:"hasDrift"`
 	Drift    *PlanSummary `json:"drift,omitempty"` // reuses PlanSummary shape for drifted resources
+}
+
+// DeploymentRevision captures a prior configuration of an applied deployment
+// to support update history and potential rollback by re-apply of old values.
+type DeploymentRevision struct {
+	At            string         `json:"at"`
+	RecipeVersion string         `json:"recipeVersion,omitempty"`
+	Variables     map[string]any `json:"variables"`
+	Plan          *PlanSummary   `json:"plan,omitempty"`
 }
 
 const (

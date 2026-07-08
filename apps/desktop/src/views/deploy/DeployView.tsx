@@ -276,6 +276,31 @@ export default function DeployView({
     }
   }
 
+  async function handleUpdate() {
+    if (!active) return;
+    setBusy(true);
+    try {
+      // B2 update flow: re-plan using current deployment's values as seed (backend re-uses record via updateDeploymentId)
+      const response = await planDeployment({
+        recipeId: active.recipeId,
+        name: active.name,
+        providerId: active.providerId,
+        profileId: active.profileId,
+        local: active.local,
+        runtimeId: active.runtimeId,
+        variables: active.variables ?? {},
+        updateDeploymentId: active.id,
+      });
+      setActive(response.deployment);
+      resetLogsForDeployment(response.deployment.id);
+      // stay in deployment mode to see the fresh plan
+    } catch (error) {
+      reportDeployError("Update plan failed", error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleCancel() {
     if (!active) return;
     try {
@@ -318,6 +343,7 @@ export default function DeployView({
         onDelete={() => void handleDelete(active.id)}
         onRetryPostApply={handleRetryPostApply}
         onCheckDrift={handleCheckDrift}
+        onUpdate={handleUpdate}
         navigateToResource={navigateToResource}
       />
     );

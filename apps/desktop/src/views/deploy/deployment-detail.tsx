@@ -45,6 +45,7 @@ export function DeploymentDetail({
   onDelete: () => void;
   onRetryPostApply: () => void;
   onCheckDrift?: () => void;
+  onUpdate?: () => void;
   navigateToResource?: (params: NavigateToResourceParams) => void;
 }) {
   const canApply = deployment.status === "planned";
@@ -91,6 +92,11 @@ export function DeploymentDetail({
           {deployment.status === "applied" && onCheckDrift && (
             <Button variant="outline" size="sm" onClick={onCheckDrift} disabled={busy}>
               Check drift
+            </Button>
+          )}
+          {deployment.status === "applied" && onUpdate && (
+            <Button variant="outline" size="sm" onClick={onUpdate} disabled={busy}>
+              Update
             </Button>
           )}
           {canRemove && (
