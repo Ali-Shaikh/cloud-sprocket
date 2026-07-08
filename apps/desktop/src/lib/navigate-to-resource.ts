@@ -199,6 +199,22 @@ export function openTabActionToParams(
   };
 }
 
+export function resolveOverviewProvider(
+  tabId: string,
+  options: {
+    lockedProviderId?: string;
+    workspaceProviderId?: string;
+    selectedProviderId?: string;
+  } = {},
+): NavigateToResourceParams["provider"] {
+  if (tabId.startsWith("azure-")) {
+    return "azure";
+  }
+  const providerId =
+    options.lockedProviderId ?? options.workspaceProviderId ?? options.selectedProviderId;
+  return providerId === "azure" ? "azure" : "aws";
+}
+
 export function overviewNavigateToParams(
   tabId: string,
   context?: Record<string, string | boolean | undefined>,

@@ -7,6 +7,7 @@ import {
   openTabActionToParams,
   overviewNavigateToParams,
   planNavigateToResource,
+  resolveOverviewProvider,
 } from "./navigate-to-resource";
 
 describe("planNavigateToResource", () => {
@@ -105,6 +106,20 @@ describe("planNavigateToResource", () => {
     });
 
     expect(plan.subPage).toEqual({ tab: "s3", pageId: "objects" });
+  });
+});
+
+describe("resolveOverviewProvider", () => {
+  it("prefers locked provider id when workspace provider is unset", () => {
+    expect(
+      resolveOverviewProvider("azure-vms", {
+        lockedProviderId: "azure",
+      }),
+    ).toBe("azure");
+  });
+
+  it("infers azure from tab id when provider signals are missing", () => {
+    expect(resolveOverviewProvider("azure-resource-groups")).toBe("azure");
   });
 });
 

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import type { ReactNode } from "react";
-import { overviewNavigateToParams } from "@/lib/navigate-to-resource";
+import { overviewNavigateToParams, resolveOverviewProvider } from "@/lib/navigate-to-resource";
 import { toActivityEntries } from "@/lib/workspace-shell";
 import { useNavigateToResource } from "@/hooks/use-navigate-to-resource";
 import ConnectView from "@/views/ConnectView";
@@ -271,10 +271,11 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
           void props.onEnableHiddenService(hit);
         }}
         onNavigate={(tabId, context) => {
-          const provider =
-            workspace.provider?.providerId === "azure" || selectedProvider?.providerId === "azure"
-              ? "azure"
-              : "aws";
+          const provider = resolveOverviewProvider(tabId, {
+            lockedProviderId: session.lockedProviderId,
+            workspaceProviderId: workspace.provider?.providerId,
+            selectedProviderId: selectedProvider?.providerId,
+          });
           navigateToResource(overviewNavigateToParams(tabId, context, provider));
         }}
       />
