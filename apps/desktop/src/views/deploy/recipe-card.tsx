@@ -8,7 +8,10 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { RecipeManifest } from "@/types/backend";
 
-import { manifestRequiresPro } from "./deployShared";
+import { proCapabilityHint } from "@/lib/local-runtime-labels";
+import { recipeLocalRuntimeIds } from "@/lib/deploy-gallery-filter";
+
+import { manifestRequiresPro } from "./shared";
 
 export function RecipeCard({ manifest, onConfigure }: { manifest: RecipeManifest; onConfigure: () => void }) {
   const isLab = manifest.kind === "service-lab";
@@ -25,8 +28,11 @@ export function RecipeCard({ manifest, onConfigure }: { manifest: RecipeManifest
         </div>
         <div className="flex items-center gap-2">
           {manifestRequiresPro(manifest) && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
-              <Crown className="size-3" /> Pro
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400"
+              title={proCapabilityHint(recipeLocalRuntimeIds(manifest))}
+            >
+              <Crown className="size-3" /> Licensed runtime
             </span>
           )}
           {manifest.superpowers?.iamPolicyStream && (

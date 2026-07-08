@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import type { Deployment, DeploymentOutput } from "../types/backend";
+import type { Deployment, DeploymentOutput } from "@/types/backend";
 
 export type LogCommand = {
   label: string;
@@ -21,17 +21,7 @@ const LOCALSTACK_CLOUD_SUFFIX = ".localhost.localstack.cloud";
 const LOCALSTACK_LEGACY_HOST =
   /\.(elb|s3-website|s3|execute-api|cloudfront|rds)\.localhost(?::\d+)?(?:\/|$)/i;
 
-const RUNTIME_LABELS: Record<string, string> = {
-  localstack: "LocalStack",
-  "floci-az": "floci-az",
-  "docker-compose": "Docker Compose",
-  "magento-compose": "Magento (Docker Compose)",
-};
-
-export function runtimeDisplayName(runtimeId?: string): string {
-  const id = (runtimeId ?? "localstack").trim() || "localstack";
-  return RUNTIME_LABELS[id] ?? id;
-}
+export { runtimeDisplayName } from "@/lib/deploy-runtime-labels";
 
 export function deploymentRuntimeId(deployment: Pick<Deployment, "local" | "runtimeId">): string {
   if (!deployment.local) return "aws-cloud";

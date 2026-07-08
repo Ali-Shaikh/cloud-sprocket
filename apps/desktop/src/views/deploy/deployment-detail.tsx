@@ -9,9 +9,12 @@ import { Card } from "@/components/ui/card";
 import { openExternalUrl } from "@/lib/backend";
 import type { Deployment, DeploymentOutput, RecipeManifest } from "@/types/backend";
 
-import { AppHandoffCard, LogCommandsCard, PostApplyWarningCard, SuperpowersCard } from "./deployCards";
-import { deploymentOutputLink, runtimeDisplayName } from "./deployOutputLinks";
-import { CopyButton, RevealButton, StatusBadge } from "./deployShared";
+import { formatDeploymentTargetLabel } from "@/lib/local-runtime-labels";
+
+import { AppHandoffCard, LogCommandsCard, PostApplyWarningCard, SuperpowersCard } from "./cards";
+import { deploymentOutputLink } from "./output-links";
+import { CopyButton, RevealButton, StatusBadge } from "./shared";
+import { VirtualizedLogPane } from "./components/virtualized-log-pane";
 
 export function DeploymentDetail({
   deployment,
@@ -29,7 +32,7 @@ export function DeploymentDetail({
   deployment: Deployment;
   recipeManifest: RecipeManifest | null;
   logs: string[];
-  logRef: React.MutableRefObject<HTMLDivElement | null>;
+  logRef?: React.MutableRefObject<HTMLDivElement | null>;
   busy: boolean;
   onBack: () => void;
   onApply: () => void;
@@ -45,9 +48,7 @@ export function DeploymentDetail({
     deployment.status === "applying" ||
     deployment.status === "destroying";
   const canRemove = !isRunning && !canDestroy;
-  const targetLabel = deployment.local
-    ? `Local emulator (${runtimeDisplayName(deployment.runtimeId ?? "localstack")})`
-    : `${deployment.providerId} · ${deployment.profileId}`;
+  const targetLabel = formatDeploymentTargetLabel(deployment);
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-5 p-6">
@@ -136,20 +137,7 @@ export function DeploymentDetail({
 
       <div>
         <p className="mb-2 text-sm font-medium text-foreground">Logs</p>
-        <div
-          ref={logRef}
-          className="h-72 overflow-auto rounded-lg border bg-[#0d1117] p-3 font-mono text-xs leading-relaxed text-[#c9d1d9]"
-        >
-          {logs.length === 0 ? (
-            <span className="text-muted-foreground">Waiting for output…</span>
-          ) : (
-            logs.map((line, index) => (
-              <div key={index} className="whitespace-pre-wrap">
-                {line}
-              </div>
-            ))
-          )}
-        </div>
+        <VirtualizedLogPane lines={logs} scrollRef={logRef} />
       </div>
     </div>
   );

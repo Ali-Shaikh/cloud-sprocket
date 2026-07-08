@@ -4,21 +4,21 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { useDeploymentsQuery } from "@/hooks/use-deployments-query";
-import { queryKeys } from "@/lib/query-keys";
-import { Boxes, Download, FlaskConical, Loader2, Rocket, Trash2 } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { EmptyState } from "@/components/empty-state";
 import { SectionHeader } from "@/components/section-header";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { useDeploymentsQuery } from "@/hooks/use-deployments-query";
+import { useDeploymentEvents } from "@/hooks/use-deployment-events";
+import {
+  filterGalleryRecipes,
+  inferRecipeKind,
+  type GalleryFilters,
+} from "@/lib/deploy-gallery-filter";
+import { formatLocalTargetLabel } from "@/lib/local-runtime-labels";
+import { notify } from "@/lib/notify";
+import { queryKeys } from "@/lib/query-keys";
+import { formatBackendError } from "@/lib/workspace-snapshot";
 import {
   applyDeployment,
   cancelDeployment,
@@ -30,34 +30,34 @@ import {
   listRecipes,
   planDeployment,
   retryPostApplyDeployment,
-  subscribeToBackendEvent,
 } from "@/lib/backend";
 import type { Deployment, ProfileSummary, Recipe, RecipeManifest, TofuStatus } from "@/types/backend";
+import { Download, Loader2, Rocket, Trash2 } from "lucide-react";
 
-import { ConfigureRecipe } from "./deployConfigure";
-import { DeploymentDetail } from "./deployDetail";
-import { runtimeDisplayName } from "./deployOutputLinks";
-import { RecipeCard } from "./deployRecipeCard";
+import { ConfigureRecipe } from "./configure-recipe";
+import { defaultGalleryFilters, RecipeGallery } from "./components/recipe-gallery";
+import { DeploymentDetail } from "./deployment-detail";
 import {
   coerceValues,
   isFlociAzureProfile,
   MAGENTO_COMPOSE_RECIPE_ID,
   magentoComposeDir,
-  manifestCloudOnlyAzure,
   normaliseMagentoComposeValues,
-  SCENARIO_TAGS,
   seedValues,
   StatusBadge,
-  type DeployMode,
-  type GallerySection,
   type TargetOption,
-} from "./deployShared";
+} from "./shared";
+
+function reportDeployError(title: string, error: unknown): void {
+  notify("error", title, formatBackendError(error));
+}
 
 export default function DeployView({ profiles }: { profiles: ProfileSummary[] }) {
-  const [mode, setMode] = useState<DeployMode>("list");
+  const [mode, setMode] = useState<"list" | "configure" | "deployment">("list");
   const [recipes, setRecipes] = useState<RecipeManifest[]>([]);
   const [tofu, setTofu] = useState<TofuStatus | null>(null);
   const [installing, setInstalling] = useState(false);
+  const [galleryFilters, setGalleryFilters] = useState<GalleryFilters>(defaultGalleryFilters());
   const queryClient = useQueryClient();
   const deploymentsQuery = useDeploymentsQuery();
   const deployments = deploymentsQuery.data ?? [];
@@ -65,38 +65,22 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [target, setTarget] = useState<string>("local");
-  const [gallerySection, setGallerySection] = useState<GallerySection>("app-deploy");
-  const [scenarioFilter, setScenarioFilter] = useState<string>("all");
   const [busy, setBusy] = useState(false);
 
-  const [active, setActive] = useState<Deployment | null>(null);
-  const [logs, setLogs] = useState<Record<string, string[]>>({});
+  const { active, setActive, logs, resetLogsForDeployment } = useDeploymentEvents();
   const logRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    void listRecipes().then(setRecipes).catch(() => setRecipes([]));
-    void getTofuStatus().then(setTofu).catch(() => setTofu(null));
-
-    const unsubChanged = subscribeToBackendEvent("deployment.changed", (deployment) => {
-      setActive((current) => (current && current.id === deployment.id ? deployment : current));
-    });
-    const unsubLog = subscribeToBackendEvent("deployment.log", (event) => {
-      setLogs((current) => ({
-        ...current,
-        [event.deploymentId]: [...(current[event.deploymentId] ?? []), event.line],
-      }));
-    });
-    return () => {
-      void unsubChanged.then((fn) => fn());
-      void unsubLog.then((fn) => fn());
-    };
+    void listRecipes()
+      .then(setRecipes)
+      .catch((error) => {
+        setRecipes([]);
+        reportDeployError("Could not load recipes", error);
+      });
+    void getTofuStatus()
+      .then(setTofu)
+      .catch(() => setTofu(null));
   }, []);
-
-  useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight;
-    }
-  }, [logs, active?.id]);
 
   const targetOptions = useMemo<TargetOption[]>(() => {
     const providers = new Set(recipe?.manifest.providers ?? ["aws"]);
@@ -110,16 +94,14 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
           : [];
 
     const options: TargetOption[] = [];
-    const cloudOnlyAzure = recipe ? manifestCloudOnlyAzure(recipe.manifest) : false;
     for (const providerId of providers) {
       if (providerId !== "aws" && providerId !== "azure") continue;
       for (const runtime of runtimes) {
         if (providerId === "aws" && runtime.id === "floci-az") continue;
         if (providerId === "azure" && runtime.id === "localstack") continue;
-        const proSuffix = runtime.requiresPro ? " · Pro" : "";
         options.push({
           id: `local:${runtime.id}`,
-          label: `Local emulator (${runtimeDisplayName(runtime.id)})${proSuffix}`,
+          label: formatLocalTargetLabel(runtime.id, runtime.requiresPro),
           providerId,
           profileId: "",
           local: true,
@@ -148,17 +130,10 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
     }
   }, [target, targetOptions]);
 
-  const galleryRecipes = useMemo(() => {
-    const sectionKind = gallerySection;
-    return recipes.filter((manifest) => {
-      const kind = manifest.kind ?? (manifest.id.startsWith("lab-") || manifest.id === "scheduled-job-aws" ? "service-lab" : "app-deploy");
-      if (kind !== sectionKind) return false;
-      if (sectionKind === "app-deploy" && scenarioFilter !== "all") {
-        return (manifest.tags ?? []).includes(scenarioFilter);
-      }
-      return true;
-    });
-  }, [recipes, gallerySection, scenarioFilter]);
+  const galleryRecipes = useMemo(
+    () => filterGalleryRecipes(recipes, galleryFilters),
+    [galleryFilters, recipes],
+  );
 
   async function openRecipe(id: string) {
     try {
@@ -188,9 +163,12 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
         setTarget(profile ? `profile:${profile.profileId}` : "");
       }
       setMode("configure");
-      setGallerySection(loaded.manifest.kind === "service-lab" ? "service-lab" : "app-deploy");
-    } catch {
-      /* surfaced by the debug log */
+      setGalleryFilters((current) => ({
+        ...current,
+        section: inferRecipeKind(loaded.manifest),
+      }));
+    } catch (error) {
+      reportDeployError("Could not open recipe", error);
     }
   }
 
@@ -207,6 +185,8 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
           break;
         }
       }
+    } catch (error) {
+      reportDeployError("Could not install OpenTofu", error);
     } finally {
       setInstalling(false);
     }
@@ -227,8 +207,10 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
         variables: coerceValues(recipe.variables, values),
       });
       setActive(response.deployment);
-      setLogs((current) => ({ ...current, [response.deployment.id]: [] }));
+      resetLogsForDeployment(response.deployment.id);
       setMode("deployment");
+    } catch (error) {
+      reportDeployError("Plan failed", error);
     } finally {
       setBusy(false);
     }
@@ -239,6 +221,8 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
     setBusy(true);
     try {
       await applyDeployment(active.id);
+    } catch (error) {
+      reportDeployError("Apply failed", error);
     } finally {
       setBusy(false);
     }
@@ -249,6 +233,8 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
     setBusy(true);
     try {
       await retryPostApplyDeployment(active.id);
+    } catch (error) {
+      reportDeployError("Post-apply retry failed", error);
     } finally {
       setBusy(false);
     }
@@ -259,6 +245,8 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
     setBusy(true);
     try {
       await destroyDeployment(active.id);
+    } catch (error) {
+      reportDeployError("Destroy failed", error);
     } finally {
       setBusy(false);
     }
@@ -268,8 +256,8 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
     if (!active) return;
     try {
       await cancelDeployment(active.id);
-    } catch {
-      /* surfaced by the debug log */
+    } catch (error) {
+      reportDeployError("Could not stop deployment", error);
     }
   }
 
@@ -283,8 +271,8 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
         setActive(null);
         setMode("list");
       }
-    } catch {
-      /* surfaced by the debug log */
+    } catch (error) {
+      reportDeployError("Could not remove deployment", error);
     }
   }
 
@@ -353,58 +341,22 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
         </Card>
       )}
 
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant={gallerySection === "app-deploy" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setGallerySection("app-deploy")}
-          >
-            <Rocket className="size-4" /> Deploy your app
-          </Button>
-          <Button
-            variant={gallerySection === "service-lab" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setGallerySection("service-lab")}
-          >
-            <FlaskConical className="size-4" /> Service labs
-          </Button>
-          {gallerySection === "app-deploy" && (
-            <Select value={scenarioFilter} onValueChange={setScenarioFilter}>
-              <SelectTrigger className="h-8 w-[180px]">
-                <SelectValue placeholder="All scenarios" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All scenarios</SelectItem>
-                {SCENARIO_TAGS.map((tag) => (
-                  <SelectItem key={tag} value={tag}>
-                    {tag}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-
-        {galleryRecipes.length === 0 ? (
-          <EmptyState
-            icon={gallerySection === "service-lab" ? <FlaskConical className="size-6" /> : <Boxes className="size-6" />}
-            title={gallerySection === "service-lab" ? "No service labs match" : "No app recipes match"}
-            description="Bundled recipes ship with the app. Try clearing the scenario filter."
-          />
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {galleryRecipes.map((manifest) => (
-              <RecipeCard key={manifest.id} manifest={manifest} onConfigure={() => void openRecipe(manifest.id)} />
-            ))}
-          </div>
-        )}
-      </div>
+      <RecipeGallery
+        recipes={galleryRecipes}
+        catalogueRecipes={recipes}
+        filters={galleryFilters}
+        onFiltersChange={(patch) => setGalleryFilters((current) => ({ ...current, ...patch }))}
+        onConfigure={(id) => void openRecipe(id)}
+      />
 
       <div>
         <h3 className="mb-3 text-sm font-semibold text-foreground">Recent deployments</h3>
         {deployments.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No deployments yet.</p>
+          <EmptyState
+            icon={<Rocket className="size-6" />}
+            title="No deployments yet"
+            description="Pick a recipe above, plan against a local runtime or cloud profile, then apply when ready."
+          />
         ) : (
           <div className="flex flex-col gap-2">
             {deployments.map((deployment) => {
@@ -429,7 +381,10 @@ export default function DeployView({ profiles }: { profiles: ProfileSummary[] })
                     <div>
                       <p className="text-sm font-medium text-foreground">{deployment.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {deployment.local ? "Local emulator" : `${deployment.providerId} · ${deployment.profileId}`} · {deployment.recipeId}
+                        {deployment.local
+                          ? formatLocalTargetLabel(deployment.runtimeId)
+                          : `${deployment.providerId} · ${deployment.profileId}`}{" "}
+                        · {deployment.recipeId}
                       </p>
                     </div>
                     <StatusBadge status={deployment.status} />

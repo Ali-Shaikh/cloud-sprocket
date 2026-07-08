@@ -6,7 +6,7 @@ import { mergeAwsS3Selection, normaliseWorkspaceSnapshot } from "@/lib/workspace
 import { toActivityEntries } from "@/lib/workspace-shell";
 import ConnectView from "@/views/ConnectView";
 import OverviewView from "@/views/OverviewView";
-import DeployView from "@/views/DeployView";
+import DeployView from "@/views/deploy/DeployView";
 import DebugView from "@/views/DebugView";
 import { ActivityView, RuntimeView, PlaceholderView, DeveloperToolsView } from "@/views/workspace/lazy-views";
 import SettingsView from "@/views/SettingsView";
