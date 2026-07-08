@@ -1383,8 +1383,14 @@ export interface Deployment {
   outputs?: DeploymentOutput[];
   error?: string;
   postApplyError?: string;
+  drift?: DriftReport;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DriftReport {
+  hasDrift: boolean;
+  drift?: PlanSummary; // re-uses the plan summary shape for the list of drifted resources
 }
 
 export interface DeploymentJob {

@@ -3683,6 +3683,8 @@ function handleMockRequest<T>(
       return mockRunDeployment(params.deploymentId as string, "apply") as Promise<T>;
     case "deployments.destroy":
       return mockRunDeployment(params.deploymentId as string, "destroy") as Promise<T>;
+    case "deployments.checkDrift":
+      return mockCheckDrift(params.deploymentId as string) as Promise<T>;
     case "deployments.cancel":
       return mockCancelDeployment(params.deploymentId as string) as Promise<T>;
     case "deployments.delete":
@@ -3844,6 +3846,15 @@ export async function applyDeployment(deploymentId: string): Promise<DeploymentJ
 
 export async function destroyDeployment(deploymentId: string): Promise<DeploymentJob> {
   return backendRequest<DeploymentJob>("deployments.destroy", { deploymentId });
+}
+
+export interface CheckDriftResult {
+  deployment: Deployment;
+  drift: DriftReport;
+}
+
+export async function checkDeploymentDrift(deploymentId: string): Promise<CheckDriftResult> {
+  return backendRequest<CheckDriftResult>("deployments.checkDrift", { deploymentId });
 }
 
 export async function cancelDeployment(deploymentId: string): Promise<void> {

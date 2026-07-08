@@ -24,6 +24,7 @@ import {
   cancelDeployment,
   deleteDeployment,
   destroyDeployment,
+  checkDeploymentDrift,
   getRecipe,
   getTofuStatus,
   installTofu,
@@ -259,6 +260,22 @@ export default function DeployView({
     }
   }
 
+  async function handleCheckDrift() {
+    if (!active) return;
+    setBusy(true);
+    try {
+      const result = await checkDeploymentDrift(active.id);
+      // optimistic local update
+      setActive(result.deployment);
+      // also refresh list
+      await queryClient.invalidateQueries({ queryKey: queryKeys.deployments.list });
+    } catch (error) {
+      reportDeployError("Check drift failed", error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleCancel() {
     if (!active) return;
     try {
@@ -300,6 +317,7 @@ export default function DeployView({
         onCancel={handleCancel}
         onDelete={() => void handleDelete(active.id)}
         onRetryPostApply={handleRetryPostApply}
+        onCheckDrift={handleCheckDrift}
         navigateToResource={navigateToResource}
       />
     );

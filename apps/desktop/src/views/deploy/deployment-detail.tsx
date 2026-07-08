@@ -30,6 +30,7 @@ export function DeploymentDetail({
   onCancel,
   onDelete,
   onRetryPostApply,
+  onCheckDrift,
   navigateToResource,
 }: {
   deployment: Deployment;
@@ -43,6 +44,7 @@ export function DeploymentDetail({
   onCancel: () => void;
   onDelete: () => void;
   onRetryPostApply: () => void;
+  onCheckDrift?: () => void;
   navigateToResource?: (params: NavigateToResourceParams) => void;
 }) {
   const canApply = deployment.status === "planned";
@@ -86,6 +88,11 @@ export function DeploymentDetail({
               <Trash2 className="size-4" /> Destroy
             </Button>
           )}
+          {deployment.status === "applied" && onCheckDrift && (
+            <Button variant="outline" size="sm" onClick={onCheckDrift} disabled={busy}>
+              Check drift
+            </Button>
+          )}
           {canRemove && (
             <Button variant="outline" onClick={onDelete}>
               <Trash2 className="size-4" /> Remove
@@ -116,6 +123,26 @@ export function DeploymentDetail({
               </div>
             ))}
           </div>
+        </Card>
+      )}
+
+      {deployment.drift && (
+        <Card className="p-4">
+          <div className="mb-2 flex items-center gap-2 text-sm">
+            <span className="font-medium text-foreground">Drift</span>
+            {deployment.drift.hasDrift ? (
+              <span className="rounded bg-amber-500/15 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">drift detected</span>
+            ) : (
+              <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-600 dark:text-emerald-400">in sync</span>
+            )}
+          </div>
+          {deployment.drift.hasDrift && deployment.drift.drift ? (
+            <div className="text-xs text-muted-foreground">
+              {deployment.drift.drift.changes?.length || 0} resource(s) drifted. Use the workspace to inspect.
+            </div>
+          ) : (
+            <div className="text-xs text-muted-foreground">No drift detected on last check.</div>
+          )}
         </Card>
       )}
 
