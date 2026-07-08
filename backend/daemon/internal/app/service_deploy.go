@@ -31,6 +31,11 @@ type deploymentJob struct {
 	Job        models.JobStatus   `json:"job"`
 }
 
+type deploymentDriftResult struct {
+	Deployment *deploy.Deployment `json:"deployment"`
+	Drift      deploy.DriftReport `json:"drift"`
+}
+
 // deploymentLogEvent is streamed per tofu output line.
 type deploymentLogEvent struct {
 	DeploymentID string `json:"deploymentId"`
@@ -442,6 +447,30 @@ func (s *Service) handleDeploymentsCancel(params json.RawMessage) (any, error) {
 		return nil, err
 	}
 	return map[string]bool{"cancelled": true}, s.cancelDeployment(request.DeploymentID)
+}
+
+func (s *Service) handleDeploymentsCheckDrift(params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		DeploymentID string `json:"deploymentId"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	deployment, err := s.deploymentGet(context.Background(), request.DeploymentID)
+	if err != nil {
+		return nil, err
+	}
+	drift, err := s.deployer.CheckDrift(context.Background(), deployment, s.deploymentLogger(deployment.ID, "", notifier))
+	if err != nil {
+		return nil, err
+	}
+	deployment.Drift = &drift
+	deployment.UpdatedAt = s.timestamp()
+	_ = s.store.SaveDeployment(context.Background(), deployment.ID, s.sealForStore(deployment), deployment.UpdatedAt)
+	if notifier != nil {
+		_ = notifier.Notify("deployment.changed", deployment)
+	}
+	return deploymentDriftResult{Deployment: deployment, Drift: drift}, nil
 }
 
 func (s *Service) handleDeploymentsRetryPostApply(params json.RawMessage, notifier Notifier) (any, error) {

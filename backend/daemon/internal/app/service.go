@@ -487,6 +487,8 @@ func (s *Service) Handle(
 		return s.handleDeploymentsApply(params, notifier)
 	case "deployments.destroy":
 		return s.handleDeploymentsDestroy(params, notifier)
+	case "deployments.checkDrift":
+		return s.handleDeploymentsCheckDrift(params, notifier)
 	case "deployments.cancel":
 		return s.handleDeploymentsCancel(params)
 	case "deployments.delete":
