@@ -3,7 +3,13 @@
 
 import { describe, expect, it } from "vitest";
 
-import { deploymentOutputLink, localDeploymentOutputLink, logCommandsForDeployment, toLocalStackUrl } from "./output-links";
+import {
+  deploymentOutputLink,
+  getNoRuntimeLogsMessage,
+  localDeploymentOutputLink,
+  logCommandsForDeployment,
+  toLocalStackUrl,
+} from "./output-links";
 
 describe("toLocalStackUrl", () => {
   it("rewrites AWS-format load balancer URLs to LocalStack", () => {
@@ -148,5 +154,21 @@ describe("toLocalStackUrl", () => {
     );
     expect(commands[0].command).not.toContain("AWS_ACCESS_KEY_ID");
     expect(commands[0].command).not.toContain("AWS_SECRET_ACCESS_KEY");
+  });
+});
+
+describe("getNoRuntimeLogsMessage", () => {
+  it("uses the S3-specific message only for static-site-aws", () => {
+    const msg = getNoRuntimeLogsMessage("static-site-aws");
+    expect(msg).toContain("Static S3 sites need S3 or CloudFront access logging configured separately");
+    expect(msg).toContain("This recipe does not produce application runtime logs by default");
+  });
+
+  it("uses a generic message for labs and other recipes", () => {
+    const labMsg = "This lab creates infrastructure resources. Application runtime logs (if any) come from the services created (e.g. Lambda logs in CloudWatch for AWS labs). Use the workspace tabs to inspect.";
+    expect(getNoRuntimeLogsMessage("lab-dynamodb-aws")).toBe(labMsg);
+    expect(getNoRuntimeLogsMessage("lab-postgres-flexible-azure")).toBe(labMsg);
+    expect(getNoRuntimeLogsMessage("lab-secrets-aws")).toBe(labMsg);
+    expect(getNoRuntimeLogsMessage("some-other-recipe")).toBe("This recipe does not produce application runtime logs by default.");
   });
 });

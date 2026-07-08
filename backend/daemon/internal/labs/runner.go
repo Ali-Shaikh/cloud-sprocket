@@ -103,9 +103,6 @@ func (r *Runner) VerifyStep(
 	if !ok {
 		return LabSession{}, fmt.Errorf("lab step %q was not found", stepID)
 	}
-	if len(stepSpec.Verify) == 0 {
-		return LabSession{}, errors.New("this step has no verification checks")
-	}
 
 	checkCtx := CheckContext{
 		Deployment: deployment,
@@ -114,14 +111,25 @@ func (r *Runner) VerifyStep(
 	}
 	results := make([]VerifyResult, 0, len(stepSpec.Verify))
 	allPassed := true
-	for _, verify := range stepSpec.Verify {
-		result, runErr := r.registry.Run(ctx, verify, checkCtx)
-		if runErr != nil {
-			return LabSession{}, runErr
-		}
-		results = append(results, result)
-		if !result.Passed {
-			allPassed = false
+	if len(stepSpec.Verify) == 0 {
+		// Guidance / action-only step (e.g. "note the ARN", "explore the tab").
+		// Mark as passed so the runner works for inspection-only labs.
+		results = []VerifyResult{{
+			Type:    "manual",
+			Passed:  true,
+			Detail:  "No automated checks for this step.",
+			Message: "Step completed (no verification defined).",
+		}}
+	} else {
+		for _, verify := range stepSpec.Verify {
+			result, runErr := r.registry.Run(ctx, verify, checkCtx)
+			if runErr != nil {
+				return LabSession{}, runErr
+			}
+			results = append(results, result)
+			if !result.Passed {
+				allPassed = false
+			}
 		}
 	}
 

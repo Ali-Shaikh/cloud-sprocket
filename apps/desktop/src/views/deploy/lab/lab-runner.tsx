@@ -197,7 +197,7 @@ export function LabRunner({
               <div className="flex items-center gap-3">
                 <Button onClick={() => void verifyStep(activeStep.id)} disabled={loading}>
                   {loading ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                  Check my work
+                  { (activeStep.verify ?? []).length > 0 ? "Check my work" : "Mark complete" }
                 </Button>
               </div>
 

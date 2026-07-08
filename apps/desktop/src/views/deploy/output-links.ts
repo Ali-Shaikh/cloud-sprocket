@@ -141,6 +141,21 @@ export function logCommandsForDeployment(deployment: Deployment): LogCommand[] {
   }
 }
 
+export function getNoRuntimeLogsMessage(recipeId: string): string {
+  // Static S3 / frontend-only recipes need explicit access logging configured in the recipe or via the provider.
+  if (recipeId === "static-site-aws") {
+    return "This recipe does not produce application runtime logs by default. Static S3 sites need S3 or CloudFront access logging configured separately.";
+  }
+
+  // Many service labs are infrastructure-focused (tables, secrets, databases) and do not emit app runtime logs.
+  if (recipeId.startsWith("lab-")) {
+    return "This lab creates infrastructure resources. Application runtime logs (if any) come from the services created (e.g. Lambda logs in CloudWatch for AWS labs). Use the workspace tabs to inspect.";
+  }
+
+  // Service labs and many infrastructure recipes intentionally do not emit app-level runtime logs.
+  return "This recipe does not produce application runtime logs by default.";
+}
+
 function cloudWatchTailCommand(
   deployment: Deployment,
   region: string,

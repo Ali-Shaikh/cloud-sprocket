@@ -13,6 +13,12 @@ func TestLoadLabRecipes(t *testing.T) {
 		"lab-event-fanout-aws",
 		"lab-secrets-aws",
 		"lab-postgres-flexible-azure",
+		"lab-s3-events-aws",
+		"lab-eventbridge-aws",
+		"lab-kms-aws",
+		"lab-queue-storage-azure",
+		"lab-key-vault-azure",
+		"lab-functions-http-azure",
 	} {
 		recipe, err := Bundled().Load(id)
 		if err != nil {
@@ -42,6 +48,16 @@ func TestBundledGuidedLabSpecsValidate(t *testing.T) {
 		{id: "lab-rest-api-aws", minSteps: 2, wantProvider: "aws"},
 		{id: "lab-secrets-aws", minSteps: 2, wantProvider: "aws"},
 		{id: "lab-event-fanout-aws", minSteps: 5, wantProvider: "aws"},
+		{id: "lab-s3-events-aws", minSteps: 5, wantProvider: "aws"},
+		{id: "lab-eventbridge-aws", minSteps: 6, wantProvider: "aws"},
+		{id: "lab-kms-aws", minSteps: 4, wantProvider: "aws"},
+		{id: "lab-api-auth-aws", minSteps: 5, wantProvider: "aws"},
+		{id: "lab-sns-filtered-fanout-aws", minSteps: 5, wantProvider: "aws"},
+		{id: "lab-iam-roles-aws", minSteps: 4, wantProvider: "aws"},
+		{id: "lab-s3-lambda-events-aws", minSteps: 5, wantProvider: "aws"},
+		{id: "lab-queue-storage-azure", minSteps: 4, wantProvider: "azure"},
+		{id: "lab-key-vault-azure", minSteps: 4, wantProvider: "azure"},
+		{id: "lab-functions-http-azure", minSteps: 4, wantProvider: "azure"},
 	}
 
 	for _, tc := range cases {
