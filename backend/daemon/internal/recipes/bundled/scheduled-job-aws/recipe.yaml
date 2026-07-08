@@ -1,12 +1,14 @@
 apiVersion: cloudsprocket.recipe/v1
 id: scheduled-job-aws
-version: 0.1.0
+kind: service-lab
+version: 0.2.0
 name: Scheduled job (AWS EventBridge + Lambda)
 summary: A Node Lambda invoked on a schedule by an EventBridge rule.
 description: |
   A recurring background job: an EventBridge (CloudWatch Events) rule fires on a
-  schedule expression and invokes a Node.js Lambda. Use it for periodic clean-ups,
-  report generation, polling or any cron-style task.
+  schedule expression and invokes a Node.js Lambda. Bundled sample job code
+  deploys when you do not supply your own handler. Use it for periodic
+  clean-ups, report generation, polling or any cron-style task.
 
   Uses only Lambda, EventBridge and IAM, which emulate on LocalStack's free tier,
   so it dry-runs locally and ships unchanged to real AWS by switching the
@@ -23,13 +25,13 @@ engine:
   type: opentofu
   minVersion: "1.6.0"
 local:
-  emulator: localstack
-  requiresPro: false
+  runtimes:
+    - id: localstack
 build:
   - name: Install backend dependencies
     dirVar: backend_source_dir
     requires: package.json
-    command: ["npm", "ci", "--omit=dev"]
+    command: ["npm", "install", "--omit=dev"]
 variableGroups:
   - title: Application
     variables:
@@ -50,7 +52,7 @@ variableGroups:
     variables:
       - name: backend_source_dir
         widget: directory
-        help: Folder with your Node job (package.json + handler.handler). Leave default for the sample handler.
+        help: Folder with your Node job handler.handler export. Leave default for the sample job.
       - name: lambda_memory_mb
         widget: number
         help: Memory for the job Lambda, in megabytes.

@@ -23,8 +23,8 @@ variable "aws_region" {
 
 variable "frontend_dist_dir" {
   type        = string
-  description = "Directory of your built static site (e.g. a Vite `dist/` or Next.js `out/` export). Leave blank to create an empty bucket."
-  default     = ""
+  description = "Directory of your built static site (e.g. a Vite `dist/` or Next.js `out/` export). Leave as the default to deploy the sample site."
+  default     = "./sample-site"
 }
 
 variable "tags" {
