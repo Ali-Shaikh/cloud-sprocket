@@ -189,7 +189,7 @@ func (s *Service) handleAwsS3CopyObject(ctx context.Context, params json.RawMess
 	if err := json.Unmarshal(params, &request); err != nil {
 		return nil, err
 	}
-	destinationObjectKey := strings.TrimSpace(request.DestinationObjectKey)
+	destinationObjectKey := request.DestinationObjectKey
 	if destinationObjectKey == "" {
 		return nil, errors.New("destination object key is required")
 	}

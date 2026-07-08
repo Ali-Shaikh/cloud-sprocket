@@ -389,8 +389,6 @@ func (s *S3Inventory) CopyObject(
 	destinationObjectKey string,
 ) (models.AwsS3CopyObjectResult, error) {
 	bucketName = strings.TrimSpace(bucketName)
-	sourceObjectKey = strings.TrimSpace(sourceObjectKey)
-	destinationObjectKey = strings.TrimSpace(destinationObjectKey)
 	if bucketName == "" || sourceObjectKey == "" || destinationObjectKey == "" {
 		return models.AwsS3CopyObjectResult{}, fmt.Errorf("bucket, source key, and destination key are required")
 	}
