@@ -60,3 +60,30 @@ outputs:
   - name: api_endpoint
     primary: true
   - name: lambda_function_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 20
+  objectives:
+    - Call the deployed HTTP API and confirm a successful response
+    - Inspect the backing Lambda function in the workspace
+  steps:
+    - id: call-api
+      title: Call the API endpoint
+      body: |
+        Run the check to send an HTTP GET to the API Gateway invoke URL from the
+        `api_endpoint` output. A 2xx response means the sample handler is live.
+      verify:
+        - type: http.get
+          url: "{{ outputs.api_endpoint }}"
+      hints:
+        - LocalStack may take a few seconds after apply before the endpoint responds.
+    - id: inspect-lambda
+      title: Inspect the API Lambda
+      body: |
+        Open the Lambda tab to view the function behind the HTTP API.
+      actions:
+        - type: open-tab
+          tab: aws-lambda
+          focus: "{{ outputs.lambda_function_name }}"
+      hints:
+        - The function name matches the `lambda_function_name` output.
