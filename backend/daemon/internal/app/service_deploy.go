@@ -4,12 +4,17 @@
 package app
 
 import (
+	"archive/zip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"cloudsprocket/backend/daemon/internal/deploy"
@@ -595,33 +600,82 @@ func (s *Service) handleDeploymentsDelete(ctx context.Context, params json.RawMe
 	return map[string]bool{"deleted": true}, s.deleteDeployment(ctx, request.DeploymentID)
 }
 
-// handleRecipesImport provides basic local import (folder) with a trust gate (C2).
-// Without confirm=true, only a preview is returned (no disk write). With confirm=true,
-// the tree is copied under ImportedRecipesDir as <safeId>@<safeVersion>, skipping VCS dirs.
+// handleRecipesValidate runs C1 validation against a local recipe folder.
+func (s *Service) handleRecipesValidate(params json.RawMessage) (any, error) {
+	var req struct {
+		SourcePath string `json:"sourcePath"`
+	}
+	if err := json.Unmarshal(params, &req); err != nil {
+		return nil, err
+	}
+	return recipes.ValidateDirectory(req.SourcePath)
+}
+
+// handleRecipesImport provides local import (folder or zip) with a trust gate (C2).
+// Without confirm=true, only a preview + validation report is returned (no durable write).
+// With confirm=true, the tree is copied under ImportedRecipesDir as <safeId>@<safeVersion>.
 func (s *Service) handleRecipesImport(params json.RawMessage) (any, error) {
 	var req struct {
 		SourcePath string `json:"sourcePath"`
+		// SourceType is "folder", "zip", or empty (auto-detect from extension / directory).
+		SourceType string `json:"sourceType,omitempty"`
 		Confirm    bool   `json:"confirm"`
 	}
 	if err := json.Unmarshal(params, &req); err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(req.SourcePath) == "" {
-		return nil, fmt.Errorf("sourcePath (folder) is required for basic import")
+		return nil, fmt.Errorf("sourcePath (folder or .zip) is required")
 	}
-	src := filepath.Clean(req.SourcePath)
-	manifestPath := filepath.Join(src, "recipe.yaml")
+	srcPath := filepath.Clean(req.SourcePath)
+	sourceType := strings.ToLower(strings.TrimSpace(req.SourceType))
+	if sourceType == "" {
+		if strings.EqualFold(filepath.Ext(srcPath), ".zip") {
+			sourceType = "zip"
+		} else {
+			sourceType = "folder"
+		}
+	}
+
+	workDir := srcPath
+	var cleanup func()
+	if sourceType == "zip" {
+		extracted, err := extractRecipeZip(srcPath)
+		if err != nil {
+			return nil, err
+		}
+		workDir = extracted
+		cleanup = func() { _ = os.RemoveAll(extracted) }
+		defer cleanup()
+	} else if sourceType != "folder" {
+		return nil, fmt.Errorf("unsupported sourceType %q (use folder or zip)", sourceType)
+	}
+
+	report, err := recipes.ValidateDirectory(workDir)
+	if err != nil {
+		return nil, err
+	}
+	if !report.OK {
+		return map[string]any{
+			"ok":         false,
+			"confirmed":  false,
+			"sourceType": sourceType,
+			"validation": report,
+			"trustNote":  "Import blocked: fix validation errors before accepting.",
+		}, nil
+	}
+
+	manifestPath := filepath.Join(workDir, "recipe.yaml")
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
-		return nil, fmt.Errorf("read recipe.yaml from %s: %w", src, err)
+		return nil, fmt.Errorf("read recipe.yaml from %s: %w", workDir, err)
 	}
 	var m recipes.Manifest
 	if err := yaml.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("parse manifest: %w", err)
 	}
-	// Folder-name fallback before Validate so recipes that omit id still work.
 	if strings.TrimSpace(m.ID) == "" {
-		m.ID = filepath.Base(src)
+		m.ID = filepath.Base(workDir)
 	}
 	if err := m.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid manifest: %w", err)
@@ -636,23 +690,36 @@ func (s *Service) handleRecipesImport(params json.RawMessage) (any, error) {
 	}
 	targetName := fmt.Sprintf("%s@%s", safeID, safeVer)
 	dest := filepath.Join(s.settings.ImportedRecipesDir, targetName)
-	// Ensure dest stays under ImportedRecipesDir even after Clean.
 	importedRoot := filepath.Clean(s.settings.ImportedRecipesDir)
 	cleanDest := filepath.Clean(dest)
 	if cleanDest != importedRoot && !strings.HasPrefix(cleanDest, importedRoot+string(os.PathSeparator)) {
 		return nil, fmt.Errorf("import destination escapes imported recipes directory")
 	}
 
+	contentHash, err := hashRecipeTree(workDir)
+	if err != nil {
+		return nil, fmt.Errorf("content hash: %w", err)
+	}
+
 	preview := map[string]any{
+		"ok":           true,
 		"id":           m.ID,
 		"version":      m.Version,
 		"name":         m.Name,
+		"kind":         m.Kind,
+		"providers":    m.Providers,
+		"summary":      m.Summary,
+		"buildCommands": report.BuildCommands,
+		"labStepCount": report.LabStepCount,
+		"contentHash":  contentHash,
+		"sourceType":   sourceType,
+		"sourcePath":   srcPath,
 		"importedPath": dest,
 		"confirmed":    false,
-		"trustNote":    "Review manifest summary, build steps and providers before enabling. Call again with confirm=true to copy into the imported recipes directory.",
+		"validation":   report,
+		"trustNote":    "Review providers, build commands, and lab actions. These run on this machine. Call again with confirm=true to copy into imported recipes.",
 	}
 	if !req.Confirm {
-		// Trust gate: preview only; nothing written yet.
 		return preview, nil
 	}
 
@@ -662,7 +729,128 @@ func (s *Service) handleRecipesImport(params json.RawMessage) (any, error) {
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return nil, err
 	}
-	if err := filepath.WalkDir(src, func(path string, d fs.DirEntry, walkErr error) error {
+	if err := copyRecipeTree(workDir, dest); err != nil {
+		_ = os.RemoveAll(dest)
+		return nil, fmt.Errorf("copy import: %w", err)
+	}
+	trust := map[string]any{
+		"contentHash": contentHash,
+		"acceptedAt":  s.timestamp(),
+		"sourceType":  sourceType,
+		"sourcePath":  srcPath,
+		"id":          m.ID,
+		"version":     m.Version,
+	}
+	trustBytes, _ := json.MarshalIndent(trust, "", "  ")
+	if err := os.WriteFile(filepath.Join(dest, ".import-trust.json"), trustBytes, 0o644); err != nil {
+		_ = os.RemoveAll(dest)
+		return nil, fmt.Errorf("write trust record: %w", err)
+	}
+	preview["confirmed"] = true
+	preview["trustNote"] = "Import accepted and copied. A changed content hash will require re-acceptance."
+	return preview, nil
+}
+
+// extractRecipeZip unpacks a zip into a temp directory and returns the recipe root
+// (directory containing recipe.yaml, possibly one level down).
+func extractRecipeZip(zipPath string) (string, error) {
+	info, err := os.Stat(zipPath)
+	if err != nil {
+		return "", fmt.Errorf("open zip: %w", err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("zip path is a directory: %s", zipPath)
+	}
+	reader, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return "", fmt.Errorf("open zip: %w", err)
+	}
+	defer reader.Close()
+
+	tmp, err := os.MkdirTemp("", "cs-recipe-import-*")
+	if err != nil {
+		return "", err
+	}
+	cleanTmp := filepath.Clean(tmp)
+	for _, file := range reader.File {
+		name := filepath.Clean(file.Name)
+		// Zip slip guard.
+		if name == ".." || strings.HasPrefix(name, ".."+string(os.PathSeparator)) {
+			_ = os.RemoveAll(tmp)
+			return "", fmt.Errorf("zip entry escapes root: %s", file.Name)
+		}
+		// Normalise to slash for skip checks.
+		if shouldSkipImportPath(filepath.ToSlash(name), nil) {
+			continue
+		}
+		target := filepath.Join(tmp, name)
+		if !strings.HasPrefix(filepath.Clean(target), cleanTmp+string(os.PathSeparator)) && filepath.Clean(target) != cleanTmp {
+			_ = os.RemoveAll(tmp)
+			return "", fmt.Errorf("zip entry escapes root: %s", file.Name)
+		}
+		if file.FileInfo().IsDir() {
+			if err := os.MkdirAll(target, 0o755); err != nil {
+				_ = os.RemoveAll(tmp)
+				return "", err
+			}
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			_ = os.RemoveAll(tmp)
+			return "", err
+		}
+		rc, err := file.Open()
+		if err != nil {
+			_ = os.RemoveAll(tmp)
+			return "", err
+		}
+		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+		if err != nil {
+			_ = rc.Close()
+			_ = os.RemoveAll(tmp)
+			return "", err
+		}
+		_, copyErr := io.Copy(out, rc)
+		_ = out.Close()
+		_ = rc.Close()
+		if copyErr != nil {
+			_ = os.RemoveAll(tmp)
+			return "", copyErr
+		}
+	}
+
+	// Prefer a root recipe.yaml; otherwise a single top-level subdir that has one.
+	if _, err := os.Stat(filepath.Join(tmp, "recipe.yaml")); err == nil {
+		return tmp, nil
+	}
+	entries, err := os.ReadDir(tmp)
+	if err != nil {
+		_ = os.RemoveAll(tmp)
+		return "", err
+	}
+	var candidates []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(tmp, entry.Name(), "recipe.yaml")); err == nil {
+			candidates = append(candidates, filepath.Join(tmp, entry.Name()))
+		}
+	}
+	if len(candidates) == 1 {
+		return candidates[0], nil
+	}
+	if len(candidates) == 0 {
+		_ = os.RemoveAll(tmp)
+		return "", fmt.Errorf("zip does not contain recipe.yaml at root or in a single top-level folder")
+	}
+	_ = os.RemoveAll(tmp)
+	return "", fmt.Errorf("zip contains multiple recipe.yaml roots; repackage with a single recipe")
+}
+
+func copyRecipeTree(src, dest string) error {
+	cleanDest := filepath.Clean(dest)
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -680,7 +868,6 @@ func (s *Service) handleRecipesImport(params json.RawMessage) (any, error) {
 			return nil
 		}
 		tgt := filepath.Join(dest, rel)
-		// Guard each target path stays under dest.
 		if !strings.HasPrefix(filepath.Clean(tgt), cleanDest+string(os.PathSeparator)) && filepath.Clean(tgt) != cleanDest {
 			return fmt.Errorf("refusing to write outside import destination: %s", rel)
 		}
@@ -695,13 +882,60 @@ func (s *Service) handleRecipesImport(params json.RawMessage) (any, error) {
 			return err
 		}
 		return os.WriteFile(tgt, b, 0o644)
-	}); err != nil {
-		_ = os.RemoveAll(dest)
-		return nil, fmt.Errorf("copy import: %w", err)
+	})
+}
+
+// hashRecipeTree returns a stable sha256 over relative paths and file contents
+// (excluding VCS / tooling dirs). Used for the import trust gate.
+func hashRecipeTree(root string) (string, error) {
+	type entry struct {
+		rel  string
+		data []byte
 	}
-	preview["confirmed"] = true
-	preview["trustNote"] = "Import accepted and copied. Review again if the source folder changes."
-	return preview, nil
+	var files []entry
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		if shouldSkipImportPath(rel, d) {
+			if d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		// Do not include prior trust records in the hash.
+		if filepath.Base(rel) == ".import-trust.json" {
+			return nil
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		files = append(files, entry{rel: filepath.ToSlash(rel), data: b})
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].rel < files[j].rel })
+	h := sha256.New()
+	for _, f := range files {
+		_, _ = h.Write([]byte(f.rel))
+		_, _ = h.Write([]byte{0})
+		_, _ = h.Write(f.data)
+		_, _ = h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // handleRecipesScaffold (C3) generates a minimal starter in the given dest dir (authoring scaffold).
