@@ -34,6 +34,7 @@ type Settings struct {
 	ToolsDir           string
 	TofuPath           string
 	DeploymentsDir     string
+	ImportedRecipesDir string
 	SecretKeyPath      string
 }
 
@@ -76,6 +77,7 @@ func FromEnv(env map[string]string, goos string, home string) Settings {
 	toolsDir := firstNonEmpty(env["CLOUDSPROCKET_TOOLS_DIR"], filepath.Join(configDir, "tools"))
 	tofuPath := env["CLOUDSPROCKET_TOFU_PATH"]
 	deploymentsDir := firstNonEmpty(env["CLOUDSPROCKET_DEPLOYMENTS_DIR"], filepath.Join(configDir, "deployments"))
+	importedRecipesDir := firstNonEmpty(env["CLOUDSPROCKET_IMPORTED_RECIPES_DIR"], filepath.Join(configDir, "recipes", "imported"))
 	secretKeyPath := firstNonEmpty(env["CLOUDSPROCKET_SECRET_KEY_PATH"], filepath.Join(configDir, "secret.key"))
 
 	return Settings{
@@ -99,12 +101,13 @@ func FromEnv(env map[string]string, goos string, home string) Settings {
 		ToolsDir:           toolsDir,
 		TofuPath:           tofuPath,
 		DeploymentsDir:     deploymentsDir,
+		ImportedRecipesDir: importedRecipesDir,
 		SecretKeyPath:      secretKeyPath,
 	}
 }
 
 func (s Settings) EnsureRuntimeDirs() error {
-	for _, directory := range []string{filepath.Dir(s.LogPath), s.LocalConfigDir, s.EmulatorStateDir, s.ToolsDir, s.DeploymentsDir} {
+	for _, directory := range []string{filepath.Dir(s.LogPath), s.LocalConfigDir, s.EmulatorStateDir, s.ToolsDir, s.DeploymentsDir, s.ImportedRecipesDir} {
 		if err := os.MkdirAll(directory, 0o755); err != nil {
 			return err
 		}

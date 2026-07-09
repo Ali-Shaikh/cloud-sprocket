@@ -24,10 +24,10 @@ local:
   runtimes:
     - id: localstack
 build:
-  - name: Build Go binary for Lambda
+  - name: Build Go binary for Lambda (cross-compile for linux/amd64)
     dirVar: backend_source_dir
     requires: go.mod
-    command: ["go", "build", "-o", "bootstrap", "."]
+    command: ["sh", "-c", "GOOS=linux GOARCH=amd64 go build -o bootstrap ."]
   - name: Install any extra if needed (noop for sample)
     dirVar: backend_source_dir
     command: ["echo", "Go build complete"]

@@ -34,6 +34,9 @@ variableGroups:
         options: [dev, staging, prod]
       - name: azure_location
         widget: text
+      - name: azure_tenant_id
+        widget: text
+        help: Tenant ID (use placeholder for local floci-az).
   - title: Code
     variables:
       - name: backend_source_dir

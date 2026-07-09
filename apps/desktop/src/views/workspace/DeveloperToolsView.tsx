@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { useMemo, useState } from "react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
   ArrowLeftRight,
   Braces,
@@ -57,6 +58,9 @@ import {
   type ToolResult,
 } from "@/lib/developer-tools";
 import { cn } from "@/lib/utils";
+import { importRecipeFolder, scaffoldRecipe } from "@/lib/backend";
+import { notify } from "@/lib/notify";
+import { formatBackendError } from "@/lib/workspace-snapshot";
 
 type TextLanguage = "plain" | "json" | "yaml" | "markdown" | "shell" | "env";
 type DiffLanguage = "plain" | "json" | "yaml";
@@ -733,6 +737,90 @@ function CloudIdWorkbench() {
   );
 }
 
+function RecipeAuthoring() {
+  const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [pendingImportPath, setPendingImportPath] = useState<string | null>(null);
+  const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
+
+  async function doImportPreview() {
+    try {
+      const folder = await openDialog({ directory: true, multiple: false });
+      if (!folder) return;
+      setBusy(true);
+      const path = String(folder);
+      const res = await importRecipeFolder(path, false);
+      setPendingImportPath(path);
+      setPreview(res as Record<string, unknown>);
+      setStatus("Import preview (not copied yet): " + JSON.stringify(res));
+      notify("success", "Import preview ready", "Review the preview, then accept to copy into imported recipes.");
+    } catch (e) {
+      setStatus("Import error: " + formatBackendError(e));
+      setPendingImportPath(null);
+      setPreview(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doImportConfirm() {
+    if (!pendingImportPath) return;
+    try {
+      setBusy(true);
+      const res = await importRecipeFolder(pendingImportPath, true);
+      setStatus("Import accepted: " + JSON.stringify(res));
+      setPreview(res as Record<string, unknown>);
+      setPendingImportPath(null);
+      notify("success", "Import accepted", "Recipe copied into the imported recipes directory.");
+    } catch (e) {
+      setStatus("Import confirm error: " + formatBackendError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function doImportReject() {
+    setPendingImportPath(null);
+    setPreview(null);
+    setStatus("Import rejected; nothing was copied.");
+    notify("info", "Import rejected", "No files were written to the imported recipes directory.");
+  }
+
+  async function doScaffold() {
+    try {
+      const folder = await openDialog({ directory: true, multiple: false });
+      if (!folder) return;
+      setBusy(true);
+      const res = await scaffoldRecipe(String(folder), "aws");
+      setStatus("Scaffolded at " + (res?.path || folder));
+      notify("success", "Scaffold complete", "Starter recipe.yaml + tf files written. Open folder to edit.");
+    } catch (e) {
+      setStatus("Scaffold error: " + formatBackendError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <ToolSection title="Recipe Authoring (C3) + Import (C2)" icon={Wand2}>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={doImportPreview} disabled={busy}>Import folder (trust preview)</Button>
+        <Button onClick={doImportConfirm} disabled={busy || !pendingImportPath}>Accept import</Button>
+        <Button variant="outline" onClick={doImportReject} disabled={busy || !pendingImportPath}>Reject</Button>
+        <Button variant="outline" onClick={doScaffold} disabled={busy}>Scaffold starter to folder</Button>
+      </div>
+      {preview && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Pending: {String(preview.name || preview.id || "recipe")} @ {String(preview.version || "?")}
+          {preview.confirmed ? " (copied)" : " (preview only)"}
+        </p>
+      )}
+      {status && <p className="mt-2 text-xs text-muted-foreground break-all">{status}</p>}
+      <p className="mt-3 text-xs text-muted-foreground">Preview does not write files. Accept copies under app data; extend for zip/git + hash store (C1).</p>
+    </ToolSection>
+  );
+}
+
 export default function DeveloperToolsView() {
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -770,6 +858,10 @@ export default function DeveloperToolsView() {
             <Clipboard aria-hidden />
             Cloud IDs
           </TabsTrigger>
+          <TabsTrigger value="recipes">
+            <Wand2 aria-hidden />
+            Recipes
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="json">
@@ -786,6 +878,9 @@ export default function DeveloperToolsView() {
         </TabsContent>
         <TabsContent value="cloud">
           <CloudIdWorkbench />
+        </TabsContent>
+        <TabsContent value="recipes">
+          <RecipeAuthoring />
         </TabsContent>
       </Tabs>
     </div>

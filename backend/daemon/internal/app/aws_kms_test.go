@@ -88,8 +88,8 @@ func TestAwsScopedKmsInventoryLoadsKeysAliasesAndMetadata(t *testing.T) {
 		kms:            kmsInventory,
 		apigateway:     stubApiGatewayInventory{},
 		secretsManager: stubSecretsManagerInventory{},
-		logs:           stubLogsInventory{},
-		iam:            stubIAMInventory{},
+		logs:           &stubLogsInventory{},
+		iam:            &stubIAMInventory{},
 		now:            func() time.Time { return time.Now().UTC() },
 	}
 

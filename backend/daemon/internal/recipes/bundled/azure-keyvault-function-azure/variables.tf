@@ -21,6 +21,12 @@ variable "azure_location" {
   default     = "westeurope"
 }
 
+variable "azure_tenant_id" {
+  type        = string
+  description = "Tenant ID. Use placeholder for floci-az local emulator."
+  default     = "00000000-0000-0000-0000-000000000002"
+}
+
 variable "backend_source_dir" {
   type        = string
   description = "Code dir. Default sample."

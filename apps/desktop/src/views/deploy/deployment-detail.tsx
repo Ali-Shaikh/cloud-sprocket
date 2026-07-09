@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { ArrowLeft, ExternalLink, Loader2, Rocket, Square, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Loader2, RefreshCw, Rocket, Square, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ export function DeploymentDetail({
   onDelete,
   onRetryPostApply,
   onCheckDrift,
+  onUpdate,
   navigateToResource,
 }: {
   deployment: Deployment;
@@ -45,6 +46,7 @@ export function DeploymentDetail({
   onDelete: () => void;
   onRetryPostApply: () => void;
   onCheckDrift?: () => void;
+  onUpdate?: () => void;
   navigateToResource?: (params: NavigateToResourceParams) => void;
 }) {
   const canApply = deployment.status === "planned";
@@ -56,6 +58,7 @@ export function DeploymentDetail({
   const hasLiveResources = deployment.status === "applied" || (deployment.status === "cancelled" && (deployment.outputs?.length ?? 0) > 0);
   const canRemove = !isRunning && !hasLiveResources;
   const targetLabel = formatDeploymentTargetLabel(deployment);
+  const isUpdateReplan = canApply && ((deployment.outputs?.length ?? 0) > 0 || (deployment.revisions?.length ?? 0) > 0);
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-5 p-6">
@@ -70,6 +73,9 @@ export function DeploymentDetail({
             <StatusBadge status={deployment.status} />
           </div>
           <p className="text-sm text-muted-foreground">{targetLabel}</p>
+          {recipeManifest && deployment.recipeVersion && recipeManifest.version && recipeManifest.version !== deployment.recipeVersion && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">Recipe updated: {deployment.recipeVersion} to {recipeManifest.version}. Use Update for the latest.</p>
+          )}
         </div>
         <div className="flex gap-2">
           {isRunning && (
@@ -80,7 +86,7 @@ export function DeploymentDetail({
           {canApply && (
             <Button onClick={onApply} disabled={busy}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : <Rocket className="size-4" />}
-              Apply
+              {isUpdateReplan ? "Confirm and Apply" : "Apply"}
             </Button>
           )}
           {canDestroy && (
@@ -91,6 +97,11 @@ export function DeploymentDetail({
           {deployment.status === "applied" && onCheckDrift && (
             <Button variant="outline" size="sm" onClick={onCheckDrift} disabled={busy}>
               Check drift
+            </Button>
+          )}
+          {deployment.status === "applied" && onUpdate && (
+            <Button variant="outline" onClick={onUpdate} disabled={busy}>
+              <RefreshCw className="size-4" /> Update
             </Button>
           )}
           {canRemove && (
@@ -116,10 +127,31 @@ export function DeploymentDetail({
             <span className="text-destructive">-{deployment.plan.destroy} destroy</span>
           </div>
           <div className="flex flex-col gap-1">
-            {deployment.plan.changes.map((change) => (
-              <div key={change.address} className="flex items-center gap-2 font-mono text-xs">
-                <span className="text-muted-foreground">{change.actions.join(",")}</span>
-                <span className="text-foreground">{change.address}</span>
+            {deployment.plan.changes.map((change) => {
+              const destructive = change.actions.some((a) => a === "delete" || (a === "create" && change.actions.includes("delete")));
+              return (
+                <div key={change.address} className="flex items-center gap-2 font-mono text-xs">
+                  <span className={destructive ? "text-destructive" : "text-muted-foreground"}>{change.actions.join(",")}</span>
+                  <span className={destructive ? "text-destructive" : "text-foreground"}>{change.address}</span>
+                </div>
+              );
+            })}
+          </div>
+          {deployment.plan.destroy > 0 && (
+            <p className="mt-2 text-xs text-destructive">Destructive changes detected. Review carefully before confirming apply.</p>
+          )}
+        </Card>
+      )}
+
+      {deployment.revisions && deployment.revisions.length > 0 && (
+        <Card className="p-4">
+          <div className="mb-2 text-sm font-medium text-foreground">Revisions (B2 history)</div>
+          <div className="space-y-1 text-xs">
+            {deployment.revisions.slice().reverse().map((rev) => (
+              <div key={rev.at} className="flex gap-2 text-muted-foreground">
+                <span>{new Date(rev.at).toLocaleString()}</span>
+                <span>v{rev.recipeVersion || '?'}</span>
+                {rev.plan && <span>+{rev.plan.add} ~{rev.plan.change} -{rev.plan.destroy}</span>}
               </div>
             ))}
           </div>

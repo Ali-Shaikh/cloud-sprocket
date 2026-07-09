@@ -81,8 +81,8 @@ func TestAwsScopedEKSInventoryLoadsClustersAndNodeGroups(t *testing.T) {
 		kms:            stubKmsInventory{},
 		apigateway:     stubApiGatewayInventory{},
 		secretsManager: stubSecretsManagerInventory{},
-		logs:           stubLogsInventory{},
-		iam:            stubIAMInventory{},
+		logs:           &stubLogsInventory{},
+		iam:            &stubIAMInventory{},
 		now:            func() time.Time { return time.Now().UTC() },
 	}
 

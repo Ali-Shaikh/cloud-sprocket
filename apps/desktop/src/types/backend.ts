@@ -1384,8 +1384,17 @@ export interface Deployment {
   error?: string;
   postApplyError?: string;
   drift?: DriftReport;
+  recipeVersion?: string;
+  revisions?: DeploymentRevision[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DeploymentRevision {
+  at: string;
+  recipeVersion?: string;
+  variables: Record<string, unknown>;
+  plan?: PlanSummary;
 }
 
 export interface DriftReport {

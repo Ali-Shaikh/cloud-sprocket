@@ -1,6 +1,6 @@
 apiVersion: cloudsprocket.recipe/v1
 id: scheduled-job-aws
-kind: service-lab
+kind: app-deploy
 version: 0.2.0
 name: Scheduled job (AWS EventBridge + Lambda)
 summary: A Node Lambda invoked on a schedule by an EventBridge rule.

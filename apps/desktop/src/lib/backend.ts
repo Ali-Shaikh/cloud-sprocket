@@ -3667,6 +3667,21 @@ function handleMockRequest<T>(
       return Promise.resolve(mockRecipes.map((recipe) => recipe.manifest) as T);
     case "recipes.get":
       return mockGetRecipe(params.recipeId as string) as Promise<T>;
+    case "recipes.import": {
+      const confirmed = Boolean((params as { confirm?: boolean }).confirm);
+      return Promise.resolve({
+        id: "imported-demo",
+        version: "0.1.0",
+        name: "Imported",
+        importedPath: String((params as { sourcePath?: string }).sourcePath || ""),
+        confirmed,
+        trustNote: confirmed
+          ? "Import accepted and copied (mock)."
+          : "Review preview, then call again with confirm=true to copy.",
+      }) as Promise<T>;
+    }
+    case "recipes.scaffold":
+      return Promise.resolve({ status: "scaffolded", path: String((params as any).destDir || "") }) as Promise<T>;
     case "tofu.status":
       return Promise.resolve({ available: true, version: "1.12.2", path: "(bundled)" } as T);
     case "tofu.install": {
@@ -3868,6 +3883,16 @@ export async function deleteDeployment(deploymentId: string): Promise<void> {
 
 export async function retryPostApplyDeployment(deploymentId: string): Promise<DeploymentJob> {
   return backendRequest<DeploymentJob>("deployments.retryPostApply", { deploymentId });
+}
+
+export async function importRecipeFolder(sourcePath: string, confirm = false): Promise<any> {
+  // Basic local import (C2): preview by default; confirm=true copies after trust review.
+  return backendRequest<any>("recipes.import", { sourcePath, confirm });
+}
+
+export async function scaffoldRecipe(destDir: string, provider?: string): Promise<any> {
+  // C3 authoring scaffold.
+  return backendRequest<any>("recipes.scaffold", { destDir, provider });
 }
 
 export async function startLabSession(deploymentId: string): Promise<LabSession> {

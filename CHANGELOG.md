@@ -9,6 +9,12 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.8.36] - 2026-07-09
+
+### Changed
+- Version bump ahead of next wave of plan work (recipes/labs + lifecycle).
+- Post-Greptile fixes for recent recipe PRs integrated (via review branches).
+
 ## [0.8.35] - 2026-07-08
 
 ### Added

@@ -84,8 +84,8 @@ func TestHandleAzureWafSelectPolicyReturnsWorkspaceSnapshot(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -175,8 +175,8 @@ func TestHandleAzureWafRefreshReturnsPolicyDetail(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)

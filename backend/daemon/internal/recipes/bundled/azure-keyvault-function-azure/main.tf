@@ -36,10 +36,10 @@ resource "azurerm_key_vault" "main" {
   name                        = replace("${local.name}kv", "-", "")
   location                    = azurerm_resource_group.main.location
   resource_group_name         = azurerm_resource_group.main.name
-  tenant_id                   = "00000000-0000-0000-0000-000000000002" # placeholder for local
+  tenant_id                   = var.azure_tenant_id
   sku_name                    = "standard"
   soft_delete_retention_days  = 7
-  purge_protection_enabled    = false
+  purge_protection_enabled    = true
   tags                        = local.tags
 }
 
