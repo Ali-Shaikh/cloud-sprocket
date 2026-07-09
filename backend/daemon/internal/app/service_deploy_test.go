@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -434,4 +436,110 @@ func TestDeploymentUpdateFlow(t *testing.T) {
 	if updated.RecipeVersion == "" {
 		t.Fatal("expected recipeVersion to be recorded on update plan")
 	}
+}
+
+
+func TestSafeRecipePathSegment(t *testing.T) {
+	ok, err := safeRecipePathSegment("my-recipe", "id")
+	if err != nil || ok != "my-recipe" {
+		t.Fatalf("plain id: got %q err=%v", ok, err)
+	}
+	if _, err := safeRecipePathSegment("../../etc", "id"); err == nil {
+		t.Fatal("expected rejection for traversal id")
+	}
+	if _, err := safeRecipePathSegment("a/b", "id"); err == nil {
+		t.Fatal("expected rejection for slash in id")
+	}
+	if _, err := safeRecipePathSegment("", "id"); err == nil {
+		t.Fatal("expected rejection for empty id")
+	}
+	// Base of nested path collapses; still reject if result is ..
+	if _, err := safeRecipePathSegment("..", "version"); err == nil {
+		t.Fatal("expected rejection for ..")
+	}
+}
+
+func TestRecipesImportTrustGateAndPathSafety(t *testing.T) {
+	deployer := &fakeDeployer{available: true}
+	s := newDeployTestService(t, deployer)
+	src := t.TempDir()
+	// Valid manifest
+	manifest := []byte("apiVersion: cloudsprocket.recipe/v1\nid: demo-import\nversion: 0.1.0\nname: Demo Import\nkind: app-deploy\nproviders: [\"aws\"]\nengine:\n  type: opentofu\n  minVersion: \"1.6.0\"\n")
+	if err := os.WriteFile(filepath.Join(src, "recipe.yaml"), manifest, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "main.tf"), []byte("resource \"null_resource\" \"n\" {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Hidden tooling that must not be copied
+	if err := os.MkdirAll(filepath.Join(src, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, ".git", "config"), []byte("secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Preview only: no copy
+	res, err := s.Handle(context.Background(), "recipes.import", json.RawMessage(`{"sourcePath":`+mustJSON(src)+`}`), nil)
+	if err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	prev := res.(map[string]any)
+	if prev["confirmed"] == true {
+		t.Fatal("preview must not confirm")
+	}
+	dest := prev["importedPath"].(string)
+	if _, err := os.Stat(dest); !os.IsNotExist(err) {
+		t.Fatalf("preview must not create dest, stat err=%v", err)
+	}
+
+	// Confirm copies, skips .git
+	confirmBody, _ := json.Marshal(map[string]any{"sourcePath": src, "confirm": true})
+	res2, err := s.Handle(context.Background(), "recipes.import", confirmBody, nil)
+	if err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	done := res2.(map[string]any)
+	if done["confirmed"] != true {
+		t.Fatal("confirm must set confirmed")
+	}
+	if _, err := os.Stat(filepath.Join(dest, "recipe.yaml")); err != nil {
+		t.Fatalf("expected recipe.yaml at dest: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, ".git")); !os.IsNotExist(err) {
+		t.Fatal(".git must not be copied")
+	}
+
+	// Path traversal via crafted id
+	bad := t.TempDir()
+	badManifest := []byte("apiVersion: cloudsprocket.recipe/v1\nid: ../../evil\nversion: 0.1.0\nname: Evil\nkind: app-deploy\nproviders: [\"aws\"]\nengine:\n  type: opentofu\n  minVersion: \"1.6.0\"\n")
+	if err := os.WriteFile(filepath.Join(bad, "recipe.yaml"), badManifest, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.Handle(context.Background(), "recipes.import", json.RawMessage(`{"sourcePath":`+mustJSON(bad)+`,"confirm":true}`), nil)
+	if err == nil {
+		t.Fatal("expected path traversal reject")
+	}
+}
+
+func TestRecipesScaffoldReportsWriteErrors(t *testing.T) {
+	deployer := &fakeDeployer{available: true}
+	s := newDeployTestService(t, deployer)
+	// Use a path that cannot be created as a writable directory on Windows/Unix:
+	// a file path as destDir after creating a file there.
+	base := t.TempDir()
+	blocked := filepath.Join(base, "not-a-dir")
+	if err := os.WriteFile(blocked, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(map[string]string{"destDir": blocked, "provider": "aws"})
+	_, err := s.Handle(context.Background(), "recipes.scaffold", body, nil)
+	if err == nil {
+		t.Fatal("expected scaffold error when destDir is a file")
+	}
+}
+
+func mustJSON(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
 }

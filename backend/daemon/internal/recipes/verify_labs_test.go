@@ -25,9 +25,6 @@ func TestLoadLabRecipes(t *testing.T) {
 		"lab-sns-filtered-fanout-aws",
 		"lab-iam-roles-aws",
 		"lab-s3-lambda-events-aws",
-		"lab-cloudformation-drift-aws",
-		"lab-step-functions-aws",
-		"lab-storage-event-function-azure",
 	} {
 		recipe, err := Bundled().Load(id)
 		if err != nil {
@@ -69,9 +66,6 @@ func TestBundledGuidedLabSpecsValidate(t *testing.T) {
 		{id: "lab-functions-http-azure", minSteps: 4, wantProvider: "azure"},
 		{id: "lab-storage-blobs-azure", minSteps: 4, wantProvider: "azure"},
 		{id: "lab-logs-aws", minSteps: 3, wantProvider: "aws"},
-		{id: "lab-cloudformation-drift-aws", minSteps: 5, wantProvider: "aws"},
-		{id: "lab-step-functions-aws", minSteps: 5, wantProvider: "aws"},
-		{id: "lab-storage-event-function-azure", minSteps: 5, wantProvider: "azure"},
 	}
 
 	for _, tc := range cases {

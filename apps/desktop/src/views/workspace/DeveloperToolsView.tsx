@@ -740,20 +740,50 @@ function CloudIdWorkbench() {
 function RecipeAuthoring() {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pendingImportPath, setPendingImportPath] = useState<string | null>(null);
+  const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
 
-  async function doImport() {
+  async function doImportPreview() {
     try {
       const folder = await openDialog({ directory: true, multiple: false });
       if (!folder) return;
       setBusy(true);
-      const res = await importRecipeFolder(String(folder));
-      setStatus("Import preview: " + JSON.stringify(res));
-      notify("success", "Import prepared", "Review the returned preview; full enable on accept would copy to imported/.");
+      const path = String(folder);
+      const res = await importRecipeFolder(path, false);
+      setPendingImportPath(path);
+      setPreview(res as Record<string, unknown>);
+      setStatus("Import preview (not copied yet): " + JSON.stringify(res));
+      notify("success", "Import preview ready", "Review the preview, then accept to copy into imported recipes.");
     } catch (e) {
       setStatus("Import error: " + formatBackendError(e));
+      setPendingImportPath(null);
+      setPreview(null);
     } finally {
       setBusy(false);
     }
+  }
+
+  async function doImportConfirm() {
+    if (!pendingImportPath) return;
+    try {
+      setBusy(true);
+      const res = await importRecipeFolder(pendingImportPath, true);
+      setStatus("Import accepted: " + JSON.stringify(res));
+      setPreview(res as Record<string, unknown>);
+      setPendingImportPath(null);
+      notify("success", "Import accepted", "Recipe copied into the imported recipes directory.");
+    } catch (e) {
+      setStatus("Import confirm error: " + formatBackendError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function doImportReject() {
+    setPendingImportPath(null);
+    setPreview(null);
+    setStatus("Import rejected; nothing was copied.");
+    notify("info", "Import rejected", "No files were written to the imported recipes directory.");
   }
 
   async function doScaffold() {
@@ -774,11 +804,19 @@ function RecipeAuthoring() {
   return (
     <ToolSection title="Recipe Authoring (C3) + Import (C2)" icon={Wand2}>
       <div className="flex flex-wrap gap-2">
-        <Button onClick={doImport} disabled={busy}>Import folder (trust preview)</Button>
+        <Button onClick={doImportPreview} disabled={busy}>Import folder (trust preview)</Button>
+        <Button onClick={doImportConfirm} disabled={busy || !pendingImportPath}>Accept import</Button>
+        <Button variant="outline" onClick={doImportReject} disabled={busy || !pendingImportPath}>Reject</Button>
         <Button variant="outline" onClick={doScaffold} disabled={busy}>Scaffold starter to folder</Button>
       </div>
+      {preview && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Pending: {String(preview.name || preview.id || "recipe")} @ {String(preview.version || "?")}
+          {preview.confirmed ? " (copied)" : " (preview only)"}
+        </p>
+      )}
       {status && <p className="mt-2 text-xs text-muted-foreground break-all">{status}</p>}
-      <p className="mt-3 text-xs text-muted-foreground">Imported recipes materialise under app data; extend for zip/git + full trust gate + validate RPC (C1).</p>
+      <p className="mt-3 text-xs text-muted-foreground">Preview does not write files. Accept copies under app data; extend for zip/git + hash store (C1).</p>
     </ToolSection>
   );
 }

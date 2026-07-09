@@ -174,7 +174,7 @@ func (s *Service) startDeploymentPlan(ctx context.Context, request deploymentPla
 	var deployment *deploy.Deployment
 	if request.UpdateDeploymentID != "" {
 		// Update flow (B2): reuse existing deployment record for re-seed + re-plan against live state.
-		existing, getErr := s.deploymentGet(context.Background(), request.UpdateDeploymentID)
+		existing, getErr := s.deploymentGet(ctx, request.UpdateDeploymentID)
 		if getErr != nil {
 			return deploymentJob{}, fmt.Errorf("update target deployment not found: %w", getErr)
 		}
@@ -230,15 +230,61 @@ func (s *Service) startDeploymentPlan(ctx context.Context, request deploymentPla
 	return deploymentJob{Deployment: deployment, Job: job}, nil
 }
 
+// cloneVariables deep-clones a variables map so revision snapshots stay isolated
+// from later mutations of nested maps/slices.
 func cloneVariables(src map[string]any) map[string]any {
 	if src == nil {
 		return nil
 	}
-	dst := make(map[string]any, len(src))
-	for k, v := range src {
-		dst[k] = v
+	raw, err := json.Marshal(src)
+	if err != nil {
+		// Fall back to a shallow copy if a value is not JSON-serialisable.
+		dst := make(map[string]any, len(src))
+		for k, v := range src {
+			dst[k] = v
+		}
+		return dst
+	}
+	var dst map[string]any
+	if err := json.Unmarshal(raw, &dst); err != nil {
+		dst = make(map[string]any, len(src))
+		for k, v := range src {
+			dst[k] = v
+		}
 	}
 	return dst
+}
+
+// safeRecipePathSegment clamps a manifest id or version for use as a single path
+// segment under ImportedRecipesDir. Rejects empty, traversal, and separator chars.
+func safeRecipePathSegment(value, field string) (string, error) {
+	v := strings.TrimSpace(value)
+	if v == "" {
+		return "", fmt.Errorf("manifest %s is empty", field)
+	}
+	// Reject separators / traversal in the raw value before any Join.
+	if strings.ContainsAny(v, `/\`) || strings.Contains(v, "..") {
+		return "", fmt.Errorf("manifest %s %q is not a safe path segment", field, value)
+	}
+	base := filepath.Base(filepath.Clean(v))
+	if base == "." || base == ".." || base != v {
+		// base != v catches cleaned forms that still differ (e.g. trailing dots on some OSes).
+		return "", fmt.Errorf("manifest %s %q is not a safe path segment", field, value)
+	}
+	return base, nil
+}
+
+// shouldSkipImportPath skips VCS and other hidden tooling dirs during recipe import.
+func shouldSkipImportPath(rel string, d fs.DirEntry) bool {
+	// Skip the root of any path component that is .git or similar.
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	for _, p := range parts {
+		switch p {
+		case ".git", ".svn", ".hg", ".jj", "node_modules", ".terraform":
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) startDeploymentAction(id string, action deploymentAction, notifier Notifier) (deploymentJob, error) {
@@ -549,14 +595,13 @@ func (s *Service) handleDeploymentsDelete(ctx context.Context, params json.RawMe
 	return map[string]bool{"deleted": true}, s.deleteDeployment(ctx, request.DeploymentID)
 }
 
-// handleRecipesImport provides basic local import (folder) with trust gate prep (C2).
-// For basic deliver: accepts folder sourcePath, reads manifest, copies to imported dir
-// under <id>@<version>, returns preview for UI trust review. Full zip/git + gate hash store
-// can extend this.
+// handleRecipesImport provides basic local import (folder) with a trust gate (C2).
+// Without confirm=true, only a preview is returned (no disk write). With confirm=true,
+// the tree is copied under ImportedRecipesDir as <safeId>@<safeVersion>, skipping VCS dirs.
 func (s *Service) handleRecipesImport(params json.RawMessage) (any, error) {
 	var req struct {
 		SourcePath string `json:"sourcePath"`
-		// type etc for zip/git in future
+		Confirm    bool   `json:"confirm"`
 	}
 	if err := json.Unmarshal(params, &req); err != nil {
 		return nil, err
@@ -571,33 +616,74 @@ func (s *Service) handleRecipesImport(params json.RawMessage) (any, error) {
 		return nil, fmt.Errorf("read recipe.yaml from %s: %w", src, err)
 	}
 	var m recipes.Manifest
-	if err := yaml.Unmarshal(data, &m); err != nil { // note: yaml already dep via recipes
+	if err := yaml.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("parse manifest: %w", err)
+	}
+	// Folder-name fallback before Validate so recipes that omit id still work.
+	if strings.TrimSpace(m.ID) == "" {
+		m.ID = filepath.Base(src)
 	}
 	if err := m.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid manifest: %w", err)
 	}
-	if m.ID == "" {
-		m.ID = filepath.Base(src)
+	safeID, err := safeRecipePathSegment(m.ID, "id")
+	if err != nil {
+		return nil, err
 	}
-	targetName := fmt.Sprintf("%s@%s", m.ID, m.Version)
+	safeVer, err := safeRecipePathSegment(m.Version, "version")
+	if err != nil {
+		return nil, err
+	}
+	targetName := fmt.Sprintf("%s@%s", safeID, safeVer)
 	dest := filepath.Join(s.settings.ImportedRecipesDir, targetName)
+	// Ensure dest stays under ImportedRecipesDir even after Clean.
+	importedRoot := filepath.Clean(s.settings.ImportedRecipesDir)
+	cleanDest := filepath.Clean(dest)
+	if cleanDest != importedRoot && !strings.HasPrefix(cleanDest, importedRoot+string(os.PathSeparator)) {
+		return nil, fmt.Errorf("import destination escapes imported recipes directory")
+	}
+
+	preview := map[string]any{
+		"id":           m.ID,
+		"version":      m.Version,
+		"name":         m.Name,
+		"importedPath": dest,
+		"confirmed":    false,
+		"trustNote":    "Review manifest summary, build steps and providers before enabling. Call again with confirm=true to copy into the imported recipes directory.",
+	}
+	if !req.Confirm {
+		// Trust gate: preview only; nothing written yet.
+		return preview, nil
+	}
+
 	if err := os.RemoveAll(dest); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return nil, err
 	}
-	// copy tree (basic, no .git etc filter for simplicity)
 	if err := filepath.WalkDir(src, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
-		rel, _ := filepath.Rel(src, path)
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
 		if rel == "." {
 			return nil
 		}
+		if shouldSkipImportPath(rel, d) {
+			if d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
 		tgt := filepath.Join(dest, rel)
+		// Guard each target path stays under dest.
+		if !strings.HasPrefix(filepath.Clean(tgt), cleanDest+string(os.PathSeparator)) && filepath.Clean(tgt) != cleanDest {
+			return fmt.Errorf("refusing to write outside import destination: %s", rel)
+		}
 		if d.IsDir() {
 			return os.MkdirAll(tgt, 0o755)
 		}
@@ -610,16 +696,11 @@ func (s *Service) handleRecipesImport(params json.RawMessage) (any, error) {
 		}
 		return os.WriteFile(tgt, b, 0o644)
 	}); err != nil {
+		_ = os.RemoveAll(dest)
 		return nil, fmt.Errorf("copy import: %w", err)
 	}
-	// trust gate prep: return preview (UI will show and accept)
-	preview := map[string]any{
-		"id":           m.ID,
-		"version":      m.Version,
-		"name":         m.Name,
-		"importedPath": dest,
-		"trustNote":    "Review manifest summary, build steps and providers before enabling. Acceptance recorded by re-import on change.",
-	}
+	preview["confirmed"] = true
+	preview["trustNote"] = "Import accepted and copied. Review again if the source folder changes."
 	return preview, nil
 }
 
@@ -642,7 +723,6 @@ func (s *Service) handleRecipesScaffold(params json.RawMessage) (any, error) {
 	if prov == "" {
 		prov = "aws"
 	}
-	// minimal files
 	recipeYaml := fmt.Sprintf(`apiVersion: cloudsprocket.recipe/v1
 id: my-custom-recipe
 version: 0.1.0
@@ -658,12 +738,20 @@ local:
     - id: localstack
 variables: []
 `, prov)
-	_ = os.WriteFile(filepath.Join(req.DestDir, "recipe.yaml"), []byte(recipeYaml), 0o644)
 	mainTf := `resource "null_resource" "placeholder" {}
 output "example" { value = "hello" }
 `
-	_ = os.WriteFile(filepath.Join(req.DestDir, "main.tf"), []byte(mainTf), 0o644)
-	_ = os.WriteFile(filepath.Join(req.DestDir, "variables.tf"), []byte(""), 0o644)
-	_ = os.WriteFile(filepath.Join(req.DestDir, "outputs.tf"), []byte(""), 0o644)
+	files := map[string][]byte{
+		"recipe.yaml":  []byte(recipeYaml),
+		"main.tf":      []byte(mainTf),
+		"variables.tf": []byte(""),
+		"outputs.tf":   []byte(""),
+	}
+	for name, content := range files {
+		path := filepath.Join(req.DestDir, name)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			return nil, fmt.Errorf("scaffold write %s: %w", name, err)
+		}
+	}
 	return map[string]string{"status": "scaffolded", "path": req.DestDir}, nil
 }

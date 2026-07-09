@@ -147,8 +147,8 @@ export function DeploymentDetail({
         <Card className="p-4">
           <div className="mb-2 text-sm font-medium text-foreground">Revisions (B2 history)</div>
           <div className="space-y-1 text-xs">
-            {deployment.revisions.slice().reverse().map((rev, i) => (
-              <div key={i} className="flex gap-2 text-muted-foreground">
+            {deployment.revisions.slice().reverse().map((rev) => (
+              <div key={rev.at} className="flex gap-2 text-muted-foreground">
                 <span>{new Date(rev.at).toLocaleString()}</span>
                 <span>v{rev.recipeVersion || '?'}</span>
                 {rev.plan && <span>+{rev.plan.add} ~{rev.plan.change} -{rev.plan.destroy}</span>}
