@@ -5,9 +5,11 @@ package app
 
 import (
 	"context"
+	"archive/zip"
 	"encoding/json"
 	"errors"
 	"os"
+	"io/fs"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -488,12 +490,18 @@ func TestRecipesImportTrustGateAndPathSafety(t *testing.T) {
 	if prev["confirmed"] == true {
 		t.Fatal("preview must not confirm")
 	}
+	if prev["ok"] != true {
+		t.Fatalf("expected ok preview, got %+v", prev)
+	}
+	if prev["contentHash"] == nil || prev["contentHash"] == "" {
+		t.Fatal("expected contentHash on preview")
+	}
 	dest := prev["importedPath"].(string)
 	if _, err := os.Stat(dest); !os.IsNotExist(err) {
 		t.Fatalf("preview must not create dest, stat err=%v", err)
 	}
 
-	// Confirm copies, skips .git
+	// Confirm copies, skips .git, writes trust record
 	confirmBody, _ := json.Marshal(map[string]any{"sourcePath": src, "confirm": true})
 	res2, err := s.Handle(context.Background(), "recipes.import", confirmBody, nil)
 	if err != nil {
@@ -506,6 +514,9 @@ func TestRecipesImportTrustGateAndPathSafety(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dest, "recipe.yaml")); err != nil {
 		t.Fatalf("expected recipe.yaml at dest: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(dest, ".import-trust.json")); err != nil {
+		t.Fatalf("expected trust record: %v", err)
+	}
 	if _, err := os.Stat(filepath.Join(dest, ".git")); !os.IsNotExist(err) {
 		t.Fatal(".git must not be copied")
 	}
@@ -516,9 +527,63 @@ func TestRecipesImportTrustGateAndPathSafety(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(bad, "recipe.yaml"), badManifest, 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(bad, "main.tf"), []byte("resource \"null_resource\" \"n\" {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	_, err = s.Handle(context.Background(), "recipes.import", json.RawMessage(`{"sourcePath":`+mustJSON(bad)+`,"confirm":true}`), nil)
 	if err == nil {
 		t.Fatal("expected path traversal reject")
+	}
+}
+
+func TestRecipesValidateRPC(t *testing.T) {
+	deployer := &fakeDeployer{available: true}
+	s := newDeployTestService(t, deployer)
+	src := t.TempDir()
+	manifest := []byte("apiVersion: cloudsprocket.recipe/v1\nid: validate-demo\nversion: 0.1.0\nname: Validate Demo\nkind: app-deploy\nproviders: [\"aws\"]\nengine:\n  type: opentofu\n")
+	if err := os.WriteFile(filepath.Join(src, "recipe.yaml"), manifest, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "main.tf"), []byte("resource \"null_resource\" \"n\" {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.Handle(context.Background(), "recipes.validate", json.RawMessage(`{"sourcePath":`+mustJSON(src)+`}`), nil)
+	if err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	report := res.(recipes.ValidationReport)
+	if !report.OK {
+		t.Fatalf("expected ok, findings=%+v", report.Findings)
+	}
+}
+
+func TestRecipesImportZip(t *testing.T) {
+	deployer := &fakeDeployer{available: true}
+	s := newDeployTestService(t, deployer)
+	src := t.TempDir()
+	manifest := []byte("apiVersion: cloudsprocket.recipe/v1\nid: zip-demo\nversion: 0.1.0\nname: Zip Demo\nkind: app-deploy\nproviders: [\"aws\"]\nengine:\n  type: opentofu\n")
+	if err := os.WriteFile(filepath.Join(src, "recipe.yaml"), manifest, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "main.tf"), []byte("resource \"null_resource\" \"n\" {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	zipPath := filepath.Join(t.TempDir(), "recipe.zip")
+	if err := zipDir(src, zipPath); err != nil {
+		t.Fatalf("zipDir: %v", err)
+	}
+	body, _ := json.Marshal(map[string]any{"sourcePath": zipPath, "sourceType": "zip", "confirm": true})
+	res, err := s.Handle(context.Background(), "recipes.import", body, nil)
+	if err != nil {
+		t.Fatalf("import zip: %v", err)
+	}
+	done := res.(map[string]any)
+	if done["confirmed"] != true {
+		t.Fatalf("expected confirmed zip import, got %+v", done)
+	}
+	dest := done["importedPath"].(string)
+	if _, err := os.Stat(filepath.Join(dest, "recipe.yaml")); err != nil {
+		t.Fatalf("expected imported recipe: %v", err)
 	}
 }
 
@@ -542,4 +607,42 @@ func TestRecipesScaffoldReportsWriteErrors(t *testing.T) {
 func mustJSON(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
+}
+
+
+func zipDir(src, dest string) error {
+	f, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	w := zip.NewWriter(f)
+	defer w.Close()
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		name := filepath.ToSlash(rel)
+		if d.IsDir() {
+			_, err := w.Create(name + "/")
+			return err
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		fw, err := w.Create(name)
+		if err != nil {
+			return err
+		}
+		_, err = fw.Write(b)
+		return err
+	})
 }

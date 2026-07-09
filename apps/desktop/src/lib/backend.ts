@@ -3670,16 +3670,31 @@ function handleMockRequest<T>(
     case "recipes.import": {
       const confirmed = Boolean((params as { confirm?: boolean }).confirm);
       return Promise.resolve({
+        ok: true,
         id: "imported-demo",
         version: "0.1.0",
         name: "Imported",
+        providers: ["aws"],
+        buildCommands: [],
+        contentHash: "mock-hash",
+        sourceType: String((params as { sourceType?: string }).sourceType || "folder"),
         importedPath: String((params as { sourcePath?: string }).sourcePath || ""),
         confirmed,
+        validation: { ok: true, findings: [] },
         trustNote: confirmed
           ? "Import accepted and copied (mock)."
           : "Review preview, then call again with confirm=true to copy.",
       }) as Promise<T>;
     }
+    case "recipes.validate":
+      return Promise.resolve({
+        ok: true,
+        id: "validated-demo",
+        version: "0.1.0",
+        name: "Validated",
+        findings: [],
+        sourcePath: String((params as { sourcePath?: string }).sourcePath || ""),
+      }) as Promise<T>;
     case "recipes.scaffold":
       return Promise.resolve({ status: "scaffolded", path: String((params as any).destDir || "") }) as Promise<T>;
     case "tofu.status":
@@ -3885,9 +3900,18 @@ export async function retryPostApplyDeployment(deploymentId: string): Promise<De
   return backendRequest<DeploymentJob>("deployments.retryPostApply", { deploymentId });
 }
 
-export async function importRecipeFolder(sourcePath: string, confirm = false): Promise<any> {
-  // Basic local import (C2): preview by default; confirm=true copies after trust review.
-  return backendRequest<any>("recipes.import", { sourcePath, confirm });
+export async function importRecipeFolder(
+  sourcePath: string,
+  confirm = false,
+  sourceType?: "folder" | "zip",
+): Promise<any> {
+  // Local import (C2): folder or zip; preview by default; confirm=true copies after trust review.
+  return backendRequest<any>("recipes.import", { sourcePath, confirm, sourceType });
+}
+
+export async function validateRecipeFolder(sourcePath: string): Promise<any> {
+  // C1 validation against a local recipe directory.
+  return backendRequest<any>("recipes.validate", { sourcePath });
 }
 
 export async function scaffoldRecipe(destDir: string, provider?: string): Promise<any> {

@@ -475,6 +475,8 @@ func (s *Service) Handle(
 		return s.handleRecipesGet(params)
 	case "recipes.import":
 		return s.handleRecipesImport(params)
+	case "recipes.validate":
+		return s.handleRecipesValidate(params)
 	case "recipes.scaffold":
 		return s.handleRecipesScaffold(params)
 	case "tofu.status":
