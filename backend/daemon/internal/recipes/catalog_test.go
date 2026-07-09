@@ -10,9 +10,9 @@ func TestBundledCatalogV07(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	// Thresholds match recipes present on this branch (B2/C without A5 wave-2 labs).
-	if len(manifests) < 47 {
-		t.Fatalf("expected at least 47 bundled recipes, got %d", len(manifests))
+	// Thresholds match recipes present with A5 wave-2 labs.
+	if len(manifests) < 50 {
+		t.Fatalf("expected at least 50 bundled recipes, got %d", len(manifests))
 	}
 
 	counts := map[string]int{}
@@ -22,7 +22,7 @@ func TestBundledCatalogV07(t *testing.T) {
 	if counts[KindAppDeploy] < 29 {
 		t.Fatalf("expected at least 29 app-deploy recipes, got %d", counts[KindAppDeploy])
 	}
-	if counts[KindServiceLab] < 18 {
-		t.Fatalf("expected at least 18 service-lab recipes, got %d", counts[KindServiceLab])
+	if counts[KindServiceLab] < 21 {
+		t.Fatalf("expected at least 21 service-lab recipes, got %d", counts[KindServiceLab])
 	}
 }
