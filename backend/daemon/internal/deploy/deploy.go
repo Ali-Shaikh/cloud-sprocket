@@ -410,10 +410,6 @@ func parseDrift(raw []byte) (DriftReport, error) {
 	}, nil
 }
 
-func isNoOp(actions []string) bool {
-	return len(actions) == 0 || (len(actions) == 1 && actions[0] == "no-op")
-}
-
 // runBuildSteps runs a recipe's build commands (e.g. `npm ci`) to package
 // application code before planning. A step is skipped when its DirVar is empty
 // or its Requires file is absent (so the bundled stub directory is left alone).

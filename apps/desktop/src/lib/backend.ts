@@ -33,6 +33,7 @@ import type {
   PreferencesSnapshot,
   ServiceCatalogEntry,
   ServicePreferences,
+  DriftReport,
 } from "../types/backend";
 import {
   isProviderEnabled,
@@ -4314,6 +4315,18 @@ function mockDeleteDeployment(deploymentId: string): Promise<{ deleted: boolean 
   }
   mockDeployments.splice(index, 1);
   return Promise.resolve({ deleted: true });
+}
+
+function mockCheckDrift(deploymentId: string): Promise<CheckDriftResult> {
+  const deployment = mockDeployments.find((entry) => entry.id === deploymentId);
+  if (!deployment) {
+    return Promise.reject(new Error(`deployment ${deploymentId} not found`));
+  }
+  // For mock/dev: report no drift. Real impl populates from tofu plan.
+  const report: DriftReport = { hasDrift: false };
+  deployment.drift = report;
+  emitMockEvent("deployment.changed", { ...deployment });
+  return Promise.resolve({ deployment: { ...deployment }, drift: report });
 }
 
 export async function backendRequest<T>(

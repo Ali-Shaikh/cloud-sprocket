@@ -84,6 +84,10 @@ func (f *fakeDeployer) Destroy(_ context.Context, _ *deploy.Deployment, _ tofu.L
 	return nil
 }
 
+func (f *fakeDeployer) CheckDrift(_ context.Context, _ *deploy.Deployment, _ tofu.LogFunc) (deploy.DriftReport, error) {
+	return deploy.DriftReport{}, nil
+}
+
 func (f *fakeDeployer) RemoveWorkspace(string) error { return nil }
 
 type captureNotifier struct {
