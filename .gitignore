@@ -39,3 +39,11 @@ apps/desktop/scripts/esbuild-wrapper/esbuild-wrapper.pdb
 .claude/launch.json
 apps/desktop/test-ui.mjs
 mcps/localstack/tools/
+
+# Merge / rebase / diff tool backup artifacts (never commit)
+*.parent
+*.orig
+*.BACKUP.*
+*.BASE.*
+*.LOCAL.*
+*.REMOTE.*
