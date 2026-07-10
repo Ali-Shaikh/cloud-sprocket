@@ -6,6 +6,7 @@ package labs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -51,11 +52,15 @@ func (m *memorySettingStore) LoadAppSetting(_ context.Context, key string, targe
 type fakeCheck struct {
 	checkType string
 	result    VerifyResult
+	err       error
 }
 
 func (f *fakeCheck) Type() string { return f.checkType }
 
 func (f *fakeCheck) Run(_ context.Context, _ recipes.LabVerify, _ CheckContext) (VerifyResult, error) {
+	if f.err != nil {
+		return VerifyResult{}, f.err
+	}
 	return f.result, nil
 }
 
@@ -138,6 +143,46 @@ func TestRunnerStartVerifyAndReset(t *testing.T) {
 	}
 	if reset.CurrentStepID != "send-message" {
 		t.Fatalf("reset CurrentStepID = %q", reset.CurrentStepID)
+	}
+}
+
+func TestRunnerVerifyStepRecordsCheckError(t *testing.T) {
+	store := NewSessionStore(&memorySettingStore{})
+	registry := NewRegistry(&fakeCheck{
+		checkType: recipes.LabVerifySQSQueueAttribute,
+		err:       errors.New("adapter boom"),
+	})
+	runner := NewRunner(store, registry, func() time.Time { return time.Now().UTC() })
+	lab := &recipes.LabSpec{
+		Steps: []recipes.LabStep{{
+			ID: "send-message",
+			Title: "Send",
+			Verify: []recipes.LabVerify{{
+				Type:      recipes.LabVerifySQSQueueAttribute,
+				Queue:     "{{ outputs.queue_url }}",
+				Attribute: "ApproximateNumberOfMessages",
+				Compare:   "gte",
+				Value:     "1",
+			}},
+		}},
+	}
+	deployment := &deploy.Deployment{ID: "dep-1", RecipeID: "lab-demo", Status: deploy.StatusApplied}
+	ctx := context.Background()
+	if _, err := runner.Start(ctx, lab, deployment); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	verified, err := runner.VerifyStep(ctx, lab, deployment, "send-message", models.ProfileSummary{}, "us-east-1")
+	if err != nil {
+		t.Fatalf("VerifyStep should not abort: %v", err)
+	}
+	if verified.Steps[0].Status != StepStatusFailed {
+		t.Fatalf("status = %q, want failed", verified.Steps[0].Status)
+	}
+	if len(verified.Steps[0].VerifyResults) != 1 || verified.Steps[0].VerifyResults[0].Passed {
+		t.Fatalf("expected one failed verify result, got %+v", verified.Steps[0].VerifyResults)
+	}
+	if verified.Steps[0].VerifyResults[0].Detail == "" {
+		t.Fatal("expected error detail on verify result")
 	}
 }
 

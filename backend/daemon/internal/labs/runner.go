@@ -124,7 +124,16 @@ func (r *Runner) VerifyStep(
 		for _, verify := range stepSpec.Verify {
 			result, runErr := r.registry.Run(ctx, verify, checkCtx)
 			if runErr != nil {
-				return LabSession{}, runErr
+				// Record a failed check instead of aborting the whole step so the
+				// UI can show which verification failed and the user can retry.
+				results = append(results, VerifyResult{
+					Type:    verify.Type,
+					Passed:  false,
+					Detail:  runErr.Error(),
+					Message: runErr.Error(),
+				})
+				allPassed = false
+				continue
 			}
 			results = append(results, result)
 			if !result.Passed {
