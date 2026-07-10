@@ -3,7 +3,11 @@
 
 import { describe, expect, it } from "vitest";
 
-import { filterObjectsByKeyQuery, s3ObjectListSummary } from "./s3-object-filter";
+import {
+  filterObjectsByKeyQuery,
+  s3EntryDisplayName,
+  s3ObjectListSummary,
+} from "./s3-object-filter";
 
 describe("filterObjectsByKeyQuery", () => {
   const objects = [
@@ -36,5 +40,12 @@ describe("s3ObjectListSummary", () => {
     expect(s3ObjectListSummary(500, 12, true)).toBe("12 of 500 loaded");
     expect(s3ObjectListSummary(3, 3, false)).toBe("3 objects");
     expect(s3ObjectListSummary(0, 0, false)).toBe("0 objects");
+  });
+});
+
+describe("s3EntryDisplayName", () => {
+  it("strips the current folder prefix for display", () => {
+    expect(s3EntryDisplayName("reports/2026/file.json", "reports/")).toBe("2026/file.json");
+    expect(s3EntryDisplayName("reports/", "")).toBe("reports");
   });
 });

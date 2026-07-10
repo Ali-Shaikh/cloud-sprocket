@@ -11,7 +11,6 @@ import (
 	"strings"
 	"sync"
 
-	"cloudsprocket/backend/daemon/internal/awsadapter"
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
 	"cloudsprocket/backend/daemon/internal/urlinspector"
@@ -65,15 +64,21 @@ func (s *Service) selectedS3ObjectKey(
 ) string {
 	if session.SelectedS3ObjectKey != "" {
 		for _, object := range objects {
+			if object.IsFolder {
+				continue
+			}
 			if object.Key == session.SelectedS3ObjectKey {
 				return session.SelectedS3ObjectKey
 			}
 		}
 	}
-	if len(objects) == 0 {
-		return ""
+	// Prefer the first real object; never auto-select a folder row.
+	for _, object := range objects {
+		if !object.IsFolder {
+			return object.Key
+		}
 	}
-	return objects[0].Key
+	return ""
 }
 
 func (s *Service) s3Buckets(
@@ -120,36 +125,49 @@ func (s *Service) s3Buckets(
 	return []models.AwsS3Bucket{}
 }
 
+func (s *Service) s3ObjectPage(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+	prefix string,
+	continuationToken string,
+) models.AwsS3ObjectListPage {
+	if bucketName == "" {
+		return models.AwsS3ObjectListPage{}
+	}
+	// First page may use a short TTL cache; paginated tokens are never cached.
+	if continuationToken == "" {
+		const scope = "aws.s3.objects.page"
+		queryHash := profile.ProfileID + "|" + bucketName + "|" + prefix
+		var cached models.AwsS3ObjectListPage
+		if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+			return cached
+		}
+		page, err := s.s3.ListObjects(ctx, profile, bucketName, prefix, "")
+		if err == nil {
+			_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, page)
+			return page
+		}
+		if _, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached); cacheErr == nil && ok {
+			return cached
+		}
+		return models.AwsS3ObjectListPage{}
+	}
+	page, err := s.s3.ListObjects(ctx, profile, bucketName, prefix, continuationToken)
+	if err != nil {
+		return models.AwsS3ObjectListPage{}
+	}
+	return page
+}
+
+// s3Objects is used by write paths that only need keys under a prefix (no pagination).
 func (s *Service) s3Objects(
 	ctx context.Context,
 	profile models.ProfileSummary,
 	bucketName string,
 	prefix string,
 ) []models.AwsS3Object {
-	if bucketName == "" {
-		return []models.AwsS3Object{}
-	}
-
-	const scope = "aws.s3.objects"
-	queryHash := profile.ProfileID + "|" + bucketName + "|" + prefix
-
-	var cached []models.AwsS3Object
-	if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
-		return cached
-	}
-
-	objects, err := s.s3.ListObjects(ctx, profile, bucketName, prefix)
-	if err == nil {
-		_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, objects)
-		return objects
-	}
-
-	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
-	if cacheErr == nil && ok {
-		return cached
-	}
-
-	return []models.AwsS3Object{}
+	return s.s3ObjectPage(ctx, profile, bucketName, prefix, "").Entries
 }
 
 func (s *Service) s3ObjectMetadata(
@@ -245,13 +263,15 @@ func (s *Service) enrichS3Inventory(
 	}
 
 	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
-	objects := s.s3Objects(
+	page := s.s3ObjectPage(
 		timeoutCtx,
 		*workspace.Profile,
 		selectedBucket,
 		session.S3PrefixFilter,
+		"",
 	)
 	cancel()
+	objects := page.Entries
 	selectedObject := s.selectedS3ObjectKey(session, objects)
 	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
 	metadata := s.s3ObjectMetadata(
@@ -265,48 +285,46 @@ func (s *Service) enrichS3Inventory(
 
 	status := "No buckets are currently available for this AWS workspace."
 	if selectedBucket != "" {
-		if len(objects) == 0 {
-			if session.S3PrefixFilter != "" {
-				status = fmt.Sprintf(
-					"No objects matched path prefix %q in %s.",
-					session.S3PrefixFilter,
-					selectedBucket,
-				)
+		folderCount := 0
+		fileCount := 0
+		for _, entry := range objects {
+			if entry.IsFolder {
+				folderCount++
 			} else {
-				status = fmt.Sprintf("No objects were returned for %s.", selectedBucket)
+				fileCount++
 			}
-		} else if len(objects) >= awsadapter.MaxObjectList {
-			// S3 ListObjects is start-with only; client search filters this window.
+		}
+		location := selectedBucket
+		if session.S3PrefixFilter != "" {
+			location = selectedBucket + "/" + strings.TrimSuffix(session.S3PrefixFilter, "/")
+		}
+		switch {
+		case folderCount == 0 && fileCount == 0:
+			status = fmt.Sprintf("This folder is empty in %s. Open a folder above or use the breadcrumb.", location)
+		case page.IsTruncated:
 			status = fmt.Sprintf(
-				"Showing first %d objects from %s (list truncated). Narrow with a path prefix, or use key search within this window.",
-				len(objects),
-				selectedBucket,
+				"Showing %d folder(s) and %d object(s) in %s. More results available — use Load more.",
+				folderCount,
+				fileCount,
+				location,
 			)
-			if session.S3PrefixFilter != "" {
-				status = fmt.Sprintf(
-					"Showing first %d objects under path prefix %q in %s (list truncated). Narrow the path or use key search within this window.",
-					len(objects),
-					session.S3PrefixFilter,
-					selectedBucket,
-				)
-			}
-		} else {
-			status = fmt.Sprintf("Loaded %d objects from %s.", len(objects), selectedBucket)
-			if session.S3PrefixFilter != "" {
-				status = fmt.Sprintf(
-					"Loaded %d objects under path prefix %q in %s.",
-					len(objects),
-					session.S3PrefixFilter,
-					selectedBucket,
-				)
-			}
+		default:
+			status = fmt.Sprintf(
+				"%d folder(s) and %d object(s) in %s. Click a folder to open it.",
+				folderCount,
+				fileCount,
+				location,
+			)
 		}
 	}
 
 	lockWorkspace(mu, func() {
 		workspace.S3Buckets = buckets
 		workspace.SelectedS3BucketName = selectedBucket
+		workspace.S3PrefixFilter = session.S3PrefixFilter
 		workspace.S3Objects = objects
+		workspace.S3ObjectsNextToken = page.NextContinuationToken
+		workspace.S3ObjectsHasMore = page.IsTruncated || page.NextContinuationToken != ""
 		workspace.SelectedS3ObjectKey = selectedObject
 		workspace.S3ObjectMetadata = metadata
 		workspace.S3ExportSnippets = snippets
@@ -367,7 +385,74 @@ func (s *Service) handleAwsS3SetPrefixFilter(ctx context.Context, params json.Ra
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "s3", skipAzureInventory: true}, "info", fmt.Sprintf("Updated S3 prefix filter to %q.", request.Prefix), false)
+	// Opening a folder must re-list the first page for the new prefix.
+	s.invalidateResourceCacheScope(ctx, "aws.s3.objects.page")
+	label := "bucket root"
+	if strings.TrimSpace(request.Prefix) != "" {
+		label = request.Prefix
+	}
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "s3", skipAzureInventory: true}, "info", fmt.Sprintf("Opened folder %s.", label), false)
+}
+
+func (s *Service) handleAwsS3LoadMoreObjects(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		ContinuationToken string `json:"continuationToken"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	token := strings.TrimSpace(request.ContinuationToken)
+	if token == "" {
+		return nil, errors.New("continuation token is required to load more objects")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	s.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	if !session.IsLocked || session.CurrentProviderID != "aws" {
+		return nil, errors.New("open an AWS workspace before listing S3 objects")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		return nil, errors.New("the workspace's AWS profile is not available")
+	}
+	bucket := session.SelectedS3BucketName
+	if bucket == "" {
+		return nil, errors.New("select an S3 bucket before loading more objects")
+	}
+	timeoutCtx, cancel := s.withAWSTimeout(ctx)
+	page := s.s3ObjectPage(timeoutCtx, profile, bucket, session.S3PrefixFilter, token)
+	cancel()
+
+	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+		awsScope:           "s3",
+		skipAzureInventory: true,
+		lightweightAWS:     true,
+	})
+	// Replace browser fields with the next page only; the UI appends to the list.
+	workspace.S3Objects = page.Entries
+	workspace.S3ObjectsNextToken = page.NextContinuationToken
+	workspace.S3ObjectsHasMore = page.IsTruncated || page.NextContinuationToken != ""
+	workspace.S3PrefixFilter = session.S3PrefixFilter
+	workspace.SelectedS3BucketName = bucket
+	workspace.S3StatusMessage = fmt.Sprintf(
+		"Loaded %d more item(s). %s",
+		len(page.Entries),
+		func() string {
+			if workspace.S3ObjectsHasMore {
+				return "More results available."
+			}
+			return "End of list."
+		}(),
+	)
+	_ = notifier
+	return workspace, nil
 }
 
 func (s *Service) handleAwsS3UploadObject(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

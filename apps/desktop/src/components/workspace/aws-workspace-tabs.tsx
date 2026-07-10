@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { backendRequest } from "@/lib/backend";
-import { mergeAwsS3Selection, normaliseWorkspaceSnapshot } from "@/lib/workspace-snapshot";
+import {
+  mergeAwsS3LoadMore,
+  mergeAwsS3Selection,
+  normaliseWorkspaceSnapshot,
+} from "@/lib/workspace-snapshot";
 import type { UrlInspection } from "@/types/backend";
 import {
   ComputeView,
@@ -49,6 +53,7 @@ export const AWS_TAB_IDS = new Set([
 ]);
 
 export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
+  const [s3LoadMoreInFlight, setS3LoadMoreInFlight] = useState(false);
   const {
     activeWorkspaceTabId,
     setActiveWorkspaceTabId,
@@ -254,7 +259,6 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onSelectObject={(objectKey) => {
         void mutateWorkspaceSelection("aws.s3.selectObject", { objectKey }, {
           merge: mergeAwsS3Selection,
-          persistOnly: true,
           onOptimistic: () => {
             setWorkspace((current) =>
               normaliseWorkspaceSnapshot({
@@ -263,9 +267,28 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
               }),
             );
           },
+          errorTitle: "Could not select S3 object",
         });
       }}
       onSetPrefixFilter={applyS3PrefixFilter}
+      loadMoreInFlight={s3LoadMoreInFlight}
+      onLoadMoreObjects={() => {
+        const token = activeWorkspace.s3ObjectsNextToken;
+        if (!token || s3LoadMoreInFlight) {
+          return;
+        }
+        setS3LoadMoreInFlight(true);
+        void mutateWorkspaceSelection(
+          "aws.s3.loadMoreObjects",
+          { continuationToken: token },
+          {
+            merge: mergeAwsS3LoadMore,
+            errorTitle: "Could not load more S3 objects",
+          },
+        ).finally(() => {
+          setS3LoadMoreInFlight(false);
+        });
+      }}
       uploadStatus={s3UploadStatus}
       signedUrlStatus={s3SignedUrlStatus}
       signedUrlResult={s3SignedUrlResult}

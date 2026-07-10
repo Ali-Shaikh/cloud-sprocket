@@ -22,7 +22,11 @@ import {
 import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
-import { filterObjectsByKeyQuery, s3ObjectListSummary } from "@/lib/s3-object-filter";
+import {
+  filterObjectsByKeyQuery,
+  s3EntryDisplayName,
+  s3ObjectListSummary,
+} from "@/lib/s3-object-filter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -75,6 +79,8 @@ export type StorageViewProps = {
   onSelectBucket: (bucketName: string) => void;
   onSelectObject: (objectKey: string) => void;
   onSetPrefixFilter: (prefix: string) => void;
+  onLoadMoreObjects?: () => void;
+  loadMoreInFlight?: boolean;
   uploadStatus: string;
   signedUrlStatus: string;
   signedUrlResult?: AwsS3PresignResult;
@@ -162,6 +168,8 @@ export default function StorageView({
   onSelectBucket,
   onSelectObject,
   onSetPrefixFilter,
+  onLoadMoreObjects,
+  loadMoreInFlight = false,
   uploadStatus,
   signedUrlStatus,
   signedUrlResult,
@@ -725,27 +733,12 @@ export default function StorageView({
             </Select>
           </div>
           <div className="min-w-0">
-            <div className={cn(fieldLabel, "mb-1")}>Path prefix (starts with)</div>
-            <Input
-              value={prefixDraft}
-              placeholder="e.g. reports/2026/ — re-lists from S3"
-              disabled={!bucketName}
-              aria-label="S3 path prefix"
-              onChange={(event) => {
-                setPrefixDraft(event.target.value);
-              }}
-            />
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Server-side: only keys that start with this path are loaded.
-            </p>
-          </div>
-          <div className="min-w-0 lg:col-span-2">
-            <div className={cn(fieldLabel, "mb-1")}>Search keys (contains)</div>
+            <div className={cn(fieldLabel, "mb-1")}>Search in this folder (contains)</div>
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={keySearch}
-                placeholder="e.g. summary — filters the loaded list, matches anywhere in the key"
+                placeholder="Filter loaded folders and files by name"
                 disabled={!bucketName || workspace.s3Objects.length === 0}
                 aria-label="Search object keys"
                 className="pl-9"
@@ -754,6 +747,9 @@ export default function StorageView({
                 }}
               />
             </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Browse folders in the table to open a path. You do not need to type a prefix.
+            </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -761,12 +757,7 @@ export default function StorageView({
             {workspace.s3StatusMessage || "S3 inventory is waiting for an open AWS workspace."}
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              {listSummary}
-              {prefixDraft !== (workspace.s3PrefixFilter || "")
-                ? " · path updating after typing pauses"
-                : ""}
-            </span>
+            <span className="text-xs text-muted-foreground">{listSummary}</span>
             {onCreateFolderPrefix ? (
               <Button
                 variant="outline"
@@ -800,60 +791,87 @@ export default function StorageView({
       ) : (
         <ResourceInventoryShell
           table={
-            <ResourceTable
-              columns={[
-                {
-                  id: "key",
-                  label: "Object Key",
-                  cellClassName: "max-w-0 truncate font-medium",
-                },
-                { id: "size", label: "Size", headerClassName: "w-28", cellClassName: "truncate" },
-                {
-                  id: "modified",
-                  label: "Modified",
-                  headerClassName: "w-44",
-                  cellClassName: "truncate",
-                },
-                {
-                  id: "storageClass",
-                  label: "Storage Class",
-                  headerClassName: "w-36",
-                  cellClassName: "truncate",
-                },
-              ]}
-              rows={visibleObjects}
-              selectedKey={workspace.selectedS3ObjectKey}
-              getRowKey={(object) => object.key}
-              onRowClick={(object) => {
-                onSelectObject(object.key);
-                setDrawerOpen(true);
-              }}
-              getCellTitle={(object, columnId) => (columnId === "key" ? object.key : undefined)}
-              renderCell={(object, columnId) => {
-                if (columnId === "key") {
-                  return object.key;
-                }
-                if (columnId === "size") {
-                  return object.size || "Unknown";
-                }
-                if (columnId === "modified") {
-                  return object.modifiedAt || "Unknown";
-                }
-                return object.storageClass || "STANDARD";
-              }}
-              emptyState={
-                <EmptyState
-                  icon={<Database />}
-                  title={searchActive ? "No matching keys" : "No objects"}
-                  description={
-                    searchActive
-                      ? `No loaded keys contain “${debouncedKeySearch.trim()}”. Clear search or change the path prefix to load a different window.`
-                      : "No S3 objects loaded for the selected bucket."
+            <div className="space-y-2">
+              <ResourceTable
+                columns={[
+                  {
+                    id: "key",
+                    label: "Name",
+                    cellClassName: "max-w-0 truncate font-medium",
+                  },
+                  { id: "size", label: "Size", headerClassName: "w-28", cellClassName: "truncate" },
+                  {
+                    id: "modified",
+                    label: "Modified",
+                    headerClassName: "w-44",
+                    cellClassName: "truncate",
+                  },
+                  {
+                    id: "storageClass",
+                    label: "Type",
+                    headerClassName: "w-36",
+                    cellClassName: "truncate",
+                  },
+                ]}
+                rows={visibleObjects}
+                selectedKey={workspace.selectedS3ObjectKey}
+                getRowKey={(object) => object.key}
+                onRowClick={(object) => {
+                  if (object.isFolder) {
+                    onSetPrefixFilter(object.key);
+                    setKeySearch("");
+                    return;
                   }
-                  className="border-0"
-                />
-              }
-            />
+                  onSelectObject(object.key);
+                  setDrawerOpen(true);
+                }}
+                getCellTitle={(object, columnId) => (columnId === "key" ? object.key : undefined)}
+                renderCell={(object, columnId) => {
+                  if (columnId === "key") {
+                    const label = s3EntryDisplayName(object.key, workspace.s3PrefixFilter || "");
+                    if (object.isFolder) {
+                      return (
+                        <span className="inline-flex items-center gap-2">
+                          <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
+                          <span>{label}/</span>
+                        </span>
+                      );
+                    }
+                    return label;
+                  }
+                  if (columnId === "size") {
+                    return object.isFolder ? "—" : object.size || "Unknown";
+                  }
+                  if (columnId === "modified") {
+                    return object.isFolder ? "—" : object.modifiedAt || "Unknown";
+                  }
+                  return object.isFolder ? "Folder" : object.storageClass || "STANDARD";
+                }}
+                emptyState={
+                  <EmptyState
+                    icon={<Database />}
+                    title={searchActive ? "No matching names" : "Empty folder"}
+                    description={
+                      searchActive
+                        ? `No loaded names contain “${debouncedKeySearch.trim()}”. Clear search or open another folder.`
+                        : "This folder has no subfolders or objects. Use the breadcrumb to go up."
+                    }
+                    className="border-0"
+                  />
+                }
+              />
+              {workspace.s3ObjectsHasMore && onLoadMoreObjects ? (
+                <div className="flex justify-center">
+                  <Button
+                    variant="outline"
+                    disabled={loadMoreInFlight}
+                    onClick={() => onLoadMoreObjects()}
+                  >
+                    {loadMoreInFlight ? "Loading…" : "Load more"}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
           }
           inspectorContent={drawerBody}
           inspectorOpen={drawerOpen}

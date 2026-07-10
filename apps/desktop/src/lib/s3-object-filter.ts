@@ -3,8 +3,8 @@
 
 /**
  * Client-side key filter for the S3 object browser.
- * S3 ListObjects only supports start-with path prefixes; contains-search is applied
- * to the already-loaded window so users can find keys without re-listing the bucket.
+ * Server listing uses delimiter folders; contains-search filters the loaded page
+ * (folders and files) so users can find names without knowing the full path.
  */
 export function filterObjectsByKeyQuery<T extends { key: string }>(
   objects: readonly T[],
@@ -15,6 +15,12 @@ export function filterObjectsByKeyQuery<T extends { key: string }>(
     return objects.slice();
   }
   return objects.filter((object) => object.key.toLowerCase().includes(needle));
+}
+
+/** Display name for a folder or object key relative to the current path prefix. */
+export function s3EntryDisplayName(key: string, currentPrefix: string): string {
+  const relative = key.startsWith(currentPrefix) ? key.slice(currentPrefix.length) : key;
+  return relative.replace(/\/$/, "") || key;
 }
 
 export function s3ObjectListSummary(loaded: number, visible: number, searchActive: boolean): string {
