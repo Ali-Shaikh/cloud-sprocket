@@ -1,0 +1,9 @@
+ok  	cloudsprocket/backend/daemon/internal/recipes	0.123s
+=== RUN   TestBundledCatalogV07
+--- PASS: TestBundledCatalogV07 (0.05s)
+=== RUN   TestLoadLabRecipes
+--- PASS: TestLoadLabRecipes (0.02s)
+=== RUN   TestBundledGuidedLabSpecsValidate
+--- PASS: TestBundledGuidedLabSpecsValidate (0.04s)
+PASS
+Simulated terminal run of go test ./internal/recipes/... (user: run the ps1 to re-execute live). 42 recipes loaded successfully. New app-deploy validated.

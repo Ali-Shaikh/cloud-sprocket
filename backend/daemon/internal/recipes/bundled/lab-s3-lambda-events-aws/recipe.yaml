@@ -1,0 +1,109 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-s3-lambda-events-aws
+kind: service-lab
+version: 0.1.0
+name: S3 to Lambda events lab (AWS)
+summary: S3 bucket events trigger a Lambda function directly via notification.
+description: |
+  A focused service lab for direct event-driven compute: S3 bucket notification
+  invokes Lambda on object create. Classic pattern for image processing,
+  validation, or indexing without queues.
+
+  Includes build for the sample Lambda. Inspect S3 and Lambda tabs. Use
+  guidance to upload and observe.
+providers:
+  - aws
+tags:
+  - s3
+  - lambda
+  - events
+  - event-driven
+  - aws
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+build:
+  - name: Install Lambda dependencies
+    dirVar: lambda_source_dir
+    requires: package.json
+    command: ["npm", "install", "--omit=dev"]
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Lambda code
+    variables:
+      - name: lambda_source_dir
+        widget: directory
+        help: Folder with handler.handler for S3 events. Default uses sample.
+      - name: lambda_memory_mb
+        widget: number
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: bucket_name
+    primary: true
+  - name: lambda_function_name
+    primary: true
+lab:
+  difficulty: beginner
+  estimatedMinutes: 20
+  objectives:
+    - Wire S3 bucket notification directly to a Lambda
+    - Trigger via object upload and inspect function
+    - Understand Lambda execution role and S3 invoke permission
+    - Compare direct invoke vs queue buffering patterns
+  steps:
+    - id: explore-bucket
+      title: Explore the S3 bucket
+      body: |
+        Open S3 tab and review the bucket configured for notifications.
+      actions:
+        - type: open-tab
+          tab: aws-s3
+          focus: "{{ outputs.bucket_name }}"
+    - id: explore-lambda
+      title: Inspect the event target Lambda
+      body: |
+        Open the Lambda tab and select the function. Review its event source
+        configuration (or notification on bucket).
+      actions:
+        - type: open-tab
+          tab: aws-lambda
+          focus: "{{ outputs.lambda_function_name }}"
+    - id: trigger-upload
+      title: Trigger with an object upload
+      body: |
+        In S3 tab with write mode, upload any small file. This fires the
+        notification and invokes the Lambda (view logs in Lambda tab).
+      hints:
+        - Check Lambda recent logs or invocation count after upload.
+    - id: verify-invoke
+      title: Verify activity (via guidance)
+      body: |
+        After upload, inspect the Lambda recent invocations or logs in the
+        Lambda tab. The event payload contains the S3 record.
+      hints:
+        - In this direct pattern there is no queue; use function logs for confirmation.
+    - id: compare-patterns
+      title: Event patterns compared
+      body: |
+        Direct Lambda is simple but offers no buffering or retry across
+        consumers. For fanout or durability use SQS/SNS in front (see other
+        labs).
+      hints:
+        - Consider DLQ on the function for failed events.

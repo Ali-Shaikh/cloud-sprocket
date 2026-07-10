@@ -83,3 +83,38 @@ outputs:
   - name: resource_group_name
   - name: admin_username
   - name: connection_hint
+lab:
+  difficulty: beginner
+  estimatedMinutes: 25
+  objectives:
+    - Find the PostgreSQL flexible server provisioned by this deployment
+    - Read connection details for local floci-az or cloud access
+  steps:
+    - id: explore-server
+      title: Open the PostgreSQL server
+      body: |
+        Open the PostgreSQL workspace tab and select the flexible server created
+        by this deployment. Note the server name, location, and SKU shown in the
+        inspector.
+      actions:
+        - type: open-tab
+          tab: azure-postgres
+          focus: "{{ outputs.server_name }}"
+      hints:
+        - The server name matches the `server_name` deployment output.
+    - id: review-database
+      title: Review the starter database
+      body: |
+        Confirm the starter database from the `database_name` output exists on the
+        server. On floci-az local runs, the workspace tab reveals connection strings
+        and a live `/connect` endpoint backed by a real Postgres container.
+      hints:
+        - Local mode uses `sslmode=disable`; Azure cloud enforces TLS 1.2+.
+    - id: read-connection-hint
+      title: Read the connection hint
+      body: |
+        Open the deployment outputs panel and read `connection_hint` alongside
+        `server_fqdn` and `admin_username`. Use these values in your client or ORM
+        connection string.
+      hints:
+        - floci-az exposes host and port via the PostgreSQL tab after apply completes.

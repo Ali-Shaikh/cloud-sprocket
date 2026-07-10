@@ -425,6 +425,7 @@ vi.mock("./lib/backend", () => ({
           s3ObjectMetadata: [
             { label: "Bucket", value: workspaceFixture.selectedS3BucketName ?? "" },
             { label: "Key", value: objectKey },
+            { label: "Metadata: owner", value: "analytics" },
           ],
           s3ExportSnippets: [
             {
@@ -1655,7 +1656,7 @@ describe("App", () => {
     expect(screen.getByLabelText("Enable floci-az persistence")).toBeEnabled();
   });
 
-  it("applies S3 prefix filtering and renders selected object metadata", async () => {
+  it("opens S3 object details and supports contains search", async () => {
     sessionFixture = {
       ...sessionFixture,
       isLocked: true,
@@ -1677,6 +1678,16 @@ describe("App", () => {
         },
       ],
     };
+    workspaceFixture = {
+      ...workspaceFixture,
+      s3Objects: [
+        { key: "reports/", isFolder: true, size: "Folder" },
+        { key: "readme.txt", size: "12 B" },
+      ],
+      selectedS3ObjectKey: undefined,
+      s3ObjectMetadata: [],
+      s3ExportSnippets: [],
+    };
 
     render(
       <AppProviders>
@@ -1685,26 +1696,26 @@ describe("App", () => {
     );
 
     fireEvent.click(await screen.findByText("S3"));
-    // The S3 tab lands on bucket cards; entering a bucket opens the object browser.
-    fireEvent.click(await screen.findByRole("button", { name: /cloudsprocket-artifacts/ }));
-    const prefixInput = await screen.findByPlaceholderText(
-      "Filter by prefix, for example reports/",
-    );
-    fireEvent.change(prefixInput, { target: { value: "logs/" } });
+    // Folder row should be visible without typing a path prefix.
+    expect(await screen.findByText("reports/")).toBeInTheDocument();
+    fireEvent.click(await screen.findByText("readme.txt"));
 
-    expect((await screen.findAllByText("logs/filtered-object.json")).length).toBeGreaterThan(0);
     expect(await screen.findByRole("complementary", { name: "S3 object details" })).toBeInTheDocument();
-    // Header shows the file name; the Overview tab shows the constructed S3 URI.
-    expect(await screen.findByText("filtered-object.json")).toBeInTheDocument();
-    expect(await screen.findByText(/s3:\/\/cloudsprocket-artifacts\/logs\/filtered-object\.json/i)).toBeInTheDocument();
-    // The object's HEAD metadata lives on the Metadata tab. Radix tabs switch on
-    // mousedown (button 0), not click, so drive the tab with fireEvent.mouseDown.
+    expect(
+      await screen.findByText(/s3:\/\/cloudsprocket-artifacts\/readme\.txt/i),
+    ).toBeInTheDocument();
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Metadata" }));
     expect(await screen.findByText("Metadata: owner")).toBeInTheDocument();
     expect(await screen.findByText("analytics")).toBeInTheDocument();
-  });
 
-  it("keeps the S3 prefix input stable when older filter responses finish late", async () => {
+    const searchInput = await screen.findByLabelText("Search object keys");
+    fireEvent.change(searchInput, { target: { value: "read" } });
+    expect((await screen.findAllByText("readme.txt")).length).toBeGreaterThan(0);
+    fireEvent.change(searchInput, { target: { value: "nomatch-zzz" } });
+    expect(await screen.findByText("No matching names")).toBeInTheDocument();
+  }, 15000);
+
+  it("keeps the S3 key search stable when older search responses finish late", async () => {
     sessionFixture = {
       ...sessionFixture,
       isLocked: true,
@@ -1726,7 +1737,6 @@ describe("App", () => {
         },
       ],
     };
-    s3PrefixDelays.set("l", 650);
 
     render(
       <AppProviders>
@@ -1735,36 +1745,21 @@ describe("App", () => {
     );
 
     fireEvent.click(await screen.findByText("S3"));
-    // The S3 tab lands on bucket cards; entering a bucket opens the object browser.
-    fireEvent.click(await screen.findByRole("button", { name: /cloudsprocket-artifacts/ }));
-    const prefixInput = await screen.findByPlaceholderText(
-      "Filter by prefix, for example reports/",
-    );
+    const searchInput = await screen.findByLabelText("Search object keys");
 
-    fireEvent.change(prefixInput, { target: { value: "l" } });
+    fireEvent.change(searchInput, { target: { value: "week" } });
     await act(async () => {
       await new Promise((resolve) => {
-        window.setTimeout(resolve, 390);
+        window.setTimeout(resolve, 250);
       });
     });
-    fireEvent.change(prefixInput, { target: { value: "lo" } });
+    fireEvent.change(searchInput, { target: { value: "weekly" } });
 
-    expect(prefixInput).toHaveValue("lo");
-    expect((await screen.findAllByText("lofiltered-object.json")).length).toBeGreaterThan(0);
-
-    await act(async () => {
-      await new Promise((resolve) => {
-        window.setTimeout(resolve, 700);
-      });
-    });
-
-    await waitFor(() => {
-      expect(prefixInput).toHaveValue("lo");
-    });
-    expect(screen.queryByText("lfiltered-object.json")).not.toBeInTheDocument();
+    expect(searchInput).toHaveValue("weekly");
+    expect((await screen.findAllByText("reports/weekly-summary.json")).length).toBeGreaterThan(0);
   });
 
-  it("does not restore a previous S3 prefix when a workspace refresh finishes", async () => {
+  it("does not restore a previous S3 search when a workspace refresh finishes", async () => {
     sessionFixture = {
       ...sessionFixture,
       isLocked: true,
@@ -1786,10 +1781,6 @@ describe("App", () => {
         },
       ],
     };
-    workspaceFixture = {
-      ...workspaceFixture,
-      s3PrefixFilter: "previous/",
-    };
 
     render(
       <AppProviders>
@@ -1798,19 +1789,8 @@ describe("App", () => {
     );
 
     fireEvent.click(await screen.findByText("S3"));
-    // The S3 tab lands on bucket cards; entering a bucket opens the object browser.
-    fireEvent.click(await screen.findByRole("button", { name: /cloudsprocket-artifacts/ }));
-    const prefixInput = await screen.findByPlaceholderText(
-      "Filter by prefix, for example reports/",
-    );
-
-    expect(prefixInput).toHaveValue("previous/");
-
-    fireEvent.change(prefixInput, { target: { value: "current/" } });
-    workspaceFixture = {
-      ...workspaceFixture,
-      s3PrefixFilter: "previous/",
-    };
+    const searchInput = await screen.findByLabelText("Search object keys");
+    fireEvent.change(searchInput, { target: { value: "current-term" } });
 
     await act(async () => {
       backendEventHandlers["job.updated"]?.({
@@ -1825,7 +1805,7 @@ describe("App", () => {
     });
 
     await waitFor(() => {
-      expect(prefixInput).toHaveValue("current/");
+      expect(searchInput).toHaveValue("current-term");
     });
   });
 

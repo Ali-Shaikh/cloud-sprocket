@@ -1,0 +1,77 @@
+apiVersion: cloudsprocket.recipe/v1
+id: azure-functions-http-azure
+kind: app-deploy
+version: 0.1.0
+name: HTTP Functions (Azure)
+summary: An Azure Functions app with a simple HTTP trigger, friendly for floci-az local.
+description: |
+  Azure compute pattern: serverless HTTP endpoint via Azure Functions. Point at
+  your function code or use sample. Works with floci-az for local and real Azure
+  cloud profile.
+
+  Includes storage account for functions runtime.
+providers:
+  - azure
+tags:
+  - azure
+  - functions
+  - serverless
+  - http
+  - floci-az
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: floci-az
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: azure_location
+        widget: text
+        help: Azure location (ignored by floci-az).
+  - title: Function code
+    variables:
+      - name: backend_source_dir
+        widget: directory
+        help: Folder containing Azure Functions code (host.json + function). Default sample.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as JSON object.
+outputs:
+  - name: function_app_name
+    primary: true
+  - name: function_app_url
+  - name: resource_group_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 20
+  objectives:
+    - Deploy Azure Function app with HTTP trigger
+    - Call the endpoint or inspect in Azure tab
+  steps:
+    - id: call-endpoint
+      title: Call the function endpoint
+      body: |
+        Use the function_app_url output to GET the HTTP trigger. A working
+        response confirms the function is live (floci-az or cloud).
+      verify:
+        - type: http.get
+          url: "{{ outputs.function_app_url }}"
+      hints:
+        - floci-az may return simulated responses; allow a few seconds after apply.
+    - id: inspect-function
+      title: Inspect in workspace
+      body: Open relevant Azure tab for the function app.
+      actions:
+        - type: open-tab
+          tab: azure-functions
+          focus: "{{ outputs.function_app_name }}"

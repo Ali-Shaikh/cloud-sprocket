@@ -52,3 +52,57 @@ outputs:
   - name: queue_url
     primary: true
   - name: lambda_function_name
+lab:
+  difficulty: intermediate
+  estimatedMinutes: 25
+  objectives:
+    - Trace an event from SNS through SQS to the worker Lambda
+    - Send a queue message and verify fan-out plumbing
+  steps:
+    - id: explore-topic
+      title: Explore the SNS topic
+      body: |
+        Open the SNS tab and inspect the topic that forwards messages to the queue.
+      actions:
+        - type: open-tab
+          tab: aws-sns
+          focus: "{{ outputs.topic_arn }}"
+      hints:
+        - The topic ARN is in the `topic_arn` deployment output.
+    - id: explore-queue
+      title: Explore the SQS queue
+      body: |
+        Open the SQS tab and inspect the queue subscribed to the topic.
+      actions:
+        - type: open-tab
+          tab: aws-sqs
+          focus: "{{ outputs.queue_url }}"
+    - id: send-message
+      title: Send a test message
+      body: |
+        Send a JSON message directly to the queue to simulate a published event
+        reaching the consumer.
+      actions:
+        - type: invoke-write
+          op: sqs.send
+          params:
+            queueUrl: "{{ outputs.queue_url }}"
+            messageBody: '{"lab":"event-fanout","demo":1}'
+    - id: verify-queue
+      title: Verify queue activity
+      body: |
+        Run the check to confirm messages are visible or in flight while the worker runs.
+      verify:
+        - type: sqs.queue-attribute
+          queue: "{{ outputs.queue_url }}"
+          attribute: ApproximateNumberOfMessagesNotVisible
+          compare: gte
+          value: "0"
+    - id: inspect-lambda
+      title: Inspect the worker Lambda
+      body: |
+        Open the Lambda tab to view the function consuming the queue.
+      actions:
+        - type: open-tab
+          tab: aws-lambda
+          focus: "{{ outputs.lambda_function_name }}"

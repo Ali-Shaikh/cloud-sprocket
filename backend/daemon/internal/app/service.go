@@ -120,7 +120,7 @@ func NewWithRuntimes(
 	localStackMgr LocalStackManager,
 	azureRuntime AzureRuntimeManager,
 ) *Service {
-	recipeLoader := recipes.Bundled()
+	recipeLoader := recipes.Bundled().WithImportedDir(settings.ImportedRecipesDir)
 	deployEngine := deploy.NewEngine(tofu.NewRunner(tofu.Resolve(settings)), settings, recipeLoader)
 	service := &Service{
 		settings:              settings,
@@ -187,8 +187,18 @@ func (s *Service) Handle(
 		return s.handleAwsS3SelectObject(ctx, params, notifier)
 	case "aws.s3.setPrefixFilter":
 		return s.handleAwsS3SetPrefixFilter(ctx, params, notifier)
+	case "aws.s3.loadMoreObjects":
+		return s.handleAwsS3LoadMoreObjects(ctx, params, notifier)
 	case "aws.s3.uploadObject":
 		return s.handleAwsS3UploadObject(ctx, params, notifier)
+	case "aws.s3.deleteObject":
+		return s.handleAwsS3DeleteObject(ctx, params, notifier)
+	case "aws.s3.createBucket":
+		return s.handleAwsS3CreateBucket(ctx, params, notifier)
+	case "aws.s3.copyObject":
+		return s.handleAwsS3CopyObject(ctx, params, notifier)
+	case "aws.s3.createFolderPrefix":
+		return s.handleAwsS3CreateFolderPrefix(ctx, params, notifier)
 	case "aws.s3.presignObject":
 		return s.handleAwsS3PresignObject(ctx, params, notifier)
 	case "aws.s3.analyseUrl":
@@ -201,6 +211,10 @@ func (s *Service) Handle(
 		return s.handleAwsEc2SelectInstance(ctx, params, notifier)
 	case "aws.ec2.invokeAction":
 		return s.handleAwsEc2InvokeAction(ctx, params, notifier)
+	case "aws.ec2.runInstances":
+		return s.handleAwsEc2RunInstances(ctx, params, notifier)
+	case "aws.ec2.terminateInstances":
+		return s.handleAwsEc2TerminateInstances(ctx, params, notifier)
 	case "aws.lambda.selectRegion":
 		return s.handleAwsLambdaSelectRegion(ctx, params, notifier)
 	case "aws.lambda.selectFunction":
@@ -287,6 +301,18 @@ func (s *Service) Handle(
 		return s.handleAwsLambdaInvoke(ctx, params, notifier)
 	case "aws.lambda.create":
 		return s.handleAwsLambdaCreate(ctx, params, notifier)
+	case "aws.lambda.deleteFunction":
+		return s.handleAwsLambdaDeleteFunction(ctx, params, notifier)
+	case "aws.rds.startInstance":
+		return s.handleAwsRdsStartInstance(ctx, params, notifier)
+	case "aws.rds.stopInstance":
+		return s.handleAwsRdsStopInstance(ctx, params, notifier)
+	case "aws.logs.createLogGroup":
+		return s.handleAwsLogsCreateLogGroup(ctx, params, notifier)
+	case "aws.logs.putLogEvents":
+		return s.handleAwsLogsPutLogEvents(ctx, params, notifier)
+	case "aws.iam.createRole":
+		return s.handleAwsIamCreateRole(ctx, params, notifier)
 	case "aws.inventory.get":
 		return s.handleAwsInventoryGet(ctx, params, notifier)
 	case "azure.inventory.get":
@@ -333,6 +359,10 @@ func (s *Service) Handle(
 		return s.handleAzureStorageUploadBlob(ctx, params, notifier)
 	case "azure.storage.deleteBlob":
 		return s.handleAzureStorageDeleteBlob(ctx, params, notifier)
+	case "azure.storage.copyBlob":
+		return s.handleAzureStorageCopyBlob(ctx, params, notifier)
+	case "azure.storage.createFolderPrefix":
+		return s.handleAzureStorageCreateFolderPrefix(ctx, params, notifier)
 	case "azure.logAnalytics.selectWorkspace":
 		return s.handleAzureLogAnalyticsSelectWorkspace(ctx, params, notifier)
 	case "azure.logAnalytics.query":
@@ -445,6 +475,12 @@ func (s *Service) Handle(
 		return s.recipes.List()
 	case "recipes.get":
 		return s.handleRecipesGet(params)
+	case "recipes.import":
+		return s.handleRecipesImport(params)
+	case "recipes.validate":
+		return s.handleRecipesValidate(params)
+	case "recipes.scaffold":
+		return s.handleRecipesScaffold(params)
 	case "tofu.status":
 		return s.tofuStatus(ctx), nil
 	case "tofu.install":
@@ -459,12 +495,24 @@ func (s *Service) Handle(
 		return s.handleDeploymentsApply(params, notifier)
 	case "deployments.destroy":
 		return s.handleDeploymentsDestroy(params, notifier)
+	case "deployments.checkDrift":
+		return s.handleDeploymentsCheckDrift(ctx, params, notifier)
 	case "deployments.cancel":
 		return s.handleDeploymentsCancel(params)
 	case "deployments.delete":
 		return s.handleDeploymentsDelete(ctx, params)
 	case "deployments.retryPostApply":
 		return s.handleDeploymentsRetryPostApply(params, notifier)
+	case "labs.start":
+		return s.handleLabsStart(ctx, params, notifier)
+	case "labs.get":
+		return s.handleLabsGet(ctx, params, notifier)
+	case "labs.verifyStep":
+		return s.handleLabsVerifyStep(ctx, params, notifier)
+	case "labs.runAction":
+		return s.handleLabsRunAction(ctx, params, notifier)
+	case "labs.reset":
+		return s.handleLabsReset(ctx, params, notifier)
 	default:
 		return nil, fmt.Errorf("unknown backend method: %s", method)
 	}

@@ -60,8 +60,8 @@ func TestHandleAzureFrontDoorRefreshReturnsTopology(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)

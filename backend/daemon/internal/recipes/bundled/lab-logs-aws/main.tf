@@ -1,0 +1,28 @@
+terraform {
+  required_version = ">= 1.6.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+
+locals {
+  name = "${var.app_name}-${var.environment}"
+  tags = merge({
+    App         = var.app_name
+    Environment = var.environment
+    ManagedBy   = "CloudSprocket"
+  }, var.tags)
+}
+
+resource "aws_cloudwatch_log_group" "lab" {
+  name              = "/${local.name}/lab"
+  retention_in_days = 7
+  tags              = local.tags
+}

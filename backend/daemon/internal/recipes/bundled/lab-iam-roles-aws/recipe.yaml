@@ -1,0 +1,90 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-iam-roles-aws
+kind: service-lab
+version: 0.1.0
+name: IAM roles lab (AWS)
+summary: An IAM role with least-privilege policy for learning permission boundaries.
+description: |
+  A focused service lab for IAM: a role assumable by Lambda (example) with a
+  minimal inline policy. Teaches principle of least privilege, ARN formatting,
+  and how roles decouple identity from long-term credentials.
+
+  Explore in the IAM tab. Includes notes on drift and real-world rotation of
+  policies.
+providers:
+  - aws
+tags:
+  - iam
+  - security
+  - auth
+  - aws
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: role_name
+    primary: true
+  - name: role_arn
+lab:
+  difficulty: beginner
+  estimatedMinutes: 15
+  objectives:
+    - Inspect an IAM role and its attached policy in the workspace
+    - Understand trust policy vs permissions policy
+    - Apply least privilege thinking to the example statements
+    - Recognise risks of wildcards and how recipes enforce declared policies
+  steps:
+    - id: explore-role
+      title: Open the IAM role
+      body: |
+        Open the IAM tab and select the role. Review the trust relationship
+        (who can assume) and the permissions policy.
+      actions:
+        - type: open-tab
+          tab: aws-iam
+          focus: "{{ outputs.role_name }}"
+      hints:
+        - Role names are unique per account; ARNs include the account id even on emulators.
+    - id: note-arn
+      title: Note the role ARN
+      body: |
+        Copy the role_arn output. Applications and other services reference
+        the ARN when granting assume or pass role permissions.
+      hints:
+        - Never hard code account numbers; use the output.
+    - id: least-privilege
+      title: Review least privilege
+      body: |
+        The policy grants only the minimum actions needed for the lab role.
+        In production, start narrow and expand only with justification.
+        Avoid * in Action or Resource unless absolutely required.
+      hints:
+        - Use the IAM tab or policy simulator (outside this lab) to test.
+    - id: drift-policy
+      title: Policy drift awareness
+      body: |
+        If someone edits the policy in the console, the next plan detects the
+        difference between declared and actual. Re-apply to reconcile or
+        destroy to clean.
+      hints:
+        - Treat IAM as code to avoid privilege creep.

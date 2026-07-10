@@ -1,12 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Database, FileIcon, Trash2, Upload } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Database,
+  FileIcon,
+  FolderPlus,
+  Trash2,
+  Upload,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { actionCapabilityState } from "@/lib/action-capabilities";
+import { presentAzureStorageStatus } from "@/lib/azure-storage-status";
 import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,14 +27,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,6 +40,7 @@ import {
 import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { azureInventoryLoadingLabel } from "@/lib/azure-inventory";
 import { EmptyState } from "@/components/empty-state";
+import { InlineBanner } from "@/components/inline-banner";
 import { StatusPill } from "@/components/status-pill";
 import {
   ResourceInspectorHeader,
@@ -48,11 +51,8 @@ import { ResourceTable } from "@/components/inventory/resource-table";
 import { DetailFieldList } from "./detail-fields";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
-export type AzureStoragePageId = "accounts" | "containers" | "blobs" | "upload";
-
 export type AzureStorageViewProps = {
   workspace: WorkspaceSnapshot;
-  activePageId: string;
   actionStatus: string;
   inventoryLoading?: boolean;
   onSelectAccount: (accountName: string) => void;
@@ -63,28 +63,37 @@ export type AzureStorageViewProps = {
   onCreateContainer: (containerName: string) => void;
   onUploadBlob: (sourcePath: string, blobName: string) => void;
   onDeleteBlob: (blobName: string) => void;
+  onCopyBlob?: (sourceBlobName: string, destinationBlobName: string) => void;
+  onCreateFolderPrefix?: (folderPrefix: string) => void;
 };
-
-function normalisePageId(pageId: string): AzureStoragePageId {
-  if (pageId === "accounts" || pageId === "containers" || pageId === "upload") {
-    return pageId;
-  }
-  return "blobs";
-}
 
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
-
-const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] shadow-sm";
 
 function blobFileName(name: string): string {
   const segments = name.split("/").filter(Boolean);
   return segments.length > 0 ? segments[segments.length - 1] : name;
 }
 
+function prefixSegments(prefix: string): string[] {
+  return prefix.split("/").filter(Boolean);
+}
+
+function defaultUploadName(sourcePath: string, prefix?: string): string {
+  const fileName = sourcePath.split(/[\\/]/).filter(Boolean).pop() ?? "";
+  const cleanPrefix = (prefix ?? "").replace(/^\/+/, "");
+  if (!cleanPrefix) {
+    return fileName;
+  }
+  return `${cleanPrefix.replace(/\/?$/, "/")}${fileName}`;
+}
+
+/**
+ * Single Azure blob browser: account + container + path on one surface.
+ * Selection never sends the user to another rail page.
+ */
 export default function AzureStorageView({
   workspace,
-  activePageId,
   actionStatus,
   inventoryLoading = false,
   onSelectAccount,
@@ -95,12 +104,16 @@ export default function AzureStorageView({
   onCreateContainer,
   onUploadBlob,
   onDeleteBlob,
+  onCopyBlob,
+  onCreateFolderPrefix,
 }: AzureStorageViewProps) {
-  const page = normalisePageId(activePageId);
   const writeCapability = actionCapabilityState(workspace, "storage", "uploadBlob", "azure");
+  const copyCapability = actionCapabilityState(workspace, "storage", "copyBlob", "azure");
+  const folderCapability = actionCapabilityState(workspace, "storage", "createFolderPrefix", "azure");
   const canWrite = writeCapability.enabled;
   const writeDisabledReason = writeCapability.reason;
   const inventoryLoadingLabel = azureInventoryLoadingLabel(workspace, "storage");
+
   const [prefixInput, setPrefixInput] = useState(workspace.azureBlobPrefixFilter ?? "");
   const [createAccountOpen, setCreateAccountOpen] = useState(false);
   const [newAccountName, setNewAccountName] = useState("");
@@ -108,12 +121,25 @@ export default function AzureStorageView({
   const [newAccountResourceGroup, setNewAccountResourceGroup] = useState(
     workspace.selectedAzureResourceGroup ?? "",
   );
+  const [createContainerOpen, setCreateContainerOpen] = useState(false);
   const [newContainerName, setNewContainerName] = useState("");
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadSourcePath, setUploadSourcePath] = useState("");
   const [uploadBlobName, setUploadBlobName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [copyDestinationName, setCopyDestinationName] = useState("");
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
+  const [folderPrefixDraft, setFolderPrefixDraft] = useState("");
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedAzureBlobName));
+  const [errorDetailOpen, setErrorDetailOpen] = useState(false);
   const lastSelectedBlobRef = useRef(workspace.selectedAzureBlobName || "");
+  const lastPrefixRef = useRef(workspace.azureBlobPrefixFilter || "");
+
+  const statusPresentation = useMemo(
+    () => presentAzureStorageStatus(workspace.azureStorageStatusMessage),
+    [workspace.azureStorageStatusMessage],
+  );
 
   useEffect(() => {
     const nextBlob = workspace.selectedAzureBlobName || "";
@@ -123,184 +149,79 @@ export default function AzureStorageView({
     }
   }, [workspace.selectedAzureBlobName]);
 
+  useEffect(() => {
+    const next = workspace.azureBlobPrefixFilter || "";
+    if (next !== lastPrefixRef.current) {
+      lastPrefixRef.current = next;
+      setPrefixInput(next);
+    }
+  }, [workspace.azureBlobPrefixFilter]);
+
   const selectedBlob = workspace.azureBlobs.find(
     (blob) => blob.name === workspace.selectedAzureBlobName,
   );
+  const account = workspace.selectedAzureStorageAccount || "";
+  const container = workspace.selectedAzureBlobContainer || "";
+  const pathParts = prefixSegments(workspace.azureBlobPrefixFilter || "");
 
-  const accountsPage = (
-    <section className={sectionCard}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-bold">Storage Accounts</h2>
-          <p className="text-sm text-muted-foreground">
-            Blob storage accounts for the open Azure subscription. floci-az includes{" "}
-            <code className="text-xs">devstoreaccount1</code> plus any accounts you create via ARM.
-          </p>
-        </div>
-        {canWrite ? (
-          <Button
-            onClick={() => {
-              setNewAccountResourceGroup(workspace.selectedAzureResourceGroup ?? "");
-              setCreateAccountOpen(true);
-            }}
-          >
-            Create account
-          </Button>
-        ) : null}
-      </div>
-      {inventoryLoading ? (
-        <InventoryLoadingState variant="inline" label={inventoryLoadingLabel} />
-      ) : (
-        <p className="text-sm text-muted-foreground">{workspace.azureStorageStatusMessage}</p>
-      )}
-      <div className="overflow-hidden rounded-lg border border-border">
-        {inventoryLoading && workspace.azureStorageAccounts.length === 0 ? (
-          <InventoryLoadingState
-            label={inventoryLoadingLabel}
-            className="border-0 bg-transparent"
-          />
-        ) : workspace.azureStorageAccounts.length === 0 ? (
-          <EmptyState
-            icon={<Database />}
-            title="No storage accounts"
-            description="No Azure storage accounts were returned for this subscription."
-            className="border-0"
-          />
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Kind</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Blob endpoint</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {workspace.azureStorageAccounts.map((account) => {
-                const active = account.name === workspace.selectedAzureStorageAccount;
-                return (
-                  <TableRow
-                    key={account.name}
-                    data-state={active ? "selected" : undefined}
-                    className="cursor-pointer"
-                    onClick={() => onSelectAccount(account.name)}
-                  >
-                    <TableCell className="font-medium">{account.name}</TableCell>
-                    <TableCell>{account.kind || "Unknown"}</TableCell>
-                    <TableCell>{account.location || "Unknown"}</TableCell>
-                    <TableCell className="max-w-[240px] truncate font-mono text-xs">
-                      {account.blobEndpoint || "Unavailable"}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+  const applyPrefix = (prefix: string) => {
+    const normalised = prefix.replace(/^\/+/, "");
+    setPrefixInput(normalised);
+    lastPrefixRef.current = normalised;
+    onSetPrefixFilter(normalised);
+  };
+
+  const breadcrumb = (
+    <nav
+      aria-label="Blob path"
+      className="flex min-w-0 flex-wrap items-center gap-1 text-sm text-muted-foreground"
+    >
+      <button
+        type="button"
+        className={cn(
+          "rounded px-1 font-medium hover:bg-muted hover:text-foreground",
+          !account && "text-foreground",
         )}
-      </div>
-    </section>
-  );
-
-  const containersPage = (
-    <section className={sectionCard}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-bold">Blob Containers</h2>
-          <p className="text-sm text-muted-foreground">
-            Containers in {workspace.selectedAzureStorageAccount || "the selected account"}.
-          </p>
-        </div>
-        <StatusPill
-          status={canWrite ? "on" : "warning"}
-          label={canWrite ? "Writes enabled" : "Read-only"}
-        />
-      </div>
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="w-64">
-          <div className={cn(fieldLabel, "mb-1")}>Storage account</div>
-          <Select
-            value={workspace.selectedAzureStorageAccount ?? ""}
-            onValueChange={(value) => {
-              if (value) {
-                onSelectAccount(value);
-              }
-            }}
+        onClick={() => {
+          if (account) {
+            applyPrefix("");
+          }
+        }}
+        disabled={!account}
+      >
+        {account || "No account"}
+      </button>
+      {container ? (
+        <>
+          <ChevronRight className="size-3.5 shrink-0 opacity-50" />
+          <button
+            type="button"
+            className="rounded px-1 font-medium hover:bg-muted hover:text-foreground"
+            onClick={() => applyPrefix("")}
           >
-            <SelectTrigger aria-label="Select storage account">
-              <SelectValue placeholder="Select account" />
-            </SelectTrigger>
-            <SelectContent>
-              {workspace.azureStorageAccounts.map((account) => (
-                <SelectItem key={account.name} value={account.name}>
-                  {account.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {canWrite ? (
-          <div className="flex flex-wrap items-end gap-2">
-            <div>
-              <div className={cn(fieldLabel, "mb-1")}>New container</div>
-              <Input
-                value={newContainerName}
-                onChange={(event) => setNewContainerName(event.target.value)}
-                placeholder="my-container"
-                className="w-48"
-              />
-            </div>
-            <Button
-              disabled={!newContainerName.trim()}
-              onClick={() => {
-                onCreateContainer(newContainerName.trim());
-                setNewContainerName("");
-              }}
+            {container}
+          </button>
+        </>
+      ) : null}
+      {pathParts.map((segment, index) => {
+        const upTo = `${pathParts.slice(0, index + 1).join("/")}/`;
+        return (
+          <span key={upTo} className="flex items-center gap-1">
+            <ChevronRight className="size-3.5 shrink-0 opacity-50" />
+            <button
+              type="button"
+              className="rounded px-1 font-medium hover:bg-muted hover:text-foreground"
+              onClick={() => applyPrefix(upTo)}
             >
-              Create container
-            </Button>
-          </div>
-        ) : null}
-      </div>
-      <div className="overflow-hidden rounded-lg border border-border">
-        {workspace.azureBlobContainers.length === 0 ? (
-          <EmptyState
-            icon={<Database />}
-            title="No containers"
-            description="No blob containers were returned for the selected storage account."
-            className="border-0"
-          />
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Last modified</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {workspace.azureBlobContainers.map((container) => {
-                const active = container.name === workspace.selectedAzureBlobContainer;
-                return (
-                  <TableRow
-                    key={container.name}
-                    data-state={active ? "selected" : undefined}
-                    className="cursor-pointer"
-                    onClick={() => onSelectContainer(container.name)}
-                  >
-                    <TableCell className="font-medium">{container.name}</TableCell>
-                    <TableCell>{container.lastModified || "Unknown"}</TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
-      </div>
-    </section>
+              {segment}
+            </button>
+          </span>
+        );
+      })}
+    </nav>
   );
 
-  const blobInspectorContent = selectedBlob ? (
+  const inspectorContent = selectedBlob ? (
     <ResourceInspectorPanel>
       <ResourceInspectorHeader
         icon={FileIcon}
@@ -313,206 +234,329 @@ export default function AzureStorageView({
         fields={workspace.azureBlobMetadata}
         emptyText="No blob metadata available."
       />
+      <div className="flex flex-wrap gap-2">
+        {onCopyBlob ? (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!copyCapability.enabled}
+            title={copyCapability.enabled ? undefined : copyCapability.reason}
+            onClick={() => {
+              setCopyDestinationName(`${selectedBlob.name}-copy`);
+              setCopyDialogOpen(true);
+            }}
+          >
+            <Copy />
+            Copy blob
+          </Button>
+        ) : null}
+        {canWrite ? (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setDeleteTarget(selectedBlob.name)}
+          >
+            <Trash2 />
+            Delete
+          </Button>
+        ) : null}
+      </div>
     </ResourceInspectorPanel>
   ) : null;
 
-  const blobsPage = (
-    <section className="space-y-4">
-      <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="w-52">
-            <div className={cn(fieldLabel, "mb-1")}>Container</div>
+  return (
+    <div className="mx-auto max-w-6xl space-y-4">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">Azure Storage</h1>
+          <p className="text-sm text-muted-foreground">
+            {workspace.profile?.displayName || "Subscription"} · browse account / container / blobs
+          </p>
+          {breadcrumb}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusPill
+            status={canWrite ? "on" : "warning"}
+            label={canWrite ? "Writes enabled" : "Read-only"}
+          />
+          {canWrite ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setNewAccountResourceGroup(workspace.selectedAzureResourceGroup ?? "");
+                  setCreateAccountOpen(true);
+                }}
+              >
+                New account
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!account}
+                onClick={() => setCreateContainerOpen(true)}
+              >
+                New container
+              </Button>
+              <Button
+                size="sm"
+                disabled={!container}
+                onClick={() => {
+                  setUploadSourcePath("");
+                  setUploadBlobName("");
+                  setUploadOpen(true);
+                }}
+              >
+                <Upload />
+                Upload
+              </Button>
+            </>
+          ) : null}
+        </div>
+      </header>
+
+      {inventoryLoading ? (
+        <InventoryLoadingState variant="banner" label={inventoryLoadingLabel} />
+      ) : null}
+
+      <section className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_minmax(0,1.4fr)_auto]">
+          <div className="min-w-0">
+            <div className={cn(fieldLabel, "mb-1")}>Storage account</div>
             <Select
-              value={workspace.selectedAzureBlobContainer ?? ""}
-              onValueChange={(value) => {
-                if (value) {
-                  onSelectContainer(value);
-                }
-              }}
+              value={account || undefined}
+              onValueChange={(value) => value && onSelectAccount(value)}
+              disabled={workspace.azureStorageAccounts.length === 0}
             >
-              <SelectTrigger aria-label="Select blob container">
-                <SelectValue placeholder="Select container" />
+              <SelectTrigger aria-label="Select storage account" className="w-full">
+                <SelectValue
+                  placeholder={
+                    workspace.azureStorageAccounts.length === 0
+                      ? "No accounts loaded"
+                      : "Select account"
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
-                {workspace.azureBlobContainers.map((container) => (
-                  <SelectItem key={container.name} value={container.name}>
-                    {container.name}
+                {workspace.azureStorageAccounts.map((item) => (
+                  <SelectItem key={item.name} value={item.name}>
+                    {item.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <div className="min-w-[200px] flex-1">
-            <div className={cn(fieldLabel, "mb-1")}>Prefix filter</div>
+          <div className="min-w-0">
+            <div className={cn(fieldLabel, "mb-1")}>Container</div>
+            <Select
+              value={container || undefined}
+              onValueChange={(value) => value && onSelectContainer(value)}
+              disabled={workspace.azureBlobContainers.length === 0}
+            >
+              <SelectTrigger aria-label="Select blob container" className="w-full">
+                <SelectValue
+                  placeholder={
+                    !account
+                      ? "Select account first"
+                      : workspace.azureBlobContainers.length === 0
+                        ? "No containers"
+                        : "Select container"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {workspace.azureBlobContainers.map((item) => (
+                  <SelectItem key={item.name} value={item.name}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="min-w-0">
+            <div className={cn(fieldLabel, "mb-1")}>Prefix</div>
             <div className="flex gap-2">
               <Input
                 value={prefixInput}
                 onChange={(event) => setPrefixInput(event.target.value)}
-                placeholder="optional/prefix/"
+                placeholder="optional/folder/"
+                disabled={!container}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    applyPrefix(prefixInput);
+                  }
+                }}
               />
-              <Button variant="outline" onClick={() => onSetPrefixFilter(prefixInput)}>
-                Apply
+              <Button
+                variant="outline"
+                disabled={!container}
+                onClick={() => applyPrefix(prefixInput)}
+              >
+                Go
               </Button>
             </div>
           </div>
-        </div>
-      </div>
-
-      <p className="text-sm text-muted-foreground">{workspace.azureStorageStatusMessage}</p>
-      {actionStatus ? <p className="text-sm text-muted-foreground">{actionStatus}</p> : null}
-
-      <ResourceInventoryShell
-        table={
-          <ResourceTable
-            columns={[
-              { id: "name", label: "Name" },
-              { id: "size", label: "Size" },
-              { id: "modified", label: "Modified" },
-            ]}
-            rows={workspace.azureBlobs}
-            selectedKey={workspace.selectedAzureBlobName}
-            getRowKey={(blob) => blob.name}
-            onRowClick={(blob) => {
-              onSelectBlob(blob.name);
-              setInspectorOpen(true);
-            }}
-            renderCell={(blob, columnId) => {
-              if (columnId === "name") {
-                return <span className="font-medium">{blob.name}</span>;
-              }
-              if (columnId === "size") {
-                return blob.size || "Unknown";
-              }
-              return blob.modifiedAt || "Unknown";
-            }}
-            renderTrailingCell={
-              canWrite
-                ? (blob) => (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`Delete ${blob.name}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setDeleteTarget(blob.name);
-                      }}
-                    >
-                      <Trash2 />
-                    </Button>
-                  )
-                : undefined
-            }
-            emptyState={
-              <EmptyState
-                icon={<Database />}
-                title="No blobs"
-                description="No blobs were returned for the selected container."
-                className="border-0"
-              />
-            }
-          />
-        }
-        inspectorContent={blobInspectorContent}
-        inspectorOpen={inspectorOpen}
-        onInspectorOpenChange={setInspectorOpen}
-        inspectorAriaLabel="Azure blob details"
-      />
-    </section>
-  );
-
-  const uploadPage = (
-    <section className={sectionCard}>
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-bold">Upload blob</h2>
-          <p className="text-sm text-muted-foreground">
-            Upload a local file to{" "}
-            {workspace.selectedAzureStorageAccount || "account"}/
-            {workspace.selectedAzureBlobContainer || "container"}.
-          </p>
-        </div>
-        <StatusPill
-          status={canWrite ? "on" : "warning"}
-          label={canWrite ? "Writes enabled" : "Read-only"}
-        />
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <div className={cn(fieldLabel, "mb-1")}>Source file</div>
-          <div className="flex gap-2">
-            <Input
-              value={uploadSourcePath}
-              onChange={(event) => setUploadSourcePath(event.target.value)}
-              placeholder="C:\path\to\file.txt"
-            />
-            <Button
-              variant="outline"
-              onClick={() => {
-                void open({ multiple: false }).then((path) => {
-                  if (typeof path === "string") {
-                    setUploadSourcePath(path);
-                    const fileName = path.split(/[\\/]/).filter(Boolean).pop() ?? "";
-                    if (!uploadBlobName) {
-                      setUploadBlobName(fileName);
-                    }
-                  }
-                });
-              }}
-            >
-              Browse
-            </Button>
+          <div className="flex items-end">
+            {onCreateFolderPrefix ? (
+              <Button
+                variant="outline"
+                disabled={!folderCapability.enabled || !container}
+                title={folderCapability.enabled ? undefined : folderCapability.reason}
+                onClick={() => {
+                  setFolderPrefixDraft(workspace.azureBlobPrefixFilter || "");
+                  setFolderDialogOpen(true);
+                }}
+              >
+                <FolderPlus />
+                Folder
+              </Button>
+            ) : null}
           </div>
         </div>
-        <div>
-          <div className={cn(fieldLabel, "mb-1")}>Blob name</div>
-          <Input
-            value={uploadBlobName}
-            onChange={(event) => setUploadBlobName(event.target.value)}
-            placeholder="folder/file.txt"
+        {statusPresentation && !statusPresentation.isError ? (
+          <p className="text-sm text-muted-foreground">{statusPresentation.title}</p>
+        ) : !statusPresentation && !inventoryLoading ? (
+          <p className="text-sm text-muted-foreground">Pick an account and container to browse.</p>
+        ) : null}
+        {actionStatus ? <p className="text-sm text-muted-foreground">{actionStatus}</p> : null}
+      </section>
+
+      {statusPresentation?.isError ? (
+        <div className="space-y-2">
+          <InlineBanner
+            tone={statusPresentation.tone}
+            title={statusPresentation.title}
+            description={statusPresentation.description}
+            className="items-start"
           />
+          {statusPresentation.detail ? (
+            <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+              <button
+                type="button"
+                className="flex w-full items-center gap-1.5 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+                onClick={() => setErrorDetailOpen((open) => !open)}
+                aria-expanded={errorDetailOpen}
+              >
+                <ChevronDown
+                  className={cn(
+                    "size-3.5 shrink-0 transition-transform",
+                    errorDetailOpen ? "rotate-0" : "-rotate-90",
+                  )}
+                />
+                Technical detail
+              </button>
+              {errorDetailOpen ? (
+                <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-muted-foreground">
+                  {statusPresentation.detail}
+                </pre>
+              ) : null}
+            </div>
+          ) : null}
         </div>
-      </div>
-      <Button
-        disabled={
-          !canWrite ||
-          !uploadSourcePath.trim() ||
-          !uploadBlobName.trim() ||
-          !workspace.selectedAzureBlobContainer
-        }
-        onClick={() => {
-          onUploadBlob(uploadSourcePath.trim(), uploadBlobName.trim());
-          notify("success", "Blob upload started");
-        }}
-      >
-        <Upload />
-        Upload blob
-      </Button>
-      {writeDisabledReason ? (
-        <p className="text-sm text-muted-foreground">{writeDisabledReason}</p>
       ) : null}
-      {actionStatus ? <p className="text-sm text-muted-foreground">{actionStatus}</p> : null}
-    </section>
-  );
 
-  const pageTitles: Record<AzureStoragePageId, string> = {
-    accounts: "Accounts",
-    containers: "Containers",
-    blobs: "Blobs",
-    upload: "Upload",
-  };
-
-  return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <header>
-        <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">Azure Storage</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {workspace.profile?.displayName || "Subscription"} · {pageTitles[page]}
-        </p>
-      </header>
-      {page === "accounts" ? accountsPage : null}
-      {page === "containers" ? containersPage : null}
-      {page === "blobs" ? blobsPage : null}
-      {page === "upload" ? uploadPage : null}
+      {!account || workspace.azureStorageAccounts.length === 0 ? (
+        statusPresentation?.isError ? null : (
+          <EmptyState
+            icon={<Database />}
+            title={
+              workspace.azureStorageAccounts.length === 0
+                ? "No storage accounts"
+                : "Select a storage account"
+            }
+            description={
+              statusPresentation?.title ||
+              (workspace.azureStorageAccounts.length === 0
+                ? "No accounts were returned for this subscription. Check Azure CLI sign-in or create an account."
+                : "Choose an account above. Containers and blobs stay on this page.")
+            }
+          />
+        )
+      ) : !container ? (
+        statusPresentation?.isError ? null : (
+          <EmptyState
+            icon={<Database />}
+            title={
+              workspace.azureBlobContainers.length === 0 ? "No containers" : "Select a container"
+            }
+            description={
+              statusPresentation?.title ||
+              "Choose a container above to list blobs. An empty list does not mean containers are private."
+            }
+          />
+        )
+      ) : (
+        <ResourceInventoryShell
+          table={
+            <ResourceTable
+              columns={[
+                { id: "name", label: "Name" },
+                { id: "size", label: "Size" },
+                { id: "modified", label: "Modified" },
+              ]}
+              rows={workspace.azureBlobs}
+              selectedKey={workspace.selectedAzureBlobName}
+              getRowKey={(blob) => blob.name}
+              onRowClick={(blob) => {
+                onSelectBlob(blob.name);
+                setInspectorOpen(true);
+              }}
+              renderCell={(blob, columnId) => {
+                if (columnId === "name") {
+                  return <span className="font-medium">{blob.name}</span>;
+                }
+                if (columnId === "size") {
+                  return blob.size || "Unknown";
+                }
+                return blob.modifiedAt || "Unknown";
+              }}
+              renderTrailingCell={
+                canWrite
+                  ? (blob) => (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Delete ${blob.name}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setDeleteTarget(blob.name);
+                        }}
+                      >
+                        <Trash2 />
+                      </Button>
+                    )
+                  : undefined
+              }
+              emptyState={
+                statusPresentation?.isError ? (
+                  <EmptyState
+                    icon={<Database />}
+                    title="Blobs unavailable"
+                    description="See the error banner above for why this list could not be loaded."
+                    className="border-0"
+                  />
+                ) : (
+                  <EmptyState
+                    icon={<Database />}
+                    title="No blobs"
+                    description={
+                      workspace.azureBlobPrefixFilter
+                        ? `No blobs under prefix “${workspace.azureBlobPrefixFilter}”.`
+                        : "This container has no blobs, or inventory is still loading."
+                    }
+                    className="border-0"
+                  />
+                )
+              }
+            />
+          }
+          inspectorContent={inspectorContent}
+          inspectorOpen={inspectorOpen}
+          onInspectorOpenChange={setInspectorOpen}
+          inspectorAriaLabel="Azure blob details"
+        />
+      )}
 
       <AlertDialog open={createAccountOpen} onOpenChange={setCreateAccountOpen}>
         <AlertDialogContent>
@@ -577,14 +621,112 @@ export default function AzureStorageView({
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={createContainerOpen} onOpenChange={setCreateContainerOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create container</AlertDialogTitle>
+            <AlertDialogDescription>
+              Creates a blob container in {account || "the selected account"}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={newContainerName}
+            onChange={(event) => setNewContainerName(event.target.value)}
+            placeholder="my-container"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!newContainerName.trim()}
+              onClick={() => {
+                onCreateContainer(newContainerName.trim());
+                setNewContainerName("");
+                setCreateContainerOpen(false);
+              }}
+            >
+              Create
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={uploadOpen} onOpenChange={setUploadOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Upload blob</AlertDialogTitle>
+            <AlertDialogDescription>
+              Upload into {account || "account"}/{container || "container"}
+              {workspace.azureBlobPrefixFilter
+                ? ` (prefix ${workspace.azureBlobPrefixFilter})`
+                : ""}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <div>
+              <div className={cn(fieldLabel, "mb-1")}>Source file</div>
+              <div className="flex gap-2">
+                <Input
+                  value={uploadSourcePath}
+                  onChange={(event) => setUploadSourcePath(event.target.value)}
+                  placeholder="C:\\path\\to\\file.txt"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    void open({ multiple: false }).then((path) => {
+                      if (typeof path === "string") {
+                        setUploadSourcePath(path);
+                        setUploadBlobName(
+                          defaultUploadName(path, workspace.azureBlobPrefixFilter),
+                        );
+                      }
+                    });
+                  }}
+                >
+                  Browse
+                </Button>
+              </div>
+            </div>
+            <div>
+              <div className={cn(fieldLabel, "mb-1")}>Blob name</div>
+              <Input
+                value={uploadBlobName}
+                onChange={(event) => setUploadBlobName(event.target.value)}
+                placeholder="folder/file.txt"
+              />
+            </div>
+            {writeDisabledReason ? (
+              <p className="text-sm text-muted-foreground">{writeDisabledReason}</p>
+            ) : null}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={
+                !canWrite ||
+                !uploadSourcePath.trim() ||
+                !uploadBlobName.trim() ||
+                !container
+              }
+              onClick={() => {
+                onUploadBlob(uploadSourcePath.trim(), uploadBlobName.trim());
+                notify("success", "Blob upload started");
+                setUploadOpen(false);
+              }}
+            >
+              Upload
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={deleteTarget !== null} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete blob?</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes <strong>{deleteTarget}</strong> from{" "}
-              {workspace.selectedAzureStorageAccount}/{workspace.selectedAzureBlobContainer}. This
-              action cannot be undone.
+              This removes <strong>{deleteTarget}</strong> from {account}/{container}. This action
+              cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -599,6 +741,66 @@ export default function AzureStorageView({
               }}
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={copyDialogOpen} onOpenChange={setCopyDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Copy blob</AlertDialogTitle>
+            <AlertDialogDescription>
+              Copy {workspace.selectedAzureBlobName} to a new name in the same container.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={copyDestinationName}
+            placeholder="archive/readme-copy.txt"
+            onChange={(event) => setCopyDestinationName(event.target.value)}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!copyDestinationName.trim() || !workspace.selectedAzureBlobName}
+              onClick={() => {
+                if (onCopyBlob && workspace.selectedAzureBlobName && copyDestinationName.trim()) {
+                  onCopyBlob(workspace.selectedAzureBlobName, copyDestinationName.trim());
+                  setCopyDialogOpen(false);
+                }
+              }}
+            >
+              Copy blob
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create folder prefix</AlertDialogTitle>
+            <AlertDialogDescription>
+              Creates a zero-byte folder marker. Use forward slashes, for example reports/2026/.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={folderPrefixDraft}
+            placeholder="reports/2026/"
+            onChange={(event) => setFolderPrefixDraft(event.target.value)}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!folderPrefixDraft.trim()}
+              onClick={() => {
+                if (onCreateFolderPrefix && folderPrefixDraft.trim()) {
+                  onCreateFolderPrefix(folderPrefixDraft.trim());
+                  setFolderDialogOpen(false);
+                }
+              }}
+            >
+              Create folder
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

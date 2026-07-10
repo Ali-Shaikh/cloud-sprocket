@@ -141,7 +141,7 @@ const dockerComposeLocalStackYAML = `services:
     ports:
       - "127.0.0.1:4566:4566"
     environment:
-      - SERVICES=apigateway,apigatewayv2,cloudformation,dynamodb,ec2,ecr,ecs,elbv2,events,iam,kinesis,kms,lambda,logs,rds,route53,s3,secretsmanager,sns,sqs,ssm,sts
+      - SERVICES=apigateway,apigatewayv2,cloudformation,dynamodb,ec2,ecr,ecs,elbv2,events,iam,kinesis,kms,lambda,logs,rds,route53,s3,secretsmanager,sns,sqs,ssm,stepfunctions,sts
       - DEBUG=0
       - PERSISTENCE=0
     volumes:

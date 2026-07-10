@@ -26,9 +26,14 @@ import type {
   AwsLambdaInvokeResult,
   HiddenResourceHit,
   HiddenResourcesSnapshot,
+  LabRunActionResult,
+  LabSession,
+  LabSpec,
+  LabStepAction,
   PreferencesSnapshot,
   ServiceCatalogEntry,
   ServicePreferences,
+  DriftReport,
 } from "../types/backend";
 import {
   isProviderEnabled,
@@ -40,7 +45,8 @@ export type BackendEventName =
   | "job.updated"
   | "log.appended"
   | "deployment.log"
-  | "deployment.changed";
+  | "deployment.changed"
+  | "lab.changed";
 
 export type DebugLogEntry = {
   timestamp: string;
@@ -103,6 +109,7 @@ type BackendEventMap = {
   "log.appended": ActivityLogEntry;
   "deployment.log": DeploymentLogEvent;
   "deployment.changed": Deployment;
+  "lab.changed": LabSession;
 };
 
 type MockState = {
@@ -2387,6 +2394,37 @@ function handleMockRequest<T>(
       appendLog("success", `Created S3 bucket ${bucketName}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     }
+    case "aws.s3.copyObject": {
+      const sourceObjectKey = String(params.sourceObjectKey ?? mockState.session.selectedS3ObjectKey ?? "");
+      const destinationObjectKey = String(params.destinationObjectKey ?? `${sourceObjectKey}-copy`);
+      const bucketName = mockState.session.selectedS3BucketName ?? mockWorkspaceBuckets[0]?.name;
+      if (bucketName) {
+        mockWorkspaceObjects.push({
+          key: destinationObjectKey,
+          size: "12 MB",
+          modifiedAt: "2026-07-08T12:00:00Z",
+          storageClass: "STANDARD",
+        });
+        mockState.session.selectedS3ObjectKey = destinationObjectKey;
+      }
+      appendLog("success", `Copied ${sourceObjectKey} to ${destinationObjectKey}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "aws.s3.createFolderPrefix": {
+      const folderPrefix = String(params.folderPrefix ?? "folder/");
+      const bucketName = mockState.session.selectedS3BucketName ?? mockWorkspaceBuckets[0]?.name;
+      if (bucketName) {
+        mockWorkspaceObjects.push({
+          key: folderPrefix.endsWith("/") ? folderPrefix : `${folderPrefix}/`,
+          size: "0 B",
+          modifiedAt: "2026-07-08T12:00:00Z",
+          storageClass: "STANDARD",
+        });
+        mockState.session.s3PrefixFilter = folderPrefix.endsWith("/") ? folderPrefix : `${folderPrefix}/`;
+      }
+      appendLog("success", `Created folder prefix ${folderPrefix}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "aws.s3.presignObject": {
       const objectKey = mockState.session.selectedS3ObjectKey ?? mockWorkspaceObjects[0]?.key;
       const bucketName = mockState.session.selectedS3BucketName ?? mockWorkspaceBuckets[0]?.name;
@@ -3449,6 +3487,39 @@ function handleMockRequest<T>(
       }
       return Promise.resolve(buildMockWorkspace() as T);
     }
+    case "azure.storage.copyBlob": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("blob copy requires write mode to be enabled for this Azure workspace"));
+      }
+      const sourceBlobName = String(params.sourceBlobName ?? mockState.session.selectedAzureBlobName ?? "");
+      const destinationBlobName = String(params.destinationBlobName ?? `${sourceBlobName}-copy`);
+      mockAzureBlobs.push({
+        name: destinationBlobName,
+        size: "1 KiB",
+        modifiedAt: new Date().toISOString(),
+        contentType: "application/octet-stream",
+      });
+      mockState.session.selectedAzureBlobName = destinationBlobName;
+      appendLog("success", `Copied blob ${sourceBlobName} to ${destinationBlobName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.storage.createFolderPrefix": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(new Error("folder create requires write mode to be enabled for this Azure workspace"));
+      }
+      const folderPrefix = String(params.folderPrefix ?? "folder/");
+      const markerName = folderPrefix.endsWith("/") ? folderPrefix : `${folderPrefix}/`;
+      mockAzureBlobs.push({
+        name: markerName,
+        size: "0 B",
+        modifiedAt: new Date().toISOString(),
+        contentType: "application/octet-stream",
+      });
+      mockState.session.azureBlobPrefixFilter = markerName;
+      mockState.session.selectedAzureBlobName = undefined;
+      appendLog("success", `Created folder prefix ${markerName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "session.selectProvider":
       setCurrentProvider(String(params.providerId ?? ""));
       emitStateChanged();
@@ -3596,6 +3667,36 @@ function handleMockRequest<T>(
       return Promise.resolve(mockRecipes.map((recipe) => recipe.manifest) as T);
     case "recipes.get":
       return mockGetRecipe(params.recipeId as string) as Promise<T>;
+    case "recipes.import": {
+      const confirmed = Boolean((params as { confirm?: boolean }).confirm);
+      return Promise.resolve({
+        ok: true,
+        id: "imported-demo",
+        version: "0.1.0",
+        name: "Imported",
+        providers: ["aws"],
+        buildCommands: [],
+        contentHash: "mock-hash",
+        sourceType: String((params as { sourceType?: string }).sourceType || "folder"),
+        importedPath: String((params as { sourcePath?: string }).sourcePath || ""),
+        confirmed,
+        validation: { ok: true, findings: [] },
+        trustNote: confirmed
+          ? "Import accepted and copied (mock)."
+          : "Review preview, then call again with confirm=true to copy.",
+      }) as Promise<T>;
+    }
+    case "recipes.validate":
+      return Promise.resolve({
+        ok: true,
+        id: "validated-demo",
+        version: "0.1.0",
+        name: "Validated",
+        findings: [],
+        sourcePath: String((params as { sourcePath?: string }).sourcePath || ""),
+      }) as Promise<T>;
+    case "recipes.scaffold":
+      return Promise.resolve({ status: "scaffolded", path: String((params as any).destDir || "") }) as Promise<T>;
     case "tofu.status":
       return Promise.resolve({ available: true, version: "1.12.2", path: "(bundled)" } as T);
     case "tofu.install": {
@@ -3613,12 +3714,118 @@ function handleMockRequest<T>(
       return mockRunDeployment(params.deploymentId as string, "apply") as Promise<T>;
     case "deployments.destroy":
       return mockRunDeployment(params.deploymentId as string, "destroy") as Promise<T>;
+    case "deployments.checkDrift":
+      return mockCheckDrift(params.deploymentId as string) as Promise<T>;
     case "deployments.cancel":
       return mockCancelDeployment(params.deploymentId as string) as Promise<T>;
     case "deployments.delete":
       return mockDeleteDeployment(params.deploymentId as string) as Promise<T>;
     case "deployments.retryPostApply":
       return mockRetryPostApply(params.deploymentId as string) as Promise<T>;
+    case "labs.start": {
+      const deployment = mockRequireAppliedDeployment(String(params.deploymentId ?? ""));
+      const recipe = mockRequireLabRecipe(deployment);
+      const session = mockBuildLabSession(deployment, recipe, "in_progress");
+      mockLabSessions.set(deployment.id, session);
+      mockEmitLabChanged(session);
+      return Promise.resolve(session as T);
+    }
+    case "labs.get": {
+      const deploymentId = String(params.deploymentId ?? "");
+      const existing = mockGetLabSessionRecord(deploymentId);
+      if (existing) {
+        return Promise.resolve(existing as T);
+      }
+      const deployment = mockDeployments.find((entry) => entry.id === deploymentId);
+      if (!deployment) {
+        return Promise.reject(new Error(`deployment ${deploymentId} not found`));
+      }
+      const recipe = mockRecipes.find((entry) => entry.manifest.id === deployment.recipeId);
+      if (!recipe?.manifest.lab) {
+        return Promise.reject(new Error(`recipe ${deployment.recipeId} has no lab section`));
+      }
+      const session = mockBuildLabSession(deployment, recipe, "not_started");
+      return Promise.resolve(session as T);
+    }
+    case "labs.verifyStep": {
+      const deployment = mockRequireAppliedDeployment(String(params.deploymentId ?? ""));
+      const recipe = mockRequireLabRecipe(deployment);
+      const stepId = String(params.stepId ?? "");
+      const labStep = recipe.manifest.lab?.steps.find((step) => step.id === stepId);
+      if (!labStep) {
+        return Promise.reject(new Error(`unknown lab step ${stepId}`));
+      }
+      const current =
+        mockGetLabSessionRecord(deployment.id) ??
+        mockBuildLabSession(deployment, recipe, "in_progress");
+      const verifyResults = (labStep.verify ?? []).map((check) => {
+        const table = mockResolveLabTemplate(String(check.table ?? ""), deployment);
+        const passed = Boolean(table);
+        return {
+          type: String(check.type ?? "verify"),
+          passed,
+          detail: passed ? `Verified ${table}` : "Could not resolve the verification target",
+        };
+      });
+      const allPassed = verifyResults.every((result) => result.passed);
+      const nextSteps = current.steps.map((step) => {
+        if (step.stepId !== stepId) {
+          return step;
+        }
+        return {
+          ...step,
+          status: allPassed ? ("passed" as const) : ("failed" as const),
+          verifyResults,
+        };
+      });
+      const stepIndex = recipe.manifest.lab!.steps.findIndex((step) => step.id === stepId);
+      if (allPassed && stepIndex >= 0 && stepIndex + 1 < nextSteps.length) {
+        nextSteps[stepIndex + 1] = {
+          ...nextSteps[stepIndex + 1],
+          status: "in_progress",
+        };
+      }
+      const completed = nextSteps.every((step) => step.status === "passed");
+      const session: LabSession = {
+        ...current,
+        status: completed ? "completed" : "in_progress",
+        completedAt: completed ? new Date().toISOString() : undefined,
+        steps: nextSteps,
+      };
+      mockLabSessions.set(deployment.id, session);
+      mockEmitLabChanged(session);
+      return Promise.resolve(session as T);
+    }
+    case "labs.runAction": {
+      const deployment = mockRequireAppliedDeployment(String(params.deploymentId ?? ""));
+      const recipe = mockRequireLabRecipe(deployment);
+      const action = params.action as LabStepAction;
+      const current =
+        mockGetLabSessionRecord(deployment.id) ??
+        mockBuildLabSession(deployment, recipe, "in_progress");
+      mockLabSessions.set(deployment.id, current);
+      const resolvedAction =
+        action.type === "open-tab" && typeof (action as LabStepAction & { focus?: string }).focus === "string"
+          ? {
+              ...action,
+              focus: mockResolveLabTemplate((action as LabStepAction & { focus: string }).focus, deployment),
+            }
+          : action;
+      const result: LabRunActionResult = {
+        session: current,
+        action: resolvedAction,
+      };
+      mockEmitLabChanged(current);
+      return Promise.resolve(result as T);
+    }
+    case "labs.reset": {
+      const deployment = mockRequireAppliedDeployment(String(params.deploymentId ?? ""));
+      const recipe = mockRequireLabRecipe(deployment);
+      const session = mockBuildLabSession(deployment, recipe, "not_started");
+      mockLabSessions.set(deployment.id, session);
+      mockEmitLabChanged(session);
+      return Promise.resolve(session as T);
+    }
     default:
       return Promise.reject(new Error(`Mock backend method not implemented: ${method}`));
   }
@@ -3672,6 +3879,15 @@ export async function destroyDeployment(deploymentId: string): Promise<Deploymen
   return backendRequest<DeploymentJob>("deployments.destroy", { deploymentId });
 }
 
+export interface CheckDriftResult {
+  deployment: Deployment;
+  drift: DriftReport;
+}
+
+export async function checkDeploymentDrift(deploymentId: string): Promise<CheckDriftResult> {
+  return backendRequest<CheckDriftResult>("deployments.checkDrift", { deploymentId });
+}
+
 export async function cancelDeployment(deploymentId: string): Promise<void> {
   await backendRequest("deployments.cancel", { deploymentId });
 }
@@ -3684,6 +3900,55 @@ export async function retryPostApplyDeployment(deploymentId: string): Promise<De
   return backendRequest<DeploymentJob>("deployments.retryPostApply", { deploymentId });
 }
 
+export async function importRecipeFolder(
+  sourcePath: string,
+  confirm = false,
+  sourceType?: "folder" | "zip",
+): Promise<any> {
+  // Local import (C2): folder or zip; preview by default; confirm=true copies after trust review.
+  return backendRequest<any>("recipes.import", { sourcePath, confirm, sourceType });
+}
+
+export async function validateRecipeFolder(sourcePath: string): Promise<any> {
+  // C1 validation against a local recipe directory.
+  return backendRequest<any>("recipes.validate", { sourcePath });
+}
+
+export async function scaffoldRecipe(destDir: string, provider?: string): Promise<any> {
+  // C3 authoring scaffold.
+  return backendRequest<any>("recipes.scaffold", { destDir, provider });
+}
+
+export async function startLabSession(deploymentId: string): Promise<LabSession> {
+  return backendRequest<LabSession>("labs.start", { deploymentId });
+}
+
+export async function getLabSession(deploymentId: string): Promise<LabSession> {
+  return backendRequest<LabSession>("labs.get", { deploymentId });
+}
+
+export async function verifyLabStep(deploymentId: string, stepId: string): Promise<LabSession> {
+  return backendRequest<LabSession>("labs.verifyStep", { deploymentId, stepId });
+}
+
+export async function runLabAction(
+  deploymentId: string,
+  stepId: string,
+  action: LabStepAction,
+  actionIndex?: number,
+): Promise<LabRunActionResult> {
+  return backendRequest<LabRunActionResult>("labs.runAction", {
+    deploymentId,
+    stepId,
+    actionIndex,
+    action,
+  });
+}
+
+export async function resetLabSession(deploymentId: string): Promise<LabSession> {
+  return backendRequest<LabSession>("labs.reset", { deploymentId });
+}
+
 // openExternalUrl opens a URL in the user's default browser. The Tauri webview
 // blocks plain <a target="_blank"> navigation, so deployment output links must
 // go through the opener plugin; in browser/dev we fall back to window.open.
@@ -3694,6 +3959,28 @@ export async function openExternalUrl(url: string): Promise<void> {
   }
   window.open(url, "_blank", "noopener,noreferrer");
 }
+
+const mockLabDynamoDbSpec: LabSpec = {
+  difficulty: "beginner",
+  estimatedMinutes: 15,
+  objectives: ["Inspect the DynamoDB table created by this lab"],
+  steps: [
+    {
+      id: "inspect-table",
+      title: "Open the DynamoDB table",
+      body: "Use the DynamoDB tab to find the table created by this deployment.",
+      actions: [{ type: "open-tab", tab: "aws-dynamodb", focus: "{{ outputs.table_name }}" }],
+      verify: [{ type: "dynamodb.table-exists", table: "{{ outputs.table_name }}" }],
+      hints: ["The table name is available in the deployment outputs above."],
+    },
+    {
+      id: "scan-items",
+      title: "Preview table items",
+      body: "Select the table and review the read-only item preview in the inspector.",
+      verify: [{ type: "dynamodb.table-readable", table: "{{ outputs.table_name }}" }],
+    },
+  ],
+};
 
 const mockRecipes: Recipe[] = [
   {
@@ -3792,6 +4079,31 @@ const mockRecipes: Recipe[] = [
   {
     manifest: {
       apiVersion: "cloudsprocket.recipe/v1",
+      id: "lab-dynamodb-aws",
+      kind: "service-lab",
+      version: "0.1.0",
+      name: "DynamoDB lab (AWS)",
+      summary: "A single on-demand DynamoDB table you can query from your app.",
+      description: "A focused service lab for DynamoDB with guided verification steps.",
+      providers: ["aws"],
+      tags: ["dynamodb", "database", "aws", "lab"],
+      engine: { type: "opentofu", minVersion: "1.6.0" },
+      local: { runtimes: [{ id: "localstack" }] },
+      lab: mockLabDynamoDbSpec,
+    },
+    variables: [
+      { name: "app_name", type: "string", default: "mylab", required: false, group: "Application", widget: "text" },
+      { name: "environment", type: "string", default: "dev", required: false, group: "Application", widget: "select", options: ["dev", "staging", "prod"] },
+      { name: "aws_region", type: "string", default: "us-east-1", required: false, group: "Application", widget: "text" },
+    ],
+    outputs: [
+      { name: "table_name", description: "DynamoDB table name.", primary: true },
+      { name: "table_arn", description: "DynamoDB table ARN." },
+    ],
+  },
+  {
+    manifest: {
+      apiVersion: "cloudsprocket.recipe/v1",
       id: "scheduled-job-aws",
       version: "0.1.0",
       name: "Scheduled job (AWS EventBridge + Lambda)",
@@ -3819,6 +4131,66 @@ const mockRecipes: Recipe[] = [
 ];
 
 const mockDeployments: Deployment[] = [];
+const mockLabSessions = new Map<string, LabSession>();
+
+function mockEmitLabChanged(session: LabSession): void {
+  emitMockEvent("lab.changed", { ...session });
+}
+
+function mockResolveLabTemplate(value: string, deployment: Deployment): string {
+  return value.replace(/\{\{\s*outputs\.([a-zA-Z0-9_]+)\s*\}\}/g, (_match, name: string) => {
+    const output = deployment.outputs?.find((entry) => entry.name === name);
+    return output ? String(output.value ?? "") : "";
+  });
+}
+
+function mockBuildLabSession(deployment: Deployment, recipe: Recipe, status: LabSession["status"]): LabSession {
+  const lab = recipe.manifest.lab;
+  if (!lab) {
+    throw new Error(`recipe ${deployment.recipeId} has no lab section`);
+  }
+  const now = new Date().toISOString();
+  const steps = lab.steps.map((step, index) => ({
+    stepId: step.id,
+    status:
+      status === "not_started"
+        ? ("pending" as const)
+        : index === 0
+          ? ("in_progress" as const)
+          : ("pending" as const),
+    verifyResults: [] as LabSession["steps"][number]["verifyResults"],
+  }));
+  return {
+    deploymentId: deployment.id,
+    recipeId: deployment.recipeId,
+    status,
+    startedAt: now,
+    steps,
+  };
+}
+
+function mockGetLabSessionRecord(deploymentId: string): LabSession | null {
+  return mockLabSessions.get(deploymentId) ?? null;
+}
+
+function mockRequireAppliedDeployment(deploymentId: string): Deployment {
+  const deployment = mockDeployments.find((entry) => entry.id === deploymentId);
+  if (!deployment) {
+    throw new Error(`deployment ${deploymentId} not found`);
+  }
+  if (deployment.status !== "applied") {
+    throw new Error("Lab is only available after the deployment has been applied");
+  }
+  return deployment;
+}
+
+function mockRequireLabRecipe(deployment: Deployment): Recipe {
+  const recipe = mockRecipes.find((entry) => entry.manifest.id === deployment.recipeId);
+  if (!recipe?.manifest.lab) {
+    throw new Error(`recipe ${deployment.recipeId} has no lab section`);
+  }
+  return recipe;
+}
 
 function mockGetRecipe(recipeId: string): Promise<Recipe> {
   const recipe = mockRecipes.find((entry) => entry.manifest.id === recipeId);
@@ -3908,6 +4280,11 @@ function mockRunDeployment(deploymentId: string, action: "apply" | "destroy"): P
         { name: "website_endpoint", value: `http://${appName}-${env}-site.s3-website.localhost:4566` },
         { name: "bucket_name", value: `${appName}-${env}-site` },
       ];
+    } else if (deployment.recipeId === "lab-dynamodb-aws") {
+      deployment.outputs = [
+        { name: "table_name", value: `${appName}-${env}-items` },
+        { name: "table_arn", value: `arn:aws:dynamodb:us-east-1:000000000000:table/${appName}-${env}-items` },
+      ];
     } else if (deployment.recipeId === "scheduled-job-aws") {
       deployment.outputs = [
         { name: "lambda_function_name", value: `${appName}-${env}-job` },
@@ -3987,6 +4364,18 @@ function mockDeleteDeployment(deploymentId: string): Promise<{ deleted: boolean 
   }
   mockDeployments.splice(index, 1);
   return Promise.resolve({ deleted: true });
+}
+
+function mockCheckDrift(deploymentId: string): Promise<CheckDriftResult> {
+  const deployment = mockDeployments.find((entry) => entry.id === deploymentId);
+  if (!deployment) {
+    return Promise.reject(new Error(`deployment ${deploymentId} not found`));
+  }
+  // For mock/dev: report no drift. Real impl populates from tofu plan.
+  const report: DriftReport = { hasDrift: false };
+  deployment.drift = report;
+  emitMockEvent("deployment.changed", { ...deployment });
+  return Promise.resolve({ deployment: { ...deployment }, drift: report });
 }
 
 export async function backendRequest<T>(

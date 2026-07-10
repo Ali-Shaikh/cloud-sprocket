@@ -38,3 +38,28 @@ outputs:
   - name: table_name
     primary: true
   - name: table_arn
+lab:
+  difficulty: beginner
+  estimatedMinutes: 15
+  objectives:
+    - Locate the on-demand DynamoDB table in the workspace
+    - Understand the partition key layout for this lab table
+  steps:
+    - id: explore-table
+      title: Open the DynamoDB table
+      body: |
+        Open the DynamoDB tab and select the table created by this deployment.
+        Review the table status, billing mode, and key schema in the inspector.
+      actions:
+        - type: open-tab
+          tab: aws-dynamodb
+          focus: "{{ outputs.table_name }}"
+      hints:
+        - The table name is prefixed with your app name and environment.
+    - id: note-outputs
+      title: Note the table ARN
+      body: |
+        Copy the `table_arn` output from the deployment detail panel. You will use
+        this ARN when wiring IAM policies or application SDK configuration.
+      hints:
+        - On LocalStack the ARN uses the emulated account id from your profile.

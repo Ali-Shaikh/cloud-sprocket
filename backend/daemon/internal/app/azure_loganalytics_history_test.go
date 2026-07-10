@@ -48,8 +48,8 @@ func TestLogAnalyticsHistoryUsesRequestedWorkspaceIdentifier(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -117,8 +117,8 @@ func TestLogAnalyticsHistoryPrefersHistoryQuery(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)

@@ -83,6 +83,28 @@ func (s *Service) sealForStore(deployment *deploy.Deployment) *deploy.Deployment
 		clone.Outputs = outputs
 	}
 
+	// Seal sensitive values inside historical revisions (B2). Revisions use the
+	// deployment's SensitiveVars list at snapshot time.
+	if len(deployment.Revisions) > 0 {
+		revisions := make([]deploy.DeploymentRevision, len(deployment.Revisions))
+		copy(revisions, deployment.Revisions)
+		for i := range revisions {
+			if len(revisions[i].Variables) > 0 {
+				vars := make(map[string]any, len(revisions[i].Variables))
+				for k, v := range revisions[i].Variables {
+					vars[k] = v
+				}
+				for _, name := range deployment.SensitiveVars {
+					if _, ok := vars[name]; ok {
+						vars[name] = s.sealValue(vars[name])
+					}
+				}
+				revisions[i].Variables = vars
+			}
+		}
+		clone.Revisions = revisions
+	}
+
 	return &clone
 }
 
@@ -100,6 +122,13 @@ func (s *Service) openFromStore(deployment *deploy.Deployment) {
 	for index := range deployment.Outputs {
 		if deployment.Outputs[index].Sensitive {
 			deployment.Outputs[index].Value = s.openValue(deployment.Outputs[index].Value)
+		}
+	}
+	for i := range deployment.Revisions {
+		for _, name := range deployment.SensitiveVars {
+			if value, ok := deployment.Revisions[i].Variables[name]; ok {
+				deployment.Revisions[i].Variables[name] = s.openValue(value)
+			}
 		}
 	}
 }

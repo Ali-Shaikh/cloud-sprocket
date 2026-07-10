@@ -1,0 +1,94 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-kms-aws
+kind: service-lab
+version: 0.1.0
+name: KMS encryption lab (AWS)
+summary: A customer managed KMS key with alias for learning envelope encryption patterns.
+description: |
+  A focused service lab for AWS KMS: one customer-managed key with an alias.
+  Use to understand key rotation, grants, and how applications perform envelope
+  encryption (encrypt data key with KMS, use data key for bulk).
+
+  Fully supported on LocalStack. Inspect in the KMS tab. Notes cover drift and
+  real usage patterns.
+providers:
+  - aws
+tags:
+  - kms
+  - encryption
+  - security
+  - aws
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: key_id
+    primary: true
+  - name: key_arn
+  - name: alias_name
+lab:
+  difficulty: intermediate
+  estimatedMinutes: 15
+  objectives:
+    - Locate a customer managed KMS key and its alias in the workspace
+    - Understand key metadata, rotation settings, and ARN usage
+    - Practise safe key handling and recognise when keys should not be deleted
+    - Note drift implications for keys used by other resources
+  steps:
+    - id: explore-key
+      title: Open the KMS key
+      body: |
+        Open the KMS tab and select the key. Review key id, ARN, description,
+        and whether automatic rotation is enabled.
+      actions:
+        - type: open-tab
+          tab: aws-kms
+          focus: "{{ outputs.key_id }}"
+      hints:
+        - The alias provides a friendly name; the key id is the stable identifier.
+    - id: note-alias
+      title: Note the alias
+      body: |
+        The alias name is available in outputs. Applications often reference
+        aliases rather than raw key ids so rotation is transparent.
+      actions:
+        - type: open-tab
+          tab: aws-kms
+          focus: "{{ outputs.alias_name }}"
+    - id: key-usage-pattern
+      title: Envelope encryption pattern
+      body: |
+        In real apps, call GenerateDataKey on this KMS key to obtain a data
+        encryption key (plaintext + encrypted copy). Encrypt data with the
+        plaintext data key; store the encrypted data key with the ciphertext.
+        To decrypt later, call Decrypt on the stored encrypted data key.
+      hints:
+        - Never persist the plaintext data key. KMS handles the master key only.
+    - id: drift-and-deletion
+      title: Drift and deletion protection
+      body: |
+        KMS keys have deletion protection windows (default 7-30 days). Manual
+        schedule for deletion outside the recipe will appear as drift. Keys
+        referenced by other services (S3, RDS, etc) must stay in sync.
+      hints:
+        - Use prevent_destroy in production recipes for keys.

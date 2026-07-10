@@ -1,0 +1,74 @@
+apiVersion: cloudsprocket.recipe/v1
+id: azure-queue-function-azure
+kind: app-deploy
+version: 0.1.0
+name: Queue triggered Functions (Azure)
+summary: Azure Functions triggered by Storage Queue messages, using floci-az friendly storage.
+description: |
+  Azure async messaging: deploy storage queue + function app with queue binding
+  in sample code. Send messages to trigger processing.
+
+  Good companion for event driven on Azure.
+providers:
+  - azure
+tags:
+  - azure
+  - functions
+  - queue
+  - storage
+  - messaging
+  - floci-az
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: floci-az
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: azure_location
+        widget: text
+  - title: Code
+    variables:
+      - name: backend_source_dir
+        widget: directory
+        help: Functions dir. Default sample queue trigger.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+outputs:
+  - name: function_app_name
+    primary: true
+  - name: storage_account_name
+  - name: queue_name
+  - name: resource_group_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 22
+  objectives:
+    - Provision queue and queue-triggered function
+    - Verify resources in Azure tabs
+  steps:
+    - id: inspect-queue
+      title: Check storage queue
+      body: |
+        Use outputs to locate the queue in storage resources.
+      actions:
+        - type: open-tab
+          tab: azure-storage
+          focus: "{{ outputs.storage_account_name }}"
+    - id: inspect-func
+      title: Inspect function app
+      body: Open function app details.
+      actions:
+        - type: open-tab
+          tab: azure-functions
+          focus: "{{ outputs.function_app_name }}"

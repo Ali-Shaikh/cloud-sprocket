@@ -1,0 +1,83 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lambda-with-secrets-aws
+kind: app-deploy
+version: 0.1.0
+name: Lambda with Secrets Manager (AWS)
+summary: A Lambda function granted least-privilege access to a Secrets Manager secret.
+description: |
+  Security pattern: IAM role allows Lambda to read a specific secret. Sample
+  handler demonstrates access (extend with real fetch). Good for DB creds or
+  API keys.
+
+  Uses Lambda + Secrets Manager. LocalStack supported.
+providers:
+  - aws
+tags:
+  - security
+  - secrets
+  - lambda
+  - iam
+  - aws
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+build:
+  - name: Install backend dependencies
+    dirVar: backend_source_dir
+    requires: package.json
+    command: ["npm", "install", "--omit=dev"]
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Secret
+    variables:
+      - name: secret_name
+        widget: text
+        help: Name for the Secrets Manager secret.
+  - title: Code
+    variables:
+      - name: backend_source_dir
+        widget: directory
+        help: Your handler folder. Default sample.
+      - name: lambda_memory_mb
+        widget: number
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+outputs:
+  - name: secret_arn
+    primary: true
+  - name: lambda_function_name
+lab:
+  difficulty: intermediate
+  estimatedMinutes: 18
+  objectives:
+    - See IAM policy scoped to one secret
+    - Inspect secret and Lambda role
+  steps:
+    - id: inspect-secret
+      title: Open Secrets tab
+      body: View the created secret in Secrets Manager tab.
+      actions:
+        - type: open-tab
+          tab: aws-secrets
+          focus: "{{ outputs.secret_arn }}"
+    - id: inspect-lambda
+      title: Check Lambda IAM
+      body: Lambda tab shows the function with attached policy for the secret.
+      actions:
+        - type: open-tab
+          tab: aws-lambda
+          focus: "{{ outputs.lambda_function_name }}"

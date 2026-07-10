@@ -1,0 +1,89 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-queue-storage-azure
+kind: service-lab
+version: 0.1.0
+name: Azure Storage queue lab
+summary: An Azure Storage account with a queue for async messaging patterns.
+description: |
+  A focused service lab for Azure queues: storage account + queue. Learn
+  enqueue, peek, and how Functions or workers consume from Azure Storage
+  queues. Uses floci-az for local.
+
+  Open the Azure Storage and Queues tabs.
+providers:
+  - azure
+tags:
+  - azure
+  - queue
+  - storage
+  - async
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: floci-az
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: azure_location
+        widget: text
+        help: Azure region, e.g. westeurope.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: storage_account_name
+    primary: true
+  - name: queue_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 15
+  objectives:
+    - Provision an Azure Storage account and queue using recipe
+    - Inspect queue in the Azure workspace tabs
+    - Understand enqueue semantics and visibility timeout
+    - Recognise how this pairs with Azure Functions for processing
+  steps:
+    - id: explore-storage
+      title: Explore the storage account
+      body: |
+        Open the Azure Storage tab and locate the account. Browse containers
+        and note the queues capability (separate Queues view).
+      actions:
+        - type: open-tab
+          tab: azure-storage
+          focus: "{{ outputs.storage_account_name }}"
+      hints:
+        - Account name is derived and lowercased without hyphens for Azure rules.
+    - id: explore-queue
+      title: View the queue
+      body: |
+        Open the Azure Queues tab and select or filter to the created queue.
+      actions:
+        - type: open-tab
+          tab: azure-queues
+          focus: "{{ outputs.queue_name }}"
+    - id: enqueue-note
+      title: Enqueue a message (guidance)
+      body: |
+        With write mode, use the Queues UI or SDK to enqueue a message. Peek
+        to see it without removing.
+      hints:
+        - Messages have visibility timeout; failed processing can reappear.
+    - id: pair-with-functions
+      title: Pairing with Functions
+      body: |
+        Azure Functions has a Storage Queue trigger binding. See the companion
+        lab for a function wired to a queue.
+      hints:
+        - This lab focuses on the queue resource itself.

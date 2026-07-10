@@ -1,0 +1,67 @@
+apiVersion: cloudsprocket.recipe/v1
+id: python-s3-event-lambda-aws
+kind: app-deploy
+version: 0.1.0
+name: Python S3 event processor (AWS Lambda)
+summary: S3 bucket events triggering a Python Lambda function.
+description: |
+  Event-driven with Python: upload triggers Python Lambda. Sample uses
+  python runtime. Alternative language for the S3 event pattern.
+
+  LocalStack supported.
+providers:
+  - aws
+tags:
+  - event-driven
+  - s3
+  - lambda
+  - python
+  - aws
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+build:
+  - name: Install Python dependencies
+    dirVar: backend_source_dir
+    requires: requirements.txt
+    command: ["pip", "install", "-r", "requirements.txt", "-t", "."]
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase prefix.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Code
+    variables:
+      - name: backend_source_dir
+        widget: directory
+        help: Python Lambda dir with lambda_function.py . Default sample.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+outputs:
+  - name: bucket_name
+    primary: true
+  - name: lambda_function_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 15
+  objectives:
+    - Trigger Python Lambda from S3
+  steps:
+    - id: explore
+      title: Explore bucket and function
+      body: Use S3 and Lambda tabs.
+      actions:
+        - type: open-tab
+          tab: aws-s3
+          focus: "{{ outputs.bucket_name }}"

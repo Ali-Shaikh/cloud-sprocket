@@ -6,6 +6,7 @@ package app
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"cloudsprocket/backend/daemon/internal/config"
@@ -69,8 +70,8 @@ func TestServiceRejectsPhase2And3WriteRPCsWithoutWriteMode(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -117,8 +118,12 @@ func TestServiceRejectsPhase2And3WriteRPCsWithoutWriteMode(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := service.Handle(ctx, tc.method, []byte(tc.params), nil); err == nil {
+			_, err := service.Handle(ctx, tc.method, []byte(tc.params), nil)
+			if err == nil {
 				t.Fatalf("expected %s to be rejected without write mode enabled", tc.method)
+			}
+			if strings.Contains(err.Error(), "unknown backend method") {
+				t.Fatalf("expected %s to route to a write handler, got %v", tc.method, err)
 			}
 		})
 	}

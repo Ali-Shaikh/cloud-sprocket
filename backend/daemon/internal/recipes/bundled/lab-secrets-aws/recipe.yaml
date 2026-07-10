@@ -43,3 +43,28 @@ outputs:
   - name: secret_arn
     primary: true
   - name: secret_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 15
+  objectives:
+    - Find the Secrets Manager secret in the workspace
+    - Understand how ARNs map to secret names in IAM policies
+  steps:
+    - id: explore-secret
+      title: Open the secret
+      body: |
+        Open the Secrets Manager tab and select the secret created by this
+        deployment. Review the ARN and description in the inspector.
+      actions:
+        - type: open-tab
+          tab: aws-secrets
+          focus: "{{ outputs.secret_name }}"
+      hints:
+        - The secret name is prefixed with your app name and environment.
+    - id: note-arn
+      title: Note the secret ARN
+      body: |
+        Copy the `secret_arn` output for use in application configuration or IAM
+        resource policies. Never commit secret values to source control.
+      hints:
+        - Rotate the initial value in your app after first deploy.

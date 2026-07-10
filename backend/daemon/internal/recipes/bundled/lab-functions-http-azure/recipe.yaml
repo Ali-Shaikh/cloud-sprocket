@@ -1,0 +1,87 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-functions-http-azure
+kind: service-lab
+version: 0.1.0
+name: Azure Functions lab (HTTP)
+summary: An Azure Functions app with HTTP trigger ready for serverless compute.
+description: |
+  A focused service lab for Azure Functions: storage account + consumption
+  plan + Linux function app. Inspect and (when code deployed) invoke HTTP
+  functions. Uses floci-az.
+
+  Open azure-functions tab. Good companion to queue or storage labs.
+providers:
+  - azure
+tags:
+  - azure
+  - functions
+  - serverless
+  - http
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: floci-az
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: azure_location
+        widget: text
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: function_app_name
+    primary: true
+  - name: storage_account_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 15
+  objectives:
+    - Provision a function app and its backing storage
+    - Explore the Functions tab and understand hosting model
+    - Recognise storage requirement for Functions runtime
+    - Note deployment of actual function code is separate from infra
+  steps:
+    - id: explore-functions
+      title: Open the Functions view
+      body: |
+        Open azure-functions tab and locate the function app. List functions
+        once code is deployed.
+      actions:
+        - type: open-tab
+          tab: azure-functions
+          focus: "{{ outputs.function_app_name }}"
+    - id: explore-storage
+      title: View backing storage
+      body: |
+        The storage account is required by the Functions host for internal
+        state.
+      actions:
+        - type: open-tab
+          tab: azure-storage
+          focus: "{{ outputs.storage_account_name }}"
+    - id: invoke-guidance
+      title: Invoke an HTTP function
+      body: |
+        After deploying function code (outside this lab infra), use the
+        Functions UI invoke button (write mode) or the default host URL.
+      hints:
+        - Default host is https://<name>.azurewebsites.net or emulator equivalent.
+    - id: hosting-notes
+      title: Hosting and scaling notes
+      body: |
+        Consumption plan (Y1) scales to zero. Use VNet or private endpoints
+        for production. Drift on app settings is common; manage via recipe.
+      hints:
+        - Pair with Key Vault for secrets in app settings.

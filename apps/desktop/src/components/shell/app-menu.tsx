@@ -17,6 +17,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { APP_VERSION } from "@/lib/app-version";
+import { RELEASE_CHANNEL_LABEL } from "@/lib/release-channel";
 import { openExternalUrl } from "@/lib/backend";
 import { useTheme } from "@/lib/theme";
 import {
@@ -145,7 +146,7 @@ function AppMenu({
         <DropdownMenuLabel>About</DropdownMenuLabel>
         <DropdownMenuItem disabled>
           <Info />
-          CloudSprocket v{APP_VERSION}
+          CloudSprocket v{APP_VERSION} ({RELEASE_CHANNEL_LABEL})
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => {

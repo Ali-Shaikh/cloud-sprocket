@@ -1,0 +1,110 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-cloudformation-drift-aws
+kind: service-lab
+version: 0.1.0
+name: CloudFormation vs recipe drift lab (AWS)
+summary: Manage a CloudFormation stack via OpenTofu recipe and explore drift patterns.
+description: |
+  A service lab contrasting CloudFormation stacks with recipe (tofu) driven IaC.
+  The recipe provisions a CF stack containing an SQS queue. Learn to inspect the
+  stack in the CloudFormation tab, recognise drift when changes are made outside
+  the recipe, and understand why recipes and native CF should stay in sync.
+
+  Uses LocalStack for local execution (and works on cloud profiles). Ties into
+  drift detection features. No sample code build required.
+
+providers:
+  - aws
+tags:
+  - cloudformation
+  - drift
+  - iac
+  - sqs
+  - aws
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: stack_name
+    primary: true
+  - name: stack_id
+  - name: queue_url_from_stack
+lab:
+  difficulty: intermediate
+  estimatedMinutes: 20
+  objectives:
+    - Deploy a CloudFormation stack from a recipe using OpenTofu
+    - Inspect the stack and contained resources in the workspace
+    - Recognise how out of band changes create detectable drift
+    - Contrast recipe managed IaC with direct CloudFormation usage
+  steps:
+    - id: explore-stack
+      title: Inspect the CloudFormation stack
+      body: |
+        Open the CloudFormation tab and select the stack created by this recipe.
+        Review status, resources, and outputs. Note the queue defined inside the
+        template body in the recipe.
+      actions:
+        - type: open-tab
+          tab: aws-cloudformation
+          focus: "{{ outputs.stack_name }}"
+      hints:
+        - The stack is fully managed by the recipe's tofu apply. Its template is
+          embedded in the main.tf.
+    - id: review-queue-in-stack
+      title: Note the queue inside the stack
+      body: |
+        The stack outputs include the queue URL created by the CF template. This
+        shows how recipes can orchestrate CF to create AWS resources.
+      hints:
+        - In a full drift scenario, manually delete or modify the queue via the
+          emulator console and re-check for drift using the deployment tools.
+    - id: drift-concept
+      title: Understand recipe vs CF drift
+      body: |
+        Recipes (tofu) record their own state. CF stacks have their own drift
+        detection. When you edit resources declared in the stack template
+        outside the recipe, both the recipe deployment and the stack will report
+        drift on next plan.
+      hints:
+        - Re-apply the recipe to reconcile, or use the drift check button on the
+          deployment after manual changes.
+    - id: explore-other-tabs
+      title: Cross check in related tabs
+      body: |
+        Although the queue lives inside CF, you may explore SQS and other tabs.
+        The recipe engine surfaces resources consistently.
+      actions:
+        - type: open-tab
+          tab: aws-sqs
+      hints:
+        - Focus may not resolve to an exact row for nested CF resources; the
+          lesson is the relationship between the two IaC approaches.
+    - id: summary-and-next
+      title: Summarise learnings and next steps
+      body: |
+        You have seen a recipe using tofu to stand up a CF stack. In production,
+        choose one primary IaC tool. Use drift detection regularly. For pure CF
+        recipes consider dedicated CF labs or the import flow.
+      hints:
+        - Try the same pattern with an S3 bucket or Lambda inside a stack.

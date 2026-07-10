@@ -13,12 +13,16 @@ import (
 
 type S3Inventory interface {
 	ListBuckets(ctx context.Context, profile models.ProfileSummary) ([]models.AwsS3Bucket, error)
-	ListObjects(ctx context.Context, profile models.ProfileSummary, bucketName string, prefix string) ([]models.AwsS3Object, error)
+	// ListObjects returns one delimiter-scoped page (folders + objects) for the browser.
+	// continuationToken empty means the first page under prefix.
+	ListObjects(ctx context.Context, profile models.ProfileSummary, bucketName string, prefix string, continuationToken string) (models.AwsS3ObjectListPage, error)
 	HeadObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string) ([]models.DetailField, error)
 	UploadFile(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, sourcePath string) (models.AwsS3UploadResult, error)
 	PresignGetObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, durationSeconds int) (models.AwsS3PresignResult, error)
 	DeleteObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string) (models.AwsS3DeleteObjectResult, error)
 	CreateBucket(ctx context.Context, profile models.ProfileSummary, bucketName string, region string) (models.AwsS3CreateBucketResult, error)
+	CopyObject(ctx context.Context, profile models.ProfileSummary, bucketName string, sourceObjectKey string, destinationObjectKey string) (models.AwsS3CopyObjectResult, error)
+	CreateFolderPrefix(ctx context.Context, profile models.ProfileSummary, bucketName string, folderPrefix string) (models.AwsS3CreateFolderPrefixResult, error)
 }
 
 type EC2Inventory interface {
@@ -144,6 +148,8 @@ type AzureInventory interface {
 	CreateBlobContainer(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string) error
 	UploadBlob(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, blobName string, sourcePath string) (models.AzureBlobUploadResult, error)
 	DeleteBlob(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, blobName string) error
+	CopyBlob(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, sourceBlobName string, destinationBlobName string) (models.AzureBlobCopyResult, error)
+	CreateFolderPrefix(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, folderPrefix string) (models.AzureBlobCreateFolderPrefixResult, error)
 	InvokeVirtualMachineAction(ctx context.Context, profile models.ProfileSummary, resourceGroup string, vmName string, action string) error
 	GetVirtualMachine(ctx context.Context, profile models.ProfileSummary, resourceGroup string, vmName string) (models.AzureVirtualMachine, error)
 	ListBastionHosts(ctx context.Context, profile models.ProfileSummary) ([]models.AzureBastionHost, error)
@@ -235,5 +241,6 @@ type Deployer interface {
 	Apply(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) (deploy.ApplyResult, error)
 	RetryPostApply(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) error
 	Destroy(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) error
+	CheckDrift(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) (deploy.DriftReport, error)
 	RemoveWorkspace(id string) error
 }

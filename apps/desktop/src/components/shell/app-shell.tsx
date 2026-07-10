@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
+import { DeveloperPreviewNotice } from "@/components/developer-preview-notice";
+
 import type { AppShellProps } from "./types";
 
 /**
@@ -19,6 +21,7 @@ function AppShell({ rail, nav, topBar, children, drawer, navCollapsed }: AppShel
       {!navCollapsed && nav}
       <div className="flex min-w-0 flex-col overflow-hidden bg-background">
         {topBar}
+        <DeveloperPreviewNotice variant="strip" />
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
       {drawer}
