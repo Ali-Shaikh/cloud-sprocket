@@ -1,16 +1,34 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { Clock, Loader2, Server } from "lucide-react";
+import { ChevronDown, Clock, Loader2, Server } from "lucide-react";
 
+import { useCollapsedNavGroups } from "@/hooks/use-collapsed-nav-groups";
 import { cn } from "@/lib/utils";
 import { ProviderIcon } from "@/components/provider-icon";
 import { StatusDot } from "@/components/status-dot";
 
-import type { ContextNavProps } from "./types";
+import type { ContextNavProps, NavGroup } from "./types";
 
 const navItemBase =
   "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13.5px] font-medium";
+
+const groupHeaderBase =
+  "px-2 pb-1.5 pt-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground";
+
+/** Sum of numeric item counts, shown on a collapsed header so nothing goes invisible. */
+function groupCountSum(group: NavGroup): number | null {
+  let sum = 0;
+  let found = false;
+  for (const item of group.items) {
+    const count = typeof item.count === "string" ? Number(item.count) : item.count;
+    if (typeof count === "number" && Number.isFinite(count)) {
+      sum += count;
+      found = true;
+    }
+  }
+  return found ? sum : null;
+}
 
 /**
  * The 256px contextual sidebar: a connection header, grouped navigation items,
@@ -25,6 +43,7 @@ function ContextNav({
   activityActive,
   footer,
 }: ContextNavProps) {
+  const { isCollapsed, toggleGroup } = useCollapsedNavGroups();
   return (
     <aside
       data-slot="context-nav"
@@ -61,12 +80,37 @@ function ContextNav({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
-        {groups.map((group) => (
-          <div key={group.label}>
-            <div className="px-2 pb-1.5 pt-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              {group.label}
-            </div>
-            {group.items.map((item) => {
+        {groups.map((group) => {
+          const collapsible = Boolean(group.collapsible && group.id);
+          const collapsed = collapsible && isCollapsed(group.id!);
+          const collapsedCount = collapsed ? groupCountSum(group) : null;
+          return (
+          <div key={group.id ?? group.label}>
+            {collapsible ? (
+              <button
+                type="button"
+                aria-expanded={!collapsed}
+                onClick={() => toggleGroup(group.id!)}
+                className={cn(
+                  groupHeaderBase,
+                  "flex w-full items-center gap-1 rounded-md text-left transition-colors hover:text-foreground",
+                )}
+              >
+                <ChevronDown
+                  aria-hidden
+                  className={cn("size-3 shrink-0 transition-transform", collapsed && "-rotate-90")}
+                />
+                <span className="truncate">{group.label}</span>
+                {collapsedCount != null && (
+                  <span className="ml-auto rounded-full bg-muted px-1.5 py-px text-[11px] font-bold normal-case tracking-normal">
+                    {collapsedCount}
+                  </span>
+                )}
+              </button>
+            ) : (
+              <div className={groupHeaderBase}>{group.label}</div>
+            )}
+            {!collapsed && group.items.map((item) => {
               // A parent tab stays highlighted when one of its sub-pages is
               // active (composite ids look like "s3:objects"), while the active
               // sub-page item also highlights via the exact match.
@@ -120,7 +164,8 @@ function ContextNav({
               );
             })}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="border-t border-border">

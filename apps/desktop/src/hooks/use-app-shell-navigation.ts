@@ -7,6 +7,7 @@ import { Bug, LayoutGrid, Rocket, Server } from "lucide-react";
 import type { Command } from "@/components/command-palette";
 import type { NavConnectionHeader, NavGroup, RailConnection } from "@/components/shell/types";
 import type { Status } from "@/components/status-dot";
+import { groupByServiceDomain } from "@/lib/service-domains";
 import {
   authLabel,
   navItemForTab,
@@ -284,13 +285,13 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
         countsPending && item.count != null
           ? { ...item, count: undefined, countLoading: true }
           : item;
-      return { item: navItem, category: tabCategory(tab) };
+      return { item: navItem, category: tabCategory(tab), domain: tab.domain };
     });
     const workspaceItems = entries.filter((entry) => entry.category === "workspace").map((entry) => entry.item);
     const toolItems = entries.filter((entry) => entry.category === "tool").map((entry) => entry.item);
-    const serviceItems = entries
-      .filter((entry) => entry.category === "service" || entry.category === "coming_soon")
-      .map((entry) => entry.item);
+    const serviceEntries = entries.filter(
+      (entry) => entry.category === "service" || entry.category === "coming_soon",
+    );
     const groups: NavGroup[] = [];
     if (workspaceItems.length > 0) {
       groups.push({ label: "Workspace", items: workspaceItems });
@@ -298,8 +299,13 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     if (toolItems.length > 0) {
       groups.push({ label: "Tools", items: toolItems });
     }
-    if (serviceItems.length > 0) {
-      groups.push({ label: "Services", items: serviceItems });
+    for (const domainGroup of groupByServiceDomain(serviceEntries, (entry) => entry.domain)) {
+      groups.push({
+        id: domainGroup.id,
+        label: domainGroup.label,
+        items: domainGroup.items.map((entry) => entry.item),
+        collapsible: true,
+      });
     }
     // S3 and Azure Storage are single path-browser surfaces (no sub-rail pages).
     groups.push({
