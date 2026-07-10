@@ -1304,6 +1304,8 @@ export interface RecipeManifest {
   superpowers?: RecipeSuperpowers;
   imageBuild?: RecipeImageBuild;
   lab?: LabSpec;
+  /** Set by the daemon: bundled catalogue vs trusted local import. */
+  source?: "bundled" | "imported" | string;
 }
 
 export interface RecipeVisibleWhen {
@@ -1466,6 +1468,8 @@ export interface LabVerifyResult {
   type: string;
   passed: boolean;
   detail: string;
+  /** Optional human-readable note (e.g. check runtime error text). */
+  message?: string;
 }
 
 export interface LabStepSession {
