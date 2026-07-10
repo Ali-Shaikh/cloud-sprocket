@@ -200,7 +200,14 @@ func (l *Loader) listImported() ([]Manifest, error) {
 		return nil, fmt.Errorf("read imported recipes: %w", err)
 	}
 	// Prefer highest folder name (id@version) per recipe id when several exist.
-	bestDir := map[string]string{}
+	// Cache the light manifest so we only parse recipe.yaml once per winner (no
+	// second tfconfig pass during List).
+	type candidate struct {
+		dir      string
+		folder   string
+		manifest Manifest
+	}
+	best := map[string]candidate{}
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -209,23 +216,19 @@ func (l *Loader) listImported() ([]Manifest, error) {
 		if !TrustValid(dir) {
 			continue
 		}
-		recipe, err := LoadFromDirectory(dir, SourceImported)
+		manifest, err := readManifestFromDirectory(dir, SourceImported)
 		if err != nil {
 			// Skip corrupt imports rather than failing the whole catalogue.
 			continue
 		}
-		id := recipe.Manifest.ID
-		if prev, ok := bestDir[id]; !ok || entry.Name() > filepath.Base(prev) {
-			bestDir[id] = dir
+		id := manifest.ID
+		if prev, ok := best[id]; !ok || entry.Name() > prev.folder {
+			best[id] = candidate{dir: dir, folder: entry.Name(), manifest: manifest}
 		}
 	}
-	manifests := make([]Manifest, 0, len(bestDir))
-	for _, dir := range bestDir {
-		recipe, err := LoadFromDirectory(dir, SourceImported)
-		if err != nil {
-			continue
-		}
-		manifests = append(manifests, recipe.Manifest)
+	manifests := make([]Manifest, 0, len(best))
+	for _, c := range best {
+		manifests = append(manifests, c.manifest)
 	}
 	return manifests, nil
 }
@@ -251,9 +254,9 @@ func (l *Loader) findImportedDir(id string) (string, bool) {
 		if !TrustValid(dir) {
 			continue
 		}
-		// Confirm manifest id matches (avoids prefix collisions).
-		recipe, err := LoadFromDirectory(dir, SourceImported)
-		if err != nil || recipe.Manifest.ID != id {
+		// Light manifest read only (avoid full module inspect until Load).
+		manifest, err := readManifestFromDirectory(dir, SourceImported)
+		if err != nil || manifest.ID != id {
 			continue
 		}
 		if best == "" || name > filepath.Base(best) {
@@ -264,6 +267,35 @@ func (l *Loader) findImportedDir(id string) (string, bool) {
 		return "", false
 	}
 	return best, true
+}
+
+// readManifestFromDirectory parses recipe.yaml without inspecting the OpenTofu
+// module (used for catalogue listing and import discovery).
+func readManifestFromDirectory(dir, source string) (Manifest, error) {
+	data, err := os.ReadFile(filepath.Join(dir, manifestFile))
+	if err != nil {
+		return Manifest{}, fmt.Errorf("read manifest in %s: %w", dir, err)
+	}
+	var manifest Manifest
+	if err := yaml.Unmarshal(data, &manifest); err != nil {
+		return Manifest{}, fmt.Errorf("parse manifest in %s: %w", dir, err)
+	}
+	if strings.TrimSpace(manifest.ID) == "" {
+		manifest.ID = filepath.Base(dir)
+	}
+	if err := manifest.Validate(); err != nil {
+		return Manifest{}, err
+	}
+	if err := ValidateLabSpec(manifest); err != nil {
+		return Manifest{}, err
+	}
+	NormalizeManifest(&manifest)
+	if source != "" {
+		manifest.Source = source
+	} else if manifest.Source == "" {
+		manifest.Source = SourceImported
+	}
+	return manifest, nil
 }
 
 func copyDirTree(src, dest string) error {

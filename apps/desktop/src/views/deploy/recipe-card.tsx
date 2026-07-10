@@ -58,6 +58,14 @@ export function RecipeCard({ manifest, onConfigure }: { manifest: RecipeManifest
               ~{lab.estimatedMinutes} min
             </span>
           )}
+          {manifest.source === "imported" && (
+            <span
+              className="rounded-full bg-orange-500/15 px-2 py-0.5 text-xs font-medium text-orange-700 dark:text-orange-300"
+              title="Loaded from a locally imported recipe with a valid trust hash"
+            >
+              Imported
+            </span>
+          )}
           <span className="text-xs text-muted-foreground">v{manifest.version}</span>
         </div>
       </div>
