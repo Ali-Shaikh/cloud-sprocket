@@ -9,6 +9,21 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-07-10
+
+### Added
+
+- Recipe validation RPC (`recipes.validate`) for local folders: manifest, lab
+  semantics, OpenTofu module inspect, and build/imageBuild coherence (#138)
+- Zip import for recipes alongside folder import, with zip-slip-safe extract (#138)
+- Import trust preview enrichment: providers, build commands, lab step count,
+  content hash; acceptance writes `.import-trust.json` (#138)
+- Developer Toolbox actions: validate folder, import folder/zip, accept/reject (#138)
+
+### Changed
+
+- Import blocks on validation errors until the recipe report is clean (#138)
+
 ## [0.9.0] - 2026-07-09
 
 ### Added
@@ -745,7 +760,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.36...v0.9.0
 [0.8.36]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.35...v0.8.36
 [0.8.35]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.34...v0.8.35
