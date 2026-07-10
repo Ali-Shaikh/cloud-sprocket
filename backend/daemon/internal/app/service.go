@@ -187,6 +187,8 @@ func (s *Service) Handle(
 		return s.handleAwsS3SelectObject(ctx, params, notifier)
 	case "aws.s3.setPrefixFilter":
 		return s.handleAwsS3SetPrefixFilter(ctx, params, notifier)
+	case "aws.s3.loadMoreObjects":
+		return s.handleAwsS3LoadMoreObjects(ctx, params, notifier)
 	case "aws.s3.uploadObject":
 		return s.handleAwsS3UploadObject(ctx, params, notifier)
 	case "aws.s3.deleteObject":

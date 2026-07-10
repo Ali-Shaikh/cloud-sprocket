@@ -247,6 +247,8 @@ export interface AwsS3Object {
   size?: string;
   modifiedAt?: string;
   storageClass?: string;
+  /** True for delimiter CommonPrefixes (virtual folders). */
+  isFolder?: boolean;
 }
 
 export interface AwsS3ExportSnippet {
@@ -1115,6 +1117,8 @@ export interface WorkspaceSnapshot {
   s3StatusMessage?: string;
   s3Buckets: AwsS3Bucket[];
   s3Objects: AwsS3Object[];
+  s3ObjectsNextToken?: string;
+  s3ObjectsHasMore?: boolean;
   s3ObjectMetadata: DetailField[];
   s3ExportSnippets: AwsS3ExportSnippet[];
   selectedEc2Region?: string;

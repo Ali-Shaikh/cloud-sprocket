@@ -338,7 +338,7 @@ function normaliseS3Bucket(bucket: AwsS3Bucket): AwsS3Bucket {
 }
 
 function normaliseS3Object(object: AwsS3Object): AwsS3Object {
-  return { ...object };
+  return { ...object, isFolder: Boolean(object.isFolder) };
 }
 
 function normaliseS3ExportSnippet(snippet: AwsS3ExportSnippet): AwsS3ExportSnippet {
@@ -823,8 +823,49 @@ export function mergeAwsS3Selection(
     s3PrefixFilter: normalised.s3PrefixFilter,
     s3Buckets: normalised.s3Buckets,
     s3Objects: normalised.s3Objects,
+    s3ObjectsNextToken: normalised.s3ObjectsNextToken,
+    s3ObjectsHasMore: normalised.s3ObjectsHasMore,
     s3ObjectMetadata: normalised.s3ObjectMetadata,
+    s3ExportSnippets: normalised.s3ExportSnippets,
     s3StatusMessage: normalised.s3StatusMessage,
+  });
+}
+
+/**
+ * Object selection re-lists page 1 on the backend. Keep any Load more pages
+ * already shown, and only take selection + inspector fields from the response.
+ */
+export function mergeAwsS3ObjectSelection(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  return normaliseWorkspaceSnapshot({
+    ...current,
+    selectedS3ObjectKey: normalised.selectedS3ObjectKey,
+    s3ObjectMetadata: normalised.s3ObjectMetadata,
+    s3ExportSnippets: normalised.s3ExportSnippets,
+    s3StatusMessage: normalised.s3StatusMessage || current.s3StatusMessage,
+  });
+}
+
+/** Append a Load more page onto the current S3 object list. */
+export function mergeAwsS3LoadMore(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  const seen = new Set(current.s3Objects.map((object) => object.key));
+  const appended = [
+    ...current.s3Objects,
+    ...normalised.s3Objects.filter((object) => !seen.has(object.key)),
+  ];
+  return normaliseWorkspaceSnapshot({
+    ...current,
+    s3Objects: appended,
+    s3ObjectsNextToken: normalised.s3ObjectsNextToken,
+    s3ObjectsHasMore: normalised.s3ObjectsHasMore,
+    s3StatusMessage: normalised.s3StatusMessage || current.s3StatusMessage,
   });
 }
 
@@ -1119,6 +1160,8 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     azureEntraApps: normaliseArray(source.azureEntraApps),
     s3Buckets: normaliseArray(source.s3Buckets).map(normaliseS3Bucket),
     s3Objects: normaliseArray(source.s3Objects).map(normaliseS3Object),
+    s3ObjectsNextToken: source.s3ObjectsNextToken,
+    s3ObjectsHasMore: source.s3ObjectsHasMore ?? false,
     s3ObjectMetadata: normaliseDetailFields(source.s3ObjectMetadata),
     s3ExportSnippets: normaliseArray(source.s3ExportSnippets).map(normaliseS3ExportSnippet),
     ec2Regions: normaliseArray(source.ec2Regions),

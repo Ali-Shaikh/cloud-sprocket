@@ -51,9 +51,12 @@ function SelectContent({
       <SelectPrimitive.Content
         data-slot="select-content"
         className={cn(
-          "relative z-50 max-h-96 min-w-[8rem] max-w-[min(26rem,var(--radix-select-content-available-width))] overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+          // Keep sizing simple: fixed max height/width. Radix CSS vars for
+          // available height/width have collapsed the popper to zero height in
+          // WebView2, so multi-item lists looked empty.
+          "relative z-50 max-h-72 min-w-[8rem] overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
           position === "popper" &&
-            "data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1",
+            "data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1 w-[var(--radix-select-trigger-width)]",
           className,
         )}
         position={position}
@@ -62,9 +65,8 @@ function SelectContent({
         <SelectScrollUpButton />
         <SelectPrimitive.Viewport
           className={cn(
-            "p-1",
-            position === "popper" &&
-              "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]",
+            "max-h-72 overflow-y-auto p-1",
+            position === "popper" && "w-full min-w-[var(--radix-select-trigger-width)]",
           )}
         >
           {children}

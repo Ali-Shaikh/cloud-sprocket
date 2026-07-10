@@ -151,7 +151,8 @@ export function useWorkspaceState(session: SessionSnapshot) {
   } | null>(null);
   const [activeS3PageId, setActiveS3PageId] = useState("buckets");
   const [activeAzurePageId, setActiveAzurePageId] = useState("resource-groups");
-  const [activeAzureStoragePageId, setActiveAzureStoragePageId] = useState("blobs");
+  // Accounts first so the user can pick a storage account before containers/blobs.
+  const [activeAzureStoragePageId, setActiveAzureStoragePageId] = useState("accounts");
   const [showSensitiveValues, setShowSensitiveValues] = useState(false);
 
   const activeWorkspace = useMemo(

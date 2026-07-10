@@ -66,16 +66,28 @@ export default function AzureQueuesView({
       <section className={cn(sectionCard, inventoryLoading ? "opacity-60" : undefined)}>
         <div className="w-72">
           <div className={cn(fieldLabel, "mb-1")}>Storage account</div>
-          <Select value={account} onValueChange={(value) => value && onSelectAccount(value)}>
+          <Select
+            value={account || undefined}
+            onValueChange={(value) => value && onSelectAccount(value)}
+            disabled={accounts.length === 0}
+          >
             <SelectTrigger aria-label="Select storage account">
-              <SelectValue placeholder="Select account" />
+              <SelectValue
+                placeholder={accounts.length === 0 ? "No accounts loaded" : "Select account"}
+              />
             </SelectTrigger>
             <SelectContent>
-              {accounts.map((item) => (
-                <SelectItem key={item.name} value={item.name}>
-                  {item.name}
-                </SelectItem>
-              ))}
+              {accounts.length === 0 ? (
+                <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                  No storage accounts available. Confirm the Azure workspace inventory loaded.
+                </div>
+              ) : (
+                accounts.map((item) => (
+                  <SelectItem key={item.name} value={item.name}>
+                    {item.name}
+                  </SelectItem>
+                ))
+              )}
             </SelectContent>
           </Select>
         </div>

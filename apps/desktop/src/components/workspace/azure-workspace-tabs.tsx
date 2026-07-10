@@ -78,10 +78,7 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
     logs,
     showSensitiveValues,
     setShowSensitiveValues,
-    activeS3PageId,
-    setActiveS3PageId,
     activeAzurePageId,
-    activeAzureStoragePageId,
     s3UploadStatus,
     setS3UploadStatus,
     s3SignedUrlStatus,
@@ -271,7 +268,6 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
   ) : session.isLocked && activeWorkspaceTabId === "azure-storage" ? (
     <AzureStorageView
       workspace={activeWorkspace}
-      activePageId={activeAzureStoragePageId}
       actionStatus={azureStorageActionStatus}
       inventoryLoading={azureServiceInventoryLoading}
       onSelectAccount={(accountName) => {
