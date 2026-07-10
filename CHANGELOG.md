@@ -9,6 +9,24 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-07-10
+
+### Added
+
+- Unified Azure Storage and S3 path browsers (account/container or bucket +
+  breadcrumb path + objects + inspector) with sub-rail pages removed (#148)
+- S3 folder browse via delimiter listing, Load more pagination, and client-side
+  contains search over the loaded page (#148)
+- Structured multi-line Azure storage list-error banners with plain-language
+  guidance for network isolation and auth failures (#148)
+
+### Fixed
+
+- S3 listing loading indicators without multi-blink; path reset when switching
+  buckets; object select no longer collapses Load more pages (#148)
+- Load more surfaces list errors instead of reporting end of list (#148)
+- Select popper sizing so multi-option dropdowns are not clipped (#148)
+
 ## [0.9.1] - 2026-07-10
 
 ### Added
@@ -760,7 +778,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.36...v0.9.0
 [0.8.36]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.35...v0.8.36

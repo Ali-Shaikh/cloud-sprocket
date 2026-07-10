@@ -31,6 +31,8 @@ type MutateWorkspaceSelectionOptions = {
   onOptimistic?: () => void;
   persistOnly?: boolean;
   panelLoading?: boolean;
+  /** When true, apply optimistic/result updates synchronously (avoids list flicker). */
+  immediate?: boolean;
   errorTitle?: string;
 };
 
@@ -224,7 +226,7 @@ export type WorkspaceTabRouterProps = {
   selectLogGroup: (logGroupName: string) => void;
   refreshIAMInventory: () => void;
   selectIAMRole: (roleName: string) => void;
-  applyS3PrefixFilter: (prefix: string) => void;
+  applyS3PrefixFilter: (prefix: string) => Promise<void>;
   selectAzureResourceGroup: (resourceGroup: string) => Promise<void>;
   selectAzureVirtualMachine: (vmId: string) => Promise<void>;
   selectAzureWebApp: (appName: string) => Promise<void>;

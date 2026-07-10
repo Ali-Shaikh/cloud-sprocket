@@ -334,6 +334,15 @@ type AwsS3Object struct {
 	Size         string `json:"size,omitempty"`
 	ModifiedAt   string `json:"modifiedAt,omitempty"`
 	StorageClass string `json:"storageClass,omitempty"`
+	// IsFolder marks a CommonPrefixes "virtual folder" from delimiter listing.
+	IsFolder bool `json:"isFolder,omitempty"`
+}
+
+// AwsS3ObjectListPage is one delimiter-scoped page of folders and objects.
+type AwsS3ObjectListPage struct {
+	Entries                 []AwsS3Object `json:"entries"`
+	NextContinuationToken   string        `json:"nextContinuationToken,omitempty"`
+	IsTruncated             bool          `json:"isTruncated,omitempty"`
 }
 
 type AwsS3ExportSnippet struct {
@@ -1286,8 +1295,12 @@ type WorkspaceSnapshot struct {
 	S3StatusMessage                   string                       `json:"s3StatusMessage,omitempty"`
 	S3Buckets                         []AwsS3Bucket                `json:"s3Buckets"`
 	S3Objects                         []AwsS3Object                `json:"s3Objects"`
-	S3ObjectMetadata                  []DetailField                `json:"s3ObjectMetadata"`
-	S3ExportSnippets                  []AwsS3ExportSnippet         `json:"s3ExportSnippets"`
+	// S3ObjectsNextToken is the ListObjectsV2 continuation token for Load more.
+	S3ObjectsNextToken string `json:"s3ObjectsNextToken,omitempty"`
+	// S3ObjectsHasMore is true when another page is available under the current prefix.
+	S3ObjectsHasMore bool `json:"s3ObjectsHasMore,omitempty"`
+	S3ObjectMetadata []DetailField         `json:"s3ObjectMetadata"`
+	S3ExportSnippets []AwsS3ExportSnippet  `json:"s3ExportSnippets"`
 	SelectedEC2Region                 string                       `json:"selectedEc2Region,omitempty"`
 	SelectedEC2InstanceID             string                       `json:"selectedEc2InstanceId,omitempty"`
 	EC2StatusMessage                  string                       `json:"ec2StatusMessage,omitempty"`

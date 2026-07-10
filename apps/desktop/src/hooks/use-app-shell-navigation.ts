@@ -57,11 +57,7 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     workspace,
     activeWorkspaceTabId,
     setActiveWorkspaceTabId,
-    activeS3PageId,
-    setActiveS3PageId,
     setActiveAzurePageId,
-    activeAzureStoragePageId,
-    setActiveAzureStoragePageId,
     workspaceFetching,
     workspaceLoading,
     workspaceLoaded,
@@ -305,28 +301,7 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     if (serviceItems.length > 0) {
       groups.push({ label: "Services", items: serviceItems });
     }
-    if (activeWorkspaceTabId === "s3") {
-      groups.push({
-        label: "Storage",
-        items: [
-          { id: "s3:buckets", label: "Buckets" },
-          { id: "s3:objects", label: "Objects" },
-          { id: "s3:upload", label: "Upload" },
-          { id: "s3:inspect", label: "Inspect URL" },
-        ],
-      });
-    }
-    if (activeWorkspaceTabId === "azure-storage") {
-      groups.push({
-        label: "Blob storage",
-        items: [
-          { id: "azure-storage:accounts", label: "Accounts" },
-          { id: "azure-storage:containers", label: "Containers" },
-          { id: "azure-storage:blobs", label: "Blobs" },
-          { id: "azure-storage:upload", label: "Upload" },
-        ],
-      });
-    }
+    // S3 and Azure Storage are single path-browser surfaces (no sub-rail pages).
     groups.push({
       label: "Developer",
       items: [{ id: "debug", label: "Debug console", icon: Bug }],
@@ -346,12 +321,7 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     workspaceLoading,
   ]);
 
-  const activeNavItemId =
-    activeWorkspaceTabId === "s3"
-      ? `s3:${activeS3PageId}`
-      : activeWorkspaceTabId === "azure-storage"
-        ? `azure-storage:${activeAzureStoragePageId}`
-        : activeWorkspaceTabId;
+  const activeNavItemId = activeWorkspaceTabId;
 
   const viewLabel =
     activeWorkspaceTabId === "settings"
@@ -397,12 +367,10 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
         const tabId = id.slice(0, separator);
         const pageId = id.slice(separator + 1);
         setActiveWorkspaceTabId(tabId);
-        if (tabId === "s3") {
-          setActiveS3PageId(pageId);
-        } else if (tabId === "azure-overview") {
+        // Legacy deep-links (s3:objects, azure-storage:blobs) still open the
+        // parent tab; storage is now a single browser with no sub-pages.
+        if (tabId === "azure-overview") {
           setActiveAzurePageId(pageId);
-        } else if (tabId === "azure-storage") {
-          setActiveAzureStoragePageId(pageId);
         }
         return;
       }
@@ -414,8 +382,6 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     [
       session.workspaceTabs,
       setActiveAzurePageId,
-      setActiveAzureStoragePageId,
-      setActiveS3PageId,
       setActiveWorkspaceTabId,
     ],
   );
