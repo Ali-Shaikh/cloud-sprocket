@@ -318,6 +318,8 @@ export default function StorageView({
   const pathParts = prefixSegments(workspace.s3PrefixFilter || "");
 
   const applyPrefix = (prefix: string) => {
+    // Clear contains-search so a filter from the previous folder does not stick.
+    setKeySearch("");
     onSetPrefixFilter(prefix.replace(/^\/+/, ""));
   };
 
@@ -818,7 +820,6 @@ export default function StorageView({
                 onRowClick={(object) => {
                   if (object.isFolder) {
                     applyPrefix(object.key);
-                    setKeySearch("");
                     return;
                   }
                   onSelectObject(object.key);

@@ -112,9 +112,21 @@ type LabStep struct {
 	ID      string      `yaml:"id" json:"id"`
 	Title   string      `yaml:"title" json:"title"`
 	Body    string      `yaml:"body" json:"body,omitempty"`
+	// Fault optionally injects a runtime chaos fault for the duration of this
+	// step (A6). Unsupported runtimes surface a clear error on verify.
+	Fault   *LabFault   `yaml:"fault" json:"fault,omitempty"`
 	Actions []LabAction `yaml:"actions" json:"actions,omitempty"`
 	Verify  []LabVerify `yaml:"verify" json:"verify,omitempty"`
 	Hints   []string    `yaml:"hints" json:"hints,omitempty"`
+}
+
+// LabFault is an abstract chaos request declared on a lab step.
+type LabFault struct {
+	// Kind is a FaultKind value (service-error, latency, partition, pause).
+	Kind   string            `yaml:"kind" json:"kind"`
+	// Target names the dependency (container, service, etc.).
+	Target string            `yaml:"target" json:"target,omitempty"`
+	Params map[string]string `yaml:"params" json:"params,omitempty"`
 }
 
 // LabAction deep-links to a workspace tab or invokes a gated write operation.

@@ -6,8 +6,33 @@ package deploy
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 )
+
+type recordingContainers struct {
+	mu      sync.Mutex
+	paused  []string
+	unpaused []string
+	pauseErr error
+}
+
+func (r *recordingContainers) Pause(_ context.Context, name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.pauseErr != nil {
+		return r.pauseErr
+	}
+	r.paused = append(r.paused, name)
+	return nil
+}
+
+func (r *recordingContainers) Unpause(_ context.Context, name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.unpaused = append(r.unpaused, name)
+	return nil
+}
 
 func TestNoopFaultInjectorRejectsAllKinds(t *testing.T) {
 	t.Parallel()
@@ -28,39 +53,46 @@ func TestNoopFaultInjectorRejectsAllKinds(t *testing.T) {
 	}
 }
 
-func TestComposeFaultInjectorAdvertisesKinds(t *testing.T) {
+func TestComposeFaultInjectorPauseAndRevert(t *testing.T) {
 	t.Parallel()
-	injector := ComposeFaultInjector{}
-	for _, kind := range []FaultKind{
-		FaultKindLatency,
-		FaultKindPartition,
-		FaultKindPause,
-		FaultKindServiceError,
-	} {
-		if !Supports(injector, kind) {
-			t.Fatalf("expected support for %s", kind)
-		}
-	}
-	// Whitespace around kind should still match advertised capabilities.
+	containers := &recordingContainers{}
+	injector := NewComposeFaultInjector(containers)
+
 	if !Supports(injector, FaultKind(" pause ")) {
 		t.Fatal("expected Supports to normalise fault kind whitespace")
 	}
+
 	revert, err := injector.Inject(context.Background(), Fault{Kind: FaultKindPause, Target: "worker"})
-	if err == nil {
-		t.Fatal("expected not-wired error until chaos labs implement inject")
+	if err != nil {
+		t.Fatalf("inject pause: %v", err)
 	}
-	if !errors.Is(err, ErrFaultNotImplemented) {
-		t.Fatalf("got %v, want ErrFaultNotImplemented", err)
+	if revert == nil {
+		t.Fatal("expected non-nil revert on success")
 	}
-	if errors.Is(err, ErrFaultUnsupported) {
-		t.Fatalf("supported kind should not return ErrFaultUnsupported: %v", err)
+	if len(containers.paused) != 1 || containers.paused[0] != "worker" {
+		t.Fatalf("paused = %v, want [worker]", containers.paused)
 	}
-	if revert != nil {
-		t.Fatal("failed inject must return nil revert")
+	if err := revert(); err != nil {
+		t.Fatalf("revert: %v", err)
+	}
+	if err := revert(); err != nil {
+		t.Fatalf("second revert should be idempotent: %v", err)
+	}
+	if len(containers.unpaused) != 1 || containers.unpaused[0] != "worker" {
+		t.Fatalf("unpaused = %v, want [worker] once", containers.unpaused)
 	}
 }
 
-func TestFaultInjectorForTarget(t *testing.T) {
+func TestComposeFaultInjectorUnimplementedKinds(t *testing.T) {
+	t.Parallel()
+	injector := NewComposeFaultInjector(&recordingContainers{})
+	_, err := injector.Inject(context.Background(), Fault{Kind: FaultKindLatency, Target: "api"})
+	if !errors.Is(err, ErrFaultNotImplemented) {
+		t.Fatalf("got %v, want ErrFaultNotImplemented", err)
+	}
+}
+
+func TestFaultInjectorForTargetAndDeployment(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		targetID string
@@ -70,8 +102,6 @@ func TestFaultInjectorForTarget(t *testing.T) {
 		{targetID: "magento-compose", compose: true},
 		{targetID: "localstack", compose: false},
 		{targetID: "aws-cloud", compose: false},
-		{targetID: "azure-cloud", compose: false},
-		{targetID: "floci-az", compose: false},
 	}
 	for _, tc := range cases {
 		injector := FaultInjectorForTarget(tc.targetID)
@@ -79,5 +109,14 @@ func TestFaultInjectorForTarget(t *testing.T) {
 		if isCompose != tc.compose {
 			t.Fatalf("target %s: compose=%v want %v", tc.targetID, isCompose, tc.compose)
 		}
+	}
+
+	cloud := FaultInjectorForDeployment(&Deployment{Local: false, RuntimeID: "aws-cloud"})
+	if _, ok := cloud.(NoopFaultInjector); !ok {
+		t.Fatalf("cloud deployment should be noop, got %T", cloud)
+	}
+	compose := FaultInjectorForDeployment(&Deployment{Local: true, RuntimeID: "docker-compose"})
+	if _, ok := compose.(ComposeFaultInjector); !ok {
+		t.Fatalf("compose deployment should use compose injector, got %T", compose)
 	}
 }

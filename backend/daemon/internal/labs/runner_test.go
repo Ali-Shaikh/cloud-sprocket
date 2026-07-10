@@ -186,6 +186,58 @@ func TestRunnerVerifyStepRecordsCheckError(t *testing.T) {
 	}
 }
 
+type trackingInjector struct {
+	injected bool
+	reverted bool
+}
+
+func (t *trackingInjector) Capabilities() []deploy.FaultKind {
+	return []deploy.FaultKind{deploy.FaultKindPause}
+}
+
+func (t *trackingInjector) Inject(_ context.Context, _ deploy.Fault) (func() error, error) {
+	t.injected = true
+	return func() error {
+		t.reverted = true
+		return nil
+	}, nil
+}
+
+func TestRunnerVerifyStepInjectsAndRevertsFault(t *testing.T) {
+	store := NewSessionStore(&memorySettingStore{})
+	registry := NewRegistry()
+	runner := NewRunner(store, registry, func() time.Time { return time.Now().UTC() })
+	tracker := &trackingInjector{}
+	runner.injectorFor = func(_ *deploy.Deployment) deploy.FaultInjector { return tracker }
+
+	lab := &recipes.LabSpec{
+		Steps: []recipes.LabStep{{
+			ID:    "chaos",
+			Title: "Pause worker",
+			Fault: &recipes.LabFault{Kind: string(deploy.FaultKindPause), Target: "worker"},
+		}},
+	}
+	deployment := &deploy.Deployment{
+		ID:        "dep-chaos",
+		Status:    deploy.StatusApplied,
+		Local:     true,
+		RuntimeID: "docker-compose",
+	}
+	ctx := context.Background()
+	if _, err := runner.Start(ctx, lab, deployment); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if _, err := runner.VerifyStep(ctx, lab, deployment, "chaos", models.ProfileSummary{}, "us-east-1"); err != nil {
+		t.Fatalf("VerifyStep: %v", err)
+	}
+	if !tracker.injected {
+		t.Fatal("expected fault inject during verify")
+	}
+	if !tracker.reverted {
+		t.Fatal("expected fault revert after verify")
+	}
+}
+
 func TestRunnerRunActionOpenTab(t *testing.T) {
 	store := NewSessionStore(&memorySettingStore{})
 	runner := NewRunner(store, NewRegistry(), func() time.Time { return time.Now().UTC() })
