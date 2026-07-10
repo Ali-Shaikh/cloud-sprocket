@@ -250,11 +250,18 @@ export default function StorageView({
   useEffect(() => {
     const nextBucket = workspace.selectedS3BucketName || "";
     if (nextBucket !== lastSelectedBucketRef.current) {
-      const nextPrefix = workspace.s3PrefixFilter || "";
       lastSelectedBucketRef.current = nextBucket;
+      // Changing bucket always starts at root in the UI; the session clears prefix too.
+      setPrefixDraft("");
+      lastRequestedPrefixRef.current = "";
+      setKeySearch("");
+      return;
+    }
+    // Same bucket: keep local path draft in sync when breadcrumb/folder navigation updates prefix.
+    const nextPrefix = workspace.s3PrefixFilter || "";
+    if (nextPrefix !== lastRequestedPrefixRef.current) {
       setPrefixDraft(nextPrefix);
       lastRequestedPrefixRef.current = nextPrefix;
-      setKeySearch("");
     }
   }, [workspace.s3PrefixFilter, workspace.selectedS3BucketName]);
 

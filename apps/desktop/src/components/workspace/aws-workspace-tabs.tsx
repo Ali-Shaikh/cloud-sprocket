@@ -251,9 +251,15 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
                 ...current,
                 selectedS3BucketName: bucketName,
                 selectedS3ObjectKey: undefined,
+                // Do not keep the previous bucket's folder path on the new bucket.
+                s3PrefixFilter: "",
+                s3Objects: [],
+                s3ObjectsNextToken: undefined,
+                s3ObjectsHasMore: false,
               }),
             );
           },
+          errorTitle: "Could not select S3 bucket",
         });
       }}
       onSelectObject={(objectKey) => {

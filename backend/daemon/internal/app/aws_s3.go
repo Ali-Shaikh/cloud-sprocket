@@ -342,11 +342,14 @@ func (s *Service) handleAwsS3SelectBucket(ctx context.Context, params json.RawMe
 	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting an S3 bucket", func(session *models.SessionSnapshot) error {
 		session.SelectedS3BucketName = request.BucketName
 		session.SelectedS3ObjectKey = ""
+		// Bucket paths are not portable: always open the new bucket at its root.
+		session.S3PrefixFilter = ""
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
+	s.invalidateResourceCacheScope(ctx, "aws.s3.objects.page")
 	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "s3", skipAzureInventory: true}, "info", fmt.Sprintf("Selected S3 bucket %s.", request.BucketName), false)
 }
 
