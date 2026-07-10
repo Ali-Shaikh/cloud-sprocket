@@ -557,6 +557,83 @@ func TestRecipesValidateRPC(t *testing.T) {
 	}
 }
 
+// TestImportedRecipeAppearsInCatalogue guards Claude P0: confirm import must surface
+// in recipes.list with source=imported (bundled-only loader regressions).
+func TestImportedRecipeAppearsInCatalogue(t *testing.T) {
+	deployer := &fakeDeployer{available: true}
+	s := newDeployTestService(t, deployer)
+	src := t.TempDir()
+	manifest := []byte("apiVersion: cloudsprocket.recipe/v1\nid: catalogue-import-demo\nversion: 0.1.0\nname: Catalogue Import Demo\nkind: app-deploy\nproviders: [\"aws\"]\nengine:\n  type: opentofu\n")
+	if err := os.WriteFile(filepath.Join(src, "recipe.yaml"), manifest, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "main.tf"), []byte("resource \"null_resource\" \"n\" {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(map[string]any{"sourcePath": src, "confirm": true})
+	if _, err := s.Handle(context.Background(), "recipes.import", body, nil); err != nil {
+		t.Fatalf("import confirm: %v", err)
+	}
+	listRes, err := s.Handle(context.Background(), "recipes.list", nil, nil)
+	if err != nil {
+		t.Fatalf("recipes.list: %v", err)
+	}
+	list, ok := listRes.([]recipes.Manifest)
+	if !ok {
+		t.Fatalf("unexpected list type %T", listRes)
+	}
+	found := false
+	for _, m := range list {
+		if m.ID == "catalogue-import-demo" {
+			found = true
+			if m.Source != recipes.SourceImported {
+				t.Fatalf("source = %q, want imported", m.Source)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("imported recipe missing from recipes.list after confirm")
+	}
+	// Load must also resolve the import for deploy materialise.
+	if _, err := s.Handle(context.Background(), "recipes.get", json.RawMessage(`{"recipeId":"catalogue-import-demo"}`), nil); err != nil {
+		t.Fatalf("recipes.get imported: %v", err)
+	}
+}
+
+// TestCheckDriftRejectsPendingStatus guards status gate + ctx path for drift.
+func TestCheckDriftRejectsPendingStatus(t *testing.T) {
+	deployer := &fakeDeployer{available: true}
+	s := newDeployTestService(t, deployer)
+	// Seed a pending deployment directly in the store.
+	now := s.timestamp()
+	dep := &deploy.Deployment{
+		ID:        "dep-pending-drift",
+		RecipeID:  "serverless-fullstack-aws",
+		Name:      "pending",
+		ProviderID: "aws",
+		Local:     true,
+		Status:    deploy.StatusPending,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := s.store.SaveDeployment(context.Background(), dep.ID, s.sealForStore(dep), now); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	_, err := s.Handle(context.Background(), "deployments.checkDrift", json.RawMessage(`{"deploymentId":"dep-pending-drift"}`), nil)
+	if err == nil {
+		t.Fatal("expected drift check to reject pending status")
+	}
+}
+
+func TestRecipesValidateRejectsBlankPath(t *testing.T) {
+	deployer := &fakeDeployer{available: true}
+	s := newDeployTestService(t, deployer)
+	_, err := s.Handle(context.Background(), "recipes.validate", json.RawMessage(`{"sourcePath":""}`), nil)
+	if err == nil {
+		t.Fatal("expected blank sourcePath to error")
+	}
+}
+
 func TestRecipesImportZip(t *testing.T) {
 	deployer := &fakeDeployer{available: true}
 	s := newDeployTestService(t, deployer)

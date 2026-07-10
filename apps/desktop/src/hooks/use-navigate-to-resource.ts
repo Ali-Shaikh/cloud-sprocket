@@ -56,12 +56,9 @@ export function useNavigateToResource(deps: NavigateToResourceDeps) {
       deps.setActiveWorkspaceTabId(plan.tabId);
 
       if (plan.subPage) {
-        if (plan.subPage.tab === "s3") {
-          deps.setActiveS3PageId(plan.subPage.pageId);
-        } else if (plan.subPage.tab === "azure-overview") {
+        // S3 and Azure Storage are single browsers; only Azure overview still has sub-pages.
+        if (plan.subPage.tab === "azure-overview") {
           deps.setActiveAzurePageId(plan.subPage.pageId);
-        } else if (plan.subPage.tab === "azure-storage") {
-          deps.setActiveAzureStoragePageId(plan.subPage.pageId);
         }
       }
 

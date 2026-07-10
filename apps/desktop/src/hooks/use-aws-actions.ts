@@ -1129,16 +1129,19 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setIamActionStatus, setWorkspace]);
 
-  const applyS3PrefixFilter = useCallback((prefix: string): void => {
+  const applyS3PrefixFilter = useCallback((prefix: string): Promise<void> => {
     const requestId = s3PrefixRequestIdRef.current + 1;
     s3PrefixRequestIdRef.current = requestId;
-    void requestWorkspaceSnapshot("aws.s3.setPrefixFilter", { prefix }).then((workspaceResult) => {
-      if (requestId === s3PrefixRequestIdRef.current) {
-        startTransition(() => {
+    // Apply immediately (not startTransition) so listing loading and objects commit together.
+    return requestWorkspaceSnapshot("aws.s3.setPrefixFilter", { prefix })
+      .then((workspaceResult) => {
+        if (requestId === s3PrefixRequestIdRef.current) {
           setWorkspace(workspaceResult);
-        });
-      }
-    });
+        }
+      })
+      .catch(() => {
+        // Callers surface loading state; keep selection handlers non-throwing.
+      });
   }, [s3PrefixRequestIdRef, setWorkspace]);
 
   return {
