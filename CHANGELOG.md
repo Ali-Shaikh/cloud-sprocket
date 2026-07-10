@@ -9,6 +9,25 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-07-11
+
+### Added
+
+- A6 chaos foundation: `FaultInjector` seam with compose **pause** via docker
+  pause/unpause, `LabStep.fault` schema, and inject/revert during lab verify
+  (#150, #151, #153)
+
+### Fixed
+
+- S3 breadcrumb path changes clear the contains-search filter so folder filters
+  do not stick across navigation (#153)
+
+### Changed
+
+- Dependency updates: pnpm 11.11, Vite 8.1.4, Vitest 4.1.10, Prettier 3.9.5,
+  lucide-react 1.24, Radix UI primitives, AWS SDK JS v3 and Go v2 monorepos,
+  Azure SDK monorepo (#146, #21, #116, #145, #64, #56, #154, #155, #147)
+
 ## [0.9.2] - 2026-07-10
 
 ### Added
@@ -778,7 +797,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.3...HEAD
+[0.9.3]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.36...v0.9.0
