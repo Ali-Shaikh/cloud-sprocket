@@ -48,6 +48,17 @@ func TestValidateDirectoryMissingManifest(t *testing.T) {
 	}
 }
 
+func TestValidateDirectoryRejectsBlankPath(t *testing.T) {
+	_, err := ValidateDirectory("   ")
+	if err == nil {
+		t.Fatal("expected error for blank sourcePath")
+	}
+	_, err = ValidateDirectory("")
+	if err == nil {
+		t.Fatal("expected error for empty sourcePath")
+	}
+}
+
 func TestValidateDirectoryUnknownBuildDirVar(t *testing.T) {
 	dir := t.TempDir()
 	writeRecipe(t, dir, `apiVersion: cloudsprocket.recipe/v1

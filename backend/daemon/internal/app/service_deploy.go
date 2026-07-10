@@ -768,6 +768,10 @@ func extractRecipeZip(zipPath string) (string, error) {
 		return "", err
 	}
 	cleanTmp := filepath.Clean(tmp)
+	// Caps protect against zip bombs (highly compressed payloads expanding on disk).
+	const maxEntryBytes int64 = 32 << 20  // 32 MiB per file
+	const maxTotalBytes int64 = 128 << 20 // 128 MiB total uncompressed
+	var totalWritten int64
 	for _, file := range reader.File {
 		name := filepath.Clean(file.Name)
 		// Zip slip guard.
@@ -791,6 +795,15 @@ func extractRecipeZip(zipPath string) (string, error) {
 			}
 			continue
 		}
+		// UncompressedSize64 is a declared size; still enforce LimitReader below.
+		if file.UncompressedSize64 > uint64(maxEntryBytes) {
+			_ = os.RemoveAll(tmp)
+			return "", fmt.Errorf("zip entry %q exceeds max size (%d bytes)", file.Name, maxEntryBytes)
+		}
+		if totalWritten+int64(file.UncompressedSize64) > maxTotalBytes {
+			_ = os.RemoveAll(tmp)
+			return "", fmt.Errorf("zip total uncompressed size would exceed %d bytes", maxTotalBytes)
+		}
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			_ = os.RemoveAll(tmp)
 			return "", err
@@ -806,12 +819,23 @@ func extractRecipeZip(zipPath string) (string, error) {
 			_ = os.RemoveAll(tmp)
 			return "", err
 		}
-		_, copyErr := io.Copy(out, rc)
+		// LimitReader caps actual bytes written even if UncompressedSize64 lies.
+		limited := io.LimitReader(rc, maxEntryBytes+1)
+		n, copyErr := io.Copy(out, limited)
 		_ = out.Close()
 		_ = rc.Close()
 		if copyErr != nil {
 			_ = os.RemoveAll(tmp)
 			return "", copyErr
+		}
+		if n > maxEntryBytes {
+			_ = os.RemoveAll(tmp)
+			return "", fmt.Errorf("zip entry %q exceeds max size (%d bytes)", file.Name, maxEntryBytes)
+		}
+		totalWritten += n
+		if totalWritten > maxTotalBytes {
+			_ = os.RemoveAll(tmp)
+			return "", fmt.Errorf("zip total uncompressed size exceeds %d bytes", maxTotalBytes)
 		}
 	}
 

@@ -1305,7 +1305,7 @@ export interface RecipeManifest {
   imageBuild?: RecipeImageBuild;
   lab?: LabSpec;
   /** Set by the daemon: bundled catalogue vs trusted local import. */
-  source?: "bundled" | "imported" | string;
+  source?: "bundled" | "imported";
 }
 
 export interface RecipeVisibleWhen {
