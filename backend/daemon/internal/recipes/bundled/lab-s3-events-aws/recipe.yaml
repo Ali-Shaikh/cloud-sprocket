@@ -1,0 +1,114 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-s3-events-aws
+kind: service-lab
+version: 0.1.0
+name: S3 events lab (AWS)
+summary: An S3 bucket configured to emit events to an SQS queue on object creation.
+description: |
+  A focused service lab for event-driven storage: an S3 bucket with notifications
+  that publish to SQS when objects are created. Demonstrates the classic
+  decoupled event pattern. Emulates fully on LocalStack free tier.
+
+  Switch profiles to ship the same recipe to real AWS. Use the S3 and SQS tabs
+  to explore wiring and simulate events.
+providers:
+  - aws
+tags:
+  - s3
+  - events
+  - sqs
+  - event-driven
+  - aws
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: bucket_name
+    primary: true
+  - name: queue_url
+    primary: true
+lab:
+  difficulty: beginner
+  estimatedMinutes: 20
+  objectives:
+    - Understand how S3 bucket notifications drive downstream processing via SQS
+    - Inspect bucket and queue configuration in the workspace tabs
+    - Simulate or observe an object-created event reaching the queue
+    - Recognise drift risks when notifications are changed outside the recipe
+  steps:
+    - id: explore-bucket
+      title: Explore the S3 bucket
+      body: |
+        Open the S3 tab and select the bucket. Review its configuration and note
+        that no public access or website settings are enabled for this lab.
+      actions:
+        - type: open-tab
+          tab: aws-s3
+          focus: "{{ outputs.bucket_name }}"
+      hints:
+        - Bucket names are globally unique; the prefix keeps yours isolated in the emulator.
+    - id: explore-queue
+      title: Explore the target SQS queue
+      body: |
+        Open the SQS tab and inspect the queue that receives S3 event notifications.
+      actions:
+        - type: open-tab
+          tab: aws-sqs
+          focus: "{{ outputs.queue_url }}"
+      hints:
+        - The queue policy allows the S3 service to send messages.
+    - id: trigger-event
+      title: Trigger an S3 event
+      body: |
+        In the S3 tab (write mode enabled), upload a small text file to the bucket.
+        This should publish an ObjectCreated event notification to the queue.
+        Alternatively use the send action below to place a manual test message.
+      actions:
+        - type: invoke-write
+          op: sqs.send
+          params:
+            queueUrl: "{{ outputs.queue_url }}"
+            messageBody: '{"lab":"s3-events","event":"manual-test"}'
+      hints:
+        - Real S3 events include bucket, key, and event name details. Manual send helps test the consumer side.
+    - id: verify-queue
+      title: Verify queue received activity
+      body: |
+        Run the check. Expect at least one message visible or in flight after the
+        event (or manual send). SQS eventual consistency means a short wait may help.
+      verify:
+        - type: sqs.queue-attribute
+          queue: "{{ outputs.queue_url }}"
+          attribute: ApproximateNumberOfMessagesNotVisible
+          compare: gte
+          value: "0"
+      hints:
+        - If using a real event upload, the message body will be a JSON record from S3.
+    - id: drift-awareness
+      title: Note drift and lifecycle
+      body: |
+        If you manually edit the bucket notification in the console or emulator,
+        re-running plan will show drift. This lab teaches that infrastructure
+        managed by recipes should be changed via the recipe, not ad-hoc.
+      hints:
+        - Re-apply after manual change to restore declared state (or destroy and recreate).

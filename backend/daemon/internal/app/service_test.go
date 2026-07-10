@@ -252,18 +252,28 @@ func (stubSecretsManagerInventory) GetSecretValue(context.Context, models.Profil
 	return "", nil
 }
 
-type stubLogsInventory struct{}
+type stubLogsInventory struct {
+	groups map[string][]models.AwsLogGroup
+}
 
-func (stubLogsInventory) ListLogGroups(context.Context, models.ProfileSummary, string) ([]models.AwsLogGroup, error) {
-	return nil, nil
+func (s *stubLogsInventory) ListLogGroups(_ context.Context, _ models.ProfileSummary, region string) ([]models.AwsLogGroup, error) {
+	if s.groups == nil {
+		return nil, nil
+	}
+	return append([]models.AwsLogGroup(nil), s.groups[region]...), nil
 }
 
 func (stubLogsInventory) DescribeLogGroup(context.Context, models.ProfileSummary, string, string) (models.AwsLogGroup, error) {
 	return models.AwsLogGroup{}, nil
 }
 
-func (stubLogsInventory) CreateLogGroup(context.Context, models.ProfileSummary, string, string) (models.AwsLogsCreateLogGroupResult, error) {
-	return models.AwsLogsCreateLogGroupResult{LogGroupName: "/aws/test/group", Region: "us-east-1"}, nil
+func (s *stubLogsInventory) CreateLogGroup(_ context.Context, _ models.ProfileSummary, region string, logGroupName string) (models.AwsLogsCreateLogGroupResult, error) {
+	if s.groups == nil {
+		s.groups = map[string][]models.AwsLogGroup{}
+	}
+	if region == "" { region = "us-east-1" }
+	s.groups[region] = append(s.groups[region], models.AwsLogGroup{LogGroupName: logGroupName})
+	return models.AwsLogsCreateLogGroupResult{LogGroupName: logGroupName, Region: region}, nil
 }
 
 func (stubLogsInventory) PutLogEvents(context.Context, models.ProfileSummary, string, string, string) (models.AwsLogsPutLogEventsResult, error) {
@@ -274,10 +284,15 @@ func (stubLogsInventory) PutLogEvents(context.Context, models.ProfileSummary, st
 	}, nil
 }
 
-type stubIAMInventory struct{}
+type stubIAMInventory struct {
+	roles map[string][]models.AwsIamRole
+}
 
-func (stubIAMInventory) ListRoles(context.Context, models.ProfileSummary, string) ([]models.AwsIamRole, error) {
-	return nil, nil
+func (s *stubIAMInventory) ListRoles(_ context.Context, _ models.ProfileSummary, region string) ([]models.AwsIamRole, error) {
+	if s.roles == nil {
+		return nil, nil
+	}
+	return append([]models.AwsIamRole(nil), s.roles[region]...), nil
 }
 
 func (stubIAMInventory) DescribeRole(context.Context, models.ProfileSummary, string, string) (models.AwsIamRole, error) {
@@ -288,21 +303,26 @@ func (stubIAMInventory) ListPolicies(context.Context, models.ProfileSummary, str
 	return nil, nil
 }
 
-func (stubIAMInventory) CreateRole(context.Context, models.ProfileSummary, string, string) (models.AwsIamCreateRoleResult, error) {
+func (s *stubIAMInventory) CreateRole(_ context.Context, _ models.ProfileSummary, region string, roleName string) (models.AwsIamCreateRoleResult, error) {
+	if s.roles == nil {
+		s.roles = map[string][]models.AwsIamRole{}
+	}
+	if region == "" { region = "us-east-1" }
+	s.roles[region] = append(s.roles[region], models.AwsIamRole{RoleName: roleName})
 	return models.AwsIamCreateRoleResult{
-		RoleName: "demo-lambda-role",
-		RoleArn:  "arn:aws:iam::000000000000:role/demo-lambda-role",
+		RoleName: roleName,
+		RoleArn:  "arn:aws:iam::000000000000:role/" + roleName,
 	}, nil
 }
 
-func (s stubS3Inventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.AwsS3Bucket, error) {
+func (s *stubS3Inventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.AwsS3Bucket, error) {
 	return append([]models.AwsS3Bucket(nil), s.buckets...), nil
 }
 
-func (s stubS3Inventory) ListObjects(_ context.Context, _ models.ProfileSummary, bucketName string, prefix string) ([]models.AwsS3Object, error) {
+func (s *stubS3Inventory) ListObjects(_ context.Context, _ models.ProfileSummary, bucketName string, prefix string, continuationToken string) (models.AwsS3ObjectListPage, error) {
 	objects := append([]models.AwsS3Object(nil), s.objects[bucketName]...)
 	if prefix == "" {
-		return objects, nil
+		return models.AwsS3ObjectListPage{Entries: objects}, nil
 	}
 	filtered := []models.AwsS3Object{}
 	for _, object := range objects {
@@ -310,7 +330,8 @@ func (s stubS3Inventory) ListObjects(_ context.Context, _ models.ProfileSummary,
 			filtered = append(filtered, object)
 		}
 	}
-	return filtered, nil
+	_ = continuationToken
+	return models.AwsS3ObjectListPage{Entries: filtered}, nil
 }
 
 func (s stubS3Inventory) HeadObject(_ context.Context, _ models.ProfileSummary, bucketName string, objectKey string) ([]models.DetailField, error) {
@@ -327,16 +348,32 @@ func (s *stubS3Inventory) UploadFile(_ context.Context, _ models.ProfileSummary,
 	return result, nil
 }
 
-func (stubS3Inventory) DeleteObject(_ context.Context, _ models.ProfileSummary, bucketName string, objectKey string) (models.AwsS3DeleteObjectResult, error) {
-	return models.AwsS3DeleteObjectResult{
-		BucketName: bucketName,
-		ObjectKey:  objectKey,
-		Summary:    "Deleted object " + objectKey + ".",
+func (s *stubS3Inventory) DeleteObject(_ context.Context, _ models.ProfileSummary, bucketName string, objectKey string) (models.AwsS3DeleteObjectResult, error) {
+	if objs, ok := s.objects[bucketName]; ok {
+		filtered := []models.AwsS3Object{}
+		for _, o := range objs { if o.Key != objectKey { filtered = append(filtered, o) } }
+		s.objects[bucketName] = filtered
+	}
+	return models.AwsS3DeleteObjectResult{BucketName: bucketName, ObjectKey: objectKey, Summary: "Deleted object " + objectKey + "."}, nil
+}
+
+func (s *stubS3Inventory) CreateBucket(_ context.Context, _ models.ProfileSummary, bucketName string, region string) (models.AwsS3CreateBucketResult, error) {
+	for _, b := range s.buckets { if b.Name == bucketName { return models.AwsS3CreateBucketResult{BucketName: bucketName, Region: region}, nil } }
+	s.buckets = append(s.buckets, models.AwsS3Bucket{Name: bucketName})
+	return models.AwsS3CreateBucketResult{BucketName: bucketName, Region: region}, nil
+}
+
+func (stubS3Inventory) CopyObject(_ context.Context, _ models.ProfileSummary, bucketName string, sourceObjectKey string, destinationObjectKey string) (models.AwsS3CopyObjectResult, error) {
+	return models.AwsS3CopyObjectResult{
+		BucketName:           bucketName,
+		SourceObjectKey:      sourceObjectKey,
+		DestinationObjectKey: destinationObjectKey,
+		DestinationURI:       "s3://" + bucketName + "/" + destinationObjectKey,
 	}, nil
 }
 
-func (stubS3Inventory) CreateBucket(_ context.Context, _ models.ProfileSummary, bucketName string, region string) (models.AwsS3CreateBucketResult, error) {
-	return models.AwsS3CreateBucketResult{BucketName: bucketName, Region: region}, nil
+func (stubS3Inventory) CreateFolderPrefix(_ context.Context, _ models.ProfileSummary, bucketName string, folderPrefix string) (models.AwsS3CreateFolderPrefixResult, error) {
+	return models.AwsS3CreateFolderPrefixResult{BucketName: bucketName, FolderPrefix: folderPrefix}, nil
 }
 
 func (s stubS3Inventory) PresignGetObject(_ context.Context, _ models.ProfileSummary, bucketName string, objectKey string, durationSeconds int) (models.AwsS3PresignResult, error) {
@@ -371,13 +408,11 @@ func (s *stubEC2Inventory) StopInstance(_ context.Context, _ models.ProfileSumma
 	return s.actionErrors["stop"]
 }
 
-func (stubEC2Inventory) RunInstances(_ context.Context, _ models.ProfileSummary, region string, instanceType string) (models.AwsEc2RunInstancesResult, error) {
-	return models.AwsEc2RunInstancesResult{
-		InstanceID:   "i-launched00001",
-		Region:       region,
-		InstanceType: instanceType,
-		Summary:      "Launched EC2 instance i-launched00001.",
-	}, nil
+func (s *stubEC2Inventory) RunInstances(_ context.Context, _ models.ProfileSummary, region string, instanceType string) (models.AwsEc2RunInstancesResult, error) {
+	id := "i-launched00001"
+	if s.instances == nil { s.instances = map[string][]models.AwsEc2Instance{} }
+	s.instances[region] = append(s.instances[region], models.AwsEc2Instance{InstanceID: id, State: "running"})
+	return models.AwsEc2RunInstancesResult{InstanceID: id, Region: region, InstanceType: instanceType, Summary: "Launched EC2 instance " + id + "."}, nil
 }
 
 func (stubEC2Inventory) TerminateInstances(_ context.Context, _ models.ProfileSummary, _ string, instanceID string) error {
@@ -431,6 +466,24 @@ func (stubAzureInventory) UploadBlob(context.Context, models.ProfileSummary, str
 
 func (stubAzureInventory) DeleteBlob(context.Context, models.ProfileSummary, string, string, string) error {
 	return nil
+}
+
+func (stubAzureInventory) CopyBlob(_ context.Context, _ models.ProfileSummary, accountName string, containerName string, sourceBlobName string, destinationBlobName string) (models.AzureBlobCopyResult, error) {
+	return models.AzureBlobCopyResult{
+		AccountName:         accountName,
+		ContainerName:       containerName,
+		SourceBlobName:      sourceBlobName,
+		DestinationBlobName: destinationBlobName,
+		BlobURL:             "https://example.invalid/" + containerName + "/" + destinationBlobName,
+	}, nil
+}
+
+func (stubAzureInventory) CreateFolderPrefix(_ context.Context, _ models.ProfileSummary, accountName string, containerName string, folderPrefix string) (models.AzureBlobCreateFolderPrefixResult, error) {
+	return models.AzureBlobCreateFolderPrefixResult{
+		AccountName:   accountName,
+		ContainerName: containerName,
+		FolderPrefix:  folderPrefix,
+	}, nil
 }
 
 func (stubAzureInventory) InvokeVirtualMachineAction(context.Context, models.ProfileSummary, string, string, string) error {
@@ -817,8 +870,8 @@ func TestServiceLocksSessionAndListsLogs(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
 		stubAzureInventory{},
 		dockerRuntime,
 	)
@@ -1110,8 +1163,8 @@ func TestServiceReportsFailedEC2ActionJob(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -1196,8 +1249,8 @@ func TestServiceAllowsEC2ActionOnRealCloudWithWriteMode(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -1280,8 +1333,8 @@ func TestServiceRejectsWriteActionsWithoutWriteMode(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -1360,8 +1413,8 @@ func TestServiceAllowsEC2ActionOnLocalEndpointWithWriteMode(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -1451,8 +1504,8 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{}, stubAzureInventory{}, stubDockerRuntime{})
+		&stubLogsInventory{},
+		&stubIAMInventory{}, stubAzureInventory{}, stubDockerRuntime{})
 	ctx := context.Background()
 
 	if _, err := firstService.Handle(ctx, "session.lock", nil, nil); err != nil {
@@ -1489,8 +1542,8 @@ func TestServiceRestoresLockedWorkspaceFromStore(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{}, stubAzureInventory{}, stubDockerRuntime{})
+		&stubLogsInventory{},
+		&stubIAMInventory{}, stubAzureInventory{}, stubDockerRuntime{})
 
 	sessionResult, err := secondService.Handle(ctx, "session.get", nil, nil)
 	if err != nil {
@@ -1570,8 +1623,8 @@ func TestServiceResetClearsOnlyAppOwnedState(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -1715,8 +1768,8 @@ func TestPrepareProfileWritesDiscoverableLocalProfiles(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)
@@ -1828,8 +1881,8 @@ func TestDockerRuntimeProbeIsBoundedWhenEngineBlocks(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
 		stubAzureInventory{},
 		blockingDockerRuntime{},
 	)
@@ -1901,8 +1954,8 @@ func TestUnlockNotBlockedBySlowWorkspaceFetch(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
 		stubAzureInventory{},
 		blockingDockerRuntime{},
 	)

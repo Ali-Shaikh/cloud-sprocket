@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -112,6 +113,7 @@ func (m *Manager) Start(ctx context.Context, options models.LocalStackStartOptio
 					return m.errorStatus("Failed to start floci-az container: " + err.Error()), err
 				}
 			} else {
+				_ = m.waitForReady(ctx, "127.0.0.1:"+restPort)
 				return m.statusWithClient(ctx, api), nil
 			}
 		} else {
@@ -149,6 +151,9 @@ func (m *Manager) Start(ctx context.Context, options models.LocalStackStartOptio
 	if _, err := api.ContainerStart(ctx, containerName, client.ContainerStartOptions{}); err != nil {
 		return m.errorStatus("Failed to start floci-az container: " + err.Error()), err
 	}
+	// Wait briefly so the REST/metadata endpoints (and TLS cert) are ready for
+	// preflight + tofu plan. Prevents "stuck on planning" races after start.
+	_ = m.waitForReady(ctx, "127.0.0.1:"+restPort)
 	return m.statusWithClient(ctx, api), nil
 }
 
@@ -527,6 +532,35 @@ func tcpHealth(ctx context.Context, address string) error {
 		return err
 	}
 	return conn.Close()
+}
+
+// waitForReady polls the TCP port (and a lightweight metadata probe) after
+// container start. This makes Start() return only when floci-az is actually
+// usable for tofu preflight/plan, avoiding apparent "stuck on planning" when
+// the user immediately plans an Azure lab after starting the runtime.
+func (m *Manager) waitForReady(ctx context.Context, address string) error {
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		if err := tcpHealth(ctx, address); err == nil {
+			// Best-effort metadata probe (non-fatal if slow).
+			probeCtx, cancel := context.WithTimeout(ctx, 800*time.Millisecond)
+			url := "http://" + address + "/metadata/endpoints?api-version=2022-09-01"
+			req, _ := http.NewRequestWithContext(probeCtx, http.MethodGet, url, nil)
+			if resp, err := http.DefaultClient.Do(req); err == nil {
+				resp.Body.Close()
+				cancel()
+				return nil
+			}
+			cancel()
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	return nil
 }
 
 func truncateID(id string) string {

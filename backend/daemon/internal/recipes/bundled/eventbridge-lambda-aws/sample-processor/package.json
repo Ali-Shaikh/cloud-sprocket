@@ -1,0 +1,6 @@
+{
+  "name": "eventbridge-processor",
+  "version": "0.1.0",
+  "private": true,
+  "main": "handler.js"
+}

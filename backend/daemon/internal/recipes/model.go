@@ -99,6 +99,43 @@ type OutputHint struct {
 	Primary bool   `yaml:"primary" json:"primary,omitempty"`
 }
 
+// LabSpec describes a guided, verifiable learning experience for a recipe.
+type LabSpec struct {
+	Difficulty       string    `yaml:"difficulty" json:"difficulty,omitempty"`
+	EstimatedMinutes int       `yaml:"estimatedMinutes" json:"estimatedMinutes,omitempty"`
+	Objectives       []string  `yaml:"objectives" json:"objectives,omitempty"`
+	Steps            []LabStep `yaml:"steps" json:"steps,omitempty"`
+}
+
+// LabStep is one instruction block in a lab with optional actions and checks.
+type LabStep struct {
+	ID      string      `yaml:"id" json:"id"`
+	Title   string      `yaml:"title" json:"title"`
+	Body    string      `yaml:"body" json:"body,omitempty"`
+	Actions []LabAction `yaml:"actions" json:"actions,omitempty"`
+	Verify  []LabVerify `yaml:"verify" json:"verify,omitempty"`
+	Hints   []string    `yaml:"hints" json:"hints,omitempty"`
+}
+
+// LabAction deep-links to a workspace tab or invokes a gated write operation.
+type LabAction struct {
+	Type   string            `yaml:"type" json:"type"`
+	Tab    string            `yaml:"tab" json:"tab,omitempty"`
+	Focus  string            `yaml:"focus" json:"focus,omitempty"`
+	Op     string            `yaml:"op" json:"op,omitempty"`
+	Params map[string]string `yaml:"params" json:"params,omitempty"`
+}
+
+// LabVerify declares an on-demand verification check for a lab step.
+type LabVerify struct {
+	Type      string `yaml:"type" json:"type"`
+	Queue     string `yaml:"queue" json:"queue,omitempty"`
+	Attribute string `yaml:"attribute" json:"attribute,omitempty"`
+	Compare   string `yaml:"compare" json:"compare,omitempty"`
+	Value     string `yaml:"value" json:"value,omitempty"`
+	URL       string `yaml:"url" json:"url,omitempty"`
+}
+
 // Manifest is the recipe.yaml document.
 type Manifest struct {
 	APIVersion     string          `yaml:"apiVersion" json:"apiVersion"`
@@ -122,6 +159,9 @@ type Manifest struct {
 	PostApply      []BuildStep     `yaml:"postApply" json:"postApply,omitempty"`
 	VariableGroups []VariableGroup `yaml:"variableGroups" json:"variableGroups,omitempty"`
 	Outputs        []OutputHint    `yaml:"outputs" json:"outputs,omitempty"`
+	Lab            *LabSpec        `yaml:"lab" json:"lab,omitempty"`
+	// Source is set by the loader (not in recipe.yaml): bundled | imported.
+	Source         string          `yaml:"-" json:"source,omitempty"`
 }
 
 // Validate checks the registry-required fields.

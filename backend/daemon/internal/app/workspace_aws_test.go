@@ -87,8 +87,8 @@ func awsTestService(t *testing.T) (*Service, *countingS3Inventory, *countingEC2I
 		kms:            stubKmsInventory{},
 		apigateway:     stubApiGatewayInventory{},
 		secretsManager: stubSecretsManagerInventory{},
-		logs:        stubLogsInventory{},
-		iam:      stubIAMInventory{},
+		logs:        &stubLogsInventory{},
+		iam:      &stubIAMInventory{},
 		now:      func() time.Time { return time.Now().UTC() },
 	}
 	return service, s3, ec2, lambda
@@ -225,8 +225,8 @@ func TestAwsInventoryGetRunsSingleEnricher(t *testing.T) {
 		stubKmsInventory{},
 		stubApiGatewayInventory{},
 		stubSecretsManagerInventory{},
-		stubLogsInventory{},
-		stubIAMInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
 		stubAzureInventory{},
 		stubDockerRuntime{},
 	)

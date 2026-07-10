@@ -1,0 +1,98 @@
+apiVersion: cloudsprocket.recipe/v1
+id: s3-event-lambda-aws
+kind: app-deploy
+version: 0.1.0
+name: S3 event processor (AWS Lambda)
+summary: An S3 bucket that triggers a Node Lambda on object uploads for event-driven processing.
+description: |
+  Event-driven pattern: upload an object to S3 and a Lambda function is invoked
+  automatically. The bundled sample handler logs the bucket and key. Point
+  `backend_source_dir` at your processor or keep the sample.
+
+  Uses S3 and Lambda (free tier in LocalStack). Same recipe runs locally or on
+  real AWS by switching profile. Ideal starter for image processing, ETL, or
+  validation pipelines.
+providers:
+  - aws
+tags:
+  - event-driven
+  - s3
+  - lambda
+  - aws
+  - starter
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+build:
+  - name: Install backend dependencies
+    dirVar: backend_source_dir
+    requires: package.json
+    command: ["npm", "install", "--omit=dev"]
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Processor code
+    variables:
+      - name: backend_source_dir
+        widget: directory
+        help: Folder with your Node handler.handler export for S3 events. Leave default for the sample processor.
+      - name: lambda_memory_mb
+        widget: number
+        help: Memory for the processor Lambda, in megabytes.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: bucket_name
+    primary: true
+  - name: lambda_function_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 15
+  objectives:
+    - Deploy an S3 bucket wired to invoke a Lambda on uploads
+    - Inspect the Lambda and bucket in workspace tabs
+    - Upload a test object (via console or code) to trigger processing
+  steps:
+    - id: explore-bucket
+      title: Explore the S3 bucket
+      body: |
+        Open the S3 tab. Locate the bucket named after your app and environment.
+        Note it has no public website config (this recipe focuses on events).
+      actions:
+        - type: open-tab
+          tab: aws-s3
+          focus: "{{ outputs.bucket_name }}"
+      hints:
+        - The bucket name is the primary output.
+    - id: inspect-lambda
+      title: Inspect the event processor Lambda
+      body: |
+        Switch to the Lambda tab and select the function. It is granted
+        permission to be invoked by S3.
+      actions:
+        - type: open-tab
+          tab: aws-lambda
+          focus: "{{ outputs.lambda_function_name }}"
+      hints:
+        - Handler receives standard S3 event records.
+    - id: review-outputs
+      title: Review deployment outputs
+      body: |
+        Check the Outputs panel for bucket_name. Use it to target uploads
+        from your own code or the AWS CLI.
+      hints:
+        - After apply, any object create in the bucket will invoke the Lambda.

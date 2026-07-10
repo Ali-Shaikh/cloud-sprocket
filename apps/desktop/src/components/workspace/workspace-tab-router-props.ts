@@ -31,6 +31,8 @@ type MutateWorkspaceSelectionOptions = {
   onOptimistic?: () => void;
   persistOnly?: boolean;
   panelLoading?: boolean;
+  /** When true, apply optimistic/result updates synchronously (avoids list flicker). */
+  immediate?: boolean;
   errorTitle?: string;
 };
 
@@ -52,7 +54,9 @@ export type WorkspaceTabRouterProps = {
   activeS3PageId: string;
   setActiveS3PageId: Dispatch<SetStateAction<string>>;
   activeAzurePageId: string;
+  setActiveAzurePageId: Dispatch<SetStateAction<string>>;
   activeAzureStoragePageId: string;
+  setActiveAzureStoragePageId: Dispatch<SetStateAction<string>>;
   s3UploadStatus: string;
   setS3UploadStatus: Dispatch<SetStateAction<string>>;
   s3SignedUrlStatus: string;
@@ -180,6 +184,8 @@ export type WorkspaceTabRouterProps = {
   selectRDSInstance: (instanceId: string) => void;
   deleteS3Object: (objectKey: string) => void;
   createS3Bucket: (bucketName: string, region?: string) => void;
+  copyS3Object: (sourceObjectKey: string, destinationObjectKey: string) => void;
+  createS3FolderPrefix: (folderPrefix: string) => void;
   runEC2Instances: (instanceType?: string) => void;
   terminateEC2Instance: (instanceId: string) => void;
   deleteLambdaFunction: (functionName: string) => void;
@@ -220,7 +226,7 @@ export type WorkspaceTabRouterProps = {
   selectLogGroup: (logGroupName: string) => void;
   refreshIAMInventory: () => void;
   selectIAMRole: (roleName: string) => void;
-  applyS3PrefixFilter: (prefix: string) => void;
+  applyS3PrefixFilter: (prefix: string) => Promise<void>;
   selectAzureResourceGroup: (resourceGroup: string) => Promise<void>;
   selectAzureVirtualMachine: (vmId: string) => Promise<void>;
   selectAzureWebApp: (appName: string) => Promise<void>;

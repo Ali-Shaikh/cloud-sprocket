@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { useMemo, useState } from "react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
   ArrowLeftRight,
   Braces,
@@ -57,6 +58,9 @@ import {
   type ToolResult,
 } from "@/lib/developer-tools";
 import { cn } from "@/lib/utils";
+import { importRecipeFolder, scaffoldRecipe, validateRecipeFolder } from "@/lib/backend";
+import { notify } from "@/lib/notify";
+import { formatBackendError } from "@/lib/workspace-snapshot";
 
 type TextLanguage = "plain" | "json" | "yaml" | "markdown" | "shell" | "env";
 type DiffLanguage = "plain" | "json" | "yaml";
@@ -733,6 +737,158 @@ function CloudIdWorkbench() {
   );
 }
 
+function RecipeAuthoring() {
+  const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [pendingImportPath, setPendingImportPath] = useState<string | null>(null);
+  const [pendingSourceType, setPendingSourceType] = useState<"folder" | "zip" | undefined>(undefined);
+  const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
+
+  async function runImportPreview(sourceType: "folder" | "zip") {
+    try {
+      const selected =
+        sourceType === "zip"
+          ? await openDialog({
+              directory: false,
+              multiple: false,
+              filters: [{ name: "Recipe zip", extensions: ["zip"] }],
+            })
+          : await openDialog({ directory: true, multiple: false });
+      if (!selected) return;
+      setBusy(true);
+      const path = String(selected);
+      const res = (await importRecipeFolder(path, false, sourceType)) as Record<string, unknown>;
+      setPreview(res);
+      if (res.ok === false) {
+        setPendingImportPath(null);
+        setPendingSourceType(undefined);
+        setStatus("Import blocked by validation: " + JSON.stringify(res.validation ?? res));
+        notify("error", "Import blocked", "Fix validation errors before accepting the import.");
+        return;
+      }
+      setPendingImportPath(path);
+      setPendingSourceType(sourceType);
+      setStatus("Import preview (not copied yet): " + JSON.stringify(res));
+      notify("success", "Import preview ready", "Review providers and build commands, then accept to copy.");
+    } catch (e) {
+      setStatus("Import error: " + formatBackendError(e));
+      setPendingImportPath(null);
+      setPendingSourceType(undefined);
+      setPreview(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doImportConfirm() {
+    if (!pendingImportPath) return;
+    try {
+      setBusy(true);
+      const res = await importRecipeFolder(pendingImportPath, true, pendingSourceType);
+      setStatus("Import accepted: " + JSON.stringify(res));
+      setPreview(res as Record<string, unknown>);
+      setPendingImportPath(null);
+      setPendingSourceType(undefined);
+      notify("success", "Import accepted", "Recipe copied into the imported recipes directory.");
+    } catch (e) {
+      setStatus("Import confirm error: " + formatBackendError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function doImportReject() {
+    setPendingImportPath(null);
+    setPendingSourceType(undefined);
+    setPreview(null);
+    setStatus("Import rejected; nothing was copied.");
+    notify("info", "Import rejected", "No files were written to the imported recipes directory.");
+  }
+
+  async function doValidate() {
+    try {
+      const folder = await openDialog({ directory: true, multiple: false });
+      if (!folder) return;
+      setBusy(true);
+      const res = await validateRecipeFolder(String(folder));
+      setStatus("Validation: " + JSON.stringify(res));
+      if (res?.ok) {
+        notify("success", "Recipe valid", "No blocking validation errors.");
+      } else {
+        notify("warning", "Validation findings", "See status for errors and warnings.");
+      }
+    } catch (e) {
+      setStatus("Validate error: " + formatBackendError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doScaffold() {
+    try {
+      const folder = await openDialog({ directory: true, multiple: false });
+      if (!folder) return;
+      setBusy(true);
+      const res = await scaffoldRecipe(String(folder), "aws");
+      setStatus("Scaffolded at " + (res?.path || folder));
+      notify("success", "Scaffold complete", "Starter recipe.yaml + tf files written. Open folder to edit.");
+    } catch (e) {
+      setStatus("Scaffold error: " + formatBackendError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const buildCommands = Array.isArray(preview?.buildCommands)
+    ? (preview?.buildCommands as string[])
+    : [];
+
+  return (
+    <ToolSection title="Recipe Authoring (C1–C3)" icon={Wand2}>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => void runImportPreview("folder")} disabled={busy}>
+          Import folder
+        </Button>
+        <Button onClick={() => void runImportPreview("zip")} disabled={busy}>
+          Import zip
+        </Button>
+        <Button onClick={doImportConfirm} disabled={busy || !pendingImportPath}>
+          Accept import
+        </Button>
+        <Button variant="outline" onClick={doImportReject} disabled={busy || !pendingImportPath}>
+          Reject
+        </Button>
+        <Button variant="outline" onClick={() => void doValidate()} disabled={busy}>
+          Validate folder
+        </Button>
+        <Button variant="outline" onClick={() => void doScaffold()} disabled={busy}>
+          Scaffold starter
+        </Button>
+      </div>
+      {preview && (
+        <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+          <p>
+            {String(preview.name || preview.id || "recipe")} @ {String(preview.version || "?")}
+            {preview.confirmed ? " (copied)" : " (preview only)"}
+            {preview.contentHash ? ` · hash ${String(preview.contentHash).slice(0, 12)}…` : ""}
+          </p>
+          {Array.isArray(preview.providers) && preview.providers.length > 0 && (
+            <p>Providers: {(preview.providers as string[]).join(", ")}</p>
+          )}
+          {buildCommands.length > 0 && (
+            <p className="break-all">Build commands (run on this machine): {buildCommands.join(" · ")}</p>
+          )}
+        </div>
+      )}
+      {status && <p className="mt-2 text-xs text-muted-foreground break-all">{status}</p>}
+      <p className="mt-3 text-xs text-muted-foreground">
+        Validate checks manifest, lab semantics, and OpenTofu module coherence. Import supports folder or zip; accept
+        writes under app data with a content-hash trust record. Git import is next.
+      </p>
+    </ToolSection>
+  );
+}
+
 export default function DeveloperToolsView() {
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -770,6 +926,10 @@ export default function DeveloperToolsView() {
             <Clipboard aria-hidden />
             Cloud IDs
           </TabsTrigger>
+          <TabsTrigger value="recipes">
+            <Wand2 aria-hidden />
+            Recipes
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="json">
@@ -786,6 +946,9 @@ export default function DeveloperToolsView() {
         </TabsContent>
         <TabsContent value="cloud">
           <CloudIdWorkbench />
+        </TabsContent>
+        <TabsContent value="recipes">
+          <RecipeAuthoring />
         </TabsContent>
       </Tabs>
     </div>

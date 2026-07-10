@@ -1,0 +1,111 @@
+apiVersion: cloudsprocket.recipe/v1
+id: lab-sns-filtered-fanout-aws
+kind: service-lab
+version: 0.1.0
+name: SNS filtered fan-out lab (AWS)
+summary: SNS topic with filtered subscriptions to multiple SQS queues for selective routing.
+description: |
+  A focused service lab for advanced fan-out: publish to SNS, use subscription
+  filter policies so only matching messages reach each SQS queue (e.g. by
+  message attribute or body content).
+
+  Builds on basic fan-out. Teaches efficient event routing without extra
+  compute. LocalStack supported.
+providers:
+  - aws
+tags:
+  - sns
+  - sqs
+  - events
+  - fanout
+  - aws
+  - lab
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix used for every resource.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+        help: Extra tags as a JSON object, applied to every resource.
+outputs:
+  - name: topic_arn
+    primary: true
+  - name: queue_high_url
+  - name: queue_low_url
+lab:
+  difficulty: intermediate
+  estimatedMinutes: 20
+  objectives:
+    - Create an SNS topic with two filtered SQS subscriptions
+    - Send messages that match different filters and verify routing
+    - Inspect SNS subscriptions and filter policies in the workspace
+    - Appreciate content-based routing to reduce downstream load
+  steps:
+    - id: explore-topic
+      title: Explore the SNS topic
+      body: |
+        Open the SNS tab and inspect the topic and its subscriptions.
+      actions:
+        - type: open-tab
+          tab: aws-sns
+          focus: "{{ outputs.topic_arn }}"
+      hints:
+        - Filter policies are visible on the subscription details.
+    - id: explore-queues
+      title: View the target queues
+      body: |
+        Open SQS tabs for the high and low priority queues that receive
+        filtered subsets of messages.
+      actions:
+        - type: open-tab
+          tab: aws-sqs
+          focus: "{{ outputs.queue_high_url }}"
+    - id: send-high
+      title: Send a high priority message
+      body: |
+        Send a message with attributes that match the high filter.
+      actions:
+        - type: invoke-write
+          op: sqs.send
+          params:
+            queueUrl: "{{ outputs.queue_high_url }}"
+            messageBody: '{"lab":"sns-filter","level":"high"}'
+      hints:
+        - In real use, publish to SNS with MessageAttributes; filter decides delivery.
+    - id: send-low
+      title: Send a low priority message
+      body: |
+        Send to the low queue path.
+      actions:
+        - type: invoke-write
+          op: sqs.send
+          params:
+            queueUrl: "{{ outputs.queue_low_url }}"
+            messageBody: '{"lab":"sns-filter","level":"low"}'
+    - id: verify-routing
+      title: Verify selective delivery
+      body: |
+        Check one or both queues have received activity based on your sends.
+      verify:
+        - type: sqs.queue-attribute
+          queue: "{{ outputs.queue_high_url }}"
+          attribute: ApproximateNumberOfMessagesNotVisible
+          compare: gte
+          value: "0"
+      hints:
+        - Real SNS publish with matching attribute would fan to only the right queue.

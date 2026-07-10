@@ -70,6 +70,8 @@ func buildAWSActionCapabilities(
 			awsActionCapability(session, profile, "uploadObject", "Upload object"),
 			awsActionCapability(session, profile, "deleteObject", "Delete object"),
 			awsActionCapability(session, profile, "createBucket", "Create bucket"),
+			awsActionCapability(session, profile, "copyObject", "Copy object"),
+			awsActionCapability(session, profile, "createFolderPrefix", "Create folder prefix"),
 		},
 		"ec2": {
 			awsActionCapability(session, profile, "start", "Start instance"),
@@ -137,6 +139,8 @@ func buildAzureActionCapabilities(
 			cap("createContainer", "Create container"),
 			cap("uploadBlob", "Upload blob"),
 			cap("deleteBlob", "Delete blob"),
+			cap("copyBlob", "Copy blob"),
+			cap("createFolderPrefix", "Create folder prefix"),
 		},
 		"functions": {
 			cap("invoke", "Invoke function"),

@@ -247,6 +247,8 @@ export interface AwsS3Object {
   size?: string;
   modifiedAt?: string;
   storageClass?: string;
+  /** True for delimiter CommonPrefixes (virtual folders). */
+  isFolder?: boolean;
 }
 
 export interface AwsS3ExportSnippet {
@@ -1115,6 +1117,8 @@ export interface WorkspaceSnapshot {
   s3StatusMessage?: string;
   s3Buckets: AwsS3Bucket[];
   s3Objects: AwsS3Object[];
+  s3ObjectsNextToken?: string;
+  s3ObjectsHasMore?: boolean;
   s3ObjectMetadata: DetailField[];
   s3ExportSnippets: AwsS3ExportSnippet[];
   selectedEc2Region?: string;
@@ -1303,6 +1307,9 @@ export interface RecipeManifest {
   };
   superpowers?: RecipeSuperpowers;
   imageBuild?: RecipeImageBuild;
+  lab?: LabSpec;
+  /** Set by the daemon: bundled catalogue vs trusted local import. */
+  source?: "bundled" | "imported";
 }
 
 export interface RecipeVisibleWhen {
@@ -1382,8 +1389,23 @@ export interface Deployment {
   outputs?: DeploymentOutput[];
   error?: string;
   postApplyError?: string;
+  drift?: DriftReport;
+  recipeVersion?: string;
+  revisions?: DeploymentRevision[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DeploymentRevision {
+  at: string;
+  recipeVersion?: string;
+  variables: Record<string, unknown>;
+  plan?: PlanSummary;
+}
+
+export interface DriftReport {
+  hasDrift: boolean;
+  drift?: PlanSummary; // re-uses the plan summary shape for the list of drifted resources
 }
 
 export interface DeploymentJob {
@@ -1401,4 +1423,79 @@ export interface DeploymentLogEvent {
   deploymentId: string;
   jobId: string;
   line: string;
+}
+
+// --- Guided labs -------------------------------------------------------------
+
+export type LabDifficulty = "beginner" | "intermediate" | "advanced";
+
+export type LabStepStatus = "pending" | "in_progress" | "passed" | "failed" | "skipped";
+
+export type LabSessionStatus = "not_started" | "in_progress" | "completed" | "abandoned";
+
+export interface LabActionOpenTab {
+  type: "open-tab";
+  tab: string;
+  focus?: string;
+}
+
+export interface LabActionInvokeWrite {
+  type: "invoke-write";
+  op: string;
+  params?: Record<string, unknown>;
+}
+
+export type LabStepAction = LabActionOpenTab | LabActionInvokeWrite | { type: string; [key: string]: unknown };
+
+export interface LabVerifyCheck {
+  type: string;
+  [key: string]: unknown;
+}
+
+export interface LabStepSpec {
+  id: string;
+  title: string;
+  body: string;
+  actions?: LabStepAction[];
+  verify?: LabVerifyCheck[];
+  hints?: string[];
+}
+
+export interface LabSpec {
+  difficulty: LabDifficulty;
+  estimatedMinutes: number;
+  objectives: string[];
+  steps: LabStepSpec[];
+}
+
+export interface LabVerifyResult {
+  type: string;
+  passed: boolean;
+  detail: string;
+  /** Optional human-readable note (e.g. check runtime error text). */
+  message?: string;
+}
+
+export interface LabStepSession {
+  stepId: string;
+  status: LabStepStatus;
+  startedAt?: string;
+  completedAt?: string;
+  verifyResults: LabVerifyResult[];
+}
+
+export interface LabSession {
+  deploymentId: string;
+  recipeId: string;
+  status: LabSessionStatus;
+  startedAt: string;
+  completedAt?: string;
+  updatedAt?: string;
+  currentStepId?: string;
+  steps: LabStepSession[];
+}
+
+export interface LabRunActionResult {
+  session: LabSession;
+  action?: LabStepAction;
 }

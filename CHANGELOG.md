@@ -9,6 +9,134 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-07-10
+
+### Added
+
+- Unified Azure Storage and S3 path browsers (account/container or bucket +
+  breadcrumb path + objects + inspector) with sub-rail pages removed (#148)
+- S3 folder browse via delimiter listing, Load more pagination, and client-side
+  contains search over the loaded page (#148)
+- Structured multi-line Azure storage list-error banners with plain-language
+  guidance for network isolation and auth failures (#148)
+
+### Fixed
+
+- S3 listing loading indicators without multi-blink; path reset when switching
+  buckets; object select no longer collapses Load more pages (#148)
+- Load more surfaces list errors instead of reporting end of list (#148)
+- Select popper sizing so multi-option dropdowns are not clipped (#148)
+
+## [0.9.1] - 2026-07-10
+
+### Added
+
+- Recipe validation RPC (`recipes.validate`) for local folders: manifest, lab
+  semantics, OpenTofu module inspect, and build/imageBuild coherence (#138)
+- Zip import for recipes alongside folder import, with zip-slip-safe extract (#138)
+- Import trust preview enrichment: providers, build commands, lab step count,
+  content hash; acceptance writes `.import-trust.json` (#138)
+- Developer Toolbox actions: validate folder, import folder/zip, accept/reject (#138)
+
+### Changed
+
+- Import blocks on validation errors until the recipe report is clean (#138)
+
+## [0.9.0] - 2026-07-09
+
+### Added
+
+- Guided labs platform (schema, engine, runner, navigation) and lab sections on
+  bundled service labs (#126, #127)
+- Expanded app-deploy and service-lab catalogue, including static-site and
+  scheduled-job recipes (#129, #131)
+- A5 wave-2 labs: CloudFormation drift, Step Functions order flow, and Azure
+  storage event function (#136)
+- Deployment drift detection (B1): `CheckDrift`, UI badge/panel, persistence
+  (#123 area + follow-ups)
+- Deployment update flow (B2): re-plan applied deployments with revision history,
+  version banner, and structured plan highlighting (#135)
+- Basic recipe import/scaffold authoring (C2/C3) with trust preview before copy
+  and path-safe import destinations (#135)
+- Live recipe build-step log streaming during deploy (#133)
+- Azure PostgreSQL Flexible Server local deploy path via floci-az (shipped
+  earlier as #52 / v0.8.21; part of the local Azure runtime story for v0.9)
+
+### Changed
+
+- v0.9.0 UX batch for deploy errors, logs, gallery, and related desktop polish
+  (#123)
+- Pre-v0.9 backlog closed (ResourceTable breadth, storage depth, write RPC wiring)
+  (#121)
+
+### Fixed
+
+- Recipe/test expectation cleanups after Greptile review on new catalogue
+  content (#130)
+- Post guided-labs improvements for runner, destroy, and floci-az (#127)
+
+## [0.8.36] - 2026-07-09
+
+### Changed
+- Version bump ahead of next wave of plan work (recipes/labs + lifecycle).
+- Post-Greptile fixes for recent recipe PRs integrated (via review branches).
+
+## [0.8.35] - 2026-07-08
+
+### Added
+
+- CloudFormation and EventBridge inventory tabs migrated to shared
+  `ResourceInventoryShell` + `ResourceTable` (#121)
+- S3 copy object and create folder prefix workflows (write-gated) (#121)
+- Azure Storage blob copy and folder prefix create workflows (write-gated) (#121)
+
+### Fixed
+
+- AWS write ops Phases 2–3 handlers were implemented but not registered in
+  `service.go`; delete/create/run/terminate/RDS/Logs/IAM RPCs now route correctly
+  (#121)
+- S3 `CopyObject` URL-encodes copy-source keys with spaces and special characters
+  (#121)
+- Azure blob copy authorises the source with a read SAS and polls until the async
+  copy completes (#121)
+- CloudFormation stack row selection highlights the active stack again (#121)
+- S3 copy preserves object key whitespace instead of trimming it (#121)
+
+### Changed
+
+- `docs/project-status.md` brought current; pre-v0.9 backlog marked complete (#121)
+
+## [0.8.34] - 2026-07-07
+
+### Added
+
+- Developer Preview channel labelling in the README, connect screen, workspace
+  strip, app menu, and window title (#119)
+- Shared `release-channel` module for consistent pre-1.0 messaging (#119)
+
+### Fixed
+
+- README Developer Preview heading no longer renders Pandoc `{#id}` anchor syntax
+  literally (#120)
+
+## [0.8.33] - 2026-07-06
+
+### Changed
+
+- AWS write mode can be enabled on any locked AWS profile; live cloud profiles
+  require an extra acknowledgement before mutating actions (#114)
+- Inventory tables restored to full width with the inspector stacked below the
+  table (#113)
+
+### Fixed
+
+- KMS sidebar icon now uses the official AWS KMS asset instead of a generic
+  fallback (#114)
+- S3 delete and other mutating actions stayed disabled after enabling write mode
+  because action capabilities were not refreshed on toggle (#114)
+- ResourceTable layout regression that crushed wide tables beside a fixed side
+  inspector (#113)
+
 ## [0.8.32] - 2026-07-05
 
 ### Added
@@ -650,7 +778,14 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.32...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.1...v0.9.2
+[0.9.1]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.36...v0.9.0
+[0.8.36]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.35...v0.8.36
+[0.8.35]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.34...v0.8.35
+[0.8.34]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.33...v0.8.34
+[0.8.33]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.32...v0.8.33
 [0.8.32]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.31...v0.8.32
 [0.8.31]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.30...v0.8.31
 [0.8.30]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.8.29...v0.8.30

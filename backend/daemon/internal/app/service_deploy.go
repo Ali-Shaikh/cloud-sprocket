@@ -4,24 +4,35 @@
 package app
 
 import (
+	"archive/zip"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"cloudsprocket/backend/daemon/internal/deploy"
 	"cloudsprocket/backend/daemon/internal/models"
+	"cloudsprocket/backend/daemon/internal/recipes"
+
+	"gopkg.in/yaml.v3"
 )
 
 // deploymentPlanRequest is the payload for deployments.plan.
+// UpdateDeploymentID, when supplied for an applied deployment, re-uses that
+// record (re-seeding variables) and produces a fresh plan for re-apply (B2 update flow).
 type deploymentPlanRequest struct {
-	RecipeID   string         `json:"recipeId"`
-	Name       string         `json:"name"`
-	ProviderID string         `json:"providerId"`
-	ProfileID  string         `json:"profileId"`
-	Local      bool           `json:"local"`
-	RuntimeID  string         `json:"runtimeId,omitempty"`
-	Variables  map[string]any `json:"variables"`
+	RecipeID           string         `json:"recipeId"`
+	Name               string         `json:"name"`
+	ProviderID         string         `json:"providerId"`
+	ProfileID          string         `json:"profileId"`
+	Local              bool           `json:"local"`
+	RuntimeID          string         `json:"runtimeId,omitempty"`
+	Variables          map[string]any `json:"variables"`
+	UpdateDeploymentID string         `json:"updateDeploymentId,omitempty"`
 }
 
 // deploymentJob is returned by plan/apply/destroy: the deployment record plus
@@ -29,6 +40,11 @@ type deploymentPlanRequest struct {
 type deploymentJob struct {
 	Deployment *deploy.Deployment `json:"deployment"`
 	Job        models.JobStatus   `json:"job"`
+}
+
+type deploymentDriftResult struct {
+	Deployment *deploy.Deployment `json:"deployment"`
+	Drift      deploy.DriftReport `json:"drift"`
 }
 
 // deploymentLogEvent is streamed per tofu output line.
@@ -119,16 +135,24 @@ func (s *Service) deleteDeployment(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	switch deployment.Status {
-	case deploy.StatusPlanning, deploy.StatusApplying, deploy.StatusDestroying:
-		return fmt.Errorf("this deployment is still running; stop it before removing it")
-	case deploy.StatusApplied:
-		return fmt.Errorf("this deployment still has live resources; destroy it before removing it")
+
+	s.deployCancelsMu.Lock()
+	hasActiveOperation := s.deployCancels[id] != nil
+	s.deployCancelsMu.Unlock()
+
+	if hasActiveOperation || deployment.Status == deploy.StatusPlanning || deployment.Status == deploy.StatusApplying || deployment.Status == deploy.StatusDestroying {
+		return fmt.Errorf("this deployment is still running or stopping; wait for the current operation (or stop) to fully complete before removing it")
 	}
-	if err := s.store.DeleteDeployment(ctx, id); err != nil {
+	if deployment.Status == deploy.StatusApplied || (deployment.Status == deploy.StatusCancelled && len(deployment.Outputs) > 0) {
+		return fmt.Errorf("this deployment still has (or had) live resources; destroy it before removing the record")
+	}
+	// Remove workspace first. If it fails (e.g. files still in use by a just-stopped operation),
+	// we keep the record so user can retry or investigate. Guard above already prevents delete
+	// while an operation (or its stop) is in flight.
+	if err := s.deployer.RemoveWorkspace(id); err != nil {
 		return err
 	}
-	if err := s.deployer.RemoveWorkspace(id); err != nil {
+	if err := s.store.DeleteDeployment(ctx, id); err != nil {
 		return err
 	}
 	return nil
@@ -148,19 +172,55 @@ func (s *Service) startDeploymentPlan(ctx context.Context, request deploymentPla
 		name = request.RecipeID
 	}
 	now := s.timestamp()
-	deployment := &deploy.Deployment{
-		ID:            deploy.NewID(),
-		RecipeID:      request.RecipeID,
-		Name:          name,
-		ProviderID:    request.ProviderID,
-		ProfileID:     request.ProfileID,
-		Local:         request.Local,
-		RuntimeID:     request.RuntimeID,
-		Variables:     request.Variables,
-		SensitiveVars: sensitiveVariableNames(recipe),
-		Status:        deploy.StatusPending,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+
+	var deployment *deploy.Deployment
+	if request.UpdateDeploymentID != "" {
+		// Update flow (B2): reuse existing deployment record for re-seed + re-plan against live state.
+		existing, getErr := s.deploymentGet(ctx, request.UpdateDeploymentID)
+		if getErr != nil {
+			return deploymentJob{}, fmt.Errorf("update target deployment not found: %w", getErr)
+		}
+		if existing.Status != deploy.StatusApplied && existing.Status != deploy.StatusPlanned && existing.Status != deploy.StatusFailed {
+			return deploymentJob{}, fmt.Errorf("update is only supported for applied (or planned/failed) deployments")
+		}
+		// Snapshot prior state into revisions for history (values at time of update initiation).
+		prior := deploy.DeploymentRevision{
+			At:            now,
+			RecipeVersion: existing.RecipeVersion,
+			Variables:     cloneVariables(existing.Variables),
+			Plan:          existing.Plan,
+		}
+		deployment = existing
+		deployment.Variables = cloneVariables(request.Variables)
+		deployment.Name = name
+		deployment.ProviderID = request.ProviderID
+		deployment.ProfileID = request.ProfileID
+		deployment.Local = request.Local
+		deployment.RuntimeID = request.RuntimeID
+		deployment.SensitiveVars = sensitiveVariableNames(recipe)
+		deployment.Plan = nil
+		deployment.Error = ""
+		deployment.Drift = nil
+		deployment.Status = deploy.StatusPending
+		deployment.UpdatedAt = now
+		deployment.Revisions = append(append([]deploy.DeploymentRevision(nil), existing.Revisions...), prior)
+		deployment.RecipeVersion = recipe.Manifest.Version
+	} else {
+		deployment = &deploy.Deployment{
+			ID:            deploy.NewID(),
+			RecipeID:      request.RecipeID,
+			Name:          name,
+			ProviderID:    request.ProviderID,
+			ProfileID:     request.ProfileID,
+			Local:         request.Local,
+			RuntimeID:     request.RuntimeID,
+			Variables:     request.Variables,
+			SensitiveVars: sensitiveVariableNames(recipe),
+			Status:        deploy.StatusPending,
+			CreatedAt:     now,
+			UpdatedAt:     now,
+			RecipeVersion: recipe.Manifest.Version,
+		}
 	}
 	deploy.NormaliseDeploymentTarget(deployment)
 	if err := s.store.SaveDeployment(ctx, deployment.ID, s.sealForStore(deployment), now); err != nil {
@@ -170,6 +230,55 @@ func (s *Service) startDeploymentPlan(ctx context.Context, request deploymentPla
 	job := models.JobStatus{JobID: s.newJobID(), Label: "Plan " + name, Status: "queued", Message: "Planning deployment."}
 	go s.runDeploymentPlan(deployment, job, notifier)
 	return deploymentJob{Deployment: deployment, Job: job}, nil
+}
+
+// cloneVariables deep-clones a variables map so revision snapshots stay isolated
+// from later mutations of nested maps/slices.
+func cloneVariables(src map[string]any) map[string]any {
+	if src == nil {
+		return nil
+	}
+	raw, err := json.Marshal(src)
+	if err != nil {
+		// Fall back to a shallow copy if a value is not JSON-serialisable.
+		dst := make(map[string]any, len(src))
+		for k, v := range src {
+			dst[k] = v
+		}
+		return dst
+	}
+	var dst map[string]any
+	if err := json.Unmarshal(raw, &dst); err != nil {
+		dst = make(map[string]any, len(src))
+		for k, v := range src {
+			dst[k] = v
+		}
+	}
+	return dst
+}
+
+// safeRecipePathSegment clamps a manifest id or version for use as a single path
+// segment under ImportedRecipesDir. Rejects empty, traversal, and separator chars.
+func safeRecipePathSegment(value, field string) (string, error) {
+	v := strings.TrimSpace(value)
+	if v == "" {
+		return "", fmt.Errorf("manifest %s is empty", field)
+	}
+	// Reject separators / traversal in the raw value before any Join.
+	if strings.ContainsAny(v, `/\`) || strings.Contains(v, "..") {
+		return "", fmt.Errorf("manifest %s %q is not a safe path segment", field, value)
+	}
+	base := filepath.Base(filepath.Clean(v))
+	if base == "." || base == ".." || base != v {
+		// base != v catches cleaned forms that still differ (e.g. trailing dots on some OSes).
+		return "", fmt.Errorf("manifest %s %q is not a safe path segment", field, value)
+	}
+	return base, nil
+}
+
+// shouldSkipImportPath skips VCS and other hidden tooling dirs during recipe import.
+func shouldSkipImportPath(rel string, _ fs.DirEntry) bool {
+	return recipes.ShouldSkipImportRel(rel)
 }
 
 func (s *Service) startDeploymentAction(id string, action deploymentAction, notifier Notifier) (deploymentJob, error) {
@@ -277,6 +386,14 @@ func (s *Service) runDeploymentAction(deployment *deploy.Deployment, action depl
 		s.setDeploymentStatus(ctx, deployment, deploy.StatusDestroying, notifier)
 		s.emitJobStatus(notifier, job, "running", "Destroying "+deployment.Name+".")
 		if err := s.deployer.Destroy(runCtx, deployment, onLine); err != nil {
+			if runCtx.Err() == context.Canceled {
+				// User stopped the destroy. Resources are likely still present (or partially destroyed).
+				// Revert to applied so the Destroy button is available again and delete is blocked.
+				deployment.Error = ""
+				s.setDeploymentStatus(ctx, deployment, deploy.StatusApplied, notifier)
+				s.emitJobStatus(notifier, job, "failed", deployment.Name+" destroy was stopped. Resources may still exist — destroy again to clean up.")
+				return
+			}
 			s.finishWithError(ctx, runCtx, deployment, job, notifier, err)
 			return
 		}
@@ -428,6 +545,37 @@ func (s *Service) handleDeploymentsCancel(params json.RawMessage) (any, error) {
 	return map[string]bool{"cancelled": true}, s.cancelDeployment(request.DeploymentID)
 }
 
+func (s *Service) handleDeploymentsCheckDrift(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		DeploymentID string `json:"deploymentId"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	deployment, err := s.deploymentGet(ctx, request.DeploymentID)
+	if err != nil {
+		return nil, err
+	}
+	// Drift is only meaningful against applied (or previously planned) live state.
+	switch deployment.Status {
+	case deploy.StatusApplied, deploy.StatusPlanned, deploy.StatusFailed:
+		// ok
+	default:
+		return nil, fmt.Errorf("drift check is only supported for applied, planned, or failed deployments (status=%s)", deployment.Status)
+	}
+	drift, err := s.deployer.CheckDrift(ctx, deployment, s.deploymentLogger(deployment.ID, "", notifier))
+	if err != nil {
+		return nil, err
+	}
+	deployment.Drift = &drift
+	deployment.UpdatedAt = s.timestamp()
+	_ = s.store.SaveDeployment(ctx, deployment.ID, s.sealForStore(deployment), deployment.UpdatedAt)
+	if notifier != nil {
+		_ = notifier.Notify("deployment.changed", deployment)
+	}
+	return deploymentDriftResult{Deployment: deployment, Drift: drift}, nil
+}
+
 func (s *Service) handleDeploymentsRetryPostApply(params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		DeploymentID string `json:"deploymentId"`
@@ -446,4 +594,374 @@ func (s *Service) handleDeploymentsDelete(ctx context.Context, params json.RawMe
 		return nil, err
 	}
 	return map[string]bool{"deleted": true}, s.deleteDeployment(ctx, request.DeploymentID)
+}
+
+// handleRecipesValidate runs C1 validation against a local recipe folder.
+func (s *Service) handleRecipesValidate(params json.RawMessage) (any, error) {
+	var req struct {
+		SourcePath string `json:"sourcePath"`
+	}
+	if err := json.Unmarshal(params, &req); err != nil {
+		return nil, err
+	}
+	return recipes.ValidateDirectory(req.SourcePath)
+}
+
+// handleRecipesImport provides local import (folder or zip) with a trust gate (C2).
+// Without confirm=true, only a preview + validation report is returned (no durable write).
+// With confirm=true, the tree is copied under ImportedRecipesDir as <safeId>@<safeVersion>.
+func (s *Service) handleRecipesImport(params json.RawMessage) (any, error) {
+	var req struct {
+		SourcePath string `json:"sourcePath"`
+		// SourceType is "folder", "zip", or empty (auto-detect from extension / directory).
+		SourceType string `json:"sourceType,omitempty"`
+		Confirm    bool   `json:"confirm"`
+	}
+	if err := json.Unmarshal(params, &req); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(req.SourcePath) == "" {
+		return nil, fmt.Errorf("sourcePath (folder or .zip) is required")
+	}
+	srcPath := filepath.Clean(req.SourcePath)
+	sourceType := strings.ToLower(strings.TrimSpace(req.SourceType))
+	if sourceType == "" {
+		if strings.EqualFold(filepath.Ext(srcPath), ".zip") {
+			sourceType = "zip"
+		} else {
+			sourceType = "folder"
+		}
+	}
+
+	workDir := srcPath
+	var cleanup func()
+	if sourceType == "zip" {
+		extracted, err := extractRecipeZip(srcPath)
+		if err != nil {
+			return nil, err
+		}
+		workDir = extracted
+		cleanup = func() { _ = os.RemoveAll(extracted) }
+		defer cleanup()
+	} else if sourceType != "folder" {
+		return nil, fmt.Errorf("unsupported sourceType %q (use folder or zip)", sourceType)
+	}
+
+	report, err := recipes.ValidateDirectory(workDir)
+	if err != nil {
+		return nil, err
+	}
+	if !report.OK {
+		return map[string]any{
+			"ok":         false,
+			"confirmed":  false,
+			"sourceType": sourceType,
+			"validation": report,
+			"trustNote":  "Import blocked: fix validation errors before accepting.",
+		}, nil
+	}
+
+	manifestPath := filepath.Join(workDir, "recipe.yaml")
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return nil, fmt.Errorf("read recipe.yaml from %s: %w", workDir, err)
+	}
+	var m recipes.Manifest
+	if err := yaml.Unmarshal(data, &m); err != nil {
+		return nil, fmt.Errorf("parse manifest: %w", err)
+	}
+	if strings.TrimSpace(m.ID) == "" {
+		m.ID = filepath.Base(workDir)
+	}
+	if err := m.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid manifest: %w", err)
+	}
+	safeID, err := safeRecipePathSegment(m.ID, "id")
+	if err != nil {
+		return nil, err
+	}
+	safeVer, err := safeRecipePathSegment(m.Version, "version")
+	if err != nil {
+		return nil, err
+	}
+	targetName := fmt.Sprintf("%s@%s", safeID, safeVer)
+	dest := filepath.Join(s.settings.ImportedRecipesDir, targetName)
+	importedRoot := filepath.Clean(s.settings.ImportedRecipesDir)
+	cleanDest := filepath.Clean(dest)
+	if cleanDest != importedRoot && !strings.HasPrefix(cleanDest, importedRoot+string(os.PathSeparator)) {
+		return nil, fmt.Errorf("import destination escapes imported recipes directory")
+	}
+
+	contentHash, err := recipes.ContentHash(workDir)
+	if err != nil {
+		return nil, fmt.Errorf("content hash: %w", err)
+	}
+
+	preview := map[string]any{
+		"ok":           true,
+		"id":           m.ID,
+		"version":      m.Version,
+		"name":         m.Name,
+		"kind":         m.Kind,
+		"providers":    m.Providers,
+		"summary":      m.Summary,
+		"buildCommands": report.BuildCommands,
+		"labStepCount": report.LabStepCount,
+		"contentHash":  contentHash,
+		"sourceType":   sourceType,
+		"sourcePath":   srcPath,
+		"importedPath": dest,
+		"confirmed":    false,
+		"validation":   report,
+		"trustNote":    "Review providers, build commands, and lab actions. These run on this machine. Call again with confirm=true to copy into imported recipes.",
+	}
+	if !req.Confirm {
+		return preview, nil
+	}
+
+	if err := os.RemoveAll(dest); err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		return nil, err
+	}
+	if err := copyRecipeTree(workDir, dest); err != nil {
+		_ = os.RemoveAll(dest)
+		return nil, fmt.Errorf("copy import: %w", err)
+	}
+	trust := recipes.ImportTrust{
+		ContentHash: contentHash,
+		AcceptedAt:  s.timestamp(),
+		SourceType:  sourceType,
+		SourcePath:  srcPath,
+		ID:          m.ID,
+		Version:     m.Version,
+	}
+	trustBytes, _ := json.MarshalIndent(trust, "", "  ")
+	if err := os.WriteFile(filepath.Join(dest, recipes.TrustFileName()), trustBytes, 0o644); err != nil {
+		_ = os.RemoveAll(dest)
+		return nil, fmt.Errorf("write trust record: %w", err)
+	}
+	preview["confirmed"] = true
+	preview["trustNote"] = "Import accepted and copied. A changed content hash will require re-acceptance."
+	return preview, nil
+}
+
+// extractRecipeZip unpacks a zip into a temp directory and returns the recipe root
+// (directory containing recipe.yaml, possibly one level down).
+func extractRecipeZip(zipPath string) (string, error) {
+	info, err := os.Stat(zipPath)
+	if err != nil {
+		return "", fmt.Errorf("open zip: %w", err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("zip path is a directory: %s", zipPath)
+	}
+	reader, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return "", fmt.Errorf("open zip: %w", err)
+	}
+	defer reader.Close()
+
+	tmp, err := os.MkdirTemp("", "cs-recipe-import-*")
+	if err != nil {
+		return "", err
+	}
+	cleanTmp := filepath.Clean(tmp)
+	// Caps protect against zip bombs (highly compressed payloads expanding on disk).
+	const maxEntryBytes int64 = 32 << 20  // 32 MiB per file
+	const maxTotalBytes int64 = 128 << 20 // 128 MiB total uncompressed
+	var totalWritten int64
+	for _, file := range reader.File {
+		name := filepath.Clean(file.Name)
+		// Zip slip guard.
+		if name == ".." || strings.HasPrefix(name, ".."+string(os.PathSeparator)) {
+			_ = os.RemoveAll(tmp)
+			return "", fmt.Errorf("zip entry escapes root: %s", file.Name)
+		}
+		// Normalise to slash for skip checks.
+		if shouldSkipImportPath(filepath.ToSlash(name), nil) {
+			continue
+		}
+		target := filepath.Join(tmp, name)
+		if !strings.HasPrefix(filepath.Clean(target), cleanTmp+string(os.PathSeparator)) && filepath.Clean(target) != cleanTmp {
+			_ = os.RemoveAll(tmp)
+			return "", fmt.Errorf("zip entry escapes root: %s", file.Name)
+		}
+		if file.FileInfo().IsDir() {
+			if err := os.MkdirAll(target, 0o755); err != nil {
+				_ = os.RemoveAll(tmp)
+				return "", err
+			}
+			continue
+		}
+		// UncompressedSize64 is a declared size; still enforce LimitReader below.
+		if file.UncompressedSize64 > uint64(maxEntryBytes) {
+			_ = os.RemoveAll(tmp)
+			return "", fmt.Errorf("zip entry %q exceeds max size (%d bytes)", file.Name, maxEntryBytes)
+		}
+		if totalWritten+int64(file.UncompressedSize64) > maxTotalBytes {
+			_ = os.RemoveAll(tmp)
+			return "", fmt.Errorf("zip total uncompressed size would exceed %d bytes", maxTotalBytes)
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			_ = os.RemoveAll(tmp)
+			return "", err
+		}
+		rc, err := file.Open()
+		if err != nil {
+			_ = os.RemoveAll(tmp)
+			return "", err
+		}
+		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+		if err != nil {
+			_ = rc.Close()
+			_ = os.RemoveAll(tmp)
+			return "", err
+		}
+		// LimitReader caps actual bytes written even if UncompressedSize64 lies.
+		limited := io.LimitReader(rc, maxEntryBytes+1)
+		n, copyErr := io.Copy(out, limited)
+		_ = out.Close()
+		_ = rc.Close()
+		if copyErr != nil {
+			_ = os.RemoveAll(tmp)
+			return "", copyErr
+		}
+		if n > maxEntryBytes {
+			_ = os.RemoveAll(tmp)
+			return "", fmt.Errorf("zip entry %q exceeds max size (%d bytes)", file.Name, maxEntryBytes)
+		}
+		totalWritten += n
+		if totalWritten > maxTotalBytes {
+			_ = os.RemoveAll(tmp)
+			return "", fmt.Errorf("zip total uncompressed size exceeds %d bytes", maxTotalBytes)
+		}
+	}
+
+	// Prefer a root recipe.yaml; otherwise a single top-level subdir that has one.
+	if _, err := os.Stat(filepath.Join(tmp, "recipe.yaml")); err == nil {
+		return tmp, nil
+	}
+	entries, err := os.ReadDir(tmp)
+	if err != nil {
+		_ = os.RemoveAll(tmp)
+		return "", err
+	}
+	var candidates []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(tmp, entry.Name(), "recipe.yaml")); err == nil {
+			candidates = append(candidates, filepath.Join(tmp, entry.Name()))
+		}
+	}
+	if len(candidates) == 1 {
+		return candidates[0], nil
+	}
+	if len(candidates) == 0 {
+		_ = os.RemoveAll(tmp)
+		return "", fmt.Errorf("zip does not contain recipe.yaml at root or in a single top-level folder")
+	}
+	_ = os.RemoveAll(tmp)
+	return "", fmt.Errorf("zip contains multiple recipe.yaml roots; repackage with a single recipe")
+}
+
+func copyRecipeTree(src, dest string) error {
+	cleanDest := filepath.Clean(dest)
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		if shouldSkipImportPath(rel, d) {
+			if d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		tgt := filepath.Join(dest, rel)
+		if !strings.HasPrefix(filepath.Clean(tgt), cleanDest+string(os.PathSeparator)) && filepath.Clean(tgt) != cleanDest {
+			return fmt.Errorf("refusing to write outside import destination: %s", rel)
+		}
+		if d.IsDir() {
+			return os.MkdirAll(tgt, 0o755)
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(tgt), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(tgt, b, 0o644)
+	})
+}
+
+
+
+// handleRecipesScaffold (C3) generates a minimal starter in the given dest dir (authoring scaffold).
+func (s *Service) handleRecipesScaffold(params json.RawMessage) (any, error) {
+	var req struct {
+		DestDir  string `json:"destDir"`
+		Provider string `json:"provider"`
+	}
+	if err := json.Unmarshal(params, &req); err != nil {
+		return nil, err
+	}
+	if req.DestDir == "" {
+		return nil, fmt.Errorf("destDir required for scaffold")
+	}
+	if err := os.MkdirAll(req.DestDir, 0o755); err != nil {
+		return nil, err
+	}
+	prov := req.Provider
+	if prov == "" {
+		prov = "aws"
+	}
+	runtimeID := "localstack"
+	switch strings.ToLower(strings.TrimSpace(prov)) {
+	case "azure":
+		runtimeID = "floci-az"
+	case "docker", "compose":
+		runtimeID = "docker-compose"
+	}
+	recipeYaml := fmt.Sprintf(`apiVersion: cloudsprocket.recipe/v1
+id: my-custom-recipe
+version: 0.1.0
+name: My Custom Recipe
+summary: Starter generated by scaffold.
+kind: app-deploy
+providers: ["%s"]
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: %s
+variables: []
+`, prov, runtimeID)
+	mainTf := `resource "null_resource" "placeholder" {}
+output "example" { value = "hello" }
+`
+	files := map[string][]byte{
+		"recipe.yaml":  []byte(recipeYaml),
+		"main.tf":      []byte(mainTf),
+		"variables.tf": []byte(""),
+		"outputs.tf":   []byte(""),
+	}
+	for name, content := range files {
+		path := filepath.Join(req.DestDir, name)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			return nil, fmt.Errorf("scaffold write %s: %w", name, err)
+		}
+	}
+	return map[string]string{"status": "scaffolded", "path": req.DestDir}, nil
 }

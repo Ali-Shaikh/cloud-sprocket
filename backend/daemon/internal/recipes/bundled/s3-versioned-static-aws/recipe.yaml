@@ -1,0 +1,68 @@
+apiVersion: cloudsprocket.recipe/v1
+id: s3-versioned-static-aws
+kind: app-deploy
+version: 0.1.0
+name: Versioned static site (AWS S3)
+summary: S3 static website with versioning enabled for advanced storage workflows.
+description: |
+  Storage depth pattern: S3 bucket with object versioning on, website hosting,
+  and sample site. Useful for rollback, audit of changes to static assets.
+
+  Builds on basic static site. LocalStack compatible.
+providers:
+  - aws
+tags:
+  - storage
+  - s3
+  - versioning
+  - static
+  - aws
+engine:
+  type: opentofu
+  minVersion: "1.6.0"
+local:
+  runtimes:
+    - id: localstack
+superpowers:
+  iamPolicyStream: true
+variableGroups:
+  - title: Application
+    variables:
+      - name: app_name
+        widget: text
+        help: Lowercase name prefix.
+      - name: environment
+        widget: select
+        options: [dev, staging, prod]
+      - name: aws_region
+        widget: text
+  - title: Content
+    variables:
+      - name: frontend_dist_dir
+        widget: directory
+        help: Built site dir. Default sample.
+  - title: Advanced
+    variables:
+      - name: tags
+        widget: textarea
+outputs:
+  - name: website_endpoint
+    primary: true
+  - name: bucket_name
+lab:
+  difficulty: beginner
+  estimatedMinutes: 10
+  objectives:
+    - Confirm versioning enabled on bucket
+    - View site
+  steps:
+    - id: check-bucket
+      title: Inspect S3 bucket versioning
+      body: Open S3 and verify versioning status on the bucket.
+      actions:
+        - type: open-tab
+          tab: aws-s3
+          focus: "{{ outputs.bucket_name }}"
+    - id: view-site
+      title: Visit website
+      body: Use the website_endpoint output.

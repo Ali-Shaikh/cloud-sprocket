@@ -78,10 +78,7 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
     logs,
     showSensitiveValues,
     setShowSensitiveValues,
-    activeS3PageId,
-    setActiveS3PageId,
     activeAzurePageId,
-    activeAzureStoragePageId,
     s3UploadStatus,
     setS3UploadStatus,
     s3SignedUrlStatus,
@@ -271,7 +268,6 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
   ) : session.isLocked && activeWorkspaceTabId === "azure-storage" ? (
     <AzureStorageView
       workspace={activeWorkspace}
-      activePageId={activeAzureStoragePageId}
       actionStatus={azureStorageActionStatus}
       inventoryLoading={azureServiceInventoryLoading}
       onSelectAccount={(accountName) => {
@@ -427,6 +423,32 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
               setWorkspace(workspaceResult);
             });
             setAzureStorageActionStatus(`Deleted blob ${blobName}.`);
+          })
+          .catch((error: unknown) => {
+            setAzureStorageActionStatus(error instanceof Error ? error.message : String(error));
+          });
+      }}
+      onCopyBlob={(sourceBlobName, destinationBlobName) => {
+        setAzureStorageActionStatus(`Copying blob to ${destinationBlobName}...`);
+        void requestWorkspaceSnapshot("azure.storage.copyBlob", { sourceBlobName, destinationBlobName })
+          .then((workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(workspaceResult);
+            });
+            setAzureStorageActionStatus(`Copied blob to ${destinationBlobName}.`);
+          })
+          .catch((error: unknown) => {
+            setAzureStorageActionStatus(error instanceof Error ? error.message : String(error));
+          });
+      }}
+      onCreateFolderPrefix={(folderPrefix) => {
+        setAzureStorageActionStatus(`Creating folder prefix ${folderPrefix}...`);
+        void requestWorkspaceSnapshot("azure.storage.createFolderPrefix", { folderPrefix })
+          .then((workspaceResult) => {
+            startTransition(() => {
+              setWorkspace(workspaceResult);
+            });
+            setAzureStorageActionStatus(`Created folder prefix ${folderPrefix}.`);
           })
           .catch((error: unknown) => {
             setAzureStorageActionStatus(error instanceof Error ? error.message : String(error));

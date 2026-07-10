@@ -1,6 +1,6 @@
 # AWS Services Expansion Plan
 
-**Status:** Phase 1 shipped in v0.8.23 (PR #69); Phase 2 shipped in v0.8.25–v0.8.26 (ECS #79, API Gateway #80, Secrets Manager #81). Phase 3+ next.
+**Status:** Complete. Phase 1 (v0.8.23, PR #69); Phase 2 (v0.8.25–v0.8.26); Phase 3 (v0.8.30–v0.8.31, EKS/CFN/EventBridge); Phase 4 (v0.8.32, Route 53/ELBv2/KMS). ResourceTable shell completed for CloudFormation and EventBridge pre-v0.9.
 **Date:** 23 June 2026 (Phase 2 status updated 5 July 2026)
 **Scope:** Add high-value AWS services to match Azure breadth, reusing v0.8.10 AWS performance patterns.
 

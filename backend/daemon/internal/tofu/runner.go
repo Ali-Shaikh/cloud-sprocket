@@ -77,6 +77,33 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions) ([]byte, error) {
 	return writer.captured.Bytes(), nil
 }
 
+// RunWithExitCode is like Run but also returns the raw exit code (useful for
+// tofu's -detailed-exitcode where 2 means drift was detected).
+func (r *Runner) RunWithExitCode(ctx context.Context, opts RunOptions) ([]byte, int, error) {
+	if !r.Available() {
+		return nil, 0, fmt.Errorf("opentofu binary is not available")
+	}
+	cmd := exec.CommandContext(ctx, r.binaryPath, opts.Args...)
+	cmd.Dir = opts.Dir
+	cmd.Env = mergeEnv(os.Environ(), opts.Env)
+	sysproc.Hide(cmd)
+
+	writer := &lineWriter{onLine: opts.OnLine}
+	cmd.Stdout = writer
+	cmd.Stderr = writer
+
+	err := cmd.Run()
+	writer.flush()
+	output := writer.captured.Bytes()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return output, exitErr.ExitCode(), nil
+		}
+		return output, 0, fmt.Errorf("tofu %s: %w", strings.Join(opts.Args, " "), err)
+	}
+	return output, 0, nil
+}
+
 // mergeEnv combines process and deployment environment variables. Deployment
 // entries win on duplicate keys so emulator-specific ARM_* values are not
 // shadowed by a developer shell configured for real Azure.
