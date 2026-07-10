@@ -64,6 +64,7 @@ import {
 } from "@/components/inventory/resource-inspector";
 import { ResourceTable } from "@/components/inventory/resource-table";
 import { StatusPill } from "@/components/status-pill";
+import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { DetailFieldList } from "./detail-fields";
 import type {
@@ -81,6 +82,8 @@ export type StorageViewProps = {
   onSetPrefixFilter: (prefix: string) => void;
   onLoadMoreObjects?: () => void;
   loadMoreInFlight?: boolean;
+  listingLoading?: boolean;
+  listingLoadingLabel?: string;
   uploadStatus: string;
   signedUrlStatus: string;
   signedUrlResult?: AwsS3PresignResult;
@@ -170,6 +173,8 @@ export default function StorageView({
   onSetPrefixFilter,
   onLoadMoreObjects,
   loadMoreInFlight = false,
+  listingLoading = false,
+  listingLoadingLabel = "Loading objects…",
   uploadStatus,
   signedUrlStatus,
   signedUrlResult,
@@ -230,13 +235,10 @@ export default function StorageView({
     MAX_PRESIGN_SECONDS,
   );
   const [urlTesterValue, setUrlTesterValue] = useState("");
-  const [prefixDraft, setPrefixDraft] = useState(workspace.s3PrefixFilter || "");
   const [keySearch, setKeySearch] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(Boolean(workspace.selectedS3ObjectKey));
   const lastSelectedBucketRef = useRef(workspace.selectedS3BucketName || "");
-  const lastRequestedPrefixRef = useRef(workspace.s3PrefixFilter || "");
   const lastSelectedObjectRef = useRef(workspace.selectedS3ObjectKey || "");
-  const debouncedPrefixDraft = useDebouncedValue(prefixDraft, 350);
   const debouncedKeySearch = useDebouncedValue(keySearch, 200);
 
   useEffect(() => {
@@ -251,19 +253,10 @@ export default function StorageView({
     const nextBucket = workspace.selectedS3BucketName || "";
     if (nextBucket !== lastSelectedBucketRef.current) {
       lastSelectedBucketRef.current = nextBucket;
-      // Changing bucket always starts at root in the UI; the session clears prefix too.
-      setPrefixDraft("");
-      lastRequestedPrefixRef.current = "";
+      // Changing bucket always starts at root; drop local name filter from the previous bucket.
       setKeySearch("");
-      return;
     }
-    // Same bucket: keep local path draft in sync when breadcrumb/folder navigation updates prefix.
-    const nextPrefix = workspace.s3PrefixFilter || "";
-    if (nextPrefix !== lastRequestedPrefixRef.current) {
-      setPrefixDraft(nextPrefix);
-      lastRequestedPrefixRef.current = nextPrefix;
-    }
-  }, [workspace.s3PrefixFilter, workspace.selectedS3BucketName]);
+  }, [workspace.selectedS3BucketName]);
 
   const visibleObjects = useMemo(
     () => filterObjectsByKeyQuery(workspace.s3Objects, debouncedKeySearch),
@@ -275,13 +268,6 @@ export default function StorageView({
     visibleObjects.length,
     searchActive,
   );
-
-  useEffect(() => {
-    if (debouncedPrefixDraft !== lastRequestedPrefixRef.current) {
-      lastRequestedPrefixRef.current = debouncedPrefixDraft;
-      onSetPrefixFilter(debouncedPrefixDraft);
-    }
-  }, [debouncedPrefixDraft, onSetPrefixFilter]);
 
   useEffect(() => {
     if (!uploadObjectKey && uploadSourcePath) {
@@ -332,10 +318,7 @@ export default function StorageView({
   const pathParts = prefixSegments(workspace.s3PrefixFilter || "");
 
   const applyPrefix = (prefix: string) => {
-    const normalised = prefix.replace(/^\/+/, "");
-    setPrefixDraft(normalised);
-    lastRequestedPrefixRef.current = normalised;
-    onSetPrefixFilter(normalised);
+    onSetPrefixFilter(prefix.replace(/^\/+/, ""));
   };
 
   const breadcrumb = (
@@ -345,9 +328,9 @@ export default function StorageView({
     >
       <button
         type="button"
-        className="rounded px-1 font-medium hover:bg-muted hover:text-foreground"
+        className="rounded px-1 font-medium hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
         onClick={() => applyPrefix("")}
-        disabled={!bucketName}
+        disabled={!bucketName || listingLoading}
       >
         {bucketName || "No bucket"}
       </button>
@@ -358,8 +341,9 @@ export default function StorageView({
             <ChevronRight className="size-3.5 shrink-0 opacity-50" />
             <button
               type="button"
-              className="rounded px-1 font-medium hover:bg-muted hover:text-foreground"
+              className="rounded px-1 font-medium hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
               onClick={() => applyPrefix(upTo)}
+              disabled={listingLoading}
             >
               {segment}
             </button>
@@ -717,7 +701,7 @@ export default function StorageView({
             <Select
               value={bucketName || undefined}
               onValueChange={(value) => value && onSelectBucket(value)}
-              disabled={workspace.s3Buckets.length === 0}
+              disabled={workspace.s3Buckets.length === 0 || listingLoading}
             >
               <SelectTrigger
                 className="w-full"
@@ -746,7 +730,7 @@ export default function StorageView({
               <Input
                 value={keySearch}
                 placeholder="Filter loaded folders and files by name"
-                disabled={!bucketName || workspace.s3Objects.length === 0}
+                disabled={!bucketName || listingLoading || workspace.s3Objects.length === 0}
                 aria-label="Search object keys"
                 className="pl-9"
                 onChange={(event) => {
@@ -760,16 +744,22 @@ export default function StorageView({
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-muted-foreground">
-            {workspace.s3StatusMessage || "S3 inventory is waiting for an open AWS workspace."}
-          </p>
+          {listingLoading ? (
+            <InventoryLoadingState variant="inline" label={listingLoadingLabel} />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {workspace.s3StatusMessage || "S3 inventory is waiting for an open AWS workspace."}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted-foreground">{listSummary}</span>
+            {!listingLoading ? (
+              <span className="text-xs text-muted-foreground">{listSummary}</span>
+            ) : null}
             {onCreateFolderPrefix ? (
               <Button
                 variant="outline"
                 size="sm"
-                disabled={!folderCapability.enabled || !bucketName}
+                disabled={!folderCapability.enabled || !bucketName || listingLoading}
                 title={folderCapability.enabled ? undefined : folderCapability.reason}
                 onClick={() => {
                   setFolderPrefixDraft(workspace.s3PrefixFilter || "");
@@ -795,6 +785,8 @@ export default function StorageView({
               : "Choose a bucket above. Objects stay on this page."
           }
         />
+      ) : listingLoading ? (
+        <InventoryLoadingState variant="panel" label={listingLoadingLabel} />
       ) : (
         <ResourceInventoryShell
           table={
@@ -825,7 +817,7 @@ export default function StorageView({
                 getRowKey={(object) => object.key}
                 onRowClick={(object) => {
                   if (object.isFolder) {
-                    onSetPrefixFilter(object.key);
+                    applyPrefix(object.key);
                     setKeySearch("");
                     return;
                   }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { backendRequest } from "@/lib/backend";
 import {
   mergeAwsS3LoadMore,
@@ -54,6 +54,9 @@ export const AWS_TAB_IDS = new Set([
 
 export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
   const [s3LoadMoreInFlight, setS3LoadMoreInFlight] = useState(false);
+  const [s3ListingLoading, setS3ListingLoading] = useState(false);
+  const [s3ListingLabel, setS3ListingLabel] = useState("Loading objects…");
+  const s3ListingGenerationRef = useRef(0);
   const {
     activeWorkspaceTabId,
     setActiveWorkspaceTabId,
@@ -242,8 +245,19 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     <StorageView
       workspace={activeWorkspace}
       showSensitiveValues={showSensitiveValues}
+      listingLoading={s3ListingLoading}
+      listingLoadingLabel={s3ListingLabel}
       onSelectBucket={(bucketName) => {
+        if (s3ListingLoading) {
+          return;
+        }
+        const generation = s3ListingGenerationRef.current + 1;
+        s3ListingGenerationRef.current = generation;
+        setS3ListingLabel(`Loading ${bucketName}…`);
+        setS3ListingLoading(true);
         void mutateWorkspaceSelection("aws.s3.selectBucket", { bucketName }, {
+          // Sync updates so loading does not clear before objects paint.
+          immediate: true,
           merge: mergeAwsS3Selection,
           onOptimistic: () => {
             setWorkspace((current) =>
@@ -256,10 +270,15 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
                 s3Objects: [],
                 s3ObjectsNextToken: undefined,
                 s3ObjectsHasMore: false,
+                s3StatusMessage: `Loading ${bucketName}…`,
               }),
             );
           },
           errorTitle: "Could not select S3 bucket",
+        }).finally(() => {
+          if (generation === s3ListingGenerationRef.current) {
+            setS3ListingLoading(false);
+          }
         });
       }}
       onSelectObject={(objectKey) => {
@@ -276,11 +295,36 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
           errorTitle: "Could not select S3 object",
         });
       }}
-      onSetPrefixFilter={applyS3PrefixFilter}
+      onSetPrefixFilter={(prefix) => {
+        if (s3ListingLoading) {
+          return;
+        }
+        const generation = s3ListingGenerationRef.current + 1;
+        s3ListingGenerationRef.current = generation;
+        const folderLabel = prefix ? prefix.replace(/\/$/, "") : "bucket root";
+        setS3ListingLabel(`Opening ${folderLabel}…`);
+        setS3ListingLoading(true);
+        setWorkspace((current) =>
+          normaliseWorkspaceSnapshot({
+            ...current,
+            s3PrefixFilter: prefix,
+            selectedS3ObjectKey: undefined,
+            s3Objects: [],
+            s3ObjectsNextToken: undefined,
+            s3ObjectsHasMore: false,
+            s3StatusMessage: `Opening ${folderLabel}…`,
+          }),
+        );
+        void applyS3PrefixFilter(prefix).finally(() => {
+          if (generation === s3ListingGenerationRef.current) {
+            setS3ListingLoading(false);
+          }
+        });
+      }}
       loadMoreInFlight={s3LoadMoreInFlight}
       onLoadMoreObjects={() => {
         const token = activeWorkspace.s3ObjectsNextToken;
-        if (!token || s3LoadMoreInFlight) {
+        if (!token || s3LoadMoreInFlight || s3ListingLoading) {
           return;
         }
         setS3LoadMoreInFlight(true);
