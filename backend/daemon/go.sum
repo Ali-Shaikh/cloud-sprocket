@@ -155,6 +155,8 @@ github.com/hashicorp/hcl/v2 v2.20.1 h1:M6hgdyz7HYt1UN9e61j+qKJBqR3orTWbI1HKBJEdx
 github.com/hashicorp/hcl/v2 v2.20.1/go.mod h1:TZDqQ4kNKCbh1iJp99FdPiUaVDDUPivbqxZulxDYqL4=
 github.com/hashicorp/terraform-config-inspect v0.0.0-20260224005459-813a97530220 h1:v0h6j7IMgA24b8aWG5+d6WStIP9G8e/p0DKK3Bmk7YQ=
 github.com/hashicorp/terraform-config-inspect v0.0.0-20260224005459-813a97530220/go.mod h1:Gz/z9Hbn+4KSp8A2FBtNszfLSdT2Tn/uAKGuVqqWmDI=
+github.com/hashicorp/terraform-config-inspect v0.0.0-20260709150029-2fb54c236733 h1:e1CDVoHQG7iqZvWK6EY7gWOVg70z9zDy6PseAAoSEJY=
+github.com/hashicorp/terraform-config-inspect v0.0.0-20260709150029-2fb54c236733/go.mod h1:Gz/z9Hbn+4KSp8A2FBtNszfLSdT2Tn/uAKGuVqqWmDI=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
 github.com/kr/pretty v0.3.1/go.mod h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk=
 github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=
