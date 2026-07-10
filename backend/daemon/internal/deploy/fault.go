@@ -7,7 +7,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os/exec"
 	"strings"
+	"sync"
+
+	"cloudsprocket/backend/daemon/internal/sysproc"
 )
 
 // FaultKind is an abstract chaos fault that lab steps can request.
@@ -39,8 +43,7 @@ type Fault struct {
 // Real cloud targets use NoopFaultInjector so chaos steps stay local-only.
 //
 // Contract: on success, Inject returns a non-nil revert func that is safe to
-// call more than once. On error, revert is always nil — callers must not
-// invoke it.
+// call more than once. On error, revert is always nil; callers must not invoke it.
 type FaultInjector interface {
 	// Capabilities lists fault kinds this injector can apply.
 	// Always returns a non-nil slice (empty means no chaos support).
@@ -54,8 +57,10 @@ type FaultInjector interface {
 // ErrFaultUnsupported means the runtime cannot apply the requested fault kind.
 var ErrFaultUnsupported = errors.New("fault kind is not supported on this runtime")
 
-// ErrFaultNotImplemented means the kind is advertised but the inject backend
-// is not wired yet (compose stub until first chaos labs land).
+// ErrFaultNotImplemented is reserved for kinds that are advertised in
+// Capabilities but whose inject backend is not wired yet (e.g. toxiproxy).
+// ComposeFaultInjector currently advertises only pause, so callers should
+// normally see ErrFaultUnsupported for latency/partition/service-error.
 var ErrFaultNotImplemented = errors.New("fault inject backend is not implemented yet")
 
 // NoopFaultInjector never injects faults (cloud targets and local runtimes
@@ -96,42 +101,114 @@ func normaliseFaultKind(kind FaultKind) FaultKind {
 }
 
 // FaultInjectorForTarget returns a chaos injector for the deploy target id.
-// Compose-based targets get a stub that advertises container-level faults
-// (implementation lands with the first chaos labs). Others are no-op.
+// Compose-based targets support container pause; others are no-op for now.
 func FaultInjectorForTarget(targetID string) FaultInjector {
 	switch strings.TrimSpace(strings.ToLower(targetID)) {
 	case "docker-compose", "magento-compose":
-		return ComposeFaultInjector{}
+		return NewComposeFaultInjector(nil)
 	default:
 		return NoopFaultInjector{}
 	}
 }
 
-// ComposeFaultInjector advertises compose-level fault kinds. Inject is not yet
-// wired to toxiproxy/docker pause; callers get ErrFaultNotImplemented until the
-// first chaos lab lands the backend.
-type ComposeFaultInjector struct{}
+// FaultInjectorForDeployment picks an injector from deployment runtime metadata.
+func FaultInjectorForDeployment(deployment *Deployment) FaultInjector {
+	if deployment == nil {
+		return NoopFaultInjector{}
+	}
+	if !deployment.Local {
+		return NoopFaultInjector{}
+	}
+	runtimeID := strings.TrimSpace(deployment.RuntimeID)
+	if runtimeID == "" {
+		// Default local AWS path is LocalStack (no compose fault backend yet).
+		return NoopFaultInjector{}
+	}
+	return FaultInjectorForTarget(runtimeID)
+}
 
-// Capabilities lists compose-oriented fault kinds.
+// ContainerController pauses and unpauses named containers (docker CLI).
+type ContainerController interface {
+	Pause(ctx context.Context, name string) error
+	Unpause(ctx context.Context, name string) error
+}
+
+type dockerContainerController struct{}
+
+func (dockerContainerController) Pause(ctx context.Context, name string) error {
+	return runDockerContainerCommand(ctx, "pause", name)
+}
+
+func (dockerContainerController) Unpause(ctx context.Context, name string) error {
+	return runDockerContainerCommand(ctx, "unpause", name)
+}
+
+func runDockerContainerCommand(ctx context.Context, action, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return errors.New("container name is required")
+	}
+	cmd := exec.CommandContext(ctx, "docker", action, name)
+	sysproc.Hide(cmd)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker %s %s: %s", action, name, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// ComposeFaultInjector applies compose/docker-oriented faults. Pause is
+// implemented via docker pause/unpause; other kinds await toxiproxy wiring.
+type ComposeFaultInjector struct {
+	containers ContainerController
+}
+
+// NewComposeFaultInjector builds a compose injector. Pass nil containers to use
+// the real docker CLI.
+func NewComposeFaultInjector(containers ContainerController) ComposeFaultInjector {
+	if containers == nil {
+		containers = dockerContainerController{}
+	}
+	return ComposeFaultInjector{containers: containers}
+}
+
+// Capabilities lists compose fault kinds that are actually injectable.
+// Only pause is wired today; latency/partition/service-error wait for toxiproxy
+// and must not be advertised until Inject can apply them.
 func (ComposeFaultInjector) Capabilities() []FaultKind {
 	return []FaultKind{
-		FaultKindLatency,
-		FaultKindPartition,
 		FaultKindPause,
-		FaultKindServiceError,
 	}
 }
 
-// Inject returns ErrFaultNotImplemented for advertised kinds until wired.
-func (ComposeFaultInjector) Inject(_ context.Context, fault Fault) (func() error, error) {
+// Inject applies a supported compose fault. Pause uses docker pause on Target.
+func (c ComposeFaultInjector) Inject(ctx context.Context, fault Fault) (func() error, error) {
 	kind := normaliseFaultKind(fault.Kind)
-	if !Supports(ComposeFaultInjector{}, kind) {
+	if !Supports(c, kind) {
 		return nil, fmt.Errorf("%w: %s", ErrFaultUnsupported, kind)
 	}
-	return nil, fmt.Errorf(
-		"%w: kind %s (target %q); first chaos labs will implement this",
-		ErrFaultNotImplemented,
-		kind,
-		fault.Target,
-	)
+	switch kind {
+	case FaultKindPause:
+		target := strings.TrimSpace(fault.Target)
+		if target == "" {
+			return nil, errors.New("pause fault requires a container target name")
+		}
+		if err := c.containers.Pause(ctx, target); err != nil {
+			return nil, err
+		}
+		var once sync.Once
+		var revertErr error
+		return func() error {
+			once.Do(func() {
+				// Best-effort unpause; ignore already-running containers.
+				if err := c.containers.Unpause(context.Background(), target); err != nil {
+					// Unpause often fails if the container was removed; keep the error.
+					revertErr = err
+				}
+			})
+			return revertErr
+		}, nil
+	default:
+		return nil, fmt.Errorf("%w: kind %s (target %q)", ErrFaultNotImplemented, kind, fault.Target)
+	}
 }

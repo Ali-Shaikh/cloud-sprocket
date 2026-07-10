@@ -23,6 +23,9 @@ type Runner struct {
 	store    *SessionStore
 	registry *Registry
 	now      func() time.Time
+	faults   *faultTracker
+	// injectorFor overrides FaultInjectorForDeployment (tests).
+	injectorFor func(deployment *deploy.Deployment) deploy.FaultInjector
 }
 
 // NewRunner builds a lab runner.
@@ -30,7 +33,12 @@ func NewRunner(store *SessionStore, registry *Registry, now func() time.Time) *R
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	return &Runner{store: store, registry: registry, now: now}
+	return &Runner{
+		store:    store,
+		registry: registry,
+		now:      now,
+		faults:   newFaultTracker(),
+	}
 }
 
 // Start initialises a new lab session for an applied deployment.
@@ -103,6 +111,15 @@ func (r *Runner) VerifyStep(
 	if !ok {
 		return LabSession{}, fmt.Errorf("lab step %q was not found", stepID)
 	}
+
+	// Inject step fault before checks so verifications observe chaos conditions.
+	// Always clear on the way out of this step (pass, fail, or inject error path).
+	if err := r.applyStepFault(ctx, deployment, stepSpec); err != nil {
+		return LabSession{}, err
+	}
+	defer func() {
+		_ = r.clearDeploymentFaults(deployment.ID)
+	}()
 
 	checkCtx := CheckContext{
 		Deployment: deployment,
@@ -225,6 +242,9 @@ func (r *Runner) RunAction(
 
 // Reset clears and restarts the lab session for a deployment.
 func (r *Runner) Reset(ctx context.Context, lab *recipes.LabSpec, deployment *deploy.Deployment) (LabSession, error) {
+	if deployment != nil {
+		_ = r.clearDeploymentFaults(deployment.ID)
+	}
 	if err := r.store.Delete(ctx, deployment.ID); err != nil {
 		return LabSession{}, err
 	}
