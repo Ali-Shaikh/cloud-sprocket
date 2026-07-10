@@ -64,10 +64,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     logs,
     showSensitiveValues,
     setShowSensitiveValues,
-    activeS3PageId,
-    setActiveS3PageId,
     activeAzurePageId,
-    activeAzureStoragePageId,
     s3UploadStatus,
     setS3UploadStatus,
     s3SignedUrlStatus,
@@ -239,8 +236,6 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
   return session.isLocked && activeWorkspaceTabId === "s3" ? (
     <StorageView
       workspace={activeWorkspace}
-      activePageId={activeS3PageId}
-      onNavigatePage={setActiveS3PageId}
       showSensitiveValues={showSensitiveValues}
       onSelectBucket={(bucketName) => {
         void mutateWorkspaceSelection("aws.s3.selectBucket", { bucketName }, {

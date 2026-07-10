@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
+  ChevronRight,
   Copy,
   Database,
   File as FileIcon,
@@ -13,6 +14,7 @@ import {
   FileText,
   FolderOpen,
   FolderPlus,
+  Link2,
   Upload,
 } from "lucide-react";
 
@@ -29,7 +31,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +41,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/empty-state";
 import {
@@ -51,7 +60,6 @@ import { ResourceTable } from "@/components/inventory/resource-table";
 import { StatusPill } from "@/components/status-pill";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { DetailFieldList } from "./detail-fields";
-import awsS3IconUrl from "@/assets/cloud-icons/aws-s3.svg";
 import type {
   AwsS3PresignResult,
   UrlInspection,
@@ -59,13 +67,8 @@ import type {
   WorkspaceSnapshot,
 } from "@/types/backend";
 
-export type StoragePageId = "buckets" | "objects" | "upload" | "inspect";
-
 export type StorageViewProps = {
   workspace: WorkspaceSnapshot;
-  /** Raw sub-page id from the nav; unknown values fall back to "objects". */
-  activePageId: string;
-  onNavigatePage: (pageId: StoragePageId) => void;
   showSensitiveValues: boolean;
   onSelectBucket: (bucketName: string) => void;
   onSelectObject: (objectKey: string) => void;
@@ -85,17 +88,6 @@ export type StorageViewProps = {
   onCreateFolderPrefix?: (folderPrefix: string) => void;
 };
 
-function normalisePageId(pageId: string): StoragePageId {
-  if (pageId === "buckets" || pageId === "upload" || pageId === "inspect") {
-    return pageId;
-  }
-  // "url-tester" was the legacy id for the URL tools page.
-  if (pageId === "url-tester") {
-    return "inspect";
-  }
-  return "objects";
-}
-
 function defaultUploadKey(sourcePath: string, prefix?: string): string {
   const fileName = sourcePath.split(/[\\/]/).filter(Boolean).pop() ?? "";
   const cleanPrefix = (prefix ?? "").replace(/^\/+/, "");
@@ -112,13 +104,11 @@ function copyToClipboard(value: string, label = "Copied to clipboard"): void {
   }
 }
 
-/** Last path segment of an S3 key, used as the drawer title. */
 function objectFileName(key: string): string {
   const segments = key.split("/").filter(Boolean);
   return segments.length > 0 ? segments[segments.length - 1] : key;
 }
 
-/** Picks a lucide file icon from the object key's extension. */
 function objectFileIcon(key: string) {
   const extension = key.split(".").pop()?.toLowerCase() ?? "";
   if (["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"].includes(extension)) {
@@ -144,7 +134,6 @@ const UNIT_SECONDS: Record<DurationUnit, number> = {
   days: 86400,
 };
 
-// AWS SigV4 presigned URLs are valid for at most 7 days.
 const MAX_PRESIGN_SECONDS = 7 * 86400;
 
 const SIGNED_URL_PRESETS: { label: string; amount: number; unit: DurationUnit }[] = [
@@ -157,15 +146,16 @@ const SIGNED_URL_PRESETS: { label: string; amount: number; unit: DurationUnit }[
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
 
+function prefixSegments(prefix: string): string[] {
+  return prefix.split("/").filter(Boolean);
+}
+
 /**
- * M5a Storage: Tailwind replacement for the Cloudscape S3 tab. Bucket cards,
- * the object browser with a details drawer, the upload form, and the URL
- * inspector, switched by the contextual nav's sub-page id.
+ * Single S3 browser: bucket + prefix path + objects + inspector on one surface.
+ * Upload and URL inspect are dialogs, not separate rail destinations.
  */
 export default function StorageView({
   workspace,
-  activePageId,
-  onNavigatePage,
   showSensitiveValues,
   onSelectBucket,
   onSelectObject,
@@ -184,8 +174,8 @@ export default function StorageView({
   onCopyObject,
   onCreateFolderPrefix,
 }: StorageViewProps) {
-  const page = normalisePageId(activePageId);
-
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [urlToolsOpen, setUrlToolsOpen] = useState(false);
   const [uploadSourcePath, setUploadSourcePath] = useState("");
   const [uploadObjectKey, setUploadObjectKey] = useState("");
   const [uploadAcknowledged, setUploadAcknowledged] = useState(false);
@@ -237,7 +227,6 @@ export default function StorageView({
   const lastSelectedObjectRef = useRef(workspace.selectedS3ObjectKey || "");
   const debouncedPrefixDraft = useDebouncedValue(prefixDraft, 350);
 
-  // Open or close the drawer when the backend-selected object changes.
   useEffect(() => {
     const nextObjectKey = workspace.selectedS3ObjectKey || "";
     if (nextObjectKey !== lastSelectedObjectRef.current) {
@@ -246,7 +235,6 @@ export default function StorageView({
     }
   }, [workspace.selectedS3ObjectKey]);
 
-  // Switching bucket resets the prefix draft to the workspace value.
   useEffect(() => {
     const nextBucket = workspace.selectedS3BucketName || "";
     if (nextBucket !== lastSelectedBucketRef.current) {
@@ -257,7 +245,6 @@ export default function StorageView({
     }
   }, [workspace.s3PrefixFilter, workspace.selectedS3BucketName]);
 
-  // Push the debounced prefix to the backend once it differs from the last request.
   useEffect(() => {
     if (debouncedPrefixDraft !== lastRequestedPrefixRef.current) {
       lastRequestedPrefixRef.current = debouncedPrefixDraft;
@@ -307,71 +294,49 @@ export default function StorageView({
     }),
   ].join("\n");
 
-  const bucketsPage = (
-    <section className="space-y-4">
-      <div className="flex justify-end">
-        <Button
-          variant="outline"
-          disabled={!createBucketCapability.enabled || !onCreateBucket}
-          title={createBucketCapability.enabled ? undefined : createBucketCapability.reason}
-          onClick={() => setCreateDialogOpen(true)}
-        >
-          Create bucket
-        </Button>
-      </div>
-      {workspace.s3Buckets.length === 0 ? (
-        <EmptyState
-          icon={<Database />}
-          title="No buckets discovered"
-          description={workspace.s3StatusMessage || "S3 inventory is waiting for an open AWS workspace."}
-        />
-      ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
-          {workspace.s3Buckets.map((bucket) => {
-            const active = bucket.name === workspace.selectedS3BucketName;
-            return (
-              <button
-                key={bucket.name}
-                type="button"
-                onClick={() => {
-                  onSelectBucket(bucket.name);
-                  onNavigatePage("objects");
-                }}
-                className={cn(
-                  "flex flex-col gap-3 rounded-lg border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md",
-                  active ? "border-primary ring-1 ring-primary" : "border-border hover:border-border-strong",
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-muted">
-                    <img src={awsS3IconUrl} alt="" className="size-6 object-contain" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-bold">{bucket.name}</div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {bucket.createdAt ? `Created ${bucket.createdAt}` : "S3 bucket"}
-                    </div>
-                  </div>
-                </div>
-                {bucket.summary ? (
-                  <p className="line-clamp-2 text-xs text-muted-foreground">{bucket.summary}</p>
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
-
   const objectKey = workspace.selectedS3ObjectKey ?? "";
   const bucketName = workspace.selectedS3BucketName ?? "";
   const s3Uri = bucketName ? `s3://${bucketName}/${objectKey}` : objectKey;
   const FileTypeIcon = objectFileIcon(objectKey);
+  const pathParts = prefixSegments(workspace.s3PrefixFilter || "");
 
-  const closeDrawer = () => {
-    setDrawerOpen(false);
+  const applyPrefix = (prefix: string) => {
+    const normalised = prefix.replace(/^\/+/, "");
+    setPrefixDraft(normalised);
+    lastRequestedPrefixRef.current = normalised;
+    onSetPrefixFilter(normalised);
   };
+
+  const breadcrumb = (
+    <nav
+      aria-label="S3 path"
+      className="flex min-w-0 flex-wrap items-center gap-1 text-sm text-muted-foreground"
+    >
+      <button
+        type="button"
+        className="rounded px-1 font-medium hover:bg-muted hover:text-foreground"
+        onClick={() => applyPrefix("")}
+        disabled={!bucketName}
+      >
+        {bucketName || "No bucket"}
+      </button>
+      {pathParts.map((segment, index) => {
+        const upTo = `${pathParts.slice(0, index + 1).join("/")}/`;
+        return (
+          <span key={upTo} className="flex items-center gap-1">
+            <ChevronRight className="size-3.5 shrink-0 opacity-50" />
+            <button
+              type="button"
+              className="rounded px-1 font-medium hover:bg-muted hover:text-foreground"
+              onClick={() => applyPrefix(upTo)}
+            >
+              {segment}
+            </button>
+          </span>
+        );
+      })}
+    </nav>
+  );
 
   const drawerBody = selectedObject ? (
     <ResourceInspectorPanel>
@@ -379,7 +344,7 @@ export default function StorageView({
         icon={FileTypeIcon}
         eyebrow="Object"
         title={objectFileName(objectKey)}
-        onClose={closeDrawer}
+        onClose={() => setDrawerOpen(false)}
       />
 
       <div className="flex items-start gap-1 rounded-lg border border-border bg-muted/40 py-1.5 pl-3 pr-1.5">
@@ -430,19 +395,28 @@ export default function StorageView({
 
       <Tabs defaultValue="overview" className="gap-3">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview" className="px-1.5 text-xs">Overview</TabsTrigger>
-          <TabsTrigger value="metadata" className="px-1.5 text-xs">Metadata</TabsTrigger>
-          <TabsTrigger value="share" className="px-1.5 text-xs">Share</TabsTrigger>
-          <TabsTrigger value="code" className="px-1.5 text-xs">Code</TabsTrigger>
+          <TabsTrigger value="overview" className="px-1.5 text-xs">
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="metadata" className="px-1.5 text-xs">
+            Metadata
+          </TabsTrigger>
+          <TabsTrigger value="share" className="px-1.5 text-xs">
+            Share
+          </TabsTrigger>
+          <TabsTrigger value="code" className="px-1.5 text-xs">
+            Code
+          </TabsTrigger>
         </TabsList>
 
-        {/* Overview: the three real object facts, the S3 URI, and copy actions. */}
         <TabsContent value="overview" className="space-y-4">
           <dl className="grid grid-cols-[max-content_1fr] items-baseline gap-x-5 gap-y-2.5">
             <dt className="text-xs text-muted-foreground">Size</dt>
             <dd className="text-right text-[13px] font-medium">{selectedObject.size || "Unknown"}</dd>
             <dt className="text-xs text-muted-foreground">Last modified</dt>
-            <dd className="text-right text-[13px] font-medium">{selectedObject.modifiedAt || "Unknown"}</dd>
+            <dd className="text-right text-[13px] font-medium">
+              {selectedObject.modifiedAt || "Unknown"}
+            </dd>
             <dt className="text-xs text-muted-foreground">Storage class</dt>
             <dd className="text-right">
               <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
@@ -488,7 +462,6 @@ export default function StorageView({
           </div>
         </TabsContent>
 
-        {/* Metadata: the object's HEAD response (content type, ETag, custom keys). */}
         <TabsContent value="metadata" className="space-y-3">
           {workspace.s3ObjectMetadata.length > 0 ? (
             <div className="flex justify-end gap-1">
@@ -519,7 +492,6 @@ export default function StorageView({
           />
         </TabsContent>
 
-        {/* Share: generate a time-limited signed link of any duration. */}
         <TabsContent value="share" className="space-y-3">
           <div className={fieldLabel}>Signed link duration</div>
           <div className="flex flex-wrap gap-1">
@@ -594,13 +566,26 @@ export default function StorageView({
               >
                 {signedUrlResult.url}
               </code>
-              <Button
-                size="sm"
-                onClick={() => copyToClipboard(signedUrlResult.url, "Signed URL copied")}
-              >
-                <Copy />
-                Copy link
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => copyToClipboard(signedUrlResult.url, "Signed URL copied")}
+                >
+                  <Copy />
+                  Copy link
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setUrlTesterValue(signedUrlResult.url);
+                    setUrlToolsOpen(true);
+                  }}
+                >
+                  <Link2 />
+                  Inspect link
+                </Button>
+              </div>
               {signedUrlResult.effectiveWarning ? (
                 <p className="text-xs text-muted-foreground">{signedUrlResult.effectiveWarning}</p>
               ) : null}
@@ -608,7 +593,6 @@ export default function StorageView({
           ) : null}
         </TabsContent>
 
-        {/* Code: ready-to-paste CLI / SDK snippets. */}
         <TabsContent value="code" className="space-y-2">
           {workspace.s3ExportSnippets.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -622,7 +606,10 @@ export default function StorageView({
               >
                 <div className="min-w-0 flex-1">
                   <div className={fieldLabel}>{snippet.label}</div>
-                  <code className="block break-all font-mono text-xs leading-relaxed" title={snippet.value}>
+                  <code
+                    className="block break-all font-mono text-xs leading-relaxed"
+                    title={snippet.value}
+                  >
                     {snippet.value}
                   </code>
                 </div>
@@ -643,335 +630,393 @@ export default function StorageView({
     </ResourceInspectorPanel>
   ) : null;
 
-  const objectsPage = (
-    <section className="space-y-4">
-      <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm">
-        {/* Bucket gets its own full-width row so long names stay on one line. */}
-        <div>
-          <div className={cn(fieldLabel, "mb-1")}>Bucket</div>
-          <Select
-            value={workspace.selectedS3BucketName ?? ""}
-            onValueChange={(value) => {
-              if (value) {
-                onSelectBucket(value);
-              }
+  return (
+    <div className="mx-auto max-w-6xl space-y-4">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">S3 Storage</h1>
+          <p className="text-sm text-muted-foreground">
+            {workspace.s3Buckets.length} bucket{workspace.s3Buckets.length === 1 ? "" : "s"} ·
+            browse bucket / prefix / objects
+          </p>
+          {breadcrumb}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusPill
+            status={uploadCapability.enabled ? "on" : "warning"}
+            label={uploadCapability.enabled ? "Writes enabled" : "Read-only"}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!createBucketCapability.enabled || !onCreateBucket}
+            title={createBucketCapability.enabled ? undefined : createBucketCapability.reason}
+            onClick={() => setCreateDialogOpen(true)}
+          >
+            New bucket
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setUrlToolsOpen(true)}
+          >
+            <Link2 />
+            Inspect URL
+          </Button>
+          <Button
+            size="sm"
+            disabled={!bucketName}
+            onClick={() => {
+              setUploadSourcePath("");
+              setUploadObjectKey("");
+              setUploadAcknowledged(false);
+              setUploadOpen(true);
             }}
           >
-            <SelectTrigger
-              className="w-full"
-              aria-label="Select bucket"
-              title={workspace.selectedS3BucketName ?? undefined}
-            >
-              <SelectValue placeholder="Select bucket" />
-            </SelectTrigger>
-            <SelectContent>
-              {workspace.s3Buckets.map((bucket) => (
-                <SelectItem key={bucket.name} value={bucket.name} title={bucket.name}>
-                  {bucket.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Upload />
+            Upload
+          </Button>
         </div>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-64 flex-1">
-            <div className={cn(fieldLabel, "mb-1")}>Prefix filter</div>
+      </header>
+
+      <section className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto]">
+          <div className="min-w-0">
+            <div className={cn(fieldLabel, "mb-1")}>Bucket</div>
+            <Select
+              value={bucketName || undefined}
+              onValueChange={(value) => value && onSelectBucket(value)}
+              disabled={workspace.s3Buckets.length === 0}
+            >
+              <SelectTrigger
+                className="w-full"
+                aria-label="Select bucket"
+                title={bucketName || undefined}
+              >
+                <SelectValue
+                  placeholder={
+                    workspace.s3Buckets.length === 0 ? "No buckets loaded" : "Select bucket"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {workspace.s3Buckets.map((bucket) => (
+                  <SelectItem key={bucket.name} value={bucket.name} title={bucket.name}>
+                    {bucket.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="min-w-0">
+            <div className={cn(fieldLabel, "mb-1")}>Prefix</div>
             <Input
               value={prefixDraft}
               placeholder="Filter by prefix, for example reports/"
+              disabled={!bucketName}
               onChange={(event) => {
                 setPrefixDraft(event.target.value);
               }}
             />
           </div>
-          <div className="pb-2 text-xs text-muted-foreground">
-            {workspace.s3Objects.length} object{workspace.s3Objects.length === 1 ? "" : "s"}
-            {prefixDraft !== (workspace.s3PrefixFilter || "")
-              ? " · updating after typing pauses"
-              : ""}
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="pb-2 text-xs text-muted-foreground">
+              {workspace.s3Objects.length} object{workspace.s3Objects.length === 1 ? "" : "s"}
+              {prefixDraft !== (workspace.s3PrefixFilter || "")
+                ? " · updating after typing pauses"
+                : ""}
+            </div>
+            {onCreateFolderPrefix ? (
+              <Button
+                variant="outline"
+                disabled={!folderCapability.enabled || !bucketName}
+                title={folderCapability.enabled ? undefined : folderCapability.reason}
+                onClick={() => {
+                  setFolderPrefixDraft(workspace.s3PrefixFilter || "");
+                  setFolderDialogOpen(true);
+                }}
+              >
+                <FolderPlus />
+                Folder
+              </Button>
+            ) : null}
           </div>
-          {onCreateFolderPrefix ? (
-            <Button
-              variant="outline"
-              disabled={!folderCapability.enabled || !workspace.selectedS3BucketName}
-              title={folderCapability.enabled ? undefined : folderCapability.reason}
-              onClick={() => {
-                setFolderPrefixDraft(workspace.s3PrefixFilter || "");
-                setFolderDialogOpen(true);
-              }}
-            >
-              <FolderPlus />
-              Create folder
-            </Button>
-          ) : null}
         </div>
-      </div>
-
-      <p className="text-sm text-muted-foreground">
-        {workspace.s3StatusMessage || "S3 inventory is waiting for an open AWS workspace."}
-      </p>
-
-      <ResourceInventoryShell
-        table={
-          <ResourceTable
-            columns={[
-              {
-                id: "key",
-                label: "Object Key",
-                cellClassName: "max-w-0 truncate font-medium",
-              },
-              { id: "size", label: "Size", headerClassName: "w-28", cellClassName: "truncate" },
-              { id: "modified", label: "Modified", headerClassName: "w-44", cellClassName: "truncate" },
-              {
-                id: "storageClass",
-                label: "Storage Class",
-                headerClassName: "w-36",
-                cellClassName: "truncate",
-              },
-            ]}
-            rows={workspace.s3Objects}
-            selectedKey={workspace.selectedS3ObjectKey}
-            getRowKey={(object) => object.key}
-            onRowClick={(object) => {
-              onSelectObject(object.key);
-              setDrawerOpen(true);
-            }}
-            getCellTitle={(object, columnId) => (columnId === "key" ? object.key : undefined)}
-            renderCell={(object, columnId) => {
-              if (columnId === "key") {
-                return object.key;
-              }
-              if (columnId === "size") {
-                return object.size || "Unknown";
-              }
-              if (columnId === "modified") {
-                return object.modifiedAt || "Unknown";
-              }
-              return object.storageClass || "STANDARD";
-            }}
-            emptyState={
-              <EmptyState
-                icon={<Database />}
-                title="No objects"
-                description="No S3 objects loaded for the selected bucket."
-                className="border-0"
-              />
-            }
-          />
-        }
-        inspectorContent={drawerBody}
-        inspectorOpen={drawerOpen}
-        onInspectorOpenChange={setDrawerOpen}
-        inspectorAriaLabel="S3 object details"
-      />
-    </section>
-  );
-
-  const uploadPage = (
-    <section className="max-w-3xl space-y-5 rounded-lg border border-border bg-card p-[18px] shadow-sm">
-      <p className="text-sm text-muted-foreground">
-        Upload a local file into the selected bucket and prefix. Uploads use the Go daemon and
-        the AWS SDK transfer manager.
-      </p>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div>
-          <div className={fieldLabel}>Target bucket</div>
-          <p className="truncate text-sm">{workspace.selectedS3BucketName || "Select a bucket first"}</p>
-        </div>
-        <div>
-          <div className={fieldLabel}>Current prefix</div>
-          <p className="truncate text-sm">{workspace.s3PrefixFilter || "Bucket root"}</p>
-        </div>
-        <div>
-          <div className={fieldLabel}>Write policy</div>
-          <StatusPill
-            status={uploadCapability.enabled ? "on" : "warning"}
-            label={uploadCapability.enabled ? "Writes enabled" : "Read-only"}
-          />
-        </div>
-        <div>
-          <div className={fieldLabel}>Endpoint</div>
-          <p className="truncate text-sm">{workspace.awsEndpointUrl || "Default AWS endpoint"}</p>
-        </div>
-      </div>
-
-      <div className="flex gap-2">
-        <Input
-          value={uploadSourcePath}
-          placeholder="Local file path, for example D:\Downloads\report.csv"
-          onChange={(event) => {
-            setUploadSourcePath(event.target.value);
-            setUploadAcknowledged(false);
-            if (!uploadObjectKey) {
-              setUploadObjectKey(defaultUploadKey(event.target.value, workspace.s3PrefixFilter));
-            }
-          }}
-        />
-        <Button
-          variant="outline"
-          onClick={() => {
-            void chooseUploadFile();
-          }}
-        >
-          <FolderOpen />
-          Browse...
-        </Button>
-      </div>
-      <Input
-        value={uploadObjectKey}
-        placeholder="Destination object key"
-        onChange={(event) => {
-          setUploadObjectKey(event.target.value);
-          setUploadAcknowledged(false);
-        }}
-      />
-
-      <label className="flex items-start gap-2.5 text-sm">
-        <input
-          type="checkbox"
-          checked={uploadAcknowledged}
-          disabled={
-            !uploadCapability.enabled ||
-            !workspace.selectedS3BucketName ||
-            !uploadSourcePath ||
-            !uploadObjectKey
-          }
-          onChange={(event) => {
-            setUploadAcknowledged(event.target.checked);
-          }}
-          className="mt-0.5 size-4 accent-[color:var(--primary)]"
-        />
-        <span>
-          I have checked the selected bucket, destination key, local endpoint, and source file.
-        </span>
-      </label>
-      <p className="text-xs text-muted-foreground">
-        Uploads are accepted only when the backend sees a local endpoint profile with explicit
-        write opt-in. The daemon rejects directories, hidden absolute object keys, control
-        characters, dot path segments, and files above 512 MiB.
-      </p>
-
-      <Button
-        disabled={!canUpload}
-        title={uploadDisabledReason}
-        onClick={() => {
-          onUploadObject(uploadSourcePath, uploadObjectKey);
-          setUploadAcknowledged(false);
-        }}
-      >
-        <Upload />
-        Upload
-      </Button>
-      {uploadDisabledReason ? (
-        <p className="text-xs text-muted-foreground">{uploadDisabledReason}</p>
-      ) : null}
-      <p className="text-sm text-muted-foreground">{uploadStatus}</p>
-    </section>
-  );
-
-  const inspectPage = (
-    <section className="max-w-3xl space-y-5 rounded-lg border border-border bg-card p-[18px] shadow-sm">
-      <p className="text-sm text-muted-foreground">
-        Inspect a pasted S3 signed URL or public object URL, then optionally make a range
-        request. URL tools do not require the current bucket selection.
-      </p>
-      {signedUrlResult ? (
-        <div className="rounded-lg border border-border bg-muted/40 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className={fieldLabel}>
-              Latest signed URL for {signedUrlResult.objectKey}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setUrlTesterValue(signedUrlResult.url);
-              }}
-            >
-              Use latest signed URL
-            </Button>
-          </div>
-          <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">{signedUrlResult.url}</pre>
-        </div>
-      ) : null}
-      <Textarea
-        value={urlTesterValue}
-        placeholder="Paste an S3 signed URL or public object URL."
-        onChange={(event) => {
-          setUrlTesterValue(event.target.value);
-        }}
-      />
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          disabled={!urlTesterValue}
-          onClick={() => {
-            onAnalyseUrl(urlTesterValue);
-          }}
-        >
-          Analyse
-        </Button>
-        <Button
-          variant="outline"
-          disabled={!urlTesterValue}
-          onClick={() => {
-            onValidateUrl(urlTesterValue);
-          }}
-        >
-          Validate
-        </Button>
-      </div>
-      {urlInspection ? (
-        <div className="space-y-2">
-          <p className="text-sm">{urlInspection.summary}</p>
-          <DetailFieldList
-            fields={urlInspection.detailFields}
-            emptyText="No URL details available."
-          />
-        </div>
-      ) : null}
-      {urlValidation ? (
-        <div className="space-y-2">
-          <StatusPill
-            status={urlValidation.succeeded ? "on" : "error"}
-            label={urlValidation.summary}
-          />
-          <DetailFieldList
-            fields={urlValidation.detailFields}
-            emptyText="No validation details available."
-          />
-        </div>
-      ) : null}
-    </section>
-  );
-
-  const pageTitles: Record<StoragePageId, string> = {
-    buckets: "Buckets",
-    objects: "Objects",
-    upload: "Upload",
-    inspect: "Inspect URL",
-  };
-
-  return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <header>
-        <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">Storage</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {workspace.s3Buckets.length} bucket{workspace.s3Buckets.length === 1 ? "" : "s"}
-          {workspace.selectedS3BucketName ? ` · ${workspace.selectedS3BucketName}` : ""} ·{" "}
-          {pageTitles[page]}
+        <p className="text-sm text-muted-foreground">
+          {workspace.s3StatusMessage || "S3 inventory is waiting for an open AWS workspace."}
         </p>
-      </header>
-      {page === "buckets" ? bucketsPage : null}
-      {page === "objects" ? objectsPage : null}
-      {page === "upload" ? uploadPage : null}
-      {page === "inspect" ? inspectPage : null}
-      <AlertDialog open={pendingDeleteKey !== undefined} onOpenChange={(open) => !open && setPendingDeleteKey(undefined)}>
+      </section>
+
+      {!bucketName || workspace.s3Buckets.length === 0 ? (
+        <EmptyState
+          icon={<Database />}
+          title={workspace.s3Buckets.length === 0 ? "No buckets discovered" : "Select a bucket"}
+          description={
+            workspace.s3Buckets.length === 0
+              ? workspace.s3StatusMessage ||
+                "S3 inventory is waiting for an open AWS workspace."
+              : "Choose a bucket above. Objects stay on this page."
+          }
+        />
+      ) : (
+        <ResourceInventoryShell
+          table={
+            <ResourceTable
+              columns={[
+                {
+                  id: "key",
+                  label: "Object Key",
+                  cellClassName: "max-w-0 truncate font-medium",
+                },
+                { id: "size", label: "Size", headerClassName: "w-28", cellClassName: "truncate" },
+                {
+                  id: "modified",
+                  label: "Modified",
+                  headerClassName: "w-44",
+                  cellClassName: "truncate",
+                },
+                {
+                  id: "storageClass",
+                  label: "Storage Class",
+                  headerClassName: "w-36",
+                  cellClassName: "truncate",
+                },
+              ]}
+              rows={workspace.s3Objects}
+              selectedKey={workspace.selectedS3ObjectKey}
+              getRowKey={(object) => object.key}
+              onRowClick={(object) => {
+                onSelectObject(object.key);
+                setDrawerOpen(true);
+              }}
+              getCellTitle={(object, columnId) => (columnId === "key" ? object.key : undefined)}
+              renderCell={(object, columnId) => {
+                if (columnId === "key") {
+                  return object.key;
+                }
+                if (columnId === "size") {
+                  return object.size || "Unknown";
+                }
+                if (columnId === "modified") {
+                  return object.modifiedAt || "Unknown";
+                }
+                return object.storageClass || "STANDARD";
+              }}
+              emptyState={
+                <EmptyState
+                  icon={<Database />}
+                  title="No objects"
+                  description="No S3 objects loaded for the selected bucket."
+                  className="border-0"
+                />
+              }
+            />
+          }
+          inspectorContent={drawerBody}
+          inspectorOpen={drawerOpen}
+          onInspectorOpenChange={setDrawerOpen}
+          inspectorAriaLabel="S3 object details"
+        />
+      )}
+
+      <Dialog open={urlToolsOpen} onOpenChange={setUrlToolsOpen}>
+        <DialogContent className="max-h-[min(90vh,40rem)] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Inspect URL</DialogTitle>
+            <DialogDescription>
+              Paste a signed or public S3 URL to analyse or validate it. Does not depend on the
+              selected bucket.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {signedUrlResult ? (
+              <div className="rounded-lg border border-border bg-muted/40 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className={fieldLabel}>
+                    Latest signed URL · {signedUrlResult.objectKey}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setUrlTesterValue(signedUrlResult.url);
+                    }}
+                  >
+                    Use this link
+                  </Button>
+                </div>
+                <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                  {signedUrlResult.url}
+                </pre>
+              </div>
+            ) : null}
+            <div>
+              <div className={cn(fieldLabel, "mb-1")}>URL</div>
+              <Textarea
+                value={urlTesterValue}
+                placeholder="Paste an S3 signed URL or public object URL."
+                className="min-h-24"
+                onChange={(event) => {
+                  setUrlTesterValue(event.target.value);
+                }}
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                disabled={!urlTesterValue.trim()}
+                onClick={() => {
+                  onAnalyseUrl(urlTesterValue);
+                }}
+              >
+                Analyse
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!urlTesterValue.trim()}
+                onClick={() => {
+                  onValidateUrl(urlTesterValue);
+                }}
+              >
+                Validate
+              </Button>
+            </div>
+            {urlInspection ? (
+              <div className="space-y-2 rounded-lg border border-border p-3">
+                <p className="text-sm font-medium">{urlInspection.summary}</p>
+                <DetailFieldList
+                  fields={urlInspection.detailFields}
+                  emptyText="No URL details available."
+                />
+              </div>
+            ) : null}
+            {urlValidation ? (
+              <div className="space-y-2 rounded-lg border border-border p-3">
+                <StatusPill
+                  status={urlValidation.succeeded ? "on" : "error"}
+                  label={urlValidation.summary}
+                />
+                <DetailFieldList
+                  fields={urlValidation.detailFields}
+                  emptyText="No validation details available."
+                />
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUrlToolsOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={uploadOpen} onOpenChange={setUploadOpen}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Upload object</AlertDialogTitle>
+            <AlertDialogDescription>
+              Upload into {bucketName || "bucket"}
+              {workspace.s3PrefixFilter ? ` (prefix ${workspace.s3PrefixFilter})` : ""}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <div className={fieldLabel}>Write policy</div>
+                <StatusPill
+                  status={uploadCapability.enabled ? "on" : "warning"}
+                  label={uploadCapability.enabled ? "Writes enabled" : "Read-only"}
+                />
+              </div>
+              <div>
+                <div className={fieldLabel}>Endpoint</div>
+                <p className="truncate">{workspace.awsEndpointUrl || "Default AWS endpoint"}</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Input
+                value={uploadSourcePath}
+                placeholder="Local file path"
+                onChange={(event) => {
+                  setUploadSourcePath(event.target.value);
+                  setUploadAcknowledged(false);
+                  if (!uploadObjectKey) {
+                    setUploadObjectKey(
+                      defaultUploadKey(event.target.value, workspace.s3PrefixFilter),
+                    );
+                  }
+                }}
+              />
+              <Button
+                variant="outline"
+                onClick={() => {
+                  void chooseUploadFile();
+                }}
+              >
+                <FolderOpen />
+                Browse
+              </Button>
+            </div>
+            <Input
+              value={uploadObjectKey}
+              placeholder="Destination object key"
+              onChange={(event) => {
+                setUploadObjectKey(event.target.value);
+                setUploadAcknowledged(false);
+              }}
+            />
+            <label className="flex items-start gap-2.5 text-sm">
+              <input
+                type="checkbox"
+                checked={uploadAcknowledged}
+                disabled={
+                  !uploadCapability.enabled ||
+                  !workspace.selectedS3BucketName ||
+                  !uploadSourcePath ||
+                  !uploadObjectKey
+                }
+                onChange={(event) => {
+                  setUploadAcknowledged(event.target.checked);
+                }}
+                className="mt-0.5 size-4 accent-[color:var(--primary)]"
+              />
+              <span>
+                I have checked the selected bucket, destination key, local endpoint, and source
+                file.
+              </span>
+            </label>
+            {uploadDisabledReason ? (
+              <p className="text-xs text-muted-foreground">{uploadDisabledReason}</p>
+            ) : null}
+            <p className="text-sm text-muted-foreground">{uploadStatus}</p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!canUpload}
+              title={uploadDisabledReason}
+              onClick={() => {
+                onUploadObject(uploadSourcePath, uploadObjectKey);
+                setUploadAcknowledged(false);
+                setUploadOpen(false);
+              }}
+            >
+              Upload
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={pendingDeleteKey !== undefined}
+        onOpenChange={(open) => !open && setPendingDeleteKey(undefined)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete object?</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently removes {pendingDeleteKey} from the bucket. This cannot be undone on LocalStack.
+              This permanently removes {pendingDeleteKey} from the bucket.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -989,11 +1034,14 @@ export default function StorageView({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
       <AlertDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Create bucket</AlertDialogTitle>
-            <AlertDialogDescription>Enter a bucket name for your local endpoint profile.</AlertDialogDescription>
+            <AlertDialogDescription>
+              Enter a bucket name for your local endpoint profile.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <Input
             value={newBucketName}
@@ -1017,6 +1065,7 @@ export default function StorageView({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
       <AlertDialog open={copyDialogOpen} onOpenChange={setCopyDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1046,12 +1095,13 @@ export default function StorageView({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
       <AlertDialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Create folder prefix</AlertDialogTitle>
             <AlertDialogDescription>
-              Creates a zero-byte folder marker in the selected bucket. Use forward slashes, for example reports/2026/.
+              Creates a zero-byte folder marker. Use forward slashes, for example reports/2026/.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <Input

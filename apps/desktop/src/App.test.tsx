@@ -1685,8 +1685,7 @@ describe("App", () => {
     );
 
     fireEvent.click(await screen.findByText("S3"));
-    // The S3 tab lands on bucket cards; entering a bucket opens the object browser.
-    fireEvent.click(await screen.findByRole("button", { name: /cloudsprocket-artifacts/ }));
+    // Single S3 browser: bucket is already selected from workspace fixture.
     const prefixInput = await screen.findByPlaceholderText(
       "Filter by prefix, for example reports/",
     );
@@ -1735,8 +1734,7 @@ describe("App", () => {
     );
 
     fireEvent.click(await screen.findByText("S3"));
-    // The S3 tab lands on bucket cards; entering a bucket opens the object browser.
-    fireEvent.click(await screen.findByRole("button", { name: /cloudsprocket-artifacts/ }));
+    // Single S3 browser: bucket is already selected from workspace fixture.
     const prefixInput = await screen.findByPlaceholderText(
       "Filter by prefix, for example reports/",
     );
@@ -1798,8 +1796,7 @@ describe("App", () => {
     );
 
     fireEvent.click(await screen.findByText("S3"));
-    // The S3 tab lands on bucket cards; entering a bucket opens the object browser.
-    fireEvent.click(await screen.findByRole("button", { name: /cloudsprocket-artifacts/ }));
+    // Single S3 browser: bucket is already selected from workspace fixture.
     const prefixInput = await screen.findByPlaceholderText(
       "Filter by prefix, for example reports/",
     );
