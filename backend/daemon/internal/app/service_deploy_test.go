@@ -176,7 +176,7 @@ func newDeployTestService(t *testing.T, deployer Deployer) *Service {
 	return &Service{
 		settings: settings,
 		store:    dataStore,
-		recipes:  recipes.Bundled(),
+		recipes:  recipes.Bundled().WithImportedDir(settings.ImportedRecipesDir),
 		deployer: deployer,
 		now:      func() time.Time { return time.Now().UTC() },
 	}

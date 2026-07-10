@@ -120,7 +120,7 @@ func NewWithRuntimes(
 	localStackMgr LocalStackManager,
 	azureRuntime AzureRuntimeManager,
 ) *Service {
-	recipeLoader := recipes.Bundled()
+	recipeLoader := recipes.Bundled().WithImportedDir(settings.ImportedRecipesDir)
 	deployEngine := deploy.NewEngine(tofu.NewRunner(tofu.Resolve(settings)), settings, recipeLoader)
 	service := &Service{
 		settings:              settings,
@@ -494,7 +494,7 @@ func (s *Service) Handle(
 	case "deployments.destroy":
 		return s.handleDeploymentsDestroy(params, notifier)
 	case "deployments.checkDrift":
-		return s.handleDeploymentsCheckDrift(params, notifier)
+		return s.handleDeploymentsCheckDrift(ctx, params, notifier)
 	case "deployments.cancel":
 		return s.handleDeploymentsCancel(params)
 	case "deployments.delete":

@@ -26,17 +26,17 @@ const (
 type VerifyResult struct {
 	Type    string `json:"type"`
 	Passed  bool   `json:"passed"`
-	Detail  string `json:"detail"`
-	Message string `json:"-"`
+	Detail  string `json:"detail,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 // StepState tracks one lab step in a session.
 type StepState struct {
-	StepID              string         `json:"stepId"`
-	Status              StepStatus     `json:"status"`
-	StartedAt           string         `json:"-"`
-	CompletedAt         string         `json:"-"`
-	VerifyResults       []VerifyResult `json:"verifyResults"`
+	StepID        string         `json:"stepId"`
+	Status        StepStatus     `json:"status"`
+	StartedAt     string         `json:"startedAt,omitempty"`
+	CompletedAt   string         `json:"completedAt,omitempty"`
+	VerifyResults []VerifyResult `json:"verifyResults"`
 }
 
 // LabSession is the persisted progress for a deployment lab run.
@@ -46,8 +46,8 @@ type LabSession struct {
 	Status        SessionStatus `json:"status"`
 	StartedAt     string        `json:"startedAt"`
 	CompletedAt   string        `json:"completedAt,omitempty"`
-	UpdatedAt     string        `json:"-"`
-	CurrentStepID string        `json:"-"`
+	UpdatedAt     string        `json:"updatedAt,omitempty"`
+	CurrentStepID string        `json:"currentStepId,omitempty"`
 	Steps         []StepState   `json:"steps"`
 }
 

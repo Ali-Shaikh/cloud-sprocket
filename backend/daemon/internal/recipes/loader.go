@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/hashicorp/terraform-config-inspect/tfconfig"
 	"gopkg.in/yaml.v3"
@@ -17,11 +18,18 @@ import (
 
 const manifestFile = "recipe.yaml"
 
+// Source labels where a recipe came from (gallery badges / trust).
+const (
+	SourceBundled  = "bundled"
+	SourceImported = "imported"
+)
+
 // Loader lists and loads recipes from a filesystem whose root contains one
-// directory per recipe. Bundled recipes use an embedded FS; a future registry
-// can supply a different FS over the same API.
+// directory per recipe. Bundled recipes use an embedded FS; ImportedDir is
+// scanned as a second source (C2) when set.
 type Loader struct {
-	fsys fs.FS
+	fsys        fs.FS
+	importedDir string
 }
 
 // NewLoader builds a loader over a recipe-root filesystem.
@@ -29,13 +37,26 @@ func NewLoader(fsys fs.FS) *Loader {
 	return &Loader{fsys: fsys}
 }
 
-// List returns the manifest of every recipe found at the root.
+// WithImportedDir returns a shallow copy that also lists/loads trusted recipes
+// from ImportedRecipesDir (folders named id@version with a valid trust hash).
+func (l *Loader) WithImportedDir(dir string) *Loader {
+	if l == nil {
+		return &Loader{importedDir: dir}
+	}
+	clone := *l
+	clone.importedDir = strings.TrimSpace(dir)
+	return &clone
+}
+
+// List returns the manifest of every recipe found at the root, plus trusted
+// imports (imported wins on ID collision so user copies override bundled).
 func (l *Loader) List() ([]Manifest, error) {
 	entries, err := fs.ReadDir(l.fsys, ".")
 	if err != nil {
 		return nil, fmt.Errorf("read recipes: %w", err)
 	}
-	manifests := make([]Manifest, 0, len(entries))
+	byID := map[string]Manifest{}
+	order := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -44,7 +65,23 @@ func (l *Loader) List() ([]Manifest, error) {
 		if err != nil {
 			return nil, err
 		}
-		manifests = append(manifests, manifest)
+		manifest.Source = SourceBundled
+		byID[manifest.ID] = manifest
+		order = append(order, manifest.ID)
+	}
+	imported, err := l.listImported()
+	if err != nil {
+		return nil, err
+	}
+	for _, manifest := range imported {
+		if _, exists := byID[manifest.ID]; !exists {
+			order = append(order, manifest.ID)
+		}
+		byID[manifest.ID] = manifest
+	}
+	manifests := make([]Manifest, 0, len(order))
+	for _, id := range order {
+		manifests = append(manifests, byID[id])
 	}
 	sort.Slice(manifests, func(left, right int) bool {
 		return manifests[left].Name < manifests[right].Name
@@ -54,11 +91,16 @@ func (l *Loader) List() ([]Manifest, error) {
 
 // Load resolves a single recipe: its manifest plus variables and outputs
 // introspected from the Terraform configuration, merged with the UI hints.
+// Trusted imports override the bundled recipe with the same id.
 func (l *Loader) Load(id string) (Recipe, error) {
+	if dir, ok := l.findImportedDir(id); ok {
+		return LoadFromDirectory(dir, SourceImported)
+	}
 	manifest, err := l.readManifest(id)
 	if err != nil {
 		return Recipe{}, err
 	}
+	manifest.Source = SourceBundled
 
 	sub, err := fs.Sub(l.fsys, id)
 	if err != nil {
@@ -79,6 +121,9 @@ func (l *Loader) Load(id string) (Recipe, error) {
 // Materialise copies a recipe's files onto the local filesystem so the engine
 // can run against them.
 func (l *Loader) Materialise(id, destDir string) error {
+	if dir, ok := l.findImportedDir(id); ok {
+		return copyDirTree(dir, destDir)
+	}
 	sub, err := fs.Sub(l.fsys, id)
 	if err != nil {
 		return fmt.Errorf("recipe %q: %w", id, err)
@@ -102,6 +147,165 @@ func (l *Loader) Materialise(id, destDir string) error {
 	})
 }
 
+// LoadFromDirectory loads a recipe from an on-disk folder (import or materialised path).
+func LoadFromDirectory(dir, source string) (Recipe, error) {
+	data, err := os.ReadFile(filepath.Join(dir, manifestFile))
+	if err != nil {
+		return Recipe{}, fmt.Errorf("read manifest in %s: %w", dir, err)
+	}
+	var manifest Manifest
+	if err := yaml.Unmarshal(data, &manifest); err != nil {
+		return Recipe{}, fmt.Errorf("parse manifest in %s: %w", dir, err)
+	}
+	if strings.TrimSpace(manifest.ID) == "" {
+		manifest.ID = filepath.Base(dir)
+	}
+	if err := manifest.Validate(); err != nil {
+		return Recipe{}, err
+	}
+	if err := ValidateLabSpec(manifest); err != nil {
+		return Recipe{}, err
+	}
+	NormalizeManifest(&manifest)
+	if source != "" {
+		manifest.Source = source
+	}
+	module, diags := tfconfig.LoadModule(dir)
+	if diags.HasErrors() {
+		return Recipe{}, fmt.Errorf("inspect recipe %q: %s", manifest.ID, diags.Err())
+	}
+	return Recipe{
+		Manifest:  manifest,
+		Variables: mergeVariables(module, manifest),
+		Outputs:   mergeOutputs(module, manifest),
+	}, nil
+}
+
+func (l *Loader) listImported() ([]Manifest, error) {
+	if strings.TrimSpace(l.importedDir) == "" {
+		return nil, nil
+	}
+	info, err := os.Stat(l.importedDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read imported recipes: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, nil
+	}
+	entries, err := os.ReadDir(l.importedDir)
+	if err != nil {
+		return nil, fmt.Errorf("read imported recipes: %w", err)
+	}
+	// Prefer highest folder name (id@version) per recipe id when several exist.
+	bestDir := map[string]string{}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		dir := filepath.Join(l.importedDir, entry.Name())
+		if !TrustValid(dir) {
+			continue
+		}
+		recipe, err := LoadFromDirectory(dir, SourceImported)
+		if err != nil {
+			// Skip corrupt imports rather than failing the whole catalogue.
+			continue
+		}
+		id := recipe.Manifest.ID
+		if prev, ok := bestDir[id]; !ok || entry.Name() > filepath.Base(prev) {
+			bestDir[id] = dir
+		}
+	}
+	manifests := make([]Manifest, 0, len(bestDir))
+	for _, dir := range bestDir {
+		recipe, err := LoadFromDirectory(dir, SourceImported)
+		if err != nil {
+			continue
+		}
+		manifests = append(manifests, recipe.Manifest)
+	}
+	return manifests, nil
+}
+
+func (l *Loader) findImportedDir(id string) (string, bool) {
+	if strings.TrimSpace(l.importedDir) == "" || strings.TrimSpace(id) == "" {
+		return "", false
+	}
+	entries, err := os.ReadDir(l.importedDir)
+	if err != nil {
+		return "", false
+	}
+	var best string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if name != id && !strings.HasPrefix(name, id+"@") {
+			continue
+		}
+		dir := filepath.Join(l.importedDir, name)
+		if !TrustValid(dir) {
+			continue
+		}
+		// Confirm manifest id matches (avoids prefix collisions).
+		recipe, err := LoadFromDirectory(dir, SourceImported)
+		if err != nil || recipe.Manifest.ID != id {
+			continue
+		}
+		if best == "" || name > filepath.Base(best) {
+			best = dir
+		}
+	}
+	if best == "" {
+		return "", false
+	}
+	return best, true
+}
+
+func copyDirTree(src, dest string) error {
+	cleanDest := filepath.Clean(dest)
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		if shouldSkipImportRel(rel) {
+			if d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if filepath.Base(rel) == trustFileName {
+			return nil
+		}
+		tgt := filepath.Join(dest, rel)
+		if !strings.HasPrefix(filepath.Clean(tgt), cleanDest+string(os.PathSeparator)) && filepath.Clean(tgt) != cleanDest {
+			return fmt.Errorf("refusing to write outside destination: %s", rel)
+		}
+		if d.IsDir() {
+			return os.MkdirAll(tgt, 0o755)
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(tgt), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(tgt, b, 0o644)
+	})
+}
+
 func (l *Loader) readManifest(id string) (Manifest, error) {
 	data, err := fs.ReadFile(l.fsys, path.Join(id, manifestFile))
 	if err != nil {
@@ -121,6 +325,9 @@ func (l *Loader) readManifest(id string) (Manifest, error) {
 		return Manifest{}, err
 	}
 	NormalizeManifest(&manifest)
+	if manifest.Source == "" {
+		manifest.Source = SourceBundled
+	}
 	return manifest, nil
 }
 

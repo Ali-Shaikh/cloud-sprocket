@@ -1471,6 +1471,8 @@ export interface LabVerifyResult {
 export interface LabStepSession {
   stepId: string;
   status: LabStepStatus;
+  startedAt?: string;
+  completedAt?: string;
   verifyResults: LabVerifyResult[];
 }
 
@@ -1480,6 +1482,8 @@ export interface LabSession {
   status: LabSessionStatus;
   startedAt: string;
   completedAt?: string;
+  updatedAt?: string;
+  currentStepId?: string;
   steps: LabStepSession[];
 }
 

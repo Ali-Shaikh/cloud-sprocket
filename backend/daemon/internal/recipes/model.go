@@ -160,6 +160,8 @@ type Manifest struct {
 	VariableGroups []VariableGroup `yaml:"variableGroups" json:"variableGroups,omitempty"`
 	Outputs        []OutputHint    `yaml:"outputs" json:"outputs,omitempty"`
 	Lab            *LabSpec        `yaml:"lab" json:"lab,omitempty"`
+	// Source is set by the loader (not in recipe.yaml): bundled | imported.
+	Source         string          `yaml:"-" json:"source,omitempty"`
 }
 
 // Validate checks the registry-required fields.

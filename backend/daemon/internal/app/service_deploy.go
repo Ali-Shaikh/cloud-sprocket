@@ -6,15 +6,12 @@ package app
 import (
 	"archive/zip"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"cloudsprocket/backend/daemon/internal/deploy"
@@ -280,16 +277,8 @@ func safeRecipePathSegment(value, field string) (string, error) {
 }
 
 // shouldSkipImportPath skips VCS and other hidden tooling dirs during recipe import.
-func shouldSkipImportPath(rel string, d fs.DirEntry) bool {
-	// Skip the root of any path component that is .git or similar.
-	parts := strings.Split(filepath.ToSlash(rel), "/")
-	for _, p := range parts {
-		switch p {
-		case ".git", ".svn", ".hg", ".jj", "node_modules", ".terraform":
-			return true
-		}
-	}
-	return false
+func shouldSkipImportPath(rel string, _ fs.DirEntry) bool {
+	return recipes.ShouldSkipImportRel(rel)
 }
 
 func (s *Service) startDeploymentAction(id string, action deploymentAction, notifier Notifier) (deploymentJob, error) {
@@ -556,24 +545,31 @@ func (s *Service) handleDeploymentsCancel(params json.RawMessage) (any, error) {
 	return map[string]bool{"cancelled": true}, s.cancelDeployment(request.DeploymentID)
 }
 
-func (s *Service) handleDeploymentsCheckDrift(params json.RawMessage, notifier Notifier) (any, error) {
+func (s *Service) handleDeploymentsCheckDrift(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		DeploymentID string `json:"deploymentId"`
 	}
 	if err := json.Unmarshal(params, &request); err != nil {
 		return nil, err
 	}
-	deployment, err := s.deploymentGet(context.Background(), request.DeploymentID)
+	deployment, err := s.deploymentGet(ctx, request.DeploymentID)
 	if err != nil {
 		return nil, err
 	}
-	drift, err := s.deployer.CheckDrift(context.Background(), deployment, s.deploymentLogger(deployment.ID, "", notifier))
+	// Drift is only meaningful against applied (or previously planned) live state.
+	switch deployment.Status {
+	case deploy.StatusApplied, deploy.StatusPlanned, deploy.StatusFailed:
+		// ok
+	default:
+		return nil, fmt.Errorf("drift check is only supported for applied, planned, or failed deployments (status=%s)", deployment.Status)
+	}
+	drift, err := s.deployer.CheckDrift(ctx, deployment, s.deploymentLogger(deployment.ID, "", notifier))
 	if err != nil {
 		return nil, err
 	}
 	deployment.Drift = &drift
 	deployment.UpdatedAt = s.timestamp()
-	_ = s.store.SaveDeployment(context.Background(), deployment.ID, s.sealForStore(deployment), deployment.UpdatedAt)
+	_ = s.store.SaveDeployment(ctx, deployment.ID, s.sealForStore(deployment), deployment.UpdatedAt)
 	if notifier != nil {
 		_ = notifier.Notify("deployment.changed", deployment)
 	}
@@ -696,7 +692,7 @@ func (s *Service) handleRecipesImport(params json.RawMessage) (any, error) {
 		return nil, fmt.Errorf("import destination escapes imported recipes directory")
 	}
 
-	contentHash, err := hashRecipeTree(workDir)
+	contentHash, err := recipes.ContentHash(workDir)
 	if err != nil {
 		return nil, fmt.Errorf("content hash: %w", err)
 	}
@@ -733,16 +729,16 @@ func (s *Service) handleRecipesImport(params json.RawMessage) (any, error) {
 		_ = os.RemoveAll(dest)
 		return nil, fmt.Errorf("copy import: %w", err)
 	}
-	trust := map[string]any{
-		"contentHash": contentHash,
-		"acceptedAt":  s.timestamp(),
-		"sourceType":  sourceType,
-		"sourcePath":  srcPath,
-		"id":          m.ID,
-		"version":     m.Version,
+	trust := recipes.ImportTrust{
+		ContentHash: contentHash,
+		AcceptedAt:  s.timestamp(),
+		SourceType:  sourceType,
+		SourcePath:  srcPath,
+		ID:          m.ID,
+		Version:     m.Version,
 	}
 	trustBytes, _ := json.MarshalIndent(trust, "", "  ")
-	if err := os.WriteFile(filepath.Join(dest, ".import-trust.json"), trustBytes, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dest, recipes.TrustFileName()), trustBytes, 0o644); err != nil {
 		_ = os.RemoveAll(dest)
 		return nil, fmt.Errorf("write trust record: %w", err)
 	}
@@ -885,58 +881,7 @@ func copyRecipeTree(src, dest string) error {
 	})
 }
 
-// hashRecipeTree returns a stable sha256 over relative paths and file contents
-// (excluding VCS / tooling dirs). Used for the import trust gate.
-func hashRecipeTree(root string) (string, error) {
-	type entry struct {
-		rel  string
-		data []byte
-	}
-	var files []entry
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		if rel == "." {
-			return nil
-		}
-		if shouldSkipImportPath(rel, d) {
-			if d.IsDir() {
-				return fs.SkipDir
-			}
-			return nil
-		}
-		if d.IsDir() {
-			return nil
-		}
-		// Do not include prior trust records in the hash.
-		if filepath.Base(rel) == ".import-trust.json" {
-			return nil
-		}
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		files = append(files, entry{rel: filepath.ToSlash(rel), data: b})
-		return nil
-	})
-	if err != nil {
-		return "", err
-	}
-	sort.Slice(files, func(i, j int) bool { return files[i].rel < files[j].rel })
-	h := sha256.New()
-	for _, f := range files {
-		_, _ = h.Write([]byte(f.rel))
-		_, _ = h.Write([]byte{0})
-		_, _ = h.Write(f.data)
-		_, _ = h.Write([]byte{0})
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
+
 
 // handleRecipesScaffold (C3) generates a minimal starter in the given dest dir (authoring scaffold).
 func (s *Service) handleRecipesScaffold(params json.RawMessage) (any, error) {
@@ -957,6 +902,13 @@ func (s *Service) handleRecipesScaffold(params json.RawMessage) (any, error) {
 	if prov == "" {
 		prov = "aws"
 	}
+	runtimeID := "localstack"
+	switch strings.ToLower(strings.TrimSpace(prov)) {
+	case "azure":
+		runtimeID = "floci-az"
+	case "docker", "compose":
+		runtimeID = "docker-compose"
+	}
 	recipeYaml := fmt.Sprintf(`apiVersion: cloudsprocket.recipe/v1
 id: my-custom-recipe
 version: 0.1.0
@@ -969,9 +921,9 @@ engine:
   minVersion: "1.6.0"
 local:
   runtimes:
-    - id: localstack
+    - id: %s
 variables: []
-`, prov)
+`, prov, runtimeID)
 	mainTf := `resource "null_resource" "placeholder" {}
 output "example" { value = "hello" }
 `
