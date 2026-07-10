@@ -29,7 +29,9 @@ type S3Inventory struct {
 	bucketRegions map[string]string
 }
 
-const maxObjectListingPages = 5
+// ObjectListPageSize is one page of S3 keys/folders returned to the browser.
+// Further pages are fetched on demand via continuation token (Load more).
+const ObjectListPageSize = 100
 
 func NewS3Inventory(settings config.Settings) *S3Inventory {
 	return &S3Inventory{
@@ -76,49 +78,78 @@ func (s *S3Inventory) ListObjects(
 	profile models.ProfileSummary,
 	bucketName string,
 	prefix string,
-) ([]models.AwsS3Object, error) {
+	continuationToken string,
+) (models.AwsS3ObjectListPage, error) {
 	region, err := s.bucketRegion(ctx, profile, bucketName)
 	if err != nil {
-		return nil, err
+		return models.AwsS3ObjectListPage{}, err
 	}
 
 	cfg, err := s.loadConfig(ctx, profile, region)
 	if err != nil {
-		return nil, err
+		return models.AwsS3ObjectListPage{}, err
 	}
 
 	client := s3Client(cfg, profile)
+	pageSize := int32(ObjectListPageSize)
+	delimiter := "/"
 	input := &s3.ListObjectsV2Input{
-		Bucket: &bucketName,
+		Bucket:    &bucketName,
+		MaxKeys:   &pageSize,
+		Delimiter: &delimiter,
 	}
 	if prefix != "" {
 		input.Prefix = &prefix
 	}
-
-	paginator := s3.NewListObjectsV2Paginator(client, input)
-	objects := []models.AwsS3Object{}
-	for pagesRead := 0; paginator.HasMorePages() && pagesRead < maxObjectListingPages; pagesRead++ {
-		result, err := paginator.NextPage(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, object := range result.Contents {
-			entry := models.AwsS3Object{
-				Key:          awsString(object.Key),
-				StorageClass: string(object.StorageClass),
-			}
-			if object.LastModified != nil {
-				entry.ModifiedAt = object.LastModified.UTC().Format(time.RFC3339)
-			}
-			if object.Size != nil {
-				entry.Size = humanize.Bytes(uint64(*object.Size))
-			}
-			objects = append(objects, entry)
-		}
+	if continuationToken != "" {
+		input.ContinuationToken = &continuationToken
 	}
 
-	return objects, nil
+	result, err := client.ListObjectsV2(ctx, input)
+	if err != nil {
+		return models.AwsS3ObjectListPage{}, err
+	}
+
+	// Folders first (CommonPrefixes), then object keys at this level.
+	entries := make([]models.AwsS3Object, 0, len(result.CommonPrefixes)+len(result.Contents))
+	for _, common := range result.CommonPrefixes {
+		folderKey := awsString(common.Prefix)
+		if folderKey == "" || folderKey == prefix {
+			continue
+		}
+		entries = append(entries, models.AwsS3Object{
+			Key:      folderKey,
+			IsFolder: true,
+			Size:     "Folder",
+		})
+	}
+	for _, object := range result.Contents {
+		key := awsString(object.Key)
+		// Skip the zero-byte folder marker that equals the current prefix.
+		if key == "" || key == prefix {
+			continue
+		}
+		entry := models.AwsS3Object{
+			Key:          key,
+			StorageClass: string(object.StorageClass),
+		}
+		if object.LastModified != nil {
+			entry.ModifiedAt = object.LastModified.UTC().Format(time.RFC3339)
+		}
+		if object.Size != nil {
+			entry.Size = humanize.Bytes(uint64(*object.Size))
+		}
+		entries = append(entries, entry)
+	}
+
+	page := models.AwsS3ObjectListPage{
+		Entries:     entries,
+		IsTruncated: aws.ToBool(result.IsTruncated),
+	}
+	if result.NextContinuationToken != nil {
+		page.NextContinuationToken = *result.NextContinuationToken
+	}
+	return page, nil
 }
 
 func (s *S3Inventory) HeadObject(

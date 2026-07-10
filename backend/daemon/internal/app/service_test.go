@@ -319,10 +319,10 @@ func (s *stubS3Inventory) ListBuckets(context.Context, models.ProfileSummary) ([
 	return append([]models.AwsS3Bucket(nil), s.buckets...), nil
 }
 
-func (s *stubS3Inventory) ListObjects(_ context.Context, _ models.ProfileSummary, bucketName string, prefix string) ([]models.AwsS3Object, error) {
+func (s *stubS3Inventory) ListObjects(_ context.Context, _ models.ProfileSummary, bucketName string, prefix string, continuationToken string) (models.AwsS3ObjectListPage, error) {
 	objects := append([]models.AwsS3Object(nil), s.objects[bucketName]...)
 	if prefix == "" {
-		return objects, nil
+		return models.AwsS3ObjectListPage{Entries: objects}, nil
 	}
 	filtered := []models.AwsS3Object{}
 	for _, object := range objects {
@@ -330,7 +330,8 @@ func (s *stubS3Inventory) ListObjects(_ context.Context, _ models.ProfileSummary
 			filtered = append(filtered, object)
 		}
 	}
-	return filtered, nil
+	_ = continuationToken
+	return models.AwsS3ObjectListPage{Entries: filtered}, nil
 }
 
 func (s stubS3Inventory) HeadObject(_ context.Context, _ models.ProfileSummary, bucketName string, objectKey string) ([]models.DetailField, error) {

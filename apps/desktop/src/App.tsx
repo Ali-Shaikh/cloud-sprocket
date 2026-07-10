@@ -751,6 +751,8 @@ export default function App() {
   type WorkspaceSelectionOptions = {
     panelLoading?: boolean;
     persistOnly?: boolean;
+    /** When true, apply optimistic/result updates synchronously (avoids list flicker). */
+    immediate?: boolean;
     merge?: (current: WorkspaceSnapshot, incoming: WorkspaceSnapshot) => WorkspaceSnapshot;
     onOptimistic?: () => void;
     errorTitle?: string;
@@ -761,9 +763,23 @@ export default function App() {
     params: Record<string, unknown> = {},
     options: WorkspaceSelectionOptions = {},
   ): Promise<void> {
-    const { panelLoading = false, persistOnly = false, merge, onOptimistic, errorTitle } = options;
+    const {
+      panelLoading = false,
+      persistOnly = false,
+      immediate = false,
+      merge,
+      onOptimistic,
+      errorTitle,
+    } = options;
+    const schedule = (update: () => void) => {
+      if (immediate) {
+        update();
+        return;
+      }
+      startTransition(update);
+    };
     if (onOptimistic) {
-      startTransition(onOptimistic);
+      schedule(onOptimistic);
     }
     if (panelLoading) {
       beginAzureInventoryFetch();
@@ -771,7 +787,7 @@ export default function App() {
     try {
       const workspaceResult = await requestWorkspaceSnapshot(method, params);
       if (!persistOnly) {
-        startTransition(() => {
+        schedule(() => {
           setWorkspace((current) =>
             merge ? merge(current, workspaceResult) : workspaceResult,
           );

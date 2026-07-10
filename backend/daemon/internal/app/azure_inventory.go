@@ -58,8 +58,12 @@ func (s *Service) handleAzureInventoryGet(ctx context.Context, params json.RawMe
 		return nil, errors.New("open an Azure workspace before loading service inventory")
 	}
 
+	// Storage path browser needs accounts + containers + blobs on first open.
+	// Other scopes stay lightweight so expensive detail (WAF policy config,
+	// schema probes, etc.) still loads only when the user drills in.
+	lightweight := scope != "storage"
 	return s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
-		lightweightAzure:       true,
+		lightweightAzure:       lightweight,
 		skipAwsInventory:       true,
 		azureScope:             scope,
 		azureDeferredInventory: false,

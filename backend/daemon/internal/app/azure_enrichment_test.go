@@ -5,7 +5,9 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -784,6 +786,223 @@ func TestAzureInventoryGetScopedStorage(t *testing.T) {
 	}
 	if len(workspace.AzureStorageAccounts) == 0 {
 		t.Fatal("expected storage accounts from scoped inventory fetch")
+	}
+	if workspace.SelectedAzureStorageAccount == "" {
+		t.Fatal("expected a selected storage account after scoped inventory")
+	}
+	// Full (non-lightweight) tab inventory must load containers so the Blobs
+	// page dropdown is not empty after accounts are already known.
+	if len(workspace.AzureBlobContainers) == 0 {
+		t.Fatal("expected blob containers from scoped storage inventory")
+	}
+}
+
+type failingStorageAccountsAzure struct {
+	stubAzureInventory
+}
+
+func (failingStorageAccountsAzure) ListStorageAccounts(context.Context, models.ProfileSummary) ([]models.AzureStorageAccount, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func TestAzureInventoryGetStorageSurfacesListError(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+	mustWriteFile(
+		t,
+		filepath.Join(home, ".azure", "azureProfile.json"),
+		`{"subscriptions":[{"id":"sub-001","name":"Marketing","tenantId":"tenant-123","user":{"name":"ali@example.com"}}]}`,
+	)
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("EnsureRuntimeDirs: %v", err)
+	}
+
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer dataStore.Close()
+
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(command string) (string, error) {
+			if command == "az" {
+				return "/usr/bin/az", nil
+			}
+			return "", nil
+		}),
+		&stubS3Inventory{},
+		&stubEC2Inventory{},
+		stubLambdaInventory{},
+		stubDynamoDBInventory{},
+		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubECSInventory{},
+		stubEKSInventory{},
+		stubCloudFormationInventory{},
+		stubEventBridgeInventory{},
+		stubRoute53Inventory{},
+		stubElbv2Inventory{},
+		stubKmsInventory{},
+		stubApiGatewayInventory{},
+		stubSecretsManagerInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
+		failingStorageAccountsAzure{},
+		stubDockerRuntime{},
+	)
+
+	ctx := context.Background()
+	for _, step := range []struct {
+		method string
+		params []byte
+	}{
+		{"session.selectProvider", []byte(`{"providerId":"azure"}`)},
+		{"session.selectProfile", []byte(`{"providerId":"azure","profileId":"sub-001"}`)},
+		{"session.selectAuthMethod", []byte(`{"authMethod":"cli"}`)},
+		{"session.lock", nil},
+	} {
+		if _, err := service.Handle(ctx, step.method, step.params, nil); err != nil {
+			t.Fatalf("%s: %v", step.method, err)
+		}
+	}
+
+	result, err := service.Handle(ctx, "azure.inventory.get", []byte(`{"scope":"storage"}`), nil)
+	if err != nil {
+		t.Fatalf("azure.inventory.get: %v", err)
+	}
+	workspace, ok := result.(models.WorkspaceSnapshot)
+	if !ok {
+		t.Fatalf("expected WorkspaceSnapshot, got %T", result)
+	}
+	if len(workspace.AzureStorageAccounts) != 0 {
+		t.Fatalf("accounts = %#v, want empty on list failure", workspace.AzureStorageAccounts)
+	}
+	if !strings.Contains(workspace.AzureStorageStatusMessage, "Could not list storage accounts") {
+		t.Fatalf("status = %q, want list error surface", workspace.AzureStorageStatusMessage)
+	}
+	// Multi-line: title, guidance, optional detail for the banner UI.
+	if lines := strings.Split(workspace.AzureStorageStatusMessage, "\n"); len(lines) < 2 {
+		t.Fatalf("status should be multi-line for UI banner, got %q", workspace.AzureStorageStatusMessage)
+	}
+}
+
+type failingContainersAzure struct {
+	stubAzureInventory
+}
+
+func (failingContainersAzure) ListBlobContainers(context.Context, models.ProfileSummary, string) ([]models.AzureBlobContainer, error) {
+	return nil, fmt.Errorf("list blob containers: blocked by network rules of storage account")
+}
+
+func TestAzureInventoryGetStorageSurfacesContainerListError(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+	mustWriteFile(
+		t,
+		filepath.Join(home, ".azure", "azureProfile.json"),
+		`{"subscriptions":[{"id":"sub-001","name":"Marketing","tenantId":"tenant-123","user":{"name":"ali@example.com"}}]}`,
+	)
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("EnsureRuntimeDirs: %v", err)
+	}
+
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer dataStore.Close()
+
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(command string) (string, error) {
+			if command == "az" {
+				return "/usr/bin/az", nil
+			}
+			return "", nil
+		}),
+		&stubS3Inventory{},
+		&stubEC2Inventory{},
+		stubLambdaInventory{},
+		stubDynamoDBInventory{},
+		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubECSInventory{},
+		stubEKSInventory{},
+		stubCloudFormationInventory{},
+		stubEventBridgeInventory{},
+		stubRoute53Inventory{},
+		stubElbv2Inventory{},
+		stubKmsInventory{},
+		stubApiGatewayInventory{},
+		stubSecretsManagerInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
+		failingContainersAzure{},
+		stubDockerRuntime{},
+	)
+
+	ctx := context.Background()
+	for _, step := range []struct {
+		method string
+		params []byte
+	}{
+		{"session.selectProvider", []byte(`{"providerId":"azure"}`)},
+		{"session.selectProfile", []byte(`{"providerId":"azure","profileId":"sub-001"}`)},
+		{"session.selectAuthMethod", []byte(`{"authMethod":"cli"}`)},
+		{"session.lock", nil},
+	} {
+		if _, err := service.Handle(ctx, step.method, step.params, nil); err != nil {
+			t.Fatalf("%s: %v", step.method, err)
+		}
+	}
+
+	result, err := service.Handle(ctx, "azure.inventory.get", []byte(`{"scope":"storage"}`), nil)
+	if err != nil {
+		t.Fatalf("azure.inventory.get: %v", err)
+	}
+	workspace, ok := result.(models.WorkspaceSnapshot)
+	if !ok {
+		t.Fatalf("expected WorkspaceSnapshot, got %T", result)
+	}
+	if len(workspace.AzureStorageAccounts) == 0 {
+		t.Fatal("expected accounts so container list path is exercised")
+	}
+	if len(workspace.AzureBlobContainers) != 0 {
+		t.Fatalf("containers = %#v, want empty on list failure", workspace.AzureBlobContainers)
+	}
+	if !strings.Contains(workspace.AzureStorageStatusMessage, "Could not list containers") {
+		t.Fatalf("status = %q, want container list error surface", workspace.AzureStorageStatusMessage)
+	}
+	if !strings.Contains(workspace.AzureStorageStatusMessage, "public network access") &&
+		!strings.Contains(workspace.AzureStorageStatusMessage, "firewall") {
+		t.Fatalf("status = %q, want network isolation guidance", workspace.AzureStorageStatusMessage)
+	}
+	lines := strings.Split(workspace.AzureStorageStatusMessage, "\n")
+	if len(lines) < 3 {
+		t.Fatalf("status should be title/guidance/detail, got %q", workspace.AzureStorageStatusMessage)
+	}
+	if !strings.Contains(lines[2], "blocked by network") {
+		t.Fatalf("detail line = %q", lines[2])
+	}
+}
+
+func TestFormatAzureStorageListErrorNetwork(t *testing.T) {
+	msg := formatAzureStorageListError(fmt.Errorf("blocked by network rules of storage account"))
+	if !strings.Contains(msg, "public network access") && !strings.Contains(msg, "firewall") {
+		t.Fatalf("formatted = %q", msg)
+	}
+	plain := formatAzureStorageListError(fmt.Errorf("timeout waiting for response"))
+	if !strings.Contains(plain, "timed out") {
+		t.Fatalf("timeout error rewritten unexpectedly: %q", plain)
 	}
 }
 
