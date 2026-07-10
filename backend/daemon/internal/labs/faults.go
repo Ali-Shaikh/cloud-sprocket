@@ -81,7 +81,10 @@ func (r *Runner) applyStepFault(
 	if err != nil {
 		return err
 	}
-	injector := r.injectorFor(deployment)
+	var injector deploy.FaultInjector
+	if r.injectorFor != nil {
+		injector = r.injectorFor(deployment)
+	}
 	if injector == nil {
 		injector = deploy.FaultInjectorForDeployment(deployment)
 	}

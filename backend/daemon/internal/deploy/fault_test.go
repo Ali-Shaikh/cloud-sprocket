@@ -83,12 +83,19 @@ func TestComposeFaultInjectorPauseAndRevert(t *testing.T) {
 	}
 }
 
-func TestComposeFaultInjectorUnimplementedKinds(t *testing.T) {
+func TestComposeFaultInjectorCapabilitiesOnlyPause(t *testing.T) {
 	t.Parallel()
 	injector := NewComposeFaultInjector(&recordingContainers{})
+	caps := injector.Capabilities()
+	if len(caps) != 1 || caps[0] != FaultKindPause {
+		t.Fatalf("capabilities = %v, want [pause] only", caps)
+	}
+	if Supports(injector, FaultKindLatency) {
+		t.Fatal("latency must not be advertised until toxiproxy is wired")
+	}
 	_, err := injector.Inject(context.Background(), Fault{Kind: FaultKindLatency, Target: "api"})
-	if !errors.Is(err, ErrFaultNotImplemented) {
-		t.Fatalf("got %v, want ErrFaultNotImplemented", err)
+	if !errors.Is(err, ErrFaultUnsupported) {
+		t.Fatalf("got %v, want ErrFaultUnsupported", err)
 	}
 }
 

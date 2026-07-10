@@ -57,8 +57,10 @@ type FaultInjector interface {
 // ErrFaultUnsupported means the runtime cannot apply the requested fault kind.
 var ErrFaultUnsupported = errors.New("fault kind is not supported on this runtime")
 
-// ErrFaultNotImplemented means the kind is advertised but the inject backend
-// is not wired yet (latency/partition/service-error until toxiproxy lands).
+// ErrFaultNotImplemented is reserved for kinds that are advertised in
+// Capabilities but whose inject backend is not wired yet (e.g. toxiproxy).
+// ComposeFaultInjector currently advertises only pause, so callers should
+// normally see ErrFaultUnsupported for latency/partition/service-error.
 var ErrFaultNotImplemented = errors.New("fault inject backend is not implemented yet")
 
 // NoopFaultInjector never injects faults (cloud targets and local runtimes
@@ -170,13 +172,12 @@ func NewComposeFaultInjector(containers ContainerController) ComposeFaultInjecto
 	return ComposeFaultInjector{containers: containers}
 }
 
-// Capabilities lists compose-oriented fault kinds.
+// Capabilities lists compose fault kinds that are actually injectable.
+// Only pause is wired today; latency/partition/service-error wait for toxiproxy
+// and must not be advertised until Inject can apply them.
 func (ComposeFaultInjector) Capabilities() []FaultKind {
 	return []FaultKind{
-		FaultKindLatency,
-		FaultKindPartition,
 		FaultKindPause,
-		FaultKindServiceError,
 	}
 }
 

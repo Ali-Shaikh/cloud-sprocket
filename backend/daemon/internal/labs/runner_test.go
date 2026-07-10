@@ -238,6 +238,28 @@ func TestRunnerVerifyStepInjectsAndRevertsFault(t *testing.T) {
 	}
 }
 
+func TestRunnerApplyStepFaultWithoutInjectorHook(t *testing.T) {
+	// Production NewRunner leaves injectorFor nil; must not panic.
+	store := NewSessionStore(&memorySettingStore{})
+	runner := NewRunner(store, NewRegistry(), func() time.Time { return time.Now().UTC() })
+	if runner.injectorFor != nil {
+		t.Fatal("NewRunner must leave injectorFor unset for production")
+	}
+	deployment := &deploy.Deployment{
+		ID:        "dep-prod-hook",
+		Local:     false,
+		RuntimeID: "aws-cloud",
+	}
+	step := recipes.LabStep{
+		ID:    "chaos",
+		Fault: &recipes.LabFault{Kind: string(deploy.FaultKindPause), Target: "worker"},
+	}
+	err := runner.applyStepFault(context.Background(), deployment, step)
+	if !errors.Is(err, deploy.ErrFaultUnsupported) {
+		t.Fatalf("got %v, want ErrFaultUnsupported (cloud noop path, no panic)", err)
+	}
+}
+
 func TestRunnerRunActionOpenTab(t *testing.T) {
 	store := NewSessionStore(&memorySettingStore{})
 	runner := NewRunner(store, NewRegistry(), func() time.Time { return time.Now().UTC() })
