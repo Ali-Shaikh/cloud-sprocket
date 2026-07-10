@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue/v2"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
