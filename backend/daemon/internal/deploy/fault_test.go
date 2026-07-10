@@ -12,12 +12,19 @@ import (
 func TestNoopFaultInjectorRejectsAllKinds(t *testing.T) {
 	t.Parallel()
 	injector := NoopFaultInjector{}
-	if len(injector.Capabilities()) != 0 {
-		t.Fatalf("noop capabilities: got %v, want empty", injector.Capabilities())
+	caps := injector.Capabilities()
+	if caps == nil {
+		t.Fatal("noop capabilities must be non-nil for stable JSON encoding")
 	}
-	_, err := injector.Inject(context.Background(), Fault{Kind: FaultKindLatency, Target: "api"})
+	if len(caps) != 0 {
+		t.Fatalf("noop capabilities: got %v, want empty", caps)
+	}
+	revert, err := injector.Inject(context.Background(), Fault{Kind: FaultKindLatency, Target: "api"})
 	if !errors.Is(err, ErrFaultUnsupported) {
 		t.Fatalf("inject: got %v, want ErrFaultUnsupported", err)
+	}
+	if revert != nil {
+		t.Fatal("failed inject must return nil revert")
 	}
 }
 
@@ -34,12 +41,22 @@ func TestComposeFaultInjectorAdvertisesKinds(t *testing.T) {
 			t.Fatalf("expected support for %s", kind)
 		}
 	}
-	_, err := injector.Inject(context.Background(), Fault{Kind: FaultKindPause, Target: "worker"})
+	// Whitespace around kind should still match advertised capabilities.
+	if !Supports(injector, FaultKind(" pause ")) {
+		t.Fatal("expected Supports to normalise fault kind whitespace")
+	}
+	revert, err := injector.Inject(context.Background(), Fault{Kind: FaultKindPause, Target: "worker"})
 	if err == nil {
 		t.Fatal("expected not-wired error until chaos labs implement inject")
 	}
+	if !errors.Is(err, ErrFaultNotImplemented) {
+		t.Fatalf("got %v, want ErrFaultNotImplemented", err)
+	}
 	if errors.Is(err, ErrFaultUnsupported) {
 		t.Fatalf("supported kind should not return ErrFaultUnsupported: %v", err)
+	}
+	if revert != nil {
+		t.Fatal("failed inject must return nil revert")
 	}
 }
 
