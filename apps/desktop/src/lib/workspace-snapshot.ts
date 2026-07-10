@@ -831,6 +831,24 @@ export function mergeAwsS3Selection(
   });
 }
 
+/**
+ * Object selection re-lists page 1 on the backend. Keep any Load more pages
+ * already shown, and only take selection + inspector fields from the response.
+ */
+export function mergeAwsS3ObjectSelection(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  return normaliseWorkspaceSnapshot({
+    ...current,
+    selectedS3ObjectKey: normalised.selectedS3ObjectKey,
+    s3ObjectMetadata: normalised.s3ObjectMetadata,
+    s3ExportSnippets: normalised.s3ExportSnippets,
+    s3StatusMessage: normalised.s3StatusMessage || current.s3StatusMessage,
+  });
+}
+
 /** Append a Load more page onto the current S3 object list. */
 export function mergeAwsS3LoadMore(
   current: WorkspaceSnapshot,

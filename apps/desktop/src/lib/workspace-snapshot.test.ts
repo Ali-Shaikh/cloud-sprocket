@@ -7,6 +7,7 @@ import {
   emptyWorkspace,
   formatBackendError,
   mergeAwsInventoryScope,
+  mergeAwsS3ObjectSelection,
   normaliseWorkspaceSnapshot,
 } from "./workspace-snapshot";
 
@@ -39,6 +40,43 @@ describe("mergeAwsInventoryScope", () => {
     expect(merged.selectedS3BucketName).toBe("new-bucket");
     expect(merged.ec2Instances[0]?.instanceId).toBe("i-keep");
     expect(merged.ec2Instances[0]?.state).toBe("running");
+  });
+});
+
+describe("mergeAwsS3ObjectSelection", () => {
+  it("keeps Load more pages when selecting an object", () => {
+    const current = normaliseWorkspaceSnapshot({
+      selectedS3BucketName: "artifacts",
+      s3PrefixFilter: "reports/",
+      s3Objects: [
+        { key: "reports/a.json" },
+        { key: "reports/b.json" },
+        { key: "reports/page2.json" },
+      ],
+      s3ObjectsNextToken: "token-2",
+      s3ObjectsHasMore: true,
+      s3StatusMessage: "Loaded more items.",
+    });
+    const incoming = normaliseWorkspaceSnapshot({
+      selectedS3BucketName: "artifacts",
+      selectedS3ObjectKey: "reports/page2.json",
+      s3PrefixFilter: "reports/",
+      s3Objects: [{ key: "reports/a.json" }],
+      s3ObjectsNextToken: undefined,
+      s3ObjectsHasMore: false,
+      s3ObjectMetadata: [{ label: "Size", value: "12 B" }],
+      s3ExportSnippets: [{ label: "S3 URI", value: "s3://artifacts/reports/page2.json" }],
+      s3StatusMessage: "Selected object.",
+    });
+
+    const merged = mergeAwsS3ObjectSelection(current, incoming);
+
+    expect(merged.selectedS3ObjectKey).toBe("reports/page2.json");
+    expect(merged.s3Objects).toHaveLength(3);
+    expect(merged.s3ObjectsNextToken).toBe("token-2");
+    expect(merged.s3ObjectsHasMore).toBe(true);
+    expect(merged.s3ObjectMetadata).toEqual([{ label: "Size", value: "12 B" }]);
+    expect(merged.s3StatusMessage).toBe("Selected object.");
   });
 });
 

@@ -77,7 +77,7 @@ export function ResourceTable<TRow>({
 
   const colCount = columns.length + (renderTrailingCell ? 1 : 0);
 
-  const renderRow = (row: TRow, style?: React.CSSProperties) => {
+  const renderRow = (row: TRow) => {
     const rowKey = getRowKey(row);
     const active = rowKey === selectedKey;
     return (
@@ -85,7 +85,6 @@ export function ResourceTable<TRow>({
         key={rowKey}
         data-state={active ? "selected" : undefined}
         className={cn(onRowClick ? "cursor-pointer" : undefined, rowClassName)}
-        style={style}
         onClick={
           onRowClick
             ? () => {

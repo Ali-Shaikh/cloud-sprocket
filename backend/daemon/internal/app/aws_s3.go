@@ -430,8 +430,11 @@ func (s *Service) handleAwsS3LoadMoreObjects(ctx context.Context, params json.Ra
 		return nil, errors.New("select an S3 bucket before loading more objects")
 	}
 	timeoutCtx, cancel := s.withAWSTimeout(ctx)
-	page := s.s3ObjectPage(timeoutCtx, profile, bucket, session.S3PrefixFilter, token)
+	page, listErr := s.s3.ListObjects(timeoutCtx, profile, bucket, session.S3PrefixFilter, token)
 	cancel()
+	if listErr != nil {
+		return nil, fmt.Errorf("could not load more S3 objects: %w", listErr)
+	}
 
 	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
 		awsScope:           "s3",

@@ -5,6 +5,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { backendRequest } from "@/lib/backend";
 import {
   mergeAwsS3LoadMore,
+  mergeAwsS3ObjectSelection,
   mergeAwsS3Selection,
   normaliseWorkspaceSnapshot,
 } from "@/lib/workspace-snapshot";
@@ -283,7 +284,8 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       }}
       onSelectObject={(objectKey) => {
         void mutateWorkspaceSelection("aws.s3.selectObject", { objectKey }, {
-          merge: mergeAwsS3Selection,
+          // Do not replace the browser list with a fresh page-1 response.
+          merge: mergeAwsS3ObjectSelection,
           onOptimistic: () => {
             setWorkspace((current) =>
               normaliseWorkspaceSnapshot({
