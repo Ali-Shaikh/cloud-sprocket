@@ -149,26 +149,9 @@ func (l *Loader) Materialise(id, destDir string) error {
 
 // LoadFromDirectory loads a recipe from an on-disk folder (import or materialised path).
 func LoadFromDirectory(dir, source string) (Recipe, error) {
-	data, err := os.ReadFile(filepath.Join(dir, manifestFile))
+	manifest, err := readManifestFromDirectory(dir, source)
 	if err != nil {
-		return Recipe{}, fmt.Errorf("read manifest in %s: %w", dir, err)
-	}
-	var manifest Manifest
-	if err := yaml.Unmarshal(data, &manifest); err != nil {
-		return Recipe{}, fmt.Errorf("parse manifest in %s: %w", dir, err)
-	}
-	if strings.TrimSpace(manifest.ID) == "" {
-		manifest.ID = filepath.Base(dir)
-	}
-	if err := manifest.Validate(); err != nil {
 		return Recipe{}, err
-	}
-	if err := ValidateLabSpec(manifest); err != nil {
-		return Recipe{}, err
-	}
-	NormalizeManifest(&manifest)
-	if source != "" {
-		manifest.Source = source
 	}
 	module, diags := tfconfig.LoadModule(dir)
 	if diags.HasErrors() {
@@ -290,11 +273,10 @@ func readManifestFromDirectory(dir, source string) (Manifest, error) {
 		return Manifest{}, err
 	}
 	NormalizeManifest(&manifest)
-	if source != "" {
-		manifest.Source = source
-	} else if manifest.Source == "" {
-		manifest.Source = SourceImported
+	if strings.TrimSpace(source) == "" {
+		source = SourceImported
 	}
+	manifest.Source = source
 	return manifest, nil
 }
 

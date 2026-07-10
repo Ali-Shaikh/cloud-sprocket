@@ -41,8 +41,13 @@ type ValidationReport struct {
 // It checks manifest schema-ish requirements, lab semantics, module presence, and
 // coherence of build/imageBuild variable references against the OpenTofu module.
 func ValidateDirectory(dir string) (ValidationReport, error) {
-	dir = filepath.Clean(strings.TrimSpace(dir))
-	if dir == "" {
+	raw := strings.TrimSpace(dir)
+	if raw == "" {
+		return ValidationReport{}, fmt.Errorf("sourcePath is required")
+	}
+	dir = filepath.Clean(raw)
+	// Clean of empty becomes ".", which would validate the process CWD — reject it.
+	if dir == "." && raw != "." {
 		return ValidationReport{}, fmt.Errorf("sourcePath is required")
 	}
 	info, err := os.Stat(dir)
