@@ -1687,7 +1687,7 @@ describe("App", () => {
     fireEvent.click(await screen.findByText("S3"));
     // Single S3 browser: bucket is already selected from workspace fixture.
     const prefixInput = await screen.findByPlaceholderText(
-      "Filter by prefix, for example reports/",
+      "e.g. reports/2026/ — re-lists from S3",
     );
     fireEvent.change(prefixInput, { target: { value: "logs/" } });
 
@@ -1736,7 +1736,7 @@ describe("App", () => {
     fireEvent.click(await screen.findByText("S3"));
     // Single S3 browser: bucket is already selected from workspace fixture.
     const prefixInput = await screen.findByPlaceholderText(
-      "Filter by prefix, for example reports/",
+      "e.g. reports/2026/ — re-lists from S3",
     );
 
     fireEvent.change(prefixInput, { target: { value: "l" } });
@@ -1798,7 +1798,7 @@ describe("App", () => {
     fireEvent.click(await screen.findByText("S3"));
     // Single S3 browser: bucket is already selected from workspace fixture.
     const prefixInput = await screen.findByPlaceholderText(
-      "Filter by prefix, for example reports/",
+      "e.g. reports/2026/ — re-lists from S3",
     );
 
     expect(prefixInput).toHaveValue("previous/");

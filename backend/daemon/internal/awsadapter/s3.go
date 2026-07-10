@@ -29,7 +29,14 @@ type S3Inventory struct {
 	bucketRegions map[string]string
 }
 
-const maxObjectListingPages = 5
+// MaxObjectList is the hard cap of object keys returned per list request so the
+// desktop UI never materialises multi-thousand row tables for a single bucket.
+const MaxObjectList = 500
+
+const (
+	maxObjectListingPages = 5
+	objectListPageSize    = 200
+)
 
 func NewS3Inventory(settings config.Settings) *S3Inventory {
 	return &S3Inventory{
@@ -88,15 +95,17 @@ func (s *S3Inventory) ListObjects(
 	}
 
 	client := s3Client(cfg, profile)
+	pageSize := int32(objectListPageSize)
 	input := &s3.ListObjectsV2Input{
-		Bucket: &bucketName,
+		Bucket:  &bucketName,
+		MaxKeys: &pageSize,
 	}
 	if prefix != "" {
 		input.Prefix = &prefix
 	}
 
 	paginator := s3.NewListObjectsV2Paginator(client, input)
-	objects := []models.AwsS3Object{}
+	objects := make([]models.AwsS3Object, 0, objectListPageSize)
 	for pagesRead := 0; paginator.HasMorePages() && pagesRead < maxObjectListingPages; pagesRead++ {
 		result, err := paginator.NextPage(ctx)
 		if err != nil {
@@ -115,6 +124,9 @@ func (s *S3Inventory) ListObjects(
 				entry.Size = humanize.Bytes(uint64(*object.Size))
 			}
 			objects = append(objects, entry)
+			if len(objects) >= MaxObjectList {
+				return objects, nil
+			}
 		}
 	}
 

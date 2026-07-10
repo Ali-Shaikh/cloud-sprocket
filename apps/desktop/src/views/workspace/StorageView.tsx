@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   ChevronRight,
@@ -15,12 +15,14 @@ import {
   FolderOpen,
   FolderPlus,
   Link2,
+  Search,
   Upload,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { filterObjectsByKeyQuery, s3ObjectListSummary } from "@/lib/s3-object-filter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -221,11 +223,13 @@ export default function StorageView({
   );
   const [urlTesterValue, setUrlTesterValue] = useState("");
   const [prefixDraft, setPrefixDraft] = useState(workspace.s3PrefixFilter || "");
+  const [keySearch, setKeySearch] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(Boolean(workspace.selectedS3ObjectKey));
   const lastSelectedBucketRef = useRef(workspace.selectedS3BucketName || "");
   const lastRequestedPrefixRef = useRef(workspace.s3PrefixFilter || "");
   const lastSelectedObjectRef = useRef(workspace.selectedS3ObjectKey || "");
   const debouncedPrefixDraft = useDebouncedValue(prefixDraft, 350);
+  const debouncedKeySearch = useDebouncedValue(keySearch, 200);
 
   useEffect(() => {
     const nextObjectKey = workspace.selectedS3ObjectKey || "";
@@ -242,8 +246,20 @@ export default function StorageView({
       lastSelectedBucketRef.current = nextBucket;
       setPrefixDraft(nextPrefix);
       lastRequestedPrefixRef.current = nextPrefix;
+      setKeySearch("");
     }
   }, [workspace.s3PrefixFilter, workspace.selectedS3BucketName]);
+
+  const visibleObjects = useMemo(
+    () => filterObjectsByKeyQuery(workspace.s3Objects, debouncedKeySearch),
+    [workspace.s3Objects, debouncedKeySearch],
+  );
+  const searchActive = debouncedKeySearch.trim().length > 0;
+  const listSummary = s3ObjectListSummary(
+    workspace.s3Objects.length,
+    visibleObjects.length,
+    searchActive,
+  );
 
   useEffect(() => {
     if (debouncedPrefixDraft !== lastRequestedPrefixRef.current) {
@@ -680,7 +696,7 @@ export default function StorageView({
       </header>
 
       <section className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm">
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto]">
+        <div className="grid gap-3 lg:grid-cols-2">
           <div className="min-w-0">
             <div className={cn(fieldLabel, "mb-1")}>Bucket</div>
             <Select
@@ -709,26 +725,52 @@ export default function StorageView({
             </Select>
           </div>
           <div className="min-w-0">
-            <div className={cn(fieldLabel, "mb-1")}>Prefix</div>
+            <div className={cn(fieldLabel, "mb-1")}>Path prefix (starts with)</div>
             <Input
               value={prefixDraft}
-              placeholder="Filter by prefix, for example reports/"
+              placeholder="e.g. reports/2026/ — re-lists from S3"
               disabled={!bucketName}
+              aria-label="S3 path prefix"
               onChange={(event) => {
                 setPrefixDraft(event.target.value);
               }}
             />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Server-side: only keys that start with this path are loaded.
+            </p>
           </div>
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="pb-2 text-xs text-muted-foreground">
-              {workspace.s3Objects.length} object{workspace.s3Objects.length === 1 ? "" : "s"}
-              {prefixDraft !== (workspace.s3PrefixFilter || "")
-                ? " · updating after typing pauses"
-                : ""}
+          <div className="min-w-0 lg:col-span-2">
+            <div className={cn(fieldLabel, "mb-1")}>Search keys (contains)</div>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={keySearch}
+                placeholder="e.g. summary — filters the loaded list, matches anywhere in the key"
+                disabled={!bucketName || workspace.s3Objects.length === 0}
+                aria-label="Search object keys"
+                className="pl-9"
+                onChange={(event) => {
+                  setKeySearch(event.target.value);
+                }}
+              />
             </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-muted-foreground">
+            {workspace.s3StatusMessage || "S3 inventory is waiting for an open AWS workspace."}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              {listSummary}
+              {prefixDraft !== (workspace.s3PrefixFilter || "")
+                ? " · path updating after typing pauses"
+                : ""}
+            </span>
             {onCreateFolderPrefix ? (
               <Button
                 variant="outline"
+                size="sm"
                 disabled={!folderCapability.enabled || !bucketName}
                 title={folderCapability.enabled ? undefined : folderCapability.reason}
                 onClick={() => {
@@ -742,9 +784,6 @@ export default function StorageView({
             ) : null}
           </div>
         </div>
-        <p className="text-sm text-muted-foreground">
-          {workspace.s3StatusMessage || "S3 inventory is waiting for an open AWS workspace."}
-        </p>
       </section>
 
       {!bucketName || workspace.s3Buckets.length === 0 ? (
@@ -782,7 +821,7 @@ export default function StorageView({
                   cellClassName: "truncate",
                 },
               ]}
-              rows={workspace.s3Objects}
+              rows={visibleObjects}
               selectedKey={workspace.selectedS3ObjectKey}
               getRowKey={(object) => object.key}
               onRowClick={(object) => {
@@ -805,8 +844,12 @@ export default function StorageView({
               emptyState={
                 <EmptyState
                   icon={<Database />}
-                  title="No objects"
-                  description="No S3 objects loaded for the selected bucket."
+                  title={searchActive ? "No matching keys" : "No objects"}
+                  description={
+                    searchActive
+                      ? `No loaded keys contain “${debouncedKeySearch.trim()}”. Clear search or change the path prefix to load a different window.`
+                      : "No S3 objects loaded for the selected bucket."
+                  }
                   className="border-0"
                 />
               }

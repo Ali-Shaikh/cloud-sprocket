@@ -58,12 +58,12 @@ func (s *Service) handleAzureInventoryGet(ctx context.Context, params json.RawMe
 		return nil, errors.New("open an Azure workspace before loading service inventory")
 	}
 
-	// Tab-scoped inventory must load usable drill-down (e.g. storage accounts
-	// plus containers for the selected account). Lightweight mode is for the
-	// deferred workspace.get path only; using it here left the Storage Blobs
-	// page with an empty container dropdown after accounts had already been listed.
+	// Storage path browser needs accounts + containers + blobs on first open.
+	// Other scopes stay lightweight so expensive detail (WAF policy config,
+	// schema probes, etc.) still loads only when the user drills in.
+	lightweight := scope != "storage"
 	return s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
-		lightweightAzure:       false,
+		lightweightAzure:       lightweight,
 		skipAwsInventory:       true,
 		azureScope:             scope,
 		azureDeferredInventory: false,

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"cloudsprocket/backend/daemon/internal/awsadapter"
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
 	"cloudsprocket/backend/daemon/internal/urlinspector"
@@ -267,15 +268,38 @@ func (s *Service) enrichS3Inventory(
 		if len(objects) == 0 {
 			if session.S3PrefixFilter != "" {
 				status = fmt.Sprintf(
-					"No objects matched prefix %q in %s.",
+					"No objects matched path prefix %q in %s.",
 					session.S3PrefixFilter,
 					selectedBucket,
 				)
 			} else {
 				status = fmt.Sprintf("No objects were returned for %s.", selectedBucket)
 			}
+		} else if len(objects) >= awsadapter.MaxObjectList {
+			// S3 ListObjects is start-with only; client search filters this window.
+			status = fmt.Sprintf(
+				"Showing first %d objects from %s (list truncated). Narrow with a path prefix, or use key search within this window.",
+				len(objects),
+				selectedBucket,
+			)
+			if session.S3PrefixFilter != "" {
+				status = fmt.Sprintf(
+					"Showing first %d objects under path prefix %q in %s (list truncated). Narrow the path or use key search within this window.",
+					len(objects),
+					session.S3PrefixFilter,
+					selectedBucket,
+				)
+			}
 		} else {
 			status = fmt.Sprintf("Loaded %d objects from %s.", len(objects), selectedBucket)
+			if session.S3PrefixFilter != "" {
+				status = fmt.Sprintf(
+					"Loaded %d objects under path prefix %q in %s.",
+					len(objects),
+					session.S3PrefixFilter,
+					selectedBucket,
+				)
+			}
 		}
 	}
 
