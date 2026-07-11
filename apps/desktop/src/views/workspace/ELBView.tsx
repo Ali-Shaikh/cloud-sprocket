@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Scale } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { formatTimestamp } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -205,7 +206,11 @@ export default function ELBView({
             value: selectedLoadBalancer.state || "Unknown",
           },
           { label: "VPC", value: selectedLoadBalancer.vpcId || "—" },
-          { label: "Created", value: selectedLoadBalancer.createdTime || "—" },
+          {
+            label: "Created",
+            value: selectedLoadBalancer.createdTime ? formatTimestamp(selectedLoadBalancer.createdTime) : "Unknown",
+            title: selectedLoadBalancer.createdTime,
+          },
         ]}
         emptyText="No load balancer details are available."
       />

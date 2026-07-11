@@ -7,6 +7,7 @@ import { Copy, Loader2, Play, Plus, RefreshCw, Server, Upload } from "lucide-rea
 
 import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
+import { formatTimestamp } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -502,7 +503,11 @@ export default function LambdaView({
           },
           { label: "Handler", value: selectedFunction.handler || "Unknown" },
           { label: "State", value: selectedFunction.state || "Unknown" },
-          { label: "Last Modified", value: selectedFunction.lastModified || "Unknown" },
+          {
+            label: "Last Modified",
+            value: selectedFunction.lastModified ? formatTimestamp(selectedFunction.lastModified) : "Unknown",
+            title: selectedFunction.lastModified,
+          },
           { label: "Log Group", value: selectedFunction.logGroup || "Unknown" },
           { label: "Description", value: selectedFunction.description || "No description" },
         ]}
@@ -791,6 +796,7 @@ export default function LambdaView({
                 onSelectFunction(fn.functionName);
                 setInspectorOpen(true);
               }}
+              getCellTitle={(fn, columnId) => columnId === "lastModified" ? fn.lastModified : undefined}
               renderCell={(fn, columnId) => {
                 if (columnId === "name") {
                   return <span className="font-mono text-sm">{fn.functionName}</span>;
@@ -802,7 +808,7 @@ export default function LambdaView({
                   return fn.memorySize ? `${fn.memorySize} MB` : "Unknown";
                 }
                 if (columnId === "lastModified") {
-                  return fn.lastModified || "Unknown";
+                  return fn.lastModified ? formatTimestamp(fn.lastModified) : "Unknown";
                 }
                 if (columnId === "state") {
                   return (

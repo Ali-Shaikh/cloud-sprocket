@@ -21,6 +21,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
+import { formatTimestamp } from "@/lib/format";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import {
   filterObjectsByKeyQuery,
@@ -431,8 +432,8 @@ export default function StorageView({
             <dt className="text-xs text-muted-foreground">Size</dt>
             <dd className="text-right text-[13px] font-medium">{selectedObject.size || "Unknown"}</dd>
             <dt className="text-xs text-muted-foreground">Last modified</dt>
-            <dd className="text-right text-[13px] font-medium">
-              {selectedObject.modifiedAt || "Unknown"}
+            <dd className="text-right text-[13px] font-medium" title={selectedObject.modifiedAt || undefined}>
+              {selectedObject.modifiedAt ? formatTimestamp(selectedObject.modifiedAt) : "Unknown"}
             </dd>
             <dt className="text-xs text-muted-foreground">Storage class</dt>
             <dd className="text-right">
@@ -825,7 +826,9 @@ export default function StorageView({
                   onSelectObject(object.key);
                   setDrawerOpen(true);
                 }}
-                getCellTitle={(object, columnId) => (columnId === "key" ? object.key : undefined)}
+                getCellTitle={(object, columnId) =>
+                  columnId === "key" ? object.key : columnId === "modified" ? object.modifiedAt : undefined
+                }
                 renderCell={(object, columnId) => {
                   if (columnId === "key") {
                     const label = s3EntryDisplayName(object.key, workspace.s3PrefixFilter || "");
@@ -843,7 +846,7 @@ export default function StorageView({
                     return object.isFolder ? "—" : object.size || "Unknown";
                   }
                   if (columnId === "modified") {
-                    return object.isFolder ? "—" : object.modifiedAt || "Unknown";
+                    return object.isFolder ? "-" : object.modifiedAt ? formatTimestamp(object.modifiedAt) : "Unknown";
                   }
                   return object.isFolder ? "Folder" : object.storageClass || "STANDARD";
                 }}

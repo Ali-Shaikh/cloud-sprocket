@@ -21,6 +21,7 @@ const snapshot: PreferencesSnapshot = {
       summary: "Bucket and object workbench.",
       detail: "Bucket and object workbench.",
       category: "service",
+      domain: "storage",
       inventoryScope: "s3",
       enabled: true,
     },
@@ -31,7 +32,17 @@ const snapshot: PreferencesSnapshot = {
       summary: "Fleet and instance operations.",
       detail: "Fleet and instance operations.",
       category: "service",
+      domain: "compute",
       inventoryScope: "ec2",
+      enabled: true,
+    },
+    {
+      providerId: "aws",
+      serviceId: "waf",
+      label: "WAF",
+      summary: "Web application firewall tools.",
+      detail: "Web application firewall tools.",
+      category: "tool",
       enabled: true,
     },
   ],
@@ -64,5 +75,20 @@ describe("SettingsView", () => {
       disabledProviders: [],
       disabledServices: { aws: ["s3"] },
     });
+  });
+
+  it("groups provider services under domain subheadings with tools last", () => {
+    render(
+      <ThemeProvider>
+        <SettingsView snapshot={snapshot} onUpdate={vi.fn()} />
+      </ThemeProvider>,
+    );
+
+    const headings = screen.getAllByRole("heading", { level: 3 });
+    expect(headings.map((heading) => heading.textContent)).toEqual([
+      "Compute",
+      "Storage",
+      "Tools & other",
+    ]);
   });
 });
