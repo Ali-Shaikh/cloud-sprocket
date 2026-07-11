@@ -205,9 +205,20 @@ export default function ConnectView({
             {loading ? (
               <p className="text-sm text-muted-foreground">Loading profiles...</p>
             ) : providerProfiles.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No profiles detected for this connection.
-              </p>
+              <div className="rounded-lg border border-dashed p-5 text-center">
+                <p className="text-sm font-semibold">No profiles detected for this connection</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Configure the provider CLI and refresh, or use a local runtime without a cloud account.
+                </p>
+                <div className="mt-4 flex justify-center gap-2">
+                  <Button variant="outline" size="sm" onClick={onRefreshDiscovery}>
+                    <RefreshCw className="size-4" /> Refresh
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={onOpenLocalRuntime}>
+                    <Server className="size-4" /> Local Runtime
+                  </Button>
+                </div>
+              </div>
             ) : (
               <div className="grid gap-2 sm:grid-cols-2">
                 {providerProfiles.map((profile) => {

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { SectionHeader } from "@/components/section-header";
@@ -57,9 +57,13 @@ function reportDeployError(title: string, error: unknown): void {
 export default function DeployView({
   profiles,
   navigateToResource,
+  initialRecipeId,
+  onInitialRecipeOpened,
 }: {
   profiles: ProfileSummary[];
   navigateToResource?: (params: NavigateToResourceParams) => void;
+  initialRecipeId?: string;
+  onInitialRecipeOpened?: () => void;
 }) {
   const [mode, setMode] = useState<"list" | "configure" | "deployment">("list");
   const [recipes, setRecipes] = useState<RecipeManifest[]>([]);
@@ -78,6 +82,7 @@ export default function DeployView({
 
   const { active, setActive, logs, resetLogsForDeployment } = useDeploymentEvents();
   const logRef = useRef<HTMLDivElement | null>(null);
+  const initialRecipeRequestRef = useRef<string | null>(null);
 
   useEffect(() => {
     void listRecipes()
@@ -144,7 +149,7 @@ export default function DeployView({
     [galleryFilters, recipes],
   );
 
-  async function openRecipe(id: string) {
+  const openRecipe = useCallback(async (id: string) => {
     setUpdateTargetID(null);
     try {
       const loaded = await getRecipe(id);
@@ -180,7 +185,13 @@ export default function DeployView({
     } catch (error) {
       reportDeployError("Could not open recipe", error);
     }
-  }
+  }, [profiles]);
+
+  useEffect(() => {
+    if (!initialRecipeId || initialRecipeRequestRef.current === initialRecipeId) return;
+    initialRecipeRequestRef.current = initialRecipeId;
+    void openRecipe(initialRecipeId).finally(onInitialRecipeOpened);
+  }, [initialRecipeId, onInitialRecipeOpened, openRecipe]);
 
   async function handleInstallTofu() {
     setInstalling(true);

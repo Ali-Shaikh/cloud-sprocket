@@ -250,6 +250,7 @@ export type WorkspaceTabRouterProps = {
   chooseAuthMethod: (authMethod: string) => Promise<void>;
   preferencesSnapshot: PreferencesSnapshot | null;
   preferencesSaving: boolean;
+  onLoadPreferences: () => Promise<PreferencesSnapshot>;
   onPreferencesUpdate: (preferences: ServicePreferences) => Promise<void>;
   hiddenResourceHits: HiddenResourceHit[];
   hiddenResourceEnablingServiceId: string | null;

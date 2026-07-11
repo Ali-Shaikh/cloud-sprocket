@@ -8,6 +8,7 @@ import App from "./App";
 import { AppProviders } from "./components/app-providers";
 import { backendRequest } from "./lib/backend";
 import { __resetNotifications } from "./lib/notify";
+import { ONBOARDING_COMPLETED_KEY } from "./views/onboarding/onboarding-state";
 import type {
   ActivityLogEntry,
   AppSettingsSnapshot,
@@ -644,6 +645,7 @@ vi.mock("./lib/backend", () => ({
 describe("App", () => {
   beforeEach(() => {
     __resetNotifications();
+    window.localStorage.setItem(ONBOARDING_COMPLETED_KEY, "true");
     sessionFixture = {
       currentProviderId: "aws",
       selectedProfileId: "sandbox",

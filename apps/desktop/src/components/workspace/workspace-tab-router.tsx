@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { overviewNavigateToParams, resolveOverviewProvider } from "@/lib/navigate-to-resource";
 import { toActivityEntries } from "@/lib/workspace-shell";
 import { useNavigateToResource } from "@/hooks/use-navigate-to-resource";
 import ConnectView from "@/views/ConnectView";
 import OverviewView from "@/views/OverviewView";
 import DeployView from "@/views/deploy/DeployView";
+import OnboardingWizard from "@/views/onboarding/OnboardingWizard";
+import {
+  isOnboardingComplete,
+  markOnboardingComplete,
+} from "@/views/onboarding/onboarding-state";
 import DebugView from "@/views/DebugView";
 import { ActivityView, RuntimeView, PlaceholderView, DeveloperToolsView } from "@/views/workspace/lazy-views";
 import SettingsView from "@/views/SettingsView";
@@ -16,6 +21,8 @@ import { AzureWorkspaceTabs } from "./azure-workspace-tabs";
 import type { WorkspaceTabRouterProps } from "./workspace-tab-router-props";
 
 export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
+  const [showOnboarding, setShowOnboarding] = useState(() => !isOnboardingComplete());
+  const [deployRecipeId, setDeployRecipeId] = useState<string>();
   const {
     activeWorkspaceTabId,
     setActiveWorkspaceTabId,
@@ -239,7 +246,14 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     );
   }
   if (activeWorkspaceTabId === "deploy") {
-    return <DeployView profiles={profiles} navigateToResource={navigateToResource} />;
+    return (
+      <DeployView
+        profiles={profiles}
+        navigateToResource={navigateToResource}
+        initialRecipeId={deployRecipeId}
+        onInitialRecipeOpened={() => setDeployRecipeId(undefined)}
+      />
+    );
   }
   if (session.isLocked && activeWorkspaceTabId === "overview") {
     return (
@@ -347,6 +361,36 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
       entries={toActivityEntries(logs).slice(0, 12)}
       onRefreshDiscovery={() => {
         void refreshDiscovery();
+      }}
+    />
+  ) : showOnboarding ? (
+    <OnboardingWizard
+      providers={providers}
+      profiles={profiles}
+      discoveryLoading={loading}
+      preferencesSnapshot={props.preferencesSnapshot}
+      preferencesSaving={props.preferencesSaving}
+      dockerReady={workspace.dockerRuntime.reachable}
+      emulators={workspace.emulatorSummaries}
+      onLoadPreferences={props.onLoadPreferences}
+      onPreferencesUpdate={props.onPreferencesUpdate}
+      onRefreshDiscovery={refreshDiscovery}
+      onRefreshDocker={refreshDockerRuntime}
+      onOpenRuntime={() => setActiveWorkspaceTabId("virtualisation")}
+      onStartEmulator={(emulatorId) =>
+        emulatorId === "localstack"
+          ? invokeLocalStackAction("start")
+          : invokeFlociAzAction("start")
+      }
+      onComplete={() => {
+        markOnboardingComplete();
+        setShowOnboarding(false);
+      }}
+      onRunFirstLab={() => {
+        markOnboardingComplete();
+        setShowOnboarding(false);
+        setDeployRecipeId("lab-dynamodb-aws");
+        setActiveWorkspaceTabId("deploy");
       }}
     />
   ) : (

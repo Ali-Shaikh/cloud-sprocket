@@ -1114,6 +1114,7 @@ export default function App() {
     setHiddenResourceEnablingServiceId,
     hiddenResourcesProbeKeyRef,
     openSettings,
+    loadPreferences,
     applyPreferencesUpdate,
     enableHiddenService,
   } = useServicePreferencesFlow({
@@ -1372,6 +1373,7 @@ export default function App() {
     chooseAuthMethod,
     preferencesSnapshot,
     preferencesSaving,
+    onLoadPreferences: loadPreferences,
     onPreferencesUpdate: applyPreferencesUpdate,
     hiddenResourceHits,
     hiddenResourceEnablingServiceId,

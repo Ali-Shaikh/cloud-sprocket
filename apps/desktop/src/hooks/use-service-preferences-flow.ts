@@ -118,6 +118,15 @@ export function useServicePreferencesFlow(params: UseServicePreferencesFlowParam
     ],
   );
 
+  const loadPreferences = useCallback(async (): Promise<PreferencesSnapshot> => {
+    if (preferencesSnapshot) return preferencesSnapshot;
+    const snapshot = normalisePreferencesSnapshot(
+      await backendRequest<PreferencesSnapshot>("preferences.get"),
+    );
+    setPreferencesSnapshot(snapshot);
+    return snapshot;
+  }, [preferencesSnapshot]);
+
   const openSettings = useCallback(async (): Promise<void> => {
     const [snapshot] = await Promise.all([
       backendRequest<PreferencesSnapshot>("preferences.get"),
@@ -171,6 +180,7 @@ export function useServicePreferencesFlow(params: UseServicePreferencesFlowParam
     hiddenResourcesProbeKeyRef: hiddenResourcesProbeKeyRef as MutableRefObject<string | null>,
     probeHiddenResources,
     openSettings,
+    loadPreferences,
     applyPreferencesUpdate,
     enableHiddenService,
   };
