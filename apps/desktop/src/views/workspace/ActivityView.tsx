@@ -5,6 +5,7 @@ import { RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { StatusDot } from "@/components/status-dot";
+import { formatTimestamp } from "@/lib/format";
 import type { ActivityEntry } from "@/components/shell/types";
 
 export type ActivityViewProps = {
@@ -47,8 +48,8 @@ export default function ActivityView({ entries, onRefreshDiscovery }: ActivityVi
               <StatusDot status={entry.tone ?? "off"} className="mt-1.5" />
               <div className="min-w-0 flex-1">
                 <div className="text-sm text-foreground">{entry.message}</div>
-                <div className="mt-0.5 font-mono text-xs text-muted-foreground">
-                  {entry.timestamp}
+                <div className="mt-0.5 font-mono text-xs text-muted-foreground" title={entry.timestamp}>
+                  {formatTimestamp(entry.timestamp)}
                 </div>
                 {entry.detail ? (
                   <div className="mt-1 break-words text-xs text-muted-foreground">

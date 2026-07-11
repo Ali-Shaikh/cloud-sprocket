@@ -3,6 +3,8 @@
 
 import type { DetailField } from "@/types/backend";
 
+type TitledDetailField = DetailField & { title?: string };
+
 /**
  * A label/value grid for backend DetailField lists, with sensitive-value
  * masking. Tailwind replacement for the Cloudscape detail-card grid that the
@@ -13,7 +15,7 @@ function DetailFieldList({
   emptyText,
   showSensitiveValues = true,
 }: {
-  fields?: DetailField[];
+  fields?: TitledDetailField[];
   emptyText: string;
   showSensitiveValues?: boolean;
 }) {
@@ -30,7 +32,7 @@ function DetailFieldList({
           <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             {field.label}
           </div>
-          <div className="break-words text-sm text-foreground">
+          <div className="break-words text-sm text-foreground" title={field.title}>
             {field.sensitive && !showSensitiveValues ? "Hidden" : field.value}
           </div>
         </div>

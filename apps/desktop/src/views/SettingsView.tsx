@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { serviceCatalogIconUrl } from "@/lib/service-catalog-icons";
+import { groupByServiceDomain, SERVICE_DOMAIN_FALLBACK_GROUP } from "@/lib/service-domains";
 import {
   filterCatalogueEntries,
   groupCatalogueByProvider,
@@ -69,6 +70,7 @@ export default function SettingsView({ snapshot, saving = false, onUpdate }: Set
         {providerGroups.map((group) => {
           const providerOn = isProviderEnabled(preferences, group.providerId);
           const visibleServices = group.services;
+          const domainGroups = groupByServiceDomain(visibleServices, (service) => service.domain);
           return (
             <section key={group.providerId} className={sectionCard}>
               <div className="flex flex-wrap items-center gap-3 border-b border-border px-[18px] py-4">
@@ -130,8 +132,19 @@ export default function SettingsView({ snapshot, saving = false, onUpdate }: Set
               </div>
 
               {providerOn ? (
-                <div className="grid gap-3 p-[18px] sm:grid-cols-2">
-                  {visibleServices.map((service) => {
+                <div className="space-y-5 p-[18px]">
+                  {domainGroups.map((domainGroup) => (
+                    <section key={domainGroup.id} aria-labelledby={`${group.providerId}-${domainGroup.id}`}>
+                      <h3
+                        id={`${group.providerId}-${domainGroup.id}`}
+                        className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
+                      >
+                        {domainGroup.id === SERVICE_DOMAIN_FALLBACK_GROUP.id
+                          ? "Tools & other"
+                          : domainGroup.label}
+                      </h3>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                  {domainGroup.items.map((service) => {
                     const iconUrl = serviceCatalogIconUrl(service.serviceId);
                     const enabled = isServiceEnabled(
                       preferences,
@@ -175,6 +188,9 @@ export default function SettingsView({ snapshot, saving = false, onUpdate }: Set
                       </label>
                     );
                   })}
+                      </div>
+                    </section>
+                  ))}
                 </div>
               ) : (
                 <p className="px-[18px] py-4 text-sm text-muted-foreground">

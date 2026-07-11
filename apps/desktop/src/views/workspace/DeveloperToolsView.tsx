@@ -768,7 +768,7 @@ function RecipeAuthoring() {
       }
       setPendingImportPath(path);
       setPendingSourceType(sourceType);
-      setStatus("Import preview (not copied yet): " + JSON.stringify(res));
+      setStatus("Import preview ready. Nothing has been copied yet.");
       notify("success", "Import preview ready", "Review providers and build commands, then accept to copy.");
     } catch (e) {
       setStatus("Import error: " + formatBackendError(e));
@@ -785,7 +785,7 @@ function RecipeAuthoring() {
     try {
       setBusy(true);
       const res = await importRecipeFolder(pendingImportPath, true, pendingSourceType);
-      setStatus("Import accepted: " + JSON.stringify(res));
+      setStatus("Import accepted and copied into the imported recipes directory.");
       setPreview(res as Record<string, unknown>);
       setPendingImportPath(null);
       setPendingSourceType(undefined);
@@ -842,21 +842,30 @@ function RecipeAuthoring() {
   const buildCommands = Array.isArray(preview?.buildCommands)
     ? (preview?.buildCommands as string[])
     : [];
+  const providers = Array.isArray(preview?.providers) ? (preview.providers as string[]) : [];
+  const contentHash = typeof preview?.contentHash === "string" ? preview.contentHash : "";
+  const labStepCount = typeof preview?.labStepCount === "number" ? preview.labStepCount : 0;
+
+  function copyContentHash() {
+    if (!contentHash) return;
+    if (!navigator.clipboard?.writeText) {
+      notify("error", "Could not copy content hash");
+      return;
+    }
+    void navigator.clipboard.writeText(contentHash).then(
+      () => notify("success", "Content hash copied"),
+      () => notify("error", "Could not copy content hash"),
+    );
+  }
 
   return (
-    <ToolSection title="Recipe Authoring (C1–C3)" icon={Wand2}>
+    <ToolSection title="Recipe Authoring (C1-C3)" icon={Wand2}>
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => void runImportPreview("folder")} disabled={busy}>
           Import folder
         </Button>
         <Button onClick={() => void runImportPreview("zip")} disabled={busy}>
           Import zip
-        </Button>
-        <Button onClick={doImportConfirm} disabled={busy || !pendingImportPath}>
-          Accept import
-        </Button>
-        <Button variant="outline" onClick={doImportReject} disabled={busy || !pendingImportPath}>
-          Reject
         </Button>
         <Button variant="outline" onClick={() => void doValidate()} disabled={busy}>
           Validate folder
@@ -866,18 +875,75 @@ function RecipeAuthoring() {
         </Button>
       </div>
       {preview && (
-        <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-          <p>
-            {String(preview.name || preview.id || "recipe")} @ {String(preview.version || "?")}
-            {preview.confirmed ? " (copied)" : " (preview only)"}
-            {preview.contentHash ? ` · hash ${String(preview.contentHash).slice(0, 12)}…` : ""}
-          </p>
-          {Array.isArray(preview.providers) && preview.providers.length > 0 && (
-            <p>Providers: {(preview.providers as string[]).join(", ")}</p>
-          )}
-          {buildCommands.length > 0 && (
-            <p className="break-all">Build commands (run on this machine): {buildCommands.join(" · ")}</p>
-          )}
+        <div className="mt-3 space-y-4 rounded-lg border border-border bg-card p-4 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Import trust review
+              </p>
+              <h3 className="mt-1 text-base font-semibold text-foreground">
+                {String(preview.name || preview.id || "Unnamed recipe")}
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                {String(preview.id || "Unknown ID")} · v{String(preview.version || "?")} · {String(preview.kind || "Unknown kind")}
+              </p>
+            </div>
+            <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              {preview.confirmed ? "Copied" : "Preview only"}
+            </span>
+          </div>
+
+          <dl className="grid gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-xs text-muted-foreground">Providers</dt>
+              <dd className="font-medium text-foreground">{providers.join(", ") || "None declared"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Lab steps</dt>
+              <dd className="font-medium text-foreground">{labStepCount}</dd>
+            </div>
+          </dl>
+
+          {buildCommands.length > 0 ? (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
+                <ShieldAlert className="size-4" /> Runs on this machine
+              </div>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-foreground">
+                {buildCommands.map((command) => (
+                  <li key={command}><code className="break-all font-mono">{command}</code></li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {contentHash ? (
+            <div>
+              <div className="text-xs text-muted-foreground">Content hash</div>
+              <div className="mt-1 flex items-center gap-2">
+                <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1.5 text-xs" title={contentHash}>
+                  {contentHash.slice(0, 16)}…
+                </code>
+                <Button type="button" variant="outline" size="sm" onClick={copyContentHash}>
+                  <Copy aria-hidden /> Copy hash
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {pendingImportPath ? (
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={doImportConfirm} disabled={busy}>Accept import</Button>
+              <Button variant="outline" onClick={doImportReject} disabled={busy}>Reject</Button>
+            </div>
+          ) : null}
+
+          <details className="text-xs text-muted-foreground">
+            <summary className="cursor-pointer font-medium text-foreground">Raw import payload</summary>
+            <pre className="mt-2 max-h-64 overflow-auto rounded-lg bg-muted p-3 font-mono text-[11px] leading-relaxed">
+              {JSON.stringify(preview, null, 2)}
+            </pre>
+          </details>
         </div>
       )}
       {status && <p className="mt-2 text-xs text-muted-foreground break-all">{status}</p>}

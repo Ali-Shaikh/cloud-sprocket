@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
+import { useEffect, useRef, useState } from "react";
 import { ChevronRight, Loader2, RefreshCw, Server } from "lucide-react";
 
 import { DeveloperPreviewNotice } from "@/components/developer-preview-notice";
@@ -71,6 +72,9 @@ export default function ConnectView({
   onChooseAuthMethod,
   onOpenLocalRuntime,
 }: ConnectViewProps) {
+  const [authChoiceProfileId, setAuthChoiceProfileId] = useState<string>();
+  const authSectionRef = useRef<HTMLDivElement | null>(null);
+  const firstAuthButtonRef = useRef<HTMLButtonElement | null>(null);
   const providerProfiles = selectedProvider
     ? profiles.filter((profile) => profile.providerId === selectedProvider.providerId)
     : [];
@@ -92,6 +96,13 @@ export default function ConnectView({
   );
   const showAuthMethods = needsAuthChoice || noUsableAuth || cliUnavailable;
   const opening = Boolean(openingProfileId);
+
+  useEffect(() => {
+    if (selectedProfile?.profileId !== authChoiceProfileId || !needsAuthChoice) return;
+    authSectionRef.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+    firstAuthButtonRef.current?.focus();
+    setAuthChoiceProfileId(undefined);
+  }, [authChoiceProfileId, needsAuthChoice, selectedProfile?.profileId]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -202,13 +213,20 @@ export default function ConnectView({
                 {providerProfiles.map((profile) => {
                   const active = profile.profileId === selectedProfile?.profileId;
                   const busy = openingProfileId === profile.profileId;
+                  const profileNeedsAuthChoice =
+                    profile.authMethods.filter((method) => method.available).length > 1;
+                  const ctaLabel = profileNeedsAuthChoice ? "Choose sign-in" : "Open";
                   return (
                     <button
                       key={profile.profileId}
                       type="button"
                       aria-pressed={active}
+                      aria-label={`${ctaLabel} ${profile.displayName}`}
                       disabled={opening}
-                      onClick={() => onOpenProfile(profile.providerId, profile.profileId)}
+                      onClick={() => {
+                        setAuthChoiceProfileId(profileNeedsAuthChoice ? profile.profileId : undefined);
+                        onOpenProfile(profile.providerId, profile.profileId);
+                      }}
                       className={cn(
                         "group flex items-center gap-3 rounded-lg border p-3 text-left transition-colors disabled:cursor-not-allowed",
                         active
@@ -232,7 +250,7 @@ export default function ConnectView({
                         </span>
                       ) : (
                         <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-muted-foreground transition-colors group-hover:text-foreground">
-                          Open
+                          {ctaLabel}
                           <ChevronRight className="size-3.5" />
                         </span>
                       )}
@@ -244,7 +262,7 @@ export default function ConnectView({
           </div>
 
           {showAuthMethods ? (
-            <div className="mt-5">
+            <div ref={authSectionRef} className="mt-5">
               <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                 Authentication
               </div>
@@ -259,6 +277,7 @@ export default function ConnectView({
                 {authMethods.map((method) => (
                   <button
                     key={method.method}
+                    ref={method.method === usableAuthMethods[0]?.method ? firstAuthButtonRef : undefined}
                     type="button"
                     disabled={!method.available || opening}
                     title={method.summary}

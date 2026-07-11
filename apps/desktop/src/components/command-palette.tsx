@@ -16,6 +16,10 @@ export interface Command {
   run: () => void;
 }
 
+function isDestructiveCommand(command: Command): boolean {
+  return command.id === "act:reset";
+}
+
 /**
  * A keyboard-driven command palette (⌘K / Ctrl+K). Rendered as a lightweight
  * portal overlay: type to filter, arrow keys to move, Enter to run, Esc or a
@@ -121,6 +125,7 @@ export function CommandPalette({
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={onKeyDown}
             placeholder="Search commands…"
+            aria-label="Search commands"
             className="w-full bg-transparent py-3.5 text-sm text-foreground outline-none placeholder:text-muted-foreground"
           />
         </div>
@@ -137,12 +142,20 @@ export function CommandPalette({
                   <button
                     key={command.id}
                     type="button"
+                    aria-label={command.label}
                     data-index={index}
                     onMouseMove={() => setActiveIndex(index)}
                     onClick={() => run(index)}
                     className={cn(
                       "flex w-full items-center justify-between gap-3 rounded-md px-2.5 py-2 text-left text-sm",
-                      index === activeIndex ? "bg-accent text-accent-foreground" : "text-foreground",
+                      isDestructiveCommand(command)
+                        ? "text-destructive"
+                        : index === activeIndex
+                          ? "bg-accent text-accent-foreground"
+                          : "text-foreground",
+                      isDestructiveCommand(command) && index === activeIndex
+                        ? "bg-destructive/10"
+                        : null,
                     )}
                   >
                     <span className="truncate">{command.label}</span>

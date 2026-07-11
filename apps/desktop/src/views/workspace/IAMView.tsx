@@ -8,6 +8,7 @@ import { actionCapabilityState } from "@/lib/action-capabilities";
 
 import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
+import { formatTimestamp } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/empty-state";
@@ -189,7 +190,11 @@ export default function IAMView({
           { label: "Role ARN", value: selectedRole.roleArn || "Unknown" },
           { label: "Path", value: selectedRole.path || "/" },
           { label: "Description", value: selectedRole.description || "No description" },
-          { label: "Created", value: selectedRole.createDate || "Unknown" },
+          {
+            label: "Created",
+            value: selectedRole.createDate ? formatTimestamp(selectedRole.createDate) : "Unknown",
+            title: selectedRole.createDate,
+          },
           {
             label: "Attached policies",
             value: joinedValues(selectedRole.attachedPolicies, "None"),

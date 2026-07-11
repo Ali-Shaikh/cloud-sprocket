@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { KeyRound, RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { formatTimestamp } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -209,8 +210,16 @@ export default function KMSView({
           { label: "Origin", value: selectedKey.origin || "—" },
           { label: "Enabled", value: formatBoolean(selectedKey.enabled) },
           { label: "Multi-region", value: formatBoolean(selectedKey.multiRegion) },
-          { label: "Created", value: selectedKey.creationDate || "—" },
-          { label: "Scheduled deletion", value: selectedKey.deletionDate || "—" },
+          {
+            label: "Created",
+            value: selectedKey.creationDate ? formatTimestamp(selectedKey.creationDate) : "Unknown",
+            title: selectedKey.creationDate,
+          },
+          {
+            label: "Scheduled deletion",
+            value: selectedKey.deletionDate ? formatTimestamp(selectedKey.deletionDate) : "Unknown",
+            title: selectedKey.deletionDate,
+          },
         ]}
         emptyText="No key metadata is available."
       />

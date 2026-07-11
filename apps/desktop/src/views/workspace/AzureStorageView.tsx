@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { actionCapabilityState } from "@/lib/action-capabilities";
 import { presentAzureStorageStatus } from "@/lib/azure-storage-status";
 import { notify } from "@/lib/notify";
+import { formatTimestamp } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -502,6 +503,7 @@ export default function AzureStorageView({
                 onSelectBlob(blob.name);
                 setInspectorOpen(true);
               }}
+              getCellTitle={(blob, columnId) => columnId === "modified" ? blob.modifiedAt : undefined}
               renderCell={(blob, columnId) => {
                 if (columnId === "name") {
                   return <span className="font-medium">{blob.name}</span>;
@@ -509,7 +511,7 @@ export default function AzureStorageView({
                 if (columnId === "size") {
                   return blob.size || "Unknown";
                 }
-                return blob.modifiedAt || "Unknown";
+                return blob.modifiedAt ? formatTimestamp(blob.modifiedAt) : "Unknown";
               }}
               renderTrailingCell={
                 canWrite

@@ -87,6 +87,7 @@ function TopBar({
       <button
         type="button"
         onClick={onOpenCommandPalette}
+        aria-label={searchPlaceholder ?? "Search commands"}
         className={cn(
           "flex w-60 items-center gap-2 rounded-full border border-border bg-muted px-3.5 py-1.5 text-left text-muted-foreground transition-colors hover:text-foreground",
           writeMode ? null : "ml-auto",

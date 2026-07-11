@@ -121,6 +121,7 @@ function ContextNav({
                 <button
                   key={item.id}
                   type="button"
+                  aria-label={item.label}
                   disabled={item.comingSoon}
                   onClick={() => onSelectItem(item.id)}
                   className={cn(
@@ -172,6 +173,7 @@ function ContextNav({
         <div className="grid gap-1 p-2.5">
           <button
             type="button"
+            aria-label="Recent activity"
             onClick={onShowActivity}
             className={cn(
               navItemBase,

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Layers, RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { formatTimestamp } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -170,7 +171,11 @@ export default function CloudFormationView({
           { label: "Stack", value: selectedStack.stackName },
           { label: "Stack ID", value: selectedStack.stackId || "Not available" },
           { label: "Status", value: selectedStack.stackStatus || "Unknown" },
-          { label: "Created", value: selectedStack.creationTime || "—" },
+          {
+            label: "Created",
+            value: selectedStack.creationTime ? formatTimestamp(selectedStack.creationTime) : "Unknown",
+            title: selectedStack.creationTime,
+          },
         ]}
         emptyText="No CloudFormation selection details are available."
       />
@@ -187,9 +192,10 @@ export default function CloudFormationView({
             ]}
             rows={workspace.cloudFormationStackEvents}
             getRowKey={(event) => event.eventId}
+            getCellTitle={(event, columnId) => columnId === "timestamp" ? event.timestamp : undefined}
             renderCell={(event, columnId) => {
               if (columnId === "timestamp") {
-                return event.timestamp || "—";
+                return event.timestamp ? formatTimestamp(event.timestamp) : "Unknown";
               }
               if (columnId === "logicalId") {
                 return event.logicalResourceId || "—";
@@ -283,6 +289,7 @@ export default function CloudFormationView({
                 onSelectStack(stack.stackName);
                 setInspectorOpen(true);
               }}
+              getCellTitle={(stack, columnId) => columnId === "created" ? stack.creationTime : undefined}
               renderCell={(stack, columnId) => {
                 if (columnId === "name") {
                   return <span className="font-medium">{stack.stackName}</span>;
@@ -296,7 +303,7 @@ export default function CloudFormationView({
                   );
                 }
                 if (columnId === "created") {
-                  return stack.creationTime || "—";
+                  return stack.creationTime ? formatTimestamp(stack.creationTime) : "Unknown";
                 }
                 return null;
               }}

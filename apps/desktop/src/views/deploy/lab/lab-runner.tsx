@@ -28,6 +28,8 @@ import type {
   LabStepSpec,
 } from "@/types/backend";
 
+import { LabMarkdown } from "./lab-markdown";
+
 function stepStatusIcon(status: LabStepSession["status"]) {
   if (status === "passed") return <CheckCircle2 className="size-4 text-emerald-500" />;
   if (status === "failed") return <XCircle className="size-4 text-destructive" />;
@@ -118,7 +120,7 @@ export function LabRunner({
           title="Guided lab"
           description={
             session.status === "completed"
-              ? "Lab complete — well done."
+              ? "Lab complete, well done."
               : "Follow each step, run actions, then check your work."
           }
         />
@@ -161,9 +163,7 @@ export function LabRunner({
             <>
               <div>
                 <h3 className="text-base font-semibold text-foreground">{activeStep.title}</h3>
-                <pre className="mt-3 whitespace-pre-wrap font-sans text-sm leading-relaxed text-muted-foreground">
-                  {activeStep.body}
-                </pre>
+                <LabMarkdown>{activeStep.body}</LabMarkdown>
               </div>
 
               {activeStep.hints && activeStep.hints.length > 0 && (

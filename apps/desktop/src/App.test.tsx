@@ -1495,6 +1495,31 @@ describe("App", () => {
     expect(await screen.findByRole("button", { name: /sandbox/ })).toBeEnabled();
   });
 
+  it("opens reset confirmation from the command palette", async () => {
+    const user = userEvent.setup();
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [],
+    };
+
+    render(
+      <AppProviders>
+        <App />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    const search = await screen.findByRole("textbox", { name: "Search commands" });
+    await user.type(search, "Reset app data{enter}");
+
+    expect(await screen.findByRole("alertdialog", { name: "Reset app data" })).toBeInTheDocument();
+  });
+
   it("starts and stops LocalStack from the local runtime workspace", async () => {
     sessionFixture = {
       ...sessionFixture,
