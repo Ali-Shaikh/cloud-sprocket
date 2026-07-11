@@ -101,6 +101,9 @@ type WorkspaceTab struct {
 	Summary  string `json:"summary"`
 	Detail   string `json:"detail"`
 	Category string `json:"category,omitempty"`
+	// Domain groups service tabs by type in the sidebar (compute, storage, ...).
+	// Empty for workspace shell tabs and operational tools.
+	Domain string `json:"domain,omitempty"`
 }
 
 // ServicePreferences stores globally disabled providers and services. Absence of
@@ -118,6 +121,7 @@ type ServiceCatalogEntry struct {
 	Summary        string `json:"summary"`
 	Detail         string `json:"detail"`
 	Category       string `json:"category"`
+	Domain         string `json:"domain,omitempty"`
 	InventoryScope string `json:"inventoryScope,omitempty"`
 	Enabled        bool   `json:"enabled"`
 }

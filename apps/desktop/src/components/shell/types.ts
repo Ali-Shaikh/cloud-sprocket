@@ -69,6 +69,10 @@ export interface NavItem {
 export interface NavGroup {
   label: string;
   items: NavItem[];
+  /** Stable id for collapse persistence. Required when `collapsible` is set. */
+  id?: string;
+  /** Renders the header as a toggle that hides the group's items. */
+  collapsible?: boolean;
 }
 
 /** The connection header shown at the top of the contextual sidebar. */

@@ -60,6 +60,8 @@ export interface WorkspaceTab {
   summary: string;
   detail: string;
   category?: "workspace" | "service" | "tool" | "coming_soon";
+  /** Service domain for sidebar grouping (compute, storage, ...). Absent on shell tabs and tools. */
+  domain?: string;
 }
 
 export interface ServicePreferences {
@@ -74,6 +76,7 @@ export interface ServiceCatalogEntry {
   summary: string;
   detail: string;
   category: string;
+  domain?: string;
   inventoryScope?: string;
   enabled: boolean;
 }
