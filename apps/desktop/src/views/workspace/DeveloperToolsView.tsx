@@ -848,6 +848,10 @@ function RecipeAuthoring() {
 
   function copyContentHash() {
     if (!contentHash) return;
+    if (!navigator.clipboard?.writeText) {
+      notify("error", "Could not copy content hash");
+      return;
+    }
     void navigator.clipboard.writeText(contentHash).then(
       () => notify("success", "Content hash copied"),
       () => notify("error", "Could not copy content hash"),

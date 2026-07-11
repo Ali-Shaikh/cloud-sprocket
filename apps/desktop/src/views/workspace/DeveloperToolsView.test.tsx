@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   importRecipeFolder: vi.fn(),
   validateRecipeFolder: vi.fn(),
   scaffoldRecipe: vi.fn(),
+  notify: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: mocks.openDialog }));
@@ -21,6 +22,7 @@ vi.mock("@/lib/backend", () => ({
   validateRecipeFolder: mocks.validateRecipeFolder,
   scaffoldRecipe: mocks.scaffoldRecipe,
 }));
+vi.mock("@/lib/notify", () => ({ notify: mocks.notify }));
 
 describe("DeveloperToolsView", () => {
   it("renders the toolbox tabs and validates the sample JSON", async () => {
@@ -89,6 +91,13 @@ describe("DeveloperToolsView", () => {
       "title",
       "0123456789abcdef0123456789abcdef",
     );
+
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: undefined,
+    });
+    await user.click(screen.getByRole("button", { name: "Copy hash" }));
+    expect(mocks.notify).toHaveBeenCalledWith("error", "Could not copy content hash");
 
     await user.click(screen.getByRole("button", { name: "Accept import" }));
     expect(mocks.importRecipeFolder).toHaveBeenLastCalledWith("C:\\recipes\\demo", true, "folder");
