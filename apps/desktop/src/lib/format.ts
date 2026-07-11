@@ -18,5 +18,5 @@ export function formatTimestamp(iso: string): string {
   const part = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((entry) => entry.type === type)?.value ?? "";
 
-  return `${part("day")} ${part("month")} ${part("year")}, ${part("hour")}:${part("minute")}`;
+  return `${part("day")} ${part("month")} ${part("year")}, ${part("hour")}:${part("minute")} UTC`;
 }

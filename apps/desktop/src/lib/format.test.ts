@@ -7,8 +7,8 @@ import { formatTimestamp } from "./format";
 
 describe("formatTimestamp", () => {
   it.each([
-    ["2026-04-14T09:12:00Z", "14 Apr 2026, 09:12"],
-    ["2026-04-14T13:12:00+04:00", "14 Apr 2026, 09:12"],
+    ["2026-04-14T09:12:00Z", "14 Apr 2026, 09:12 UTC"],
+    ["2026-04-14T13:12:00+04:00", "14 Apr 2026, 09:12 UTC"],
   ])("formats %s in British UTC form", (input, expected) => {
     expect(formatTimestamp(input)).toBe(expected);
   });

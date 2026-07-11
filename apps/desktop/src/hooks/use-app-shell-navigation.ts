@@ -446,6 +446,7 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
         group: "Actions",
         label: "Reset app data",
         keywords: "clear wipe",
+        destructive: true,
         run: openResetModal,
       },
     ],

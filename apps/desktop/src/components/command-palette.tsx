@@ -13,11 +13,8 @@ export interface Command {
   label: string;
   hint?: string;
   keywords?: string;
+  destructive?: boolean;
   run: () => void;
-}
-
-function isDestructiveCommand(command: Command): boolean {
-  return command.id === "act:reset";
 }
 
 /**
@@ -64,7 +61,7 @@ export function CommandPalette({
 
   useEffect(() => {
     const node = listRef.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`);
-    node?.scrollIntoView({ block: "nearest" });
+    node?.scrollIntoView?.({ block: "nearest" });
   }, [activeIndex]);
 
   const groups = useMemo(() => {
@@ -148,12 +145,12 @@ export function CommandPalette({
                     onClick={() => run(index)}
                     className={cn(
                       "flex w-full items-center justify-between gap-3 rounded-md px-2.5 py-2 text-left text-sm",
-                      isDestructiveCommand(command)
+                      command.destructive
                         ? "text-destructive"
                         : index === activeIndex
                           ? "bg-accent text-accent-foreground"
                           : "text-foreground",
-                      isDestructiveCommand(command) && index === activeIndex
+                      command.destructive && index === activeIndex
                         ? "bg-destructive/10"
                         : null,
                     )}
