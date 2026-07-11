@@ -18,17 +18,18 @@ import {
 import { ProviderIcon } from "@/components/provider-icon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { getTofuStatus, installTofu } from "@/lib/backend";
+import { getTofuStatus, installTofu, listRecipes } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 import type {
   EmulatorSummary,
   PreferencesSnapshot,
   ProfileSummary,
   ProviderSummary,
+  RecipeManifest,
   ServicePreferences,
   TofuStatus,
 } from "@/types/backend";
-import { readOnboardingStep, writeOnboardingStep } from "./onboarding-state";
+import { FIRST_LAB_RECIPE_ID, readOnboardingStep, writeOnboardingStep } from "./onboarding-state";
 
 const STEPS = ["Welcome", "Clouds", "Environment", "Profiles", "First lab"] as const;
 
@@ -65,6 +66,16 @@ function statusText(status: EmulatorSummary["status"] | undefined): string {
   }
 }
 
+function firstLabMeta(manifest: RecipeManifest | null): string {
+  const parts: string[] = [];
+  const difficulty = manifest?.lab?.difficulty;
+  if (difficulty) parts.push(difficulty.charAt(0).toUpperCase() + difficulty.slice(1));
+  const minutes = manifest?.lab?.estimatedMinutes;
+  if (minutes) parts.push(`about ${minutes} minutes`);
+  parts.push("runs locally");
+  return parts.join(" · ");
+}
+
 async function waitForTofu(): Promise<TofuStatus> {
   const deadline = Date.now() + 90_000;
   let status = await getTofuStatus();
@@ -99,6 +110,7 @@ export default function OnboardingWizard({
   const [preferencesError, setPreferencesError] = useState<string | null>(null);
   const [preferenceLoadAttempt, setPreferenceLoadAttempt] = useState(0);
   const [tofu, setTofu] = useState<TofuStatus | null>(null);
+  const [firstLab, setFirstLab] = useState<RecipeManifest | null>(null);
   const [installingTofu, setInstallingTofu] = useState(false);
   const [startingEmulator, setStartingEmulator] = useState<string | null>(null);
   const [refreshingProfiles, setRefreshingProfiles] = useState(false);
@@ -165,6 +177,15 @@ export default function OnboardingWizard({
       })
       .catch(() => {
         if (!cancelled) setTofu(null);
+      });
+    // The final step's lab card reads name/difficulty/duration from the
+    // bundled manifest so copy cannot drift from the recipe itself.
+    void listRecipes()
+      .then((manifests) => {
+        if (!cancelled) setFirstLab(manifests.find((entry) => entry.id === FIRST_LAB_RECIPE_ID) ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setFirstLab(null);
       });
     return () => {
       cancelled = true;
@@ -513,12 +534,15 @@ export default function OnboardingWizard({
               </div>
               <h2 className="mt-5 text-2xl font-bold">Run your first lab</h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Start with the 15-minute DynamoDB beginner lab. It runs on LocalStack and guides you from deployment to
-                exploring the table in your workspace.
+                Start with a guided beginner lab. It runs on your local AWS runtime and walks you from deployment to
+                exploring the resources in your workspace.
               </p>
               <div className="mt-6 rounded-xl border bg-muted/30 p-4 text-left">
-                <p className="font-semibold">DynamoDB lab (AWS)</p>
-                <p className="mt-1 text-xs text-muted-foreground">Beginner · about 15 minutes · local friendly</p>
+                <p className="font-semibold">{firstLab?.name ?? "Beginner lab"}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{firstLabMeta(firstLab)}</p>
+                {firstLab?.summary ? (
+                  <p className="mt-2 text-xs text-muted-foreground">{firstLab.summary}</p>
+                ) : null}
               </div>
               <Button className="mt-6" size="lg" onClick={onRunFirstLab}>
                 <Rocket className="size-4" /> Configure first lab

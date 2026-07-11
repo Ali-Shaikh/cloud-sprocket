@@ -11,6 +11,7 @@ import type { EmulatorSummary, PreferencesSnapshot, ProfileSummary, ProviderSumm
 
 import OnboardingWizard from "./OnboardingWizard";
 import {
+  clearOnboardingState,
   isOnboardingComplete,
   markOnboardingComplete,
   ONBOARDING_COMPLETED_KEY,
@@ -24,6 +25,18 @@ vi.mock("@/lib/backend", () => ({
     path: "tofu",
   })),
   installTofu: vi.fn(),
+  listRecipes: vi.fn(async () => [
+    {
+      id: "lab-dynamodb-aws",
+      name: "DynamoDB lab (AWS)",
+      summary: "A single on-demand DynamoDB table you can query from your app.",
+      kind: "service-lab",
+      version: "0.1.0",
+      providers: ["aws"],
+      tags: [],
+      lab: { difficulty: "beginner", estimatedMinutes: 15, objectives: [], steps: [] },
+    },
+  ]),
 }));
 
 const providers: ProviderSummary[] = [
@@ -153,7 +166,9 @@ describe("OnboardingWizard", () => {
     expect(screen.getByText("Sandbox")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByText("DynamoDB lab (AWS)")).toBeInTheDocument();
+    expect(await screen.findByText("DynamoDB lab (AWS)")).toBeInTheDocument();
+    expect(screen.getByText("Beginner · about 15 minutes · runs locally")).toBeInTheDocument();
+    expect(screen.queryByText(/LocalStack/)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Configure first lab" }));
     expect(props.onRunFirstLab).toHaveBeenCalledOnce();
   });
@@ -183,5 +198,13 @@ describe("onboarding state", () => {
     expect(isOnboardingComplete()).toBe(false);
     markOnboardingComplete();
     expect(isOnboardingComplete()).toBe(true);
+  });
+
+  it("clearOnboardingState re-arms the wizard (app reset)", () => {
+    markOnboardingComplete();
+    window.localStorage.setItem(ONBOARDING_STEP_KEY, "3");
+    clearOnboardingState();
+    expect(isOnboardingComplete()).toBe(false);
+    expect(window.localStorage.getItem(ONBOARDING_STEP_KEY)).toBeNull();
   });
 });

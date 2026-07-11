@@ -10,6 +10,7 @@ import OverviewView from "@/views/OverviewView";
 import DeployView from "@/views/deploy/DeployView";
 import OnboardingWizard from "@/views/onboarding/OnboardingWizard";
 import {
+  FIRST_LAB_RECIPE_ID,
   isOnboardingComplete,
   markOnboardingComplete,
 } from "@/views/onboarding/onboarding-state";
@@ -389,7 +390,7 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
       onRunFirstLab={() => {
         markOnboardingComplete();
         setShowOnboarding(false);
-        setDeployRecipeId("lab-dynamodb-aws");
+        setDeployRecipeId(FIRST_LAB_RECIPE_ID);
         setActiveWorkspaceTabId("deploy");
       }}
     />

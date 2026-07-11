@@ -5,6 +5,7 @@ import { startTransition, useCallback, useState, type Dispatch, type MutableRefO
 
 import { clearDebugLogs, backendRequest } from "@/lib/backend";
 import { emptySession } from "@/lib/workspace-snapshot";
+import { clearOnboardingState } from "@/views/onboarding/onboarding-state";
 import type { NotificationTone } from "@/lib/notify";
 import type { ActivityLogEntry, AppResetResult, HiddenResourceHit, PreferencesSnapshot, SessionSnapshot } from "@/types/backend";
 import { Button } from "@/components/ui/button";
@@ -70,6 +71,9 @@ export function useAppReset(params: UseAppResetParams) {
         confirmation: resetConfirmation,
       });
       clearDebugLogs();
+      // Reset restores default service enablement, so the first-run wizard
+      // (whose job is choosing providers) must run again on next launch.
+      clearOnboardingState();
       startTransition(() => {
         setSession(emptySession);
         resetWorkspaceUiState();

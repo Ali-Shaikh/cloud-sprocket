@@ -4,6 +4,9 @@
 export const ONBOARDING_COMPLETED_KEY = "cloudsprocket.onboarding.v1.completed";
 export const ONBOARDING_STEP_KEY = "cloudsprocket.onboarding.v1.step";
 
+/** The bundled beginner lab the wizard's final step deep-links into. */
+export const FIRST_LAB_RECIPE_ID = "lab-dynamodb-aws";
+
 export function isOnboardingComplete(): boolean {
   try {
     return window.localStorage.getItem(ONBOARDING_COMPLETED_KEY) === "true";
@@ -18,6 +21,16 @@ export function markOnboardingComplete(): void {
     window.localStorage.removeItem(ONBOARDING_STEP_KEY);
   } catch {
     /* Storage may be unavailable. The router still hides the wizard for this session. */
+  }
+}
+
+/** Re-arms the wizard, e.g. after Reset app data restores default preferences. */
+export function clearOnboardingState(): void {
+  try {
+    window.localStorage.removeItem(ONBOARDING_COMPLETED_KEY);
+    window.localStorage.removeItem(ONBOARDING_STEP_KEY);
+  } catch {
+    /* Storage may be unavailable; there is nothing to clear then. */
   }
 }
 
