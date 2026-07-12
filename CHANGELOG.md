@@ -9,6 +9,34 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-07-12
+
+### Added
+
+- First-run onboarding wizard: five-step guided setup for providers, local
+  runtime checks, profile summary, and deep-link into a beginner lab (#160)
+- Domain-grouped workspace navigation with collapsible service headers (#157)
+- Usability follow-ups: settings domain headings, British UTC timestamps,
+  multi-auth focus handoff, safe lab markdown, structured import trust review,
+  and a destructive reset command in the palette (#158)
+
+### Fixed
+
+- Onboarding deep link stays armed when the first-lab recipe fails to load
+  (#160)
+- Factory reset re-arms the onboarding wizard (#160)
+- Imported multi-version recipes prefer the highest **semantic** version
+  (`0.10.0` over `0.9.0`) instead of folder-name lexicographic order (#162)
+- `FaultInjector` keeps Capabilities pause-only and exposes
+  `PlannedFaultKinds` for future chaos backends without advertising
+  unimplemented kinds (#162)
+- Review polish for UTC labels and palette destructive metadata (#159)
+
+### Changed
+
+- Product story for this release: the app now teaches you (grouped nav,
+  usability polish, onboarding)
+
 ## [0.9.3] - 2026-07-11
 
 ### Added
@@ -797,7 +825,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.4...HEAD
+[0.9.4]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.0...v0.9.1
