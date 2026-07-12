@@ -182,15 +182,25 @@ export default function DeployView({
         ...current,
         section: inferRecipeKind(loaded.manifest),
       }));
+      return true;
     } catch (error) {
       reportDeployError("Could not open recipe", error);
+      return false;
     }
   }, [profiles]);
 
   useEffect(() => {
     if (!initialRecipeId || initialRecipeRequestRef.current === initialRecipeId) return;
     initialRecipeRequestRef.current = initialRecipeId;
-    void openRecipe(initialRecipeId).finally(onInitialRecipeOpened);
+    void openRecipe(initialRecipeId).then((opened) => {
+      if (opened) {
+        // Consume the one-shot deep link only on success; a transient load
+        // failure keeps it armed so revisiting the Deploy tab retries.
+        onInitialRecipeOpened?.();
+      } else {
+        initialRecipeRequestRef.current = null;
+      }
+    });
   }, [initialRecipeId, onInitialRecipeOpened, openRecipe]);
 
   async function handleInstallTofu() {

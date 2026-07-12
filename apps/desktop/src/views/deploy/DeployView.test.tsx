@@ -63,4 +63,21 @@ describe("DeployView", () => {
     expect(getRecipe).toHaveBeenCalledWith("lab-dynamodb-aws");
     await waitFor(() => expect(onInitialRecipeOpened).toHaveBeenCalledOnce());
   });
+
+  it("keeps the deep link armed when the recipe load fails, so a revisit can retry", async () => {
+    const onInitialRecipeOpened = vi.fn();
+    vi.mocked(getRecipe).mockRejectedValueOnce(new Error("daemon unavailable"));
+    render(
+      <StrictMode>
+        <AppProviders>
+          <DeployView profiles={[]} initialRecipeId="lab-dynamodb-aws" onInitialRecipeOpened={onInitialRecipeOpened} />
+        </AppProviders>
+      </StrictMode>,
+    );
+
+    await waitFor(() => expect(getRecipe).toHaveBeenCalled());
+    // The failure must not consume the one-shot id; the parent keeps it for retry.
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "DynamoDB lab (AWS)" })).not.toBeInTheDocument());
+    expect(onInitialRecipeOpened).not.toHaveBeenCalled();
+  });
 });
