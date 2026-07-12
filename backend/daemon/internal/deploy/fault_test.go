@@ -90,12 +90,18 @@ func TestComposeFaultInjectorCapabilitiesOnlyPause(t *testing.T) {
 	if len(caps) != 1 || caps[0] != FaultKindPause {
 		t.Fatalf("capabilities = %v, want [pause] only", caps)
 	}
-	if Supports(injector, FaultKindLatency) {
-		t.Fatal("latency must not be advertised until toxiproxy is wired")
+	for _, planned := range PlannedFaultKinds() {
+		if Supports(injector, planned) {
+			t.Fatalf("%s must not be advertised until its inject backend is wired", planned)
+		}
+		_, err := injector.Inject(context.Background(), Fault{Kind: planned, Target: "api"})
+		if !errors.Is(err, ErrFaultUnsupported) {
+			t.Fatalf("%s inject: got %v, want ErrFaultUnsupported", planned, err)
+		}
 	}
-	_, err := injector.Inject(context.Background(), Fault{Kind: FaultKindLatency, Target: "api"})
-	if !errors.Is(err, ErrFaultUnsupported) {
-		t.Fatalf("got %v, want ErrFaultUnsupported", err)
+	planned := PlannedFaultKinds()
+	if len(planned) != 3 {
+		t.Fatalf("PlannedFaultKinds = %v, want latency/partition/service-error", planned)
 	}
 }
 

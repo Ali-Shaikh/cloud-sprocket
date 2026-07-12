@@ -182,12 +182,12 @@ func (l *Loader) listImported() ([]Manifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read imported recipes: %w", err)
 	}
-	// Prefer highest folder name (id@version) per recipe id when several exist.
+	// Prefer highest semantic version per recipe id when several imports exist.
 	// Cache the light manifest so we only parse recipe.yaml once per winner (no
-	// second tfconfig pass during List).
+	// second tfconfig pass during List). Folder-name lexicographic order is not
+	// used: "0.10.0" must beat "0.9.0".
 	type candidate struct {
 		dir      string
-		folder   string
 		manifest Manifest
 	}
 	best := map[string]candidate{}
@@ -205,8 +205,8 @@ func (l *Loader) listImported() ([]Manifest, error) {
 			continue
 		}
 		id := manifest.ID
-		if prev, ok := best[id]; !ok || entry.Name() > prev.folder {
-			best[id] = candidate{dir: dir, folder: entry.Name(), manifest: manifest}
+		if prev, ok := best[id]; !ok || VersionGreater(manifest.Version, prev.manifest.Version) {
+			best[id] = candidate{dir: dir, manifest: manifest}
 		}
 	}
 	manifests := make([]Manifest, 0, len(best))
@@ -224,7 +224,8 @@ func (l *Loader) findImportedDir(id string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	var best string
+	var bestDir string
+	var bestVersion string
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -242,14 +243,15 @@ func (l *Loader) findImportedDir(id string) (string, bool) {
 		if err != nil || manifest.ID != id {
 			continue
 		}
-		if best == "" || name > filepath.Base(best) {
-			best = dir
+		if bestDir == "" || VersionGreater(manifest.Version, bestVersion) {
+			bestDir = dir
+			bestVersion = manifest.Version
 		}
 	}
-	if best == "" {
+	if bestDir == "" {
 		return "", false
 	}
-	return best, true
+	return bestDir, true
 }
 
 // readManifestFromDirectory parses recipe.yaml without inspecting the OpenTofu

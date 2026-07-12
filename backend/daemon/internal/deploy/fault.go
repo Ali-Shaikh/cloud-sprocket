@@ -57,11 +57,22 @@ type FaultInjector interface {
 // ErrFaultUnsupported means the runtime cannot apply the requested fault kind.
 var ErrFaultUnsupported = errors.New("fault kind is not supported on this runtime")
 
-// ErrFaultNotImplemented is reserved for kinds that are advertised in
-// Capabilities but whose inject backend is not wired yet (e.g. toxiproxy).
-// ComposeFaultInjector currently advertises only pause, so callers should
-// normally see ErrFaultUnsupported for latency/partition/service-error.
+// ErrFaultNotImplemented is reserved for a kind that appears in Capabilities
+// but whose Inject branch is not wired yet. Callers should not see this for
+// PlannedFaultKinds: those are never advertised until a backend can apply them.
 var ErrFaultNotImplemented = errors.New("fault inject backend is not implemented yet")
+
+// PlannedFaultKinds lists abstract kinds reserved for future backends
+// (toxiproxy latency/partial-failure, etc.). They must not appear in
+// Capabilities until Inject can apply them, so UI wiring cannot bake in a
+// supported-vs-unimplemented mismatch.
+func PlannedFaultKinds() []FaultKind {
+	return []FaultKind{
+		FaultKindLatency,
+		FaultKindPartition,
+		FaultKindServiceError,
+	}
+}
 
 // NoopFaultInjector never injects faults (cloud targets and local runtimes
 // without a fault backend). Capabilities is empty so the UI can show
@@ -173,8 +184,8 @@ func NewComposeFaultInjector(containers ContainerController) ComposeFaultInjecto
 }
 
 // Capabilities lists compose fault kinds that are actually injectable.
-// Only pause is wired today; latency/partition/service-error wait for toxiproxy
-// and must not be advertised until Inject can apply them.
+// Only pause is wired today. Planned kinds (see PlannedFaultKinds) wait for
+// toxiproxy and must not be advertised until Inject can apply them.
 func (ComposeFaultInjector) Capabilities() []FaultKind {
 	return []FaultKind{
 		FaultKindPause,
