@@ -155,7 +155,22 @@ func (s *Service) handleLabsVerifyStep(ctx context.Context, params json.RawMessa
 		return nil, err
 	}
 	region := s.deploymentAWSRegion(deployment, profile)
-	session, err := s.labRunner().VerifyStep(ctx, labSpec, deployment, request.StepID, profile, region)
+	// Load workspace session for write-mode gates on side-effecting / sensitive verifies.
+	s.mu.Lock()
+	workspace, err := s.currentState(ctx, snapshot)
+	s.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	session, err := s.labRunner().VerifyStep(
+		ctx,
+		labSpec,
+		deployment,
+		request.StepID,
+		profile,
+		region,
+		labs.VerifyOptions{AWSWritesEnabled: effectiveAWSWritesEnabled(workspace, profile)},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -326,15 +341,17 @@ type labWriteHandler func(
 ) (any, error)
 
 // labWriteHandlers is the dispatch table for invoke-write ops (same write-mode
-// gating as the workspace write RPCs).
+// gating as the workspace write RPCs). Built once per Service value via pointer
+// methods; map is small and allocation is cheap relative to the RPC.
 func (s *Service) labWriteHandlers() map[string]labWriteHandler {
+	// Keep the set closed: every key must also be documented for recipe authors.
 	return map[string]labWriteHandler{
-		"sqs.send":        s.labWriteSQSSend,
-		"dynamodb.put":    s.labWriteDynamoPut,
-		"sns.publish":     s.labWriteSNSPublish,
-		"lambda.invoke":   s.labWriteLambdaInvoke,
-		"logs.put":        s.labWriteLogsPut,
-		"s3.upload":       s.labWriteS3Upload,
+		"sqs.send":      s.labWriteSQSSend,
+		"dynamodb.put":  s.labWriteDynamoPut,
+		"sns.publish":   s.labWriteSNSPublish,
+		"lambda.invoke": s.labWriteLambdaInvoke,
+		"logs.put":      s.labWriteLogsPut,
+		"s3.upload":     s.labWriteS3Upload,
 	}
 }
 
@@ -440,8 +457,8 @@ func (s *Service) labWriteLambdaInvoke(
 	if functionName == "" {
 		return nil, errors.New("function name is required")
 	}
-	var payload []byte
-	if body := params["payload"]; strings.TrimSpace(body) != "" {
+	payload := []byte("{}")
+	if body := strings.TrimSpace(params["payload"]); body != "" {
 		payload = []byte(body)
 	}
 	actionCtx, cancel := s.withAWSTimeout(ctx)
@@ -464,9 +481,13 @@ func (s *Service) labWriteLogsPut(
 	if group == "" {
 		return nil, errors.New("log group name is required")
 	}
+	message := strings.TrimSpace(params["message"])
+	if message == "" {
+		return nil, errors.New("message is required")
+	}
 	actionCtx, cancel := s.withAWSTimeout(ctx)
 	defer cancel()
-	return s.logs.PutLogEvents(actionCtx, profile, region, group, params["message"])
+	return s.logs.PutLogEvents(actionCtx, profile, region, group, message)
 }
 
 func (s *Service) labWriteS3Upload(

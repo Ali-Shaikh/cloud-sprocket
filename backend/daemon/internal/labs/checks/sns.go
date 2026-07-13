@@ -52,22 +52,26 @@ func (c *SNSSubscriptionCheck) Run(
 		return result, nil
 	}
 	actual := int64(len(topic.Subscriptions))
-	expected, err := strconv.ParseInt(strings.TrimSpace(verify.Value), 10, 64)
-	if err != nil {
-		// Default to at least one subscription when value omitted.
-		expected = 1
-		if strings.TrimSpace(verify.Value) != "" {
-			return result, fmt.Errorf("verification value %q is not a number", verify.Value)
-		}
-		if strings.TrimSpace(verify.Compare) == "" {
-			verify.Compare = "gte"
-		}
-	}
+	valueText := strings.TrimSpace(verify.Value)
 	compare := strings.TrimSpace(verify.Compare)
 	if compare == "" {
 		compare = "gte"
 	}
-	passed := compareInt64(actual, expected, compare)
+	var expected int64
+	if valueText == "" {
+		// Default: at least one subscription.
+		expected = 1
+	} else {
+		parsed, err := strconv.ParseInt(valueText, 10, 64)
+		if err != nil {
+			return result, fmt.Errorf("verification value %q is not a number", verify.Value)
+		}
+		expected = parsed
+	}
+	passed, err := compareInt64(actual, expected, compare)
+	if err != nil {
+		return result, err
+	}
 	result.Passed = passed
 	result.Detail = fmt.Sprintf("subscriptions=%d (expected %s %d)", actual, compare, expected)
 	if passed {

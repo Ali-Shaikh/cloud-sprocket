@@ -41,6 +41,14 @@ func (c *LambdaInvokeCheck) Run(
 		result.Message = "Function name is required for this verification."
 		return result, nil
 	}
+	// Lambda invoke is side-effecting (handlers may write). Match the
+	// workspace write gate used by labsInvokeWrite / aws.lambda.invoke.
+	if !checkCtx.AWSWritesEnabled {
+		result.Passed = false
+		result.Message = "Lambda invoke verification requires write mode to be enabled."
+		result.Detail = "Turn on write mode from the top bar, then re-run verify."
+		return result, nil
+	}
 	if c.Deps.Invoke == nil {
 		return result, fmt.Errorf("Lambda invoke dependency is not configured")
 	}
@@ -48,6 +56,8 @@ func (c *LambdaInvokeCheck) Run(
 	var payload []byte
 	if strings.TrimSpace(payloadText) != "" {
 		payload = []byte(payloadText)
+	} else {
+		payload = []byte("{}")
 	}
 	invokeResult, err := c.Deps.Invoke(ctx, checkCtx.Profile, checkCtx.Region, functionName, payload)
 	if err != nil {

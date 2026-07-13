@@ -90,6 +90,12 @@ func (r *Runner) Get(ctx context.Context, deploymentID string) (LabSession, bool
 	return r.store.Load(ctx, deploymentID)
 }
 
+// VerifyOptions carries workspace gates into verification (not part of the
+// recipe). Callers populate these from the active session.
+type VerifyOptions struct {
+	AWSWritesEnabled bool
+}
+
 // VerifyStep runs all verification checks for one step and updates the session.
 func (r *Runner) VerifyStep(
 	ctx context.Context,
@@ -98,6 +104,7 @@ func (r *Runner) VerifyStep(
 	stepID string,
 	profile models.ProfileSummary,
 	region string,
+	opts VerifyOptions,
 ) (LabSession, error) {
 	session, found, err := r.store.Load(ctx, deployment.ID)
 	if err != nil {
@@ -122,9 +129,10 @@ func (r *Runner) VerifyStep(
 	}()
 
 	checkCtx := CheckContext{
-		Deployment: deployment,
-		Profile:    profile,
-		Region:     region,
+		Deployment:       deployment,
+		Profile:          profile,
+		Region:           region,
+		AWSWritesEnabled: opts.AWSWritesEnabled,
 	}
 	results := make([]VerifyResult, 0, len(stepSpec.Verify))
 	allPassed := true

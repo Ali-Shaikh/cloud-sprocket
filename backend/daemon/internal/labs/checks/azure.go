@@ -114,7 +114,10 @@ func (c *AzureQueueDepthCheck) Run(
 	if compare == "" {
 		compare = "gte"
 	}
-	passed := compareInt64(actual, expected, compare)
+	passed, err := compareInt64(actual, expected, compare)
+	if err != nil {
+		return result, err
+	}
 	result.Passed = passed
 	result.Detail = fmt.Sprintf("depth=%d (expected %s %d)", actual, compare, expected)
 	if passed {

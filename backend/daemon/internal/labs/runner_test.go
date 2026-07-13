@@ -120,6 +120,7 @@ func TestRunnerStartVerifyAndReset(t *testing.T) {
 		"send-message",
 		models.ProfileSummary{ProfileID: "default"},
 		"us-east-1",
+		VerifyOptions{},
 	)
 	if err != nil {
 		t.Fatalf("VerifyStep: %v", err)
@@ -171,7 +172,7 @@ func TestRunnerVerifyStepRecordsCheckError(t *testing.T) {
 	if _, err := runner.Start(ctx, lab, deployment); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	verified, err := runner.VerifyStep(ctx, lab, deployment, "send-message", models.ProfileSummary{}, "us-east-1")
+	verified, err := runner.VerifyStep(ctx, lab, deployment, "send-message", models.ProfileSummary{}, "us-east-1", VerifyOptions{})
 	if err != nil {
 		t.Fatalf("VerifyStep should not abort: %v", err)
 	}
@@ -227,7 +228,7 @@ func TestRunnerVerifyStepInjectsAndRevertsFault(t *testing.T) {
 	if _, err := runner.Start(ctx, lab, deployment); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if _, err := runner.VerifyStep(ctx, lab, deployment, "chaos", models.ProfileSummary{}, "us-east-1"); err != nil {
+	if _, err := runner.VerifyStep(ctx, lab, deployment, "chaos", models.ProfileSummary{}, "us-east-1", VerifyOptions{}); err != nil {
 		t.Fatalf("VerifyStep: %v", err)
 	}
 	if !tracker.injected {

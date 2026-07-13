@@ -53,7 +53,25 @@ var (
 		LabVerifyAzureBlob:         {},
 		LabVerifyAzureQueueDepth:   {},
 	}
+	knownLabCompareOps = map[string]struct{}{
+		"eq":  {},
+		"gte": {},
+		"lte":  {},
+		"gt":  {},
+		"lt":  {},
+	}
 )
+
+func validateLabCompare(recipeID, stepID, verifyType, compare string) error {
+	op := strings.TrimSpace(compare)
+	if op == "" {
+		return fmt.Errorf("recipe %q lab step %q %s verify is missing compare", recipeID, stepID, verifyType)
+	}
+	if _, ok := knownLabCompareOps[op]; !ok {
+		return fmt.Errorf("recipe %q lab step %q %s verify compare %q is not recognised", recipeID, stepID, verifyType, op)
+	}
+	return nil
+}
 
 // ValidateLabSpec checks an optional lab section on a manifest.
 func ValidateLabSpec(manifest Manifest) error {
@@ -136,8 +154,8 @@ func ValidateLabSpec(manifest Manifest) error {
 				if strings.TrimSpace(verify.Attribute) == "" {
 					return fmt.Errorf("recipe %q lab step %q sqs.queue-attribute verify is missing attribute", manifest.ID, stepID)
 				}
-				if strings.TrimSpace(verify.Compare) == "" {
-					return fmt.Errorf("recipe %q lab step %q sqs.queue-attribute verify is missing compare", manifest.ID, stepID)
+				if err := validateLabCompare(manifest.ID, stepID, LabVerifySQSQueueAttribute, verify.Compare); err != nil {
+					return err
 				}
 			case LabVerifyHTTPGet:
 				if err := validateLabOutputRefs(manifest.ID, stepID, "url", verify.URL, outputNames); err != nil {
@@ -227,8 +245,11 @@ func ValidateLabSpec(manifest Manifest) error {
 				if strings.TrimSpace(verify.Topic) == "" {
 					return fmt.Errorf("recipe %q lab step %q sns.subscription verify is missing topic", manifest.ID, stepID)
 				}
-				if strings.TrimSpace(verify.Compare) == "" {
-					return fmt.Errorf("recipe %q lab step %q sns.subscription verify is missing compare", manifest.ID, stepID)
+				// Empty compare defaults to gte at runtime; if set, must be known.
+				if op := strings.TrimSpace(verify.Compare); op != "" {
+					if err := validateLabCompare(manifest.ID, stepID, LabVerifySNSSubscription, op); err != nil {
+						return err
+					}
 				}
 			case LabVerifyAzureBlob:
 				if err := validateLabOutputRefs(manifest.ID, stepID, "account", verify.Account, outputNames); err != nil {
@@ -253,8 +274,8 @@ func ValidateLabSpec(manifest Manifest) error {
 				if strings.TrimSpace(verify.Account) == "" || strings.TrimSpace(verify.Queue) == "" {
 					return fmt.Errorf("recipe %q lab step %q azure.queue-depth verify needs account and queue", manifest.ID, stepID)
 				}
-				if strings.TrimSpace(verify.Compare) == "" {
-					return fmt.Errorf("recipe %q lab step %q azure.queue-depth verify is missing compare", manifest.ID, stepID)
+				if err := validateLabCompare(manifest.ID, stepID, LabVerifyAzureQueueDepth, verify.Compare); err != nil {
+					return err
 				}
 			}
 		}

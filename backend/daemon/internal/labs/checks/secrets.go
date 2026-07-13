@@ -43,6 +43,13 @@ func (c *SecretsValueCheck) Run(
 		result.Message = "Secret id is required for this verification."
 		return result, nil
 	}
+	// Secret reveal is write-gated in the workspace (aws.secrets.reveal).
+	if !checkCtx.AWSWritesEnabled {
+		result.Passed = false
+		result.Message = "Secret value verification requires write mode to be enabled."
+		result.Detail = "Turn on write mode from the top bar, then re-run verify."
+		return result, nil
+	}
 	if c.Deps.GetSecretValue == nil {
 		return result, fmt.Errorf("secrets get dependency is not configured")
 	}

@@ -8,20 +8,34 @@ import (
 	"strings"
 )
 
-func compareInt64(actual, expected int64, compare string) bool {
-	switch strings.TrimSpace(compare) {
+// KnownCompareOps are the integer comparison operators accepted by lab
+// verify types that use compare/value (sqs, sns, azure.queue-depth).
+var KnownCompareOps = map[string]struct{}{
+	"eq":  {},
+	"gte": {},
+	"lte": {},
+	"gt":  {},
+	"lt":  {},
+}
+
+// compareInt64 compares actual against expected using a closed operator set.
+// Unknown operators return an error so callers do not misreport a config bug
+// as a failed runtime check.
+func compareInt64(actual, expected int64, compare string) (bool, error) {
+	op := strings.TrimSpace(compare)
+	switch op {
 	case "eq":
-		return actual == expected
+		return actual == expected, nil
 	case "gte":
-		return actual >= expected
+		return actual >= expected, nil
 	case "lte":
-		return actual <= expected
+		return actual <= expected, nil
 	case "gt":
-		return actual > expected
+		return actual > expected, nil
 	case "lt":
-		return actual < expected
+		return actual < expected, nil
 	default:
-		return false
+		return false, fmt.Errorf("unknown compare operator %q (want eq, gte, lte, gt, or lt)", compare)
 	}
 }
 

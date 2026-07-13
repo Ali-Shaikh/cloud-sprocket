@@ -64,7 +64,10 @@ func (c *SQSQueueAttributeCheck) Run(
 		return result, fmt.Errorf("verification value %q is not a number", verify.Value)
 	}
 
-	passed := compareInt64(actual, expected, verify.Compare)
+	passed, err := compareInt64(actual, expected, verify.Compare)
+	if err != nil {
+		return result, err
+	}
 	result.Passed = passed
 	result.Detail = fmt.Sprintf("%s=%d (expected %s %d)", verify.Attribute, actual, verify.Compare, expected)
 	if passed {

@@ -30,8 +30,9 @@ func testCtx() labs.CheckContext {
 				{Name: "queue_name", Value: "labqueue"},
 			},
 		},
-		Profile: models.ProfileSummary{ProfileID: "local", ProviderID: "aws"},
-		Region:  "eu-west-1",
+		Profile:          models.ProfileSummary{ProfileID: "local", ProviderID: "aws"},
+		Region:           "eu-west-1",
+		AWSWritesEnabled: true,
 	}
 }
 
@@ -162,6 +163,67 @@ func TestSNSSubscriptionCheckCount(t *testing.T) {
 	}
 	if !result.Passed {
 		t.Fatalf("expected pass: %+v", result)
+	}
+}
+
+func TestLambdaInvokeRequiresWriteMode(t *testing.T) {
+	t.Parallel()
+	invoked := false
+	check := &LambdaInvokeCheck{Deps: LambdaDeps{
+		Invoke: func(_ context.Context, _ models.ProfileSummary, _, _ string, _ []byte) (models.AwsLambdaInvokeResult, error) {
+			invoked = true
+			return models.AwsLambdaInvokeResult{StatusCode: 200}, nil
+		},
+	}}
+	ctx := testCtx()
+	ctx.AWSWritesEnabled = false
+	result, err := check.Run(context.Background(), recipes.LabVerify{
+		Type: recipes.LabVerifyLambdaInvoke, Function: "{{ outputs.function_name }}",
+	}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Passed {
+		t.Fatal("expected fail when write mode is off")
+	}
+	if invoked {
+		t.Fatal("must not invoke Lambda when write mode is off")
+	}
+}
+
+func TestSecretsValueRequiresWriteMode(t *testing.T) {
+	t.Parallel()
+	revealed := false
+	check := &SecretsValueCheck{Deps: SecretsDeps{
+		GetSecretValue: func(_ context.Context, _ models.ProfileSummary, _, _ string) (string, error) {
+			revealed = true
+			return "x", nil
+		},
+	}}
+	ctx := testCtx()
+	ctx.AWSWritesEnabled = false
+	result, err := check.Run(context.Background(), recipes.LabVerify{
+		Type: recipes.LabVerifySecretsValue, Secret: "{{ outputs.secret_name }}", Value: "x",
+	}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Passed {
+		t.Fatal("expected fail when write mode is off")
+	}
+	if revealed {
+		t.Fatal("must not reveal secret when write mode is off")
+	}
+}
+
+func TestCompareInt64RejectsUnknownOperator(t *testing.T) {
+	t.Parallel()
+	if _, err := compareInt64(1, 1, "ne"); err == nil {
+		t.Fatal("expected error for unknown compare operator")
+	}
+	ok, err := compareInt64(2, 1, "gte")
+	if err != nil || !ok {
+		t.Fatalf("gte: ok=%v err=%v", ok, err)
 	}
 }
 
