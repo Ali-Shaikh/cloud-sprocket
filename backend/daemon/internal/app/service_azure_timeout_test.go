@@ -237,6 +237,11 @@ func (blockingAzure) PeekQueueMessages(ctx context.Context, _ models.ProfileSumm
 	return nil, ctx.Err()
 }
 
+func (blockingAzure) GetQueueApproximateMessageCount(ctx context.Context, _ models.ProfileSummary, _ string, _ string) (int64, error) {
+	<-ctx.Done()
+	return 0, ctx.Err()
+}
+
 func (blockingAzure) ListEntraUsers(ctx context.Context, _ models.ProfileSummary) ([]models.AzureEntraUser, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()

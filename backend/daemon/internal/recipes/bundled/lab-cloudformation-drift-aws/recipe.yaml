@@ -75,7 +75,14 @@ lab:
       title: Note the queue inside the stack
       body: |
         The stack outputs include the queue URL created by the CF template. This
-        shows how recipes can orchestrate CF to create AWS resources.
+        shows how recipes can orchestrate CF to create AWS resources. Verify the
+        queue is readable via SQS inventory.
+      verify:
+        - type: sqs.queue-attribute
+          queue: "{{ outputs.queue_url_from_stack }}"
+          attribute: ApproximateNumberOfMessages
+          compare: gte
+          value: "0"
       hints:
         - In a full drift scenario, manually delete or modify the queue via the
           emulator console and re-check for drift using the deployment tools.

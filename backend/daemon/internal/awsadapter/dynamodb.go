@@ -123,6 +123,55 @@ func (d *DynamoDBInventory) scanSampleItems(
 	return items, nil
 }
 
+// GetItem loads one item by key JSON object. found is false when the key misses.
+func (d *DynamoDBInventory) GetItem(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	tableName string,
+	keyJSON string,
+) (map[string]any, bool, error) {
+	tableName = strings.TrimSpace(tableName)
+	keyJSON = strings.TrimSpace(keyJSON)
+	if tableName == "" {
+		return nil, false, fmt.Errorf("table name is required")
+	}
+	if keyJSON == "" {
+		return nil, false, fmt.Errorf("key JSON is required")
+	}
+	var native map[string]any
+	if err := json.Unmarshal([]byte(keyJSON), &native); err != nil {
+		return nil, false, fmt.Errorf("key JSON must be a valid object: %w", err)
+	}
+	key, err := attributevalue.MarshalMap(native)
+	if err != nil {
+		return nil, false, err
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := d.loadConfig(ctx, profile, region)
+	if err != nil {
+		return nil, false, err
+	}
+	client := dynamodbClient(cfg, profile)
+	res, err := client.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(tableName),
+		Key:       key,
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if len(res.Item) == 0 {
+		return nil, false, nil
+	}
+	var item map[string]any
+	if err := attributevalue.UnmarshalMap(res.Item, &item); err != nil {
+		return nil, false, err
+	}
+	return item, true, nil
+}
+
 func (d *DynamoDBInventory) PutItem(
 	ctx context.Context,
 	profile models.ProfileSummary,

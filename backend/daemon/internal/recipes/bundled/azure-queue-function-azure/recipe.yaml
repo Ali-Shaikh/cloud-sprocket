@@ -60,11 +60,18 @@ lab:
     - id: inspect-queue
       title: Check storage queue
       body: |
-        Use outputs to locate the queue in storage resources.
+        Use outputs to locate the queue in storage resources, then verify the
+        queue depth is zero before traffic arrives.
       actions:
         - type: open-tab
           tab: azure-storage
           focus: "{{ outputs.storage_account_name }}"
+      verify:
+        - type: azure.queue-depth
+          account: "{{ outputs.storage_account_name }}"
+          queue: "{{ outputs.queue_name }}"
+          compare: eq
+          value: "0"
     - id: inspect-func
       title: Inspect function app
       body: Open function app details.

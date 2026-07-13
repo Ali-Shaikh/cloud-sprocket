@@ -82,11 +82,15 @@ lab:
       title: Inspect the event processor Lambda
       body: |
         Switch to the Lambda tab and select the function. It is granted
-        permission to be invoked by S3.
+        permission to be invoked by S3. Run a safe test invoke to confirm health.
       actions:
         - type: open-tab
           tab: aws-lambda
           focus: "{{ outputs.lambda_function_name }}"
+      verify:
+        - type: lambda.invoke
+          function: "{{ outputs.lambda_function_name }}"
+          payload: '{"source":"lab"}'
       hints:
         - Handler receives standard S3 event records.
     - id: review-outputs

@@ -6,6 +6,7 @@ package awsadapter
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"sort"
@@ -22,6 +23,9 @@ import (
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/models"
 )
+
+// maxGetObjectBytes caps lab/content checks so large objects cannot blow memory.
+const maxGetObjectBytes = 256 * 1024
 
 type S3Inventory struct {
 	settings      config.Settings
@@ -281,6 +285,46 @@ func (s *S3Inventory) HeadObject(
 		})
 	}
 	return fields, nil
+}
+
+// GetObject returns the object body as text, capped at maxGetObjectBytes.
+func (s *S3Inventory) GetObject(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+	objectKey string,
+) (string, error) {
+	bucketName = strings.TrimSpace(bucketName)
+	objectKey = strings.TrimSpace(objectKey)
+	if bucketName == "" || objectKey == "" {
+		return "", fmt.Errorf("bucket and object key are required")
+	}
+	region, err := s.bucketRegion(ctx, profile, bucketName)
+	if err != nil {
+		return "", err
+	}
+	cfg, err := s.loadConfig(ctx, profile, region)
+	if err != nil {
+		return "", err
+	}
+	client := s3Client(cfg, profile)
+	result, err := client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(objectKey),
+	})
+	if err != nil {
+		return "", err
+	}
+	defer result.Body.Close()
+	limited := io.LimitReader(result.Body, maxGetObjectBytes+1)
+	body, err := io.ReadAll(limited)
+	if err != nil {
+		return "", err
+	}
+	if len(body) > maxGetObjectBytes {
+		body = body[:maxGetObjectBytes]
+	}
+	return string(body), nil
 }
 
 func (s *S3Inventory) UploadFile(

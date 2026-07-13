@@ -76,8 +76,14 @@ lab:
           focus: "{{ outputs.secret_arn }}"
     - id: inspect-lambda
       title: Check Lambda IAM
-      body: Lambda tab shows the function with attached policy for the secret.
+      body: |
+        Lambda tab shows the function with attached policy for the secret.
+        Run a safe test invoke to confirm the function is healthy.
       actions:
         - type: open-tab
           tab: aws-lambda
           focus: "{{ outputs.lambda_function_name }}"
+      verify:
+        - type: lambda.invoke
+          function: "{{ outputs.lambda_function_name }}"
+          payload: '{"source":"lab"}'

@@ -76,6 +76,10 @@ func (stubDynamoDBInventory) DescribeTable(context.Context, models.ProfileSummar
 	return models.AwsDynamoDBTable{}, nil
 }
 
+func (stubDynamoDBInventory) GetItem(context.Context, models.ProfileSummary, string, string, string) (map[string]any, bool, error) {
+	return nil, false, nil
+}
+
 func (stubDynamoDBInventory) PutItem(context.Context, models.ProfileSummary, string, string, string) (models.AwsDynamoDBWriteResult, error) {
 	return models.AwsDynamoDBWriteResult{}, nil
 }
@@ -336,6 +340,10 @@ func (s *stubS3Inventory) ListObjects(_ context.Context, _ models.ProfileSummary
 
 func (s stubS3Inventory) HeadObject(_ context.Context, _ models.ProfileSummary, bucketName string, objectKey string) ([]models.DetailField, error) {
 	return append([]models.DetailField(nil), s.metadata[bucketName+"|"+objectKey]...), nil
+}
+
+func (stubS3Inventory) GetObject(_ context.Context, _ models.ProfileSummary, _ string, _ string) (string, error) {
+	return "", nil
 }
 
 func (s *stubS3Inventory) UploadFile(_ context.Context, _ models.ProfileSummary, bucketName string, objectKey string, _ string) (models.AwsS3UploadResult, error) {
@@ -703,6 +711,10 @@ func (stubAzureInventory) GetPostgresConnection(context.Context, models.ProfileS
 
 func (stubAzureInventory) ListStorageQueues(context.Context, models.ProfileSummary, string) ([]models.AzureStorageQueue, error) {
 	return []models.AzureStorageQueue{{Name: "jobs"}}, nil
+}
+
+func (stubAzureInventory) GetQueueApproximateMessageCount(context.Context, models.ProfileSummary, string, string) (int64, error) {
+	return 0, nil
 }
 
 func (stubAzureInventory) PeekQueueMessages(context.Context, models.ProfileSummary, string, string) ([]models.AzureQueueMessage, error) {

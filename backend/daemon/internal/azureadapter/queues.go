@@ -73,6 +73,33 @@ func (i *Inventory) ListStorageQueues(
 	return queues, nil
 }
 
+// GetQueueApproximateMessageCount returns the queue approximate message count.
+func (i *Inventory) GetQueueApproximateMessageCount(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	accountName string,
+	queueName string,
+) (int64, error) {
+	accountName = strings.TrimSpace(accountName)
+	queueName = strings.TrimSpace(queueName)
+	if accountName == "" || queueName == "" {
+		return 0, fmt.Errorf("a storage account and queue are required")
+	}
+	client, err := i.queueServiceClient(ctx, profile, accountName)
+	if err != nil {
+		return 0, err
+	}
+	queueClient := client.NewQueueClient(queueName)
+	props, err := queueClient.GetProperties(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("get azure queue properties: %w", err)
+	}
+	if props.ApproximateMessagesCount == nil {
+		return 0, nil
+	}
+	return int64(*props.ApproximateMessagesCount), nil
+}
+
 // PeekQueueMessages reads messages without consuming them (no side effects).
 func (i *Inventory) PeekQueueMessages(
 	ctx context.Context,

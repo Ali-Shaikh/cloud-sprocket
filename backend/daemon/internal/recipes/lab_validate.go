@@ -19,6 +19,14 @@ const (
 
 	LabVerifySQSQueueAttribute = "sqs.queue-attribute"
 	LabVerifyHTTPGet           = "http.get"
+	LabVerifyS3Object          = "s3.object"
+	LabVerifyDynamoDBItem      = "dynamodb.item"
+	LabVerifyLambdaInvoke      = "lambda.invoke"
+	LabVerifyLogsContains      = "logs.contains"
+	LabVerifySecretsValue      = "secrets.value"
+	LabVerifySNSSubscription   = "sns.subscription"
+	LabVerifyAzureBlob         = "azure.blob"
+	LabVerifyAzureQueueDepth   = "azure.queue-depth"
 )
 
 var (
@@ -36,6 +44,14 @@ var (
 	knownLabVerifyTypes = map[string]struct{}{
 		LabVerifySQSQueueAttribute: {},
 		LabVerifyHTTPGet:           {},
+		LabVerifyS3Object:          {},
+		LabVerifyDynamoDBItem:      {},
+		LabVerifyLambdaInvoke:      {},
+		LabVerifyLogsContains:      {},
+		LabVerifySecretsValue:      {},
+		LabVerifySNSSubscription:   {},
+		LabVerifyAzureBlob:         {},
+		LabVerifyAzureQueueDepth:   {},
 	}
 )
 
@@ -126,6 +142,119 @@ func ValidateLabSpec(manifest Manifest) error {
 			case LabVerifyHTTPGet:
 				if err := validateLabOutputRefs(manifest.ID, stepID, "url", verify.URL, outputNames); err != nil {
 					return err
+				}
+			case LabVerifyS3Object:
+				if err := validateLabOutputRefs(manifest.ID, stepID, "bucket", verify.Bucket, outputNames); err != nil {
+					return err
+				}
+				if err := validateLabOutputRefs(manifest.ID, stepID, "key", verify.Key, outputNames); err != nil {
+					return err
+				}
+				if strings.TrimSpace(verify.Bucket) == "" {
+					return fmt.Errorf("recipe %q lab step %q s3.object verify is missing bucket", manifest.ID, stepID)
+				}
+				if strings.TrimSpace(verify.Key) == "" {
+					return fmt.Errorf("recipe %q lab step %q s3.object verify is missing key", manifest.ID, stepID)
+				}
+				if err := validateLabOutputRefs(manifest.ID, stepID, "contains", verify.Contains, outputNames); err != nil {
+					return err
+				}
+			case LabVerifyDynamoDBItem:
+				if err := validateLabOutputRefs(manifest.ID, stepID, "table", verify.Table, outputNames); err != nil {
+					return err
+				}
+				if err := validateLabOutputRefs(manifest.ID, stepID, "keyJson", verify.KeyJSON, outputNames); err != nil {
+					return err
+				}
+				if strings.TrimSpace(verify.Table) == "" {
+					return fmt.Errorf("recipe %q lab step %q dynamodb.item verify is missing table", manifest.ID, stepID)
+				}
+				if strings.TrimSpace(verify.KeyJSON) == "" {
+					return fmt.Errorf("recipe %q lab step %q dynamodb.item verify is missing keyJson", manifest.ID, stepID)
+				}
+				if err := validateLabOutputRefs(manifest.ID, stepID, "value", verify.Value, outputNames); err != nil {
+					return err
+				}
+			case LabVerifyLambdaInvoke:
+				if err := validateLabOutputRefs(manifest.ID, stepID, "function", verify.Function, outputNames); err != nil {
+					return err
+				}
+				if strings.TrimSpace(verify.Function) == "" {
+					return fmt.Errorf("recipe %q lab step %q lambda.invoke verify is missing function", manifest.ID, stepID)
+				}
+				if err := validateLabOutputRefs(manifest.ID, stepID, "payload", verify.Payload, outputNames); err != nil {
+					return err
+				}
+				if err := validateLabOutputRefs(manifest.ID, stepID, "contains", verify.Contains, outputNames); err != nil {
+					return err
+				}
+			case LabVerifyLogsContains:
+				if err := validateLabOutputRefs(manifest.ID, stepID, "logGroup", verify.LogGroup, outputNames); err != nil {
+					return err
+				}
+				if strings.TrimSpace(verify.LogGroup) == "" {
+					return fmt.Errorf("recipe %q lab step %q logs.contains verify is missing logGroup", manifest.ID, stepID)
+				}
+				if strings.TrimSpace(verify.Pattern) == "" && strings.TrimSpace(verify.Contains) == "" {
+					return fmt.Errorf("recipe %q lab step %q logs.contains verify needs pattern or contains", manifest.ID, stepID)
+				}
+				if err := validateLabOutputRefs(manifest.ID, stepID, "pattern", verify.Pattern, outputNames); err != nil {
+					return err
+				}
+				if err := validateLabOutputRefs(manifest.ID, stepID, "contains", verify.Contains, outputNames); err != nil {
+					return err
+				}
+			case LabVerifySecretsValue:
+				if err := validateLabOutputRefs(manifest.ID, stepID, "secret", verify.Secret, outputNames); err != nil {
+					return err
+				}
+				if strings.TrimSpace(verify.Secret) == "" {
+					return fmt.Errorf("recipe %q lab step %q secrets.value verify is missing secret", manifest.ID, stepID)
+				}
+				if strings.TrimSpace(verify.Value) == "" && strings.TrimSpace(verify.Contains) == "" {
+					return fmt.Errorf("recipe %q lab step %q secrets.value verify needs value or contains", manifest.ID, stepID)
+				}
+				if err := validateLabOutputRefs(manifest.ID, stepID, "value", verify.Value, outputNames); err != nil {
+					return err
+				}
+				if err := validateLabOutputRefs(manifest.ID, stepID, "contains", verify.Contains, outputNames); err != nil {
+					return err
+				}
+			case LabVerifySNSSubscription:
+				if err := validateLabOutputRefs(manifest.ID, stepID, "topic", verify.Topic, outputNames); err != nil {
+					return err
+				}
+				if strings.TrimSpace(verify.Topic) == "" {
+					return fmt.Errorf("recipe %q lab step %q sns.subscription verify is missing topic", manifest.ID, stepID)
+				}
+				if strings.TrimSpace(verify.Compare) == "" {
+					return fmt.Errorf("recipe %q lab step %q sns.subscription verify is missing compare", manifest.ID, stepID)
+				}
+			case LabVerifyAzureBlob:
+				if err := validateLabOutputRefs(manifest.ID, stepID, "account", verify.Account, outputNames); err != nil {
+					return err
+				}
+				if err := validateLabOutputRefs(manifest.ID, stepID, "container", verify.Container, outputNames); err != nil {
+					return err
+				}
+				if err := validateLabOutputRefs(manifest.ID, stepID, "blob", verify.Blob, outputNames); err != nil {
+					return err
+				}
+				if strings.TrimSpace(verify.Account) == "" || strings.TrimSpace(verify.Container) == "" || strings.TrimSpace(verify.Blob) == "" {
+					return fmt.Errorf("recipe %q lab step %q azure.blob verify needs account, container, and blob", manifest.ID, stepID)
+				}
+			case LabVerifyAzureQueueDepth:
+				if err := validateLabOutputRefs(manifest.ID, stepID, "account", verify.Account, outputNames); err != nil {
+					return err
+				}
+				if err := validateLabOutputRefs(manifest.ID, stepID, "queue", verify.Queue, outputNames); err != nil {
+					return err
+				}
+				if strings.TrimSpace(verify.Account) == "" || strings.TrimSpace(verify.Queue) == "" {
+					return fmt.Errorf("recipe %q lab step %q azure.queue-depth verify needs account and queue", manifest.ID, stepID)
+				}
+				if strings.TrimSpace(verify.Compare) == "" {
+					return fmt.Errorf("recipe %q lab step %q azure.queue-depth verify is missing compare", manifest.ID, stepID)
 				}
 			}
 		}

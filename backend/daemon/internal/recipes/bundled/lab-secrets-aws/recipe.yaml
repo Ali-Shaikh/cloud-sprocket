@@ -61,10 +61,21 @@ lab:
           focus: "{{ outputs.secret_name }}"
       hints:
         - The secret name is prefixed with your app name and environment.
+    - id: verify-secret
+      title: Verify the secret value
+      body: |
+        Confirm the secret still holds the initial value you configured at deploy
+        time (write mode is required for reveal in some environments).
+      verify:
+        - type: secrets.value
+          secret: "{{ outputs.secret_name }}"
+          value: "{{ vars.secret_value }}"
+      hints:
+        - Rotate the initial value after first deploy; re-run this step only before rotation.
     - id: note-arn
       title: Note the secret ARN
       body: |
         Copy the `secret_arn` output for use in application configuration or IAM
         resource policies. Never commit secret values to source control.
       hints:
-        - Rotate the initial value in your app after first deploy.
+        - Never commit secret values to source control.

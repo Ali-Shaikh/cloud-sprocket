@@ -75,6 +75,17 @@ lab:
         - type: open-tab
           tab: aws-sqs
           focus: "{{ outputs.queue_high_url }}"
+    - id: verify-subscriptions
+      title: Verify topic subscriptions
+      body: |
+        Confirm the topic has the expected filtered subscriptions attached.
+      verify:
+        - type: sns.subscription
+          topic: "{{ outputs.topic_arn }}"
+          compare: gte
+          value: "2"
+      hints:
+        - Two queues should be subscribed when the recipe applied cleanly.
     - id: send-high
       title: Send a high priority message
       body: |
