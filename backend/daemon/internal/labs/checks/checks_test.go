@@ -191,6 +191,32 @@ func TestLambdaInvokeRequiresWriteMode(t *testing.T) {
 	}
 }
 
+func TestSecretsValueRejectsEmptyCriteria(t *testing.T) {
+	t.Parallel()
+	revealed := false
+	check := &SecretsValueCheck{Deps: SecretsDeps{
+		GetSecretValue: func(_ context.Context, _ models.ProfileSummary, _, _ string) (string, error) {
+			revealed = true
+			return "anything", nil
+		},
+	}}
+	// Deployment var present but empty → {{ vars.secret_value }} resolves to "".
+	ctx := testCtx()
+	ctx.Deployment.Variables = map[string]any{"secret_value": ""}
+	result, err := check.Run(context.Background(), recipes.LabVerify{
+		Type: recipes.LabVerifySecretsValue, Secret: "{{ outputs.secret_name }}", Value: "{{ vars.secret_value }}",
+	}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Passed {
+		t.Fatal("empty resolved criteria must not pass")
+	}
+	if revealed {
+		t.Fatal("must not reveal secret when criteria resolve empty")
+	}
+}
+
 func TestSecretsValueRequiresWriteMode(t *testing.T) {
 	t.Parallel()
 	revealed := false

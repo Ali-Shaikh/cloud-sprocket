@@ -54,6 +54,17 @@ func (c *SecretsValueCheck) Run(
 		return result, fmt.Errorf("secrets get dependency is not configured")
 	}
 
+	expected = strings.TrimSpace(expected)
+	contains = strings.TrimSpace(contains)
+	// Avoid strings.Contains(any, "") always matching when both criteria resolve empty
+	// (e.g. {{ vars.secret_value }} missing from the deployment).
+	if expected == "" && contains == "" {
+		result.Passed = false
+		result.Message = "Secret verification needs a non-empty value or contains criterion."
+		result.Detail = "Resolved value and contains are both empty after template substitution."
+		return result, nil
+	}
+
 	value, err := c.Deps.GetSecretValue(ctx, checkCtx.Profile, checkCtx.Region, secretID)
 	if err != nil {
 		result.Passed = false
@@ -61,7 +72,7 @@ func (c *SecretsValueCheck) Run(
 		result.Detail = err.Error()
 		return result, nil
 	}
-	if strings.TrimSpace(expected) != "" {
+	if expected != "" {
 		if value == expected {
 			result.Passed = true
 			result.Message = "Secret value matches."
