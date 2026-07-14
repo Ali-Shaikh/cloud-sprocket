@@ -32,6 +32,12 @@ func main() {
 		log.Fatalf("failed to open sqlite store: %v", err)
 	}
 	defer dataStore.Close()
+	diagnostics, err := os.OpenFile(settings.LogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		log.Fatalf("failed to open diagnostics log: %v", err)
+	}
+	defer diagnostics.Close()
+	diagnosticLogger := log.New(diagnostics, "", log.Ldate|log.Ltime|log.LUTC)
 
 	discoveryService := discovery.New(settings, exec.LookPath)
 	s3Inventory := awsadapter.NewS3Inventory(settings)
@@ -55,7 +61,10 @@ func main() {
 	azureInventory := azureadapter.NewInventory(settings)
 	dockerRuntime := dockerruntime.New(settings)
 	service := app.New(settings, dataStore, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, eksInventory, cloudformationInventory, eventbridgeInventory, route53Inventory, elbv2Inventory, kmsInventory, apigatewayInventory, secretsManagerInventory, logsInventory, iamInventory, azureInventory, dockerRuntime)
-	server := rpc.New(service)
+	if err := service.InitialisationError(); err != nil {
+		log.Fatalf("failed to initialise secret storage: %v", err)
+	}
+	server := rpc.NewWithLogger(service, diagnosticLogger)
 
 	if err := server.Serve(context.Background(), os.Stdin, os.Stdout); err != nil {
 		log.Fatalf("rpc server stopped: %v", err)

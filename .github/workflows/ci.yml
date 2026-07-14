@@ -72,7 +72,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.26.4"
+          go-version: "1.26.5"
           cache-dependency-path: backend/daemon/go.sum
 
       - name: Set up Rust
@@ -101,6 +101,10 @@ jobs:
       - name: Run desktop tests
         run: pnpm run test:desktop
 
+      - name: Run desktop coverage gate
+        if: runner.os == 'Linux'
+        run: pnpm run test:desktop:coverage
+
       - name: Run desktop type-check
         run: pnpm run typecheck:desktop
 
@@ -110,6 +114,32 @@ jobs:
       - name: Run backend race tests
         if: runner.os == 'Linux'
         run: pnpm run test:backend:race
+
+      - name: Run backend coverage gate
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          go -C backend/daemon test -coverprofile coverage.out ./...
+          coverage="$(go -C backend/daemon tool cover -func coverage.out | awk '/^total:/ { gsub("%", "", $3); print $3 }')"
+          awk -v actual="$coverage" 'BEGIN {
+            minimum = 43.5
+            if (actual + 0 < minimum) {
+              printf "Go coverage %.1f%% is below the %.1f%% gate.\n", actual, minimum
+              exit 1
+            }
+            printf "Go coverage %.1f%% meets the %.1f%% gate.\n", actual, minimum
+          }'
+
+      - name: Upload coverage reports
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-reports
+          path: |
+            apps/desktop/coverage/
+            backend/daemon/coverage.out
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Build desktop verification binary
         if: github.event_name != 'push' || github.ref_type != 'tag'
@@ -146,7 +176,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
       - name: Download release bundles
         uses: actions/download-artifact@v8
         with:
@@ -159,6 +194,25 @@ jobs:
           mkdir -p release-assets
           find dist -type f \( -name '*.msi' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp -v {} release-assets/ \;
           find release-assets -type f | sort
+
+      - name: Generate release SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: release-assets/cloudsprocket-${{ github.ref_name }}-sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Attest release provenance and SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            release-assets/*.msi
+            release-assets/*.dmg
+            release-assets/*.AppImage
+            release-assets/*.deb
+          sbom-path: release-assets/cloudsprocket-${{ github.ref_name }}-sbom.spdx.json
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3

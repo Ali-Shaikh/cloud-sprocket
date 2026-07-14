@@ -81,6 +81,12 @@ describe("mergeAwsS3ObjectSelection", () => {
 });
 
 describe("formatBackendError", () => {
+  it("reads typed backend error payloads", () => {
+    expect(
+      formatBackendError({ code: "provider_timeout", message: "The provider timed out." }),
+    ).toBe("The provider timed out.");
+  });
+
   it("unwraps JSON RPC error payloads", () => {
     const message = formatBackendError(
       new Error('Backend RPC error: {"message":"Write mode is off"}'),

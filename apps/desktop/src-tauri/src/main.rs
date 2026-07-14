@@ -6,11 +6,13 @@
 use std::{
     collections::HashMap,
     sync::{
-        atomic::{AtomicU8, AtomicU64, Ordering},
+        atomic::{AtomicU64, AtomicU8, Ordering},
         Arc,
     },
+    time::Duration,
 };
 
+use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_shell::{
@@ -19,9 +21,13 @@ use tauri_plugin_shell::{
 };
 use thiserror::Error;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
-use tokio::sync::{oneshot, Mutex};
+use tokio::{
+    sync::{oneshot, Mutex},
+    time::timeout,
+};
 
 type PendingSender = oneshot::Sender<Result<Value, BackendError>>;
+const BACKEND_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(Default)]
 struct BackendState(Arc<SidecarManager>);
@@ -48,16 +54,53 @@ impl Default for SidecarManager {
 
 #[derive(Debug, Error)]
 enum BackendError {
-    #[error("Failed to spawn backend sidecar: {0}")]
+    #[error("failed to spawn backend sidecar: {0}")]
     Spawn(String),
-    #[error("Failed to write to backend sidecar: {0}")]
+    #[error("failed to write to backend sidecar: {0}")]
     Io(String),
-    #[error("Backend sidecar is unavailable: {0}")]
+    #[error("backend sidecar is unavailable: {0}")]
     Unavailable(String),
-    #[error("Backend RPC error: {0}")]
-    Rpc(String),
-    #[error("Failed to serialise backend request: {0}")]
+    #[error("backend RPC error {code}: {message}")]
+    Rpc { code: String, message: String },
+    #[error("backend request timed out")]
+    Timeout,
+    #[error("failed to serialise backend request: {0}")]
     Serialise(String),
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct BackendCommandError {
+    code: String,
+    message: String,
+}
+
+impl From<BackendError> for BackendCommandError {
+    fn from(error: BackendError) -> Self {
+        match error {
+            BackendError::Spawn(_) => Self {
+                code: "backend_spawn_failed".into(),
+                message: "The backend sidecar could not be started.".into(),
+            },
+            BackendError::Io(_) => Self {
+                code: "backend_io_error".into(),
+                message: "The desktop shell could not communicate with the backend sidecar.".into(),
+            },
+            BackendError::Unavailable(_) => Self {
+                code: "backend_unavailable".into(),
+                message: "The backend sidecar is unavailable. Refresh and try again.".into(),
+            },
+            BackendError::Rpc { code, message } => Self { code, message },
+            BackendError::Timeout => Self {
+                code: "backend_timeout".into(),
+                message: "The backend did not respond within two minutes. The operation may still be running; refresh its status before retrying.".into(),
+            },
+            BackendError::Serialise(_) => Self {
+                code: "request_serialisation_failed".into(),
+                message: "The desktop shell could not prepare the backend request.".into(),
+            },
+        }
+    }
 }
 
 impl SidecarManager {
@@ -83,14 +126,8 @@ impl SidecarManager {
             while let Some(event) = events.recv().await {
                 match event {
                     CommandEvent::Stdout(bytes) => {
-                        let chunk = String::from_utf8_lossy(&bytes);
-                        stdout_buffer.push_str(&chunk);
-                        while let Some(index) = stdout_buffer.find('\n') {
-                            let line: String = stdout_buffer.drain(..=index).collect();
-                            let trimmed = line.trim();
-                            if !trimmed.is_empty() {
-                                manager.handle_line(&app, trimmed.to_owned()).await;
-                            }
+                        for line in take_complete_lines(&mut stdout_buffer, &bytes) {
+                            manager.handle_line(&app, line).await;
                         }
                     }
                     CommandEvent::Stderr(bytes) => {
@@ -119,10 +156,10 @@ impl SidecarManager {
     ) -> Result<Value, BackendError> {
         self.ensure_started(app.clone()).await?;
 
-        let request_id = format!("req-{}", self.next_request_id.fetch_add(1, Ordering::SeqCst));
-        let (sender, receiver) = oneshot::channel();
-        self.pending.lock().await.insert(request_id.clone(), sender);
-
+        let request_id = format!(
+            "req-{}",
+            self.next_request_id.fetch_add(1, Ordering::SeqCst)
+        );
         let request = json!({
             "jsonrpc": "2.0",
             "id": request_id,
@@ -133,11 +170,14 @@ impl SidecarManager {
             .map_err(|error| BackendError::Serialise(error.to_string()))?;
         payload.push(b'\n');
 
+        let (sender, receiver) = oneshot::channel();
+        self.pending.lock().await.insert(request_id.clone(), sender);
+
         let write_result = {
             let mut child_guard = self.child.lock().await;
-            let child = child_guard
-                .as_mut()
-                .ok_or_else(|| BackendError::Unavailable("The backend sidecar is not running.".into()))?;
+            let child = child_guard.as_mut().ok_or_else(|| {
+                BackendError::Unavailable("The backend sidecar is not running.".into())
+            })?;
             child
                 .write(&payload)
                 .map_err(|error| BackendError::Io(error.to_string()))
@@ -148,14 +188,18 @@ impl SidecarManager {
             return Err(error);
         }
 
-        receiver
-            .await
-            .map_err(|_| BackendError::Unavailable("The backend response channel closed.".into()))?
+        await_backend_response(
+            &self.pending,
+            &request_id,
+            receiver,
+            BACKEND_REQUEST_TIMEOUT,
+        )
+        .await
     }
 
     async fn handle_line(&self, app: &AppHandle, line: String) {
         let Ok(payload) = serde_json::from_str::<Value>(&line) else {
-            let _ = self.emit_shell_log(app, "warning", format!("Unparseable backend output: {line}"));
+            let _ = self.emit_shell_log(app, "warning", "Unparseable backend output.".into());
             return;
         };
 
@@ -181,13 +225,14 @@ impl SidecarManager {
         }
 
         if let Some(error) = payload.get("error") {
-            let _ = sender.send(Err(BackendError::Rpc(error.to_string())));
+            let _ = sender.send(Err(parse_rpc_error(error)));
             return;
         }
 
-        let _ = sender.send(Err(BackendError::Rpc(
-            "Malformed backend response.".into(),
-        )));
+        let _ = sender.send(Err(BackendError::Rpc {
+            code: "malformed_response".into(),
+            message: "The backend returned a malformed response.".into(),
+        }));
     }
 
     async fn handle_termination(self: &Arc<Self>, app: AppHandle) {
@@ -248,6 +293,50 @@ fn response_id(value: &Value) -> String {
     }
 }
 
+fn parse_rpc_error(error: &Value) -> BackendError {
+    let code = error
+        .get("data")
+        .and_then(|data| data.get("code"))
+        .and_then(Value::as_str)
+        .unwrap_or("backend_error")
+        .to_owned();
+    let message = error
+        .get("message")
+        .and_then(Value::as_str)
+        .unwrap_or("The backend could not complete the request.")
+        .to_owned();
+    BackendError::Rpc { code, message }
+}
+
+async fn await_backend_response(
+    pending: &Mutex<HashMap<String, PendingSender>>,
+    request_id: &str,
+    receiver: oneshot::Receiver<Result<Value, BackendError>>,
+    duration: Duration,
+) -> Result<Value, BackendError> {
+    match timeout(duration, receiver).await {
+        Ok(result) => result
+            .map_err(|_| BackendError::Unavailable("the backend response channel closed".into()))?,
+        Err(_) => {
+            pending.lock().await.remove(request_id);
+            Err(BackendError::Timeout)
+        }
+    }
+}
+
+fn take_complete_lines(buffer: &mut String, bytes: &[u8]) -> Vec<String> {
+    buffer.push_str(&String::from_utf8_lossy(bytes));
+    let mut lines = Vec::new();
+    while let Some(index) = buffer.find('\n') {
+        let line: String = buffer.drain(..=index).collect();
+        let trimmed = line.trim();
+        if !trimmed.is_empty() {
+            lines.push(trimmed.to_owned());
+        }
+    }
+    lines
+}
+
 fn timestamp_now() -> String {
     OffsetDateTime::now_utc()
         .format(&Rfc3339)
@@ -260,12 +349,75 @@ async fn backend_request(
     state: State<'_, BackendState>,
     method: String,
     params: Value,
-) -> Result<Value, String> {
+) -> Result<Value, BackendCommandError> {
     state
         .0
         .request(app, method, params)
         .await
-        .map_err(|error| error.to_string())
+        .map_err(BackendCommandError::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn response_ids_accept_strings_and_numbers() {
+        assert_eq!(response_id(&json!("req-7")), "req-7");
+        assert_eq!(response_id(&json!(42)), "42");
+    }
+
+    #[test]
+    fn stdout_line_buffer_preserves_partial_chunks() {
+        let mut buffer = String::new();
+        assert!(take_complete_lines(&mut buffer, b"{\"id\":1").is_empty());
+        assert_eq!(
+            take_complete_lines(&mut buffer, b"}\n\n{\"id\":2}\npartial"),
+            vec!["{\"id\":1}", "{\"id\":2}"]
+        );
+        assert_eq!(buffer, "partial");
+    }
+
+    #[test]
+    fn rpc_error_uses_stable_code_and_safe_message() {
+        let error = parse_rpc_error(&json!({
+            "code": -32601,
+            "message": "This backend operation is not available.",
+            "data": { "code": "method_not_found" }
+        }));
+        let command_error = BackendCommandError::from(error);
+        assert_eq!(
+            command_error,
+            BackendCommandError {
+                code: "method_not_found".into(),
+                message: "This backend operation is not available.".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn timeout_removes_pending_request() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .expect("build test runtime")
+            .block_on(async {
+                let pending = Mutex::new(HashMap::new());
+                let (sender, receiver) = oneshot::channel();
+                pending.lock().await.insert("req-timeout".into(), sender);
+
+                let result = await_backend_response(
+                    &pending,
+                    "req-timeout",
+                    receiver,
+                    Duration::from_millis(1),
+                )
+                .await;
+
+                assert!(matches!(result, Err(BackendError::Timeout)));
+                assert!(pending.lock().await.is_empty());
+            });
+    }
 }
 
 fn main() {

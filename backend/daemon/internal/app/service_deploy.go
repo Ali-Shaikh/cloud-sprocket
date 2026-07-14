@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -223,7 +224,7 @@ func (s *Service) startDeploymentPlan(ctx context.Context, request deploymentPla
 		}
 	}
 	deploy.NormaliseDeploymentTarget(deployment)
-	if err := s.store.SaveDeployment(ctx, deployment.ID, s.sealForStore(deployment), now); err != nil {
+	if err := s.saveDeployment(ctx, deployment, now); err != nil {
 		return deploymentJob{}, err
 	}
 
@@ -458,13 +459,23 @@ func (s *Service) deploymentLogger(deploymentID, jobID string, notifier Notifier
 func (s *Service) setDeploymentStatus(ctx context.Context, deployment *deploy.Deployment, status deploy.Status, notifier Notifier) {
 	deployment.Status = status
 	deployment.UpdatedAt = s.timestamp()
-	_ = s.store.SaveDeployment(ctx, deployment.ID, s.sealForStore(deployment), deployment.UpdatedAt)
+	if err := s.saveDeployment(ctx, deployment, deployment.UpdatedAt); err != nil {
+		log.Printf("deployments: refusing unsafe persistence for %s: %v", deployment.ID, err)
+	}
 	if notifier != nil {
 		// Notify a snapshot so listeners cannot race with later status updates on
 		// the shared deployment pointer (see TestDeploymentCancelStopsRunningPlan).
 		snapshot := *deployment
 		_ = notifier.Notify("deployment.changed", &snapshot)
 	}
+}
+
+func (s *Service) saveDeployment(ctx context.Context, deployment *deploy.Deployment, timestamp string) error {
+	sealed, err := s.sealForStore(deployment)
+	if err != nil {
+		return err
+	}
+	return s.store.SaveDeployment(ctx, deployment.ID, sealed, timestamp)
 }
 
 func (s *Service) failDeployment(ctx context.Context, deployment *deploy.Deployment, job models.JobStatus, notifier Notifier, cause error) {
@@ -569,7 +580,9 @@ func (s *Service) handleDeploymentsCheckDrift(ctx context.Context, params json.R
 	}
 	deployment.Drift = &drift
 	deployment.UpdatedAt = s.timestamp()
-	_ = s.store.SaveDeployment(ctx, deployment.ID, s.sealForStore(deployment), deployment.UpdatedAt)
+	if err := s.saveDeployment(ctx, deployment, deployment.UpdatedAt); err != nil {
+		return nil, err
+	}
 	if notifier != nil {
 		_ = notifier.Notify("deployment.changed", deployment)
 	}
@@ -698,22 +711,22 @@ func (s *Service) handleRecipesImport(params json.RawMessage) (any, error) {
 	}
 
 	preview := map[string]any{
-		"ok":           true,
-		"id":           m.ID,
-		"version":      m.Version,
-		"name":         m.Name,
-		"kind":         m.Kind,
-		"providers":    m.Providers,
-		"summary":      m.Summary,
+		"ok":            true,
+		"id":            m.ID,
+		"version":       m.Version,
+		"name":          m.Name,
+		"kind":          m.Kind,
+		"providers":     m.Providers,
+		"summary":       m.Summary,
 		"buildCommands": report.BuildCommands,
-		"labStepCount": report.LabStepCount,
-		"contentHash":  contentHash,
-		"sourceType":   sourceType,
-		"sourcePath":   srcPath,
-		"importedPath": dest,
-		"confirmed":    false,
-		"validation":   report,
-		"trustNote":    "Review providers, build commands, and lab actions. These run on this machine. Call again with confirm=true to copy into imported recipes.",
+		"labStepCount":  report.LabStepCount,
+		"contentHash":   contentHash,
+		"sourceType":    sourceType,
+		"sourcePath":    srcPath,
+		"importedPath":  dest,
+		"confirmed":     false,
+		"validation":    report,
+		"trustNote":     "Review providers, build commands, and lab actions. These run on this machine. Call again with confirm=true to copy into imported recipes.",
 	}
 	if !req.Confirm {
 		return preview, nil
@@ -904,8 +917,6 @@ func copyRecipeTree(src, dest string) error {
 		return os.WriteFile(tgt, b, 0o644)
 	})
 }
-
-
 
 // handleRecipesScaffold (C3) generates a minimal starter in the given dest dir (authoring scaffold).
 func (s *Service) handleRecipesScaffold(params json.RawMessage) (any, error) {

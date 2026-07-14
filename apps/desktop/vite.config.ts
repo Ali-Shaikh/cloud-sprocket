@@ -1,7 +1,7 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -44,5 +44,25 @@ export default defineConfig({
   preview: {
     host: "0.0.0.0",
     port: 4173,
+  },
+  test: {
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: [
+        "src/**/*.test.{ts,tsx}",
+        "src/**/*.d.ts",
+        "src/main.tsx",
+        "src/types/**",
+      ],
+      reporter: ["text-summary", "json-summary", "lcov"],
+      reportOnFailure: true,
+      thresholds: {
+        statements: 51,
+        branches: 42,
+        functions: 45,
+        lines: 52,
+      },
+    },
   },
 });

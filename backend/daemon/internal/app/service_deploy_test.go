@@ -4,12 +4,12 @@
 package app
 
 import (
-	"context"
 	"archive/zip"
+	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -24,16 +24,16 @@ import (
 )
 
 type fakeDeployer struct {
-	available       bool
-	plan            deploy.PlanSummary
-	outputs         []deploy.Output
-	postApplyErr    string
+	available         bool
+	plan              deploy.PlanSummary
+	outputs           []deploy.Output
+	postApplyErr      string
 	retryPostApplyErr error
-	planErr         error
-	preflightErr    error
+	planErr           error
+	preflightErr      error
 	// planBlocks makes Plan wait for context cancellation, modelling a
 	// long-running tofu invocation so cancellation can be exercised.
-	planBlocks bool
+	planBlocks  bool
 	planStarted chan struct{}
 }
 
@@ -173,9 +173,14 @@ func newDeployTestService(t *testing.T, deployer Deployer) *Service {
 		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = dataStore.Close() })
+	cipher, err := loadCipher(settings.SecretKeyPath)
+	if err != nil {
+		t.Fatalf("loadCipher: %v", err)
+	}
 	return &Service{
 		settings: settings,
 		store:    dataStore,
+		cipher:   cipher,
 		recipes:  recipes.Bundled().WithImportedDir(settings.ImportedRecipesDir),
 		deployer: deployer,
 		now:      func() time.Time { return time.Now().UTC() },
@@ -414,7 +419,7 @@ func TestDeploymentUpdateFlow(t *testing.T) {
 	planned.Outputs = []deploy.Output{{Name: "bucket", Value: "b"}}
 	planned.RecipeVersion = "0.1.0"
 	now := s.timestamp()
-	if err := s.store.SaveDeployment(context.Background(), planned.ID, s.sealForStore(planned), now); err != nil {
+	if err := s.saveDeployment(context.Background(), planned, now); err != nil {
 		t.Fatalf("seed applied: %v", err)
 	}
 
@@ -439,7 +444,6 @@ func TestDeploymentUpdateFlow(t *testing.T) {
 		t.Fatal("expected recipeVersion to be recorded on update plan")
 	}
 }
-
 
 func TestSafeRecipePathSegment(t *testing.T) {
 	ok, err := safeRecipePathSegment("my-recipe", "id")
@@ -607,16 +611,16 @@ func TestCheckDriftRejectsPendingStatus(t *testing.T) {
 	// Seed a pending deployment directly in the store.
 	now := s.timestamp()
 	dep := &deploy.Deployment{
-		ID:        "dep-pending-drift",
-		RecipeID:  "serverless-fullstack-aws",
-		Name:      "pending",
+		ID:         "dep-pending-drift",
+		RecipeID:   "serverless-fullstack-aws",
+		Name:       "pending",
 		ProviderID: "aws",
-		Local:     true,
-		Status:    deploy.StatusPending,
-		CreatedAt: now,
-		UpdatedAt: now,
+		Local:      true,
+		Status:     deploy.StatusPending,
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	}
-	if err := s.store.SaveDeployment(context.Background(), dep.ID, s.sealForStore(dep), now); err != nil {
+	if err := s.saveDeployment(context.Background(), dep, now); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	_, err := s.Handle(context.Background(), "deployments.checkDrift", json.RawMessage(`{"deploymentId":"dep-pending-drift"}`), nil)
@@ -685,7 +689,6 @@ func mustJSON(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
 }
-
 
 func zipDir(src, dest string) error {
 	f, err := os.Create(dest)

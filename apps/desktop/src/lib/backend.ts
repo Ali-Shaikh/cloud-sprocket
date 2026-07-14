@@ -4,6 +4,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { normaliseBackendRequestError } from "./backend-error";
 import type {
   AppResetResult,
   ActivityLogEntry,
@@ -4439,13 +4440,14 @@ export async function backendRequest<T>(
     });
     return result;
   } catch (error) {
+    const safeError = normaliseBackendRequestError(error);
     addDebugLog({
       timestamp: new Date().toISOString(),
       type: "error",
       method,
-      payload: { requestId, error: error instanceof Error ? error.message : String(error) },
+      payload: { requestId, code: safeError.code, error: safeError.message },
     });
-    throw error;
+    throw safeError;
   }
 }
 

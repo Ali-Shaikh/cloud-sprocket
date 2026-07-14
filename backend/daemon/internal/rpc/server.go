@@ -7,16 +7,32 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"log"
+	"runtime/debug"
 	"sync"
 
 	"cloudsprocket/backend/daemon/internal/app"
 )
 
+const (
+	maxRequestBytes      = 1024 * 1024
+	maxConcurrentRequest = 32
+)
+
+type Handler interface {
+	Handle(context.Context, string, json.RawMessage, app.Notifier) (any, error)
+}
+
 type Server struct {
-	service *app.Service
+	handler Handler
+	logger  *log.Logger
+	workers chan struct{}
 	writer  *bufio.Writer
 	mu      sync.Mutex
+	wg      sync.WaitGroup
 }
 
 type request struct {
@@ -28,67 +44,116 @@ type request struct {
 
 type response struct {
 	JSONRPC string          `json:"jsonrpc"`
-	ID      json.RawMessage `json:"id,omitempty"`
+	ID      json.RawMessage `json:"id"`
 	Result  any             `json:"result,omitempty"`
 	Error   *responseError  `json:"error,omitempty"`
 }
 
 type responseError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code    int               `json:"code"`
+	Message string            `json:"message"`
+	Data    responseErrorData `json:"data"`
 }
 
-func New(service *app.Service) *Server {
-	return &Server{service: service}
+type responseErrorData struct {
+	Code string `json:"code"`
+}
+
+func New(handler Handler) *Server {
+	return NewWithLogger(handler, log.New(io.Discard, "", 0))
+}
+
+func NewWithLogger(handler Handler, logger *log.Logger) *Server {
+	if logger == nil {
+		logger = log.New(io.Discard, "", 0)
+	}
+	return &Server{
+		handler: handler,
+		logger:  logger,
+		workers: make(chan struct{}, maxConcurrentRequest),
+	}
 }
 
 func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
+	s.mu.Lock()
+	if s.writer != nil {
+		s.mu.Unlock()
+		return errors.New("rpc server is already serving")
+	}
 	s.writer = bufio.NewWriter(out)
+	s.mu.Unlock()
 
-	scanner := bufio.NewScanner(in)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
+	reader := bufio.NewReaderSize(in, 64*1024)
+	var serveErr error
+	for {
+		line, tooLarge, err := readRequestLine(reader)
+		if tooLarge {
+			s.logger.Printf("rpc request rejected: payload exceeds %d bytes", maxRequestBytes)
+			_ = s.write(errorResponse(nullID(), -32600, "request_too_large", "The backend request is too large."))
 		}
-
-		// Copy the line because scanner.Bytes() is reused on next Scan()
-		lineCopy := make([]byte, len(line))
-		copy(lineCopy, line)
-
-		go func(data []byte) {
-			var req request
-			if err := json.Unmarshal(data, &req); err != nil {
-				_ = s.write(response{
-					JSONRPC: "2.0",
-					Error: &responseError{
-						Code:    -32700,
-						Message: err.Error(),
-					},
-				})
-				return
+		if !tooLarge && len(line) > 0 {
+			if err := s.dispatch(ctx, line); err != nil {
+				serveErr = err
+				break
 			}
-
-			result, err := s.service.Handle(ctx, req.Method, req.Params, s)
-			reply := response{
-				JSONRPC: "2.0",
-				ID:      req.ID,
-			}
-			if err != nil {
-				reply.Error = &responseError{
-					Code:    -32000,
-					Message: err.Error(),
-				}
-			} else {
-				reply.Result = result
-			}
-
-			_ = s.write(reply)
-		}(lineCopy)
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			serveErr = err
+			break
+		}
 	}
 
-	return scanner.Err()
+	s.wg.Wait()
+	s.mu.Lock()
+	s.writer = nil
+	s.mu.Unlock()
+	return serveErr
+}
+
+func (s *Server) dispatch(ctx context.Context, data []byte) error {
+	select {
+	case s.workers <- struct{}{}:
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			defer func() { <-s.workers }()
+			s.handleRequest(ctx, data)
+		}()
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (s *Server) handleRequest(ctx context.Context, data []byte) {
+	req := request{ID: nullID()}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			s.logger.Printf("rpc handler panic: %v\n%s", recovered, debug.Stack())
+			_ = s.write(errorResponse(req.ID, -32603, "internal_error", "The backend could not complete the request."))
+		}
+	}()
+
+	if err := json.Unmarshal(data, &req); err != nil {
+		s.logger.Printf("rpc parse error: %v", err)
+		_ = s.write(errorResponse(nullID(), -32700, "parse_error", "The backend request is not valid JSON."))
+		return
+	}
+	if req.JSONRPC != "2.0" || req.Method == "" {
+		_ = s.write(errorResponse(req.ID, -32600, "invalid_request", "The backend request is invalid."))
+		return
+	}
+
+	result, err := s.handler.Handle(ctx, req.Method, req.Params, s)
+	if err != nil {
+		s.logger.Printf("rpc method %s failed: %v", req.Method, err)
+		_ = s.write(response{JSONRPC: "2.0", ID: req.ID, Error: classifyError(err)})
+		return
+	}
+	_ = s.write(response{JSONRPC: "2.0", ID: req.ID, Result: result})
 }
 
 func (s *Server) Notify(method string, payload any) error {
@@ -102,6 +167,9 @@ func (s *Server) Notify(method string, payload any) error {
 func (s *Server) write(payload any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.writer == nil {
+		return errors.New("rpc server is not serving")
+	}
 
 	encoded, err := json.Marshal(payload)
 	if err != nil {
@@ -114,4 +182,77 @@ func (s *Server) write(payload any) error {
 		return err
 	}
 	return s.writer.Flush()
+}
+
+func classifyError(err error) *responseError {
+	var public app.PublicError
+	if errors.As(err, &public) {
+		return newResponseError(public.JSONRPCCode(), public.StableCode(), public.SafeMessage())
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return newResponseError(-32001, "provider_timeout", "The backend operation timed out.")
+	}
+	if errors.Is(err, context.Canceled) {
+		return newResponseError(-32002, "request_cancelled", "The backend operation was cancelled.")
+	}
+	var syntaxError *json.SyntaxError
+	var typeError *json.UnmarshalTypeError
+	if errors.As(err, &syntaxError) || errors.As(err, &typeError) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return newResponseError(-32602, "invalid_params", "The backend request parameters are invalid.")
+	}
+	return newResponseError(-32603, "internal_error", "The backend could not complete the request. Check the diagnostics log for details.")
+}
+
+func errorResponse(id json.RawMessage, code int, stableCode, message string) response {
+	return response{JSONRPC: "2.0", ID: id, Error: newResponseError(code, stableCode, message)}
+}
+
+func newResponseError(code int, stableCode, message string) *responseError {
+	return &responseError{Code: code, Message: message, Data: responseErrorData{Code: stableCode}}
+}
+
+func nullID() json.RawMessage {
+	return json.RawMessage("null")
+}
+
+func readRequestLine(reader *bufio.Reader) ([]byte, bool, error) {
+	line := make([]byte, 0, 4096)
+	tooLarge := false
+	for {
+		fragment, err := reader.ReadSlice('\n')
+		if !tooLarge {
+			if len(line)+len(fragment) > maxRequestBytes+2 {
+				line = nil
+				tooLarge = true
+			} else {
+				line = append(line, fragment...)
+			}
+		}
+
+		switch {
+		case err == nil:
+			line = trimLineEnding(line)
+			return line, tooLarge || len(line) > maxRequestBytes, nil
+		case errors.Is(err, bufio.ErrBufferFull):
+			continue
+		case errors.Is(err, io.EOF):
+			line = trimLineEnding(line)
+			if len(line) == 0 && !tooLarge {
+				return nil, false, io.EOF
+			}
+			return line, tooLarge || len(line) > maxRequestBytes, io.EOF
+		default:
+			return nil, tooLarge, fmt.Errorf("read rpc request: %w", err)
+		}
+	}
+}
+
+func trimLineEnding(line []byte) []byte {
+	if len(line) > 0 && line[len(line)-1] == '\n' {
+		line = line[:len(line)-1]
+	}
+	if len(line) > 0 && line[len(line)-1] == '\r' {
+		line = line[:len(line)-1]
+	}
+	return line
 }
