@@ -15,7 +15,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.22.32
 	github.com/aws/aws-sdk-go-v2/service/apigateway v1.41.0
 	github.com/aws/aws-sdk-go-v2/service/apigatewayv2 v1.36.0
-	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.74.0
+	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.74.1
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.79.0
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.60.0
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.316.0

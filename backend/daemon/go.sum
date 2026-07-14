@@ -54,8 +54,8 @@ github.com/aws/aws-sdk-go-v2/service/apigateway v1.41.0 h1:n430h8pSuH+qBzZRU0rhu
 github.com/aws/aws-sdk-go-v2/service/apigateway v1.41.0/go.mod h1:z2J+G0uyTDXLfbR5i1wct6wpULIqh6YFoeeul9kzcqA=
 github.com/aws/aws-sdk-go-v2/service/apigatewayv2 v1.36.0 h1:P6m/F7TZBIVJNQt+fI1Prt3y4tMRaBSd8CWdUS5a7qA=
 github.com/aws/aws-sdk-go-v2/service/apigatewayv2 v1.36.0/go.mod h1:3GU3RMoNjUKXg6GDelv+7bIiJGqk6JXUTmMlvc6+SrU=
-github.com/aws/aws-sdk-go-v2/service/cloudformation v1.74.0 h1:mWbzz2E7by3nkSxvYngjI2TH98LYLcPthkXbJNtSb3A=
-github.com/aws/aws-sdk-go-v2/service/cloudformation v1.74.0/go.mod h1:CbJ+8eU/zw2k8QilzLNmJvqn5ExnhtcdV1yPr4HmMYA=
+github.com/aws/aws-sdk-go-v2/service/cloudformation v1.74.1 h1:3qjmF5nGL+RluWO6vkf8ZkRMg2bYTgLE1eUFn2VGwc4=
+github.com/aws/aws-sdk-go-v2/service/cloudformation v1.74.1/go.mod h1:CbJ+8eU/zw2k8QilzLNmJvqn5ExnhtcdV1yPr4HmMYA=
 github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.79.0 h1:5W/KOwsnZrdi7RD97G5Vto3XEuM70FAavWScfsli7gA=
 github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.79.0/go.mod h1:h1Iw2nkdpmAUJaa89RvX3cg/HGLgdSkCWpMNgKvBSHA=
 github.com/aws/aws-sdk-go-v2/service/dynamodb v1.60.0 h1:wnyC01GGkqvRvVI73+xRTr8qDyIZMzqjHlsFqWUUVSo=
