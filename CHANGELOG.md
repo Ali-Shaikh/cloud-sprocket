@@ -9,6 +9,36 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-07-14
+
+### Added
+
+- Tailored production and localhost-only development Content Security Policies
+  for the desktop shell (#171)
+- CodeQL, production dependency audits, Dependabot, coverage gates, release
+  SBOM generation, and GitHub build provenance attestations (#171)
+- Release-signing prerequisites and fail-closed distribution requirements for
+  Windows and macOS (#171)
+
+### Fixed
+
+- Secret-key corruption or read failures now stop startup instead of replacing
+  the key or allowing sensitive deployment data to fall back to plaintext
+  persistence (#171)
+- Deployment status changes now roll back and stop notifications when sealed
+  persistence fails, keeping the UI and stored state consistent (#171)
+- JSON-RPC requests now have size and concurrency limits, panic recovery, safe
+  stable errors, and file-backed diagnostics (#171)
+- Desktop bridge requests now time out after 120 seconds and clean up pending
+  request state (#171)
+
+### Changed
+
+- Go is pinned to 1.26.5 and current vulnerable Rust transitive dependencies are
+  updated (#171)
+- Product story for this release: safer local operation and verifiable release
+  artefacts
+
 ## [0.9.5] - 2026-07-14
 
 ### Added
