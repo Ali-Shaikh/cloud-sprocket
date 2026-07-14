@@ -18,7 +18,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.74.0
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.79.0
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.60.0
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.316.0
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.316.1
 	github.com/aws/aws-sdk-go-v2/service/ecs v1.88.0
 	github.com/aws/aws-sdk-go-v2/service/eks v1.89.0
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.56.0
