@@ -110,3 +110,40 @@ func TestLoadOrCreateKeyPersistsAndReloads(t *testing.T) {
 		t.Fatal("expected a stable key across loads")
 	}
 }
+
+func TestLoadOrCreateKeyRejectsCorruptExistingKeyWithoutReplacingIt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "secret.key")
+	original := []byte("not-valid-base64")
+	if err := os.WriteFile(path, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := LoadOrCreateKey(path); err == nil {
+		t.Fatal("expected corrupt key to be rejected")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, original) {
+		t.Fatalf("corrupt key was replaced: got %q", got)
+	}
+}
+
+func TestLoadOrCreateKeyRejectsExistingUnreadablePath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "secret.key")
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := LoadOrCreateKey(path); err == nil {
+		t.Fatal("expected an existing directory to be rejected as a key")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.IsDir() {
+		t.Fatal("existing key path was replaced")
+	}
+}

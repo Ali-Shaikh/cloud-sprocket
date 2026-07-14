@@ -672,7 +672,15 @@ export function mergeAzureFrontDoorSelection(
 }
 
 export function formatBackendError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
+  const message =
+    error instanceof Error
+      ? error.message
+      : error &&
+          typeof error === "object" &&
+          "message" in error &&
+          typeof error.message === "string"
+        ? error.message
+        : String(error);
   const marker = "Backend RPC error:";
   if (!message.includes(marker)) {
     return message;

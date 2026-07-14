@@ -52,6 +52,7 @@ type Service struct {
 	recipes               *recipes.Loader
 	deployer              Deployer
 	cipher                *secrets.Cipher
+	initialisationErr     error
 	azureInventoryTimeout time.Duration
 	dockerSnapshotMu      sync.Mutex
 	dockerSnapshotValue   *models.DockerRuntimeSnapshot
@@ -122,6 +123,7 @@ func NewWithRuntimes(
 ) *Service {
 	recipeLoader := recipes.Bundled().WithImportedDir(settings.ImportedRecipesDir)
 	deployEngine := deploy.NewEngine(tofu.NewRunner(tofu.Resolve(settings)), settings, recipeLoader)
+	cipher, cipherErr := loadCipher(settings.SecretKeyPath)
 	service := &Service{
 		settings:              settings,
 		store:                 store,
@@ -150,7 +152,8 @@ func NewWithRuntimes(
 		azureRuntime:          azureRuntime,
 		recipes:               recipeLoader,
 		deployer:              deployEngine,
-		cipher:                loadCipher(settings.SecretKeyPath),
+		cipher:                cipher,
+		initialisationErr:     cipherErr,
 		azureInventoryTimeout: defaultAzureInventoryTimeout,
 		preferences:           defaultServicePreferences(),
 		now:                   func() time.Time { return time.Now().UTC() },
@@ -164,12 +167,22 @@ func NewWithRuntimes(
 	return service
 }
 
+// InitialisationError reports a startup condition that makes it unsafe to
+// serve requests. The daemon checks this before starting RPC, and Handle keeps
+// the same fail-closed guarantee for alternate embedders.
+func (s *Service) InitialisationError() error {
+	return s.initialisationErr
+}
+
 func (s *Service) Handle(
 	ctx context.Context,
 	method string,
 	params json.RawMessage,
 	notifier Notifier,
 ) (any, error) {
+	if s.initialisationErr != nil {
+		return nil, fmt.Errorf("service initialisation failed: %w", s.initialisationErr)
+	}
 	switch method {
 	case "providers.list":
 		return s.handleProvidersList()
@@ -514,6 +527,6 @@ func (s *Service) Handle(
 	case "labs.reset":
 		return s.handleLabsReset(ctx, params, notifier)
 	default:
-		return nil, fmt.Errorf("unknown backend method: %s", method)
+		return nil, methodNotFoundError(method)
 	}
 }

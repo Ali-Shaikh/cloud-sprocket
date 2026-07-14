@@ -8,7 +8,7 @@ deploying against AWS and Azure from one workspace. The app pairs a **Tauri v2**
 shell (`React`, `TypeScript`) with a **Go** sidecar daemon that handles discovery,
 inventory, JSON-RPC, and SQLite-backed session state.
 
-**Latest release:** [v0.8.33](https://github.com/Ali-Shaikh/cloud-sprocket/releases/latest)
+**Latest release:** [v0.9.5](https://github.com/Ali-Shaikh/cloud-sprocket/releases/latest)
 
 ## Developer Preview
 
@@ -105,7 +105,7 @@ Legend: **Browse** = inventory and detail views · **Write** = mutating actions 
 |------|---------|
 | Node.js | 24 (Active LTS) |
 | pnpm | 11.9+ |
-| Go | 1.26.3 |
+| Go | 1.26.5 |
 | Rust | latest stable |
 
 Linux builds also need Tauri's system packages. See the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).

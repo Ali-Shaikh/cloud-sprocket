@@ -5,6 +5,8 @@ package app
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -26,14 +28,11 @@ func TestDeploymentSecretsSealedAtRest(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = dataStore.Close() })
 
-	s := &Service{
-		store:  dataStore,
-		cipher: loadCipher(settings.SecretKeyPath),
-		now:    func() time.Time { return time.Now().UTC() },
+	cipher, err := loadCipher(settings.SecretKeyPath)
+	if err != nil {
+		t.Fatalf("loadCipher: %v", err)
 	}
-	if s.cipher == nil {
-		t.Fatal("expected a cipher to be loaded")
-	}
+	s := &Service{store: dataStore, cipher: cipher, now: func() time.Time { return time.Now().UTC() }}
 
 	deployment := &deploy.Deployment{
 		ID:            "dep-secret",
@@ -54,7 +53,9 @@ func TestDeploymentSecretsSealedAtRest(t *testing.T) {
 		UpdatedAt: "t0",
 	}
 
-	s.setDeploymentStatus(context.Background(), deployment, deploy.StatusApplied, nil)
+	if err := s.setDeploymentStatus(context.Background(), deployment, deploy.StatusApplied, nil); err != nil {
+		t.Fatalf("setDeploymentStatus: %v", err)
+	}
 
 	// The in-memory deployment must stay plaintext for the running operation.
 	if deployment.Variables["db_password"] != "s3cret-pw" {
@@ -106,5 +107,58 @@ func TestDeploymentSecretsSealedAtRest(t *testing.T) {
 	}
 	if got.Outputs[2].Value != "demo-bucket" {
 		t.Fatalf("non-sensitive output changed: %v", got.Outputs[2].Value)
+	}
+}
+
+func TestLoadCipherRejectsCorruptExistingKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "secret.key")
+	if err := os.WriteFile(path, []byte("corrupt"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := loadCipher(path); err == nil {
+		t.Fatal("expected corrupt key to stop cipher initialisation")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "corrupt" {
+		t.Fatalf("corrupt key was replaced: %q", got)
+	}
+}
+
+func TestSensitiveDeploymentPersistenceFailsClosedWithoutCipher(t *testing.T) {
+	dir := t.TempDir()
+	dataStore, err := store.Open(filepath.Join(dir, "state.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = dataStore.Close() })
+
+	s := &Service{store: dataStore, now: func() time.Time { return time.Now().UTC() }}
+	deployment := &deploy.Deployment{
+		ID:            "dep-unsealed",
+		SensitiveVars: []string{"password"},
+		Variables:     map[string]any{"password": "must-not-leak"},
+		Status:        deploy.StatusPending,
+		UpdatedAt:     "before",
+	}
+	notifier := &captureNotifier{}
+	if err := s.setDeploymentStatus(context.Background(), deployment, deploy.StatusApplied, notifier); err == nil {
+		t.Fatal("expected persistence to fail when secret storage is unavailable")
+	}
+	if deployment.Status != deploy.StatusPending || deployment.UpdatedAt != "before" {
+		t.Fatalf("failed transition was not rolled back: status=%s updatedAt=%s", deployment.Status, deployment.UpdatedAt)
+	}
+	if got := notifier.count("deployment.changed"); got != 0 {
+		t.Fatalf("unsafe transition emitted %d deployment.changed events", got)
+	}
+	payloads, err := dataStore.ListDeploymentsJSON(context.Background())
+	if err != nil {
+		t.Fatalf("ListDeploymentsJSON: %v", err)
+	}
+	if len(payloads) != 0 {
+		t.Fatalf("unsafe deployment was persisted: %s", payloads[0])
 	}
 }

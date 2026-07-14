@@ -6,6 +6,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 
 import { azureInventoryLoaded } from "@/lib/azure-inventory";
 import { backendRequest } from "@/lib/backend";
+import { hasBackendErrorCode } from "@/lib/backend-error";
 import type { NotificationTone } from "@/lib/notify";
 import { requestWorkspaceSnapshot } from "@/lib/workspace-request";
 import {
@@ -320,8 +321,9 @@ export function useAzureActions({
         } catch (error) {
           const message = formatBackendError(error);
           const missingRefresh =
-            message.includes("unknown backend method") &&
-            message.includes("azure.waf.refresh");
+            hasBackendErrorCode(error, "method_not_found") ||
+            (message.includes("unknown backend method") &&
+              message.includes("azure.waf.refresh"));
           if (!missingRefresh || !selected) {
             throw error;
           }

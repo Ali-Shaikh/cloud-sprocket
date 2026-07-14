@@ -19,6 +19,8 @@ build/
 dist/
 node_modules/
 coverage/
+coverage.out
+.pnpm-store/
 *.tsbuildinfo
 *.db
 *.db-shm

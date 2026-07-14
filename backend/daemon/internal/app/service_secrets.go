@@ -5,7 +5,8 @@ package app
 
 import (
 	"encoding/json"
-	"log"
+	"errors"
+	"fmt"
 	"strings"
 
 	"cloudsprocket/backend/daemon/internal/deploy"
@@ -33,31 +34,32 @@ func sensitiveVariableNames(recipe recipes.Recipe) []string {
 	return names
 }
 
-// loadCipher builds the at-rest cipher from the install key, returning nil (with
-// a logged warning) when no key can be loaded so the daemon still runs.
-func loadCipher(keyPath string) *secrets.Cipher {
-	if keyPath == "" {
-		return nil
+// loadCipher builds the at-rest cipher from the install key. Any failure is
+// returned to the caller so the daemon cannot fall back to plaintext storage.
+func loadCipher(keyPath string) (*secrets.Cipher, error) {
+	if strings.TrimSpace(keyPath) == "" {
+		return nil, errors.New("secret key path is required")
 	}
 	key, err := secrets.LoadOrCreateKey(keyPath)
 	if err != nil {
-		log.Printf("secrets: could not load encryption key, sensitive values will be stored unsealed: %v", err)
-		return nil
+		return nil, err
 	}
 	cipher, err := secrets.NewCipher(key)
 	if err != nil {
-		log.Printf("secrets: could not initialise cipher: %v", err)
-		return nil
+		return nil, err
 	}
-	return cipher
+	return cipher, nil
 }
 
 // sealForStore returns a copy of the deployment with sensitive variable values
 // and sensitive output values sealed, leaving the in-memory deployment (used by
 // the running operation) in plaintext. A nil cipher returns the input unchanged.
-func (s *Service) sealForStore(deployment *deploy.Deployment) *deploy.Deployment {
-	if s.cipher == nil || deployment == nil {
-		return deployment
+func (s *Service) sealForStore(deployment *deploy.Deployment) (*deploy.Deployment, error) {
+	if deployment == nil {
+		return nil, nil
+	}
+	if s.cipher == nil {
+		return nil, errors.New("secret storage is unavailable")
 	}
 	clone := *deployment
 
@@ -67,7 +69,11 @@ func (s *Service) sealForStore(deployment *deploy.Deployment) *deploy.Deployment
 			variables[key] = value
 		}
 		for _, name := range deployment.SensitiveVars {
-			variables[name] = s.sealValue(variables[name])
+			value, err := s.sealValue(variables[name])
+			if err != nil {
+				return nil, fmt.Errorf("seal sensitive variable %q: %w", name, err)
+			}
+			variables[name] = value
 		}
 		clone.Variables = variables
 	}
@@ -77,7 +83,11 @@ func (s *Service) sealForStore(deployment *deploy.Deployment) *deploy.Deployment
 		copy(outputs, deployment.Outputs)
 		for index := range outputs {
 			if outputs[index].Sensitive {
-				outputs[index].Value = s.sealValue(outputs[index].Value)
+				value, err := s.sealValue(outputs[index].Value)
+				if err != nil {
+					return nil, fmt.Errorf("seal sensitive output %q: %w", outputs[index].Name, err)
+				}
+				outputs[index].Value = value
 			}
 		}
 		clone.Outputs = outputs
@@ -96,7 +106,11 @@ func (s *Service) sealForStore(deployment *deploy.Deployment) *deploy.Deployment
 				}
 				for _, name := range deployment.SensitiveVars {
 					if _, ok := vars[name]; ok {
-						vars[name] = s.sealValue(vars[name])
+						value, err := s.sealValue(vars[name])
+						if err != nil {
+							return nil, fmt.Errorf("seal revision %d variable %q: %w", i, name, err)
+						}
+						vars[name] = value
 					}
 				}
 				revisions[i].Variables = vars
@@ -105,7 +119,7 @@ func (s *Service) sealForStore(deployment *deploy.Deployment) *deploy.Deployment
 		clone.Revisions = revisions
 	}
 
-	return &clone
+	return &clone, nil
 }
 
 // openFromStore unseals sensitive variable and output values in place after a
@@ -133,31 +147,34 @@ func (s *Service) openFromStore(deployment *deploy.Deployment) {
 	}
 }
 
-func (s *Service) sealValue(value any) any {
+func (s *Service) sealValue(value any) (any, error) {
 	if value == nil {
-		return value
+		return value, nil
+	}
+	if s.cipher == nil {
+		return nil, errors.New("secret storage is unavailable")
 	}
 	// Strings seal directly. Structured values (number, bool, object, list) are
 	// JSON-encoded behind a marker first, so they are never left in plaintext.
 	if text, ok := value.(string); ok {
 		if text == "" || secrets.IsSealed(text) {
-			return value
+			return value, nil
 		}
 		sealed, err := s.cipher.Seal(text)
 		if err != nil {
-			return value
+			return nil, err
 		}
-		return sealed
+		return sealed, nil
 	}
 	data, err := json.Marshal(value)
 	if err != nil {
-		return value
+		return nil, err
 	}
 	sealed, err := s.cipher.Seal(structuredSecretMarker + string(data))
 	if err != nil {
-		return value
+		return nil, err
 	}
-	return sealed
+	return sealed, nil
 }
 
 func (s *Service) openValue(value any) any {
