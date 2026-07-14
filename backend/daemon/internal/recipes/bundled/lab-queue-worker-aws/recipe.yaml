@@ -107,10 +107,15 @@ lab:
     - id: inspect-lambda
       title: Inspect the worker Lambda
       body: |
-        Open the Lambda tab to view the consumer function wired to the queue.
+        Open the Lambda tab to view the consumer function wired to the queue,
+        then run a safe test invoke to confirm the function is healthy.
       actions:
         - type: open-tab
           tab: aws-lambda
           focus: "{{ outputs.lambda_function_name }}"
+      verify:
+        - type: lambda.invoke
+          function: "{{ outputs.lambda_function_name }}"
+          payload: '{"source":"lab"}'
       hints:
         - The function name matches the deployment output `lambda_function_name`.

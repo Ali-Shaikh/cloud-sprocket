@@ -17,6 +17,8 @@ type S3Inventory interface {
 	// continuationToken empty means the first page under prefix.
 	ListObjects(ctx context.Context, profile models.ProfileSummary, bucketName string, prefix string, continuationToken string) (models.AwsS3ObjectListPage, error)
 	HeadObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string) ([]models.DetailField, error)
+	// GetObject returns the object body as a string (capped for lab checks).
+	GetObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string) (string, error)
 	UploadFile(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, sourcePath string) (models.AwsS3UploadResult, error)
 	PresignGetObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, durationSeconds int) (models.AwsS3PresignResult, error)
 	DeleteObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string) (models.AwsS3DeleteObjectResult, error)
@@ -46,6 +48,8 @@ type LambdaInventory interface {
 type DynamoDBInventory interface {
 	ListTables(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsDynamoDBTable, error)
 	DescribeTable(ctx context.Context, profile models.ProfileSummary, region string, tableName string) (models.AwsDynamoDBTable, error)
+	// GetItem loads one item by key JSON object. found is false when the key misses.
+	GetItem(ctx context.Context, profile models.ProfileSummary, region string, tableName string, keyJSON string) (item map[string]any, found bool, err error)
 	PutItem(ctx context.Context, profile models.ProfileSummary, region string, tableName string, itemJSON string) (models.AwsDynamoDBWriteResult, error)
 	DeleteItem(ctx context.Context, profile models.ProfileSummary, region string, tableName string, keyJSON string) (models.AwsDynamoDBWriteResult, error)
 }
@@ -196,6 +200,8 @@ type AzureInventory interface {
 	GetPostgresConnection(ctx context.Context, profile models.ProfileSummary, resourceGroup string, serverName string) (models.AzurePostgresConnection, error)
 	ListStorageQueues(ctx context.Context, profile models.ProfileSummary, accountName string) ([]models.AzureStorageQueue, error)
 	PeekQueueMessages(ctx context.Context, profile models.ProfileSummary, accountName string, queueName string) ([]models.AzureQueueMessage, error)
+	// GetQueueApproximateMessageCount returns the queue's approximate message count.
+	GetQueueApproximateMessageCount(ctx context.Context, profile models.ProfileSummary, accountName string, queueName string) (int64, error)
 	ListEntraUsers(ctx context.Context, profile models.ProfileSummary) ([]models.AzureEntraUser, error)
 	ListEntraGroups(ctx context.Context, profile models.ProfileSummary) ([]models.AzureEntraGroup, error)
 	ListEntraAppRegistrations(ctx context.Context, profile models.ProfileSummary) ([]models.AzureEntraApp, error)

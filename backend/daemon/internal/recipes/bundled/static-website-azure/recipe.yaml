@@ -55,8 +55,11 @@ lab:
   steps:
     - id: check
       title: Check storage static site
-      body: Open Azure storage tab.
+      body: Open Azure storage tab, then confirm the public website URL responds.
       actions:
         - type: open-tab
           tab: azure-storage
           focus: "{{ outputs.storage_account_name }}"
+      verify:
+        - type: http.get
+          url: "{{ outputs.website_url }}"

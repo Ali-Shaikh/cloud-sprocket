@@ -60,13 +60,29 @@ lab:
           focus: "{{ outputs.log_group_name }}"
       hints:
         - Groups are often named after /aws/lambda/... or custom.
-    - id: emit-guidance
-      title: Emit log events
+    - id: emit-event
+      title: Emit a test log event
       body: |
-        Use a Lambda or other emitter to put events, or the emulator tools.
-        Tail the group.
+        With write mode enabled, inject a test event into the log group, then
+        verify it appears in recent events.
+      actions:
+        - type: invoke-write
+          op: logs.put
+          params:
+            logGroupName: "{{ outputs.log_group_name }}"
+            message: "cloudsprocket-lab-log-event"
       hints:
         - Retention is set at group level; default may be never expire.
+    - id: verify-logs
+      title: Verify log events
+      body: |
+        Confirm the injected message is visible in the log group.
+      verify:
+        - type: logs.contains
+          logGroup: "{{ outputs.log_group_name }}"
+          pattern: cloudsprocket-lab-log-event
+      hints:
+        - Re-run the inject action if the emulator rotated the stream.
     - id: observability
       title: Observability tie in
       body: |

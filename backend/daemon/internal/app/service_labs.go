@@ -24,6 +24,14 @@ func (s *Service) labRunner() *labs.Runner {
 	registry := labs.NewRegistry(
 		&checks.SQSQueueAttributeCheck{Deps: checks.SQSDeps{DescribeQueue: s.sqs.DescribeQueue}},
 		&checks.HTTPGetCheck{Deps: checks.HTTPDeps{Get: s.labsHTTPGet}},
+		&checks.S3ObjectCheck{Deps: checks.S3Deps{HeadObject: s.s3.HeadObject, GetObject: s.s3.GetObject}},
+		&checks.DynamoDBItemCheck{Deps: checks.DynamoDeps{GetItem: s.dynamodb.GetItem}},
+		&checks.LambdaInvokeCheck{Deps: checks.LambdaDeps{Invoke: s.lambda.InvokeFunction}},
+		&checks.LogsContainsCheck{Deps: checks.LogsDeps{DescribeLogGroup: s.logs.DescribeLogGroup}},
+		&checks.SecretsValueCheck{Deps: checks.SecretsDeps{GetSecretValue: s.secretsManager.GetSecretValue}},
+		&checks.SNSSubscriptionCheck{Deps: checks.SNSDeps{DescribeTopic: s.sns.DescribeTopic}},
+		&checks.AzureBlobCheck{Deps: checks.AzureBlobDeps{ListBlobs: s.azure.ListBlobs}},
+		&checks.AzureQueueDepthCheck{Deps: checks.AzureQueueDeps{ApproximateCount: s.azure.GetQueueApproximateMessageCount}},
 	)
 	return labs.NewRunner(store, registry, s.now)
 }
@@ -147,7 +155,22 @@ func (s *Service) handleLabsVerifyStep(ctx context.Context, params json.RawMessa
 		return nil, err
 	}
 	region := s.deploymentAWSRegion(deployment, profile)
-	session, err := s.labRunner().VerifyStep(ctx, labSpec, deployment, request.StepID, profile, region)
+	// Load workspace session for write-mode gates on side-effecting / sensitive verifies.
+	s.mu.Lock()
+	workspace, err := s.currentState(ctx, snapshot)
+	s.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	session, err := s.labRunner().VerifyStep(
+		ctx,
+		labSpec,
+		deployment,
+		request.StepID,
+		profile,
+		region,
+		labs.VerifyOptions{AWSWritesEnabled: effectiveAWSWritesEnabled(workspace, profile)},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -298,27 +321,193 @@ func (s *Service) labsInvokeWrite(
 	op string,
 	params map[string]string,
 ) (any, error) {
-	switch strings.TrimSpace(op) {
-	case "sqs.send":
-		if deployment.ProviderID != "aws" {
-			return nil, errors.New("SQS send is only available for AWS deployments")
-		}
-		if !effectiveAWSWritesEnabled(session, profile) {
-			return nil, errors.New("SQS send requires write mode to be enabled")
-		}
-		queueURL := strings.TrimSpace(params["queueUrl"])
-		messageBody := params["messageBody"]
-		if queueURL == "" {
-			return nil, errors.New("queue URL is required")
-		}
-		if strings.TrimSpace(messageBody) == "" {
-			return nil, errors.New("message body is required")
-		}
-		_ = snapshot
-		actionCtx, cancel := s.withAWSTimeout(ctx)
-		defer cancel()
-		return s.sqs.SendMessage(actionCtx, profile, region, queueURL, messageBody)
-	default:
+	_ = snapshot
+	op = strings.TrimSpace(op)
+	handler, ok := s.labWriteHandlers()[op]
+	if !ok {
 		return nil, fmt.Errorf("lab write operation %q is not supported", op)
 	}
+	return handler(ctx, session, deployment, profile, region, params)
+}
+
+// labWriteHandler executes one gated lab invoke-write op.
+type labWriteHandler func(
+	ctx context.Context,
+	session models.SessionSnapshot,
+	deployment *deploy.Deployment,
+	profile models.ProfileSummary,
+	region string,
+	params map[string]string,
+) (any, error)
+
+// labWriteHandlers is the dispatch table for invoke-write ops (same write-mode
+// gating as the workspace write RPCs). Built once per Service value via pointer
+// methods; map is small and allocation is cheap relative to the RPC.
+func (s *Service) labWriteHandlers() map[string]labWriteHandler {
+	// Keep the set closed: every key must also be documented for recipe authors.
+	return map[string]labWriteHandler{
+		"sqs.send":      s.labWriteSQSSend,
+		"dynamodb.put":  s.labWriteDynamoPut,
+		"sns.publish":   s.labWriteSNSPublish,
+		"lambda.invoke": s.labWriteLambdaInvoke,
+		"logs.put":      s.labWriteLogsPut,
+		"s3.upload":     s.labWriteS3Upload,
+	}
+}
+
+func (s *Service) requireAWSWrite(
+	session models.SessionSnapshot,
+	deployment *deploy.Deployment,
+	profile models.ProfileSummary,
+	opLabel string,
+) error {
+	if deployment.ProviderID != "aws" {
+		return fmt.Errorf("%s is only available for AWS deployments", opLabel)
+	}
+	if !effectiveAWSWritesEnabled(session, profile) {
+		return fmt.Errorf("%s requires write mode to be enabled", opLabel)
+	}
+	return nil
+}
+
+func (s *Service) labWriteSQSSend(
+	ctx context.Context,
+	session models.SessionSnapshot,
+	deployment *deploy.Deployment,
+	profile models.ProfileSummary,
+	region string,
+	params map[string]string,
+) (any, error) {
+	if err := s.requireAWSWrite(session, deployment, profile, "SQS send"); err != nil {
+		return nil, err
+	}
+	queueURL := strings.TrimSpace(params["queueUrl"])
+	messageBody := params["messageBody"]
+	if queueURL == "" {
+		return nil, errors.New("queue URL is required")
+	}
+	if strings.TrimSpace(messageBody) == "" {
+		return nil, errors.New("message body is required")
+	}
+	actionCtx, cancel := s.withAWSTimeout(ctx)
+	defer cancel()
+	return s.sqs.SendMessage(actionCtx, profile, region, queueURL, messageBody)
+}
+
+func (s *Service) labWriteDynamoPut(
+	ctx context.Context,
+	session models.SessionSnapshot,
+	deployment *deploy.Deployment,
+	profile models.ProfileSummary,
+	region string,
+	params map[string]string,
+) (any, error) {
+	if err := s.requireAWSWrite(session, deployment, profile, "DynamoDB put"); err != nil {
+		return nil, err
+	}
+	table := strings.TrimSpace(params["tableName"])
+	itemJSON := params["itemJson"]
+	if table == "" {
+		return nil, errors.New("table name is required")
+	}
+	if strings.TrimSpace(itemJSON) == "" {
+		return nil, errors.New("item JSON is required")
+	}
+	actionCtx, cancel := s.withAWSTimeout(ctx)
+	defer cancel()
+	return s.dynamodb.PutItem(actionCtx, profile, region, table, itemJSON)
+}
+
+func (s *Service) labWriteSNSPublish(
+	ctx context.Context,
+	session models.SessionSnapshot,
+	deployment *deploy.Deployment,
+	profile models.ProfileSummary,
+	region string,
+	params map[string]string,
+) (any, error) {
+	if err := s.requireAWSWrite(session, deployment, profile, "SNS publish"); err != nil {
+		return nil, err
+	}
+	topicArn := strings.TrimSpace(params["topicArn"])
+	message := params["message"]
+	if topicArn == "" {
+		return nil, errors.New("topic ARN is required")
+	}
+	if strings.TrimSpace(message) == "" {
+		return nil, errors.New("message is required")
+	}
+	actionCtx, cancel := s.withAWSTimeout(ctx)
+	defer cancel()
+	return s.sns.Publish(actionCtx, profile, region, topicArn, message)
+}
+
+func (s *Service) labWriteLambdaInvoke(
+	ctx context.Context,
+	session models.SessionSnapshot,
+	deployment *deploy.Deployment,
+	profile models.ProfileSummary,
+	region string,
+	params map[string]string,
+) (any, error) {
+	if err := s.requireAWSWrite(session, deployment, profile, "Lambda invoke"); err != nil {
+		return nil, err
+	}
+	functionName := strings.TrimSpace(params["functionName"])
+	if functionName == "" {
+		return nil, errors.New("function name is required")
+	}
+	payload := []byte("{}")
+	if body := strings.TrimSpace(params["payload"]); body != "" {
+		payload = []byte(body)
+	}
+	actionCtx, cancel := s.withAWSTimeout(ctx)
+	defer cancel()
+	return s.lambda.InvokeFunction(actionCtx, profile, region, functionName, payload)
+}
+
+func (s *Service) labWriteLogsPut(
+	ctx context.Context,
+	session models.SessionSnapshot,
+	deployment *deploy.Deployment,
+	profile models.ProfileSummary,
+	region string,
+	params map[string]string,
+) (any, error) {
+	if err := s.requireAWSWrite(session, deployment, profile, "Logs put"); err != nil {
+		return nil, err
+	}
+	group := strings.TrimSpace(params["logGroupName"])
+	if group == "" {
+		return nil, errors.New("log group name is required")
+	}
+	message := strings.TrimSpace(params["message"])
+	if message == "" {
+		return nil, errors.New("message is required")
+	}
+	actionCtx, cancel := s.withAWSTimeout(ctx)
+	defer cancel()
+	return s.logs.PutLogEvents(actionCtx, profile, region, group, message)
+}
+
+func (s *Service) labWriteS3Upload(
+	ctx context.Context,
+	session models.SessionSnapshot,
+	deployment *deploy.Deployment,
+	profile models.ProfileSummary,
+	_ string,
+	params map[string]string,
+) (any, error) {
+	if err := s.requireAWSWrite(session, deployment, profile, "S3 upload"); err != nil {
+		return nil, err
+	}
+	bucket := strings.TrimSpace(params["bucketName"])
+	key := strings.TrimSpace(params["objectKey"])
+	source := strings.TrimSpace(params["sourcePath"])
+	if bucket == "" || key == "" || source == "" {
+		return nil, errors.New("bucketName, objectKey, and sourcePath are required")
+	}
+	actionCtx, cancel := s.withAWSTimeout(ctx)
+	defer cancel()
+	return s.s3.UploadFile(actionCtx, profile, bucket, key, source)
 }

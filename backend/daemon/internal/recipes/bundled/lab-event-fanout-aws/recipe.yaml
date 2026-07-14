@@ -67,6 +67,11 @@ lab:
         - type: open-tab
           tab: aws-sns
           focus: "{{ outputs.topic_arn }}"
+      verify:
+        - type: sns.subscription
+          topic: "{{ outputs.topic_arn }}"
+          compare: gte
+          value: "1"
       hints:
         - The topic ARN is in the `topic_arn` deployment output.
     - id: explore-queue

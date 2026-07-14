@@ -75,11 +75,16 @@ lab:
     - id: inspect-lambda
       title: Inspect the EventBridge target Lambda
       body: |
-        Open the Lambda tab and find the processor function.
+        Open the Lambda tab and find the processor function, then run a safe
+        test invoke.
       actions:
         - type: open-tab
           tab: aws-lambda
           focus: "{{ outputs.lambda_function_name }}"
+      verify:
+        - type: lambda.invoke
+          function: "{{ outputs.lambda_function_name }}"
+          payload: '{"source":"lab"}'
     - id: inspect-rule
       title: Review the EventBridge rule
       body: |

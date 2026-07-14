@@ -80,11 +80,15 @@ lab:
       title: Inspect the event target Lambda
       body: |
         Open the Lambda tab and select the function. Review its event source
-        configuration (or notification on bucket).
+        configuration (or notification on bucket), then run a safe test invoke.
       actions:
         - type: open-tab
           tab: aws-lambda
           focus: "{{ outputs.lambda_function_name }}"
+      verify:
+        - type: lambda.invoke
+          function: "{{ outputs.lambda_function_name }}"
+          payload: '{"source":"lab"}'
     - id: trigger-upload
       title: Trigger with an object upload
       body: |
@@ -93,12 +97,16 @@ lab:
       hints:
         - Check Lambda recent logs or invocation count after upload.
     - id: verify-invoke
-      title: Verify activity (via guidance)
+      title: Confirm function is healthy
       body: |
-        After upload, inspect the Lambda recent invocations or logs in the
-        Lambda tab. The event payload contains the S3 record.
+        Re-run the invoke check after your upload to confirm the function still
+        returns a successful status (event payloads from S3 appear in logs).
+      verify:
+        - type: lambda.invoke
+          function: "{{ outputs.lambda_function_name }}"
+          payload: '{"source":"lab-after-upload"}'
       hints:
-        - In this direct pattern there is no queue; use function logs for confirmation.
+        - In this direct pattern there is no queue; use function logs for S3 event confirmation.
     - id: compare-patterns
       title: Event patterns compared
       body: |

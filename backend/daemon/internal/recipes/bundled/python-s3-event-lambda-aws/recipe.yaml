@@ -60,8 +60,12 @@ lab:
   steps:
     - id: explore
       title: Explore bucket and function
-      body: Use S3 and Lambda tabs.
+      body: Use S3 and Lambda tabs, then run a safe Lambda test invoke.
       actions:
         - type: open-tab
           tab: aws-s3
           focus: "{{ outputs.bucket_name }}"
+      verify:
+        - type: lambda.invoke
+          function: "{{ outputs.lambda_function_name }}"
+          payload: '{"source":"lab"}'

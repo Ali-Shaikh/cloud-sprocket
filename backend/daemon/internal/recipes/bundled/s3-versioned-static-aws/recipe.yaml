@@ -65,4 +65,7 @@ lab:
           focus: "{{ outputs.bucket_name }}"
     - id: view-site
       title: Visit website
-      body: Use the website_endpoint output.
+      body: Use the website_endpoint output and verify the site responds.
+      verify:
+        - type: http.get
+          url: "{{ outputs.website_endpoint }}"

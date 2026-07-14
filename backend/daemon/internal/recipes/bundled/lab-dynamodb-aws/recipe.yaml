@@ -56,6 +56,31 @@ lab:
           focus: "{{ outputs.table_name }}"
       hints:
         - The table name is prefixed with your app name and environment.
+    - id: put-item
+      title: Put a lab item
+      body: |
+        With write mode enabled, put a sample item with partition key `id=lab-demo`
+        so you can verify a round-trip read next.
+      actions:
+        - type: invoke-write
+          op: dynamodb.put
+          params:
+            tableName: "{{ outputs.table_name }}"
+            itemJson: '{"id":"lab-demo","status":"ready"}'
+      hints:
+        - The table uses a single string hash key named `id`.
+    - id: verify-item
+      title: Verify the item
+      body: |
+        Confirm the item is present and the `status` attribute is `ready`.
+      verify:
+        - type: dynamodb.item
+          table: "{{ outputs.table_name }}"
+          keyJson: '{"id":"lab-demo"}'
+          attribute: status
+          value: ready
+      hints:
+        - Re-run put if the item was deleted between steps.
     - id: note-outputs
       title: Note the table ARN
       body: |

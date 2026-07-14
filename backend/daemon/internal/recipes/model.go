@@ -139,6 +139,7 @@ type LabAction struct {
 }
 
 // LabVerify declares an on-demand verification check for a lab step.
+// Fields are type-specific; unused fields are ignored at runtime.
 type LabVerify struct {
 	Type      string `yaml:"type" json:"type"`
 	Queue     string `yaml:"queue" json:"queue,omitempty"`
@@ -146,6 +147,27 @@ type LabVerify struct {
 	Compare   string `yaml:"compare" json:"compare,omitempty"`
 	Value     string `yaml:"value" json:"value,omitempty"`
 	URL       string `yaml:"url" json:"url,omitempty"`
+	// s3.object
+	Bucket   string `yaml:"bucket" json:"bucket,omitempty"`
+	Key      string `yaml:"key" json:"key,omitempty"`
+	Contains string `yaml:"contains" json:"contains,omitempty"`
+	// dynamodb.item
+	Table   string `yaml:"table" json:"table,omitempty"`
+	KeyJSON string `yaml:"keyJson" json:"keyJson,omitempty"`
+	// lambda.invoke
+	Function string `yaml:"function" json:"function,omitempty"`
+	Payload  string `yaml:"payload" json:"payload,omitempty"`
+	// logs.contains
+	LogGroup string `yaml:"logGroup" json:"logGroup,omitempty"`
+	Pattern  string `yaml:"pattern" json:"pattern,omitempty"`
+	// secrets.value
+	Secret string `yaml:"secret" json:"secret,omitempty"`
+	// sns.subscription
+	Topic string `yaml:"topic" json:"topic,omitempty"`
+	// azure.blob / azure.queue-depth
+	Account   string `yaml:"account" json:"account,omitempty"`
+	Container string `yaml:"container" json:"container,omitempty"`
+	Blob      string `yaml:"blob" json:"blob,omitempty"`
 }
 
 // Manifest is the recipe.yaml document.

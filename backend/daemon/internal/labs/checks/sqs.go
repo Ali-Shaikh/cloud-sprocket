@@ -64,7 +64,10 @@ func (c *SQSQueueAttributeCheck) Run(
 		return result, fmt.Errorf("verification value %q is not a number", verify.Value)
 	}
 
-	passed := compareInt64(actual, expected, verify.Compare)
+	passed, err := compareInt64(actual, expected, verify.Compare)
+	if err != nil {
+		return result, err
+	}
 	result.Passed = passed
 	result.Detail = fmt.Sprintf("%s=%d (expected %s %d)", verify.Attribute, actual, verify.Compare, expected)
 	if passed {
@@ -94,19 +97,3 @@ func sqsAttributeValue(queue models.AwsSqsQueue, attribute string) (int64, bool)
 	}
 }
 
-func compareInt64(actual, expected int64, compare string) bool {
-	switch strings.TrimSpace(compare) {
-	case "eq":
-		return actual == expected
-	case "gte":
-		return actual >= expected
-	case "lte":
-		return actual <= expected
-	case "gt":
-		return actual > expected
-	case "lt":
-		return actual < expected
-	default:
-		return false
-	}
-}

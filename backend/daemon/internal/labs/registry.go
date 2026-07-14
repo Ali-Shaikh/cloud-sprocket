@@ -17,6 +17,10 @@ type CheckContext struct {
 	Deployment *deploy.Deployment
 	Profile    models.ProfileSummary
 	Region     string
+	// AWSWritesEnabled mirrors the workspace write gate (locked + write mode).
+	// Side-effecting verifies (lambda.invoke) and sensitive reveals
+	// (secrets.value) must refuse to run when this is false.
+	AWSWritesEnabled bool
 }
 
 // Check evaluates one lab verification spec.

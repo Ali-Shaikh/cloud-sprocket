@@ -71,10 +71,21 @@ lab:
     - id: upload-guidance
       title: Upload a blob
       body: |
-        With write mode on, upload a file via the UI. Inspect properties and
-        download it back.
+        With write mode on, upload a file named `lab-readme.txt` via the UI.
+        Inspect properties and download it back.
       hints:
         - Blobs support metadata, tags, and tiers (hot/cool).
+    - id: verify-blob
+      title: Verify the uploaded blob
+      body: |
+        Confirm `lab-readme.txt` is present in the container after your upload.
+      verify:
+        - type: azure.blob
+          account: "{{ outputs.storage_account_name }}"
+          container: "{{ outputs.container_name }}"
+          blob: lab-readme.txt
+      hints:
+        - Re-upload if the name does not match exactly.
     - id: event-extension
       title: Events extension note
       body: |

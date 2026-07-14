@@ -65,11 +65,17 @@ lab:
   steps:
     - id: inspect-lambda
       title: Inspect subscriber Lambda
-      body: Open Lambda tab to see the function subscribed to the topic.
+      body: |
+        Open Lambda tab to see the function subscribed to the topic, then run a
+        safe test invoke.
       actions:
         - type: open-tab
           tab: aws-lambda
           focus: "{{ outputs.lambda_function_name }}"
+      verify:
+        - type: lambda.invoke
+          function: "{{ outputs.lambda_function_name }}"
+          payload: '{"source":"lab"}'
     - id: review-topic
       title: Review SNS topic
       body: Open SNS tab and locate the topic by ARN from outputs.
@@ -77,3 +83,8 @@ lab:
         - type: open-tab
           tab: aws-sns
           focus: "{{ outputs.sns_topic_arn }}"
+      verify:
+        - type: sns.subscription
+          topic: "{{ outputs.sns_topic_arn }}"
+          compare: gte
+          value: "1"

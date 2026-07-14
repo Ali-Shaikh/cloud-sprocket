@@ -73,6 +73,19 @@ lab:
         - type: open-tab
           tab: azure-queues
           focus: "{{ outputs.queue_name }}"
+    - id: verify-queue-depth
+      title: Verify the queue is empty
+      body: |
+        Confirm the new queue reports an approximate depth of zero before you
+        enqueue traffic.
+      verify:
+        - type: azure.queue-depth
+          account: "{{ outputs.storage_account_name }}"
+          queue: "{{ outputs.queue_name }}"
+          compare: eq
+          value: "0"
+      hints:
+        - Depth rises after enqueue; re-apply creates a fresh empty queue only when names change.
     - id: enqueue-note
       title: Enqueue a message (guidance)
       body: |
