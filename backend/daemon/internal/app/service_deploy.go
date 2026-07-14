@@ -332,7 +332,9 @@ func (s *Service) cancelDeployment(id string) error {
 func (s *Service) finishWithError(ctx, runCtx context.Context, deployment *deploy.Deployment, job models.JobStatus, notifier Notifier, cause error) {
 	if runCtx.Err() == context.Canceled {
 		deployment.Error = ""
-		s.setDeploymentStatus(ctx, deployment, deploy.StatusCancelled, notifier)
+		if !s.transitionDeploymentStatus(ctx, deployment, deploy.StatusCancelled, notifier, job) {
+			return
+		}
 		s.emitJobStatus(notifier, job, "failed", deployment.Name+" cancelled.")
 		return
 	}
@@ -346,7 +348,9 @@ func (s *Service) runDeploymentPlan(deployment *deploy.Deployment, job models.Jo
 	s.registerDeployCancel(deployment.ID, cancel)
 	defer s.clearDeployCancel(deployment.ID)
 
-	s.setDeploymentStatus(ctx, deployment, deploy.StatusPlanning, notifier)
+	if !s.transitionDeploymentStatus(ctx, deployment, deploy.StatusPlanning, notifier, job) {
+		return
+	}
 	s.emitJobStatus(notifier, job, "running", "Planning "+deployment.Name+".")
 
 	onLine := s.deploymentLogger(deployment.ID, job.JobID, notifier)
@@ -363,7 +367,9 @@ func (s *Service) runDeploymentPlan(deployment *deploy.Deployment, job models.Jo
 	}
 	deployment.Plan = &summary
 	deployment.Error = ""
-	s.setDeploymentStatus(ctx, deployment, deploy.StatusPlanned, notifier)
+	if !s.transitionDeploymentStatus(ctx, deployment, deploy.StatusPlanned, notifier, job) {
+		return
+	}
 	s.emitJobStatus(notifier, job, "completed", fmt.Sprintf("Plan ready: +%d ~%d -%d.", summary.Add, summary.Change, summary.Destroy))
 }
 
@@ -384,14 +390,18 @@ func (s *Service) runDeploymentAction(deployment *deploy.Deployment, action depl
 	}
 
 	if action == actionDestroy {
-		s.setDeploymentStatus(ctx, deployment, deploy.StatusDestroying, notifier)
+		if !s.transitionDeploymentStatus(ctx, deployment, deploy.StatusDestroying, notifier, job) {
+			return
+		}
 		s.emitJobStatus(notifier, job, "running", "Destroying "+deployment.Name+".")
 		if err := s.deployer.Destroy(runCtx, deployment, onLine); err != nil {
 			if runCtx.Err() == context.Canceled {
 				// User stopped the destroy. Resources are likely still present (or partially destroyed).
 				// Revert to applied so the Destroy button is available again and delete is blocked.
 				deployment.Error = ""
-				s.setDeploymentStatus(ctx, deployment, deploy.StatusApplied, notifier)
+				if !s.transitionDeploymentStatus(ctx, deployment, deploy.StatusApplied, notifier, job) {
+					return
+				}
 				s.emitJobStatus(notifier, job, "failed", deployment.Name+" destroy was stopped. Resources may still exist — destroy again to clean up.")
 				return
 			}
@@ -400,7 +410,9 @@ func (s *Service) runDeploymentAction(deployment *deploy.Deployment, action depl
 		}
 		deployment.Outputs = nil
 		deployment.Error = ""
-		s.setDeploymentStatus(ctx, deployment, deploy.StatusDestroyed, notifier)
+		if !s.transitionDeploymentStatus(ctx, deployment, deploy.StatusDestroyed, notifier, job) {
+			return
+		}
 		s.emitJobStatus(notifier, job, "completed", deployment.Name+" destroyed.")
 		return
 	}
@@ -418,18 +430,24 @@ func (s *Service) runDeploymentAction(deployment *deploy.Deployment, action depl
 		if err := s.deployer.RetryPostApply(runCtx, deployment, onLine); err != nil {
 			deployment.PostApplyError = err.Error()
 			deployment.Error = ""
-			s.setDeploymentStatus(ctx, deployment, deploy.StatusApplied, notifier)
+			if !s.transitionDeploymentStatus(ctx, deployment, deploy.StatusApplied, notifier, job) {
+				return
+			}
 			s.emitJobStatus(notifier, job, "failed", err.Error())
 			return
 		}
 		deployment.PostApplyError = ""
 		deployment.Error = ""
-		s.setDeploymentStatus(ctx, deployment, deploy.StatusApplied, notifier)
+		if !s.transitionDeploymentStatus(ctx, deployment, deploy.StatusApplied, notifier, job) {
+			return
+		}
 		s.emitJobStatus(notifier, job, "completed", "Post-apply steps completed for "+deployment.Name+".")
 		return
 	}
 
-	s.setDeploymentStatus(ctx, deployment, deploy.StatusApplying, notifier)
+	if !s.transitionDeploymentStatus(ctx, deployment, deploy.StatusApplying, notifier, job) {
+		return
+	}
 	s.emitJobStatus(notifier, job, "running", "Applying "+deployment.Name+".")
 	result, err := s.deployer.Apply(runCtx, deployment, onLine)
 	if err != nil {
@@ -439,7 +457,9 @@ func (s *Service) runDeploymentAction(deployment *deploy.Deployment, action depl
 	deployment.Outputs = result.Outputs
 	deployment.PostApplyError = result.PostApplyError
 	deployment.Error = ""
-	s.setDeploymentStatus(ctx, deployment, deploy.StatusApplied, notifier)
+	if !s.transitionDeploymentStatus(ctx, deployment, deploy.StatusApplied, notifier, job) {
+		return
+	}
 	if result.PostApplyError != "" {
 		s.emitJobStatus(notifier, job, "completed", deployment.Name+" deployed; post-apply step failed (retry available).")
 		return
@@ -456,11 +476,15 @@ func (s *Service) deploymentLogger(deploymentID, jobID string, notifier Notifier
 	}
 }
 
-func (s *Service) setDeploymentStatus(ctx context.Context, deployment *deploy.Deployment, status deploy.Status, notifier Notifier) {
+func (s *Service) setDeploymentStatus(ctx context.Context, deployment *deploy.Deployment, status deploy.Status, notifier Notifier) error {
+	previousStatus := deployment.Status
+	previousUpdatedAt := deployment.UpdatedAt
 	deployment.Status = status
 	deployment.UpdatedAt = s.timestamp()
 	if err := s.saveDeployment(ctx, deployment, deployment.UpdatedAt); err != nil {
-		log.Printf("deployments: refusing unsafe persistence for %s: %v", deployment.ID, err)
+		deployment.Status = previousStatus
+		deployment.UpdatedAt = previousUpdatedAt
+		return err
 	}
 	if notifier != nil {
 		// Notify a snapshot so listeners cannot race with later status updates on
@@ -468,6 +492,16 @@ func (s *Service) setDeploymentStatus(ctx context.Context, deployment *deploy.De
 		snapshot := *deployment
 		_ = notifier.Notify("deployment.changed", &snapshot)
 	}
+	return nil
+}
+
+func (s *Service) transitionDeploymentStatus(ctx context.Context, deployment *deploy.Deployment, status deploy.Status, notifier Notifier, job models.JobStatus) bool {
+	if err := s.setDeploymentStatus(ctx, deployment, status, notifier); err != nil {
+		log.Printf("deployments: refusing unsafe persistence for %s: %v", deployment.ID, err)
+		s.emitJobStatus(notifier, job, "failed", "Could not save the deployment status. Check the diagnostics log for details.")
+		return false
+	}
+	return true
 }
 
 func (s *Service) saveDeployment(ctx context.Context, deployment *deploy.Deployment, timestamp string) error {
@@ -480,7 +514,9 @@ func (s *Service) saveDeployment(ctx context.Context, deployment *deploy.Deploym
 
 func (s *Service) failDeployment(ctx context.Context, deployment *deploy.Deployment, job models.JobStatus, notifier Notifier, cause error) {
 	deployment.Error = cause.Error()
-	s.setDeploymentStatus(ctx, deployment, deploy.StatusFailed, notifier)
+	if !s.transitionDeploymentStatus(ctx, deployment, deploy.StatusFailed, notifier, job) {
+		return
+	}
 	s.emitJobStatus(notifier, job, "failed", cause.Error())
 }
 

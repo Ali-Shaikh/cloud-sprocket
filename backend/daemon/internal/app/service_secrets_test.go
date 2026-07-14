@@ -53,7 +53,9 @@ func TestDeploymentSecretsSealedAtRest(t *testing.T) {
 		UpdatedAt: "t0",
 	}
 
-	s.setDeploymentStatus(context.Background(), deployment, deploy.StatusApplied, nil)
+	if err := s.setDeploymentStatus(context.Background(), deployment, deploy.StatusApplied, nil); err != nil {
+		t.Fatalf("setDeploymentStatus: %v", err)
+	}
 
 	// The in-memory deployment must stay plaintext for the running operation.
 	if deployment.Variables["db_password"] != "s3cret-pw" {
@@ -134,14 +136,23 @@ func TestSensitiveDeploymentPersistenceFailsClosedWithoutCipher(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = dataStore.Close() })
 
-	s := &Service{store: dataStore}
+	s := &Service{store: dataStore, now: func() time.Time { return time.Now().UTC() }}
 	deployment := &deploy.Deployment{
 		ID:            "dep-unsealed",
 		SensitiveVars: []string{"password"},
 		Variables:     map[string]any{"password": "must-not-leak"},
+		Status:        deploy.StatusPending,
+		UpdatedAt:     "before",
 	}
-	if err := s.saveDeployment(context.Background(), deployment, "t0"); err == nil {
+	notifier := &captureNotifier{}
+	if err := s.setDeploymentStatus(context.Background(), deployment, deploy.StatusApplied, notifier); err == nil {
 		t.Fatal("expected persistence to fail when secret storage is unavailable")
+	}
+	if deployment.Status != deploy.StatusPending || deployment.UpdatedAt != "before" {
+		t.Fatalf("failed transition was not rolled back: status=%s updatedAt=%s", deployment.Status, deployment.UpdatedAt)
+	}
+	if got := notifier.count("deployment.changed"); got != 0 {
+		t.Fatalf("unsafe transition emitted %d deployment.changed events", got)
 	}
 	payloads, err := dataStore.ListDeploymentsJSON(context.Background())
 	if err != nil {

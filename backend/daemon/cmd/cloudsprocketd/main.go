@@ -62,7 +62,7 @@ func main() {
 	dockerRuntime := dockerruntime.New(settings)
 	service := app.New(settings, dataStore, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, eksInventory, cloudformationInventory, eventbridgeInventory, route53Inventory, elbv2Inventory, kmsInventory, apigatewayInventory, secretsManagerInventory, logsInventory, iamInventory, azureInventory, dockerRuntime)
 	if err := service.InitialisationError(); err != nil {
-		log.Fatalf("failed to initialise secret storage: %v", err)
+		log.Fatal("failed to initialise secret storage; verify the key file and its permissions")
 	}
 	server := rpc.NewWithLogger(service, diagnosticLogger)
 
