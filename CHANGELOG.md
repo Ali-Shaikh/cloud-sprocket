@@ -9,6 +9,36 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-07-14
+
+### Added
+
+- Lab verification breadth: eight new check types (`s3.object`,
+  `dynamodb.item`, `lambda.invoke`, `logs.contains`, `secrets.value`,
+  `sns.subscription`, `azure.blob`, `azure.queue-depth`) with unit tests in
+  `labs/checks` (#166)
+- Adapter reads for lab checks: S3 `GetObject`, DynamoDB `GetItem`, Azure
+  queue approximate message count (#166)
+- Generalised lab `invoke-write` dispatch: `sqs.send`, `dynamodb.put`,
+  `sns.publish`, `lambda.invoke`, `logs.put`, `s3.upload` (#166)
+- Catalogue retrofit so most guided labs include at least one automated
+  verify on a key step (9 → 24 of 33 labs) (#166)
+
+### Fixed
+
+- Side-effecting verifies (`lambda.invoke`, `secrets.value`) require write
+  mode, matching workspace RPCs (#166)
+- Unknown `compare` operators fail validation and runtime instead of a silent
+  false check result (#166)
+- Empty `secrets.value` criteria after template resolve no longer vacuous-pass
+  (#166)
+- `logs.put` lab action requires a non-empty message (#166)
+
+### Changed
+
+- Product story for this release: guided labs that actually verify, not only
+  mark complete
+
 ## [0.9.4] - 2026-07-12
 
 ### Added
@@ -825,7 +855,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.4...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.5...HEAD
+[0.9.5]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.1...v0.9.2
