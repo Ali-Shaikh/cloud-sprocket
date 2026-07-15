@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -65,8 +66,16 @@ func (s *Service) labsHTTPGet(ctx context.Context, targetURL string) (int, error
 	if err != nil {
 		return 0, err
 	}
-	defer response.Body.Close()
+	if err := drainAndCloseHTTPBody(response.Body); err != nil {
+		return 0, fmt.Errorf("read lab HTTP response: %w", err)
+	}
 	return response.StatusCode, nil
+}
+
+func drainAndCloseHTTPBody(body io.ReadCloser) error {
+	defer body.Close()
+	_, err := io.Copy(io.Discard, body)
+	return err
 }
 
 func (s *Service) deploymentProfile(snapshot discovery.Snapshot, deployment *deploy.Deployment) (models.ProfileSummary, error) {

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -183,7 +184,9 @@ func (r *Runner) VerifyStep(
 	faultCleared := false
 	defer func() {
 		if faultApplied && !faultCleared {
-			_ = r.clearDeploymentFaults(deployment, &session)
+			if err := r.clearDeploymentFaults(deployment, &session); err != nil {
+				log.Printf("labs: deferred fault cleanup failed for deployment %s: %v", deployment.ID, err)
+			}
 		}
 	}()
 
