@@ -54,8 +54,23 @@ type FaultInjector interface {
 	Inject(ctx context.Context, fault Fault) (revert func() error, err error)
 }
 
+// FaultReverter restores a persisted fault after a daemon restart. Injectors
+// that can leave durable runtime state must implement this interface.
+type FaultReverter interface {
+	Revert(ctx context.Context, fault Fault) error
+}
+
+// FaultValidator checks a concrete request without changing runtime state.
+type FaultValidator interface {
+	Validate(fault Fault) error
+}
+
 // ErrFaultUnsupported means the runtime cannot apply the requested fault kind.
 var ErrFaultUnsupported = errors.New("fault kind is not supported on this runtime")
+
+// ErrFaultTargetNotAllowed means a fault named a container outside the
+// deployment runtime's managed target set.
+var ErrFaultTargetNotAllowed = errors.New("fault target is not managed by this runtime")
 
 // ErrFaultNotImplemented is reserved for a kind that appears in Capabilities
 // but whose Inject branch is not wired yet. Callers should not see this for
@@ -115,8 +130,8 @@ func normaliseFaultKind(kind FaultKind) FaultKind {
 // Compose-based targets support container pause; others are no-op for now.
 func FaultInjectorForTarget(targetID string) FaultInjector {
 	switch strings.TrimSpace(strings.ToLower(targetID)) {
-	case "docker-compose", "magento-compose":
-		return NewComposeFaultInjector(nil)
+	case "docker-compose":
+		return NewComposeFaultInjector(nil, dockerComposeLocalStackContainerName)
 	default:
 		return NoopFaultInjector{}
 	}
@@ -151,7 +166,52 @@ func (dockerContainerController) Pause(ctx context.Context, name string) error {
 }
 
 func (dockerContainerController) Unpause(ctx context.Context, name string) error {
-	return runDockerContainerCommand(ctx, "unpause", name)
+	paused, exists, err := dockerContainerPaused(ctx, name)
+	if err != nil {
+		return err
+	}
+	if !exists || !paused {
+		return nil
+	}
+	if err := runDockerContainerCommand(ctx, "unpause", name); err != nil {
+		// A removal or concurrent unpause after the first inspect already leaves
+		// the runtime in the desired state.
+		paused, exists, inspectErr := dockerContainerPaused(ctx, name)
+		if inspectErr == nil && (!exists || !paused) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func dockerContainerPaused(ctx context.Context, name string) (paused, exists bool, err error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false, false, errors.New("container name is required")
+	}
+	cmd := exec.CommandContext(ctx, "docker", "container", "inspect", "--format", "{{.State.Paused}}", name)
+	sysproc.Hide(cmd)
+	out, runErr := cmd.CombinedOutput()
+	message := strings.TrimSpace(string(out))
+	if runErr != nil {
+		if message == "" {
+			message = runErr.Error()
+		}
+		lower := strings.ToLower(message)
+		if strings.Contains(lower, "no such object") || strings.Contains(lower, "no such container") {
+			return false, false, nil
+		}
+		return false, false, fmt.Errorf("docker container inspect %s: %s", name, message)
+	}
+	switch strings.ToLower(message) {
+	case "true":
+		return true, true, nil
+	case "false":
+		return false, true, nil
+	default:
+		return false, true, fmt.Errorf("docker container inspect %s returned unexpected paused state %q", name, message)
+	}
 }
 
 func runDockerContainerCommand(ctx context.Context, action, name string) error {
@@ -171,16 +231,24 @@ func runDockerContainerCommand(ctx context.Context, action, name string) error {
 // ComposeFaultInjector applies compose/docker-oriented faults. Pause is
 // implemented via docker pause/unpause; other kinds await toxiproxy wiring.
 type ComposeFaultInjector struct {
-	containers ContainerController
+	containers     ContainerController
+	allowedTargets map[string]struct{}
 }
 
 // NewComposeFaultInjector builds a compose injector. Pass nil containers to use
-// the real docker CLI.
-func NewComposeFaultInjector(containers ContainerController) ComposeFaultInjector {
+// the real docker CLI. Production callers pass the runtime-owned targets;
+// omitting them keeps small unit-test fakes backwards compatible.
+func NewComposeFaultInjector(containers ContainerController, allowedTargets ...string) ComposeFaultInjector {
 	if containers == nil {
 		containers = dockerContainerController{}
 	}
-	return ComposeFaultInjector{containers: containers}
+	allowed := make(map[string]struct{}, len(allowedTargets))
+	for _, target := range allowedTargets {
+		if target = strings.TrimSpace(target); target != "" {
+			allowed[target] = struct{}{}
+		}
+	}
+	return ComposeFaultInjector{containers: containers, allowedTargets: allowed}
 }
 
 // Capabilities lists compose fault kinds that are actually injectable.
@@ -192,12 +260,33 @@ func (ComposeFaultInjector) Capabilities() []FaultKind {
 	}
 }
 
-// Inject applies a supported compose fault. Pause uses docker pause on Target.
-func (c ComposeFaultInjector) Inject(ctx context.Context, fault Fault) (func() error, error) {
+// Validate checks support, required fields, and the production target allowlist.
+func (c ComposeFaultInjector) Validate(fault Fault) error {
 	kind := normaliseFaultKind(fault.Kind)
 	if !Supports(c, kind) {
-		return nil, fmt.Errorf("%w: %s", ErrFaultUnsupported, kind)
+		return fmt.Errorf("%w: %s", ErrFaultUnsupported, kind)
 	}
+	if kind != FaultKindPause {
+		return fmt.Errorf("%w: kind %s (target %q)", ErrFaultNotImplemented, kind, fault.Target)
+	}
+	target := strings.TrimSpace(fault.Target)
+	if target == "" {
+		return errors.New("pause fault requires a container target name")
+	}
+	if len(c.allowedTargets) > 0 {
+		if _, ok := c.allowedTargets[target]; !ok {
+			return fmt.Errorf("%w: %q", ErrFaultTargetNotAllowed, target)
+		}
+	}
+	return nil
+}
+
+// Inject applies a supported compose fault. Pause uses docker pause on Target.
+func (c ComposeFaultInjector) Inject(ctx context.Context, fault Fault) (func() error, error) {
+	if err := c.Validate(fault); err != nil {
+		return nil, err
+	}
+	kind := normaliseFaultKind(fault.Kind)
 	switch kind {
 	case FaultKindPause:
 		target := strings.TrimSpace(fault.Target)
@@ -211,15 +300,21 @@ func (c ComposeFaultInjector) Inject(ctx context.Context, fault Fault) (func() e
 		var revertErr error
 		return func() error {
 			once.Do(func() {
-				// Best-effort unpause; ignore already-running containers.
-				if err := c.containers.Unpause(context.Background(), target); err != nil {
-					// Unpause often fails if the container was removed; keep the error.
-					revertErr = err
-				}
+				revertErr = c.Revert(context.Background(), fault)
 			})
 			return revertErr
 		}, nil
 	default:
 		return nil, fmt.Errorf("%w: kind %s (target %q)", ErrFaultNotImplemented, kind, fault.Target)
 	}
+}
+
+// Revert restores a supported compose fault. Container unpause is idempotent
+// for already-running and removed containers when the real Docker controller is
+// used, which makes persisted restart recovery safe to replay.
+func (c ComposeFaultInjector) Revert(ctx context.Context, fault Fault) error {
+	if err := c.Validate(fault); err != nil {
+		return err
+	}
+	return c.containers.Unpause(ctx, strings.TrimSpace(fault.Target))
 }

@@ -60,6 +60,45 @@ func TestS3ObjectCheckExistsAndContains(t *testing.T) {
 	}
 }
 
+func TestHTTPUnreachableCheckPassesOnConnectionFailure(t *testing.T) {
+	t.Parallel()
+	check := &HTTPUnreachableCheck{Deps: HTTPDeps{
+		Get: func(_ context.Context, targetURL string) (int, error) {
+			if targetURL != "http://localhost:4566/_localstack/health" {
+				t.Fatalf("unexpected URL %q", targetURL)
+			}
+			return 0, errors.New("connection refused")
+		},
+	}}
+	result, err := check.Run(context.Background(), recipes.LabVerify{
+		Type: recipes.LabVerifyHTTPUnreachable,
+		URL:  "http://localhost:4566/_localstack/health",
+	}, testCtx())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Passed || result.Detail == "" {
+		t.Fatalf("expected outage pass, got %+v", result)
+	}
+}
+
+func TestHTTPUnreachableCheckFailsWhenDependencyResponds(t *testing.T) {
+	t.Parallel()
+	check := &HTTPUnreachableCheck{Deps: HTTPDeps{
+		Get: func(_ context.Context, _ string) (int, error) { return 503, nil },
+	}}
+	result, err := check.Run(context.Background(), recipes.LabVerify{
+		Type: recipes.LabVerifyHTTPUnreachable,
+		URL:  "http://localhost:4566/_localstack/health",
+	}, testCtx())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Passed || result.Detail != "HTTP 503" {
+		t.Fatalf("expected responding dependency to fail outage check, got %+v", result)
+	}
+}
+
 func TestDynamoDBItemCheckAttributeEquals(t *testing.T) {
 	t.Parallel()
 	check := &DynamoDBItemCheck{Deps: DynamoDeps{

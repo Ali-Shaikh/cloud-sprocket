@@ -4,9 +4,9 @@ Each folder here is one portable OpenTofu recipe shipped with CloudSprocket.
 
 ## Layout
 
-- `recipe.yaml` — manifest (metadata, build phases, UI hints)
-- `*.tf` — infrastructure module
-- `sample-*` — zero-config demo code used when the user does not supply their own
+- `recipe.yaml`: manifest (metadata, build phases, UI hints)
+- `*.tf`: infrastructure module
+- `sample-*`: zero-config demo code used when the user does not supply their own
 
 ## Manifest contract
 
@@ -19,6 +19,7 @@ Each folder here is one portable OpenTofu recipe shipped with CloudSprocket.
 | `imageBuild` | Container image pipeline before plan (ECS/Fargate recipes) |
 | `postApply` | Post-apply steps with outputs injected as env vars (`database_url` → `DATABASE_URL`) |
 | `outputs` | Mark `primary: true` on outputs the UI should surface and open |
+| `lab.steps[].fault` | Optional local-runtime fault with a closed `kind`, target, and parameters |
 
 Legacy manifest fields are normalised in `internal/recipes/normalize.go`; add new fields there when upgrading older shapes.
 
@@ -29,6 +30,10 @@ Legacy manifest fields are normalised in `internal/recipes/normalize.go`; add ne
 3. Add a `TOFU_LIVE` plan test in `internal/deploy/deploy_live_test.go`.
 4. Bump counts in `internal/recipes/catalog_test.go` when the catalogue grows.
 5. For labs, keep `superpowers` empty and `requiresPro` false where possible.
+
+Chaos lab steps must degrade gracefully when the selected runtime does not
+support their fault. See [`docs/labs-platform.md`](../../../../../docs/labs-platform.md)
+for the supported kinds, recovery contract, and outage-check example.
 
 ## Runtime targeting
 

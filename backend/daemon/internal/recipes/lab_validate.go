@@ -17,8 +17,14 @@ const (
 	LabActionOpenTab     = "open-tab"
 	LabActionInvokeWrite = "invoke-write"
 
+	LabFaultPause        = "pause"
+	LabFaultLatency      = "latency"
+	LabFaultPartition    = "partition"
+	LabFaultServiceError = "service-error"
+
 	LabVerifySQSQueueAttribute = "sqs.queue-attribute"
 	LabVerifyHTTPGet           = "http.get"
+	LabVerifyHTTPUnreachable   = "http.unreachable"
 	LabVerifyS3Object          = "s3.object"
 	LabVerifyDynamoDBItem      = "dynamodb.item"
 	LabVerifyLambdaInvoke      = "lambda.invoke"
@@ -41,9 +47,16 @@ var (
 		LabActionOpenTab:     {},
 		LabActionInvokeWrite: {},
 	}
+	knownLabFaultKinds = map[string]struct{}{
+		LabFaultPause:        {},
+		LabFaultLatency:      {},
+		LabFaultPartition:    {},
+		LabFaultServiceError: {},
+	}
 	knownLabVerifyTypes = map[string]struct{}{
 		LabVerifySQSQueueAttribute: {},
 		LabVerifyHTTPGet:           {},
+		LabVerifyHTTPUnreachable:   {},
 		LabVerifyS3Object:          {},
 		LabVerifyDynamoDBItem:      {},
 		LabVerifyLambdaInvoke:      {},
@@ -56,7 +69,7 @@ var (
 	knownLabCompareOps = map[string]struct{}{
 		"eq":  {},
 		"gte": {},
-		"lte":  {},
+		"lte": {},
 		"gt":  {},
 		"lt":  {},
 	}
@@ -109,6 +122,18 @@ func ValidateLabSpec(manifest Manifest) error {
 		if strings.TrimSpace(step.Title) == "" {
 			return fmt.Errorf("recipe %q lab step %q is missing title", manifest.ID, stepID)
 		}
+		if step.Fault != nil {
+			faultKind := strings.TrimSpace(step.Fault.Kind)
+			if faultKind == "" {
+				return fmt.Errorf("recipe %q lab step %q fault is missing kind", manifest.ID, stepID)
+			}
+			if _, ok := knownLabFaultKinds[faultKind]; !ok {
+				return fmt.Errorf("recipe %q lab step %q fault kind %q is not recognised", manifest.ID, stepID, faultKind)
+			}
+			if faultKind == LabFaultPause && strings.TrimSpace(step.Fault.Target) == "" {
+				return fmt.Errorf("recipe %q lab step %q pause fault is missing target", manifest.ID, stepID)
+			}
+		}
 
 		for actionIndex, action := range step.Actions {
 			actionType := strings.TrimSpace(action.Type)
@@ -157,9 +182,12 @@ func ValidateLabSpec(manifest Manifest) error {
 				if err := validateLabCompare(manifest.ID, stepID, LabVerifySQSQueueAttribute, verify.Compare); err != nil {
 					return err
 				}
-			case LabVerifyHTTPGet:
+			case LabVerifyHTTPGet, LabVerifyHTTPUnreachable:
 				if err := validateLabOutputRefs(manifest.ID, stepID, "url", verify.URL, outputNames); err != nil {
 					return err
+				}
+				if strings.TrimSpace(verify.URL) == "" {
+					return fmt.Errorf("recipe %q lab step %q %s verify is missing url", manifest.ID, stepID, verifyType)
 				}
 			case LabVerifyS3Object:
 				if err := validateLabOutputRefs(manifest.ID, stepID, "bucket", verify.Bucket, outputNames); err != nil {

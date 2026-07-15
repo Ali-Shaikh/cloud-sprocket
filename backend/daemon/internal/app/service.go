@@ -15,6 +15,7 @@ import (
 	"cloudsprocket/backend/daemon/internal/deploy"
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/flociaz"
+	"cloudsprocket/backend/daemon/internal/labs"
 	"cloudsprocket/backend/daemon/internal/localstack"
 	"cloudsprocket/backend/daemon/internal/models"
 	"cloudsprocket/backend/daemon/internal/recipes"
@@ -59,6 +60,8 @@ type Service struct {
 	dockerSnapshotAt      time.Time
 	deployCancelsMu       sync.Mutex
 	deployCancels         map[string]context.CancelFunc
+	labRunnerOnce         sync.Once
+	labRunnerValue        *labs.Runner
 	preferences           models.ServicePreferences
 	now                   func() time.Time
 	mu                    sync.Mutex
@@ -164,6 +167,13 @@ func NewWithRuntimes(
 		service.preferences = defaultServicePreferences()
 	}
 	service.mu.Unlock()
+	if service.initialisationErr == nil && service.store != nil {
+		recoveryCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := service.recoverLabFaults(recoveryCtx); err != nil {
+			log.Printf("labs: could not recover active faults at startup: %v", err)
+		}
+	}
 	return service
 }
 

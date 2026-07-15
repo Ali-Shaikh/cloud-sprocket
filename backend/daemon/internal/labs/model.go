@@ -12,6 +12,7 @@ const (
 	StepStatusInProgress StepStatus = "in_progress"
 	StepStatusPassed     StepStatus = "passed"
 	StepStatusFailed     StepStatus = "failed"
+	StepStatusSkipped    StepStatus = "skipped"
 )
 
 // SessionStatus is the overall progress state of a lab session.
@@ -37,6 +38,26 @@ type StepState struct {
 	StartedAt     string         `json:"startedAt,omitempty"`
 	CompletedAt   string         `json:"completedAt,omitempty"`
 	VerifyResults []VerifyResult `json:"verifyResults"`
+	Fault         *FaultState    `json:"fault,omitempty"`
+}
+
+// FaultState reports whether a step fault can run on the selected deployment
+// runtime. The UI uses Reason when Available is false.
+type FaultState struct {
+	Kind      string `json:"kind"`
+	Target    string `json:"target,omitempty"`
+	Available bool   `json:"available"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+// ActiveFault is the durable recovery journal for a fault that may currently
+// be applied. It is persisted before injection and cleared only after revert.
+type ActiveFault struct {
+	Kind      string            `json:"kind"`
+	Target    string            `json:"target"`
+	Params    map[string]string `json:"params,omitempty"`
+	RuntimeID string            `json:"runtimeId"`
+	StartedAt string            `json:"startedAt"`
 }
 
 // LabSession is the persisted progress for a deployment lab run.
@@ -49,6 +70,7 @@ type LabSession struct {
 	UpdatedAt     string        `json:"updatedAt,omitempty"`
 	CurrentStepID string        `json:"currentStepId,omitempty"`
 	Steps         []StepState   `json:"steps"`
+	ActiveFault   *ActiveFault  `json:"activeFault,omitempty"`
 }
 
 // LabRunActionResult is returned by labs.runAction.

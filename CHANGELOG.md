@@ -9,6 +9,22 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Added
+
+- First vendor-neutral chaos lab: the queue-worker lab can pause the managed
+  Docker Compose runtime, verify the outage, and restore it automatically
+- Step-level fault capability reasons with graceful skipping on unsupported
+  local runtimes and cloud profiles
+
+### Fixed
+
+- Active lab faults are journalled before injection and recovered on daemon
+  restart, reset, later lab actions, and normal step completion
+- Docker unpause recovery is idempotent when a container is already running or
+  has been removed
+- Production fault injection rejects container targets outside the managed
+  runtime allowlist
+
 ## [0.9.6] - 2026-07-14
 
 ### Added

@@ -16,7 +16,10 @@ import (
 	"cloudsprocket/backend/daemon/internal/sysproc"
 )
 
-const dockerComposeProjectName = "cloudsprocket-localstack"
+const (
+	dockerComposeProjectName             = "cloudsprocket-localstack"
+	dockerComposeLocalStackContainerName = dockerComposeProjectName + "-localstack-1"
+)
 
 // dockerComposeTarget runs LocalStack via a managed docker-compose stack so
 // recipes can dry-run without the in-app LocalStack emulator.

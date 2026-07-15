@@ -1455,10 +1455,24 @@ export interface LabVerifyCheck {
   [key: string]: unknown;
 }
 
+export interface LabFaultSpec {
+  kind: string;
+  target?: string;
+  params?: Record<string, string>;
+}
+
+export interface LabFaultState {
+  kind: string;
+  target?: string;
+  available: boolean;
+  reason?: string;
+}
+
 export interface LabStepSpec {
   id: string;
   title: string;
   body: string;
+  fault?: LabFaultSpec;
   actions?: LabStepAction[];
   verify?: LabVerifyCheck[];
   hints?: string[];
@@ -1485,6 +1499,15 @@ export interface LabStepSession {
   startedAt?: string;
   completedAt?: string;
   verifyResults: LabVerifyResult[];
+  fault?: LabFaultState;
+}
+
+export interface LabActiveFault {
+  kind: string;
+  target: string;
+  params?: Record<string, string>;
+  runtimeId: string;
+  startedAt: string;
 }
 
 export interface LabSession {
@@ -1496,6 +1519,7 @@ export interface LabSession {
   updatedAt?: string;
   currentStepId?: string;
   steps: LabStepSession[];
+  activeFault?: LabActiveFault;
 }
 
 export interface LabRunActionResult {
