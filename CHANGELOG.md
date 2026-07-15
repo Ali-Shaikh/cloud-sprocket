@@ -9,21 +9,24 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.7] - 2026-07-15
+
 ### Added
 
 - First vendor-neutral chaos lab: the queue-worker lab can pause the managed
   Docker Compose runtime, verify the outage, and restore it automatically
+  (#181)
 - Step-level fault capability reasons with graceful skipping on unsupported
-  local runtimes and cloud profiles
+  local runtimes and cloud profiles (#181)
 
 ### Fixed
 
 - Active lab faults are journalled before injection and recovered on daemon
-  restart, reset, later lab actions, and normal step completion
+  restart, reset, later lab actions, and normal step completion (#181)
 - Docker unpause recovery is idempotent when a container is already running or
-  has been removed
+  has been removed (#181)
 - Production fault injection rejects container targets outside the managed
-  runtime allowlist
+  runtime allowlist (#181)
 
 ## [0.9.6] - 2026-07-14
 
@@ -901,7 +904,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.6...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.7...HEAD
+[0.9.7]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.6...v0.9.7
 [0.9.6]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.5...v0.9.6
 [0.9.5]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.3...v0.9.4
