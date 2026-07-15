@@ -26,9 +26,7 @@ func TestDrainAndCloseHTTPBody(t *testing.T) {
 	t.Parallel()
 	body := &trackedHTTPBody{reader: strings.NewReader("health response")}
 
-	if err := drainAndCloseHTTPBody(body); err != nil {
-		t.Fatalf("drainAndCloseHTTPBody: %v", err)
-	}
+	drainAndCloseHTTPBody(body)
 	if body.reader.Len() != 0 {
 		t.Fatalf("response body has %d unread bytes", body.reader.Len())
 	}

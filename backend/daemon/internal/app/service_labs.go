@@ -66,16 +66,13 @@ func (s *Service) labsHTTPGet(ctx context.Context, targetURL string) (int, error
 	if err != nil {
 		return 0, err
 	}
-	if err := drainAndCloseHTTPBody(response.Body); err != nil {
-		return 0, fmt.Errorf("read lab HTTP response: %w", err)
-	}
+	drainAndCloseHTTPBody(response.Body)
 	return response.StatusCode, nil
 }
 
-func drainAndCloseHTTPBody(body io.ReadCloser) error {
+func drainAndCloseHTTPBody(body io.ReadCloser) {
 	defer body.Close()
-	_, err := io.Copy(io.Discard, body)
-	return err
+	_, _ = io.Copy(io.Discard, body)
 }
 
 func (s *Service) deploymentProfile(snapshot discovery.Snapshot, deployment *deploy.Deployment) (models.ProfileSummary, error) {

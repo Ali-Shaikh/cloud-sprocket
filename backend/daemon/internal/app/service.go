@@ -169,10 +169,10 @@ func NewWithRuntimes(
 	service.mu.Unlock()
 	if service.initialisationErr == nil && service.store != nil {
 		recoveryCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 		if err := service.recoverLabFaults(recoveryCtx); err != nil {
 			log.Printf("labs: could not recover active faults at startup: %v", err)
 		}
-		cancel()
 	}
 	return service
 }
