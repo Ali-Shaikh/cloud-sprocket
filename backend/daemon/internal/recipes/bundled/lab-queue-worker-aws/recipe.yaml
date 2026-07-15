@@ -28,6 +28,7 @@ engine:
 local:
   runtimes:
     - id: localstack
+    - id: docker-compose
 build:
   - name: Install backend dependencies
     dirVar: backend_source_dir
@@ -63,10 +64,11 @@ outputs:
   - name: lambda_function_name
 lab:
   difficulty: beginner
-  estimatedMinutes: 20
+  estimatedMinutes: 25
   objectives:
     - Understand how an SQS queue triggers a Lambda worker
     - Send a message and verify queue activity
+    - Observe a controlled local runtime outage and automatic recovery
     - Inspect the consumer function in the workspace
   steps:
     - id: explore-queue
@@ -104,6 +106,22 @@ lab:
           value: "0"
       hints:
         - Messages may move to "in flight" quickly when the Lambda polls the queue.
+    - id: observe-runtime-outage
+      title: Observe a controlled queue outage
+      body: |
+        Run a short, local-only outage check. On the Docker Compose target,
+        CloudSprocket pauses the managed AWS runtime container, confirms its
+        health endpoint is unreachable, and restores the container before this
+        check returns. Other runtimes skip this step with a capability reason.
+      fault:
+        kind: pause
+        target: cloudsprocket-localstack-localstack-1
+      verify:
+        - type: http.unreachable
+          url: http://localhost:4566/_localstack/health
+      hints:
+        - The recovery journal is written before Docker is changed, so a daemon restart can safely replay the unpause.
+        - This uses Docker pause and unpause only. It does not call a vendor chaos API.
     - id: inspect-lambda
       title: Inspect the worker Lambda
       body: |

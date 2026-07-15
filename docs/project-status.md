@@ -1,6 +1,7 @@
 # CloudSprocket project status
 
-**Last updated:** 8 July 2026 (pre-v0.9 backlog complete on branch `feat/pre-v09-backlog`)  
+**Last updated:** 15 July 2026
+
 **Latest release:** [v0.9.6](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.9.6)
 **Recent releases:** v0.8.33 (write mode for all profiles, inventory layout), v0.8.32 (Route 53, ELBv2, KMS), v0.8.31 (CloudFormation, EventBridge, write ops Phases 2–3)
 
@@ -29,6 +30,8 @@ CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tau
 - Service enablement Phases 1–3 (v0.8.27, PR #82)
 - Shared `ResourceInventoryShell` + `ResourceTable` across all AWS inventory tabs and Azure Storage (Step 5 complete, including CloudFormation and EventBridge)
 - Multi-platform CI and release builds (Windows, macOS, Linux)
+- Vendor-neutral chaos labs with Docker pause/unpause, per-step capability
+  reasons, automatic cleanup, and daemon restart recovery
 
 ### AWS (live)
 

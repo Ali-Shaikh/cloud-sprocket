@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"cloudsprocket/backend/daemon/internal/deploy"
 	"cloudsprocket/backend/daemon/internal/discovery"
@@ -20,20 +21,39 @@ import (
 )
 
 func (s *Service) labRunner() *labs.Runner {
-	store := labs.NewSessionStore(s.store)
-	registry := labs.NewRegistry(
-		&checks.SQSQueueAttributeCheck{Deps: checks.SQSDeps{DescribeQueue: s.sqs.DescribeQueue}},
-		&checks.HTTPGetCheck{Deps: checks.HTTPDeps{Get: s.labsHTTPGet}},
-		&checks.S3ObjectCheck{Deps: checks.S3Deps{HeadObject: s.s3.HeadObject, GetObject: s.s3.GetObject}},
-		&checks.DynamoDBItemCheck{Deps: checks.DynamoDeps{GetItem: s.dynamodb.GetItem}},
-		&checks.LambdaInvokeCheck{Deps: checks.LambdaDeps{Invoke: s.lambda.InvokeFunction}},
-		&checks.LogsContainsCheck{Deps: checks.LogsDeps{DescribeLogGroup: s.logs.DescribeLogGroup}},
-		&checks.SecretsValueCheck{Deps: checks.SecretsDeps{GetSecretValue: s.secretsManager.GetSecretValue}},
-		&checks.SNSSubscriptionCheck{Deps: checks.SNSDeps{DescribeTopic: s.sns.DescribeTopic}},
-		&checks.AzureBlobCheck{Deps: checks.AzureBlobDeps{ListBlobs: s.azure.ListBlobs}},
-		&checks.AzureQueueDepthCheck{Deps: checks.AzureQueueDeps{ApproximateCount: s.azure.GetQueueApproximateMessageCount}},
-	)
-	return labs.NewRunner(store, registry, s.now)
+	s.labRunnerOnce.Do(func() {
+		store := labs.NewSessionStore(s.store)
+		httpDeps := checks.HTTPDeps{Get: s.labsHTTPGet}
+		registry := labs.NewRegistry(
+			&checks.SQSQueueAttributeCheck{Deps: checks.SQSDeps{DescribeQueue: s.sqs.DescribeQueue}},
+			&checks.HTTPGetCheck{Deps: httpDeps},
+			&checks.HTTPUnreachableCheck{Deps: httpDeps},
+			&checks.S3ObjectCheck{Deps: checks.S3Deps{HeadObject: s.s3.HeadObject, GetObject: s.s3.GetObject}},
+			&checks.DynamoDBItemCheck{Deps: checks.DynamoDeps{GetItem: s.dynamodb.GetItem}},
+			&checks.LambdaInvokeCheck{Deps: checks.LambdaDeps{Invoke: s.lambda.InvokeFunction}},
+			&checks.LogsContainsCheck{Deps: checks.LogsDeps{DescribeLogGroup: s.logs.DescribeLogGroup}},
+			&checks.SecretsValueCheck{Deps: checks.SecretsDeps{GetSecretValue: s.secretsManager.GetSecretValue}},
+			&checks.SNSSubscriptionCheck{Deps: checks.SNSDeps{DescribeTopic: s.sns.DescribeTopic}},
+			&checks.AzureBlobCheck{Deps: checks.AzureBlobDeps{ListBlobs: s.azure.ListBlobs}},
+			&checks.AzureQueueDepthCheck{Deps: checks.AzureQueueDeps{ApproximateCount: s.azure.GetQueueApproximateMessageCount}},
+		)
+		s.labRunnerValue = labs.NewRunner(store, registry, func() time.Time { return s.now() })
+	})
+	return s.labRunnerValue
+}
+
+func (s *Service) recoverLabFaults(ctx context.Context) error {
+	deployments, err := s.deploymentsList(ctx)
+	if err != nil {
+		return err
+	}
+	var recoveryErrors []error
+	for index := range deployments {
+		if err := s.labRunner().RecoverActiveFault(ctx, &deployments[index]); err != nil {
+			recoveryErrors = append(recoveryErrors, fmt.Errorf("deployment %s: %w", deployments[index].ID, err))
+		}
+	}
+	return errors.Join(recoveryErrors...)
 }
 
 func (s *Service) labsHTTPGet(ctx context.Context, targetURL string) (int, error) {

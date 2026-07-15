@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"cloudsprocket/backend/daemon/internal/deploy"
@@ -24,6 +25,7 @@ type Runner struct {
 	registry *Registry
 	now      func() time.Time
 	faults   *faultTracker
+	faultMu  sync.Mutex
 	// injectorFor overrides FaultInjectorForDeployment (tests).
 	injectorFor func(deployment *deploy.Deployment) deploy.FaultInjector
 }
@@ -55,6 +57,9 @@ func (r *Runner) Start(ctx context.Context, lab *recipes.LabSpec, deployment *de
 	if len(lab.Steps) == 0 {
 		return LabSession{}, errors.New("lab section has no steps")
 	}
+	if err := r.RecoverActiveFault(ctx, deployment); err != nil {
+		return LabSession{}, err
+	}
 
 	now := r.timestamp()
 	steps := make([]StepState, 0, len(lab.Steps))
@@ -79,6 +84,7 @@ func (r *Runner) Start(ctx context.Context, lab *recipes.LabSpec, deployment *de
 		CurrentStepID: lab.Steps[0].ID,
 		Steps:         steps,
 	}
+	r.populateFaultStates(&session, lab, deployment)
 	if err := r.store.Save(ctx, session); err != nil {
 		return LabSession{}, err
 	}
@@ -106,6 +112,17 @@ func (r *Runner) VerifyStep(
 	region string,
 	opts VerifyOptions,
 ) (LabSession, error) {
+	stepSpec, ok := findLabStep(lab, stepID)
+	if !ok {
+		return LabSession{}, fmt.Errorf("lab step %q was not found", stepID)
+	}
+	if stepSpec.Fault != nil {
+		r.faultMu.Lock()
+		defer r.faultMu.Unlock()
+	} else if err := r.RecoverActiveFault(ctx, deployment); err != nil {
+		return LabSession{}, err
+	}
+
 	session, found, err := r.store.Load(ctx, deployment.ID)
 	if err != nil {
 		return LabSession{}, err
@@ -113,19 +130,61 @@ func (r *Runner) VerifyStep(
 	if !found {
 		return LabSession{}, errors.New("lab session has not been started for this deployment")
 	}
-
-	stepSpec, ok := findLabStep(lab, stepID)
-	if !ok {
-		return LabSession{}, fmt.Errorf("lab step %q was not found", stepID)
+	if stepSpec.Fault != nil && session.ActiveFault != nil {
+		if err := r.recoverSessionFault(ctx, deployment, &session); err != nil {
+			return LabSession{}, err
+		}
+	}
+	if stepSpec.Fault != nil {
+		capability := r.faultState(deployment, stepSpec.Fault)
+		for index := range session.Steps {
+			if session.Steps[index].StepID == stepID {
+				session.Steps[index].Fault = capability
+				break
+			}
+		}
+		if capability != nil && !capability.Available {
+			now := r.timestamp()
+			for index := range session.Steps {
+				if session.Steps[index].StepID != stepID {
+					continue
+				}
+				session.Steps[index].Status = StepStatusSkipped
+				session.Steps[index].CompletedAt = now
+				session.Steps[index].VerifyResults = []VerifyResult{{
+					Type:   "fault." + capability.Kind,
+					Passed: true,
+					Detail: "Skipped: " + capability.Reason,
+				}}
+				break
+			}
+			if nextStepID, ok := nextLabStepID(lab, stepID); ok {
+				session.CurrentStepID = nextStepID
+				markStepInProgress(&session, nextStepID, now)
+			} else {
+				session.Status = SessionStatusCompleted
+				session.CompletedAt = now
+				session.CurrentStepID = ""
+			}
+			session.UpdatedAt = now
+			if err := r.store.Save(ctx, session); err != nil {
+				return LabSession{}, err
+			}
+			return session, nil
+		}
 	}
 
 	// Inject step fault before checks so verifications observe chaos conditions.
-	// Always clear on the way out of this step (pass, fail, or inject error path).
-	if err := r.applyStepFault(ctx, deployment, stepSpec); err != nil {
+	// Persist recovery metadata first, then always clear on the way out.
+	if err := r.applyStepFault(ctx, deployment, stepSpec, &session); err != nil {
 		return LabSession{}, err
 	}
+	faultApplied := stepSpec.Fault != nil
+	faultCleared := false
 	defer func() {
-		_ = r.clearDeploymentFaults(deployment.ID)
+		if faultApplied && !faultCleared {
+			_ = r.clearDeploymentFaults(deployment, &session)
+		}
 	}()
 
 	checkCtx := CheckContext{
@@ -165,6 +224,12 @@ func (r *Runner) VerifyStep(
 				allPassed = false
 			}
 		}
+	}
+	if faultApplied {
+		if err := r.clearDeploymentFaults(deployment, &session); err != nil {
+			return LabSession{}, err
+		}
+		faultCleared = true
 	}
 
 	now := r.timestamp()
@@ -215,6 +280,9 @@ func (r *Runner) RunAction(
 	region string,
 	invoke WriteInvoker,
 ) (any, error) {
+	if err := r.RecoverActiveFault(ctx, deployment); err != nil {
+		return nil, err
+	}
 	if _, found, err := r.store.Load(ctx, deployment.ID); err != nil {
 		return nil, err
 	} else if !found {
@@ -251,7 +319,9 @@ func (r *Runner) RunAction(
 // Reset clears and restarts the lab session for a deployment.
 func (r *Runner) Reset(ctx context.Context, lab *recipes.LabSpec, deployment *deploy.Deployment) (LabSession, error) {
 	if deployment != nil {
-		_ = r.clearDeploymentFaults(deployment.ID)
+		if err := r.RecoverActiveFault(ctx, deployment); err != nil {
+			return LabSession{}, err
+		}
 	}
 	if err := r.store.Delete(ctx, deployment.ID); err != nil {
 		return LabSession{}, err

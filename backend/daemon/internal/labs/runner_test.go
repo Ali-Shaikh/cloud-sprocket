@@ -156,7 +156,7 @@ func TestRunnerVerifyStepRecordsCheckError(t *testing.T) {
 	runner := NewRunner(store, registry, func() time.Time { return time.Now().UTC() })
 	lab := &recipes.LabSpec{
 		Steps: []recipes.LabStep{{
-			ID: "send-message",
+			ID:    "send-message",
 			Title: "Send",
 			Verify: []recipes.LabVerify{{
 				Type:      recipes.LabVerifySQSQueueAttribute,
@@ -204,6 +204,25 @@ func (t *trackingInjector) Inject(_ context.Context, _ deploy.Fault) (func() err
 	}, nil
 }
 
+type recoveryInjector struct {
+	revertedRuntime string
+	revertedFault   deploy.Fault
+	revertErr       error
+}
+
+func (r *recoveryInjector) Capabilities() []deploy.FaultKind {
+	return []deploy.FaultKind{deploy.FaultKindPause}
+}
+
+func (r *recoveryInjector) Inject(_ context.Context, _ deploy.Fault) (func() error, error) {
+	return func() error { return nil }, nil
+}
+
+func (r *recoveryInjector) Revert(_ context.Context, fault deploy.Fault) error {
+	r.revertedFault = fault
+	return r.revertErr
+}
+
 func TestRunnerVerifyStepInjectsAndRevertsFault(t *testing.T) {
 	store := NewSessionStore(&memorySettingStore{})
 	registry := NewRegistry()
@@ -225,8 +244,12 @@ func TestRunnerVerifyStepInjectsAndRevertsFault(t *testing.T) {
 		RuntimeID: "docker-compose",
 	}
 	ctx := context.Background()
-	if _, err := runner.Start(ctx, lab, deployment); err != nil {
+	started, err := runner.Start(ctx, lab, deployment)
+	if err != nil {
 		t.Fatalf("Start: %v", err)
+	}
+	if started.Steps[0].Fault == nil || !started.Steps[0].Fault.Available {
+		t.Fatalf("expected pause capability on compose runtime, got %+v", started.Steps[0].Fault)
 	}
 	if _, err := runner.VerifyStep(ctx, lab, deployment, "chaos", models.ProfileSummary{}, "us-east-1", VerifyOptions{}); err != nil {
 		t.Fatalf("VerifyStep: %v", err)
@@ -236,6 +259,123 @@ func TestRunnerVerifyStepInjectsAndRevertsFault(t *testing.T) {
 	}
 	if !tracker.reverted {
 		t.Fatal("expected fault revert after verify")
+	}
+	persisted, found, err := store.Load(ctx, deployment.ID)
+	if err != nil || !found {
+		t.Fatalf("Load: found=%v err=%v", found, err)
+	}
+	if persisted.ActiveFault != nil {
+		t.Fatalf("active fault journal was not cleared: %+v", persisted.ActiveFault)
+	}
+}
+
+func TestRunnerRecoversPersistedFaultAfterRestart(t *testing.T) {
+	memory := &memorySettingStore{}
+	store := NewSessionStore(memory)
+	ctx := context.Background()
+	session := LabSession{
+		DeploymentID: "dep-recover",
+		RecipeID:     "lab-queue-worker-aws",
+		ActiveFault: &ActiveFault{
+			Kind:      string(deploy.FaultKindPause),
+			Target:    "cloudsprocket-localstack-localstack-1",
+			RuntimeID: "docker-compose",
+			StartedAt: "2026-07-15T10:00:00Z",
+		},
+	}
+	if err := store.Save(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+
+	recovery := &recoveryInjector{}
+	runner := NewRunner(store, NewRegistry(), nil)
+	runner.injectorFor = func(deployment *deploy.Deployment) deploy.FaultInjector {
+		recovery.revertedRuntime = deployment.RuntimeID
+		return recovery
+	}
+	deployment := &deploy.Deployment{ID: session.DeploymentID, Local: true, RuntimeID: "localstack"}
+	if err := runner.RecoverActiveFault(ctx, deployment); err != nil {
+		t.Fatalf("RecoverActiveFault: %v", err)
+	}
+	if recovery.revertedRuntime != "docker-compose" {
+		t.Fatalf("recovered runtime = %q, want persisted docker-compose", recovery.revertedRuntime)
+	}
+	if recovery.revertedFault.Target != session.ActiveFault.Target {
+		t.Fatalf("recovered fault = %+v", recovery.revertedFault)
+	}
+	persisted, found, err := store.Load(ctx, deployment.ID)
+	if err != nil || !found {
+		t.Fatalf("Load: found=%v err=%v", found, err)
+	}
+	if persisted.ActiveFault != nil {
+		t.Fatalf("active fault journal was not cleared: %+v", persisted.ActiveFault)
+	}
+}
+
+func TestRunnerRetainsJournalWhenRestartRecoveryFails(t *testing.T) {
+	store := NewSessionStore(&memorySettingStore{})
+	ctx := context.Background()
+	session := LabSession{
+		DeploymentID: "dep-recover-fail",
+		ActiveFault: &ActiveFault{
+			Kind:      string(deploy.FaultKindPause),
+			Target:    "worker",
+			RuntimeID: "docker-compose",
+		},
+	}
+	if err := store.Save(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	runner := NewRunner(store, NewRegistry(), nil)
+	runner.injectorFor = func(_ *deploy.Deployment) deploy.FaultInjector {
+		return &recoveryInjector{revertErr: errors.New("docker unavailable")}
+	}
+	if err := runner.RecoverActiveFault(ctx, &deploy.Deployment{ID: session.DeploymentID}); err == nil {
+		t.Fatal("expected recovery error")
+	}
+	persisted, _, err := store.Load(ctx, session.DeploymentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if persisted.ActiveFault == nil {
+		t.Fatal("failed recovery must retain the active fault journal")
+	}
+}
+
+func TestRunnerSkipsUnavailableFaultStep(t *testing.T) {
+	store := NewSessionStore(&memorySettingStore{})
+	runner := NewRunner(store, NewRegistry(), nil)
+	lab := &recipes.LabSpec{Steps: []recipes.LabStep{
+		{
+			ID:    "chaos",
+			Title: "Pause worker",
+			Fault: &recipes.LabFault{Kind: string(deploy.FaultKindPause), Target: "worker"},
+		},
+		{ID: "inspect", Title: "Inspect"},
+	}}
+	deployment := &deploy.Deployment{
+		ID:        "dep-skip-chaos",
+		Status:    deploy.StatusApplied,
+		Local:     true,
+		RuntimeID: "localstack",
+	}
+	ctx := context.Background()
+	started, err := runner.Start(ctx, lab, deployment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if started.Steps[0].Fault == nil || started.Steps[0].Fault.Available || started.Steps[0].Fault.Reason == "" {
+		t.Fatalf("expected unavailable capability with reason, got %+v", started.Steps[0].Fault)
+	}
+	verified, err := runner.VerifyStep(ctx, lab, deployment, "chaos", models.ProfileSummary{}, "us-east-1", VerifyOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if verified.Steps[0].Status != StepStatusSkipped {
+		t.Fatalf("status = %q, want skipped", verified.Steps[0].Status)
+	}
+	if verified.CurrentStepID != "inspect" {
+		t.Fatalf("current step = %q, want inspect", verified.CurrentStepID)
 	}
 }
 
@@ -255,7 +395,7 @@ func TestRunnerApplyStepFaultWithoutInjectorHook(t *testing.T) {
 		ID:    "chaos",
 		Fault: &recipes.LabFault{Kind: string(deploy.FaultKindPause), Target: "worker"},
 	}
-	err := runner.applyStepFault(context.Background(), deployment, step)
+	err := runner.applyStepFault(context.Background(), deployment, step, &LabSession{DeploymentID: deployment.ID})
 	if !errors.Is(err, deploy.ErrFaultUnsupported) {
 		t.Fatalf("got %v, want ErrFaultUnsupported (cloud noop path, no panic)", err)
 	}
