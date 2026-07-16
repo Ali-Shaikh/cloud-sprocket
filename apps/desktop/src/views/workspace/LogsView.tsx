@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Copy, RefreshCw, ScrollText } from "lucide-react";
 
 import { actionCapabilityState } from "@/lib/action-capabilities";
-
+import { formatEpochMillis } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
@@ -81,12 +81,7 @@ function formatBytes(bytes?: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
-function formatCreationTime(epochMillis?: number): string {
-  if (!epochMillis || epochMillis <= 0) {
-    return "Unknown";
-  }
-  return new Date(epochMillis).toISOString();
-}
+
 
 function copyToClipboard(value: string, label = "Copied to clipboard"): void {
   if (navigator.clipboard) {
@@ -229,7 +224,7 @@ export default function LogsView({
           },
           {
             label: "Created",
-            value: formatCreationTime(selectedLogGroup.creationTime),
+            value: formatEpochMillis(selectedLogGroup.creationTime),
           },
         ]}
         emptyText="No log group details are available."

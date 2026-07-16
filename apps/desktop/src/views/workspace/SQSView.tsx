@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Inbox, RefreshCw } from "lucide-react";
 
+import { formatEpochSeconds } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
@@ -61,12 +62,7 @@ function countLabel(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
-function formatTimestamp(epochSeconds?: number): string {
-  if (!epochSeconds || epochSeconds <= 0) {
-    return "Unknown";
-  }
-  return new Date(epochSeconds * 1000).toISOString();
-}
+
 
 function copyToClipboard(value: string, label = "Copied to clipboard"): void {
   if (navigator.clipboard) {
@@ -266,7 +262,7 @@ export default function SQSView({
           },
           {
             label: "Created",
-            value: formatTimestamp(selectedQueue.createdTimestamp),
+            value: formatEpochSeconds(selectedQueue.createdTimestamp),
           },
           { label: "Queue ARN", value: selectedQueue.queueArn || "Unknown" },
         ]}

@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff, KeyRound, RefreshCw } from "lucide-react";
 
+import { formatTimestamp } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
 import { actionCapabilityState } from "@/lib/action-capabilities";
@@ -174,12 +175,24 @@ export default function SecretsManagerView({
         fields={[
           { label: "Name", value: selectedSecret.name },
           { label: "ARN", value: selectedSecret.arn || "Unknown" },
-          { label: "Description", value: selectedSecret.description || "—" },
-          { label: "Last changed", value: selectedSecret.lastChangedDate || "—" },
-          { label: "Last accessed", value: selectedSecret.lastAccessedDate || "—" },
+          { label: "Description", value: selectedSecret.description || "Unknown" },
+          {
+            label: "Last changed",
+            value: selectedSecret.lastChangedDate
+              ? formatTimestamp(selectedSecret.lastChangedDate)
+              : "Unknown",
+            title: selectedSecret.lastChangedDate,
+          },
+          {
+            label: "Last accessed",
+            value: selectedSecret.lastAccessedDate
+              ? formatTimestamp(selectedSecret.lastAccessedDate)
+              : "Unknown",
+            title: selectedSecret.lastAccessedDate,
+          },
           {
             label: "Rotation",
-            value: selectedSecret.rotationEnabled ? "Enabled" : "—",
+            value: selectedSecret.rotationEnabled ? "Enabled" : "Unknown",
           },
         ]}
         emptyText="No secret details are available."
@@ -351,13 +364,15 @@ export default function SecretsManagerView({
                   return <span className="font-medium">{secret.name}</span>;
                 }
                 if (columnId === "description") {
-                  return secret.description || "—";
+                  return secret.description || "Unknown";
                 }
                 if (columnId === "lastChanged") {
-                  return secret.lastChangedDate || "—";
+                  return secret.lastChangedDate
+                    ? formatTimestamp(secret.lastChangedDate)
+                    : "Unknown";
                 }
                 if (columnId === "rotation") {
-                  return secret.rotationEnabled ? "Enabled" : "—";
+                  return secret.rotationEnabled ? "Enabled" : "Unknown";
                 }
                 return null;
               }}

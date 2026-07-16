@@ -215,7 +215,9 @@ export default function IAMView({
                   {policy.attachmentCount != null
                     ? ` · ${policy.attachmentCount} attachment${policy.attachmentCount === 1 ? "" : "s"}`
                     : ""}
-                  {policy.updateDate ? ` · updated ${policy.updateDate}` : ""}
+                  {policy.updateDate
+                    ? ` · updated ${formatTimestamp(policy.updateDate)}`
+                    : ""}
                 </div>
               </div>
             ))}

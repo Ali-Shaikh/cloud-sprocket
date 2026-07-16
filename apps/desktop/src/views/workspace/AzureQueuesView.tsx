@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
+import { formatTimestamp } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Inbox } from "lucide-react";
 
@@ -155,7 +156,14 @@ export default function AzureQueuesView({
                     <TableCell className="font-mono text-xs">{message.id}</TableCell>
                     <TableCell className="max-w-[320px] truncate font-mono text-xs">{message.text}</TableCell>
                     <TableCell>{message.dequeueCount}</TableCell>
-                    <TableCell className="font-mono text-xs">{message.insertionTime || "—"}</TableCell>
+                    <TableCell
+                      className="text-xs"
+                      title={message.insertionTime || undefined}
+                    >
+                      {message.insertionTime
+                        ? formatTimestamp(message.insertionTime)
+                        : "Unknown"}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
