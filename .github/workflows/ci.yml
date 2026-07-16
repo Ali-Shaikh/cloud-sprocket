@@ -212,6 +212,7 @@ jobs:
             release-assets/*.dmg
             release-assets/*.AppImage
             release-assets/*.deb
+            release-assets/*.spdx.json
 
       - name: Attest release SBOM
         uses: actions/attest@v4
