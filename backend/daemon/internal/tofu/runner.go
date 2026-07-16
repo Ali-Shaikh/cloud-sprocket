@@ -71,10 +71,11 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions) ([]byte, error) {
 
 	err := cmd.Run()
 	writer.flush()
+	output := writer.captured.Bytes()
 	if err != nil {
-		return writer.captured.Bytes(), fmt.Errorf("tofu %s: %w", strings.Join(opts.Args, " "), err)
+		return output, FormatRunError(ctx, opts.Args, output, err)
 	}
-	return writer.captured.Bytes(), nil
+	return output, nil
 }
 
 // RunWithExitCode is like Run but also returns the raw exit code (useful for
@@ -97,9 +98,11 @@ func (r *Runner) RunWithExitCode(ctx context.Context, opts RunOptions) ([]byte, 
 	output := writer.captured.Bytes()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
+			// Detailed-exitcode paths need the raw exit code; still annotate
+			// non-zero failures that are not the drift code (handled by caller).
 			return output, exitErr.ExitCode(), nil
 		}
-		return output, 0, fmt.Errorf("tofu %s: %w", strings.Join(opts.Args, " "), err)
+		return output, 0, FormatRunError(ctx, opts.Args, output, err)
 	}
 	return output, 0, nil
 }
@@ -138,8 +141,8 @@ func (r *Runner) Version(ctx context.Context) (string, error) {
 		return "", err
 	}
 	var decoded struct {
-		Version          string `json:"terraform_version"`
-		OpenTofuVersion  string `json:"tofu_version"`
+		Version         string `json:"terraform_version"`
+		OpenTofuVersion string `json:"tofu_version"`
 	}
 	if jsonErr := json.Unmarshal(out, &decoded); jsonErr == nil {
 		if decoded.OpenTofuVersion != "" {

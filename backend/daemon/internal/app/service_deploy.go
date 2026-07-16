@@ -404,9 +404,11 @@ func (s *Service) cancelDeployment(id string) error {
 }
 
 // finishWithError ends a run that returned an error, reporting a user-initiated
-// cancellation distinctly from a genuine failure. Status persistence uses the
-// background ctx (not the cancelled runCtx) so the final state is still saved.
+// cancellation distinctly from a genuine failure or timeout. Status persistence
+// uses the background ctx (not the cancelled runCtx) so the final state is still
+// saved.
 func (s *Service) finishWithError(ctx, runCtx context.Context, deployment *deploy.Deployment, job models.JobStatus, notifier Notifier, cause error) {
+	// Deadlines are failures with guidance, not user cancels.
 	if runCtx.Err() == context.Canceled {
 		deployment.Error = ""
 		if !s.transitionDeploymentStatus(ctx, deployment, deploy.StatusCancelled, notifier, job) {
@@ -430,7 +432,9 @@ func (s *Service) runDeploymentPlan(deployment *deploy.Deployment, job models.Jo
 	}
 	s.emitJobStatus(notifier, job, "running", "Planning "+deployment.Name+".")
 
-	onLine := s.deploymentLogger(deployment.ID, job.JobID, notifier)
+	baseLog := s.deploymentLogger(deployment.ID, job.JobID, notifier)
+	onLine, stopProgress := deploy.WithProgressHeartbeat(runCtx, baseLog)
+	defer stopProgress()
 	onLine("Checking " + s.targetLabel(deployment) + " connectivity...")
 	deploy.NormaliseDeploymentTarget(deployment)
 	if err := s.deployer.Preflight(runCtx, deployment); err != nil {
@@ -457,7 +461,9 @@ func (s *Service) runDeploymentAction(deployment *deploy.Deployment, action depl
 	s.registerDeployCancel(deployment.ID, cancel)
 	defer s.clearDeployCancel(deployment.ID)
 
-	onLine := s.deploymentLogger(deployment.ID, job.JobID, notifier)
+	baseLog := s.deploymentLogger(deployment.ID, job.JobID, notifier)
+	onLine, stopProgress := deploy.WithProgressHeartbeat(runCtx, baseLog)
+	defer stopProgress()
 
 	deploy.NormaliseDeploymentTarget(deployment)
 	onLine("Checking " + s.targetLabel(deployment) + " connectivity...")

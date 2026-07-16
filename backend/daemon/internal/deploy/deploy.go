@@ -283,8 +283,16 @@ func (e *Engine) Plan(ctx context.Context, deployment *Deployment, onLine tofu.L
 	}
 	dir := e.WorkspaceDir(deployment.ID)
 	env := e.env(deployment)
-	if _, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, OnLine: onLine, Args: []string{"init", "-input=false", "-no-color"}}); err != nil {
+	if onLine != nil {
+		onLine("Initialising OpenTofu and installing providers when needed. First-time Azure (azurerm) downloads can take several minutes and require access to registry.opentofu.org and GitHub.")
+	}
+	initCtx, initCancel := context.WithTimeout(ctx, tofuInitTimeout)
+	defer initCancel()
+	if _, err := e.runner.Run(initCtx, tofu.RunOptions{Dir: dir, Env: env, OnLine: onLine, Args: []string{"init", "-input=false", "-no-color"}}); err != nil {
 		return PlanSummary{}, err
+	}
+	if onLine != nil {
+		onLine("Providers ready. Computing plan...")
 	}
 	if _, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, OnLine: onLine, Args: []string{"plan", "-input=false", "-no-color", "-out=" + planFile}}); err != nil {
 		return PlanSummary{}, err
