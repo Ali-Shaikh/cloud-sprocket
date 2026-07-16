@@ -22,6 +22,7 @@ import { RuntimeHealthStrip } from "@/components/overview/runtime-health-strip";
 import {
   buildRuntimeHealthTargets,
   shouldShowRuntimeHealthStrip,
+  workspaceUsesLocalEmulator,
   type RuntimeHealthTargetId,
 } from "@/lib/runtime-health";
 import { HiddenResourcesHint } from "@/components/overview/hidden-resources-hint";
@@ -125,10 +126,6 @@ export default function OverviewView({
     isRdsAvailable(instance.status),
   ).length;
   const vmsRunning = workspace.azureVirtualMachines.filter((vm) => isRunning(vm.powerState)).length;
-  const emulatorsRunning = workspace.emulatorSummaries.filter(
-    (emulator) => emulator.status === "running",
-  ).length;
-
   const statusFooter = (count: number, total: number, label: string): React.ReactNode =>
     total === 0 ? (
       "None yet"
@@ -203,12 +200,22 @@ export default function OverviewView({
       tabId: "azure-vms",
     });
   }
-  stats.push({
-    label: "Local runtimes",
-    value: workspace.emulatorSummaries.length,
-    footer: runningFooter(emulatorsRunning, workspace.emulatorSummaries.length),
-    tabId: "virtualisation",
-  });
+  // Real cloud overviews should not advertise local emulators. Management stays
+  // under the Local Runtime nav when the user wants it.
+  if (workspaceUsesLocalEmulator(workspace)) {
+    const relevantEmulators = workspace.emulatorSummaries.filter((emulator) => {
+      if (isAws) return emulator.emulatorId === "localstack";
+      if (isAzure) return emulator.emulatorId === "floci-az";
+      return false;
+    });
+    const relevantRunning = relevantEmulators.filter((emulator) => emulator.status === "running").length;
+    stats.push({
+      label: isAzure ? "floci-az" : "LocalStack",
+      value: relevantEmulators.length,
+      footer: runningFooter(relevantRunning, relevantEmulators.length),
+      tabId: "virtualisation",
+    });
+  }
 
   const recents: RecentItem[] = [];
   if (isAws) {

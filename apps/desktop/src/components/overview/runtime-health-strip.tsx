@@ -31,7 +31,7 @@ export function RuntimeHealthStrip({
         <div>
           <h2 className="text-sm font-semibold tracking-tight">Local runtime health</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Docker engine and emulator reachability for local profiles.
+            This workspace uses a local emulator. Docker and emulator status for this profile only.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={onOpenRuntime}>
