@@ -317,15 +317,22 @@ func TestStorageBlobLabStillAllowsFloci(t *testing.T) {
 	}
 }
 
-func TestPostgresFlexibleLabIsCloudOnly(t *testing.T) {
-	// floci-az starts a Docker Postgres container but returns HTTP 201 with a
-	// completed body; azurerm treats that as an error, so apply always fails.
+func TestPostgresFlexibleLabAllowsFloci(t *testing.T) {
+	// floci-az 0.9.0+ emulates Flexible Server with a real postgres container
+	// (see floci-io/floci-az #80). Keep the lab on local floci-az.
 	recipe, err := Bundled().Load("lab-postgres-flexible-azure")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if len(recipe.Manifest.Local.Runtimes) != 0 {
-		t.Fatalf("expected cloud-only (no local runtimes), got %+v", recipe.Manifest.Local.Runtimes)
+	found := false
+	for _, runtime := range recipe.Manifest.Local.Runtimes {
+		if runtime.ID == "floci-az" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("postgres lab should declare floci-az, got %+v", recipe.Manifest.Local.Runtimes)
 	}
 }
 

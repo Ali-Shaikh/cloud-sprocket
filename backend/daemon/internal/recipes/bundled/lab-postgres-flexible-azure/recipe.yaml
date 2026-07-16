@@ -1,21 +1,22 @@
 apiVersion: cloudsprocket.recipe/v1
 id: lab-postgres-flexible-azure
 kind: service-lab
-version: 0.1.1
+version: 0.1.0
 name: PostgreSQL Flexible Server lab (Azure)
-summary: Provision Azure Database for PostgreSQL Flexible Server on a real Azure subscription.
+summary: An Azure Database for PostgreSQL Flexible Server with a starter database and an open dev firewall rule.
 description: |
   A focused service lab for Azure Database for PostgreSQL Flexible Server
   (Microsoft.DBforPostgreSQL/flexibleServers). Provisions one flexible server, a
-  starter database, and a permissive firewall rule for local development clients.
+  starter database, and a permissive firewall rule for local development.
 
-  Requires a cloud Azure profile. floci-az can start a Docker Postgres container for
-  this API, but the azurerm OpenTofu provider rejects floci's create response
-  (HTTP 201 with a completed body), so local dry-run apply fails after ~1 minute.
-  Use a real subscription until floci returns a provider-compatible create path.
+  This recipe dry-runs locally against floci-az, which backs each logical server
+  with a real `postgres:17-alpine` container. After apply, open the Cosmos-style
+  PostgreSQL workspace tab (or call the floci-az `/connect` endpoint) to get the
+  host port and ready-to-paste connection strings. Local mode ships without TLS
+  (`sslmode=disable`); real Azure enforces TLS 1.2+.
 
-  Open the azure-postgres tab after apply for connection details. Cloud Azure
-  enforces TLS 1.2+.
+  The same recipe applies to a real Azure subscription on the cloud profile, where
+  it provisions a managed flexible server.
 providers:
   - azure
 tags:
@@ -24,12 +25,13 @@ tags:
   - database
   - azure
   - lab
-  - cloud-azure
+  - floci-az
 engine:
   type: opentofu
   minVersion: "1.6.0"
 local:
-  runtimes: []
+  runtimes:
+    - id: floci-az
 superpowers:
   iamPolicyStream: false
 variableGroups:
@@ -43,7 +45,7 @@ variableGroups:
         options: [dev, staging, prod]
       - name: azure_location
         widget: text
-        help: Azure region (for example westeurope or eastus).
+        help: Azure region (for example westeurope or eastus). Ignored by floci-az local.
   - title: Server
     variables:
       - name: pg_admin_username
@@ -55,13 +57,13 @@ variableGroups:
       - name: pg_version
         widget: select
         options: ["13", "14", "15", "16", "17"]
-        help: PostgreSQL major version.
+        help: PostgreSQL major version. floci-az runs postgres:17-alpine locally.
       - name: pg_sku_name
         widget: text
-        help: Compute SKU (for example B_Standard_B1ms).
+        help: Compute SKU (for example B_Standard_B1ms). Ignored by floci-az local.
       - name: pg_storage_mb
         widget: number
-        help: Provisioned storage in MB (for example 32768).
+        help: Provisioned storage in MB (for example 32768). Ignored by floci-az local.
   - title: Database
     variables:
       - name: database_name
@@ -86,7 +88,7 @@ lab:
   estimatedMinutes: 25
   objectives:
     - Find the PostgreSQL flexible server provisioned by this deployment
-    - Read connection details for cloud access
+    - Read connection details for local floci-az or cloud access
   steps:
     - id: explore-server
       title: Open the PostgreSQL server
@@ -104,9 +106,10 @@ lab:
       title: Review the starter database
       body: |
         Confirm the starter database from the `database_name` output exists on the
-        server. Azure cloud enforces TLS 1.2+ for client connections.
+        server. On floci-az local runs, the workspace tab reveals connection strings
+        and a live `/connect` endpoint backed by a real Postgres container.
       hints:
-        - Use the admin username from deployment outputs with your secret password.
+        - Local mode uses `sslmode=disable`; Azure cloud enforces TLS 1.2+.
     - id: read-connection-hint
       title: Read the connection hint
       body: |
@@ -114,4 +117,4 @@ lab:
         `server_fqdn` and `admin_username`. Use these values in your client or ORM
         connection string.
       hints:
-        - Prefer TLS on real Azure; do not disable SSL for cloud servers.
+        - floci-az exposes host and port via the PostgreSQL tab after apply completes.
