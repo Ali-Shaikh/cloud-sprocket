@@ -55,29 +55,15 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 	session models.SessionSnapshot,
 	opts workspaceSnapshotOptions,
 ) models.WorkspaceSnapshot {
-	dockerRuntime := s.dockerRuntimeSnapshot()
-	// Only enumerate managed Docker resources when the engine is reachable. When
-	// Docker is stopped the resource probe would otherwise wait out its own
-	// timeout to return an empty list, doubling the Docker latency of every
-	// workspace fetch and Local Runtime poll.
-	dockerResources := []models.ManagedDockerResource{}
-	// When the engine is unreachable, skip the per-emulator Docker probes too and
-	// fall back to the static planned summaries. Each live probe would otherwise
-	// wait out its own timeout, and with both LocalStack and floci-az that adds
-	// several seconds to every workspace fetch and Local Runtime poll.
-	emulatorSummaries := s.emulatorSummaries()
-	if dockerRuntime.Reachable {
-		dockerResources = s.dockerResources()
-		emulatorSummaries = s.emulatorsList()
-	}
+	runtime := s.runtimeStatusForSnapshot()
 	workspace := models.WorkspaceSnapshot{
 		AuthMethod:             session.SelectedAuthMethod,
 		RuntimeSettings:        s.settingsSnapshot(),
 		EnvironmentDiagnostics: s.environmentDiagnostics(snapshot, session),
-		DockerDiagnostics:      s.dockerDiagnosticsFromSnapshot(dockerRuntime),
-		DockerRuntime:          dockerRuntime,
-		DockerResources:        dockerResources,
-		EmulatorSummaries:      emulatorSummaries,
+		DockerDiagnostics:      s.dockerDiagnosticsFromSnapshot(runtime.Docker),
+		DockerRuntime:          runtime.Docker,
+		DockerResources:        runtime.Resources,
+		EmulatorSummaries:      runtime.Emulators,
 		LocalConfigArtifacts:   s.localConfigArtifacts(),
 		AzureResourceGroups:    []models.AzureResourceGroup{},
 		AzureVirtualMachines:   []models.AzureVirtualMachine{},
@@ -173,9 +159,27 @@ func (s *Service) azureCLIExtensionChecks(snapshot discovery.Snapshot, profile m
 	if !ok || strings.TrimSpace(provider.CommandPath) == "" {
 		return nil
 	}
+	profileID := strings.TrimSpace(profile.ProfileID)
+	s.azureCLIExtMu.Lock()
+	if profileID != "" &&
+		s.azureCLIExtProfileID == profileID &&
+		s.now().Sub(s.azureCLIExtAt) < azureCLIExtensionCacheTTL {
+		statuses := append([]models.AzureCLIExtensionStatus(nil), s.azureCLIExtStatuses...)
+		s.azureCLIExtMu.Unlock()
+		return statuses
+	}
+	s.azureCLIExtMu.Unlock()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return s.azure.CheckCLIExtensions(ctx)
+	statuses := s.azure.CheckCLIExtensions(ctx)
+
+	s.azureCLIExtMu.Lock()
+	s.azureCLIExtProfileID = profileID
+	s.azureCLIExtStatuses = append([]models.AzureCLIExtensionStatus(nil), statuses...)
+	s.azureCLIExtAt = s.now()
+	s.azureCLIExtMu.Unlock()
+	return statuses
 }
 
 func (s *Service) environmentDiagnostics(snapshot discovery.Snapshot, session models.SessionSnapshot) []models.DetailField {
