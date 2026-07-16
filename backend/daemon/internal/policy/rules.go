@@ -84,12 +84,17 @@ func evaluatePlan(ctx context.Context, plan map[string]any, options Options) ([]
 		address := stringValue(change["address"])
 		resourceType := stringValue(change["type"])
 
-		if publicS3(resourceType, after) {
-			appendFinding(Finding{
+		if publicAccess, unknownAccess := publicS3(resourceType, after, afterUnknown); publicAccess || unknownAccess {
+			finding := Finding{
 				RuleID: publicS3RuleID, Title: "Public S3 access",
 				Message:  "The planned S3 configuration permits public access.",
 				Severity: SeverityDeny, ResourceAddress: address,
-			})
+			}
+			if unknownAccess {
+				finding.Title = "S3 public access cannot be verified"
+				finding.Message = "A planned S3 public-access setting is unknown until apply."
+			}
+			appendFinding(finding)
 		}
 		if openManagementPort(resourceType, after) {
 			appendFinding(Finding{
@@ -167,24 +172,29 @@ func evaluatePlan(ctx context.Context, plan map[string]any, options Options) ([]
 	return findings, nil
 }
 
-func publicS3(resourceType string, after map[string]any) bool {
+func publicS3(resourceType string, after, afterUnknown map[string]any) (bool, bool) {
 	if resourceType == "aws_s3_bucket" || resourceType == "aws_s3_bucket_acl" {
 		switch stringValue(after["acl"]) {
 		case "public-read", "public-read-write", "authenticated-read":
-			return true
+			return true, false
+		}
+		if valueUnknown(afterUnknown["acl"]) {
+			return false, true
 		}
 	}
 	if resourceType != "aws_s3_bucket_public_access_block" {
-		return false
+		return false, false
 	}
+	unknown := false
 	for _, setting := range []string{"block_public_acls", "block_public_policy", "ignore_public_acls", "restrict_public_buckets"} {
 		if value, present := after[setting]; present {
 			if enabled, ok := value.(bool); ok && !enabled {
-				return true
+				return true, false
 			}
 		}
+		unknown = unknown || valueUnknown(afterUnknown[setting])
 	}
-	return false
+	return false, unknown
 }
 
 func openManagementPort(resourceType string, after map[string]any) bool {
@@ -216,11 +226,15 @@ func worldOpen(rule map[string]any) bool {
 }
 
 func tagValueUnknown(rawTags any, required string) bool {
-	if unknown, ok := rawTags.(bool); ok {
-		return unknown
+	if valueUnknown(rawTags) {
+		return true
 	}
 	unknownTags := objectValue(rawTags)
-	unknown, _ := unknownTags[required].(bool)
+	return valueUnknown(unknownTags[required])
+}
+
+func valueUnknown(raw any) bool {
+	unknown, _ := raw.(bool)
 	return unknown
 }
 

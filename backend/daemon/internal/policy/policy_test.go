@@ -141,6 +141,33 @@ func TestEvaluateDistinguishesUnknownRequiredTag(t *testing.T) {
 	}
 }
 
+func TestEvaluateBlocksUnknownS3PublicAccessSetting(t *testing.T) {
+	raw, err := json.Marshal(map[string]any{
+		"format_version": "1.0",
+		"resource_changes": []map[string]any{{
+			"address": "aws_s3_bucket_public_access_block.site",
+			"type":    "aws_s3_bucket_public_access_block",
+			"change": map[string]any{
+				"actions": []string{"create"},
+				"after": map[string]any{
+					"block_public_acls": true, "ignore_public_acls": true, "restrict_public_buckets": true,
+				},
+				"after_unknown": map[string]any{"block_public_policy": true},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Evaluate(context.Background(), raw, Options{})
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if got.Status != StatusBlocked || got.BlockingCount != 1 || len(got.Findings) != 1 || got.Findings[0].Title != "S3 public access cannot be verified" {
+		t.Fatalf("expected an unknown S3 public-access blocker, got %+v", got)
+	}
+}
+
 func TestEvaluateProviderRegionAllowlist(t *testing.T) {
 	raw, err := json.Marshal(map[string]any{
 		"format_version": "1.0",

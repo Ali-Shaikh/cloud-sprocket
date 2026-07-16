@@ -13,7 +13,7 @@ requires a new implementation review before accepting another major version.
 
 | Rule | Severity | Detects |
 | --- | --- | --- |
-| `aws.s3.public-access` | Deny | Public S3 ACLs or disabled S3 public-access-block settings |
+| `aws.s3.public-access` | Deny | Public S3 ACLs, disabled S3 public-access-block settings, or public-access settings that remain unknown until apply |
 | `aws.network.open-management-port` | Deny | SSH, RDP, or WinRM exposed to IPv4 or IPv6 world CIDRs |
 | `aws.iam.wildcard-action` | Warning | `Action` or `NotAction` containing `*` in inline IAM policy JSON |
 | `cloud.tags.required` | Warning | Missing configured tags on known taggable AWS and Azure resources |
