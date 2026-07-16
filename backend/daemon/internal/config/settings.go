@@ -118,7 +118,15 @@ func FromEnv(env map[string]string, goos string, home string) Settings {
 }
 
 func (s Settings) EnsureRuntimeDirs() error {
-	for _, directory := range []string{filepath.Dir(s.LogPath), s.LocalConfigDir, s.EmulatorStateDir, s.ToolsDir, s.DeploymentsDir, s.ImportedRecipesDir} {
+	for _, directory := range []string{
+		filepath.Dir(s.LogPath),
+		s.LocalConfigDir,
+		s.EmulatorStateDir,
+		s.ToolsDir,
+		s.DeploymentsDir,
+		s.ImportedRecipesDir,
+		filepath.Join(s.ConfigDir, "plugin-cache"),
+	} {
 		if err := os.MkdirAll(directory, 0o755); err != nil {
 			return err
 		}

@@ -102,6 +102,7 @@ func TestParseOutputs(t *testing.T) {
 
 func TestEnvLocalVsReal(t *testing.T) {
 	e := NewEngine(tofu.NewRunner("tofu"), config.Settings{
+		ConfigDir:          t.TempDir(),
 		AWSConfigPath:      "/home/u/.aws/config",
 		AWSCredentialsPath: "/home/u/.aws/credentials",
 		AzureDir:           "/home/u/.azure",
@@ -110,6 +111,9 @@ func TestEnvLocalVsReal(t *testing.T) {
 	local := e.env(&Deployment{ProviderID: "aws", Local: true})
 	if !contains(local, "AWS_ACCESS_KEY_ID=test") {
 		t.Fatalf("local env = %v", local)
+	}
+	if !envContainsKey(local, "TF_PLUGIN_CACHE_DIR", "plugin-cache") {
+		t.Fatalf("local env missing TF_PLUGIN_CACHE_DIR, got %v", local)
 	}
 	real := e.env(&Deployment{ProviderID: "aws", ProfileID: "prod"})
 	if !contains(real, "AWS_PROFILE=prod") || !contains(real, "AWS_CONFIG_FILE=/home/u/.aws/config") {

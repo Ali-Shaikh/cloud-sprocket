@@ -634,14 +634,26 @@ func (w *buildLineWriter) flush() {
 	}
 }
 
-// env builds the provider environment via the resolved deployment target.
-// Target-less deployments (no runtime) contribute no environment.
+// env builds the provider environment via the resolved deployment target and
+// always injects a shared OpenTofu plugin cache so large providers (azurerm is
+// ~63 MB) are downloaded once and reused across deployments.
 func (e *Engine) env(deployment *Deployment) []string {
+	env := tofuPluginCacheEnv(e.settings)
 	target, err := e.registry.ResolveTarget(deployment)
 	if err != nil || target == nil {
-		return nil
+		return env
 	}
-	return target.Env(deployment, e.settings)
+	return append(env, target.Env(deployment, e.settings)...)
+}
+
+// tofuPluginCacheEnv returns TF_PLUGIN_CACHE_DIR under the app config root.
+// The directory is created if missing so tofu can write into it immediately.
+func tofuPluginCacheEnv(settings config.Settings) []string {
+	cacheDir := filepath.Join(settings.ConfigDir, "plugin-cache")
+	if strings.TrimSpace(settings.ConfigDir) != "" {
+		_ = os.MkdirAll(cacheDir, 0o755)
+	}
+	return []string{"TF_PLUGIN_CACHE_DIR=" + cacheDir}
 }
 
 // TargetLabel names a deployment's target for log lines.
