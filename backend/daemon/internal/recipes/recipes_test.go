@@ -317,6 +317,18 @@ func TestStorageBlobLabStillAllowsFloci(t *testing.T) {
 	}
 }
 
+func TestPostgresFlexibleLabIsCloudOnly(t *testing.T) {
+	// floci-az starts a Docker Postgres container but returns HTTP 201 with a
+	// completed body; azurerm treats that as an error, so apply always fails.
+	recipe, err := Bundled().Load("lab-postgres-flexible-azure")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(recipe.Manifest.Local.Runtimes) != 0 {
+		t.Fatalf("expected cloud-only (no local runtimes), got %+v", recipe.Manifest.Local.Runtimes)
+	}
+}
+
 func TestLoadMagentoAWSRecipe(t *testing.T) {
 	recipe, err := Bundled().Load("magento-commerce-aws")
 	if err != nil {
