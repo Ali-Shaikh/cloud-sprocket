@@ -114,6 +114,7 @@ vi.mock("./lib/backend", () => ({
   clearDebugLogs: vi.fn(),
   getDebugLogs: vi.fn(() => []),
   subscribeToDebugLogs: vi.fn(() => () => undefined),
+  listDeployments: vi.fn(async () => []),
   backendRequest: vi.fn(async (method: string, params?: Record<string, unknown>) => {
     switch (method) {
       case "providers.list":
@@ -124,14 +125,17 @@ vi.mock("./lib/backend", () => ({
         return sessionFixture;
       case "session.selectProvider": {
         const providerId = String(params?.providerId ?? "");
-        const firstProfile = profileFixtures.find((profile) => profile.providerId === providerId);
         sessionFixture = {
           ...sessionFixture,
           isLocked: false,
           currentProviderId: providerId,
-          selectedProfileId: firstProfile?.profileId,
+          selectedProfileId: undefined,
           selectedAuthMethod: undefined,
-          availableAuthMethods: firstProfile?.authMethods ?? [],
+          lockedProviderId: undefined,
+          lockedProfileId: undefined,
+          lockedAuthMethod: undefined,
+          availableAuthMethods: [],
+          workspaceTabs: [],
         };
         return sessionFixture;
       }
@@ -147,7 +151,11 @@ vi.mock("./lib/backend", () => ({
           currentProviderId: providerId,
           selectedProfileId: profileId,
           selectedAuthMethod: undefined,
+          lockedProviderId: undefined,
+          lockedProfileId: undefined,
+          lockedAuthMethod: undefined,
           availableAuthMethods: profile?.authMethods ?? [],
+          workspaceTabs: [],
         };
         return sessionFixture;
       }
@@ -1495,6 +1503,136 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Your clouds" })).toBeInTheDocument();
     expect(await screen.findByText("App reset complete")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /sandbox/ })).toBeEnabled();
+  });
+
+  it("confirms before switching provider while a workspace is locked", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      currentProviderId: "aws",
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      selectedProfileId: "sandbox",
+      workspaceTabs: [
+        { tabId: "overview", label: "Overview", summary: "Summary", detail: "Overview panel" },
+        {
+          tabId: "dynamodb",
+          label: "DynamoDB",
+          summary: "Tables",
+          detail: "DynamoDB panel",
+          category: "service",
+          domain: "database",
+        },
+      ],
+    };
+
+    render(
+      <AppProviders>
+        <App />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
+    vi.mocked(backendRequest).mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Azure · 1 profile" }));
+
+    const leaveDialog = await screen.findByRole("alertdialog", { name: "Leave this workspace?" });
+    expect(within(leaveDialog).getByText("sandbox", { exact: true })).toBeInTheDocument();
+    expect(
+      vi.mocked(backendRequest).mock.calls.some(([method]) => method === "session.selectProvider"),
+    ).toBe(false);
+
+    fireEvent.click(within(leaveDialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alertdialog", { name: "Leave this workspace?" })).not.toBeInTheDocument();
+    expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
+    expect(sessionFixture.isLocked).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Azure · 1 profile" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Switch to Azure" }));
+
+    await waitFor(() => {
+      expect(
+        vi.mocked(backendRequest).mock.calls.some(
+          ([method, params]) =>
+            method === "session.selectProvider" &&
+            (params as { providerId?: string } | undefined)?.providerId === "azure",
+        ),
+      ).toBe(true);
+    });
+    expect(await screen.findByRole("heading", { name: "Your clouds" })).toBeInTheDocument();
+    expect(sessionFixture.isLocked).toBe(false);
+    expect(sessionFixture.selectedProfileId).toBeUndefined();
+  });
+
+  it("switches provider immediately when the session is unlocked", async () => {
+    render(
+      <AppProviders>
+        <App />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Open AWS" })).toBeInTheDocument();
+    vi.mocked(backendRequest).mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Azure · 1 profile" }));
+
+    await waitFor(() => {
+      expect(
+        vi.mocked(backendRequest).mock.calls.some(
+          ([method, params]) =>
+            method === "session.selectProvider" &&
+            (params as { providerId?: string } | undefined)?.providerId === "azure",
+        ),
+      ).toBe(true);
+    });
+    expect(screen.queryByRole("alertdialog", { name: "Leave this workspace?" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Open Azure" })).toBeInTheDocument();
+  });
+
+  it("offers locked workspace tabs in the palette from a non-workspace area", async () => {
+    const user = userEvent.setup();
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      currentProviderId: "aws",
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        { tabId: "overview", label: "Overview", summary: "Summary", detail: "Overview panel" },
+        {
+          tabId: "dynamodb",
+          label: "DynamoDB",
+          summary: "Tables",
+          detail: "DynamoDB panel",
+          category: "service",
+          domain: "database",
+        },
+      ],
+    };
+
+    render(
+      <AppProviders>
+        <App />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
+    // Developer Toolbox is a non-workspace rail area that does not need Deploy
+    // catalogue mocks; palette should still list workspace services while locked.
+    fireEvent.click(
+      screen.getByRole("button", { name: /Developer Toolbox · JSON, YAML, diff, encoders/i }),
+    );
+    expect(await screen.findByRole("heading", { name: "Developer Toolbox" })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    const search = await screen.findByRole("textbox", { name: "Search commands" });
+    await user.type(search, "DynamoDB{enter}");
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /DynamoDB/i })).toBeInTheDocument();
+    });
   });
 
   it("opens reset confirmation from the command palette", async () => {

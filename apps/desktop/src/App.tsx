@@ -22,6 +22,7 @@ import { useRuntimeActions } from "./hooks/use-runtime-actions";
 import { useServicePreferencesFlow } from "./hooks/use-service-preferences-flow";
 import { useSessionState } from "./hooks/use-session-state";
 import { useVirtualisationPoll } from "./hooks/use-virtualisation-poll";
+import { useProviderSwitchFlow } from "./hooks/use-provider-switch-flow";
 import { useWriteModeFlow } from "./hooks/use-write-mode-flow";
 import { useWorkspaceLoading } from "./hooks/use-workspace-loading";
 import { useWorkspaceState } from "./hooks/use-workspace-state";
@@ -651,7 +652,7 @@ export default function App() {
   async function mutateSession(
     method: string,
     params: Record<string, unknown> = {},
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       const nextSession = await backendRequest<SessionSnapshot>(method, params);
       const normalisedSession = normaliseSessionSnapshot(nextSession);
@@ -670,9 +671,11 @@ export default function App() {
       });
       await loadWorkspace(normalisedSession);
       await loadState({ refreshWorkspace: false });
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Session mutation failed";
       pushNotification("error", `Failed to execute ${method}`, message);
+      return false;
     }
   }
 
@@ -1152,6 +1155,14 @@ export default function App() {
       setWorkspace,
     });
 
+  const { requestProviderSwitch, providerSwitchDialog } = useProviderSwitchFlow({
+    session,
+    providers,
+    profiles,
+    mutateSession,
+    onSwitched: () => setActiveWorkspaceTabId("overview"),
+  });
+
   const {
     lockedProfile,
     isDeveloperToolsActive,
@@ -1183,7 +1194,7 @@ export default function App() {
     workspaceLoading,
     workspaceLoaded,
     logs,
-    mutateSession,
+    requestProviderSwitch,
     refreshDiscovery,
     openResetModal,
   });
@@ -1561,6 +1572,7 @@ export default function App() {
         </div>
       </AppShell>
       {writeModeDialog}
+      {providerSwitchDialog}
 
       <CommandPalette
         open={commandPaletteOpen}

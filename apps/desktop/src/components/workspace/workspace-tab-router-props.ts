@@ -149,7 +149,7 @@ export type WorkspaceTabRouterProps = {
     params: Record<string, unknown>,
     options?: MutateWorkspaceSelectionOptions,
   ) => Promise<void>;
-  mutateSession: (method: string, params?: Record<string, unknown>) => Promise<void>;
+  mutateSession: (method: string, params?: Record<string, unknown>) => Promise<boolean>;
   refreshDiscovery: () => Promise<void>;
   refreshDockerRuntime: () => Promise<void>;
   refreshLocalStackLogs: () => Promise<void>;

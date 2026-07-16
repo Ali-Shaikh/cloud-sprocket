@@ -1378,12 +1378,27 @@ function appendLog(level: ActivityLogEntry["level"], message: string): void {
   emitMockEvent("log.appended", entry);
 }
 
+function clearMockWorkspaceSelections(): void {
+  // Mirror the daemon's session.selectProvider / selectProfile unlock clears.
+  mockState.session.selectedAzureResourceGroup = undefined;
+  mockState.session.selectedAzureVmId = undefined;
+  mockState.session.selectedS3BucketName = undefined;
+  mockState.session.selectedS3ObjectKey = undefined;
+  mockState.session.s3PrefixFilter = "";
+  mockState.session.selectedEc2Region = undefined;
+  mockState.session.selectedEc2InstanceId = undefined;
+}
+
 function setCurrentProvider(providerId: string): void {
+  // Real daemon unlocks and clears profile selection when the provider changes.
+  mockState.session.isLocked = false;
+  mockState.session.lockedProviderId = undefined;
+  mockState.session.lockedProfileId = undefined;
+  mockState.session.lockedAuthMethod = undefined;
   mockState.session.currentProviderId = providerId;
-  const firstProfile = mockState.profiles.find(
-    (profile) => profile.providerId === providerId,
-  );
-  mockState.session.selectedProfileId = firstProfile?.profileId;
+  mockState.session.selectedProfileId = undefined;
+  mockState.session.selectedAuthMethod = undefined;
+  clearMockWorkspaceSelections();
   rebuildSessionDerivedState();
 }
 
@@ -3545,8 +3560,14 @@ function handleMockRequest<T>(
       appendLog("info", `Selected provider ${params.providerId}.`);
       return Promise.resolve(mockState.session as T);
     case "session.selectProfile":
+      mockState.session.isLocked = false;
+      mockState.session.lockedProviderId = undefined;
+      mockState.session.lockedProfileId = undefined;
+      mockState.session.lockedAuthMethod = undefined;
       mockState.session.currentProviderId = String(params.providerId ?? "");
       mockState.session.selectedProfileId = String(params.profileId ?? "");
+      mockState.session.selectedAuthMethod = undefined;
+      clearMockWorkspaceSelections();
       rebuildSessionDerivedState();
       emitStateChanged();
       appendLog("info", `Selected profile ${params.profileId}.`);
