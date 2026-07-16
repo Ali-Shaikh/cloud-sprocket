@@ -8,7 +8,7 @@ deploying against AWS and Azure from one workspace. The app pairs a **Tauri v2**
 shell (`React`, `TypeScript`) with a **Go** sidecar daemon that handles discovery,
 inventory, JSON-RPC, and SQLite-backed session state.
 
-**Latest release:** [v0.9.7](https://github.com/Ali-Shaikh/cloud-sprocket/releases/latest)
+**Latest release:** [v0.9.8](https://github.com/Ali-Shaikh/cloud-sprocket/releases/latest)
 
 ## Developer Preview
 
