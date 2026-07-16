@@ -1361,6 +1361,33 @@ export interface PlanSummary {
   changes: ResourceChange[];
 }
 
+export type PolicySeverity = "warning" | "deny";
+export type PolicyStatus = "passed" | "warned" | "blocked";
+
+export interface PolicyFinding {
+  ruleId: string;
+  title: string;
+  message: string;
+  severity: PolicySeverity;
+  resourceAddress?: string;
+}
+
+export interface PolicyOverride {
+  decisionDigest: string;
+  confirmedAt: string;
+  findingKeys: string[];
+}
+
+export interface PolicyEvaluation {
+  status: PolicyStatus;
+  planDigest: string;
+  decisionDigest: string;
+  evaluatedAt: string;
+  blockingCount: number;
+  findings: PolicyFinding[];
+  override?: PolicyOverride;
+}
+
 export interface DeploymentOutput {
   name: string;
   value: unknown;
@@ -1389,6 +1416,7 @@ export interface Deployment {
   variables: Record<string, unknown>;
   status: DeploymentStatus;
   plan?: PlanSummary;
+  policy?: PolicyEvaluation;
   outputs?: DeploymentOutput[];
   error?: string;
   postApplyError?: string;
@@ -1404,6 +1432,7 @@ export interface DeploymentRevision {
   recipeVersion?: string;
   variables: Record<string, unknown>;
   plan?: PlanSummary;
+  policy?: PolicyEvaluation;
 }
 
 export interface DriftReport {

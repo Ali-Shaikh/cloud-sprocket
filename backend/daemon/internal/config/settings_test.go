@@ -5,22 +5,25 @@ package config
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
 func TestFromEnvUsesWindowsOverrides(t *testing.T) {
 	home := filepath.Join("C:", "Users", "Ali")
 	settings := FromEnv(map[string]string{
-		"APPDATA":                          filepath.Join(home, "Roaming"),
-		"LOCALAPPDATA":                     filepath.Join(home, "Local"),
-		"CLOUDSPROCKET_CONFIG_DIR":         filepath.Join(home, "ConfigRoot"),
-		"CLOUDSPROCKET_RUNTIME_MODE":       "local-emulator",
-		"CLOUDSPROCKET_LOCAL_CONFIG_DIR":   filepath.Join(home, "LocalProfiles"),
-		"CLOUDSPROCKET_EMULATOR_STATE_DIR": filepath.Join(home, "EmulatorState"),
-		"CLOUDSPROCKET_LOCALSTACK_IMAGE":   "registry.example.com/localstack:2026.05.0",
-		"CLOUDSPROCKET_FLOCI_AZ_IMAGE":     "registry.example.com/floci-az:0.3.0",
-		"AWS_CONFIG_FILE":                  filepath.Join(home, "custom", "config"),
-		"AWS_SHARED_CREDENTIALS_FILE":      filepath.Join(home, "custom", "credentials"),
+		"APPDATA":                              filepath.Join(home, "Roaming"),
+		"LOCALAPPDATA":                         filepath.Join(home, "Local"),
+		"CLOUDSPROCKET_CONFIG_DIR":             filepath.Join(home, "ConfigRoot"),
+		"CLOUDSPROCKET_RUNTIME_MODE":           "local-emulator",
+		"CLOUDSPROCKET_LOCAL_CONFIG_DIR":       filepath.Join(home, "LocalProfiles"),
+		"CLOUDSPROCKET_EMULATOR_STATE_DIR":     filepath.Join(home, "EmulatorState"),
+		"CLOUDSPROCKET_LOCALSTACK_IMAGE":       "registry.example.com/localstack:2026.05.0",
+		"CLOUDSPROCKET_FLOCI_AZ_IMAGE":         "registry.example.com/floci-az:0.3.0",
+		"AWS_CONFIG_FILE":                      filepath.Join(home, "custom", "config"),
+		"AWS_SHARED_CREDENTIALS_FILE":          filepath.Join(home, "custom", "credentials"),
+		"CLOUDSPROCKET_POLICY_REQUIRED_TAGS":   "Environment, Owner,Environment",
+		"CLOUDSPROCKET_POLICY_ALLOWED_REGIONS": "eu-west-1, me-central-1",
 	}, "windows", home)
 
 	if settings.ConfigDir != filepath.Join(home, "ConfigRoot") {
@@ -47,6 +50,12 @@ func TestFromEnvUsesWindowsOverrides(t *testing.T) {
 	if settings.FlociAZImage != "registry.example.com/floci-az:0.3.0" {
 		t.Fatalf("expected floci-az image override, got %s", settings.FlociAZImage)
 	}
+	if !reflect.DeepEqual(settings.PolicyRequiredTags, []string{"Environment", "Owner"}) {
+		t.Fatalf("unexpected required policy tags: %#v", settings.PolicyRequiredTags)
+	}
+	if !reflect.DeepEqual(settings.PolicyAllowedRegions, []string{"eu-west-1", "me-central-1"}) {
+		t.Fatalf("unexpected policy region allowlist: %#v", settings.PolicyAllowedRegions)
+	}
 }
 
 func TestFromEnvUsesMacOSDefaults(t *testing.T) {
@@ -71,5 +80,18 @@ func TestFromEnvUsesMacOSDefaults(t *testing.T) {
 	}
 	if settings.FlociAZImage != "floci/floci-az:latest" {
 		t.Fatalf("unexpected floci-az image %s", settings.FlociAZImage)
+	}
+	if !reflect.DeepEqual(settings.PolicyRequiredTags, []string{"Environment", "ManagedBy"}) {
+		t.Fatalf("unexpected default required policy tags: %#v", settings.PolicyRequiredTags)
+	}
+	if len(settings.PolicyAllowedRegions) != 0 {
+		t.Fatalf("expected no default policy region restrictions, got %#v", settings.PolicyAllowedRegions)
+	}
+}
+
+func TestFromEnvCanDisableRequiredTagPolicy(t *testing.T) {
+	settings := FromEnv(map[string]string{"CLOUDSPROCKET_POLICY_REQUIRED_TAGS": ""}, "linux", "/home/ali")
+	if len(settings.PolicyRequiredTags) != 0 {
+		t.Fatalf("expected an explicitly empty required tag list, got %#v", settings.PolicyRequiredTags)
 	}
 }

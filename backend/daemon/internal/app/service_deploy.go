@@ -13,10 +13,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"cloudsprocket/backend/daemon/internal/deploy"
 	"cloudsprocket/backend/daemon/internal/models"
+	"cloudsprocket/backend/daemon/internal/policy"
 	"cloudsprocket/backend/daemon/internal/recipes"
 
 	"gopkg.in/yaml.v3"
@@ -190,6 +192,7 @@ func (s *Service) startDeploymentPlan(ctx context.Context, request deploymentPla
 			RecipeVersion: existing.RecipeVersion,
 			Variables:     cloneVariables(existing.Variables),
 			Plan:          existing.Plan,
+			Policy:        existing.Policy,
 		}
 		deployment = existing
 		deployment.Variables = cloneVariables(request.Variables)
@@ -200,6 +203,7 @@ func (s *Service) startDeploymentPlan(ctx context.Context, request deploymentPla
 		deployment.RuntimeID = request.RuntimeID
 		deployment.SensitiveVars = sensitiveVariableNames(recipe)
 		deployment.Plan = nil
+		deployment.Policy = nil
 		deployment.Error = ""
 		deployment.Drift = nil
 		deployment.Status = deploy.StatusPending
@@ -282,10 +286,18 @@ func shouldSkipImportPath(rel string, _ fs.DirEntry) bool {
 	return recipes.ShouldSkipImportRel(rel)
 }
 
-func (s *Service) startDeploymentAction(id string, action deploymentAction, notifier Notifier) (deploymentJob, error) {
+func (s *Service) startDeploymentAction(id string, action deploymentAction, policyOverride string, notifier Notifier) (deploymentJob, error) {
 	deployment, err := s.deploymentGet(context.Background(), id)
 	if err != nil {
 		return deploymentJob{}, err
+	}
+	if action == actionApply {
+		if deployment.Status != deploy.StatusPlanned {
+			return deploymentJob{}, fmt.Errorf("apply requires a planned deployment")
+		}
+		if err := s.authorisePolicyApply(context.Background(), deployment, policyOverride, notifier); err != nil {
+			return deploymentJob{}, err
+		}
 	}
 	label := "Apply " + deployment.Name
 	if action == actionDestroy {
@@ -294,6 +306,71 @@ func (s *Service) startDeploymentAction(id string, action deploymentAction, noti
 	job := models.JobStatus{JobID: s.newJobID(), Label: label, Status: "queued", Message: label + "."}
 	go s.runDeploymentAction(deployment, action, job, notifier)
 	return deploymentJob{Deployment: deployment, Job: job}, nil
+}
+
+func (s *Service) authorisePolicyApply(ctx context.Context, deployment *deploy.Deployment, confirmation string, notifier Notifier) error {
+	if deployment.Policy == nil {
+		return fmt.Errorf("deployment has no policy evaluation; plan again before applying")
+	}
+	if deployment.Policy.Status != policy.StatusBlocked || deployment.Policy.HasValidOverride() {
+		return nil
+	}
+	expected := policy.OverridePhrase(deployment.ID)
+	if confirmation != expected {
+		return fmt.Errorf("policy guardrails blocked apply; type %q to acknowledge %d blocking finding(s)", expected, deployment.Policy.BlockingCount)
+	}
+
+	previousOverride := deployment.Policy.Override
+	previousUpdatedAt := deployment.UpdatedAt
+	deployment.Policy.AcceptOverride(s.now())
+	deployment.UpdatedAt = s.timestamp()
+	rules := blockingPolicyRules(*deployment.Policy)
+	message := fmt.Sprintf("Policy override accepted for deployment %s (%s). Blocking rules: %s.", deployment.Name, deployment.ID, strings.Join(rules, ", "))
+	sealed, err := s.sealForStore(deployment)
+	if err != nil {
+		deployment.Policy.Override = previousOverride
+		deployment.UpdatedAt = previousUpdatedAt
+		return err
+	}
+	entry, err := s.store.SaveDeploymentWithLog(
+		ctx,
+		deployment.ID,
+		sealed,
+		deployment.UpdatedAt,
+		"warning",
+		message,
+		"",
+		s.timestamp(),
+	)
+	if err != nil {
+		deployment.Policy.Override = previousOverride
+		deployment.UpdatedAt = previousUpdatedAt
+		return fmt.Errorf("persist policy override and activity: %w", err)
+	}
+	if notifier != nil {
+		if err := notifier.Notify("log.appended", entry); err != nil {
+			log.Printf("deployments: policy override activity notification failed for %s: %v", deployment.ID, err)
+		}
+		_ = notifier.Notify("deployment.changed", deployment)
+	}
+	return nil
+}
+
+func blockingPolicyRules(evaluation policy.Evaluation) []string {
+	seen := map[string]struct{}{}
+	rules := []string{}
+	for _, finding := range evaluation.Findings {
+		if finding.Severity != policy.SeverityDeny {
+			continue
+		}
+		if _, ok := seen[finding.RuleID]; ok {
+			continue
+		}
+		seen[finding.RuleID] = struct{}{}
+		rules = append(rules, finding.RuleID)
+	}
+	sort.Strings(rules)
+	return rules
 }
 
 // registerDeployCancel records the cancel func for an in-flight deployment run.
@@ -564,12 +641,13 @@ func (s *Service) handleDeploymentsPlan(ctx context.Context, params json.RawMess
 
 func (s *Service) handleDeploymentsApply(params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
-		DeploymentID string `json:"deploymentId"`
+		DeploymentID   string `json:"deploymentId"`
+		PolicyOverride string `json:"policyOverride,omitempty"`
 	}
 	if err := json.Unmarshal(params, &request); err != nil {
 		return nil, err
 	}
-	return s.startDeploymentAction(request.DeploymentID, actionApply, notifier)
+	return s.startDeploymentAction(request.DeploymentID, actionApply, request.PolicyOverride, notifier)
 }
 
 func (s *Service) handleDeploymentsDestroy(params json.RawMessage, notifier Notifier) (any, error) {
@@ -579,7 +657,7 @@ func (s *Service) handleDeploymentsDestroy(params json.RawMessage, notifier Noti
 	if err := json.Unmarshal(params, &request); err != nil {
 		return nil, err
 	}
-	return s.startDeploymentAction(request.DeploymentID, actionDestroy, notifier)
+	return s.startDeploymentAction(request.DeploymentID, actionDestroy, "", notifier)
 }
 
 func (s *Service) handleDeploymentsCancel(params json.RawMessage) (any, error) {
@@ -632,7 +710,7 @@ func (s *Service) handleDeploymentsRetryPostApply(params json.RawMessage, notifi
 	if err := json.Unmarshal(params, &request); err != nil {
 		return nil, err
 	}
-	return s.startDeploymentAction(request.DeploymentID, actionRetryPostApply, notifier)
+	return s.startDeploymentAction(request.DeploymentID, actionRetryPostApply, "", notifier)
 }
 
 func (s *Service) handleDeploymentsDelete(ctx context.Context, params json.RawMessage) (any, error) {

@@ -10,8 +10,11 @@ package deploy
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,6 +23,7 @@ import (
 	"time"
 
 	"cloudsprocket/backend/daemon/internal/config"
+	"cloudsprocket/backend/daemon/internal/policy"
 	"cloudsprocket/backend/daemon/internal/recipes"
 	"cloudsprocket/backend/daemon/internal/sysproc"
 	"cloudsprocket/backend/daemon/internal/tofu"
@@ -42,35 +46,36 @@ const (
 
 // Deployment is one instantiation of a recipe against a connection profile.
 type Deployment struct {
-	ID         string         `json:"id"`
-	RecipeID   string         `json:"recipeId"`
-	Name       string         `json:"name"`
-	ProviderID string         `json:"providerId"`
-	ProfileID  string         `json:"profileId"`
-	Local      bool           `json:"local"`
+	ID         string `json:"id"`
+	RecipeID   string `json:"recipeId"`
+	Name       string `json:"name"`
+	ProviderID string `json:"providerId"`
+	ProfileID  string `json:"profileId"`
+	Local      bool   `json:"local"`
 	// RuntimeID names the local emulator when Local is true (e.g. "localstack").
 	// Empty means the default for the provider (localstack for local AWS).
-	RuntimeID  string         `json:"runtimeId,omitempty"`
-	Variables  map[string]any `json:"variables"`
-	Status     Status         `json:"status"`
-	Plan       *PlanSummary   `json:"plan,omitempty"`
-	Outputs    []Output       `json:"outputs,omitempty"`
+	RuntimeID string             `json:"runtimeId,omitempty"`
+	Variables map[string]any     `json:"variables"`
+	Status    Status             `json:"status"`
+	Plan      *PlanSummary       `json:"plan,omitempty"`
+	Policy    *policy.Evaluation `json:"policy,omitempty"`
+	Outputs   []Output           `json:"outputs,omitempty"`
 	// SensitiveVars names the variables whose values are secret (from the
 	// recipe), so they can be sealed at rest in the persisted record.
 	SensitiveVars []string `json:"sensitiveVars,omitempty"`
-	Error          string `json:"error,omitempty"`
+	Error         string   `json:"error,omitempty"`
 	// PostApplyError is set when infrastructure applied successfully but a
 	// post-apply build step failed (e.g. database migrations). The deployment
 	// stays in StatusApplied so outputs remain usable and steps can be retried.
 	PostApplyError string `json:"postApplyError,omitempty"`
 	// Drift holds the last drift check result (populated by CheckDrift for applied deployments).
-	Drift     *DriftReport `json:"drift,omitempty"`
+	Drift *DriftReport `json:"drift,omitempty"`
 	// RecipeVersion records the manifest version at creation or last update (for B3 upgrade detection).
 	RecipeVersion string `json:"recipeVersion,omitempty"`
 	// Revisions holds prior snapshots for history (backend support for revisioned deployments).
 	Revisions []DeploymentRevision `json:"revisions,omitempty"`
-	CreatedAt string       `json:"createdAt"`
-	UpdatedAt string       `json:"updatedAt"`
+	CreatedAt string               `json:"createdAt"`
+	UpdatedAt string               `json:"updatedAt"`
 }
 
 // ApplyResult is the outcome of a successful tofu apply. PostApplyError is
@@ -105,23 +110,25 @@ type PlanSummary struct {
 
 // DriftReport is the result of a drift check (manual "Check drift" on an applied deployment).
 type DriftReport struct {
-	HasDrift bool        `json:"hasDrift"`
+	HasDrift bool         `json:"hasDrift"`
 	Drift    *PlanSummary `json:"drift,omitempty"` // reuses PlanSummary shape for drifted resources
 }
 
 // DeploymentRevision captures a prior configuration of an applied deployment
 // to support update history and potential rollback by re-apply of old values.
 type DeploymentRevision struct {
-	At            string         `json:"at"`
-	RecipeVersion string         `json:"recipeVersion,omitempty"`
-	Variables     map[string]any `json:"variables"`
-	Plan          *PlanSummary   `json:"plan,omitempty"`
+	At            string             `json:"at"`
+	RecipeVersion string             `json:"recipeVersion,omitempty"`
+	Variables     map[string]any     `json:"variables"`
+	Plan          *PlanSummary       `json:"plan,omitempty"`
+	Policy        *policy.Evaluation `json:"policy,omitempty"`
 }
 
 const (
 	tfvarsFile    = "cloudsprocket.auto.tfvars.json"
-	overrideFile = "cloudsprocket_localstack_override.tf"
-	planFile     = "cloudsprocket.tfplan"
+	overrideFile  = "cloudsprocket_localstack_override.tf"
+	planFile      = "cloudsprocket.tfplan"
+	driftPlanFile = "cloudsprocket.drift.tfplan"
 )
 
 // Engine runs deployments via a tofu runner.
@@ -286,7 +293,28 @@ func (e *Engine) Plan(ctx context.Context, deployment *Deployment, onLine tofu.L
 	if err != nil {
 		return PlanSummary{}, err
 	}
-	return parsePlan(raw)
+	summary, err := parsePlan(raw)
+	if err != nil {
+		return PlanSummary{}, err
+	}
+	digest, err := fileDigest(filepath.Join(dir, planFile))
+	if err != nil {
+		return PlanSummary{}, fmt.Errorf("hash saved plan: %w", err)
+	}
+	evaluation, err := policy.Evaluate(ctx, raw, policy.Options{
+		Local:          deployment.Local,
+		PlanDigest:     digest,
+		RequiredTags:   e.settings.PolicyRequiredTags,
+		AllowedRegions: e.settings.PolicyAllowedRegions,
+	})
+	if err != nil {
+		return PlanSummary{}, err
+	}
+	deployment.Policy = &evaluation
+	if onLine != nil {
+		onLine(policyPlanLog(evaluation))
+	}
+	return summary, nil
 }
 
 // Apply applies the previously saved plan and returns captured outputs. When
@@ -296,6 +324,9 @@ func (e *Engine) Apply(ctx context.Context, deployment *Deployment, onLine tofu.
 		return ApplyResult{}, err
 	}
 	if err := e.SyncWorkspace(deployment); err != nil {
+		return ApplyResult{}, err
+	}
+	if err := e.validateApplyPolicy(ctx, deployment, onLine); err != nil {
 		return ApplyResult{}, err
 	}
 	dir := e.WorkspaceDir(deployment.ID)
@@ -369,7 +400,7 @@ func (e *Engine) CheckDrift(ctx context.Context, deployment *Deployment, onLine 
 		Dir:    dir,
 		Env:    env,
 		OnLine: onLine,
-		Args:   []string{"plan", "-input=false", "-no-color", "-refresh-only", "-detailed-exitcode", "-out=" + planFile},
+		Args:   []string{"plan", "-input=false", "-no-color", "-refresh-only", "-detailed-exitcode", "-out=" + driftPlanFile},
 	})
 	if runErr != nil {
 		// Non-zero but not the drift sentinel is a real error.
@@ -378,7 +409,7 @@ func (e *Engine) CheckDrift(ctx context.Context, deployment *Deployment, onLine 
 		}
 	}
 
-	raw, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, Args: []string{"show", "-json", planFile}})
+	raw, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, Args: []string{"show", "-json", driftPlanFile}})
 	if err != nil {
 		return DriftReport{}, err
 	}
@@ -391,13 +422,78 @@ func (e *Engine) CheckDrift(ctx context.Context, deployment *Deployment, onLine 
 	return report, nil
 }
 
+func (e *Engine) validateApplyPolicy(ctx context.Context, deployment *Deployment, onLine tofu.LogFunc) error {
+	if deployment.Policy == nil {
+		return fmt.Errorf("deployment has no policy evaluation; plan again before applying")
+	}
+	dir := e.WorkspaceDir(deployment.ID)
+	digest, err := fileDigest(filepath.Join(dir, planFile))
+	if err != nil {
+		return fmt.Errorf("hash saved plan before apply: %w", err)
+	}
+	if digest != deployment.Policy.PlanDigest {
+		return fmt.Errorf("saved plan changed after policy evaluation; plan again before applying")
+	}
+	raw, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: e.env(deployment), Args: []string{"show", "-json", planFile}})
+	if err != nil {
+		return fmt.Errorf("read saved plan before policy recheck: %w", err)
+	}
+	current, err := policy.Evaluate(ctx, raw, policy.Options{
+		Local:          deployment.Local,
+		PlanDigest:     digest,
+		RequiredTags:   e.settings.PolicyRequiredTags,
+		AllowedRegions: e.settings.PolicyAllowedRegions,
+	})
+	if err != nil {
+		return err
+	}
+	if current.DecisionDigest != deployment.Policy.DecisionDigest {
+		return fmt.Errorf("policy decision changed after planning; plan again before applying")
+	}
+	if current.Status == policy.StatusBlocked && !deployment.Policy.HasValidOverride() {
+		return fmt.Errorf("policy guardrails blocked apply; use the required typed override or plan a compliant change")
+	}
+	if onLine != nil {
+		if current.Status == policy.StatusBlocked {
+			onLine("Policy guardrails revalidated; recorded override matches this exact plan.")
+		} else {
+			onLine("Policy guardrails revalidated for the saved plan.")
+		}
+	}
+	return nil
+}
+
+func policyPlanLog(evaluation policy.Evaluation) string {
+	switch evaluation.Status {
+	case policy.StatusBlocked:
+		return fmt.Sprintf("Policy guardrails: %d finding(s), %d blocking live apply.", len(evaluation.Findings), evaluation.BlockingCount)
+	case policy.StatusWarned:
+		return fmt.Sprintf("Policy guardrails: %d warning finding(s).", len(evaluation.Findings))
+	default:
+		return "Policy guardrails: passed."
+	}
+}
+
+func fileDigest(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), nil
+}
+
 // parseDrift extracts drift information from `tofu show -json` output.
 // Prefers the dedicated `resource_drift` array (OpenTofu 1.x); falls back to
 // resource_changes that represent out-of-band modifications.
 func parseDrift(raw []byte) (DriftReport, error) {
 	var plan struct {
-		ResourceDrift    []ResourceChange `json:"resource_drift"`
-		ResourceChanges  []ResourceChange `json:"resource_changes"`
+		ResourceDrift   []ResourceChange `json:"resource_drift"`
+		ResourceChanges []ResourceChange `json:"resource_changes"`
 	}
 	if err := json.Unmarshal(raw, &plan); err != nil {
 		return DriftReport{}, fmt.Errorf("parse plan JSON: %w", err)

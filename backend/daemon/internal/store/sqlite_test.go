@@ -85,3 +85,46 @@ func TestStorePersistsSessionLogsAndSettings(t *testing.T) {
 		t.Fatalf("expected logs to be cleared, logs=%+v err=%v", logs, err)
 	}
 }
+
+func TestSaveDeploymentWithLogRollsBackBothWrites(t *testing.T) {
+	dataStore, err := Open(filepath.Join(t.TempDir(), "cloudsprocket.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer dataStore.Close()
+
+	ctx := context.Background()
+	if err := dataStore.SaveDeployment(ctx, "dep-1", map[string]string{"status": "planned"}, "2026-07-16T10:00:00Z"); err != nil {
+		t.Fatalf("save initial deployment: %v", err)
+	}
+	if _, err := dataStore.db.ExecContext(ctx, `CREATE TRIGGER fail_activity_insert
+		BEFORE INSERT ON activity_log BEGIN
+			SELECT RAISE(ABORT, 'forced activity failure');
+		END`); err != nil {
+		t.Fatalf("create failure trigger: %v", err)
+	}
+
+	if _, err := dataStore.SaveDeploymentWithLog(
+		ctx,
+		"dep-1",
+		map[string]string{"status": "override-accepted"},
+		"2026-07-16T10:01:00Z",
+		"warning",
+		"Policy override accepted.",
+		"",
+		"2026-07-16T10:01:00Z",
+	); err == nil {
+		t.Fatal("expected the activity insert to fail")
+	}
+
+	var deployment map[string]string
+	if ok, err := dataStore.LoadDeployment(ctx, "dep-1", &deployment); err != nil || !ok {
+		t.Fatalf("load deployment: ok=%v err=%v", ok, err)
+	}
+	if deployment["status"] != "planned" {
+		t.Fatalf("deployment write was not rolled back: %+v", deployment)
+	}
+	if logs, err := dataStore.ListLogs(ctx, 10); err != nil || len(logs) != 0 {
+		t.Fatalf("activity write was not rolled back: logs=%+v err=%v", logs, err)
+	}
+}

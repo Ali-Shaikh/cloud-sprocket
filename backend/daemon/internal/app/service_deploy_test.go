@@ -18,6 +18,7 @@ import (
 
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/deploy"
+	"cloudsprocket/backend/daemon/internal/policy"
 	"cloudsprocket/backend/daemon/internal/recipes"
 	"cloudsprocket/backend/daemon/internal/store"
 	"cloudsprocket/backend/daemon/internal/tofu"
@@ -31,6 +32,7 @@ type fakeDeployer struct {
 	retryPostApplyErr error
 	planErr           error
 	preflightErr      error
+	policy            *policy.Evaluation
 	// planBlocks makes Plan wait for context cancellation, modelling a
 	// long-running tofu invocation so cancellation can be exercised.
 	planBlocks  bool
@@ -53,7 +55,7 @@ func (f *fakeDeployer) TargetLabel(deployment *deploy.Deployment) string {
 }
 func (f *fakeDeployer) Prepare(*deploy.Deployment) error { return nil }
 
-func (f *fakeDeployer) Plan(ctx context.Context, _ *deploy.Deployment, onLine tofu.LogFunc) (deploy.PlanSummary, error) {
+func (f *fakeDeployer) Plan(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) (deploy.PlanSummary, error) {
 	if onLine != nil {
 		onLine("Initialising the backend...")
 	}
@@ -66,6 +68,18 @@ func (f *fakeDeployer) Plan(ctx context.Context, _ *deploy.Deployment, onLine to
 	}
 	if onLine != nil {
 		onLine("Plan: 10 to add, 0 to change, 0 to destroy.")
+	}
+	if f.policy != nil {
+		copy := *f.policy
+		copy.Findings = append([]policy.Finding(nil), f.policy.Findings...)
+		deployment.Policy = &copy
+	} else {
+		deployment.Policy = &policy.Evaluation{
+			Status:         policy.StatusPassed,
+			PlanDigest:     "sha256:fake-plan",
+			DecisionDigest: "sha256:fake-decision",
+			Findings:       []policy.Finding{},
+		}
 	}
 	return f.plan, f.planErr
 }
@@ -275,6 +289,57 @@ func TestDeploymentPlanLifecycle(t *testing.T) {
 	}
 	if list := listResult.([]deploy.Deployment); len(list) != 1 {
 		t.Fatalf("expected 1 deployment, got %d", len(list))
+	}
+}
+
+func TestDeploymentApplyRequiresAndAuditsPolicyOverride(t *testing.T) {
+	blocked := &policy.Evaluation{
+		Status:         policy.StatusBlocked,
+		PlanDigest:     "sha256:fake-plan",
+		DecisionDigest: "sha256:fake-decision",
+		BlockingCount:  1,
+		Findings: []policy.Finding{{
+			RuleID:          "aws.s3.public-access",
+			Severity:        policy.SeverityDeny,
+			ResourceAddress: "aws_s3_bucket.site",
+		}},
+	}
+	deployer := &fakeDeployer{available: true, plan: deploy.PlanSummary{Add: 1}, policy: blocked}
+	s := newDeployTestService(t, deployer)
+	notifier := &captureNotifier{}
+
+	params := json.RawMessage(`{"recipeId":"serverless-fullstack-aws","name":"live-demo","providerId":"aws","profileId":"prod","local":false,"variables":{"app_name":"demo"}}`)
+	result, err := s.Handle(context.Background(), "deployments.plan", params, notifier)
+	if err != nil {
+		t.Fatalf("deployments.plan: %v", err)
+	}
+	started := result.(deploymentJob)
+	planned := waitForStatus(t, s, notifier, started.Deployment.ID, deploy.StatusPlanned)
+	if planned.Policy == nil || planned.Policy.Status != policy.StatusBlocked {
+		t.Fatalf("blocked policy result was not persisted: %+v", planned.Policy)
+	}
+
+	applyWithoutOverride := json.RawMessage(`{"deploymentId":"` + planned.ID + `"}`)
+	if _, err := s.Handle(context.Background(), "deployments.apply", applyWithoutOverride, notifier); err == nil || !strings.Contains(err.Error(), policy.OverridePhrase(planned.ID)) {
+		t.Fatalf("expected typed policy override error, got %v", err)
+	}
+
+	applyWithOverride, err := json.Marshal(map[string]string{
+		"deploymentId":   planned.ID,
+		"policyOverride": policy.OverridePhrase(planned.ID),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Handle(context.Background(), "deployments.apply", applyWithOverride, notifier); err != nil {
+		t.Fatalf("deployments.apply with override: %v", err)
+	}
+	applied := waitForStatus(t, s, notifier, planned.ID, deploy.StatusApplied)
+	if applied.Policy == nil || !applied.Policy.HasValidOverride() {
+		t.Fatalf("policy override was not persisted: %+v", applied.Policy)
+	}
+	if notifier.count("log.appended") == 0 {
+		t.Fatal("expected policy override to append an activity log event")
 	}
 }
 

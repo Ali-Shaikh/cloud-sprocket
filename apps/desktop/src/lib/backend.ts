@@ -3730,7 +3730,7 @@ function handleMockRequest<T>(
     case "deployments.plan":
       return mockPlanDeployment(params) as Promise<T>;
     case "deployments.apply":
-      return mockRunDeployment(params.deploymentId as string, "apply") as Promise<T>;
+      return mockRunDeployment(params.deploymentId as string, "apply", String(params.policyOverride ?? "")) as Promise<T>;
     case "deployments.destroy":
       return mockRunDeployment(params.deploymentId as string, "destroy") as Promise<T>;
     case "deployments.checkDrift":
@@ -3890,8 +3890,8 @@ export async function planDeployment(request: PlanDeploymentRequest): Promise<De
   return backendRequest<DeploymentJob>("deployments.plan", { ...request });
 }
 
-export async function applyDeployment(deploymentId: string): Promise<DeploymentJob> {
-  return backendRequest<DeploymentJob>("deployments.apply", { deploymentId });
+export async function applyDeployment(deploymentId: string, policyOverride?: string): Promise<DeploymentJob> {
+  return backendRequest<DeploymentJob>("deployments.apply", { deploymentId, policyOverride });
 }
 
 export async function destroyDeployment(deploymentId: string): Promise<DeploymentJob> {
@@ -4263,16 +4263,36 @@ function mockPlanDeployment(params: Record<string, unknown>): Promise<Deployment
         { address: "aws_apigatewayv2_api.http", type: "aws_apigatewayv2_api", name: "http", actions: ["create"] },
       ],
     };
+    deployment.policy = {
+      status: "passed",
+      planDigest: "sha256:mock-plan",
+      decisionDigest: "sha256:mock-policy-decision",
+      evaluatedAt: new Date().toISOString(),
+      blockingCount: 0,
+      findings: [],
+    };
     mockSetStatus(deployment, "planned");
     emitMockEvent("job.updated", { ...job, status: "completed", message: "Plan ready: +10 ~0 -0.", completedAt: new Date().toISOString() });
   }, 60);
   return Promise.resolve({ deployment, job });
 }
 
-function mockRunDeployment(deploymentId: string, action: "apply" | "destroy"): Promise<DeploymentJob> {
+function mockRunDeployment(deploymentId: string, action: "apply" | "destroy", policyOverride = ""): Promise<DeploymentJob> {
   const deployment = mockDeployments.find((entry) => entry.id === deploymentId);
   if (!deployment) {
     return Promise.reject(new Error(`deployment ${deploymentId} not found`));
+  }
+  if (action === "apply" && deployment.policy?.status === "blocked" && deployment.policy.override?.decisionDigest !== deployment.policy.decisionDigest) {
+    if (policyOverride !== `APPLY ${deployment.id}`) {
+      return Promise.reject(new Error(`policy guardrails blocked apply; type "APPLY ${deployment.id}" to continue`));
+    }
+    deployment.policy.override = {
+      decisionDigest: deployment.policy.decisionDigest,
+      confirmedAt: new Date().toISOString(),
+      findingKeys: deployment.policy.findings
+        .filter((finding) => finding.severity === "deny")
+        .map((finding) => `${finding.ruleId}${finding.resourceAddress ? `:${finding.resourceAddress}` : ""}`),
+    };
   }
   const label = action === "apply" ? `Apply ${deployment.name}` : `Destroy ${deployment.name}`;
   const job: JobStatus = { jobId: `job-${Date.now()}`, label, status: "queued", message: `${label}.` };
