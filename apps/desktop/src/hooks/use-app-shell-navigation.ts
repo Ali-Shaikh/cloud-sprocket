@@ -417,29 +417,31 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     );
     // When a workspace is locked but the user is on Deploy / Local Runtime /
     // Developer Toolbox, still offer workspace service tabs in the palette so
-    // they can jump without returning to the sidebar first.
+    // they can jump without returning to the sidebar first. Dedup by tab id so
+    // shared entries like Debug console are not listed twice under different
+    // group labels.
     const onNonWorkspaceArea = isDeployActive || isLocalActive || isDeveloperToolsActive;
+    const seenTabIds = new Set(
+      navGroups.flatMap((group) =>
+        group.items.filter((item) => !item.comingSoon).map((item) => item.id),
+      ),
+    );
     const workspaceCommands =
       session.isLocked && onNonWorkspaceArea
         ? workspaceNavGroups.flatMap((group) =>
             group.items
-              .filter((item) => !item.comingSoon)
-              .map((item) => ({
-                id: `nav:${group.label}:${item.id}`,
-                group: group.label,
-                label: item.label,
-                run: () => handleNavSelect(item.id),
-              })),
+              .filter((item) => !item.comingSoon && !seenTabIds.has(item.id))
+              .map((item) => {
+                seenTabIds.add(item.id);
+                return {
+                  id: `nav:${group.label}:${item.id}`,
+                  group: group.label,
+                  label: item.label,
+                  run: () => handleNavSelect(item.id),
+                };
+              }),
           )
         : [];
-    const seenNavIds = new Set(areaCommands.map((command) => command.id));
-    const dedupedWorkspaceCommands = workspaceCommands.filter((command) => {
-      if (seenNavIds.has(command.id)) {
-        return false;
-      }
-      seenNavIds.add(command.id);
-      return true;
-    });
 
     return [
       ...railConnections.map((connection) => ({
@@ -450,7 +452,7 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
         run: () => handleRailSelect(connection.id),
       })),
       ...areaCommands,
-      ...dedupedWorkspaceCommands,
+      ...workspaceCommands,
       {
         id: "act:refresh",
         group: "Actions",
