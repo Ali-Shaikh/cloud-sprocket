@@ -22,6 +22,7 @@ import { useRuntimeActions } from "./hooks/use-runtime-actions";
 import { useServicePreferencesFlow } from "./hooks/use-service-preferences-flow";
 import { useSessionState } from "./hooks/use-session-state";
 import { useVirtualisationPoll } from "./hooks/use-virtualisation-poll";
+import { useProviderSwitchFlow } from "./hooks/use-provider-switch-flow";
 import { useWriteModeFlow } from "./hooks/use-write-mode-flow";
 import { useWorkspaceLoading } from "./hooks/use-workspace-loading";
 import { useWorkspaceState } from "./hooks/use-workspace-state";
@@ -1152,6 +1153,14 @@ export default function App() {
       setWorkspace,
     });
 
+  const { requestProviderSwitch, providerSwitchDialog } = useProviderSwitchFlow({
+    session,
+    providers,
+    profiles,
+    mutateSession,
+    onSwitched: () => setActiveWorkspaceTabId("overview"),
+  });
+
   const {
     lockedProfile,
     isDeveloperToolsActive,
@@ -1184,6 +1193,7 @@ export default function App() {
     workspaceLoaded,
     logs,
     mutateSession,
+    requestProviderSwitch,
     refreshDiscovery,
     openResetModal,
   });
@@ -1561,6 +1571,7 @@ export default function App() {
         </div>
       </AppShell>
       {writeModeDialog}
+      {providerSwitchDialog}
 
       <CommandPalette
         open={commandPaletteOpen}

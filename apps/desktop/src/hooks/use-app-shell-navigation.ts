@@ -44,6 +44,7 @@ export type UseAppShellNavigationParams = {
   workspaceLoaded: boolean;
   logs: ActivityLogEntry[];
   mutateSession: (method: string, params?: Record<string, unknown>) => Promise<void>;
+  requestProviderSwitch: (providerId: string) => void;
   refreshDiscovery: () => Promise<void>;
   openResetModal: () => void;
 };
@@ -63,7 +64,7 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     workspaceLoading,
     workspaceLoaded,
     logs,
-    mutateSession,
+    requestProviderSwitch,
     refreshDiscovery,
     openResetModal,
   } = params;
@@ -218,42 +219,9 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     session.selectedAuthMethod,
   ]);
 
-  const navGroups = useMemo((): NavGroup[] => {
-    if (isDeveloperToolsActive) {
-      return [
-        {
-          label: "Developer",
-          items: [{ id: "debug", label: "Debug console", icon: Bug }],
-        },
-      ];
-    }
-    if (isDeployActive) {
-      return [
-        {
-          label: "Deploy",
-          items: [
-            { id: "deploy", label: "Recipes", icon: Rocket },
-            { id: "debug", label: "Debug console", icon: Bug },
-          ],
-        },
-      ];
-    }
-    if (isLocalActive) {
-      return [
-        {
-          label: "Runtime",
-          items: [
-            { id: "virtualisation", label: "Emulators", icon: Server, count: emulatorCount },
-            { id: "debug", label: "Debug console", icon: Bug },
-          ],
-        },
-      ];
-    }
+  const workspaceNavGroups = useMemo((): NavGroup[] => {
     if (!session.isLocked) {
-      return [
-        { label: "Set up", items: [{ id: "overview", label: "Connect", icon: LayoutGrid }] },
-        { label: "Tools", items: [{ id: "debug", label: "Debug console", icon: Bug }] },
-      ];
+      return [];
     }
     const countsPending = workspaceFetching || (workspaceLoading && !workspaceLoaded);
     const tabCategory = (tab: WorkspaceTab): "workspace" | "service" | "tool" | "coming_soon" => {
@@ -314,17 +282,59 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     });
     return groups;
   }, [
-    activeWorkspaceTabId,
-    emulatorCount,
-    isDeployActive,
-    isDeveloperToolsActive,
-    isLocalActive,
     session.isLocked,
     session.workspaceTabs,
     workspace,
     workspaceFetching,
     workspaceLoaded,
     workspaceLoading,
+  ]);
+
+  const navGroups = useMemo((): NavGroup[] => {
+    if (isDeveloperToolsActive) {
+      return [
+        {
+          label: "Developer",
+          items: [{ id: "debug", label: "Debug console", icon: Bug }],
+        },
+      ];
+    }
+    if (isDeployActive) {
+      return [
+        {
+          label: "Deploy",
+          items: [
+            { id: "deploy", label: "Recipes", icon: Rocket },
+            { id: "debug", label: "Debug console", icon: Bug },
+          ],
+        },
+      ];
+    }
+    if (isLocalActive) {
+      return [
+        {
+          label: "Runtime",
+          items: [
+            { id: "virtualisation", label: "Emulators", icon: Server, count: emulatorCount },
+            { id: "debug", label: "Debug console", icon: Bug },
+          ],
+        },
+      ];
+    }
+    if (!session.isLocked) {
+      return [
+        { label: "Set up", items: [{ id: "overview", label: "Connect", icon: LayoutGrid }] },
+        { label: "Tools", items: [{ id: "debug", label: "Debug console", icon: Bug }] },
+      ];
+    }
+    return workspaceNavGroups;
+  }, [
+    emulatorCount,
+    isDeployActive,
+    isDeveloperToolsActive,
+    isLocalActive,
+    session.isLocked,
+    workspaceNavGroups,
   ]);
 
   const activeNavItemId = activeWorkspaceTabId;
@@ -353,11 +363,14 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
         return;
       }
       if (id !== session.currentProviderId) {
-        void mutateSession("session.selectProvider", { providerId: id });
+        // Locked workspaces confirm before discard; overview is applied after
+        // a successful switch (or immediately when unlocked).
+        requestProviderSwitch(id);
+        return;
       }
       setActiveWorkspaceTabId("overview");
     },
-    [mutateSession, session.currentProviderId, setActiveWorkspaceTabId],
+    [requestProviderSwitch, session.currentProviderId, setActiveWorkspaceTabId],
   );
 
   const handleNavSelect = useCallback(
@@ -392,8 +405,44 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     ],
   );
 
-  const paletteCommands: Command[] = useMemo(
-    () => [
+  const paletteCommands: Command[] = useMemo(() => {
+    const areaCommands = navGroups.flatMap((group) =>
+      group.items
+        .filter((item) => !item.comingSoon)
+        .map((item) => ({
+          id: `nav:${group.label}:${item.id}`,
+          group: group.label,
+          label: item.label,
+          run: () => handleNavSelect(item.id),
+        })),
+    );
+    // When a workspace is locked but the user is on Deploy / Local Runtime /
+    // Developer Toolbox, still offer workspace service tabs in the palette so
+    // they can jump without returning to the sidebar first.
+    const onNonWorkspaceArea = isDeployActive || isLocalActive || isDeveloperToolsActive;
+    const workspaceCommands =
+      session.isLocked && onNonWorkspaceArea
+        ? workspaceNavGroups.flatMap((group) =>
+            group.items
+              .filter((item) => !item.comingSoon)
+              .map((item) => ({
+                id: `nav:${group.label}:${item.id}`,
+                group: group.label,
+                label: item.label,
+                run: () => handleNavSelect(item.id),
+              })),
+          )
+        : [];
+    const seenNavIds = new Set(areaCommands.map((command) => command.id));
+    const dedupedWorkspaceCommands = workspaceCommands.filter((command) => {
+      if (seenNavIds.has(command.id)) {
+        return false;
+      }
+      seenNavIds.add(command.id);
+      return true;
+    });
+
+    return [
       ...railConnections.map((connection) => ({
         id: `conn:${connection.id}`,
         group: "Go to",
@@ -401,16 +450,8 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
         keywords: "connection provider",
         run: () => handleRailSelect(connection.id),
       })),
-      ...navGroups.flatMap((group) =>
-        group.items
-          .filter((item) => !item.comingSoon)
-          .map((item) => ({
-            id: `nav:${group.label}:${item.id}`,
-            group: group.label,
-            label: item.label,
-            run: () => handleNavSelect(item.id),
-          })),
-      ),
+      ...areaCommands,
+      ...dedupedWorkspaceCommands,
       {
         id: "act:refresh",
         group: "Actions",
@@ -449,17 +490,21 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
         destructive: true,
         run: openResetModal,
       },
-    ],
-    [
-      handleNavSelect,
-      handleRailSelect,
-      navGroups,
-      openResetModal,
-      railConnections,
-      refreshDiscovery,
-      setActiveWorkspaceTabId,
-    ],
-  );
+    ];
+  }, [
+    handleNavSelect,
+    handleRailSelect,
+    isDeployActive,
+    isDeveloperToolsActive,
+    isLocalActive,
+    navGroups,
+    openResetModal,
+    railConnections,
+    refreshDiscovery,
+    session.isLocked,
+    setActiveWorkspaceTabId,
+    workspaceNavGroups,
+  ]);
 
   return {
     lockedProfile,

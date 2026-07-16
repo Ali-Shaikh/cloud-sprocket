@@ -102,21 +102,29 @@ export function useAwsActions(params: UseAwsActionsParams) {
   const selectEC2Region = useCallback((region: string): void => {
     setEC2ActionStatus("Select an instance to run lifecycle actions.");
     setEC2ActionInFlight(false);
-    void requestWorkspaceSnapshot("aws.ec2.selectRegion", { region }).then((workspaceResult) => {
-      startTransition(() => {
-        setWorkspace(workspaceResult);
+    void requestWorkspaceSnapshot("aws.ec2.selectRegion", { region })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+      })
+      .catch((error: unknown) => {
+        setEC2ActionStatus(error instanceof Error ? error.message : String(error));
       });
-    });
   }, [setEC2ActionInFlight, setEC2ActionStatus, setWorkspace]);
 
   const selectEC2Instance = useCallback((instanceId: string): void => {
     setEC2ActionStatus("Instance selected. EC2 lifecycle writes require a local endpoint profile with write opt-in.");
     setEC2ActionInFlight(false);
-    void requestWorkspaceSnapshot("aws.ec2.selectInstance", { instanceId }).then((workspaceResult) => {
-      startTransition(() => {
-        setWorkspace(workspaceResult);
+    void requestWorkspaceSnapshot("aws.ec2.selectInstance", { instanceId })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+      })
+      .catch((error: unknown) => {
+        setEC2ActionStatus(error instanceof Error ? error.message : String(error));
       });
-    });
   }, [setEC2ActionInFlight, setEC2ActionStatus, setWorkspace]);
 
   const invokeEC2LifecycleAction = useCallback((action: EC2LifecycleAction, instanceId: string): void => {
