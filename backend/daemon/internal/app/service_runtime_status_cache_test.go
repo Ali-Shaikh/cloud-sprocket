@@ -268,3 +268,33 @@ func TestAzureCLIExtensionChecksCachePerProfile(t *testing.T) {
 		t.Fatalf("expected TTL expiry to re-check, checks=%d", azure.checks)
 	}
 }
+
+func TestAzureCLIExtensionChecksSkipsEmptyProfileCache(t *testing.T) {
+	azure := &countingAzureCLIExtensions{}
+	clock := time.Now()
+	s := &Service{
+		azure: azure,
+		now:   func() time.Time { return clock },
+	}
+	snapshot := discovery.Snapshot{
+		Providers: []models.ProviderSummary{
+			{ProviderID: "azure", CommandPath: `C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd`},
+		},
+	}
+	valid := models.ProfileSummary{ProfileID: "sub-a", ProviderID: "azure", DisplayName: "A"}
+	empty := models.ProfileSummary{ProfileID: "", ProviderID: "azure", DisplayName: "blank"}
+
+	_ = s.azureCLIExtensionChecks(snapshot, valid)
+	if azure.checks != 1 {
+		t.Fatalf("expected first check, got %d", azure.checks)
+	}
+	_ = s.azureCLIExtensionChecks(snapshot, empty)
+	if azure.checks != 2 {
+		t.Fatalf("expected empty profile to always probe, got %d", azure.checks)
+	}
+	// Cached valid profile must still hit after an empty-profile probe.
+	_ = s.azureCLIExtensionChecks(snapshot, valid)
+	if azure.checks != 2 {
+		t.Fatalf("empty profile must not poison valid profile cache, checks=%d", azure.checks)
+	}
+}

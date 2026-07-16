@@ -198,16 +198,18 @@ func (s *Service) handleDockerRuntimeGet() (any, error) {
 }
 
 func (s *Service) runtimeStatusForSnapshot() runtimeStatus {
+	// Hold the mutex across the miss path so concurrent snapshot builders
+	// single-flight one probe instead of stampeding Docker/emulator APIs.
+	// probeRuntimeStatus never re-enters runtimeStatusMu.
 	s.runtimeStatusMu.Lock()
+	defer s.runtimeStatusMu.Unlock()
 	if s.runtimeStatusValue != nil && s.now().Sub(s.runtimeStatusAt) < runtimeStatusCacheTTL {
-		status := *s.runtimeStatusValue
-		s.runtimeStatusMu.Unlock()
-		return status
+		return *s.runtimeStatusValue
 	}
-	s.runtimeStatusMu.Unlock()
-
 	status := s.probeRuntimeStatus()
-	s.storeRuntimeStatus(status)
+	cached := status
+	s.runtimeStatusValue = &cached
+	s.runtimeStatusAt = s.now()
 	return status
 }
 

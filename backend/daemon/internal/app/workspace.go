@@ -160,9 +160,16 @@ func (s *Service) azureCLIExtensionChecks(snapshot discovery.Snapshot, profile m
 		return nil
 	}
 	profileID := strings.TrimSpace(profile.ProfileID)
+	// Empty profile IDs skip the cache entirely so a blank key cannot poison a
+	// later real subscription's entry.
+	if profileID == "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return s.azure.CheckCLIExtensions(ctx)
+	}
+
 	s.azureCLIExtMu.Lock()
-	if profileID != "" &&
-		s.azureCLIExtProfileID == profileID &&
+	if s.azureCLIExtProfileID == profileID &&
 		s.now().Sub(s.azureCLIExtAt) < azureCLIExtensionCacheTTL {
 		statuses := append([]models.AzureCLIExtensionStatus(nil), s.azureCLIExtStatuses...)
 		s.azureCLIExtMu.Unlock()
