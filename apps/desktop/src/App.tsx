@@ -652,7 +652,7 @@ export default function App() {
   async function mutateSession(
     method: string,
     params: Record<string, unknown> = {},
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       const nextSession = await backendRequest<SessionSnapshot>(method, params);
       const normalisedSession = normaliseSessionSnapshot(nextSession);
@@ -671,9 +671,11 @@ export default function App() {
       });
       await loadWorkspace(normalisedSession);
       await loadState({ refreshWorkspace: false });
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Session mutation failed";
       pushNotification("error", `Failed to execute ${method}`, message);
+      return false;
     }
   }
 
@@ -1192,7 +1194,6 @@ export default function App() {
     workspaceLoading,
     workspaceLoaded,
     logs,
-    mutateSession,
     requestProviderSwitch,
     refreshDiscovery,
     openResetModal,

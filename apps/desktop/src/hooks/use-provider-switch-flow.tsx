@@ -18,7 +18,7 @@ export type UseProviderSwitchFlowParams = {
   session: SessionSnapshot;
   providers: ProviderSummary[];
   profiles: ProfileSummary[];
-  mutateSession: (method: string, params?: Record<string, unknown>) => Promise<void>;
+  mutateSession: (method: string, params?: Record<string, unknown>) => Promise<boolean>;
   onSwitched: () => void;
 };
 
@@ -44,8 +44,12 @@ export function useProviderSwitchFlow(params: UseProviderSwitchFlowParams) {
     async (providerId: string): Promise<void> => {
       setSwitchPending(true);
       try {
-        await mutateSession("session.selectProvider", { providerId });
-        onSwitched();
+        // mutateSession swallows backend errors and returns false so callers
+        // can avoid navigating away when the switch did not apply.
+        const ok = await mutateSession("session.selectProvider", { providerId });
+        if (ok) {
+          onSwitched();
+        }
       } finally {
         setSwitchPending(false);
         setPendingProviderId(null);

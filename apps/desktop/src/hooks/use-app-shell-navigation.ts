@@ -43,7 +43,6 @@ export type UseAppShellNavigationParams = {
   workspaceLoading: boolean;
   workspaceLoaded: boolean;
   logs: ActivityLogEntry[];
-  mutateSession: (method: string, params?: Record<string, unknown>) => Promise<void>;
   requestProviderSwitch: (providerId: string) => void;
   refreshDiscovery: () => Promise<void>;
   openResetModal: () => void;
