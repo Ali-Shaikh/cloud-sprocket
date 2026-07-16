@@ -270,6 +270,9 @@ func (e *Engine) Plan(ctx context.Context, deployment *Deployment, onLine tofu.L
 	if err := e.requireRunner(); err != nil {
 		return PlanSummary{}, err
 	}
+	if err := e.guardFlociAzureWebHosting(deployment); err != nil {
+		return PlanSummary{}, err
+	}
 	if err := e.SyncWorkspace(deployment); err != nil {
 		return PlanSummary{}, err
 	}
@@ -642,6 +645,26 @@ func (e *Engine) env(deployment *Deployment) []string {
 		return nil
 	}
 	return target.Env(deployment, e.settings)
+}
+
+// guardFlociAzureWebHosting blocks plans that would hang on floci-az for App
+// Service / Function App resources (service plan create never completes).
+func (e *Engine) guardFlociAzureWebHosting(deployment *Deployment) error {
+	if deployment == nil || !deployment.Local || deployment.ProviderID != "azure" {
+		return nil
+	}
+	NormaliseDeploymentTarget(deployment)
+	if strings.TrimSpace(deployment.RuntimeID) != recipes.RuntimeFlociAz {
+		return nil
+	}
+	needs, err := e.loader.NeedsAzureWebHosting(deployment.RecipeID)
+	if err != nil {
+		return err
+	}
+	if needs {
+		return fmt.Errorf("%s", recipes.FlociAzUnsupportedWebHostingMessage)
+	}
+	return nil
 }
 
 // TargetLabel names a deployment's target for log lines.

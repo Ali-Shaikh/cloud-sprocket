@@ -12,7 +12,7 @@ import type { RecipeManifest } from "@/types/backend";
 import { runtimeDisplayName } from "@/lib/deploy-runtime-labels";
 import { recipeLocalRuntimeIds } from "@/lib/deploy-gallery-filter";
 
-import { manifestRequiresPro } from "./shared";
+import { manifestCloudOnlyAzure, manifestRequiresPro } from "./shared";
 
 function difficultyLabel(difficulty: NonNullable<RecipeManifest["lab"]>["difficulty"]): string {
   return difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
@@ -56,6 +56,23 @@ export function RecipeCard({ manifest, onConfigure }: { manifest: RecipeManifest
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>{licensedRuntimeTooltip(manifest)}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          {manifestCloudOnlyAzure(manifest) && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    tabIndex={0}
+                    className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-700 dark:text-sky-300"
+                  >
+                    Cloud Azure
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Requires a real Azure subscription. floci-az cannot dry-run App Service or Functions hosting.
+                </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}

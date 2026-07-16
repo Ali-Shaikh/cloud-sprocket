@@ -37,4 +37,25 @@ describe("RecipeCard", () => {
       "Runs locally on LocalStack (licence required)",
     );
   });
+
+  it("badges cloud-only Azure recipes", () => {
+    const cloudOnly: RecipeManifest = {
+      apiVersion: "cloudsprocket.recipe/v1",
+      id: "lab-functions-http-azure",
+      version: "0.1.1",
+      name: "Azure Functions lab (HTTP)",
+      summary: "Cloud only",
+      kind: "service-lab",
+      providers: ["azure"],
+      tags: ["cloud-azure"],
+      engine: { type: "opentofu", minVersion: "1.6.0" },
+      local: { runtimes: [] },
+    };
+    render(
+      <ThemeProvider>
+        <RecipeCard manifest={cloudOnly} onConfigure={vi.fn()} />
+      </ThemeProvider>,
+    );
+    expect(screen.getByText("Cloud Azure")).toBeInTheDocument();
+  });
 });

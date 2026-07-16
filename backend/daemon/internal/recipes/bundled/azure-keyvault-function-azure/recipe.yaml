@@ -1,14 +1,15 @@
 apiVersion: cloudsprocket.recipe/v1
 id: azure-keyvault-function-azure
 kind: app-deploy
-version: 0.1.0
+version: 0.1.1
 name: Key Vault backed Functions (Azure)
-summary: Azure Functions with access to Key Vault for secrets (security pattern).
+summary: Azure Functions with Key Vault access on a real Azure subscription.
 description: |
   Security on Azure: function app with managed identity access to Key Vault.
   Sample demonstrates secret lifecycle.
-
-  floci-az supported for Key Vault emulation.
+  
+  Requires a cloud Azure profile. floci-az can emulate Key Vault in isolation,
+  but not the Function App host this recipe deploys.
 providers:
   - azure
 tags:
@@ -16,13 +17,12 @@ tags:
   - functions
   - keyvault
   - security
-  - floci-az
+  - cloud-azure
 engine:
   type: opentofu
   minVersion: "1.6.0"
 local:
-  runtimes:
-    - id: floci-az
+  runtimes: []
 variableGroups:
   - title: Application
     variables:
@@ -36,7 +36,7 @@ variableGroups:
         widget: text
       - name: azure_tenant_id
         widget: text
-        help: Tenant ID (use placeholder for local floci-az).
+        help: Tenant ID.
   - title: Code
     variables:
       - name: backend_source_dir

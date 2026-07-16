@@ -75,8 +75,9 @@ export function ConfigureRecipe({
       {manifestCloudOnlyAzure(recipe.manifest) && (
         <Card className="flex items-center gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-400">
           <Crown className="size-4 shrink-0" />
-          Cloud Azure subscription required. floci-az cannot dry-run this recipe; pick a subscription where your
-          account can create resource groups.
+          Cloud Azure subscription required. floci-az cannot dry-run this recipe (App Service plans and Function Apps
+          are not fully emulated). Pick a subscription where your account can create resource groups, storage, and
+          Function Apps, then enable write mode before apply.
         </Card>
       )}
 
@@ -137,8 +138,9 @@ export function ConfigureRecipe({
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          Pick a local runtime to dry-run the recipe, or switch to a cloud profile to deploy to real infrastructure
-          unchanged.
+          {manifestCloudOnlyAzure(recipe.manifest) || manifestCloudOnlyAWS(recipe.manifest)
+            ? "Only cloud profiles are offered for this recipe. Local emulators cannot complete the full stack."
+            : "Pick a local runtime to dry-run the recipe, or switch to a cloud profile to deploy to real infrastructure unchanged."}
         </p>
       </Card>
 
