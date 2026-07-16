@@ -58,13 +58,35 @@ type Service struct {
 	dockerSnapshotMu      sync.Mutex
 	dockerSnapshotValue   *models.DockerRuntimeSnapshot
 	dockerSnapshotAt      time.Time
-	deployCancelsMu       sync.Mutex
-	deployCancels         map[string]context.CancelFunc
-	labRunnerOnce         sync.Once
-	labRunnerValue        *labs.Runner
-	preferences           models.ServicePreferences
-	now                   func() time.Time
-	mu                    sync.Mutex
+	// runtimeStatus* caches the Docker + managed-resources + emulator bundle used
+	// by workspace snapshots so selection RPCs do not re-probe live runtimes on
+	// every click. Dedicated runtime.get and manual Docker refresh keep their own
+	// live paths and seed or invalidate this cache.
+	runtimeStatusMu    sync.Mutex
+	runtimeStatusValue *runtimeStatus
+	runtimeStatusAt    time.Time
+	// azureCLIExt* caches az extension list output per profile. The check shells
+	// out to a Python CLI and can take seconds; it does not need to run on every
+	// workspace snapshot for the same profile.
+	azureCLIExtMu        sync.Mutex
+	azureCLIExtProfileID string
+	azureCLIExtStatuses  []models.AzureCLIExtensionStatus
+	azureCLIExtAt        time.Time
+	deployCancelsMu      sync.Mutex
+	deployCancels        map[string]context.CancelFunc
+	labRunnerOnce        sync.Once
+	labRunnerValue       *labs.Runner
+	preferences          models.ServicePreferences
+	now                  func() time.Time
+	mu                   sync.Mutex
+}
+
+// runtimeStatus is the Docker and emulator bundle embedded in every workspace
+// snapshot. Cached briefly so interactive selection handlers avoid live probes.
+type runtimeStatus struct {
+	Docker    models.DockerRuntimeSnapshot
+	Resources []models.ManagedDockerResource
+	Emulators []models.EmulatorSummary
 }
 
 func New(

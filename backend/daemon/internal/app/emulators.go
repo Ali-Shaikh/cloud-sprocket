@@ -161,6 +161,7 @@ func (s *Service) emulatorsStart(ctx context.Context, options models.LocalStackS
 		if err != nil {
 			return result, errors.New(result.Summary)
 		}
+		s.invalidateRuntimeStatus()
 		return result, nil
 	}
 	if s.localstackMgr == nil {
@@ -177,6 +178,7 @@ func (s *Service) emulatorsStart(ctx context.Context, options models.LocalStackS
 	if err != nil {
 		return result, errors.New(result.Summary)
 	}
+	s.invalidateRuntimeStatus()
 	return result, nil
 }
 
@@ -193,6 +195,7 @@ func (s *Service) emulatorsStop(ctx context.Context, emulatorID string) (models.
 		if err != nil {
 			return result, errors.New(result.Summary)
 		}
+		s.invalidateRuntimeStatus()
 		return result, nil
 	}
 	if s.localstackMgr == nil {
@@ -205,6 +208,7 @@ func (s *Service) emulatorsStop(ctx context.Context, emulatorID string) (models.
 	if err != nil {
 		return result, errors.New(result.Summary)
 	}
+	s.invalidateRuntimeStatus()
 	return result, nil
 }
 

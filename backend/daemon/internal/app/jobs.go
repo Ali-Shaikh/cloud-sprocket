@@ -25,6 +25,8 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 	}
 
 	s.discovery.Invalidate()
+	s.invalidateRuntimeStatus()
+	s.invalidateAzureCLIExtensionCache()
 	s.invalidateCloudResourceCaches(background)
 
 	snapshot, err := s.discovery.Discover()

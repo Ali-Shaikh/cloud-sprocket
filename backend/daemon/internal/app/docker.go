@@ -32,6 +32,14 @@ const (
 	// on every fetch when Docker is stopped. A manual "Refresh Docker" forces a
 	// fresh probe, so the staleness is bounded and user-overridable.
 	dockerUnreachableCacheTTL = 15 * time.Second
+	// runtimeStatusCacheTTL bounds Docker/resource/emulator probe cost per user
+	// interaction on workspace snapshot builds. The Local Runtime tab polls
+	// every 5 s through its own handler, so staleness never exceeds one poll
+	// interval when that tab is active.
+	runtimeStatusCacheTTL = 5 * time.Second
+	// azureCLIExtensionCacheTTL bounds az extension list subprocess cost. The
+	// check is profile-scoped and only re-runs after refresh or TTL expiry.
+	azureCLIExtensionCacheTTL = 10 * time.Minute
 )
 
 func (s *Service) dockerRuntimeSnapshot() models.DockerRuntimeSnapshot {
@@ -181,8 +189,76 @@ func (s *Service) detectDockerHost() (string, string) {
 }
 
 func (s *Service) handleDockerRuntimeGet() (any, error) {
-	// Manual refresh forces a fresh probe (bypassing the unreachable cache).
-	return s.probeDockerRuntimeSnapshot(), nil
+	// Manual refresh forces a fresh probe (bypassing the unreachable cache) and
+	// drops the broader runtime-status bundle so the next workspace snapshot
+	// rebuild re-probes resources and emulators too.
+	snapshot := s.probeDockerRuntimeSnapshot()
+	s.invalidateRuntimeStatus()
+	return snapshot, nil
+}
+
+func (s *Service) runtimeStatusForSnapshot() runtimeStatus {
+	// Hold the mutex across the miss path so concurrent snapshot builders
+	// single-flight one probe instead of stampeding Docker/emulator APIs.
+	// probeRuntimeStatus never re-enters runtimeStatusMu.
+	s.runtimeStatusMu.Lock()
+	defer s.runtimeStatusMu.Unlock()
+	if s.runtimeStatusValue != nil && s.now().Sub(s.runtimeStatusAt) < runtimeStatusCacheTTL {
+		return *s.runtimeStatusValue
+	}
+	status := s.probeRuntimeStatus()
+	cached := status
+	s.runtimeStatusValue = &cached
+	s.runtimeStatusAt = s.now()
+	return status
+}
+
+// probeRuntimeStatus always performs the live Docker / resource / emulator
+// sequence used by workspace snapshots and Local Runtime polls.
+func (s *Service) probeRuntimeStatus() runtimeStatus {
+	dockerRuntime := s.dockerRuntimeSnapshot()
+	// Only enumerate managed Docker resources when the engine is reachable. When
+	// Docker is stopped the resource probe would otherwise wait out its own
+	// timeout to return an empty list, doubling the Docker latency of every
+	// workspace fetch and Local Runtime poll.
+	dockerResources := []models.ManagedDockerResource{}
+	// When the engine is unreachable, skip the per-emulator Docker probes too and
+	// fall back to the static planned summaries. Each live probe would otherwise
+	// wait out its own timeout, and with both LocalStack and floci-az that adds
+	// several seconds to every workspace fetch and Local Runtime poll.
+	emulatorSummaries := s.emulatorSummaries()
+	if dockerRuntime.Reachable {
+		dockerResources = s.dockerResources()
+		emulatorSummaries = s.emulatorsList()
+	}
+	return runtimeStatus{
+		Docker:    dockerRuntime,
+		Resources: dockerResources,
+		Emulators: emulatorSummaries,
+	}
+}
+
+func (s *Service) storeRuntimeStatus(status runtimeStatus) {
+	s.runtimeStatusMu.Lock()
+	defer s.runtimeStatusMu.Unlock()
+	cached := status
+	s.runtimeStatusValue = &cached
+	s.runtimeStatusAt = s.now()
+}
+
+func (s *Service) invalidateRuntimeStatus() {
+	s.runtimeStatusMu.Lock()
+	defer s.runtimeStatusMu.Unlock()
+	s.runtimeStatusValue = nil
+	s.runtimeStatusAt = time.Time{}
+}
+
+func (s *Service) invalidateAzureCLIExtensionCache() {
+	s.azureCLIExtMu.Lock()
+	defer s.azureCLIExtMu.Unlock()
+	s.azureCLIExtProfileID = ""
+	s.azureCLIExtStatuses = nil
+	s.azureCLIExtAt = time.Time{}
 }
 
 func (s *Service) handleDockerResourcesList() (any, error) {

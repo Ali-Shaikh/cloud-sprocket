@@ -52,7 +52,11 @@ func (s *Service) recoverLabFaults(ctx context.Context) error {
 	for index := range deployments {
 		if err := s.labRunner().RecoverActiveFault(ctx, &deployments[index]); err != nil {
 			recoveryErrors = append(recoveryErrors, fmt.Errorf("deployment %s: %w", deployments[index].ID, err))
+			continue
 		}
+		// Fault recovery pauses/unpauses containers; drop the runtime cache so
+		// the next snapshot rebuilds managed resource state.
+		s.invalidateRuntimeStatus()
 	}
 	return errors.Join(recoveryErrors...)
 }
@@ -254,6 +258,9 @@ func (s *Service) handleLabsRunAction(ctx context.Context, params json.RawMessag
 	if err != nil {
 		return nil, err
 	}
+	// Lab actions may inject Docker pause faults; invalidate so inventory and
+	// Local Runtime views pick up container state changes promptly.
+	s.invalidateRuntimeStatus()
 	sessionState, found, getErr := s.labRunner().Get(ctx, deployment.ID)
 	if getErr != nil {
 		return nil, getErr
@@ -333,6 +340,7 @@ func (s *Service) handleLabsReset(ctx context.Context, params json.RawMessage, n
 	if err != nil {
 		return nil, err
 	}
+	s.invalidateRuntimeStatus()
 	s.emitLabChanged(notifier, session)
 	return session, nil
 }
