@@ -15,6 +15,8 @@ export type GalleryFilters = {
 
 export const GALLERY_PROVIDER_ALL = "all";
 export const GALLERY_RUNTIME_ALL = "all";
+/** Gallery facet value for recipes with no local runtime (real cloud only). */
+export const GALLERY_RUNTIME_CLOUD_ONLY = "cloud-only";
 
 export function inferRecipeKind(manifest: RecipeManifest): GallerySection {
   if (manifest.kind === "app-deploy" || manifest.kind === "service-lab") {
@@ -41,11 +43,17 @@ export function recipeLocalRuntimeIds(manifest: RecipeManifest): string[] {
   return [];
 }
 
+/** True when the recipe declares no local runtime and therefore needs a cloud profile. */
+export function recipeIsCloudOnly(manifest: RecipeManifest): boolean {
+  return recipeLocalRuntimeIds(manifest).length === 0;
+}
+
 export function recipeSearchHaystack(manifest: RecipeManifest): string {
   const tags = (manifest.tags ?? []).join(" ");
   const runtimes = recipeLocalRuntimeIds(manifest).join(" ");
   const providers = recipeProviders(manifest).join(" ");
-  return `${manifest.id} ${manifest.name} ${manifest.summary ?? ""} ${tags} ${providers} ${runtimes}`.toLowerCase();
+  const cloud = recipeIsCloudOnly(manifest) ? "cloud-only cloud" : "";
+  return `${manifest.id} ${manifest.name} ${manifest.summary ?? ""} ${tags} ${providers} ${runtimes} ${cloud}`.toLowerCase();
 }
 
 export function filterGalleryRecipes(
@@ -67,7 +75,11 @@ export function filterGalleryRecipes(
 
     if (filters.runtime !== GALLERY_RUNTIME_ALL) {
       const runtimes = recipeLocalRuntimeIds(manifest);
-      if (runtimes.length === 0 || !runtimes.includes(filters.runtime)) return false;
+      if (filters.runtime === GALLERY_RUNTIME_CLOUD_ONLY) {
+        if (runtimes.length > 0) return false;
+      } else if (runtimes.length === 0 || !runtimes.includes(filters.runtime)) {
+        return false;
+      }
     }
 
     if (needle && !recipeSearchHaystack(manifest).includes(needle)) return false;

@@ -58,4 +58,26 @@ describe("RecipeCard", () => {
     );
     expect(screen.getByText("Cloud Azure")).toBeInTheDocument();
   });
+
+  it("badges local floci-az run targets so users know where to run", () => {
+    const localAzure: RecipeManifest = {
+      apiVersion: "cloudsprocket.recipe/v1",
+      id: "lab-storage-blobs-azure",
+      version: "0.1.0",
+      name: "Azure Storage blobs lab",
+      summary: "Local dry-run",
+      kind: "service-lab",
+      providers: ["azure"],
+      tags: ["azure", "storage"],
+      engine: { type: "opentofu", minVersion: "1.6.0" },
+      local: { runtimes: [{ id: "floci-az" }] },
+    };
+    render(
+      <ThemeProvider>
+        <RecipeCard manifest={localAzure} onConfigure={vi.fn()} />
+      </ThemeProvider>,
+    );
+    expect(screen.getByText("floci-az")).toBeInTheDocument();
+    expect(screen.queryByText("Cloud Azure")).not.toBeInTheDocument();
+  });
 });

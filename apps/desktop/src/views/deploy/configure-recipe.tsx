@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { ArrowLeft, Crown, FolderOpen, Loader2, Play } from "lucide-react";
+import { ArrowLeft, Cloud, Crown, FolderOpen, Loader2, Play } from "lucide-react";
 import { useMemo } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
@@ -56,6 +56,9 @@ export function ConfigureRecipe({
     () => magentoComposePlanWarnings(recipe.manifest.id, values),
     [recipe.manifest.id, values],
   );
+  const cloudOnly =
+    manifestCloudOnlyAzure(recipe.manifest) || manifestCloudOnlyAWS(recipe.manifest);
+  const noTargets = targetOptions.length === 0;
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
@@ -73,19 +76,25 @@ export function ConfigureRecipe({
       )}
 
       {manifestCloudOnlyAzure(recipe.manifest) && (
-        <Card className="flex items-center gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-400">
-          <Crown className="size-4 shrink-0" />
-          Cloud Azure subscription required. floci-az cannot dry-run this recipe (App Service plans and Function Apps
-          are not fully emulated). Pick a subscription where your account can create resource groups, storage, and
-          Function Apps, then enable write mode before apply.
+        <Card className="flex items-center gap-2 border-sky-500/30 bg-sky-500/5 p-3 text-sm text-sky-900 dark:text-sky-200">
+          <Cloud className="size-4 shrink-0" />
+          <span>
+            <span className="font-medium text-foreground">Run on Cloud Azure.</span>{" "}
+            floci-az cannot dry-run App Service plans or Function Apps. Pick a real subscription profile
+            where your account can create resource groups, storage, and Function Apps, then enable write
+            mode before apply.
+          </span>
         </Card>
       )}
 
       {manifestCloudOnlyAWS(recipe.manifest) && (
-        <Card className="flex items-center gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-400">
-          <Crown className="size-4 shrink-0" />
-          Real AWS account required. LocalStack cannot dry-run ECS, RDS, and ElastiCache for this recipe; pick an AWS
-          profile with permissions to create VPC, ECS, RDS, and ElastiCache resources.
+        <Card className="flex items-center gap-2 border-orange-500/30 bg-orange-500/5 p-3 text-sm text-orange-900 dark:text-orange-200">
+          <Cloud className="size-4 shrink-0" />
+          <span>
+            <span className="font-medium text-foreground">Run on Cloud AWS.</span>{" "}
+            LocalStack cannot dry-run ECS, RDS, and ElastiCache for this recipe. Pick an AWS profile with
+            permissions to create the full stack.
+          </span>
         </Card>
       )}
 
@@ -125,22 +134,30 @@ export function ConfigureRecipe({
 
       <Card className="flex flex-col gap-2 p-4">
         <label className="text-sm font-medium text-foreground">Deploy target</label>
-        <Select value={target} onValueChange={onTargetChange}>
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {targetOptions.map((option) => (
-              <SelectItem key={option.id} value={option.id}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {noTargets ? (
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+            {cloudOnly
+              ? "No cloud profiles are available yet. Sign in with Azure CLI or add an AWS profile, then return here. Local emulators are not offered for this recipe."
+              : "No deploy targets are available. Start a local runtime (LocalStack or floci-az) or add a cloud profile."}
+          </p>
+        ) : (
+          <Select value={target} onValueChange={onTargetChange}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {targetOptions.map((option) => (
+                <SelectItem key={option.id} value={option.id}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <p className="text-xs text-muted-foreground">
-          {manifestCloudOnlyAzure(recipe.manifest) || manifestCloudOnlyAWS(recipe.manifest)
+          {cloudOnly
             ? "Only cloud profiles are offered for this recipe. Local emulators cannot complete the full stack."
-            : "Pick a local runtime to dry-run the recipe, or switch to a cloud profile to deploy to real infrastructure unchanged."}
+            : "Local runtimes dry-run on your machine (floci-az for Azure, LocalStack for AWS). Cloud profiles deploy to real infrastructure unchanged."}
         </p>
       </Card>
 
@@ -159,7 +176,7 @@ export function ConfigureRecipe({
       ))}
 
       <div className="flex justify-end">
-        <Button onClick={onPlan} disabled={busy}>
+        <Button onClick={onPlan} disabled={busy || noTargets}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
           Plan deployment
         </Button>
