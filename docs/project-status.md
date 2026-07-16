@@ -1,7 +1,8 @@
 # CloudSprocket project status
 
-**Last updated:** 8 July 2026 (pre-v0.9 backlog complete on branch `feat/pre-v09-backlog`)  
-**Latest release:** [v0.9.5](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.9.5)
+**Last updated:** 15 July 2026
+
+**Latest release:** [v0.9.7](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.9.7)
 **Recent releases:** v0.8.33 (write mode for all profiles, inventory layout), v0.8.32 (Route 53, ELBv2, KMS), v0.8.31 (CloudFormation, EventBridge, write ops Phases 2–3)
 
 CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tauri v2 + Go sidecar. The PySide6 legacy app was removed in PR #67. The Tauri rewrite is the active product. The app is labelled **Developer Preview** (not production-ready).
@@ -29,6 +30,8 @@ CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tau
 - Service enablement Phases 1–3 (v0.8.27, PR #82)
 - Shared `ResourceInventoryShell` + `ResourceTable` across all AWS inventory tabs and Azure Storage (Step 5 complete, including CloudFormation and EventBridge)
 - Multi-platform CI and release builds (Windows, macOS, Linux)
+- Vendor-neutral chaos labs with Docker pause/unpause, per-step capability
+  reasons, automatic cleanup, and daemon restart recovery
 
 ### AWS (live)
 

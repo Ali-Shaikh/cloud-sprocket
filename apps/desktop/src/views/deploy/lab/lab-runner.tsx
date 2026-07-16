@@ -33,6 +33,7 @@ import { LabMarkdown } from "./lab-markdown";
 function stepStatusIcon(status: LabStepSession["status"]) {
   if (status === "passed") return <CheckCircle2 className="size-4 text-emerald-500" />;
   if (status === "failed") return <XCircle className="size-4 text-destructive" />;
+  if (status === "skipped") return <Circle className="size-4 text-amber-500" />;
   if (status === "in_progress") return <CircleDashed className="size-4 text-sky-500" />;
   return <Circle className="size-4 text-muted-foreground" />;
 }
@@ -81,6 +82,7 @@ export function LabRunner({
   const activeStep =
     labSpec.steps.find((step) => step.id === activeStepId) ?? labSpec.steps[0] ?? null;
   const activeStepSession = session?.steps.find((step) => step.stepId === activeStep?.id);
+  const faultState = activeStepSession?.fault;
 
   async function handleAction(step: LabStepSpec, action: LabStepAction, actionIndex: number) {
     const returned = await runAction(step.id, action, actionIndex);
@@ -177,6 +179,24 @@ export function LabRunner({
                 </details>
               )}
 
+              {activeStep.fault && (
+                <div
+                  className={cn(
+                    "rounded-lg border px-4 py-3 text-sm",
+                    faultState?.available
+                      ? "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+                      : "bg-muted/40 text-muted-foreground",
+                  )}
+                >
+                  <p className="font-medium text-foreground">Controlled fault: {activeStep.fault.kind}</p>
+                  <p className="mt-1">
+                    {faultState?.available
+                      ? `This check temporarily changes ${faultState.target ?? "the local runtime"} and restores it automatically.`
+                      : faultState?.reason ?? "This fault is not available on the selected runtime."}
+                  </p>
+                </div>
+              )}
+
               {activeStep.actions && activeStep.actions.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {activeStep.actions.map((action, index) => (
@@ -197,7 +217,11 @@ export function LabRunner({
               <div className="flex items-center gap-3">
                 <Button onClick={() => void verifyStep(activeStep.id)} disabled={loading}>
                   {loading ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                  { (activeStep.verify ?? []).length > 0 ? "Check my work" : "Mark complete" }
+                  {faultState && !faultState.available
+                    ? "Skip unavailable step"
+                    : (activeStep.verify ?? []).length > 0
+                      ? "Check my work"
+                      : "Mark complete"}
                 </Button>
               </div>
 

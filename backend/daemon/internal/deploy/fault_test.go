@@ -11,8 +11,8 @@ import (
 )
 
 type recordingContainers struct {
-	mu      sync.Mutex
-	paused  []string
+	mu       sync.Mutex
+	paused   []string
 	unpaused []string
 	pauseErr error
 }
@@ -112,7 +112,7 @@ func TestFaultInjectorForTargetAndDeployment(t *testing.T) {
 		compose  bool
 	}{
 		{targetID: "docker-compose", compose: true},
-		{targetID: "magento-compose", compose: true},
+		{targetID: "magento-compose", compose: false},
 		{targetID: "localstack", compose: false},
 		{targetID: "aws-cloud", compose: false},
 	}
@@ -131,5 +131,22 @@ func TestFaultInjectorForTargetAndDeployment(t *testing.T) {
 	compose := FaultInjectorForDeployment(&Deployment{Local: true, RuntimeID: "docker-compose"})
 	if _, ok := compose.(ComposeFaultInjector); !ok {
 		t.Fatalf("compose deployment should use compose injector, got %T", compose)
+	}
+}
+
+func TestManagedComposeInjectorRejectsUnownedTargets(t *testing.T) {
+	t.Parallel()
+	injector := FaultInjectorForTarget("docker-compose")
+	validator, ok := injector.(FaultValidator)
+	if !ok {
+		t.Fatalf("managed compose injector should validate targets, got %T", injector)
+	}
+	allowed := Fault{Kind: FaultKindPause, Target: dockerComposeLocalStackContainerName}
+	if err := validator.Validate(allowed); err != nil {
+		t.Fatalf("managed target rejected: %v", err)
+	}
+	err := validator.Validate(Fault{Kind: FaultKindPause, Target: "unrelated-database"})
+	if !errors.Is(err, ErrFaultTargetNotAllowed) {
+		t.Fatalf("got %v, want ErrFaultTargetNotAllowed", err)
 	}
 }
