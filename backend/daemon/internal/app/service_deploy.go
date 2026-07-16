@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"cloudsprocket/backend/daemon/internal/deploy"
 	"cloudsprocket/backend/daemon/internal/models"
@@ -391,7 +392,9 @@ func (s *Service) clearDeployCancel(id string) {
 }
 
 // cancelDeployment aborts the in-flight plan/apply/destroy for a deployment by
-// cancelling its run context, which kills the underlying tofu process.
+// cancelling its run context, which kills the underlying tofu process. On
+// Windows the azurerm provider child often survives; ReleaseWorkspace stops it
+// so Remove no longer fails with Access is denied.
 func (s *Service) cancelDeployment(id string) error {
 	s.deployCancelsMu.Lock()
 	cancel := s.deployCancels[id]
@@ -400,6 +403,11 @@ func (s *Service) cancelDeployment(id string) error {
 		return fmt.Errorf("no operation is currently running for this deployment")
 	}
 	cancel()
+	// Give tofu a moment to exit, then clear orphaned provider plugins.
+	time.AfterFunc(400*time.Millisecond, func() {
+		s.deployer.ReleaseWorkspace(id)
+	})
+	s.deployer.ReleaseWorkspace(id)
 	return nil
 }
 

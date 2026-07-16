@@ -249,4 +249,7 @@ type Deployer interface {
 	Destroy(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) error
 	CheckDrift(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) (deploy.DriftReport, error)
 	RemoveWorkspace(id string) error
+	// ReleaseWorkspace stops leftover provider processes under a deployment dir
+	// after cancel/stop so Windows file locks do not block removal.
+	ReleaseWorkspace(id string)
 }

@@ -209,11 +209,48 @@ func (e *Engine) WorkspaceDir(id string) string {
 // RemoveWorkspace deletes a deployment's on-disk workspace (materialised recipe,
 // tfvars, tfstate, plan). Used when a deployment record is removed so stale
 // workspaces do not accumulate. A missing directory is not an error.
+//
+// On Windows, a cancelled or hung apply often leaves terraform-provider-*.exe
+// running under the workspace, which locks provider binaries and makes the first
+// RemoveAll fail with "Access is denied". We stop those processes and retry.
 func (e *Engine) RemoveWorkspace(id string) error {
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("deployment id is required")
 	}
-	return os.RemoveAll(e.WorkspaceDir(id))
+	dir := e.WorkspaceDir(id)
+	if _, err := os.Stat(dir); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if err := os.RemoveAll(dir); err == nil {
+		return nil
+	}
+	// Best-effort unlock: kill leftover tofu/provider processes started from this dir.
+	sysproc.StopProcessesUnder(dir)
+	var last error
+	for attempt := 0; attempt < 6; attempt++ {
+		time.Sleep(time.Duration(100*(attempt+1)) * time.Millisecond)
+		last = os.RemoveAll(dir)
+		if last == nil {
+			return nil
+		}
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			return nil
+		}
+		sysproc.StopProcessesUnder(dir)
+	}
+	return fmt.Errorf("could not remove deployment workspace (a provider process may still be locking files): %w", last)
+}
+
+// ReleaseWorkspace stops leftover tofu/provider processes under a deployment
+// workspace so cancel/stop does not leave locked binaries behind.
+func (e *Engine) ReleaseWorkspace(id string) {
+	if strings.TrimSpace(id) == "" {
+		return
+	}
+	sysproc.StopProcessesUnder(e.WorkspaceDir(id))
 }
 
 // Prepare materialises the recipe into the deployment workspace, writes the

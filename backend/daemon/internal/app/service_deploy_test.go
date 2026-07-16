@@ -111,6 +111,8 @@ func (f *fakeDeployer) CheckDrift(_ context.Context, _ *deploy.Deployment, onLin
 
 func (f *fakeDeployer) RemoveWorkspace(string) error { return nil }
 
+func (f *fakeDeployer) ReleaseWorkspace(string) {}
+
 type captureNotifier struct {
 	mu     sync.Mutex
 	events []capturedEvent
