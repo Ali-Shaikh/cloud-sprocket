@@ -9,17 +9,20 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.8] - 2026-07-16
+
 ### Added
 
 - Server-side policy guardrails for public S3 access, internet-exposed
   management ports, IAM wildcard actions, required tags, and region allowlists
+  (#187)
 - Plan-bound typed overrides for blocked live deployments, with Activity audit
-  records and warning-only enforcement for local emulator targets
+  records and warning-only enforcement for local emulator targets (#187)
 
 ### Changed
 
 - Drift checks now use a separate saved plan so they cannot overwrite the plan
-  reviewed for apply
+  reviewed for apply (#187)
 
 ## [0.9.7] - 2026-07-15
 
@@ -916,7 +919,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.7...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.8...HEAD
+[0.9.8]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.7...v0.9.8
 [0.9.7]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.6...v0.9.7
 [0.9.6]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.5...v0.9.6
 [0.9.5]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.4...v0.9.5
