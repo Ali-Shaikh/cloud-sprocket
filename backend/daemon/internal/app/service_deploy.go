@@ -324,20 +324,33 @@ func (s *Service) authorisePolicyApply(ctx context.Context, deployment *deploy.D
 	previousUpdatedAt := deployment.UpdatedAt
 	deployment.Policy.AcceptOverride(s.now())
 	deployment.UpdatedAt = s.timestamp()
-	if err := s.saveDeployment(ctx, deployment, deployment.UpdatedAt); err != nil {
+	rules := blockingPolicyRules(*deployment.Policy)
+	message := fmt.Sprintf("Policy override accepted for deployment %s (%s). Blocking rules: %s.", deployment.Name, deployment.ID, strings.Join(rules, ", "))
+	sealed, err := s.sealForStore(deployment)
+	if err != nil {
 		deployment.Policy.Override = previousOverride
 		deployment.UpdatedAt = previousUpdatedAt
 		return err
 	}
-	rules := blockingPolicyRules(*deployment.Policy)
-	message := fmt.Sprintf("Policy override accepted for deployment %s (%s). Blocking rules: %s.", deployment.Name, deployment.ID, strings.Join(rules, ", "))
-	if err := s.appendActivity(ctx, notifier, "warning", message); err != nil {
+	entry, err := s.store.SaveDeploymentWithLog(
+		ctx,
+		deployment.ID,
+		sealed,
+		deployment.UpdatedAt,
+		"warning",
+		message,
+		"",
+		s.timestamp(),
+	)
+	if err != nil {
 		deployment.Policy.Override = previousOverride
 		deployment.UpdatedAt = previousUpdatedAt
-		_ = s.saveDeployment(ctx, deployment, previousUpdatedAt)
-		return fmt.Errorf("record policy override activity: %w", err)
+		return fmt.Errorf("persist policy override and activity: %w", err)
 	}
 	if notifier != nil {
+		if err := notifier.Notify("log.appended", entry); err != nil {
+			log.Printf("deployments: policy override activity notification failed for %s: %v", deployment.ID, err)
+		}
 		_ = notifier.Notify("deployment.changed", deployment)
 	}
 	return nil

@@ -92,7 +92,10 @@ func TestEvaluateBundledRuleVariants(t *testing.T) {
 			"block_public_acls": true, "block_public_policy": false,
 		}),
 		resourceChange("aws_vpc_security_group_ingress_rule.winrm", "aws_vpc_security_group_ingress_rule", map[string]any{
-			"ip_protocol": "-1", "ipv6_cidr_blocks": []string{"::/0"},
+			"ip_protocol": "-1", "cidr_ipv6": "::/0",
+		}),
+		resourceChange("aws_vpc_security_group_ingress_rule.rdp", "aws_vpc_security_group_ingress_rule", map[string]any{
+			"ip_protocol": "tcp", "from_port": 3389, "to_port": 3389, "cidr_ipv4": "0.0.0.0/0",
 		}),
 		resourceChange("aws_security_group.admin", "aws_security_group", map[string]any{
 			"ingress": []map[string]any{{
@@ -108,8 +111,33 @@ func TestEvaluateBundledRuleVariants(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
-	if got.Status != StatusBlocked || got.BlockingCount != 3 || len(got.Findings) != 4 {
-		t.Fatalf("expected three blockers and one warning, got %+v", got)
+	if got.Status != StatusBlocked || got.BlockingCount != 4 || len(got.Findings) != 5 {
+		t.Fatalf("expected four blockers and one warning, got %+v", got)
+	}
+}
+
+func TestEvaluateDistinguishesUnknownRequiredTag(t *testing.T) {
+	raw, err := json.Marshal(map[string]any{
+		"format_version": "1.0",
+		"resource_changes": []map[string]any{{
+			"address": "aws_lambda_function.worker",
+			"type":    "aws_lambda_function",
+			"change": map[string]any{
+				"actions":       []string{"create"},
+				"after":         map[string]any{"tags": nil},
+				"after_unknown": map[string]any{"tags": map[string]any{"ManagedBy": true}},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Evaluate(context.Background(), raw, Options{RequiredTags: []string{"ManagedBy"}})
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if got.Status != StatusWarned || len(got.Findings) != 1 || got.Findings[0].Title != "Required tag cannot be verified" {
+		t.Fatalf("expected an unknown-tag warning, got %+v", got)
 	}
 }
 

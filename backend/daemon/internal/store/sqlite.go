@@ -259,6 +259,70 @@ func (s *Store) SaveDeployment(ctx context.Context, id string, value any, timest
 	return err
 }
 
+// SaveDeploymentWithLog atomically persists a deployment and its related
+// activity entry. Neither write is visible unless both succeed.
+func (s *Store) SaveDeploymentWithLog(
+	ctx context.Context,
+	id string,
+	value any,
+	deploymentTimestamp string,
+	level string,
+	message string,
+	details string,
+	logTimestamp string,
+) (models.ActivityLogEntry, error) {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return models.ActivityLogEntry{}, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return models.ActivityLogEntry{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(
+		ctx,
+		`INSERT INTO deployments (id, payload_json, created_at, updated_at)
+		 VALUES (?, ?, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET
+		   payload_json = excluded.payload_json,
+		   updated_at = excluded.updated_at`,
+		id,
+		string(payload),
+		deploymentTimestamp,
+		deploymentTimestamp,
+	); err != nil {
+		return models.ActivityLogEntry{}, err
+	}
+	result, err := tx.ExecContext(
+		ctx,
+		`INSERT INTO activity_log (level, message, details, timestamp)
+		 VALUES (?, ?, ?, ?)`,
+		level,
+		message,
+		details,
+		logTimestamp,
+	)
+	if err != nil {
+		return models.ActivityLogEntry{}, err
+	}
+	logID, err := result.LastInsertId()
+	if err != nil {
+		return models.ActivityLogEntry{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return models.ActivityLogEntry{}, err
+	}
+	return models.ActivityLogEntry{
+		ID:        logID,
+		Level:     level,
+		Message:   message,
+		Details:   details,
+		Timestamp: logTimestamp,
+	}, nil
+}
+
 // LoadDeployment unmarshals a single deployment into target.
 func (s *Store) LoadDeployment(ctx context.Context, id string, target any) (bool, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT payload_json FROM deployments WHERE id = ?`, id)

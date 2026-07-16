@@ -75,7 +75,9 @@ func evaluatePlan(ctx context.Context, plan map[string]any, options Options) ([]
 			return nil, fmt.Errorf("evaluate bundled policy: %w", err)
 		}
 		change := objectValue(rawChange)
-		after := objectValue(objectValue(change["change"])["after"])
+		changeValues := objectValue(change["change"])
+		after := objectValue(changeValues["after"])
+		afterUnknown := objectValue(changeValues["after_unknown"])
 		if after == nil {
 			continue
 		}
@@ -106,13 +108,19 @@ func evaluatePlan(ctx context.Context, plan map[string]any, options Options) ([]
 		if _, taggable := taggableTypes[resourceType]; taggable {
 			tags := objectValue(after["tags"])
 			for _, required := range requiredTags {
-				if tags == nil || strings.TrimSpace(stringValue(tags[required])) == "" {
-					appendFinding(Finding{
-						RuleID: requiredTagRuleID, Title: "Required tag missing",
-						Message:  fmt.Sprintf("The planned resource is missing the required %s tag.", required),
-						Severity: SeverityWarning, ResourceAddress: address,
-					})
+				if strings.TrimSpace(stringValue(tags[required])) != "" {
+					continue
 				}
+				finding := Finding{
+					RuleID: requiredTagRuleID, Title: "Required tag missing",
+					Message:  fmt.Sprintf("The planned resource is missing the required %s tag.", required),
+					Severity: SeverityWarning, ResourceAddress: address,
+				}
+				if tagValueUnknown(afterUnknown["tags"], required) {
+					finding.Title = "Required tag cannot be verified"
+					finding.Message = fmt.Sprintf("The required %s tag is unknown until apply.", required)
+				}
+				appendFinding(finding)
 			}
 		}
 		if len(allowedRegions) > 0 {
@@ -205,6 +213,15 @@ func worldOpen(rule map[string]any) bool {
 		}
 	}
 	return stringValue(rule["cidr_ipv4"]) == "0.0.0.0/0" || stringValue(rule["cidr_ipv6"]) == "::/0"
+}
+
+func tagValueUnknown(rawTags any, required string) bool {
+	if unknown, ok := rawTags.(bool); ok {
+		return unknown
+	}
+	unknownTags := objectValue(rawTags)
+	unknown, _ := unknownTags[required].(bool)
+	return unknown
 }
 
 func resolveProviderRegion(plan map[string]any, expression map[string]any) (string, bool) {
