@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 const (
@@ -14,28 +15,30 @@ const (
 )
 
 type Settings struct {
-	PlatformName       string
-	HomeDir            string
-	AppDataDir         string
-	LocalAppDataDir    string
-	ConfigDir          string
-	RuntimeMode        string
-	LocalConfigDir     string
-	EmulatorStateDir   string
-	LocalStackImage    string
-	FlociAZImage       string
-	FlociAZEndpoint    string
-	AWSConfigPath      string
-	AWSCredentialsPath string
-	AzureDir           string
-	GCloudDir          string
-	DatabasePath       string
-	LogPath            string
-	ToolsDir           string
-	TofuPath           string
-	DeploymentsDir     string
-	ImportedRecipesDir string
-	SecretKeyPath      string
+	PlatformName         string
+	HomeDir              string
+	AppDataDir           string
+	LocalAppDataDir      string
+	ConfigDir            string
+	RuntimeMode          string
+	LocalConfigDir       string
+	EmulatorStateDir     string
+	LocalStackImage      string
+	FlociAZImage         string
+	FlociAZEndpoint      string
+	AWSConfigPath        string
+	AWSCredentialsPath   string
+	AzureDir             string
+	GCloudDir            string
+	DatabasePath         string
+	LogPath              string
+	ToolsDir             string
+	TofuPath             string
+	DeploymentsDir       string
+	ImportedRecipesDir   string
+	SecretKeyPath        string
+	PolicyRequiredTags   []string
+	PolicyAllowedRegions []string
 }
 
 func Default() Settings {
@@ -79,30 +82,38 @@ func FromEnv(env map[string]string, goos string, home string) Settings {
 	deploymentsDir := firstNonEmpty(env["CLOUDSPROCKET_DEPLOYMENTS_DIR"], filepath.Join(configDir, "deployments"))
 	importedRecipesDir := firstNonEmpty(env["CLOUDSPROCKET_IMPORTED_RECIPES_DIR"], filepath.Join(configDir, "recipes", "imported"))
 	secretKeyPath := firstNonEmpty(env["CLOUDSPROCKET_SECRET_KEY_PATH"], filepath.Join(configDir, "secret.key"))
+	requiredTagsValue, requiredTagsConfigured := env["CLOUDSPROCKET_POLICY_REQUIRED_TAGS"]
+	if !requiredTagsConfigured {
+		requiredTagsValue = "Environment,ManagedBy"
+	}
+	policyRequiredTags := commaSeparatedValues(requiredTagsValue)
+	policyAllowedRegions := commaSeparatedValues(env["CLOUDSPROCKET_POLICY_ALLOWED_REGIONS"])
 
 	return Settings{
-		PlatformName:       platform,
-		HomeDir:            home,
-		AppDataDir:         appDataDir,
-		LocalAppDataDir:    localAppDataDir,
-		ConfigDir:          configDir,
-		RuntimeMode:        runtimeMode,
-		LocalConfigDir:     localConfigDir,
-		EmulatorStateDir:   emulatorStateDir,
-		LocalStackImage:    localStackImage,
-		FlociAZImage:       flociAZImage,
-		FlociAZEndpoint:    flociAZEndpoint,
-		AWSConfigPath:      awsConfig,
-		AWSCredentialsPath: awsCredentials,
-		AzureDir:           azureDir,
-		GCloudDir:          gcloudDir,
-		DatabasePath:       filepath.Join(configDir, "cloudsprocket.db"),
-		LogPath:            filepath.Join(configDir, "logs", "cloudsprocket.log"),
-		ToolsDir:           toolsDir,
-		TofuPath:           tofuPath,
-		DeploymentsDir:     deploymentsDir,
-		ImportedRecipesDir: importedRecipesDir,
-		SecretKeyPath:      secretKeyPath,
+		PlatformName:         platform,
+		HomeDir:              home,
+		AppDataDir:           appDataDir,
+		LocalAppDataDir:      localAppDataDir,
+		ConfigDir:            configDir,
+		RuntimeMode:          runtimeMode,
+		LocalConfigDir:       localConfigDir,
+		EmulatorStateDir:     emulatorStateDir,
+		LocalStackImage:      localStackImage,
+		FlociAZImage:         flociAZImage,
+		FlociAZEndpoint:      flociAZEndpoint,
+		AWSConfigPath:        awsConfig,
+		AWSCredentialsPath:   awsCredentials,
+		AzureDir:             azureDir,
+		GCloudDir:            gcloudDir,
+		DatabasePath:         filepath.Join(configDir, "cloudsprocket.db"),
+		LogPath:              filepath.Join(configDir, "logs", "cloudsprocket.log"),
+		ToolsDir:             toolsDir,
+		TofuPath:             tofuPath,
+		DeploymentsDir:       deploymentsDir,
+		ImportedRecipesDir:   importedRecipesDir,
+		SecretKeyPath:        secretKeyPath,
+		PolicyRequiredTags:   policyRequiredTags,
+		PolicyAllowedRegions: policyAllowedRegions,
 	}
 }
 
@@ -158,6 +169,23 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func commaSeparatedValues(value string) []string {
+	seen := map[string]struct{}{}
+	values := []string{}
+	for _, item := range strings.Split(value, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		values = append(values, item)
+	}
+	return values
 }
 
 func currentEnv() map[string]string {

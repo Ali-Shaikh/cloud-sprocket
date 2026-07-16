@@ -1,11 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { ArrowLeft, ExternalLink, Loader2, RefreshCw, Rocket, Square, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Loader2, RefreshCw, Rocket, ShieldAlert, ShieldCheck, Square, Trash2 } from "lucide-react";
 import { useState } from "react";
 
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { openExternalUrl } from "@/lib/backend";
 import type { NavigateToResourceParams } from "@/lib/navigate-to-resource";
 import type { Deployment, DeploymentOutput, RecipeManifest } from "@/types/backend";
@@ -40,7 +49,7 @@ export function DeploymentDetail({
   logRef?: React.MutableRefObject<HTMLDivElement | null>;
   busy: boolean;
   onBack: () => void;
-  onApply: () => void;
+  onApply: (policyOverride?: string) => void;
   onDestroy: () => void;
   onCancel: () => void;
   onDelete: () => void;
@@ -49,6 +58,8 @@ export function DeploymentDetail({
   onUpdate?: () => void;
   navigateToResource?: (params: NavigateToResourceParams) => void;
 }) {
+  const [policyOverrideOpen, setPolicyOverrideOpen] = useState(false);
+  const [policyConfirmation, setPolicyConfirmation] = useState("");
   const canApply = deployment.status === "planned";
   const canDestroy = deployment.status === "applied";
   const isRunning =
@@ -59,6 +70,9 @@ export function DeploymentDetail({
   const canRemove = !isRunning && !hasLiveResources;
   const targetLabel = formatDeploymentTargetLabel(deployment);
   const isUpdateReplan = canApply && ((deployment.outputs?.length ?? 0) > 0 || (deployment.revisions?.length ?? 0) > 0);
+  const policyOverridePhrase = `APPLY ${deployment.id}`;
+  const policyOverrideValid = deployment.policy?.status === "blocked" && deployment.policy.override?.decisionDigest === deployment.policy.decisionDigest;
+  const policyBlocksApply = canApply && !deployment.local && deployment.policy?.status === "blocked" && !policyOverrideValid;
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-5 p-6">
@@ -84,9 +98,9 @@ export function DeploymentDetail({
             </Button>
           )}
           {canApply && (
-            <Button onClick={onApply} disabled={busy}>
+            <Button onClick={() => policyBlocksApply ? setPolicyOverrideOpen(true) : onApply()} disabled={busy}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : <Rocket className="size-4" />}
-              {isUpdateReplan ? "Confirm and Apply" : "Apply"}
+              {policyBlocksApply ? "Review policy" : isUpdateReplan ? "Confirm and Apply" : "Apply"}
             </Button>
           )}
           {canDestroy && (
@@ -140,6 +154,79 @@ export function DeploymentDetail({
           {deployment.plan.destroy > 0 && (
             <p className="mt-2 text-xs text-destructive">Destructive changes detected. Review carefully before confirming apply.</p>
           )}
+        </Card>
+      )}
+
+      {deployment.policy && (
+        <Card
+          className={
+            deployment.policy.status === "blocked"
+              ? "border-destructive/40 bg-destructive/5 p-4"
+              : deployment.policy.status === "warned"
+                ? "border-amber-500/40 bg-amber-500/5 p-4"
+                : "border-emerald-500/30 bg-emerald-500/5 p-4"
+          }
+        >
+          <div className="flex items-start gap-3">
+            {deployment.policy.status === "passed" ? (
+              <ShieldCheck className="mt-0.5 size-5 text-emerald-600 dark:text-emerald-400" />
+            ) : (
+              <ShieldAlert
+                className={
+                  deployment.policy.status === "blocked"
+                    ? "mt-0.5 size-5 text-destructive"
+                    : "mt-0.5 size-5 text-amber-600 dark:text-amber-400"
+                }
+              />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium text-foreground">Policy guardrails</p>
+                <span className="rounded bg-background/70 px-2 py-0.5 text-xs font-medium uppercase tracking-wide">
+                  {deployment.policy.status}
+                </span>
+              </div>
+              {deployment.policy.status === "passed" ? (
+                <p className="mt-1 text-xs text-muted-foreground">The saved plan passed all bundled guardrails.</p>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {deployment.policy.findings.map((finding) => {
+                    const displaySeverity = deployment.local && finding.severity === "deny" ? "warning" : finding.severity;
+                    return (
+                      <div
+                        key={`${finding.ruleId}:${finding.resourceAddress ?? finding.message}`}
+                        className="rounded border border-border/70 bg-background/50 p-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-medium text-foreground">{finding.title}</span>
+                          <span
+                            className={
+                              displaySeverity === "deny"
+                                ? "text-xs font-medium text-destructive"
+                                : "text-xs font-medium text-amber-600 dark:text-amber-400"
+                            }
+                          >
+                            {displaySeverity}
+                          </span>
+                          <span className="font-mono text-[11px] text-muted-foreground">{finding.ruleId}</span>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">{finding.message}</p>
+                        {finding.resourceAddress && (
+                          <p className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{finding.resourceAddress}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {deployment.local && deployment.policy.findings.some((finding) => finding.severity === "deny") && (
+                <p className="mt-3 text-xs text-muted-foreground">Local targets warn only. Apply remains available.</p>
+              )}
+              {policyOverrideValid && (
+                <p className="mt-3 text-xs text-destructive">A typed override is recorded for this exact plan and policy decision.</p>
+              )}
+            </div>
+          </div>
         </Card>
       )}
 
@@ -212,6 +299,58 @@ export function DeploymentDetail({
         <p className="mb-2 text-sm font-medium text-foreground">Logs</p>
         <VirtualizedLogPane lines={logs} scrollRef={logRef} />
       </div>
+
+      <AlertDialog
+        open={policyOverrideOpen}
+        onOpenChange={(open) => {
+          if (!open && !busy) {
+            setPolicyOverrideOpen(false);
+            setPolicyConfirmation("");
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Override blocking policy findings</AlertDialogTitle>
+            <AlertDialogDescription>
+              This live-cloud plan has {deployment.policy?.blockingCount ?? 0} blocking finding(s). Review the findings above, then type{" "}
+              <span className="font-mono font-medium text-foreground">{policyOverridePhrase}</span>{" "}
+              to apply this exact saved plan. The override will be recorded in Activity.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={policyConfirmation}
+            placeholder={policyOverridePhrase}
+            aria-label="Policy override confirmation"
+            disabled={busy}
+            onChange={(event) => setPolicyConfirmation(event.target.value)}
+          />
+          <AlertDialogFooter>
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => {
+                setPolicyOverrideOpen(false);
+                setPolicyConfirmation("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={busy || policyConfirmation !== policyOverridePhrase}
+              onClick={() => {
+                const confirmation = policyConfirmation;
+                setPolicyOverrideOpen(false);
+                setPolicyConfirmation("");
+                onApply(confirmation);
+              }}
+            >
+              Apply with override
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

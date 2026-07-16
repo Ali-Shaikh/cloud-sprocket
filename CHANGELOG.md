@@ -9,6 +9,18 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Added
+
+- Server-side policy guardrails for public S3 access, internet-exposed
+  management ports, IAM wildcard actions, required tags, and region allowlists
+- Plan-bound typed overrides for blocked live deployments, with Activity audit
+  records and warning-only enforcement for local emulator targets
+
+### Changed
+
+- Drift checks now use a separate saved plan so they cannot overwrite the plan
+  reviewed for apply
+
 ## [0.9.7] - 2026-07-15
 
 ### Added

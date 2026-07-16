@@ -252,11 +252,11 @@ export default function DeployView({
     }
   }
 
-  async function handleApply() {
+  async function handleApply(policyOverride = "") {
     if (!active) return;
     setBusy(true);
     try {
-      await applyDeployment(active.id);
+      await applyDeployment(active.id, policyOverride);
     } catch (error) {
       reportDeployError("Apply failed", error);
     } finally {

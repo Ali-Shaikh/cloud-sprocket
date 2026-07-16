@@ -99,6 +99,9 @@ Legend: **Browse** = inventory and detail views · **Write** = mutating actions 
 | `backend/daemon/` | Go sidecar, JSON-RPC handlers, discovery, SQLite store |
 | `.github/workflows/` | Multi-platform CI and release pipeline |
 
+Policy rule behaviour, configuration, and override enforcement are documented
+in [Policy guardrails](docs/policy-guardrails.md).
+
 ## Toolchain
 
 | Tool | Version |
