@@ -126,7 +126,8 @@ func secretSummary(item smtypes.SecretListEntry) models.AwsSecretsManagerSecret 
 		summary.LastAccessedDate = item.LastAccessedDate.UTC().Format(time.RFC3339)
 	}
 	if item.RotationEnabled != nil {
-		summary.RotationEnabled = *item.RotationEnabled
+		enabled := *item.RotationEnabled
+		summary.RotationEnabled = &enabled
 	}
 	return summary
 }

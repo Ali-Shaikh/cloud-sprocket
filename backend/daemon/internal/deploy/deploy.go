@@ -696,11 +696,15 @@ func (e *Engine) env(deployment *Deployment) []string {
 
 // tofuPluginCacheEnv returns TF_PLUGIN_CACHE_DIR under the app config root.
 // The directory is created if missing so tofu can write into it immediately.
+// When ConfigDir is empty or not absolute, nothing is injected so tofu does not
+// resolve a relative plugin-cache path against the process working directory.
 func tofuPluginCacheEnv(settings config.Settings) []string {
-	cacheDir := filepath.Join(settings.ConfigDir, "plugin-cache")
-	if strings.TrimSpace(settings.ConfigDir) != "" {
-		_ = os.MkdirAll(cacheDir, 0o755)
+	configDir := strings.TrimSpace(settings.ConfigDir)
+	if configDir == "" || !filepath.IsAbs(configDir) {
+		return nil
 	}
+	cacheDir := filepath.Join(configDir, "plugin-cache")
+	_ = os.MkdirAll(cacheDir, 0o755)
 	return []string{"TF_PLUGIN_CACHE_DIR=" + cacheDir}
 }
 

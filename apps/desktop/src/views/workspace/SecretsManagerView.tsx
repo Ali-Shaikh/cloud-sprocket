@@ -49,6 +49,17 @@ const fieldLabel =
 
 const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] shadow-sm";
 
+/** Map optional rotation flag to Enabled / Disabled / Unknown. */
+export function formatRotationStatus(rotationEnabled?: boolean): string {
+  if (rotationEnabled === true) {
+    return "Enabled";
+  }
+  if (rotationEnabled === false) {
+    return "Disabled";
+  }
+  return "Unknown";
+}
+
 function countLabel(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
 }
@@ -192,7 +203,7 @@ export default function SecretsManagerView({
           },
           {
             label: "Rotation",
-            value: selectedSecret.rotationEnabled ? "Enabled" : "Unknown",
+            value: formatRotationStatus(selectedSecret.rotationEnabled),
           },
         ]}
         emptyText="No secret details are available."
@@ -359,6 +370,9 @@ export default function SecretsManagerView({
                 onSelectSecret(secret.name);
                 setInspectorOpen(true);
               }}
+              getCellTitle={(secret, columnId) =>
+                columnId === "lastChanged" ? secret.lastChangedDate : undefined
+              }
               renderCell={(secret, columnId) => {
                 if (columnId === "name") {
                   return <span className="font-medium">{secret.name}</span>;
@@ -372,7 +386,7 @@ export default function SecretsManagerView({
                     : "Unknown";
                 }
                 if (columnId === "rotation") {
-                  return secret.rotationEnabled ? "Enabled" : "Unknown";
+                  return formatRotationStatus(secret.rotationEnabled);
                 }
                 return null;
               }}

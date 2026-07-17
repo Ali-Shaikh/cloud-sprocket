@@ -5,8 +5,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
-import SecretsManagerView from "./SecretsManagerView";
-import type { SecretsManagerWorkspaceSnapshot } from "./SecretsManagerView";
+import SecretsManagerView, {
+  formatRotationStatus,
+  type SecretsManagerWorkspaceSnapshot,
+} from "./SecretsManagerView";
 
 function mockMatchMedia(matches: boolean) {
   return vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
@@ -162,6 +164,7 @@ const workspaceFixture: SecretsManagerWorkspaceSnapshot = {
       name: "cloudsprocket/db-password",
       description: "Application database password",
       lastChangedDate: "2026-07-01T10:00:00Z",
+      rotationEnabled: false,
     },
     {
       arn: "arn:aws:secretsmanager:us-east-1:123:secret:cloudsprocket/api-key-xyz",
@@ -220,6 +223,31 @@ describe("SecretsManagerView", () => {
     expect(screen.getAllByText("cloudsprocket/db-password").length).toBeGreaterThan(0);
     expect(screen.getByText("cloudsprocket/api-key")).toBeInTheDocument();
     expect(screen.getAllByText("Application database password").length).toBeGreaterThan(0);
+  });
+
+  it("maps rotation to Enabled, Disabled, and Unknown", () => {
+    expect(formatRotationStatus(true)).toBe("Enabled");
+    expect(formatRotationStatus(false)).toBe("Disabled");
+    expect(formatRotationStatus(undefined)).toBe("Unknown");
+  });
+
+  it("shows Disabled for rotation when rotationEnabled is false", () => {
+    mockMatchMedia(true);
+    renderSecretsManagerView();
+
+    // Selected secret (db-password) has rotationEnabled: false.
+    expect(screen.getAllByText("Disabled").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Enabled").length).toBeGreaterThan(0);
+  });
+
+  it("exposes raw ISO last-changed on table cell title for hover parity", () => {
+    mockMatchMedia(true);
+    renderSecretsManagerView();
+
+    // Table cell and inspector both surface the raw ISO on title.
+    const titled = screen.getAllByTitle("2026-07-01T10:00:00Z");
+    expect(titled.length).toBeGreaterThanOrEqual(2);
+    expect(titled.some((node) => node.tagName === "TD")).toBe(true);
   });
 
   it("selects a secret when a row is clicked", () => {
