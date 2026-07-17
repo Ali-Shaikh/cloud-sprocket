@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { formatTimestamp } from "./format";
+import { formatEpochMillis, formatEpochSeconds, formatTimestamp } from "./format";
 
 describe("formatTimestamp", () => {
   it.each([
@@ -15,5 +15,25 @@ describe("formatTimestamp", () => {
 
   it.each(["not-a-date", ""])("returns invalid input unchanged", (input) => {
     expect(formatTimestamp(input)).toBe(input);
+  });
+});
+
+describe("formatEpochSeconds", () => {
+  it("formats SQS-style epoch seconds", () => {
+    expect(formatEpochSeconds(1_776_157_920)).toBe("14 Apr 2026, 09:12 UTC");
+  });
+
+  it.each([undefined, 0, -1, Number.NaN])("returns Unknown for %s", (input) => {
+    expect(formatEpochSeconds(input)).toBe("Unknown");
+  });
+});
+
+describe("formatEpochMillis", () => {
+  it("formats CloudWatch-style epoch millis", () => {
+    expect(formatEpochMillis(1_776_157_920_000)).toBe("14 Apr 2026, 09:12 UTC");
+  });
+
+  it.each([undefined, 0, -1, Number.NaN])("returns Unknown for %s", (input) => {
+    expect(formatEpochMillis(input)).toBe("Unknown");
   });
 });

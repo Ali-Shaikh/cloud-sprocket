@@ -20,3 +20,19 @@ export function formatTimestamp(iso: string): string {
 
   return `${part("day")} ${part("month")} ${part("year")}, ${part("hour")}:${part("minute")} UTC`;
 }
+
+/** Format a Unix epoch in seconds (AWS SQS-style). Invalid values become "Unknown". */
+export function formatEpochSeconds(epochSeconds?: number): string {
+  if (epochSeconds == null || epochSeconds <= 0 || !Number.isFinite(epochSeconds)) {
+    return "Unknown";
+  }
+  return formatTimestamp(new Date(epochSeconds * 1000).toISOString());
+}
+
+/** Format a Unix epoch in milliseconds (CloudWatch Logs-style). */
+export function formatEpochMillis(epochMillis?: number): string {
+  if (epochMillis == null || epochMillis <= 0 || !Number.isFinite(epochMillis)) {
+    return "Unknown";
+  }
+  return formatTimestamp(new Date(epochMillis).toISOString());
+}
