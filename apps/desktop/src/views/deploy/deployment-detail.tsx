@@ -126,8 +126,35 @@ export function DeploymentDetail({
         </div>
       </div>
 
+      {isRunning && (
+        <Card className="border-sky-500/30 bg-sky-500/5 p-4 text-sm text-sky-950 dark:text-sky-100">
+          <p className="font-medium text-foreground">OpenTofu is still running</p>
+          <p className="mt-1 text-muted-foreground">
+            Quiet periods are normal while providers download or resources create. The log prints a
+            heartbeat about every 45 seconds when OpenTofu has not produced new output.
+          </p>
+          {deployment.local &&
+            (deployment.recipeId === "lab-postgres-flexible-azure" ||
+              deployment.recipeId.includes("postgres")) && (
+              <p className="mt-2 text-muted-foreground">
+                First local PostgreSQL apply may take 1-2 minutes while Docker pulls the Postgres
+                image. This is expected and is not cloud-only.
+              </p>
+            )}
+        </Card>
+      )}
+
       {deployment.error && (
-        <Card className="border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{deployment.error}</Card>
+        <Card className="border-destructive/30 bg-destructive/5 p-4">
+          <p className="text-sm font-medium text-destructive">Deployment failed</p>
+          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-destructive">
+            {deployment.error}
+          </pre>
+          <p className="mt-2 text-xs text-muted-foreground">
+            The message above includes the last OpenTofu output when available. Retry after fixing
+            network, runtime, or lock issues, or stop a stuck run first.
+          </p>
+        </Card>
       )}
 
       <PostApplyWarningCard deployment={deployment} busy={busy} onRetry={onRetryPostApply} />

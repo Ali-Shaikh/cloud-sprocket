@@ -6,6 +6,7 @@ package deploy
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,8 +40,11 @@ func WithProgressHeartbeat(ctx context.Context, onLine tofu.LogFunc) (wrapped to
 
 	wrapped = func(line string) {
 		mu.Lock()
-		lastLine = line
-		lastAt = time.Now()
+		// Ignore our own heartbeats so quiet time reflects real tofu output.
+		if !isProgressHeartbeatLine(line) {
+			lastLine = line
+			lastAt = time.Now()
+		}
 		mu.Unlock()
 		onLine(line)
 	}
@@ -62,11 +66,7 @@ func WithProgressHeartbeat(ctx context.Context, onLine tofu.LogFunc) (wrapped to
 				if quiet < deployProgressHeartbeat {
 					continue
 				}
-				onLine(fmt.Sprintf(
-					"Still working after %s with no new OpenTofu output. Last line: %s",
-					quiet.Round(time.Second),
-					line,
-				))
+				onLine(quietProgressHint(line, quiet))
 			}
 		}
 	}()
@@ -75,4 +75,54 @@ func WithProgressHeartbeat(ctx context.Context, onLine tofu.LogFunc) (wrapped to
 		close(done)
 	})
 	return wrapped, stop
+}
+
+func isProgressHeartbeatLine(line string) bool {
+	return strings.HasPrefix(strings.TrimSpace(line), "Still ")
+}
+
+// quietProgressHint builds a phase-aware reminder so quieter periods read as
+// progress rather than a hung UI.
+func quietProgressHint(lastLine string, quiet time.Duration) string {
+	quietLabel := quiet.Round(time.Second)
+	lower := strings.ToLower(lastLine)
+	switch {
+	case strings.Contains(lower, "installing ") ||
+		(strings.Contains(lower, "finding ") && strings.Contains(lower, "versions matching")) ||
+		strings.Contains(lower, "provider plugins") ||
+		strings.Contains(lower, "initializing provider"):
+		return fmt.Sprintf(
+			"Still downloading providers after %s with no new OpenTofu output. Large providers such as azurerm can take several minutes on the first run; later runs reuse the app plugin cache. Last line: %s",
+			quietLabel,
+			lastLine,
+		)
+	case strings.Contains(lower, "still creating") ||
+		strings.Contains(lower, "creating...") ||
+		strings.Contains(lower, "creating "):
+		return fmt.Sprintf(
+			"Still waiting for resources after %s with no new OpenTofu output. Long creates (for example PostgreSQL Flexible Server) can take 1-2 minutes locally while Docker pulls the image. Last line: %s",
+			quietLabel,
+			lastLine,
+		)
+	case strings.Contains(lower, "still destroying") ||
+		strings.Contains(lower, "destroying...") ||
+		strings.Contains(lower, "destroying "):
+		return fmt.Sprintf(
+			"Still destroying resources after %s with no new OpenTofu output. Emulator or cloud cleanup can sit quiet between API calls. Last line: %s",
+			quietLabel,
+			lastLine,
+		)
+	case strings.Contains(lower, "refreshing state") || strings.Contains(lower, "reading..."):
+		return fmt.Sprintf(
+			"Still refreshing state after %s with no new OpenTofu output. This is normal when many resources are read. Last line: %s",
+			quietLabel,
+			lastLine,
+		)
+	default:
+		return fmt.Sprintf(
+			"Still working after %s with no new OpenTofu output. Quiet periods are normal during provider installs and long resource operations. Last line: %s",
+			quietLabel,
+			lastLine,
+		)
+	}
 }

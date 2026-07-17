@@ -213,6 +213,9 @@ func (e *Engine) WorkspaceDir(id string) string {
 // On Windows, a cancelled or hung apply often leaves terraform-provider-*.exe
 // running under the workspace, which locks provider binaries and makes the first
 // RemoveAll fail with "Access is denied". We stop those processes and retry.
+// Provider hardlinks into the shared plugin cache can report their image path
+// under plugin-cache rather than the workspace, so we also stop provider
+// processes there when the first unlock pass fails.
 func (e *Engine) RemoveWorkspace(id string) error {
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("deployment id is required")
@@ -227,10 +230,10 @@ func (e *Engine) RemoveWorkspace(id string) error {
 	if err := os.RemoveAll(dir); err == nil {
 		return nil
 	}
-	// Best-effort unlock: kill leftover tofu/provider processes started from this dir.
-	sysproc.StopProcessesUnder(dir)
+	// Best-effort unlock: kill leftover tofu/provider processes for this workspace.
+	e.unlockWorkspaceProcesses(dir)
 	var last error
-	for attempt := 0; attempt < 6; attempt++ {
+	for attempt := 0; attempt < 8; attempt++ {
 		time.Sleep(time.Duration(100*(attempt+1)) * time.Millisecond)
 		last = os.RemoveAll(dir)
 		if last == nil {
@@ -239,7 +242,7 @@ func (e *Engine) RemoveWorkspace(id string) error {
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
 			return nil
 		}
-		sysproc.StopProcessesUnder(dir)
+		e.unlockWorkspaceProcesses(dir)
 	}
 	return fmt.Errorf("could not remove deployment workspace (a provider process may still be locking files): %w", last)
 }
@@ -250,7 +253,16 @@ func (e *Engine) ReleaseWorkspace(id string) {
 	if strings.TrimSpace(id) == "" {
 		return
 	}
-	sysproc.StopProcessesUnder(e.WorkspaceDir(id))
+	e.unlockWorkspaceProcesses(e.WorkspaceDir(id))
+}
+
+// unlockWorkspaceProcesses stops processes that lock deployment workspace files.
+// The shared TF_PLUGIN_CACHE_DIR is scanned for terraform-provider-* only so we
+// do not terminate unrelated processes under the app config tree.
+func (e *Engine) unlockWorkspaceProcesses(workspaceDir string) {
+	sysproc.StopProcessesUnder(workspaceDir)
+	cacheDir := filepath.Join(e.settings.ConfigDir, "plugin-cache")
+	sysproc.StopProviderProcessesUnder(cacheDir)
 }
 
 // Prepare materialises the recipe into the deployment workspace, writes the

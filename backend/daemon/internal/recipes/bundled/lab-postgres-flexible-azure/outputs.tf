@@ -25,5 +25,5 @@ output "admin_username" {
 
 output "connection_hint" {
   description = "How to obtain a connection string."
-  value = "Local: GET ${azurerm_postgresql_flexible_server.main.name}/connect on floci-az for host port + psql/JDBC/URI strings (sslmode=disable). Cloud: connect to ${azurerm_postgresql_flexible_server.main.fqdn}:5432 over TLS."
+  value = "Local (floci-az): open the PostgreSQL workspace tab or GET .../flexibleServers/${azurerm_postgresql_flexible_server.main.name}/connect for host, port, and psql/JDBC/URI strings (sslmode=disable; first apply may take 1-2 minutes for image pull). Cloud: host ${azurerm_postgresql_flexible_server.main.fqdn}:5432 with TLS 1.2+ and admin user from outputs."
 }
