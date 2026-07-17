@@ -9,7 +9,9 @@ import {
   filterGalleryRecipes,
   galleryProviderOptions,
   galleryRuntimeOptions,
+  GALLERY_RUNTIME_CLOUD_ONLY,
   inferRecipeKind,
+  recipeIsCloudOnly,
 } from "./deploy-gallery-filter";
 
 function manifest(partial: Partial<RecipeManifest> & Pick<RecipeManifest, "id" | "name">): RecipeManifest {
@@ -46,6 +48,13 @@ describe("deploy-gallery-filter", () => {
       providers: ["azure"],
       local: { runtimes: [{ id: "floci-az" }] },
     }),
+    manifest({
+      id: "lab-functions-http-azure",
+      name: "Azure Functions lab",
+      kind: "service-lab",
+      providers: ["azure"],
+      local: { runtimes: [] },
+    }),
   ];
 
   it("infers service-lab kind from id prefix", () => {
@@ -61,6 +70,18 @@ describe("deploy-gallery-filter", () => {
       runtime: "floci-az",
     });
     expect(filtered.map((entry) => entry.id)).toEqual(["lab-postgres-flexible-azure"]);
+  });
+
+  it("filters cloud-only recipes that have no local runtime", () => {
+    const filtered = filterGalleryRecipes(recipes, {
+      section: "service-lab",
+      scenario: "all",
+      query: "",
+      provider: "azure",
+      runtime: GALLERY_RUNTIME_CLOUD_ONLY,
+    });
+    expect(filtered.map((entry) => entry.id)).toEqual(["lab-functions-http-azure"]);
+    expect(recipeIsCloudOnly(filtered[0])).toBe(true);
   });
 
   it("lists provider and runtime facet options", () => {

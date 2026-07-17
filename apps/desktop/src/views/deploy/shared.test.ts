@@ -16,6 +16,8 @@ import {
   manifestCloudOnlyAWS,
   manifestCloudOnlyAzure,
   normaliseMagentoComposeValues,
+  recipeRunTargets,
+  recipeRunTargetTooltip,
 } from "./shared";
 
 describe("deployShared helpers", () => {
@@ -56,6 +58,37 @@ describe("deployShared helpers", () => {
       providers: ["aws"],
     };
     expect(manifestCloudOnlyAWS(manifest)).toBe(true);
+  });
+
+  it("lists floci-az as the local run target for Azure storage labs", () => {
+    const manifest: RecipeManifest = {
+      apiVersion: "cloudsprocket.recipe/v1",
+      id: "lab-storage-blobs-azure",
+      version: "0.1.0",
+      name: "Azure Storage blobs lab",
+      engine: { type: "opentofu", minVersion: "1.6.0" },
+      local: { runtimes: [{ id: "floci-az" }] },
+      providers: ["azure"],
+    };
+    expect(recipeRunTargets(manifest)).toEqual([
+      { kind: "local", runtimeId: "floci-az", label: "floci-az" },
+    ]);
+    expect(recipeRunTargetTooltip(recipeRunTargets(manifest)[0])).toContain("floci-az");
+  });
+
+  it("lists Cloud Azure for Function recipes with empty local runtimes", () => {
+    const manifest: RecipeManifest = {
+      apiVersion: "cloudsprocket.recipe/v1",
+      id: "lab-functions-http-azure",
+      version: "0.1.1",
+      name: "Azure Functions lab (HTTP)",
+      engine: { type: "opentofu", minVersion: "1.6.0" },
+      local: { runtimes: [] },
+      providers: ["azure"],
+    };
+    expect(recipeRunTargets(manifest)).toEqual([
+      { kind: "cloud", providerId: "azure", label: "Cloud Azure" },
+    ]);
   });
 
   it("filters variables with visibleWhen", () => {

@@ -4,6 +4,7 @@
 import { Check, Copy, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 
+import { runtimeDisplayName } from "@/lib/deploy-runtime-labels";
 import { cn } from "@/lib/utils";
 import type { Deployment, ProfileSummary, RecipeManifest, RecipeVariable } from "@/types/backend";
 
@@ -66,6 +67,60 @@ export function manifestCloudOnlyAzure(manifest: RecipeManifest): boolean {
 
 export function manifestCloudOnlyAWS(manifest: RecipeManifest): boolean {
   return manifestCloudOnly(manifest, "aws");
+}
+
+/** Where a recipe can run: local emulator ids and/or cloud-only cloud labels. */
+export type RecipeRunTarget =
+  | { kind: "local"; runtimeId: string; label: string }
+  | { kind: "cloud"; providerId: "azure" | "aws"; label: string };
+
+/**
+ * Returns the run targets to show on gallery cards so users know where to deploy.
+ * Local-capable recipes list their emulator(s); cloud-only recipes list the cloud provider.
+ */
+export function recipeRunTargets(manifest: RecipeManifest): RecipeRunTarget[] {
+  const declared = manifest.local?.runtimes ?? [];
+  if (declared.length > 0) {
+    return declared.map((runtime) => ({
+      kind: "local" as const,
+      runtimeId: runtime.id,
+      label: runtimeDisplayName(runtime.id),
+    }));
+  }
+  if (manifest.local?.emulator) {
+    const id = manifest.local.emulator;
+    return [
+      {
+        kind: "local" as const,
+        runtimeId: id,
+        label: runtimeDisplayName(id),
+      },
+    ];
+  }
+  const targets: RecipeRunTarget[] = [];
+  if (manifestCloudOnlyAzure(manifest)) {
+    targets.push({ kind: "cloud", providerId: "azure", label: "Cloud Azure" });
+  }
+  if (manifestCloudOnlyAWS(manifest)) {
+    targets.push({ kind: "cloud", providerId: "aws", label: "Cloud AWS" });
+  }
+  return targets;
+}
+
+export function recipeRunTargetTooltip(target: RecipeRunTarget): string {
+  if (target.kind === "local") {
+    if (target.runtimeId === "floci-az") {
+      return "Runs locally on floci-az (Azure ARM emulator). You can also pick a real Azure subscription profile.";
+    }
+    if (target.runtimeId === "localstack") {
+      return "Runs locally on LocalStack. You can also pick a real AWS profile.";
+    }
+    return `Runs locally on ${target.label}. Cloud profiles remain available where the recipe supports them.`;
+  }
+  if (target.providerId === "azure") {
+    return "Requires a real Azure subscription. floci-az cannot dry-run App Service or Functions hosting.";
+  }
+  return "Requires a real AWS account. LocalStack cannot complete the full stack for this recipe.";
 }
 
 export function CopyButton({ value }: { value: string }) {

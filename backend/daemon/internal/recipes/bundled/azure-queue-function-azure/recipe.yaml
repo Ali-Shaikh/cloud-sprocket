@@ -1,14 +1,15 @@
 apiVersion: cloudsprocket.recipe/v1
 id: azure-queue-function-azure
 kind: app-deploy
-version: 0.1.0
+version: 0.1.1
 name: Queue triggered Functions (Azure)
-summary: Azure Functions triggered by Storage Queue messages, using floci-az friendly storage.
+summary: Queue-triggered Azure Functions on a real Azure subscription.
 description: |
-  Azure async messaging: deploy storage queue + function app with queue binding
-  in sample code. Send messages to trigger processing.
-
-  Good companion for event driven on Azure.
+  Azure async messaging: deploy a storage queue plus a function app with queue
+  binding in the sample code. Send messages to trigger processing.
+  
+  Requires a cloud Azure profile. floci-az does not fully emulate App Service
+  plans or Function Apps, so local dry-run is not offered.
 providers:
   - azure
 tags:
@@ -17,13 +18,12 @@ tags:
   - queue
   - storage
   - messaging
-  - floci-az
+  - cloud-azure
 engine:
   type: opentofu
   minVersion: "1.6.0"
 local:
-  runtimes:
-    - id: floci-az
+  runtimes: []
 variableGroups:
   - title: Application
     variables:

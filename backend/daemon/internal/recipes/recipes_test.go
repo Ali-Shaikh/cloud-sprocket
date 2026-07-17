@@ -272,6 +272,70 @@ func TestBundledListHasBothRecipes(t *testing.T) {
 	}
 }
 
+func TestAzureFunctionRecipesAreCloudOnly(t *testing.T) {
+	ids := []string{
+		"lab-functions-http-azure",
+		"azure-functions-http-azure",
+		"azure-queue-function-azure",
+		"azure-keyvault-function-azure",
+		"azure-blob-event-function-azure",
+		"lab-storage-event-function-azure",
+	}
+	loader := Bundled()
+	for _, id := range ids {
+		recipe, err := loader.Load(id)
+		if err != nil {
+			t.Fatalf("Load %s: %v", id, err)
+		}
+		if len(recipe.Manifest.Local.Runtimes) != 0 {
+			t.Fatalf("%s: expected cloud-only (no local runtimes), got %+v", id, recipe.Manifest.Local.Runtimes)
+		}
+		needs, err := loader.NeedsAzureWebHosting(id)
+		if err != nil {
+			t.Fatalf("NeedsAzureWebHosting %s: %v", id, err)
+		}
+		if !needs {
+			t.Fatalf("%s: expected Function/App Service markers in main.tf", id)
+		}
+	}
+}
+
+func TestStorageBlobLabStillAllowsFloci(t *testing.T) {
+	recipe, err := Bundled().Load("lab-storage-blobs-azure")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(recipe.Manifest.Local.Runtimes) == 0 {
+		t.Fatal("storage blobs lab should still declare floci-az for local dry-run")
+	}
+	needs, err := Bundled().NeedsAzureWebHosting("lab-storage-blobs-azure")
+	if err != nil {
+		t.Fatalf("NeedsAzureWebHosting: %v", err)
+	}
+	if needs {
+		t.Fatal("storage blobs lab must not require App Service hosting")
+	}
+}
+
+func TestPostgresFlexibleLabAllowsFloci(t *testing.T) {
+	// floci-az 0.9.0+ emulates Flexible Server with a real postgres container
+	// (see floci-io/floci-az #80). Keep the lab on local floci-az.
+	recipe, err := Bundled().Load("lab-postgres-flexible-azure")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	found := false
+	for _, runtime := range recipe.Manifest.Local.Runtimes {
+		if runtime.ID == "floci-az" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("postgres lab should declare floci-az, got %+v", recipe.Manifest.Local.Runtimes)
+	}
+}
+
 func TestLoadMagentoAWSRecipe(t *testing.T) {
 	recipe, err := Bundled().Load("magento-commerce-aws")
 	if err != nil {

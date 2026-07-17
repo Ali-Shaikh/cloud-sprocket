@@ -4,6 +4,7 @@
 package deploy
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -97,6 +98,24 @@ func TestParseOutputs(t *testing.T) {
 		if o.Name == "db_password" && !o.Sensitive {
 			t.Fatal("db_password should be sensitive")
 		}
+	}
+}
+
+func TestPlanRejectsAzureFunctionsOnFlociAz(t *testing.T) {
+	e := NewEngine(tofu.NewRunner("tofu"), config.Settings{DeploymentsDir: t.TempDir()}, recipes.Bundled())
+	deployment := &Deployment{
+		ID:         "dep-func-floci",
+		RecipeID:   "lab-functions-http-azure",
+		ProviderID: "azure",
+		Local:      true,
+		RuntimeID:  "floci-az",
+	}
+	_, err := e.Plan(context.Background(), deployment, nil)
+	if err == nil {
+		t.Fatal("expected plan to reject Function App recipes on floci-az")
+	}
+	if !strings.Contains(err.Error(), "floci-az does not fully emulate") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

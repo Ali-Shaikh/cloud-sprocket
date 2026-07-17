@@ -16,6 +16,7 @@ import {
 import {
   GALLERY_PROVIDER_ALL,
   GALLERY_RUNTIME_ALL,
+  GALLERY_RUNTIME_CLOUD_ONLY,
   type GalleryFilters,
   type GallerySection,
 } from "@/lib/deploy-gallery-filter";
@@ -108,16 +109,17 @@ export function RecipeGallery({
           </SelectContent>
         </Select>
         <Select value={runtime} onValueChange={(value) => onFiltersChange({ runtime: value })}>
-          <SelectTrigger className="h-8 w-[180px]">
-            <SelectValue placeholder="All runtimes" />
+          <SelectTrigger className="h-8 w-[200px]">
+            <SelectValue placeholder="Where to run" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={GALLERY_RUNTIME_ALL}>All local runtimes</SelectItem>
+            <SelectItem value={GALLERY_RUNTIME_ALL}>Any target</SelectItem>
             {runtimeOptions.map((entry) => (
               <SelectItem key={entry} value={entry}>
                 {runtimeDisplayName(entry)}
               </SelectItem>
             ))}
+            <SelectItem value={GALLERY_RUNTIME_CLOUD_ONLY}>Cloud only</SelectItem>
           </SelectContent>
         </Select>
       </div>

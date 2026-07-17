@@ -80,6 +80,7 @@ const workspace = {
   },
   awsWritesEnabled: false,
   awsWriteCapable: true,
+  awsWriteTargetIsLocal: true,
   azureWriteCapable: false,
 } as unknown as WorkspaceSnapshot;
 
@@ -130,7 +131,7 @@ describe("OverviewView", () => {
 
     expect(screen.getByText("Local runtime health")).toBeInTheDocument();
     expect(screen.getByText("Docker")).toBeInTheDocument();
-    expect(screen.getByText("LocalStack")).toBeInTheDocument();
+    expect(screen.getAllByText("LocalStack").length).toBeGreaterThan(0);
     expect(screen.getByText("S3 buckets")).toBeInTheDocument();
   });
 
@@ -167,5 +168,28 @@ describe("OverviewView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^Start$/i }));
     expect(onEmulatorQuickStart).toHaveBeenCalledWith("localstack");
+  });
+
+  it("hides local runtime health on real cloud workspaces", () => {
+    const cloudWorkspace = {
+      ...workspace,
+      awsWriteTargetIsLocal: false,
+      profile: { profileId: "prod", displayName: "prod" },
+    } as unknown as WorkspaceSnapshot;
+    render(
+      <OverviewView
+        workspace={cloudWorkspace}
+        session={session}
+        providerLabel="AWS"
+        profileLabel="prod"
+        onRefresh={vi.fn()}
+        onNavigate={vi.fn()}
+        onOpenRuntime={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("Local runtime health")).not.toBeInTheDocument();
+    expect(screen.queryByText("LocalStack")).not.toBeInTheDocument();
+    expect(screen.getByText("S3 buckets")).toBeInTheDocument();
   });
 });

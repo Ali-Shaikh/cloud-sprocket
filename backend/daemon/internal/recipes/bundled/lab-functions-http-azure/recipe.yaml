@@ -1,15 +1,18 @@
 apiVersion: cloudsprocket.recipe/v1
 id: lab-functions-http-azure
 kind: service-lab
-version: 0.1.0
+version: 0.1.1
 name: Azure Functions lab (HTTP)
-summary: An Azure Functions app with HTTP trigger ready for serverless compute.
+summary: Provision a Linux Function App and backing storage on a real Azure subscription.
 description: |
   A focused service lab for Azure Functions: storage account + consumption
   plan + Linux function app. Inspect and (when code deployed) invoke HTTP
-  functions. Uses floci-az.
+  functions.
 
-  Open azure-functions tab. Good companion to queue or storage labs.
+  Requires a cloud Azure profile. floci-az does not fully emulate App Service
+  plans or Function Apps, so this lab is not offered as a local dry-run.
+
+  Open the azure-functions tab after apply. Good companion to storage labs.
 providers:
   - azure
 tags:
@@ -18,12 +21,12 @@ tags:
   - serverless
   - http
   - lab
+  - cloud-azure
 engine:
   type: opentofu
   minVersion: "1.6.0"
 local:
-  runtimes:
-    - id: floci-az
+  runtimes: []
 variableGroups:
   - title: Application
     variables:
@@ -77,7 +80,7 @@ lab:
         After deploying function code (outside this lab infra), use the
         Functions UI invoke button (write mode) or the default host URL.
       hints:
-        - Default host is https://<name>.azurewebsites.net or emulator equivalent.
+        - Default host is https://<name>.azurewebsites.net.
     - id: hosting-notes
       title: Hosting and scaling notes
       body: |

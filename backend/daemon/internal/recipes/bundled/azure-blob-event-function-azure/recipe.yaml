@@ -1,14 +1,15 @@
 apiVersion: cloudsprocket.recipe/v1
 id: azure-blob-event-function-azure
 kind: app-deploy
-version: 0.1.0
+version: 0.1.1
 name: Blob event Functions (Azure)
-summary: Storage blob events triggering Azure Functions (event-driven Azure).
+summary: Blob-triggered Azure Functions on a real Azure subscription.
 description: |
-  Event-driven Azure: blob create triggers function. Uses Event Grid or storage
-  events under the hood in real, sample shows pattern.
-
-  floci-az friendly.
+  Event-driven Azure: blob create triggers a function. Uses Event Grid or
+  storage events in real Azure; the sample shows the pattern.
+  
+  Requires a cloud Azure profile. floci-az does not fully emulate App Service
+  plans or Function Apps, so local dry-run is not offered.
 providers:
   - azure
 tags:
@@ -17,13 +18,12 @@ tags:
   - storage
   - functions
   - blob
-  - floci-az
+  - cloud-azure
 engine:
   type: opentofu
   minVersion: "1.6.0"
 local:
-  runtimes:
-    - id: floci-az
+  runtimes: []
 variableGroups:
   - title: Application
     variables:

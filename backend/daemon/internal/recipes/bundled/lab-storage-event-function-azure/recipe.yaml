@@ -1,19 +1,15 @@
 apiVersion: cloudsprocket.recipe/v1
 id: lab-storage-event-function-azure
 kind: service-lab
-version: 0.1.0
+version: 0.1.1
 name: Azure Storage event + Function lab
-summary: Storage blob events wired to trigger an Azure Function (event driven Azure).
+summary: Storage blob events wired to an Azure Function on a real subscription.
 description: |
-  A focused service lab for Azure event driven patterns: storage account with
+  A focused service lab for Azure event-driven patterns: storage account with
   container, plus a function app configured for blob triggers.
-
-  Demonstrates the wiring for storage events to serverless functions. Inspect
-  using Azure tabs. Emulates on floci-az. The sample function binding (in real
-  usage) would react to new blobs.
-
-  Pure infra lab; no build step needed.
-
+  
+  Requires a cloud Azure profile. floci-az does not fully emulate App Service
+  plans or Function Apps. Pure infra lab; no build step needed.
 providers:
   - azure
 tags:
@@ -22,14 +18,13 @@ tags:
   - storage
   - functions
   - blob
-  - floci-az
   - lab
+  - cloud-azure
 engine:
   type: opentofu
   minVersion: "1.6.0"
 local:
-  runtimes:
-    - id: floci-az
+  runtimes: []
 variableGroups:
   - title: Application
     variables:
