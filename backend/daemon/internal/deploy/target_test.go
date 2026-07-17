@@ -73,8 +73,8 @@ func TestEngineSkipsTargetlessDeployment(t *testing.T) {
 	if err := engine.Preflight(context.Background(), deployment); err != nil {
 		t.Fatalf("target-less Preflight should be a no-op, got %v", err)
 	}
-	if env := engine.env(deployment); env != nil {
-		t.Fatalf("target-less env should be nil, got %v", env)
+	if env := engine.env(deployment); !envContainsKey(env, "TF_PLUGIN_CACHE_DIR", "plugin-cache") {
+		t.Fatalf("target-less env should still set TF_PLUGIN_CACHE_DIR, got %v", env)
 	}
 	if label := engine.TargetLabel(deployment); label != "local emulator" {
 		t.Fatalf("target-less TargetLabel = %q, want local emulator", label)

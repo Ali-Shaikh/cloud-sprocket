@@ -209,11 +209,48 @@ func (e *Engine) WorkspaceDir(id string) string {
 // RemoveWorkspace deletes a deployment's on-disk workspace (materialised recipe,
 // tfvars, tfstate, plan). Used when a deployment record is removed so stale
 // workspaces do not accumulate. A missing directory is not an error.
+//
+// On Windows, a cancelled or hung apply often leaves terraform-provider-*.exe
+// running under the workspace, which locks provider binaries and makes the first
+// RemoveAll fail with "Access is denied". We stop those processes and retry.
 func (e *Engine) RemoveWorkspace(id string) error {
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("deployment id is required")
 	}
-	return os.RemoveAll(e.WorkspaceDir(id))
+	dir := e.WorkspaceDir(id)
+	if _, err := os.Stat(dir); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if err := os.RemoveAll(dir); err == nil {
+		return nil
+	}
+	// Best-effort unlock: kill leftover tofu/provider processes started from this dir.
+	sysproc.StopProcessesUnder(dir)
+	var last error
+	for attempt := 0; attempt < 6; attempt++ {
+		time.Sleep(time.Duration(100*(attempt+1)) * time.Millisecond)
+		last = os.RemoveAll(dir)
+		if last == nil {
+			return nil
+		}
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			return nil
+		}
+		sysproc.StopProcessesUnder(dir)
+	}
+	return fmt.Errorf("could not remove deployment workspace (a provider process may still be locking files): %w", last)
+}
+
+// ReleaseWorkspace stops leftover tofu/provider processes under a deployment
+// workspace so cancel/stop does not leave locked binaries behind.
+func (e *Engine) ReleaseWorkspace(id string) {
+	if strings.TrimSpace(id) == "" {
+		return
+	}
+	sysproc.StopProcessesUnder(e.WorkspaceDir(id))
 }
 
 // Prepare materialises the recipe into the deployment workspace, writes the
@@ -286,8 +323,16 @@ func (e *Engine) Plan(ctx context.Context, deployment *Deployment, onLine tofu.L
 	}
 	dir := e.WorkspaceDir(deployment.ID)
 	env := e.env(deployment)
-	if _, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, OnLine: onLine, Args: []string{"init", "-input=false", "-no-color"}}); err != nil {
+	if onLine != nil {
+		onLine("Initialising OpenTofu and installing providers when needed. First-time Azure (azurerm) downloads can take several minutes and require access to registry.opentofu.org and GitHub.")
+	}
+	initCtx, initCancel := context.WithTimeout(ctx, tofuInitTimeout)
+	defer initCancel()
+	if _, err := e.runner.Run(initCtx, tofu.RunOptions{Dir: dir, Env: env, OnLine: onLine, Args: []string{"init", "-input=false", "-no-color"}}); err != nil {
 		return PlanSummary{}, err
+	}
+	if onLine != nil {
+		onLine("Providers ready. Computing plan...")
 	}
 	if _, err := e.runner.Run(ctx, tofu.RunOptions{Dir: dir, Env: env, OnLine: onLine, Args: []string{"plan", "-input=false", "-no-color", "-out=" + planFile}}); err != nil {
 		return PlanSummary{}, err
@@ -637,14 +682,26 @@ func (w *buildLineWriter) flush() {
 	}
 }
 
-// env builds the provider environment via the resolved deployment target.
-// Target-less deployments (no runtime) contribute no environment.
+// env builds the provider environment via the resolved deployment target and
+// always injects a shared OpenTofu plugin cache so large providers (azurerm is
+// ~63 MB) are downloaded once and reused across deployments.
 func (e *Engine) env(deployment *Deployment) []string {
+	env := tofuPluginCacheEnv(e.settings)
 	target, err := e.registry.ResolveTarget(deployment)
 	if err != nil || target == nil {
-		return nil
+		return env
 	}
-	return target.Env(deployment, e.settings)
+	return append(env, target.Env(deployment, e.settings)...)
+}
+
+// tofuPluginCacheEnv returns TF_PLUGIN_CACHE_DIR under the app config root.
+// The directory is created if missing so tofu can write into it immediately.
+func tofuPluginCacheEnv(settings config.Settings) []string {
+	cacheDir := filepath.Join(settings.ConfigDir, "plugin-cache")
+	if strings.TrimSpace(settings.ConfigDir) != "" {
+		_ = os.MkdirAll(cacheDir, 0o755)
+	}
+	return []string{"TF_PLUGIN_CACHE_DIR=" + cacheDir}
 }
 
 // guardFlociAzureWebHosting blocks plans that would hang on floci-az for App

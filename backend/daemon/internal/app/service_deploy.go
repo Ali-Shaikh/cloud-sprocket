@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"cloudsprocket/backend/daemon/internal/deploy"
 	"cloudsprocket/backend/daemon/internal/models"
@@ -391,7 +392,9 @@ func (s *Service) clearDeployCancel(id string) {
 }
 
 // cancelDeployment aborts the in-flight plan/apply/destroy for a deployment by
-// cancelling its run context, which kills the underlying tofu process.
+// cancelling its run context, which kills the underlying tofu process. On
+// Windows the azurerm provider child often survives; ReleaseWorkspace stops it
+// so Remove no longer fails with Access is denied.
 func (s *Service) cancelDeployment(id string) error {
 	s.deployCancelsMu.Lock()
 	cancel := s.deployCancels[id]
@@ -400,13 +403,20 @@ func (s *Service) cancelDeployment(id string) error {
 		return fmt.Errorf("no operation is currently running for this deployment")
 	}
 	cancel()
+	// Give tofu a moment to exit, then clear orphaned provider plugins.
+	time.AfterFunc(400*time.Millisecond, func() {
+		s.deployer.ReleaseWorkspace(id)
+	})
+	s.deployer.ReleaseWorkspace(id)
 	return nil
 }
 
 // finishWithError ends a run that returned an error, reporting a user-initiated
-// cancellation distinctly from a genuine failure. Status persistence uses the
-// background ctx (not the cancelled runCtx) so the final state is still saved.
+// cancellation distinctly from a genuine failure or timeout. Status persistence
+// uses the background ctx (not the cancelled runCtx) so the final state is still
+// saved.
 func (s *Service) finishWithError(ctx, runCtx context.Context, deployment *deploy.Deployment, job models.JobStatus, notifier Notifier, cause error) {
+	// Deadlines are failures with guidance, not user cancels.
 	if runCtx.Err() == context.Canceled {
 		deployment.Error = ""
 		if !s.transitionDeploymentStatus(ctx, deployment, deploy.StatusCancelled, notifier, job) {
@@ -430,7 +440,9 @@ func (s *Service) runDeploymentPlan(deployment *deploy.Deployment, job models.Jo
 	}
 	s.emitJobStatus(notifier, job, "running", "Planning "+deployment.Name+".")
 
-	onLine := s.deploymentLogger(deployment.ID, job.JobID, notifier)
+	baseLog := s.deploymentLogger(deployment.ID, job.JobID, notifier)
+	onLine, stopProgress := deploy.WithProgressHeartbeat(runCtx, baseLog)
+	defer stopProgress()
 	onLine("Checking " + s.targetLabel(deployment) + " connectivity...")
 	deploy.NormaliseDeploymentTarget(deployment)
 	if err := s.deployer.Preflight(runCtx, deployment); err != nil {
@@ -457,7 +469,9 @@ func (s *Service) runDeploymentAction(deployment *deploy.Deployment, action depl
 	s.registerDeployCancel(deployment.ID, cancel)
 	defer s.clearDeployCancel(deployment.ID)
 
-	onLine := s.deploymentLogger(deployment.ID, job.JobID, notifier)
+	baseLog := s.deploymentLogger(deployment.ID, job.JobID, notifier)
+	onLine, stopProgress := deploy.WithProgressHeartbeat(runCtx, baseLog)
+	defer stopProgress()
 
 	deploy.NormaliseDeploymentTarget(deployment)
 	onLine("Checking " + s.targetLabel(deployment) + " connectivity...")
