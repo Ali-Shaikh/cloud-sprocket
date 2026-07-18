@@ -44,7 +44,13 @@ func FormatRunError(ctx context.Context, args []string, output []byte, err error
 	var message string
 	switch {
 	case ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded):
-		if providerDownload {
+		// Prefer lock guidance when timeout and Access is denied both appear.
+		if lockedFiles {
+			message = fmt.Sprintf(
+				"OpenTofu %s timed out and a provider binary is still locked (Access is denied). Wait a few seconds and use Remove again, or reboot if a terraform-provider process remains.",
+				op,
+			)
+		} else if providerDownload {
 			message = fmt.Sprintf(
 				"OpenTofu %s timed out while downloading providers. Large providers such as azurerm can be over 200 MB. Ensure this machine can reach registry.opentofu.org and GitHub, then retry. Successful downloads are stored in the app plugin cache and reused.",
 				op,
@@ -64,7 +70,7 @@ func FormatRunError(ctx context.Context, args []string, output []byte, err error
 		message = fmt.Sprintf("OpenTofu %s was cancelled.", op)
 	case lockedFiles:
 		message = fmt.Sprintf(
-			"OpenTofu %s failed because a provider binary is still locked (common on Windows after Stop). Wait a few seconds and use Remove again, or reboot if a terraform-provider process remains. The app stops leftover provider processes under the deployment workspace and plugin cache when possible.",
+			"OpenTofu %s failed because a provider binary is still locked (common on Windows after Stop). Wait a few seconds and use Remove again, or reboot if a terraform-provider process remains. The app stops leftover provider processes under the deployment workspace first, then the shared plugin cache if Remove still fails.",
 			op,
 		)
 	case installingProviders:

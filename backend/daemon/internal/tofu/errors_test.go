@@ -77,3 +77,21 @@ func TestFormatRunErrorAccessDenied(t *testing.T) {
 		t.Fatalf("expected lock guidance, got %s", err)
 	}
 }
+
+func TestFormatRunErrorTimeoutWithAccessDeniedPrefersLockGuidance(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
+	defer cancel()
+	<-ctx.Done()
+
+	output := []byte("azurerm_postgresql_flexible_server.main: Still creating...\nError: Access is denied.\n")
+	err := FormatRunError(ctx, []string{"apply", "-auto-approve"}, output, context.DeadlineExceeded)
+	if err == nil {
+		t.Fatal("expected annotated error")
+	}
+	message := err.Error()
+	for _, want := range []string{"timed out", "locked", "Remove"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("error missing %q: %s", want, message)
+		}
+	}
+}

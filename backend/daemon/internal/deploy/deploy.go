@@ -230,7 +230,8 @@ func (e *Engine) RemoveWorkspace(id string) error {
 	if err := os.RemoveAll(dir); err == nil {
 		return nil
 	}
-	// Best-effort unlock: kill leftover tofu/provider processes for this workspace.
+	// Best-effort unlock: workspace-scoped first; shared plugin cache only if
+	// later remove attempts still fail (Windows hardlink locks).
 	e.unlockWorkspaceProcesses(dir)
 	var last error
 	for attempt := 0; attempt < 8; attempt++ {
@@ -243,12 +244,16 @@ func (e *Engine) RemoveWorkspace(id string) error {
 			return nil
 		}
 		e.unlockWorkspaceProcesses(dir)
+		if attempt >= 1 {
+			e.unlockSharedProviderCache()
+		}
 	}
 	return fmt.Errorf("could not remove deployment workspace (a provider process may still be locking files): %w", last)
 }
 
 // ReleaseWorkspace stops leftover tofu/provider processes under a deployment
-// workspace so cancel/stop does not leave locked binaries behind.
+// workspace so cancel/stop does not leave locked binaries behind. Scoped to the
+// workspace only so concurrent deployments sharing the plugin cache are not killed.
 func (e *Engine) ReleaseWorkspace(id string) {
 	if strings.TrimSpace(id) == "" {
 		return
@@ -256,11 +261,21 @@ func (e *Engine) ReleaseWorkspace(id string) {
 	e.unlockWorkspaceProcesses(e.WorkspaceDir(id))
 }
 
-// unlockWorkspaceProcesses stops processes that lock deployment workspace files.
-// The shared TF_PLUGIN_CACHE_DIR is scanned for terraform-provider-* only so we
-// do not terminate unrelated processes under the app config tree.
+// unlockWorkspaceProcesses stops processes that lock files under a single
+// deployment workspace (tofu + providers with that working tree).
 func (e *Engine) unlockWorkspaceProcesses(workspaceDir string) {
 	sysproc.StopProcessesUnder(workspaceDir)
+}
+
+// unlockSharedProviderCache stops terraform-provider-* processes whose image
+// path is under the app-wide plugin cache. Windows often hardlinks providers
+// from the cache, so workspace-scoped kill is not enough after Access is denied.
+// Only call after workspace unlock failed to free locks: a cache-wide sweep can
+// interrupt concurrent applies that reuse the same provider binary.
+func (e *Engine) unlockSharedProviderCache() {
+	if strings.TrimSpace(e.settings.ConfigDir) == "" || !filepath.IsAbs(e.settings.ConfigDir) {
+		return
+	}
 	cacheDir := filepath.Join(e.settings.ConfigDir, "plugin-cache")
 	sysproc.StopProviderProcessesUnder(cacheDir)
 }
