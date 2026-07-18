@@ -27,13 +27,37 @@ func FormatRunError(ctx context.Context, args []string, output []byte, err error
 	installingProviders := strings.Contains(lowerTail, "installing ") ||
 		(strings.Contains(lowerTail, "finding ") && strings.Contains(lowerTail, "versions matching")) ||
 		strings.Contains(lowerTail, "provider plugins")
+	creatingResources := strings.Contains(lowerTail, "still creating") ||
+		strings.Contains(lowerTail, "creating...") ||
+		strings.Contains(lowerTail, "creating ")
+	lockedFiles := strings.Contains(lowerTail, "access is denied") ||
+		strings.Contains(lowerTail, "being used by another process") ||
+		strings.Contains(strings.ToLower(err.Error()), "access is denied")
+
+	// Resource addresses often contain "azurerm_" / "hashicorp_"; only treat as a
+	// provider download when the tail actually looks like install/init output.
+	providerDownload := installingProviders ||
+		strings.Contains(lowerTail, "installing hashicorp/") ||
+		strings.Contains(lowerTail, "finding hashicorp/") ||
+		strings.Contains(lowerTail, "provider registry")
 
 	var message string
 	switch {
 	case ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded):
-		if installingProviders || strings.Contains(lowerTail, "azurerm") || strings.Contains(lowerTail, "hashicorp/") {
+		// Prefer lock guidance when timeout and Access is denied both appear.
+		if lockedFiles {
+			message = fmt.Sprintf(
+				"OpenTofu %s timed out and a provider binary is still locked (Access is denied). Wait a few seconds and use Remove again, or reboot if a terraform-provider process remains.",
+				op,
+			)
+		} else if providerDownload {
 			message = fmt.Sprintf(
 				"OpenTofu %s timed out while downloading providers. Large providers such as azurerm can be over 200 MB. Ensure this machine can reach registry.opentofu.org and GitHub, then retry. Successful downloads are stored in the app plugin cache and reused.",
+				op,
+			)
+		} else if creatingResources || strings.Contains(lowerTail, "postgresql") {
+			message = fmt.Sprintf(
+				"OpenTofu %s timed out while waiting for resources. Local PostgreSQL first runs can take 1-2 minutes while Docker pulls postgres images; cloud Flexible Server can take longer. Check the deployment log, verify the local runtime or cloud connectivity, then retry.",
 				op,
 			)
 		} else {
@@ -44,6 +68,11 @@ func FormatRunError(ctx context.Context, args []string, output []byte, err error
 		}
 	case ctx != nil && errors.Is(ctx.Err(), context.Canceled):
 		message = fmt.Sprintf("OpenTofu %s was cancelled.", op)
+	case lockedFiles:
+		message = fmt.Sprintf(
+			"OpenTofu %s failed because a provider binary is still locked (common on Windows after Stop). Wait a few seconds and use Remove again, or reboot if a terraform-provider process remains. The app stops leftover provider processes under the deployment workspace first, then the shared plugin cache if Remove still fails.",
+			op,
+		)
 	case installingProviders:
 		message = fmt.Sprintf(
 			"OpenTofu %s failed while installing providers: %v. Check network access to the OpenTofu registry and GitHub, then retry.",

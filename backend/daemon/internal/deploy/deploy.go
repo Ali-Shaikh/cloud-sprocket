@@ -213,6 +213,9 @@ func (e *Engine) WorkspaceDir(id string) string {
 // On Windows, a cancelled or hung apply often leaves terraform-provider-*.exe
 // running under the workspace, which locks provider binaries and makes the first
 // RemoveAll fail with "Access is denied". We stop those processes and retry.
+// Provider hardlinks into the shared plugin cache can report their image path
+// under plugin-cache rather than the workspace, so we also stop provider
+// processes there when the first unlock pass fails.
 func (e *Engine) RemoveWorkspace(id string) error {
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("deployment id is required")
@@ -227,10 +230,11 @@ func (e *Engine) RemoveWorkspace(id string) error {
 	if err := os.RemoveAll(dir); err == nil {
 		return nil
 	}
-	// Best-effort unlock: kill leftover tofu/provider processes started from this dir.
-	sysproc.StopProcessesUnder(dir)
+	// Best-effort unlock: workspace-scoped first; shared plugin cache only if
+	// later remove attempts still fail (Windows hardlink locks).
+	e.unlockWorkspaceProcesses(dir)
 	var last error
-	for attempt := 0; attempt < 6; attempt++ {
+	for attempt := 0; attempt < 8; attempt++ {
 		time.Sleep(time.Duration(100*(attempt+1)) * time.Millisecond)
 		last = os.RemoveAll(dir)
 		if last == nil {
@@ -239,18 +243,41 @@ func (e *Engine) RemoveWorkspace(id string) error {
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
 			return nil
 		}
-		sysproc.StopProcessesUnder(dir)
+		e.unlockWorkspaceProcesses(dir)
+		if attempt >= 1 {
+			e.unlockSharedProviderCache()
+		}
 	}
 	return fmt.Errorf("could not remove deployment workspace (a provider process may still be locking files): %w", last)
 }
 
 // ReleaseWorkspace stops leftover tofu/provider processes under a deployment
-// workspace so cancel/stop does not leave locked binaries behind.
+// workspace so cancel/stop does not leave locked binaries behind. Scoped to the
+// workspace only so concurrent deployments sharing the plugin cache are not killed.
 func (e *Engine) ReleaseWorkspace(id string) {
 	if strings.TrimSpace(id) == "" {
 		return
 	}
-	sysproc.StopProcessesUnder(e.WorkspaceDir(id))
+	e.unlockWorkspaceProcesses(e.WorkspaceDir(id))
+}
+
+// unlockWorkspaceProcesses stops processes that lock files under a single
+// deployment workspace (tofu + providers with that working tree).
+func (e *Engine) unlockWorkspaceProcesses(workspaceDir string) {
+	sysproc.StopProcessesUnder(workspaceDir)
+}
+
+// unlockSharedProviderCache stops terraform-provider-* processes whose image
+// path is under the app-wide plugin cache. Windows often hardlinks providers
+// from the cache, so workspace-scoped kill is not enough after Access is denied.
+// Only call after workspace unlock failed to free locks: a cache-wide sweep can
+// interrupt concurrent applies that reuse the same provider binary.
+func (e *Engine) unlockSharedProviderCache() {
+	if strings.TrimSpace(e.settings.ConfigDir) == "" || !filepath.IsAbs(e.settings.ConfigDir) {
+		return
+	}
+	cacheDir := filepath.Join(e.settings.ConfigDir, "plugin-cache")
+	sysproc.StopProviderProcessesUnder(cacheDir)
 }
 
 // Prepare materialises the recipe into the deployment workspace, writes the

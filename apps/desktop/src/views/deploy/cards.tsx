@@ -67,7 +67,9 @@ export function PostApplyWarningCard({
         OpenTofu finished successfully and outputs are available below. A post-apply command (for example database
         migrations) failed and can be retried without re-running apply.
       </p>
-      <p className="mt-2 rounded bg-muted px-3 py-2 font-mono text-xs text-destructive">{deployment.postApplyError}</p>
+      <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-muted px-3 py-2 font-mono text-xs text-destructive">
+        {deployment.postApplyError}
+      </pre>
       <button
         type="button"
         onClick={onRetry}

@@ -59,6 +59,41 @@ function renderDetail(deployment: Deployment, onApply = vi.fn()) {
   return onApply;
 }
 
+describe("DeploymentDetail failure honesty", () => {
+  it("renders multi-line apply errors with guidance", () => {
+    renderDetail(
+      blockedDeployment({
+        status: "failed",
+        plan: undefined,
+        policy: undefined,
+        error:
+          "OpenTofu apply failed: exit status 1\n\nLast OpenTofu output:\nInstalling hashicorp/azurerm v4.81.0...",
+      }),
+    );
+
+    expect(screen.getByText("Deployment failed")).toBeInTheDocument();
+    const errorBlock = screen.getByText(/OpenTofu apply failed/i);
+    expect(errorBlock).toHaveTextContent(/Last OpenTofu output/i);
+    expect(errorBlock).toHaveTextContent(/Installing hashicorp\/azurerm/i);
+  });
+
+  it("shows a running progress banner for local Postgres applies", () => {
+    renderDetail(
+      blockedDeployment({
+        status: "applying",
+        recipeId: "lab-postgres-flexible-azure",
+        local: true,
+        runtimeId: "floci-az",
+        plan: undefined,
+        policy: undefined,
+      }),
+    );
+
+    expect(screen.getByText("OpenTofu is still running")).toBeInTheDocument();
+    expect(screen.getByText(/1-2 minutes/i)).toBeInTheDocument();
+  });
+});
+
 describe("DeploymentDetail policy guardrails", () => {
   it("requires the exact typed override for a blocked live plan", () => {
     const onApply = renderDetail(blockedDeployment());

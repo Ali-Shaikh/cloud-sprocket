@@ -60,3 +60,26 @@ This implementation uses the standard Docker
 [`pause`](https://docs.docker.com/reference/cli/docker/container/pause/) and
 [`unpause`](https://docs.docker.com/reference/cli/docker/container/unpause/)
 commands. It does not require a vendor chaos API or paid emulator feature.
+
+## Orphan PostgreSQL data-plane containers (floci-az)
+
+The PostgreSQL Flexible Server lab (`lab-postgres-flexible-azure`) is **not**
+cloud-only: it runs on floci-az locally or on a real Azure subscription. On
+floci-az, each logical flexible server is backed by a real Postgres container
+(typically named `floci-az-pg-*`).
+
+Prefer a successful OpenTofu **Destroy** from CloudSprocket so ARM state and
+data-plane containers are removed together. If destroy or cancel fails part-way
+(for example after a Windows provider lock, a killed apply, or a floci-az
+restart), orphan containers may remain even when the deployment record is gone.
+
+Manual cleanup on the host Docker engine:
+
+```bash
+docker ps -a --filter "name=floci-az-pg-"
+docker rm -f <container-id-or-name>
+```
+
+Only remove containers you are sure belong to abandoned local labs. Do not mark
+this recipe cloud-only to avoid the issue; fix locks with Stop/Remove retries
+and clean orphans as above when destroy cannot complete.

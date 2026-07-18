@@ -9,6 +9,25 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Changed
+
+- Deploy UI surfaces multi-line OpenTofu failures, quiet-period progress guidance,
+  and a first-run PostgreSQL local apply banner (not cloud-only)
+- Progress heartbeats describe provider downloads, long creates/destroys, and
+  state refresh more clearly
+- Windows Remove/Stop also unlocks `terraform-provider-*` processes under the
+  shared plugin cache when hardlinks report that path
+
+### Fixed
+
+- FormatRunError distinguishes provider download timeouts from long resource
+  creates (including local PostgreSQL image pull) and Access is denied lock cases
+
+### Documentation
+
+- Labs platform notes for cleaning orphan `floci-az-pg-*` containers after a
+  failed destroy/cancel; PostgreSQL lab recipe connection and timing honesty
+
 ## [0.9.8] - 2026-07-16
 
 ### Added

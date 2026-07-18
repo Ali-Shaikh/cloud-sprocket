@@ -98,6 +98,17 @@ export function ConfigureRecipe({
         </Card>
       )}
 
+      {recipe.manifest.id === "lab-postgres-flexible-azure" && (
+        <Card className="border-sky-500/30 bg-sky-500/5 p-3 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Local first run:</span> applying against floci-az may take
+          1-2 minutes while Docker pulls <span className="font-mono text-xs">postgres:17-alpine</span> for the
+          Flexible Server data plane. Later applies reuse the image. This recipe is not cloud-only; pick floci-az
+          or a real Azure subscription. After apply, use the PostgreSQL workspace tab or the{" "}
+          <span className="font-mono text-xs">connection_hint</span> output for host, port, and client strings
+          (local uses <span className="font-mono text-xs">sslmode=disable</span>).
+        </Card>
+      )}
+
       {recipe.manifest.imageBuild && (
         <Card className="border-sky-500/30 bg-sky-500/5 p-3 text-sm text-muted-foreground">
           Set <span className="font-medium text-foreground">dockerfile_dir</span> to build from your Dockerfile before
