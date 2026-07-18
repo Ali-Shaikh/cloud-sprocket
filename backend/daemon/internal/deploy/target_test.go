@@ -65,7 +65,7 @@ func TestResolveTarget(t *testing.T) {
 }
 
 func TestEngineSkipsTargetlessDeployment(t *testing.T) {
-	settings := config.Settings{DeploymentsDir: t.TempDir()}
+	settings := config.Settings{ConfigDir: t.TempDir(), DeploymentsDir: t.TempDir()}
 	engine := NewEngine(tofu.NewRunner("tofu"), settings, recipes.Bundled())
 	deployment := &Deployment{ID: "dep-targetless", ProviderID: "fly", Local: true}
 

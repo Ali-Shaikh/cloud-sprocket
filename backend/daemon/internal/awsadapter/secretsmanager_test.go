@@ -15,17 +15,38 @@ import (
 func TestSecretSummaryMapsMetadata(t *testing.T) {
 	changed := time.Date(2026, 7, 4, 12, 0, 0, 0, time.UTC)
 	got := secretSummary(smtypes.SecretListEntry{
-		ARN:              aws.String("arn:aws:secretsmanager:us-east-1:123:secret:db-password-abc"),
-		Name:             aws.String("db-password"),
-		Description:      aws.String("Database credentials"),
-		LastChangedDate:  &changed,
-		RotationEnabled:  aws.Bool(true),
+		ARN:             aws.String("arn:aws:secretsmanager:us-east-1:123:secret:db-password-abc"),
+		Name:            aws.String("db-password"),
+		Description:     aws.String("Database credentials"),
+		LastChangedDate: &changed,
+		RotationEnabled: aws.Bool(true),
 	})
-	if got.Name != "db-password" || got.Arn == "" || !got.RotationEnabled {
+	if got.Name != "db-password" || got.Arn == "" || got.RotationEnabled == nil || !*got.RotationEnabled {
 		t.Fatalf("secret = %+v", got)
 	}
 	if got.LastChangedDate != changed.UTC().Format(time.RFC3339) {
 		t.Fatalf("lastChanged = %q", got.LastChangedDate)
+	}
+}
+
+func TestSecretSummaryMapsRotationDisabled(t *testing.T) {
+	got := secretSummary(smtypes.SecretListEntry{
+		ARN:             aws.String("arn:aws:secretsmanager:us-east-1:123:secret:no-rotate-abc"),
+		Name:            aws.String("no-rotate"),
+		RotationEnabled: aws.Bool(false),
+	})
+	if got.RotationEnabled == nil || *got.RotationEnabled {
+		t.Fatalf("expected rotationEnabled=false, got %+v", got.RotationEnabled)
+	}
+}
+
+func TestSecretSummaryOmitsUnknownRotation(t *testing.T) {
+	got := secretSummary(smtypes.SecretListEntry{
+		ARN:  aws.String("arn:aws:secretsmanager:us-east-1:123:secret:legacy-abc"),
+		Name: aws.String("legacy"),
+	})
+	if got.RotationEnabled != nil {
+		t.Fatalf("expected nil rotation when AWS omits the flag, got %+v", got.RotationEnabled)
 	}
 }
 
