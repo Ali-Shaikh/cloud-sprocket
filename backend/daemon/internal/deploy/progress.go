@@ -78,7 +78,12 @@ func WithProgressHeartbeat(ctx context.Context, onLine tofu.LogFunc) (wrapped to
 }
 
 func isProgressHeartbeatLine(line string) bool {
-	return strings.HasPrefix(strings.TrimSpace(line), "Still ")
+	trimmed := strings.TrimSpace(line)
+	// Every quietProgressHint message carries this phrase; OpenTofu's own
+	// "Still creating..." resource lines do not, so they keep resetting the
+	// quiet timer as real output.
+	return strings.HasPrefix(trimmed, "Still ") &&
+		strings.Contains(trimmed, "with no new OpenTofu output")
 }
 
 // quietProgressHint builds a phase-aware reminder so quieter periods read as
