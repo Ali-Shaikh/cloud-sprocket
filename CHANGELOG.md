@@ -23,6 +23,10 @@ Installers for every release are published on the
 
 ### Fixed
 
+- Docker Compose deploy target rewrites the managed LocalStack stack with
+  `LOCALSTACK_AUTH_TOKEN` and the Docker socket mount, fails fast when LocalStack
+  exits for a missing 2026 licence, and times out `compose up` instead of
+  hanging on silent preflight heartbeats
 - Failed `az extension list` results are no longer cached for the full success
   TTL (#213)
 - Workspace snapshot runtime probes no longer hold `runtimeStatusMu` across

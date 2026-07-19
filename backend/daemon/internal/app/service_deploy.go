@@ -449,6 +449,7 @@ func (s *Service) runDeploymentPlan(deployment *deploy.Deployment, job models.Jo
 		s.finishWithError(ctx, runCtx, deployment, job, notifier, err)
 		return
 	}
+	onLine(s.targetLabel(deployment) + " is reachable. Starting OpenTofu plan...")
 	summary, err := s.deployer.Plan(runCtx, deployment, onLine)
 	if err != nil {
 		s.finishWithError(ctx, runCtx, deployment, job, notifier, err)
