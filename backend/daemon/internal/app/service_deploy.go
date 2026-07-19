@@ -396,27 +396,48 @@ func (s *Service) clearDeployCancel(id string) {
 // Windows the azurerm provider child often survives; ReleaseWorkspace stops it
 // so Remove no longer fails with Access is denied.
 //
-// When preflight is stuck in `docker compose up` (common when LocalStack never
-// becomes healthy), context cancel alone is not always enough on Windows: also
-// stop the managed compose project so the hung CLI exits and status can settle.
-func (s *Service) cancelDeployment(id string) error {
+// Status is forced to cancelled immediately and broadcast via deployment.changed.
+// Previously cancel only signalled the run context; a hung docker compose
+// preflight never returned, so the UI kept showing Stop/planning with no visible
+// effect. Immediate status settle is what makes the button work.
+func (s *Service) cancelDeployment(ctx context.Context, id string, notifier Notifier) error {
 	s.deployCancelsMu.Lock()
 	cancel := s.deployCancels[id]
 	s.deployCancelsMu.Unlock()
-	if cancel == nil {
-		// Still tear down a stuck compose preflight if the cancel map was lost
-		// (daemon mid-restart) or the UI thinks an op is running.
-		deploy.StopManagedDockerCompose()
-		return fmt.Errorf("no operation is currently running for this deployment")
+
+	hadCancel := cancel != nil
+	if cancel != nil {
+		cancel()
 	}
-	cancel()
+	// When preflight is stuck in `docker compose up`, context cancel alone is
+	// not always enough on Windows: also stop the managed compose project.
 	deploy.StopManagedDockerCompose()
 	// Give tofu a moment to exit, then clear orphaned provider plugins.
 	time.AfterFunc(400*time.Millisecond, func() {
 		s.deployer.ReleaseWorkspace(id)
 	})
 	s.deployer.ReleaseWorkspace(id)
-	return nil
+
+	deployment, err := s.deploymentGet(ctx, id)
+	if err != nil {
+		if !hadCancel {
+			return fmt.Errorf("no operation is currently running for this deployment")
+		}
+		return nil
+	}
+	switch deployment.Status {
+	case deploy.StatusPending, deploy.StatusPlanning, deploy.StatusApplying, deploy.StatusDestroying:
+		deployment.Error = ""
+		if err := s.setDeploymentStatus(ctx, deployment, deploy.StatusCancelled, notifier); err != nil {
+			return err
+		}
+		return nil
+	default:
+		if !hadCancel {
+			return fmt.Errorf("no operation is currently running for this deployment")
+		}
+		return nil
+	}
 }
 
 // finishWithError ends a run that returned an error, reporting a user-initiated
@@ -683,14 +704,17 @@ func (s *Service) handleDeploymentsDestroy(params json.RawMessage, notifier Noti
 	return s.startDeploymentAction(request.DeploymentID, actionDestroy, "", notifier)
 }
 
-func (s *Service) handleDeploymentsCancel(params json.RawMessage) (any, error) {
+func (s *Service) handleDeploymentsCancel(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		DeploymentID string `json:"deploymentId"`
 	}
 	if err := json.Unmarshal(params, &request); err != nil {
 		return nil, err
 	}
-	return map[string]bool{"cancelled": true}, s.cancelDeployment(request.DeploymentID)
+	if err := s.cancelDeployment(ctx, request.DeploymentID, notifier); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"cancelled": true}, nil
 }
 
 func (s *Service) handleDeploymentsCheckDrift(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

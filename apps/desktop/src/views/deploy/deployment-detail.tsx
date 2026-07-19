@@ -94,8 +94,16 @@ export function DeploymentDetail({
         </div>
         <div className="flex gap-2">
           {isRunning && (
-            <Button variant="destructive" onClick={onCancel}>
-              <Square className="size-4" /> Stop
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busy}
+              onClick={() => {
+                void onCancel();
+              }}
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" /> : <Square className="size-4" />}
+              Stop
             </Button>
           )}
           {canApply && (

@@ -417,6 +417,43 @@ func TestDeploymentCancelWithoutRunningOperationErrors(t *testing.T) {
 	}
 }
 
+func TestDeploymentCancelForcesStuckPlanningStatus(t *testing.T) {
+	// Simulate a deployment left in planning with no cancel handle (hung preflight
+	// after daemon lost the cancel map, or UI reopened a stuck record).
+	s := newDeployTestService(t, &fakeDeployer{available: true})
+	notifier := &captureNotifier{}
+	deployment := &deploy.Deployment{
+		ID:         "dep-stuck-plan",
+		RecipeID:   "serverless-fullstack-aws",
+		Name:       "stuck",
+		ProviderID: "aws",
+		Local:      true,
+		RuntimeID:  "docker-compose",
+		Status:     deploy.StatusPlanning,
+		Variables:  map[string]any{},
+		CreatedAt:  s.timestamp(),
+		UpdatedAt:  s.timestamp(),
+	}
+	if err := s.saveDeployment(context.Background(), deployment, deployment.UpdatedAt); err != nil {
+		t.Fatalf("seed stuck deployment: %v", err)
+	}
+
+	params := json.RawMessage(`{"deploymentId":"dep-stuck-plan"}`)
+	if _, err := s.Handle(context.Background(), "deployments.cancel", params, notifier); err != nil {
+		t.Fatalf("deployments.cancel: %v", err)
+	}
+	got, err := s.deploymentGet(context.Background(), "dep-stuck-plan")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.Status != deploy.StatusCancelled {
+		t.Fatalf("status = %q, want cancelled", got.Status)
+	}
+	if notifier.count("deployment.changed") == 0 {
+		t.Fatal("expected deployment.changed so the UI can drop the Stop button")
+	}
+}
+
 func TestDeploymentDeleteRemovesPlannedRecord(t *testing.T) {
 	deployer := &fakeDeployer{available: true, plan: deploy.PlanSummary{Add: 1}}
 	s := newDeployTestService(t, deployer)

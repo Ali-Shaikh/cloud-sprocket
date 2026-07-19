@@ -327,46 +327,37 @@ export default function DeployView({
 
   async function handleCancel() {
     if (!active) return;
+    const deploymentId = active.id;
+    setBusy(true);
+    const settleCancelled = () => {
+      queryClient.setQueryData<Deployment[]>(queryKeys.deployments.list, (current = []) =>
+        current.map((entry) =>
+          entry.id === deploymentId &&
+          (entry.status === "planning" ||
+            entry.status === "applying" ||
+            entry.status === "destroying" ||
+            entry.status === "pending")
+            ? { ...entry, status: "cancelled" as const, error: undefined }
+            : entry,
+        ),
+      );
+      setActive((current) =>
+        current && current.id === deploymentId
+          ? { ...current, status: "cancelled", error: undefined }
+          : current,
+      );
+    };
     try {
-      await cancelDeployment(active.id);
-      // Status is updated asynchronously via deployment.changed; optimistically
-      // mark cancelled so a hung preflight does not leave the Stop button forever.
-      queryClient.setQueryData<Deployment[]>(queryKeys.deployments.list, (current = []) =>
-        current.map((entry) =>
-          entry.id === active.id &&
-          (entry.status === "planning" ||
-            entry.status === "applying" ||
-            entry.status === "destroying" ||
-            entry.status === "pending")
-            ? { ...entry, status: "cancelled" as const, error: undefined }
-            : entry,
-        ),
-      );
-      setActive((current) =>
-        current && current.id === active.id
-          ? { ...current, status: "cancelled", error: undefined }
-          : current,
-      );
+      await cancelDeployment(deploymentId);
+      settleCancelled();
+      notify("success", "Stopped", "Deployment was cancelled.");
     } catch (error) {
-      // Even when the daemon says nothing is running, the UI may still show a
-      // stale in-flight status after a hung compose preflight. Force local settle.
-      queryClient.setQueryData<Deployment[]>(queryKeys.deployments.list, (current = []) =>
-        current.map((entry) =>
-          entry.id === active.id &&
-          (entry.status === "planning" ||
-            entry.status === "applying" ||
-            entry.status === "destroying" ||
-            entry.status === "pending")
-            ? { ...entry, status: "cancelled" as const, error: undefined }
-            : entry,
-        ),
-      );
-      setActive((current) =>
-        current && current.id === active.id
-          ? { ...current, status: "cancelled", error: undefined }
-          : current,
-      );
+      // Force local settle so a hung preflight / lost cancel handle never leaves
+      // the Stop button looking dead.
+      settleCancelled();
       reportDeployError("Could not stop deployment", error);
+    } finally {
+      setBusy(false);
     }
   }
 

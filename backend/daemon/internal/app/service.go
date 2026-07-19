@@ -543,7 +543,7 @@ func (s *Service) Handle(
 	case "deployments.checkDrift":
 		return s.handleDeploymentsCheckDrift(ctx, params, notifier)
 	case "deployments.cancel":
-		return s.handleDeploymentsCancel(params)
+		return s.handleDeploymentsCancel(ctx, params, notifier)
 	case "deployments.delete":
 		return s.handleDeploymentsDelete(ctx, params)
 	case "deployments.retryPostApply":
