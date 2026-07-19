@@ -18,6 +18,8 @@ import { useAppReset } from "./hooks/use-app-reset";
 import { useAppShellNavigation } from "./hooks/use-app-shell-navigation";
 import { useAwsActions } from "./hooks/use-aws-actions";
 import { useAzureActions } from "./hooks/use-azure-actions";
+import { useDeploymentsQuery } from "./hooks/use-deployments-query";
+import { useNavigationController } from "./hooks/use-navigation-controller";
 import { useRuntimeActions } from "./hooks/use-runtime-actions";
 import { useServicePreferencesFlow } from "./hooks/use-service-preferences-flow";
 import { useSessionState } from "./hooks/use-session-state";
@@ -33,8 +35,15 @@ import { normaliseWorkspaceFromUnknown, requestWorkspaceSnapshot } from "./lib/w
 
 import { awsInventoryLoaded, awsInventoryScopeForTab } from "./lib/aws-inventory";
 import { azureInventoryLoaded, azureInventoryScopeForTab } from "./lib/azure-inventory";
+import { deployRailBadge } from "./lib/deploy-activity";
+import { cycleTabId, isTypingTarget } from "./lib/keyboard-shortcuts";
+import type { NavigationLocation } from "./lib/navigation-location";
+import type { NavigateToResourceParams } from "./lib/navigate-to-resource";
 import { notify, notifyJob, useNotifications, type NotificationTone } from "./lib/notify";
+import { selectedResourceCli } from "./lib/resource-cli";
+import { indexWorkspaceResources } from "./lib/resource-search";
 import { useTheme } from "./lib/theme";
+import { viewLabelFor } from "./lib/workspace-shell";
 import {
   AppShell,
   ConnectionRail,
@@ -47,6 +56,7 @@ import {
 import { AzureCLIExtensionsBanner } from "./components/azure-cli-extensions-banner";
 import { CommandPalette } from "./components/command-palette";
 import { InventoryLoadingState } from "./components/inventory-loading-state";
+import { ShortcutCheatsheet } from "./components/shortcut-cheatsheet";
 import { WorkspaceSkeleton } from "./components/workspace-skeleton";
 import type {
   ActivityLogEntry,
@@ -472,7 +482,16 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [splitPanelOpen, setSplitPanelOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [shortcutCheatsheetOpen, setShortcutCheatsheetOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const navigateToResourceRef = useRef<
+    ((params: NavigateToResourceParams, options?: { record?: boolean }) => void) | null
+  >(null);
+  const deploymentsQuery = useDeploymentsQuery();
+  const deployBadge = useMemo(
+    () => deployRailBadge(deploymentsQuery.data ?? []),
+    [deploymentsQuery.data],
+  );
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const { resolvedTheme } = useTheme();
   const notifications = useNotifications();
@@ -638,16 +657,54 @@ export default function App() {
     }
   }, [activeWorkspaceTabId, session.isLocked, session.workspaceTabs]);
 
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setCommandPaletteOpen((open) => !open);
+  const {
+    navigateToTab,
+    recordLocation,
+    goBack,
+    goForward,
+    canGoBack,
+    canGoForward,
+    recents,
+    pins,
+    togglePinnedTab,
+  } = useNavigationController({
+    activeWorkspaceTabId,
+    setActiveWorkspaceTabId,
+    applyResourceFocus: (params) => {
+      navigateToResourceRef.current?.(params, { record: false });
+    },
+    labelForTab: (tabId) => viewLabelFor(tabId, session.workspaceTabs),
+  });
+
+  const navigateToLocation = useCallback(
+    (location: NavigationLocation) => {
+      if (location.focus) {
+        navigateToResourceRef.current?.(location.focus);
+        return;
       }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+      navigateToTab(location.tabId);
+    },
+    [navigateToTab],
+  );
+
+  const lockedCloudProvider =
+    session.lockedProviderId === "azure" || session.currentProviderId === "azure"
+      ? "azure"
+      : session.lockedProviderId === "aws" || session.currentProviderId === "aws"
+        ? "aws"
+        : undefined;
+
+  const resourceHits = useMemo(
+    () => (session.isLocked ? indexWorkspaceResources(workspace, lockedCloudProvider) : []),
+    [lockedCloudProvider, session.isLocked, workspace],
+  );
+
+  const selectedCli = useMemo(
+    () => selectedResourceCli(workspace, lockedCloudProvider, activeWorkspaceTabId),
+    [activeWorkspaceTabId, lockedCloudProvider, workspace],
+  );
+
+
 
   async function mutateSession(
     method: string,
@@ -1185,6 +1242,8 @@ export default function App() {
     workspace,
     activeWorkspaceTabId,
     setActiveWorkspaceTabId,
+    navigateToTab,
+    navigateToLocation,
     activeS3PageId,
     setActiveS3PageId,
     setActiveAzurePageId,
@@ -1197,11 +1256,100 @@ export default function App() {
     requestProviderSwitch,
     refreshDiscovery,
     openResetModal,
+    deployBadge,
+    recents,
+    pins,
+    togglePinnedTab,
+    canGoBack,
+    canGoForward,
+    goBack,
+    goForward,
+    resourceHits,
+    selectedCli,
+    onCopyCli: (command) => {
+      void navigator.clipboard.writeText(command).then(
+        () => notify("success", "Copied", "CLI command copied to the clipboard."),
+        () => notify("error", "Copy failed", "Could not write to the clipboard."),
+      );
+    },
+    onOpenShortcuts: () => setShortcutCheatsheetOpen(true),
   });
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandPaletteOpen((open) => !open);
+        return;
+      }
+
+      if (event.altKey && event.key === "ArrowLeft") {
+        event.preventDefault();
+        goBack();
+        return;
+      }
+      if (event.altKey && event.key === "ArrowRight") {
+        event.preventDefault();
+        goForward();
+        return;
+      }
+
+      if (event.key === "Escape" && shortcutCheatsheetOpen) {
+        event.preventDefault();
+        setShortcutCheatsheetOpen(false);
+        return;
+      }
+
+      if (isTypingTarget(event.target) || commandPaletteOpen || shortcutCheatsheetOpen) {
+        return;
+      }
+
+      if (event.key === "?" || (event.shiftKey && event.key === "/")) {
+        event.preventDefault();
+        setShortcutCheatsheetOpen(true);
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key >= "1" && event.key <= "9") {
+        const index = Number(event.key) - 1;
+        const connection = railConnections[index];
+        if (connection) {
+          event.preventDefault();
+          handleRailSelect(connection.id);
+        }
+        return;
+      }
+
+      if (event.key === "[" || event.key === "]") {
+        const tabIds = navGroups.flatMap((group) =>
+          group.items.filter((item) => !item.comingSoon).map((item) => item.id),
+        );
+        const next = cycleTabId(tabIds, activeWorkspaceTabId, event.key === "]" ? 1 : -1);
+        if (next) {
+          event.preventDefault();
+          handleNavSelect(next);
+        }
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    activeWorkspaceTabId,
+    commandPaletteOpen,
+    goBack,
+    goForward,
+    handleNavSelect,
+    handleRailSelect,
+    navGroups,
+    railConnections,
+    shortcutCheatsheetOpen,
+  ]);
 
   const workspaceTabRouterProps: WorkspaceTabRouterProps = {
     activeWorkspaceTabId,
     setActiveWorkspaceTabId,
+    recordLocation,
+    navigateToResourceRef,
     session,
     activeWorkspace,
     workspace,
@@ -1578,6 +1726,10 @@ export default function App() {
         open={commandPaletteOpen}
         commands={paletteCommands}
         onClose={() => setCommandPaletteOpen(false)}
+      />
+      <ShortcutCheatsheet
+        open={shortcutCheatsheetOpen}
+        onClose={() => setShortcutCheatsheetOpen(false)}
       />
     </>
   );

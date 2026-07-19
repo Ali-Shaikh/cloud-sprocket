@@ -113,7 +113,20 @@ function ConnectionRail({
                       STATUS_BG[c.status],
                     )}
                   />
-                  {c.profileBadge ? (
+                  {c.alertBadge ? (
+                    <span
+                      className={cn(
+                        "absolute -right-0.5 -top-0.5 grid min-w-[14px] place-items-center rounded-full border-2 border-rail px-[3px] text-[8px] font-bold leading-none text-white",
+                        c.alertBadge.status === "error"
+                          ? "bg-destructive"
+                          : c.alertBadge.status === "warning"
+                            ? "bg-[color:var(--warning)] text-black"
+                            : "bg-primary",
+                      )}
+                    >
+                      {c.alertBadge.text}
+                    </span>
+                  ) : c.profileBadge ? (
                     <span className="absolute -right-0.5 -top-0.5 grid min-w-[14px] place-items-center rounded-full border-2 border-rail bg-primary px-[3px] text-[8px] font-bold leading-none text-white">
                       {c.profileBadge}
                     </span>

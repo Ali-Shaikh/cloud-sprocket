@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { overviewNavigateToParams, resolveOverviewProvider } from "@/lib/navigate-to-resource";
 import { toActivityEntries } from "@/lib/workspace-shell";
 import { useNavigateToResource } from "@/hooks/use-navigate-to-resource";
@@ -227,7 +227,15 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     selectEC2Instance,
     selectAzureResourceGroup,
     selectAzureVirtualMachine,
+    recordLocation: props.recordLocation,
   });
+
+  // Expose deep-link navigation to the shell (palette resource search, history).
+  useEffect(() => {
+    if (props.navigateToResourceRef) {
+      props.navigateToResourceRef.current = navigateToResource;
+    }
+  }, [navigateToResource, props.navigateToResourceRef]);
 
   if (activeWorkspaceTabId === "debug") {
     return <DebugView />;
