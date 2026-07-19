@@ -9,24 +9,84 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Added
+
+- Navigation history with Alt+Left/Right and palette Back/Forward commands (#213)
+- Jump back in recents and pin favourite services, persisted in localStorage (#213)
+- Command palette resource search over the loaded workspace inventory (#213)
+- Deploy rail badge for in-progress and failed jobs (#213)
+- Keyboard shortcuts: Ctrl/Cmd+1–9 for rail areas, [ / ] to cycle tabs, `?`
+  cheatsheet (#213)
+- Copy as CLI for the selected inventory resource (palette action) (#213)
+- Deployment outputs can open matching inventory resources when the value is a
+  resource identifier (#213)
+
+### Fixed
+
+- Failed `az extension list` results are no longer cached for the full success
+  TTL (#213)
+- Workspace snapshot runtime probes no longer hold `runtimeStatusMu` across
+  Docker/emulator I/O, so Local Runtime polls are not blocked behind cold
+  snapshots (#213)
+- Windows build steps resolve bare cwd-local scripts with `.\` when
+  `NoDefaultCurrentDirectoryInExePath` is set (#213)
+- OpenTofu progress and timeout heuristics match resource address lines
+  (`: Creating...`) more tightly, reducing false phase matches (#213)
+- Alt+Left/Right navigation does not fire while typing in inputs or when the
+  command palette is open (#213)
+
+## [0.9.9] - 2026-07-19
+
+### Added
+
+- Shared OpenTofu provider plugin cache under the app config directory so large
+  providers such as azurerm download once and are reused across deployments
+  (#194)
+- Recipe gallery run-target badges (floci-az, LocalStack, Cloud Azure, Cloud
+  AWS) and an Any target / local runtime / Cloud only filter (#195)
+
 ### Changed
 
 - Deploy UI surfaces multi-line OpenTofu failures, quiet-period progress guidance,
-  and a first-run PostgreSQL local apply banner (not cloud-only)
+  and a first-run PostgreSQL local apply banner (not cloud-only) (#202)
 - Progress heartbeats describe provider downloads, long creates/destroys, and
-  state refresh more clearly
+  state refresh more clearly (#202)
 - Windows Remove/Stop also unlocks `terraform-provider-*` processes under the
-  shared plugin cache when hardlinks report that path
+  shared plugin cache when hardlinks report that path (#202)
+- Azure Function App recipes are cloud-only: no floci-az target is offered and
+  a plan guard rejects floci-az plans that need App Service or Functions
+  hosting (#195)
+- Local runtime health on Overview appears only for local workspaces and is
+  scoped per provider: Docker plus LocalStack for local AWS, Docker plus
+  floci-az for local Azure (#195)
+- Inventory timestamps across Secrets Manager, SQS, CloudWatch Logs, Azure
+  Queues, and IAM use the shared British UTC formatter, with raw values kept on
+  hover (#193)
 
 ### Fixed
 
 - FormatRunError distinguishes provider download timeouts from long resource
-  creates (including local PostgreSQL image pull) and Access is denied lock cases
+  creates (including local PostgreSQL image pull) and Access is denied lock
+  cases (#202)
+- Deployments no longer hang silently on provider installs: a download notice
+  before init, still-working heartbeats after 45 quiet seconds, a 10-minute
+  init timeout, and failures that include the last OpenTofu output (#194)
+- Secrets Manager rotation shows Enabled, Disabled, or Unknown instead of
+  collapsing disabled secrets into unknown (#201)
+- `TF_PLUGIN_CACHE_DIR` is only injected when the app config directory is a
+  non-empty absolute path (#201)
+- The floci-az App Service guard scans every root module `.tf` file and matches
+  resource blocks only, so split Terraform files cannot bypass it and comments
+  cannot falsely flag a recipe
+- Progress heartbeat detection no longer treats OpenTofu's own `Still
+  creating...` resource lines as heartbeat output, so they keep resetting the
+  quiet timer
 
 ### Documentation
 
 - Labs platform notes for cleaning orphan `floci-az-pg-*` containers after a
   failed destroy/cancel; PostgreSQL lab recipe connection and timing honesty
+  (#202)
 
 ## [0.9.8] - 2026-07-16
 
@@ -938,7 +998,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.8...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.9...HEAD
+[0.9.9]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.8...v0.9.9
 [0.9.8]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.7...v0.9.8
 [0.9.7]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.6...v0.9.7
 [0.9.6]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.5...v0.9.6

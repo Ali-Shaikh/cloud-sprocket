@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func TestBundledListIncludesServerlessRecipe(t *testing.T) {
@@ -297,6 +298,41 @@ func TestAzureFunctionRecipesAreCloudOnly(t *testing.T) {
 		if !needs {
 			t.Fatalf("%s: expected Function/App Service markers in main.tf", id)
 		}
+	}
+}
+
+func TestNeedsAzureWebHostingScansAllTfFiles(t *testing.T) {
+	fsys := fstest.MapFS{
+		"split-recipe/main.tf": &fstest.MapFile{Data: []byte(
+			`resource "azurerm_resource_group" "rg" {}` + "\n",
+		)},
+		"split-recipe/hosting.tf": &fstest.MapFile{Data: []byte(
+			`resource "azurerm_service_plan" "plan" {}` + "\n",
+		)},
+	}
+	needs, err := NewLoader(fsys).NeedsAzureWebHosting("split-recipe")
+	if err != nil {
+		t.Fatalf("NeedsAzureWebHosting: %v", err)
+	}
+	if !needs {
+		t.Fatal("hosting resource in a non-main.tf file must flag the recipe")
+	}
+}
+
+func TestNeedsAzureWebHostingIgnoresCommentsAndOutputs(t *testing.T) {
+	fsys := fstest.MapFS{
+		"commented/main.tf": &fstest.MapFile{Data: []byte(
+			"# unlike azurerm_service_plan, storage works on floci-az\n" +
+				`resource "azurerm_storage_account" "sa" {}` + "\n" +
+				`output "note" { value = "no azurerm_function_app here" }` + "\n",
+		)},
+	}
+	needs, err := NewLoader(fsys).NeedsAzureWebHosting("commented")
+	if err != nil {
+		t.Fatalf("NeedsAzureWebHosting: %v", err)
+	}
+	if needs {
+		t.Fatal("comments and outputs mentioning hosting types must not flag the recipe")
 	}
 }
 

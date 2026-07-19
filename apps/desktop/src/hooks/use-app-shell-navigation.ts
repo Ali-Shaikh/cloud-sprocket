@@ -7,6 +7,11 @@ import { Bug, LayoutGrid, Rocket, Server } from "lucide-react";
 import type { Command } from "@/components/command-palette";
 import type { NavConnectionHeader, NavGroup, RailConnection } from "@/components/shell/types";
 import type { Status } from "@/components/status-dot";
+import type { DeployRailBadge } from "@/lib/deploy-activity";
+import type { NavigationLocation } from "@/lib/navigation-location";
+import { orderItemsByPins, type RecentNavigationEntry } from "@/lib/navigation-recents";
+import type { CliSnippet } from "@/lib/resource-cli";
+import { filterResourceHits, type ResourceSearchHit } from "@/lib/resource-search";
 import { groupByServiceDomain } from "@/lib/service-domains";
 import {
   authLabel,
@@ -34,6 +39,9 @@ export type UseAppShellNavigationParams = {
   workspace: WorkspaceSnapshot;
   activeWorkspaceTabId: string;
   setActiveWorkspaceTabId: Dispatch<SetStateAction<string>>;
+  /** Prefer this for user-initiated tab jumps so history/recents stay in sync. */
+  navigateToTab?: (tabId: string) => void;
+  navigateToLocation?: (location: NavigationLocation) => void;
   activeS3PageId: string;
   setActiveS3PageId: Dispatch<SetStateAction<string>>;
   setActiveAzurePageId: Dispatch<SetStateAction<string>>;
@@ -46,6 +54,18 @@ export type UseAppShellNavigationParams = {
   requestProviderSwitch: (providerId: string) => void;
   refreshDiscovery: () => Promise<void>;
   openResetModal: () => void;
+  deployBadge?: DeployRailBadge | null;
+  recents?: RecentNavigationEntry[];
+  pins?: string[];
+  togglePinnedTab?: (tabId: string) => void;
+  canGoBack?: boolean;
+  canGoForward?: boolean;
+  goBack?: () => void;
+  goForward?: () => void;
+  resourceHits?: ResourceSearchHit[];
+  selectedCli?: CliSnippet | null;
+  onCopyCli?: (command: string) => void;
+  onOpenShortcuts?: () => void;
 };
 
 export function useAppShellNavigation(params: UseAppShellNavigationParams) {
@@ -58,6 +78,8 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     workspace,
     activeWorkspaceTabId,
     setActiveWorkspaceTabId,
+    navigateToTab,
+    navigateToLocation,
     setActiveAzurePageId,
     workspaceFetching,
     workspaceLoading,
@@ -66,7 +88,30 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     requestProviderSwitch,
     refreshDiscovery,
     openResetModal,
+    deployBadge,
+    recents = [],
+    pins = [],
+    togglePinnedTab,
+    canGoBack = false,
+    canGoForward = false,
+    goBack,
+    goForward,
+    resourceHits = [],
+    selectedCli,
+    onCopyCli,
+    onOpenShortcuts,
   } = params;
+
+  const goToTab = useCallback(
+    (tabId: string) => {
+      if (navigateToTab) {
+        navigateToTab(tabId);
+        return;
+      }
+      setActiveWorkspaceTabId(tabId);
+    },
+    [navigateToTab, setActiveWorkspaceTabId],
+  );
 
   const lockedProfile = profiles.find((profile) => profile.profileId === session.lockedProfileId);
   const activeProvider = selectedProvider ?? workspace.provider;
@@ -146,12 +191,16 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
       {
         id: "deploy",
         label: "Deploy",
-        tooltip: "Deploy · IaC recipes",
-        status: "on" as Status,
+        tooltip: deployBadge?.tooltip ?? "Deploy · IaC recipes",
+        status: (deployBadge?.status ?? "on") as Status,
         kind: "deploy" as const,
+        alertBadge: deployBadge
+          ? { text: deployBadge.text, status: deployBadge.status }
+          : undefined,
       },
     ],
     [
+      deployBadge,
       dockerReachable,
       profiles,
       providers,
@@ -279,8 +328,16 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
       label: "Developer",
       items: [{ id: "debug", label: "Debug console", icon: Bug }],
     });
+    if (pins.length > 0) {
+      return groups.map((group) =>
+        group.collapsible || group.label === "Workspace" || group.label === "Tools"
+          ? { ...group, items: orderItemsByPins(group.items, pins) }
+          : group,
+      );
+    }
     return groups;
   }, [
+    pins,
     session.isLocked,
     session.workspaceTabs,
     workspace,
@@ -350,15 +407,15 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
   const handleRailSelect = useCallback(
     (id: string): void => {
       if (id === "developer-tools") {
-        setActiveWorkspaceTabId("developer-tools");
+        goToTab("developer-tools");
         return;
       }
       if (id === "local") {
-        setActiveWorkspaceTabId("virtualisation");
+        goToTab("virtualisation");
         return;
       }
       if (id === "deploy") {
-        setActiveWorkspaceTabId("deploy");
+        goToTab("deploy");
         return;
       }
       if (id !== session.currentProviderId) {
@@ -367,9 +424,9 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
         requestProviderSwitch(id);
         return;
       }
-      setActiveWorkspaceTabId("overview");
+      goToTab("overview");
     },
-    [requestProviderSwitch, session.currentProviderId, setActiveWorkspaceTabId],
+    [goToTab, requestProviderSwitch, session.currentProviderId],
   );
 
   const handleNavSelect = useCallback(
@@ -384,7 +441,7 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
       if (separator >= 0) {
         const tabId = id.slice(0, separator);
         const pageId = id.slice(separator + 1);
-        setActiveWorkspaceTabId(tabId);
+        goToTab(tabId);
         // Legacy deep-links (s3:objects, azure-storage:blobs) still open the
         // parent tab; storage is now a single browser with no sub-pages.
         if (tabId === "azure-overview") {
@@ -392,16 +449,12 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
         }
         return;
       }
-      setActiveWorkspaceTabId(id);
+      goToTab(id);
       if (id === "azure-overview") {
         setActiveAzurePageId("overview");
       }
     },
-    [
-      session.workspaceTabs,
-      setActiveAzurePageId,
-      setActiveWorkspaceTabId,
-    ],
+    [goToTab, session.workspaceTabs, setActiveAzurePageId],
   );
 
   const paletteCommands: Command[] = useMemo(() => {
@@ -443,7 +496,104 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
           )
         : [];
 
+    const recentCommands: Command[] = recents.slice(0, 8).map((entry, index) => ({
+      id: `recent:${index}:${entry.tabId}:${entry.focus?.resourceKey ?? ""}`,
+      group: "Jump back in",
+      label: entry.label ?? entry.tabId,
+      hint: entry.focus?.resourceKey ? entry.tabId : undefined,
+      keywords: `recent ${entry.tabId} ${entry.focus?.resourceKey ?? ""}`,
+      run: () => {
+        if (entry.focus && navigateToLocation) {
+          navigateToLocation(entry);
+          return;
+        }
+        handleNavSelect(entry.tabId);
+      },
+    }));
+
+    const resourceCommands: Command[] = filterResourceHits(resourceHits, "", 25).map((hit) => {
+      const tabId =
+        hit.params.provider === "azure"
+          ? hit.params.tab
+          : hit.params.tab.replace(/^aws-/, "");
+      return {
+        id: `res:${hit.id}`,
+        group: "Resources",
+        label: hit.label,
+        hint: hit.service,
+        keywords: `${hit.service} ${hit.keywords} resource`,
+        run: () => {
+          if (navigateToLocation) {
+            navigateToLocation({
+              tabId,
+              label: hit.label,
+              focus: hit.params,
+            });
+            return;
+          }
+          handleNavSelect(tabId);
+        },
+      };
+    });
+
+    const historyCommands: Command[] = [];
+    if (canGoBack && goBack) {
+      historyCommands.push({
+        id: "act:back",
+        group: "Navigation",
+        label: "Go back",
+        keywords: "history previous",
+        run: goBack,
+      });
+    }
+    if (canGoForward && goForward) {
+      historyCommands.push({
+        id: "act:forward",
+        group: "Navigation",
+        label: "Go forward",
+        keywords: "history next",
+        run: goForward,
+      });
+    }
+
+    const pinCommands: Command[] = [];
+    if (togglePinnedTab && session.isLocked) {
+      const isPinned = pins.includes(activeWorkspaceTabId);
+      pinCommands.push({
+        id: "act:pin-tab",
+        group: "Actions",
+        label: isPinned ? "Unpin current service" : "Pin current service",
+        keywords: "favourite favorite pin",
+        run: () => togglePinnedTab(activeWorkspaceTabId),
+      });
+    }
+
+    const cliCommands: Command[] = [];
+    if (selectedCli && onCopyCli) {
+      cliCommands.push({
+        id: "act:copy-cli",
+        group: "Actions",
+        label: `Copy as CLI: ${selectedCli.label}`,
+        keywords: "aws az cli copy command",
+        run: () => onCopyCli(selectedCli.command),
+      });
+    }
+
+    const shortcutCommands: Command[] = onOpenShortcuts
+      ? [
+          {
+            id: "act:shortcuts",
+            group: "Actions",
+            label: "Keyboard shortcuts",
+            keywords: "cheatsheet help keys",
+            run: onOpenShortcuts,
+          },
+        ]
+      : [];
+
     return [
+      ...historyCommands,
+      ...recentCommands,
       ...railConnections.map((connection) => ({
         id: `conn:${connection.id}`,
         group: "Go to",
@@ -453,6 +603,10 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
       })),
       ...areaCommands,
       ...workspaceCommands,
+      ...resourceCommands,
+      ...cliCommands,
+      ...pinCommands,
+      ...shortcutCommands,
       {
         id: "act:refresh",
         group: "Actions",
@@ -474,14 +628,14 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
         group: "Actions",
         label: "Open debug console",
         keywords: "logs",
-        run: () => setActiveWorkspaceTabId("debug"),
+        run: () => goToTab("debug"),
       },
       {
         id: "act:developer-tools",
         group: "Actions",
         label: "Open developer toolbox",
         keywords: "json yaml diff encode arn azure resource id jwt",
-        run: () => setActiveWorkspaceTabId("developer-tools"),
+        run: () => goToTab("developer-tools"),
       },
       {
         id: "act:reset",
@@ -493,17 +647,30 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
       },
     ];
   }, [
+    activeWorkspaceTabId,
+    canGoBack,
+    canGoForward,
+    goBack,
+    goForward,
+    goToTab,
     handleNavSelect,
     handleRailSelect,
     isDeployActive,
     isDeveloperToolsActive,
     isLocalActive,
     navGroups,
+    navigateToLocation,
+    onCopyCli,
+    onOpenShortcuts,
     openResetModal,
+    pins,
     railConnections,
+    recents,
     refreshDiscovery,
+    resourceHits,
+    selectedCli,
     session.isLocked,
-    setActiveWorkspaceTabId,
+    togglePinnedTab,
     workspaceNavGroups,
   ]);
 

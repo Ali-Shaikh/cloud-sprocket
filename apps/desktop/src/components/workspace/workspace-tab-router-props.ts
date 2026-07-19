@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 
+import type { NavigationLocation } from "@/lib/navigation-location";
+import type { NavigateToResourceParams } from "@/lib/navigate-to-resource";
 import type {
   ActivityLogEntry,
   AwsLambdaCreateInput,
@@ -255,6 +257,12 @@ export type WorkspaceTabRouterProps = {
   hiddenResourceHits: HiddenResourceHit[];
   hiddenResourceEnablingServiceId: string | null;
   onEnableHiddenService: (hit: HiddenResourceHit) => Promise<void>;
+  /** History/recents recorder for resource deep links. */
+  recordLocation?: (location: NavigationLocation) => void;
+  /** Shell holds a ref so the palette can jump to resources. */
+  navigateToResourceRef?: MutableRefObject<
+    ((params: NavigateToResourceParams, options?: { record?: boolean }) => void) | null
+  >;
 };
 
 export type AwsWorkspaceTabsProps = WorkspaceTabRouterProps;
