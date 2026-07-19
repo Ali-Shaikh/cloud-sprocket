@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -647,7 +648,8 @@ func (e *Engine) runBuildSteps(ctx context.Context, deployment *Deployment, step
 		if onLine != nil {
 			onLine(fmt.Sprintf("> %s: %s (in %s)", step.Name, strings.Join(step.Command, " "), dir))
 		}
-		cmd := exec.CommandContext(ctx, step.Command[0], step.Command[1:]...)
+		argv0 := resolveBuildStepCommand(dir, step.Command[0])
+		cmd := exec.CommandContext(ctx, argv0, step.Command[1:]...)
 		cmd.Dir = dir
 		if len(extraEnv) > 0 {
 			cmd.Env = append(os.Environ(), extraEnv...)
@@ -669,6 +671,25 @@ func (e *Engine) runBuildSteps(ctx context.Context, deployment *Deployment, step
 		}
 	}
 	return nil
+}
+
+// resolveBuildStepCommand rewrites bare cwd-local scripts on Windows so CreateProcess
+// still finds them when NoDefaultCurrentDirectoryInExePath is set. PATH tools
+// (npm, docker, cmd) are left unchanged.
+func resolveBuildStepCommand(dir, name string) string {
+	if runtime.GOOS != "windows" {
+		return name
+	}
+	if name == "" || filepath.IsAbs(name) {
+		return name
+	}
+	if strings.ContainsAny(name, `/\`) || strings.HasPrefix(name, `.\`) || strings.HasPrefix(name, `./`) {
+		return name
+	}
+	if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+		return `.\` + name
+	}
+	return name
 }
 
 // buildLineWriter emits complete lines to onLine as bytes arrive, buffering any

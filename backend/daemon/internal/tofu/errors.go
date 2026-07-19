@@ -24,12 +24,14 @@ func FormatRunError(ctx context.Context, args []string, output []byte, err error
 	}
 	tail := strings.TrimSpace(tailOutput(output, 1800))
 	lowerTail := strings.ToLower(tail)
-	installingProviders := strings.Contains(lowerTail, "installing ") ||
+	installingProviders := strings.Contains(lowerTail, "installing hashicorp/") ||
+		strings.Contains(lowerTail, "finding hashicorp/") ||
 		(strings.Contains(lowerTail, "finding ") && strings.Contains(lowerTail, "versions matching")) ||
-		strings.Contains(lowerTail, "provider plugins")
+		strings.Contains(lowerTail, "provider plugins") ||
+		strings.Contains(lowerTail, "initializing provider") ||
+		strings.Contains(lowerTail, "provider registry")
 	creatingResources := strings.Contains(lowerTail, "still creating") ||
-		strings.Contains(lowerTail, "creating...") ||
-		strings.Contains(lowerTail, "creating ")
+		strings.Contains(lowerTail, ": creating...")
 	lockedFiles := strings.Contains(lowerTail, "access is denied") ||
 		strings.Contains(lowerTail, "being used by another process") ||
 		strings.Contains(strings.ToLower(err.Error()), "access is denied")

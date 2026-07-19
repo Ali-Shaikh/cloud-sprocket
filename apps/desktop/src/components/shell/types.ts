@@ -29,6 +29,14 @@ export interface RailConnection {
   accentColor?: string;
   /** Two-letter badge when a workspace is open on this provider. */
   profileBadge?: string;
+  /**
+   * Corner notification badge (deploy in-flight count, failure count).
+   * Rendered top-right; takes precedence over profileBadge when both are set.
+   */
+  alertBadge?: {
+    text: string;
+    status: Status;
+  };
   /** Connection health, shown as a small status dot on the rail item. */
   status: Status;
   /** Distinguishes non-provider rail items from cloud connections. */
