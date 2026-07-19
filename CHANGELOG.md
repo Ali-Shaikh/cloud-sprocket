@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Installers for every release are published on the
 [GitHub Releases](https://github.com/Ali-Shaikh/cloud-sprocket/releases) page.
 
+## [Unreleased]
+
+### Added
+
+- Navigation history with Alt+Left/Right and palette Back/Forward commands
+- Jump back in recents and pin favourite services (persisted in localStorage)
+- Command palette resource search over the loaded workspace inventory
+- Deploy rail badge for in-progress and failed jobs
+- Keyboard shortcuts: Ctrl/Cmd+1–9 for rail areas, [ / ] to cycle tabs, `?` cheatsheet
+- Copy as CLI for the selected inventory resource (palette action)
+- Deployment outputs can open matching inventory resources when the value is a
+  resource identifier
+
+### Fixed
+
+- Failed `az extension list` results are no longer cached for the full success TTL
+- Workspace snapshot runtime probes no longer hold `runtimeStatusMu` across
+  Docker/emulator I/O, so Local Runtime polls are not blocked behind cold snapshots
+- Windows build steps resolve bare cwd-local scripts with `.\` when
+  `NoDefaultCurrentDirectoryInExePath` is set
+- OpenTofu progress and timeout heuristics match resource address lines
+  (`: Creating...`) more tightly, reducing false phase matches
+
 ## [0.9.9] - 2026-07-19
 
 ### Added
