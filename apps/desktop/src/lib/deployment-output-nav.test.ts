@@ -32,4 +32,13 @@ describe("deploymentOutputNavigateParams", () => {
       ),
     ).toEqual({ provider: "azure", tab: "azure-storage", resourceKey: "stlab" });
   });
+
+  it("does not treat generic server-named outputs as postgres", () => {
+    expect(
+      deploymentOutputNavigateParams(
+        { providerId: "azure" },
+        { name: "app_service_name", value: "lab-web" },
+      ),
+    ).toBeNull();
+  });
 });

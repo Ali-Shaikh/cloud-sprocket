@@ -20,13 +20,39 @@ describe("selectedResourceCli", () => {
     expect(snippet?.command).toContain("--region eu-west-1");
   });
 
-  it("builds an az storage account command", () => {
+  it("builds an az storage account command with resource group when selected", () => {
     const snippet = selectedResourceCli(
-      { selectedAzureStorageAccount: "stlab" } as WorkspaceSnapshot,
+      {
+        selectedAzureStorageAccount: "stlab",
+        selectedAzureResourceGroup: "rg-lab",
+      } as WorkspaceSnapshot,
       "azure",
       "azure-storage",
     );
-    expect(snippet?.command).toBe("az storage account show --name stlab");
+    expect(snippet?.command).toBe(
+      "az storage account show --name stlab --resource-group rg-lab",
+    );
+  });
+
+  it("requires resource group for az webapp show", () => {
+    expect(
+      selectedResourceCli(
+        { selectedAzureWebAppName: "lab-web" } as WorkspaceSnapshot,
+        "azure",
+        "azure-app-service",
+      ),
+    ).toBeNull();
+    const snippet = selectedResourceCli(
+      {
+        selectedAzureWebAppName: "lab-web",
+        selectedAzureResourceGroup: "rg-lab",
+      } as WorkspaceSnapshot,
+      "azure",
+      "azure-app-service",
+    );
+    expect(snippet?.command).toBe(
+      "az webapp show --name lab-web --resource-group rg-lab",
+    );
   });
 
   it("returns null when nothing is selected", () => {

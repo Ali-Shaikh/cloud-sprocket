@@ -117,13 +117,13 @@ export function selectedResourceCli(
   }
 
   // Azure
+  const resourceGroup = workspace.selectedAzureResourceGroup?.trim();
   switch (activeTabId) {
     case "azure-resource-groups": {
-      const rg = workspace.selectedAzureResourceGroup?.trim();
-      if (!rg) return null;
+      if (!resourceGroup) return null;
       return {
         label: "az group show",
-        command: `az group show --name ${rg}`,
+        command: `az group show --name ${resourceGroup}`,
       };
     }
     case "azure-vms": {
@@ -139,23 +139,25 @@ export function selectedResourceCli(
       if (!account) return null;
       return {
         label: "az storage account show",
-        command: `az storage account show --name ${account}`,
+        command: resourceGroup
+          ? `az storage account show --name ${account} --resource-group ${resourceGroup}`
+          : `az storage account show --name ${account}`,
       };
     }
     case "azure-app-service": {
       const app = workspace.selectedAzureWebAppName?.trim();
-      if (!app) return null;
+      if (!app || !resourceGroup) return null;
       return {
         label: "az webapp show",
-        command: `az webapp show --name ${app}`,
+        command: `az webapp show --name ${app} --resource-group ${resourceGroup}`,
       };
     }
     case "azure-postgres": {
       const server = workspace.selectedAzurePostgresServer?.trim();
-      if (!server) return null;
+      if (!server || !resourceGroup) return null;
       return {
         label: "az postgres flexible-server show",
-        command: `az postgres flexible-server show --name ${server}`,
+        command: `az postgres flexible-server show --name ${server} --resource-group ${resourceGroup}`,
       };
     }
     case "azure-key-vault": {
@@ -168,10 +170,10 @@ export function selectedResourceCli(
     }
     case "azure-functions": {
       const app = workspace.selectedAzureFunctionApp?.trim();
-      if (!app) return null;
+      if (!app || !resourceGroup) return null;
       return {
         label: "az functionapp show",
-        command: `az functionapp show --name ${app}`,
+        command: `az functionapp show --name ${app} --resource-group ${resourceGroup}`,
       };
     }
     default:

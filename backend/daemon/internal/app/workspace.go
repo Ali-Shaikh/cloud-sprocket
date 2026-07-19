@@ -194,6 +194,11 @@ func (s *Service) azureCLIExtensionChecks(snapshot discovery.Snapshot, profile m
 }
 
 func azureCLIExtensionListSucceeded(statuses []models.AzureCLIExtensionStatus) bool {
+	// Never cache an empty/nil result: a silent failure mode would otherwise
+	// suppress extension-missing warnings for the full success TTL.
+	if len(statuses) == 0 {
+		return false
+	}
 	for _, status := range statuses {
 		if strings.Contains(status.Summary, "could not query installed extensions") {
 			return false

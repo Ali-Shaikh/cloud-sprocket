@@ -58,7 +58,12 @@ export function deploymentOutputNavigateParams(
     if (name.includes("webapp") || name.includes("app_name") || name.includes("function_app")) {
       return { provider: "azure", tab: "azure-app-service", resourceKey: value };
     }
-    if (name.includes("postgres") || name.includes("server")) {
+    if (
+      name.includes("postgres") ||
+      name === "server_name" ||
+      name === "db_server" ||
+      name === "flexible_server_name"
+    ) {
       return { provider: "azure", tab: "azure-postgres", resourceKey: value };
     }
     if (name.includes("vault")) {

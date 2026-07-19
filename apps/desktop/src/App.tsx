@@ -1283,6 +1283,17 @@ export default function App() {
         return;
       }
 
+      if (event.key === "Escape" && shortcutCheatsheetOpen) {
+        event.preventDefault();
+        setShortcutCheatsheetOpen(false);
+        return;
+      }
+
+      // Do not steal Alt+arrows or other nav keys from text fields / open overlays.
+      if (isTypingTarget(event.target) || commandPaletteOpen || shortcutCheatsheetOpen) {
+        return;
+      }
+
       if (event.altKey && event.key === "ArrowLeft") {
         event.preventDefault();
         goBack();
@@ -1291,16 +1302,6 @@ export default function App() {
       if (event.altKey && event.key === "ArrowRight") {
         event.preventDefault();
         goForward();
-        return;
-      }
-
-      if (event.key === "Escape" && shortcutCheatsheetOpen) {
-        event.preventDefault();
-        setShortcutCheatsheetOpen(false);
-        return;
-      }
-
-      if (isTypingTarget(event.target) || commandPaletteOpen || shortcutCheatsheetOpen) {
         return;
       }
 
