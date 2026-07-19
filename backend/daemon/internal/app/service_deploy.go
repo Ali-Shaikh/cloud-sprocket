@@ -395,14 +395,22 @@ func (s *Service) clearDeployCancel(id string) {
 // cancelling its run context, which kills the underlying tofu process. On
 // Windows the azurerm provider child often survives; ReleaseWorkspace stops it
 // so Remove no longer fails with Access is denied.
+//
+// When preflight is stuck in `docker compose up` (common when LocalStack never
+// becomes healthy), context cancel alone is not always enough on Windows: also
+// stop the managed compose project so the hung CLI exits and status can settle.
 func (s *Service) cancelDeployment(id string) error {
 	s.deployCancelsMu.Lock()
 	cancel := s.deployCancels[id]
 	s.deployCancelsMu.Unlock()
 	if cancel == nil {
+		// Still tear down a stuck compose preflight if the cancel map was lost
+		// (daemon mid-restart) or the UI thinks an op is running.
+		deploy.StopManagedDockerCompose()
 		return fmt.Errorf("no operation is currently running for this deployment")
 	}
 	cancel()
+	deploy.StopManagedDockerCompose()
 	// Give tofu a moment to exit, then clear orphaned provider plugins.
 	time.AfterFunc(400*time.Millisecond, func() {
 		s.deployer.ReleaseWorkspace(id)

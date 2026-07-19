@@ -216,6 +216,21 @@ func (t *dockerComposeTarget) localStackLicenceHint(ctx context.Context) string 
 	return "LocalStack stopped because no LOCALSTACK_AUTH_TOKEN is configured. LocalStack 2026 requires an auth token for the stable image. Set LOCALSTACK_AUTH_TOKEN in the environment used by the CloudSprocket daemon (or system environment), then Stop and Plan again. Alternatively start LocalStack from Local Runtime with a token, or use a cloud AWS profile. See https://docs.localstack.cloud/aws/getting-started/auth-token/"
 }
 
+// StopManagedDockerCompose best-effort stops the CloudSprocket LocalStack compose
+// project so a hung `docker compose up` (and its preflight) can exit when the
+// user hits Stop. Safe to call when nothing is running.
+func StopManagedDockerCompose() {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	// Prefer project-name stop so we do not need the compose file path (which
+	// lives under EmulatorStateDir and may not be known at this layer).
+	cmd := exec.CommandContext(ctx, "docker", "compose", "-p", dockerComposeProjectName, "down", "--remove-orphans")
+	sysproc.Hide(cmd)
+	_ = cmd.Run()
+	// Windows sometimes leaves a stuck docker-compose CLI; kill by name is too
+	// broad. Project down above is the primary path.
+}
+
 // dockerComposeLocalStackYAML is the managed compose stack. Keep it in sync
 // with the in-app LocalStack manager defaults (stable image, gateway port,
 // docker.sock for Lambda, optional auth token).

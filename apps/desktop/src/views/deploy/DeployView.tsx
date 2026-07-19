@@ -329,7 +329,43 @@ export default function DeployView({
     if (!active) return;
     try {
       await cancelDeployment(active.id);
+      // Status is updated asynchronously via deployment.changed; optimistically
+      // mark cancelled so a hung preflight does not leave the Stop button forever.
+      queryClient.setQueryData<Deployment[]>(queryKeys.deployments.list, (current = []) =>
+        current.map((entry) =>
+          entry.id === active.id &&
+          (entry.status === "planning" ||
+            entry.status === "applying" ||
+            entry.status === "destroying" ||
+            entry.status === "pending")
+            ? { ...entry, status: "cancelled" as const, error: undefined }
+            : entry,
+        ),
+      );
+      setActive((current) =>
+        current && current.id === active.id
+          ? { ...current, status: "cancelled", error: undefined }
+          : current,
+      );
     } catch (error) {
+      // Even when the daemon says nothing is running, the UI may still show a
+      // stale in-flight status after a hung compose preflight. Force local settle.
+      queryClient.setQueryData<Deployment[]>(queryKeys.deployments.list, (current = []) =>
+        current.map((entry) =>
+          entry.id === active.id &&
+          (entry.status === "planning" ||
+            entry.status === "applying" ||
+            entry.status === "destroying" ||
+            entry.status === "pending")
+            ? { ...entry, status: "cancelled" as const, error: undefined }
+            : entry,
+        ),
+      );
+      setActive((current) =>
+        current && current.id === active.id
+          ? { ...current, status: "cancelled", error: undefined }
+          : current,
+      );
       reportDeployError("Could not stop deployment", error);
     }
   }
