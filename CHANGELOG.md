@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Installers for every release are published on the
 [GitHub Releases](https://github.com/Ali-Shaikh/cloud-sprocket/releases) page.
 
-## [Unreleased]
+## [0.9.9] - 2026-07-19
 
 ### Added
 
@@ -970,7 +970,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.8...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.9...HEAD
+[0.9.9]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.8...v0.9.9
 [0.9.8]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.7...v0.9.8
 [0.9.7]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.6...v0.9.7
 [0.9.6]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.5...v0.9.6
