@@ -89,4 +89,7 @@ func TestProgressHeartbeatIgnoresOwnLines(t *testing.T) {
 	if isProgressHeartbeatLine("Installing hashicorp/azurerm v4.81.0...") {
 		t.Fatal("did not expect install line to count as heartbeat")
 	}
+	if isProgressHeartbeatLine("Still creating... [1m10s elapsed]") {
+		t.Fatal("tofu resource progress must keep resetting the quiet timer")
+	}
 }

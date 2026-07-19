@@ -9,24 +9,56 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Added
+
+- Shared OpenTofu provider plugin cache under the app config directory so large
+  providers such as azurerm download once and are reused across deployments
+  (#194)
+- Recipe gallery run-target badges (floci-az, LocalStack, Cloud Azure, Cloud
+  AWS) and an Any target / local runtime / Cloud only filter (#195)
+
 ### Changed
 
 - Deploy UI surfaces multi-line OpenTofu failures, quiet-period progress guidance,
-  and a first-run PostgreSQL local apply banner (not cloud-only)
+  and a first-run PostgreSQL local apply banner (not cloud-only) (#202)
 - Progress heartbeats describe provider downloads, long creates/destroys, and
-  state refresh more clearly
+  state refresh more clearly (#202)
 - Windows Remove/Stop also unlocks `terraform-provider-*` processes under the
-  shared plugin cache when hardlinks report that path
+  shared plugin cache when hardlinks report that path (#202)
+- Azure Function App recipes are cloud-only: no floci-az target is offered and
+  a plan guard rejects floci-az plans that need App Service or Functions
+  hosting (#195)
+- Local runtime health on Overview appears only for local workspaces and is
+  scoped per provider: Docker plus LocalStack for local AWS, Docker plus
+  floci-az for local Azure (#195)
+- Inventory timestamps across Secrets Manager, SQS, CloudWatch Logs, Azure
+  Queues, and IAM use the shared British UTC formatter, with raw values kept on
+  hover (#193)
 
 ### Fixed
 
 - FormatRunError distinguishes provider download timeouts from long resource
-  creates (including local PostgreSQL image pull) and Access is denied lock cases
+  creates (including local PostgreSQL image pull) and Access is denied lock
+  cases (#202)
+- Deployments no longer hang silently on provider installs: a download notice
+  before init, still-working heartbeats after 45 quiet seconds, a 10-minute
+  init timeout, and failures that include the last OpenTofu output (#194)
+- Secrets Manager rotation shows Enabled, Disabled, or Unknown instead of
+  collapsing disabled secrets into unknown (#201)
+- `TF_PLUGIN_CACHE_DIR` is only injected when the app config directory is a
+  non-empty absolute path (#201)
+- The floci-az App Service guard scans every root module `.tf` file and matches
+  resource blocks only, so split Terraform files cannot bypass it and comments
+  cannot falsely flag a recipe
+- Progress heartbeat detection no longer treats OpenTofu's own `Still
+  creating...` resource lines as heartbeat output, so they keep resetting the
+  quiet timer
 
 ### Documentation
 
 - Labs platform notes for cleaning orphan `floci-az-pg-*` containers after a
   failed destroy/cancel; PostgreSQL lab recipe connection and timing honesty
+  (#202)
 
 ## [0.9.8] - 2026-07-16
 
