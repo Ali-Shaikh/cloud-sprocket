@@ -1,7 +1,7 @@
 apiVersion: cloudsprocket.recipe/v1
 id: lab-postgres-flexible-azure
 kind: service-lab
-version: 0.1.0
+version: 0.1.1
 name: PostgreSQL Flexible Server lab (Azure)
 summary: An Azure Database for PostgreSQL Flexible Server with a starter database and an open dev firewall rule.
 description: |
@@ -10,13 +10,19 @@ description: |
   starter database, and a permissive firewall rule for local development.
 
   This recipe dry-runs locally against floci-az, which backs each logical server
-  with a real `postgres:17-alpine` container. After apply, open the Cosmos-style
-  PostgreSQL workspace tab (or call the floci-az `/connect` endpoint) to get the
-  host port and ready-to-paste connection strings. Local mode ships without TLS
-  (`sslmode=disable`); real Azure enforces TLS 1.2+.
+  with a real `postgres:17-alpine` container. The first local apply may take
+  1-2 minutes while Docker pulls that image; later runs reuse it. After apply,
+  open the PostgreSQL workspace tab (or call the floci-az `/connect` endpoint)
+  to get the host port and ready-to-paste connection strings. Local mode ships
+  without TLS (`sslmode=disable`); real Azure enforces TLS 1.2+.
 
   The same recipe applies to a real Azure subscription on the cloud profile, where
-  it provisions a managed flexible server.
+  it provisions a managed flexible server. It is not cloud-only.
+
+  If destroy or cancel leaves orphan data-plane containers, clean them with
+  Docker (names typically match `floci-az-pg-*`):
+  `docker ps -a --filter name=floci-az-pg-` then
+  `docker rm -f <container>`. Prefer a successful OpenTofu destroy first.
 providers:
   - azure
 tags:
@@ -85,7 +91,7 @@ outputs:
   - name: connection_hint
 lab:
   difficulty: beginner
-  estimatedMinutes: 25
+  estimatedMinutes: 15
   objectives:
     - Find the PostgreSQL flexible server provisioned by this deployment
     - Read connection details for local floci-az or cloud access
@@ -95,13 +101,15 @@ lab:
       body: |
         Open the PostgreSQL workspace tab and select the flexible server created
         by this deployment. Note the server name, location, and SKU shown in the
-        inspector.
+        inspector. Local first runs can take 1-2 minutes while the Postgres image
+        is pulled; that is expected.
       actions:
         - type: open-tab
           tab: azure-postgres
           focus: "{{ outputs.server_name }}"
       hints:
         - The server name matches the `server_name` deployment output.
+        - Estimated lab time is about 15 minutes including a cold image pull.
     - id: review-database
       title: Review the starter database
       body: |
@@ -110,11 +118,15 @@ lab:
         and a live `/connect` endpoint backed by a real Postgres container.
       hints:
         - Local mode uses `sslmode=disable`; Azure cloud enforces TLS 1.2+.
+        - Connection strings are available via the PostgreSQL tab after apply.
     - id: read-connection-hint
       title: Read the connection hint
       body: |
         Open the deployment outputs panel and read `connection_hint` alongside
         `server_fqdn` and `admin_username`. Use these values in your client or ORM
-        connection string.
+        connection string. Local FQDN is typically localhost; the host port comes
+        from floci-az `/connect` or the workspace tab.
       hints:
         - floci-az exposes host and port via the PostgreSQL tab after apply completes.
+        - Prefer destroy through CloudSprocket; if cancel leaves orphans, remove
+          containers named `floci-az-pg-*` with Docker.

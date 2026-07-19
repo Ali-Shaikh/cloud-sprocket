@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -213,6 +214,9 @@ func (e *Engine) WorkspaceDir(id string) string {
 // On Windows, a cancelled or hung apply often leaves terraform-provider-*.exe
 // running under the workspace, which locks provider binaries and makes the first
 // RemoveAll fail with "Access is denied". We stop those processes and retry.
+// Provider hardlinks into the shared plugin cache can report their image path
+// under plugin-cache rather than the workspace, so we also stop provider
+// processes there when the first unlock pass fails.
 func (e *Engine) RemoveWorkspace(id string) error {
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("deployment id is required")
@@ -227,10 +231,11 @@ func (e *Engine) RemoveWorkspace(id string) error {
 	if err := os.RemoveAll(dir); err == nil {
 		return nil
 	}
-	// Best-effort unlock: kill leftover tofu/provider processes started from this dir.
-	sysproc.StopProcessesUnder(dir)
+	// Best-effort unlock: workspace-scoped first; shared plugin cache only if
+	// later remove attempts still fail (Windows hardlink locks).
+	e.unlockWorkspaceProcesses(dir)
 	var last error
-	for attempt := 0; attempt < 6; attempt++ {
+	for attempt := 0; attempt < 8; attempt++ {
 		time.Sleep(time.Duration(100*(attempt+1)) * time.Millisecond)
 		last = os.RemoveAll(dir)
 		if last == nil {
@@ -239,18 +244,41 @@ func (e *Engine) RemoveWorkspace(id string) error {
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
 			return nil
 		}
-		sysproc.StopProcessesUnder(dir)
+		e.unlockWorkspaceProcesses(dir)
+		if attempt >= 1 {
+			e.unlockSharedProviderCache()
+		}
 	}
 	return fmt.Errorf("could not remove deployment workspace (a provider process may still be locking files): %w", last)
 }
 
 // ReleaseWorkspace stops leftover tofu/provider processes under a deployment
-// workspace so cancel/stop does not leave locked binaries behind.
+// workspace so cancel/stop does not leave locked binaries behind. Scoped to the
+// workspace only so concurrent deployments sharing the plugin cache are not killed.
 func (e *Engine) ReleaseWorkspace(id string) {
 	if strings.TrimSpace(id) == "" {
 		return
 	}
-	sysproc.StopProcessesUnder(e.WorkspaceDir(id))
+	e.unlockWorkspaceProcesses(e.WorkspaceDir(id))
+}
+
+// unlockWorkspaceProcesses stops processes that lock files under a single
+// deployment workspace (tofu + providers with that working tree).
+func (e *Engine) unlockWorkspaceProcesses(workspaceDir string) {
+	sysproc.StopProcessesUnder(workspaceDir)
+}
+
+// unlockSharedProviderCache stops terraform-provider-* processes whose image
+// path is under the app-wide plugin cache. Windows often hardlinks providers
+// from the cache, so workspace-scoped kill is not enough after Access is denied.
+// Only call after workspace unlock failed to free locks: a cache-wide sweep can
+// interrupt concurrent applies that reuse the same provider binary.
+func (e *Engine) unlockSharedProviderCache() {
+	if strings.TrimSpace(e.settings.ConfigDir) == "" || !filepath.IsAbs(e.settings.ConfigDir) {
+		return
+	}
+	cacheDir := filepath.Join(e.settings.ConfigDir, "plugin-cache")
+	sysproc.StopProviderProcessesUnder(cacheDir)
 }
 
 // Prepare materialises the recipe into the deployment workspace, writes the
@@ -620,7 +648,8 @@ func (e *Engine) runBuildSteps(ctx context.Context, deployment *Deployment, step
 		if onLine != nil {
 			onLine(fmt.Sprintf("> %s: %s (in %s)", step.Name, strings.Join(step.Command, " "), dir))
 		}
-		cmd := exec.CommandContext(ctx, step.Command[0], step.Command[1:]...)
+		argv0 := resolveBuildStepCommand(dir, step.Command[0])
+		cmd := exec.CommandContext(ctx, argv0, step.Command[1:]...)
 		cmd.Dir = dir
 		if len(extraEnv) > 0 {
 			cmd.Env = append(os.Environ(), extraEnv...)
@@ -642,6 +671,25 @@ func (e *Engine) runBuildSteps(ctx context.Context, deployment *Deployment, step
 		}
 	}
 	return nil
+}
+
+// resolveBuildStepCommand rewrites bare cwd-local scripts on Windows so CreateProcess
+// still finds them when NoDefaultCurrentDirectoryInExePath is set. PATH tools
+// (npm, docker, cmd) are left unchanged.
+func resolveBuildStepCommand(dir, name string) string {
+	if runtime.GOOS != "windows" {
+		return name
+	}
+	if name == "" || filepath.IsAbs(name) {
+		return name
+	}
+	if strings.ContainsAny(name, `/\`) || strings.HasPrefix(name, `.\`) || strings.HasPrefix(name, `./`) {
+		return name
+	}
+	if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+		return `.\` + name
+	}
+	return name
 }
 
 // buildLineWriter emits complete lines to onLine as bytes arrive, buffering any
@@ -696,11 +744,15 @@ func (e *Engine) env(deployment *Deployment) []string {
 
 // tofuPluginCacheEnv returns TF_PLUGIN_CACHE_DIR under the app config root.
 // The directory is created if missing so tofu can write into it immediately.
+// When ConfigDir is empty or not absolute, nothing is injected so tofu does not
+// resolve a relative plugin-cache path against the process working directory.
 func tofuPluginCacheEnv(settings config.Settings) []string {
-	cacheDir := filepath.Join(settings.ConfigDir, "plugin-cache")
-	if strings.TrimSpace(settings.ConfigDir) != "" {
-		_ = os.MkdirAll(cacheDir, 0o755)
+	configDir := strings.TrimSpace(settings.ConfigDir)
+	if configDir == "" || !filepath.IsAbs(configDir) {
+		return nil
 	}
+	cacheDir := filepath.Join(configDir, "plugin-cache")
+	_ = os.MkdirAll(cacheDir, 0o755)
 	return []string{"TF_PLUGIN_CACHE_DIR=" + cacheDir}
 }
 

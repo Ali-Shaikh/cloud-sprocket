@@ -3,6 +3,7 @@
 
 import { useCallback } from "react";
 
+import type { NavigationLocation } from "@/lib/navigation-location";
 import {
   type NavigateToResourceParams,
   planNavigateToResource,
@@ -29,7 +30,10 @@ type NavigateToResourceDeps = Pick<
   | "selectEC2Instance"
   | "selectAzureResourceGroup"
   | "selectAzureVirtualMachine"
->;
+> & {
+  /** Optional history/recents recorder (shell navigation controller). */
+  recordLocation?: (location: NavigationLocation) => void;
+};
 
 const HANDLER_RPC_MAP: Record<string, (deps: NavigateToResourceDeps, value: string) => void> = {
   "aws.lambda.selectFunction": (deps, value) => deps.selectLambdaFunction(value),
@@ -48,12 +52,24 @@ const HANDLER_RPC_MAP: Record<string, (deps: NavigateToResourceDeps, value: stri
   },
 };
 
+export type NavigateToResourceOptions = {
+  /** When false, skip history/recents (used by back/forward). Default true. */
+  record?: boolean;
+};
+
 export function useNavigateToResource(deps: NavigateToResourceDeps) {
   const navigateToResource = useCallback(
-    (params: NavigateToResourceParams) => {
+    (params: NavigateToResourceParams, options: NavigateToResourceOptions = {}) => {
       const plan = planNavigateToResource(params);
 
       deps.setActiveWorkspaceTabId(plan.tabId);
+      if (options.record !== false) {
+        deps.recordLocation?.({
+          tabId: plan.tabId,
+          label: params.resourceKey?.trim() || plan.tabId,
+          focus: params,
+        });
+      }
 
       if (plan.subPage) {
         // S3 and Azure Storage are single browsers; only Azure overview still has sub-pages.

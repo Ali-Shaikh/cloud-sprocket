@@ -48,3 +48,50 @@ func TestFormatRunErrorCancelled(t *testing.T) {
 		t.Fatalf("expected cancelled message, got %v", err)
 	}
 }
+
+func TestFormatRunErrorResourceTimeout(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
+	defer cancel()
+	<-ctx.Done()
+
+	output := []byte("azurerm_postgresql_flexible_server.main: Creating...\n")
+	err := FormatRunError(ctx, []string{"apply", "-auto-approve"}, output, context.DeadlineExceeded)
+	if err == nil {
+		t.Fatal("expected annotated error")
+	}
+	message := err.Error()
+	for _, want := range []string{"timed out", "PostgreSQL", "1-2 minutes", "Last OpenTofu output"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("error missing %q: %s", want, message)
+		}
+	}
+}
+
+func TestFormatRunErrorAccessDenied(t *testing.T) {
+	output := []byte("Error: unlink of .terraform/providers/... failed: Access is denied.\n")
+	err := FormatRunError(context.Background(), []string{"apply"}, output, errors.New("exit status 1"))
+	if err == nil {
+		t.Fatal("expected annotated error")
+	}
+	if !strings.Contains(err.Error(), "provider binary is still locked") {
+		t.Fatalf("expected lock guidance, got %s", err)
+	}
+}
+
+func TestFormatRunErrorTimeoutWithAccessDeniedPrefersLockGuidance(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
+	defer cancel()
+	<-ctx.Done()
+
+	output := []byte("azurerm_postgresql_flexible_server.main: Still creating...\nError: Access is denied.\n")
+	err := FormatRunError(ctx, []string{"apply", "-auto-approve"}, output, context.DeadlineExceeded)
+	if err == nil {
+		t.Fatal("expected annotated error")
+	}
+	message := err.Error()
+	for _, want := range []string{"timed out", "locked", "Remove"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("error missing %q: %s", want, message)
+		}
+	}
+}

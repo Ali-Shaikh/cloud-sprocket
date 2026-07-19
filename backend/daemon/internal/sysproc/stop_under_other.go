@@ -9,3 +9,8 @@ package sysproc
 func StopProcessesUnder(dir string) int {
 	return 0
 }
+
+// StopProviderProcessesUnder is a no-op on non-Windows platforms.
+func StopProviderProcessesUnder(dir string) int {
+	return 0
+}

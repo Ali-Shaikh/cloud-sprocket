@@ -36,6 +36,18 @@ type processEntry32 struct {
 // which locks provider binaries and blocks workspace deletion (Access is denied).
 // Returns the number of processes signalled.
 func StopProcessesUnder(dir string) int {
+	return stopProcessesUnder(dir, "")
+}
+
+// StopProviderProcessesUnder terminates terraform-provider-* processes whose
+// executable path is under dir. Used for the shared OpenTofu plugin cache:
+// Windows hardlinks can make QueryFullProcessImageName report the cache path
+// rather than the per-deployment .terraform/providers path.
+func StopProviderProcessesUnder(dir string) int {
+	return stopProcessesUnder(dir, "terraform-provider-")
+}
+
+func stopProcessesUnder(dir string, namePrefix string) int {
 	dir = filepath.Clean(strings.TrimSpace(dir))
 	if dir == "" || dir == "." || dir == string(filepath.Separator) {
 		return 0
@@ -48,6 +60,7 @@ func StopProcessesUnder(dir string) int {
 	if !strings.HasSuffix(absDir, string(filepath.Separator)) {
 		absDir += string(filepath.Separator)
 	}
+	prefix := strings.ToLower(strings.TrimSpace(namePrefix))
 
 	kernel32 := syscall.NewLazyDLL("kernel32.dll")
 	createSnap := kernel32.NewProc("CreateToolhelp32Snapshot")
@@ -75,11 +88,14 @@ func StopProcessesUnder(dir string) int {
 	for {
 		pid := entry.processID
 		if pid != 0 && pid != uint32(syscall.Getpid()) {
-			if path := processImagePath(openProcess, queryImage, closeHandle, pid); path != "" {
-				lower := strings.ToLower(filepath.Clean(path))
-				if strings.HasPrefix(lower, absDir) {
-					if killProcess(openProcess, terminate, closeHandle, pid) {
-						stopped++
+			exeName := strings.ToLower(syscall.UTF16ToString(entry.exeFile[:]))
+			if prefix == "" || strings.HasPrefix(exeName, prefix) {
+				if path := processImagePath(openProcess, queryImage, closeHandle, pid); path != "" {
+					lower := strings.ToLower(filepath.Clean(path))
+					if strings.HasPrefix(lower, absDir) {
+						if killProcess(openProcess, terminate, closeHandle, pid) {
+							stopped++
+						}
 					}
 				}
 			}

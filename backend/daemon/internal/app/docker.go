@@ -198,18 +198,27 @@ func (s *Service) handleDockerRuntimeGet() (any, error) {
 }
 
 func (s *Service) runtimeStatusForSnapshot() runtimeStatus {
-	// Hold the mutex across the miss path so concurrent snapshot builders
-	// single-flight one probe instead of stampeding Docker/emulator APIs.
-	// probeRuntimeStatus never re-enters runtimeStatusMu.
+	// Hold the mutex only for cache read/write so runtime.get can store its own
+	// probe without waiting out a cold Docker/emulator probe on this path.
+	// Concurrent snapshot builders may still race one extra probe under load;
+	// that is cheaper than blocking Local Runtime polls for multi-second probes.
 	s.runtimeStatusMu.Lock()
-	defer s.runtimeStatusMu.Unlock()
 	if s.runtimeStatusValue != nil && s.now().Sub(s.runtimeStatusAt) < runtimeStatusCacheTTL {
-		return *s.runtimeStatusValue
+		status := *s.runtimeStatusValue
+		s.runtimeStatusMu.Unlock()
+		return status
 	}
+	s.runtimeStatusMu.Unlock()
+
 	status := s.probeRuntimeStatus()
+
+	s.runtimeStatusMu.Lock()
+	// Another goroutine may have filled a fresher value while we probed; prefer
+	// the newest wall-clock sample we just took so callers see live state.
 	cached := status
 	s.runtimeStatusValue = &cached
 	s.runtimeStatusAt = s.now()
+	s.runtimeStatusMu.Unlock()
 	return status
 }
 

@@ -22,6 +22,7 @@ import type { Deployment, DeploymentOutput, RecipeManifest } from "@/types/backe
 import { formatDeploymentTargetLabel } from "@/lib/local-runtime-labels";
 
 import { AppHandoffCard, LogCommandsCard, PostApplyWarningCard, SuperpowersCard } from "./cards";
+import { deploymentOutputNavigateParams } from "@/lib/deployment-output-nav";
 import { deploymentOutputLink } from "./output-links";
 import { CopyButton, RevealButton, StatusBadge } from "./shared";
 import { VirtualizedLogPane } from "./components/virtualized-log-pane";
@@ -126,8 +127,35 @@ export function DeploymentDetail({
         </div>
       </div>
 
+      {isRunning && (
+        <Card className="border-sky-500/30 bg-sky-500/5 p-4 text-sm text-sky-950 dark:text-sky-100">
+          <p className="font-medium text-foreground">OpenTofu is still running</p>
+          <p className="mt-1 text-muted-foreground">
+            Quiet periods are normal while providers download or resources create. The log prints a
+            heartbeat about every 45 seconds when OpenTofu has not produced new output.
+          </p>
+          {deployment.local &&
+            (deployment.recipeId === "lab-postgres-flexible-azure" ||
+              deployment.recipeId.includes("postgres")) && (
+              <p className="mt-2 text-muted-foreground">
+                First local PostgreSQL apply may take 1-2 minutes while Docker pulls the Postgres
+                image. This is expected and is not cloud-only.
+              </p>
+            )}
+        </Card>
+      )}
+
       {deployment.error && (
-        <Card className="border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{deployment.error}</Card>
+        <Card className="border-destructive/30 bg-destructive/5 p-4">
+          <p className="text-sm font-medium text-destructive">Deployment failed</p>
+          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-destructive">
+            {deployment.error}
+          </pre>
+          <p className="mt-2 text-xs text-muted-foreground">
+            The message above includes the last OpenTofu output when available. Retry after fixing
+            network, runtime, or lock issues, or stop a stuck run first.
+          </p>
+        </Card>
       )}
 
       <PostApplyWarningCard deployment={deployment} busy={busy} onRetry={onRetryPostApply} />
@@ -270,7 +298,12 @@ export function DeploymentDetail({
           <p className="mb-3 text-sm font-medium text-foreground">Outputs</p>
           <div className="flex flex-col divide-y divide-border">
             {deployment.outputs.map((output) => (
-              <OutputRow key={output.name} output={output} deployment={deployment} />
+              <OutputRow
+                key={output.name}
+                output={output}
+                deployment={deployment}
+                navigateToResource={navigateToResource}
+              />
             ))}
           </div>
         </Card>
@@ -355,13 +388,25 @@ export function DeploymentDetail({
   );
 }
 
-function OutputRow({ output, deployment }: { output: DeploymentOutput; deployment: Deployment }) {
+function OutputRow({
+  output,
+  deployment,
+  navigateToResource,
+}: {
+  output: DeploymentOutput;
+  deployment: Deployment;
+  navigateToResource?: (params: NavigateToResourceParams) => void;
+}) {
   const [revealed, setRevealed] = useState(false);
   const value = String(output.value ?? "");
   const masked = Boolean(output.sensitive) && !revealed;
   const display = masked ? "••••••••" : value;
   const outputLink = !output.sensitive ? deploymentOutputLink(deployment, output) : null;
   const openUrl = outputLink?.url?.trim() ? outputLink.url : null;
+  const inventoryNav =
+    !output.sensitive && navigateToResource
+      ? deploymentOutputNavigateParams(deployment, output)
+      : null;
 
   return (
     <div className="flex flex-col gap-1.5 py-3 first:pt-0 last:pb-0">
@@ -387,6 +432,15 @@ function OutputRow({ output, deployment }: { output: DeploymentOutput; deploymen
         >
           <ExternalLink className="size-3" />
           {outputLink ? `${outputLink.label}: ${outputLink.url}` : "Open"}
+        </button>
+      )}
+      {inventoryNav && navigateToResource && (
+        <button
+          type="button"
+          onClick={() => navigateToResource(inventoryNav)}
+          className="inline-flex w-fit items-center gap-1 text-xs text-violet-500 hover:underline"
+        >
+          Open in inventory
         </button>
       )}
     </div>

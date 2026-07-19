@@ -119,6 +119,23 @@ func TestPlanRejectsAzureFunctionsOnFlociAz(t *testing.T) {
 	}
 }
 
+func TestTofuPluginCacheEnvRequiresAbsoluteConfigDir(t *testing.T) {
+	if env := tofuPluginCacheEnv(config.Settings{}); len(env) != 0 {
+		t.Fatalf("empty ConfigDir should skip cache env, got %v", env)
+	}
+	if env := tofuPluginCacheEnv(config.Settings{ConfigDir: "relative-config"}); len(env) != 0 {
+		t.Fatalf("relative ConfigDir should skip cache env, got %v", env)
+	}
+	abs := t.TempDir()
+	env := tofuPluginCacheEnv(config.Settings{ConfigDir: abs})
+	if !envContainsKey(env, "TF_PLUGIN_CACHE_DIR", "plugin-cache") {
+		t.Fatalf("absolute ConfigDir should set TF_PLUGIN_CACHE_DIR, got %v", env)
+	}
+	if !envContainsKey(env, "TF_PLUGIN_CACHE_DIR", abs) {
+		t.Fatalf("cache dir should be under ConfigDir, got %v", env)
+	}
+}
+
 func TestEnvLocalVsReal(t *testing.T) {
 	e := NewEngine(tofu.NewRunner("tofu"), config.Settings{
 		ConfigDir:          t.TempDir(),

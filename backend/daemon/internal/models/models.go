@@ -618,7 +618,8 @@ type AwsSecretsManagerSecret struct {
 	Description      string `json:"description,omitempty"`
 	LastChangedDate  string `json:"lastChangedDate,omitempty"`
 	LastAccessedDate string `json:"lastAccessedDate,omitempty"`
-	RotationEnabled  bool   `json:"rotationEnabled,omitempty"`
+	// Pointer so false (disabled) serialises distinctly from unknown/omitted.
+	RotationEnabled *bool `json:"rotationEnabled,omitempty"`
 }
 
 // AwsEcsCluster models an ECS cluster for inventory.
