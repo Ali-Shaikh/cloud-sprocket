@@ -11,24 +11,29 @@ Installers for every release are published on the
 
 ### Added
 
-- Navigation history with Alt+Left/Right and palette Back/Forward commands
-- Jump back in recents and pin favourite services (persisted in localStorage)
-- Command palette resource search over the loaded workspace inventory
-- Deploy rail badge for in-progress and failed jobs
-- Keyboard shortcuts: Ctrl/Cmd+1–9 for rail areas, [ / ] to cycle tabs, `?` cheatsheet
-- Copy as CLI for the selected inventory resource (palette action)
+- Navigation history with Alt+Left/Right and palette Back/Forward commands (#213)
+- Jump back in recents and pin favourite services, persisted in localStorage (#213)
+- Command palette resource search over the loaded workspace inventory (#213)
+- Deploy rail badge for in-progress and failed jobs (#213)
+- Keyboard shortcuts: Ctrl/Cmd+1–9 for rail areas, [ / ] to cycle tabs, `?`
+  cheatsheet (#213)
+- Copy as CLI for the selected inventory resource (palette action) (#213)
 - Deployment outputs can open matching inventory resources when the value is a
-  resource identifier
+  resource identifier (#213)
 
 ### Fixed
 
-- Failed `az extension list` results are no longer cached for the full success TTL
+- Failed `az extension list` results are no longer cached for the full success
+  TTL (#213)
 - Workspace snapshot runtime probes no longer hold `runtimeStatusMu` across
-  Docker/emulator I/O, so Local Runtime polls are not blocked behind cold snapshots
+  Docker/emulator I/O, so Local Runtime polls are not blocked behind cold
+  snapshots (#213)
 - Windows build steps resolve bare cwd-local scripts with `.\` when
-  `NoDefaultCurrentDirectoryInExePath` is set
+  `NoDefaultCurrentDirectoryInExePath` is set (#213)
 - OpenTofu progress and timeout heuristics match resource address lines
-  (`: Creating...`) more tightly, reducing false phase matches
+  (`: Creating...`) more tightly, reducing false phase matches (#213)
+- Alt+Left/Right navigation does not fire while typing in inputs or when the
+  command palette is open (#213)
 
 ## [0.9.9] - 2026-07-19
 
