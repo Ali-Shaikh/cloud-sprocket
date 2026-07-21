@@ -190,10 +190,10 @@ describe("DeploymentDetail what changed", () => {
       name: "Open aws_s3_bucket.site in inventory",
     });
     fireEvent.click(link);
+    // OpenTofu block labels are not inventory keys; open the tab only.
     expect(navigateToResource).toHaveBeenCalledWith({
       provider: "aws",
       tab: "s3",
-      resourceKey: "site",
     });
 
     // Unknown types stay plain text (no inventory button).
@@ -201,6 +201,41 @@ describe("DeploymentDetail what changed", () => {
       screen.queryByRole("button", { name: "Open aws_vpc.main in inventory" }),
     ).not.toBeInTheDocument();
     expect(screen.getByText("aws_vpc.main")).toBeInTheDocument();
+  });
+
+  it("uses deployment output values as inventory keys when the tab matches", () => {
+    const navigateToResource = vi.fn();
+    renderDetail(
+      blockedDeployment({
+        status: "applied",
+        policy: undefined,
+        outputs: [{ name: "website_bucket", value: "prod-assets" }],
+        plan: {
+          add: 1,
+          change: 0,
+          destroy: 0,
+          changes: [
+            {
+              address: "aws_s3_bucket.site",
+              type: "aws_s3_bucket",
+              name: "site",
+              actions: ["create"],
+            },
+          ],
+        },
+      }),
+      vi.fn(),
+      { navigateToResource },
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open aws_s3_bucket.site in inventory" }),
+    );
+    expect(navigateToResource).toHaveBeenCalledWith({
+      provider: "aws",
+      tab: "s3",
+      resourceKey: "prod-assets",
+    });
   });
 
   it("keeps the Plan title when still planned and still offers inventory links", () => {
@@ -238,7 +273,6 @@ describe("DeploymentDetail what changed", () => {
     expect(navigateToResource).toHaveBeenCalledWith({
       provider: "aws",
       tab: "lambda",
-      resourceKey: "api",
     });
   });
 });

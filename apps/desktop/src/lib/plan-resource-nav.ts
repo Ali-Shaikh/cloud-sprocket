@@ -113,14 +113,16 @@ function lookupMapping(provider: "aws" | "azure", resourceType: string): TypeMap
 }
 
 /**
- * True when the logical name looks like a URL or ARN that inventory can select.
- * Used to upgrade tab-only types (e.g. SQS) when the plan name is already a real key.
+ * True when a string looks like a real inventory selection key (URL, ARN, id
+ * shape), not an OpenTofu block label such as `site` for `aws_s3_bucket.site`.
  */
-function looksLikeInventoryKey(value: string, tab: string): boolean {
+export function looksLikeInventoryKey(value: string, tab: string): boolean {
   const v = value.trim();
   if (!v) return false;
   if (/^https?:\/\//i.test(v) || v.includes("://")) return true;
   if (v.startsWith("arn:")) return true;
+  // CloudWatch log groups are path-shaped
+  if (tab === "logs" && v.startsWith("/")) return true;
   // Route53 zone ids often look like Z1ABCDEF
   if (tab === "route53" && /^Z[A-Z0-9]+$/i.test(v)) return true;
   // EC2 instance ids
@@ -128,13 +130,28 @@ function looksLikeInventoryKey(value: string, tab: string): boolean {
   return false;
 }
 
+export type PlanResourceNavOptions = {
+  /**
+   * Real cloud identifiers already known for this deployment (typically from
+   * non-sensitive outputs). Only applied when the hint tab matches the change.
+   * Never use OpenTofu block labels as inventory keys unless they pass
+   * looksLikeInventoryKey.
+   */
+  outputHints?: ReadonlyArray<{ tab: string; resourceKey: string }>;
+};
+
 /**
  * Map an OpenTofu plan resource change to an inventory deep-link, or null when
  * the type is not navigable in the workspace inventory.
+ *
+ * OpenTofu `change.name` is the block label, not the cloud resource name, so it
+ * is never used as resourceKey unless it already looks like a real inventory
+ * key (ARN/URL/id). Prefer outputHints when outputs carry real identifiers.
  */
 export function planResourceNavigateParams(
   providerId: string,
   change: Pick<ResourceChange, "type" | "name" | "actions">,
+  options: PlanResourceNavOptions = {},
 ): NavigateToResourceParams | null {
   const provider = resolveProvider(providerId);
   const mapping = lookupMapping(provider, change.type);
@@ -146,11 +163,15 @@ export function planResourceNavigateParams(
     tab: mapping.tab,
   };
 
-  if (mapping.keyMode === "name" && name) {
-    params.resourceKey = name;
-  } else if (mapping.keyMode === "tabOnly" && name && looksLikeInventoryKey(name, mapping.tab)) {
+  const hint = options.outputHints?.find(
+    (h) => h.tab === mapping.tab && h.resourceKey.trim().length > 0,
+  );
+  if (hint) {
+    params.resourceKey = hint.resourceKey.trim();
+  } else if (name && looksLikeInventoryKey(name, mapping.tab)) {
     params.resourceKey = name;
   }
+  // else: open the tab only; do not select by OpenTofu logical name
 
   return params;
 }

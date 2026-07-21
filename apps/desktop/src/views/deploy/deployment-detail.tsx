@@ -78,6 +78,14 @@ export function DeploymentDetail({
   const policyOverridePhrase = `APPLY ${deployment.id}`;
   const policyOverrideValid = deployment.policy?.status === "blocked" && deployment.policy.override?.decisionDigest === deployment.policy.decisionDigest;
   const policyBlocksApply = canApply && !deployment.local && deployment.policy?.status === "blocked" && !policyOverrideValid;
+  // Real cloud identifiers from outputs (not OpenTofu block labels) for plan deep links.
+  const planOutputHints = (deployment.outputs ?? [])
+    .map((output) => {
+      const nav = deploymentOutputNavigateParams(deployment, output);
+      if (!nav?.resourceKey) return null;
+      return { tab: nav.tab, resourceKey: nav.resourceKey };
+    })
+    .filter((hint): hint is { tab: string; resourceKey: string } => hint !== null);
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-5 p-6">
@@ -185,7 +193,9 @@ export function DeploymentDetail({
           <div className="flex flex-col gap-1">
             {deployment.plan.changes.map((change) => {
               const destructive = isDestructivePlanChange(change.actions);
-              const inventoryNav = planResourceNavigateParams(deployment.providerId, change);
+              const inventoryNav = planResourceNavigateParams(deployment.providerId, change, {
+                outputHints: planOutputHints,
+              });
               const addressClass = destructive ? "text-destructive" : "text-foreground";
               const actionClass = destructive ? "text-destructive" : "text-muted-foreground";
               return (
