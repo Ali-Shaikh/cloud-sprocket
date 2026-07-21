@@ -1072,9 +1072,9 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setSecretsManagerActionStatus, setWorkspace]);
 
-  const selectLogsRegion = useCallback((region: string): void => {
+  const selectLogsRegion = useCallback((region: string): Promise<void> => {
     setLogsActionStatus(`Loading log groups for ${region}.`);
-    void requestWorkspaceSnapshot("aws.logs.selectRegion", { region })
+    return requestWorkspaceSnapshot("aws.logs.selectRegion", { region })
       .then((workspaceResult) => {
         startTransition(() => {
           setWorkspace(workspaceResult);
@@ -1094,11 +1094,11 @@ export function useAwsActions(params: UseAwsActionsParams) {
       setLogsActionStatus("Select a region before refreshing log groups.");
       return;
     }
-    selectLogsRegion(region);
+    void selectLogsRegion(region);
   }, [selectLogsRegion, setLogsActionStatus, workspace.selectedLogsRegion]);
 
-  const selectLogGroup = useCallback((logGroupName: string): void => {
-    void requestWorkspaceSnapshot("aws.logs.selectLogGroup", { logGroupName })
+  const selectLogGroup = useCallback((logGroupName: string): Promise<void> => {
+    return requestWorkspaceSnapshot("aws.logs.selectLogGroup", { logGroupName })
       .then((workspaceResult) => {
         startTransition(() => {
           setWorkspace(workspaceResult);
