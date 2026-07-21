@@ -23,6 +23,10 @@ import { formatDeploymentTargetLabel } from "@/lib/local-runtime-labels";
 
 import { AppHandoffCard, LogCommandsCard, PostApplyWarningCard, SuperpowersCard } from "./cards";
 import { deploymentOutputNavigateParams } from "@/lib/deployment-output-nav";
+import {
+  isDestructivePlanChange,
+  planResourceNavigateParams,
+} from "@/lib/plan-resource-nav";
 import { deploymentOutputLink } from "./output-links";
 import { CopyButton, RevealButton, StatusBadge } from "./shared";
 import { VirtualizedLogPane } from "./components/virtualized-log-pane";
@@ -171,24 +175,47 @@ export function DeploymentDetail({
       {deployment.plan && (
         <Card className="p-4">
           <div className="mb-3 flex items-center gap-4 text-sm">
-            <span className="font-medium text-foreground">Plan</span>
+            <span className="font-medium text-foreground">
+              {deployment.status === "applied" ? "What changed" : "Plan"}
+            </span>
             <span className="text-emerald-600 dark:text-emerald-400">+{deployment.plan.add} add</span>
             <span className="text-amber-600 dark:text-amber-400">~{deployment.plan.change} change</span>
             <span className="text-destructive">-{deployment.plan.destroy} destroy</span>
           </div>
           <div className="flex flex-col gap-1">
             {deployment.plan.changes.map((change) => {
-              const destructive = change.actions.some((a) => a === "delete" || (a === "create" && change.actions.includes("delete")));
+              const destructive = isDestructivePlanChange(change.actions);
+              const inventoryNav = planResourceNavigateParams(deployment.providerId, change);
+              const addressClass = destructive ? "text-destructive" : "text-foreground";
+              const actionClass = destructive ? "text-destructive" : "text-muted-foreground";
               return (
                 <div key={change.address} className="flex items-center gap-2 font-mono text-xs">
-                  <span className={destructive ? "text-destructive" : "text-muted-foreground"}>{change.actions.join(",")}</span>
-                  <span className={destructive ? "text-destructive" : "text-foreground"}>{change.address}</span>
+                  <span className={actionClass}>{change.actions.join(",")}</span>
+                  {inventoryNav && navigateToResource ? (
+                    <button
+                      type="button"
+                      onClick={() => navigateToResource(inventoryNav)}
+                      className={`inline-flex min-w-0 items-center gap-1 text-left hover:underline ${
+                        destructive ? "text-destructive" : "text-violet-500"
+                      }`}
+                      aria-label={`Open ${change.address} in inventory`}
+                      title="Open in inventory"
+                    >
+                      <span className="break-all">{change.address}</span>
+                    </button>
+                  ) : (
+                    <span className={addressClass}>{change.address}</span>
+                  )}
                 </div>
               );
             })}
           </div>
           {deployment.plan.destroy > 0 && (
-            <p className="mt-2 text-xs text-destructive">Destructive changes detected. Review carefully before confirming apply.</p>
+            <p className="mt-2 text-xs text-destructive">
+              {deployment.status === "applied"
+                ? "This plan included destructive changes."
+                : "Destructive changes detected. Review carefully before confirming apply."}
+            </p>
           )}
         </Card>
       )}

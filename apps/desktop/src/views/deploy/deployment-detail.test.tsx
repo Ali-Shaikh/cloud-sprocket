@@ -4,6 +4,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import type { NavigateToResourceParams } from "@/lib/navigate-to-resource";
 import type { Deployment } from "@/types/backend";
 
 import { DeploymentDetail } from "./deployment-detail";
@@ -41,7 +42,13 @@ function blockedDeployment(overrides: Partial<Deployment> = {}): Deployment {
   };
 }
 
-function renderDetail(deployment: Deployment, onApply = vi.fn()) {
+function renderDetail(
+  deployment: Deployment,
+  onApply = vi.fn(),
+  options: {
+    navigateToResource?: (params: NavigateToResourceParams) => void;
+  } = {},
+) {
   render(
     <DeploymentDetail
       deployment={deployment}
@@ -54,6 +61,7 @@ function renderDetail(deployment: Deployment, onApply = vi.fn()) {
       onCancel={vi.fn()}
       onDelete={vi.fn()}
       onRetryPostApply={vi.fn()}
+      navigateToResource={options.navigateToResource}
     />,
   );
   return onApply;
@@ -141,5 +149,96 @@ describe("DeploymentDetail policy guardrails", () => {
     expect(
       screen.queryByLabelText("Policy override confirmation"),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("DeploymentDetail what changed", () => {
+  it("titles the plan section What changed after apply and links mappable resources", () => {
+    const navigateToResource = vi.fn();
+    renderDetail(
+      blockedDeployment({
+        status: "applied",
+        policy: undefined,
+        plan: {
+          add: 1,
+          change: 0,
+          destroy: 1,
+          changes: [
+            {
+              address: "aws_s3_bucket.site",
+              type: "aws_s3_bucket",
+              name: "site",
+              actions: ["create"],
+            },
+            {
+              address: "aws_vpc.main",
+              type: "aws_vpc",
+              name: "main",
+              actions: ["delete"],
+            },
+          ],
+        },
+      }),
+      vi.fn(),
+      { navigateToResource },
+    );
+
+    expect(screen.getByText("What changed")).toBeInTheDocument();
+    expect(screen.queryByText("Plan")).not.toBeInTheDocument();
+
+    const link = screen.getByRole("button", {
+      name: "Open aws_s3_bucket.site in inventory",
+    });
+    fireEvent.click(link);
+    expect(navigateToResource).toHaveBeenCalledWith({
+      provider: "aws",
+      tab: "s3",
+      resourceKey: "site",
+    });
+
+    // Unknown types stay plain text (no inventory button).
+    expect(
+      screen.queryByRole("button", { name: "Open aws_vpc.main in inventory" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("aws_vpc.main")).toBeInTheDocument();
+  });
+
+  it("keeps the Plan title when still planned and still offers inventory links", () => {
+    const navigateToResource = vi.fn();
+    renderDetail(
+      blockedDeployment({
+        status: "planned",
+        policy: undefined,
+        plan: {
+          add: 1,
+          change: 0,
+          destroy: 0,
+          changes: [
+            {
+              address: "aws_lambda_function.api",
+              type: "aws_lambda_function",
+              name: "api",
+              actions: ["create"],
+            },
+          ],
+        },
+      }),
+      vi.fn(),
+      { navigateToResource },
+    );
+
+    expect(screen.getByText("Plan")).toBeInTheDocument();
+    expect(screen.queryByText("What changed")).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open aws_lambda_function.api in inventory",
+      }),
+    );
+    expect(navigateToResource).toHaveBeenCalledWith({
+      provider: "aws",
+      tab: "lambda",
+      resourceKey: "api",
+    });
   });
 });
