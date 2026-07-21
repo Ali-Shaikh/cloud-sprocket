@@ -35,14 +35,14 @@ const AWS_TYPE_MAP: Record<string, TypeMapping> = {
   aws_sns_topic_policy: { tab: "sns", keyMode: "tabOnly" },
   aws_cloudwatch_log_group: { tab: "logs", keyMode: "name" },
   aws_cloudwatch_log_stream: { tab: "logs", keyMode: "tabOnly" },
-  aws_cloudwatch_metric_alarm: { tab: "logs", keyMode: "tabOnly" },
+  // Metric alarms are not a Logs inventory resource; omit until a dedicated surface exists.
   aws_secretsmanager_secret: { tab: "secrets", keyMode: "name" },
   aws_secretsmanager_secret_version: { tab: "secrets", keyMode: "tabOnly" },
   aws_iam_role: { tab: "iam", keyMode: "name" },
   aws_iam_role_policy: { tab: "iam", keyMode: "tabOnly" },
   aws_iam_role_policy_attachment: { tab: "iam", keyMode: "tabOnly" },
   aws_iam_policy: { tab: "iam", keyMode: "tabOnly" },
-  aws_iam_user: { tab: "iam", keyMode: "name" },
+  // IAM inventory selects roles only; users would false-select against roleName.
   aws_iam_instance_profile: { tab: "iam", keyMode: "tabOnly" },
   aws_db_instance: { tab: "rds", keyMode: "name" },
   aws_rds_cluster: { tab: "rds", keyMode: "name" },

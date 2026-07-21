@@ -173,6 +173,23 @@ describe("planResourceNavigateParams", () => {
     });
   });
 
+  it("returns null for types without a matching inventory surface", () => {
+    expect(
+      planResourceNavigateParams("aws", {
+        type: "aws_cloudwatch_metric_alarm",
+        name: "cpu-high",
+        actions: ["create"],
+      }),
+    ).toBeNull();
+    expect(
+      planResourceNavigateParams("aws", {
+        type: "aws_iam_user",
+        name: "deployer",
+        actions: ["create"],
+      }),
+    ).toBeNull();
+  });
+
   it("returns null for unknown resource types", () => {
     expect(
       planResourceNavigateParams("aws", {
