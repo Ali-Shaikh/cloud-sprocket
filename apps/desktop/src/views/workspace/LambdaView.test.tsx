@@ -170,6 +170,7 @@ const workspaceFixture: WorkspaceSnapshot = {
       memorySize: 512,
       state: "Active",
       handler: "index.handler",
+      logGroup: "/aws/lambda/process-order",
       recentLogs: ["2026-06-15 10:05:12 START RequestId: abc123"],
     },
   ],
@@ -179,13 +180,16 @@ function renderLambdaView(overrides?: {
   invokeResult?: AwsLambdaInvokeResult | null;
   invokeInFlight?: boolean;
   onCreate?: (input: AwsLambdaCreateInput) => void;
+  navigateToResource?: (params: { provider: "aws" | "azure"; tab: string; resourceKey?: string }) => void;
+  workspace?: WorkspaceSnapshot;
 }) {
   const onInvoke = vi.fn();
   const onCreate = overrides?.onCreate ?? vi.fn<(input: AwsLambdaCreateInput) => void>();
+  const navigateToResource = overrides?.navigateToResource;
   render(
     <ThemeProvider>
       <LambdaView
-        workspace={workspaceFixture}
+        workspace={overrides?.workspace ?? workspaceFixture}
         actionStatus="Ready to invoke."
         invokeResult={overrides?.invokeResult ?? null}
         invokeInFlight={overrides?.invokeInFlight ?? false}
@@ -194,10 +198,11 @@ function renderLambdaView(overrides?: {
         onSelectFunction={vi.fn()}
         onInvoke={onInvoke}
         onCreate={onCreate}
+        navigateToResource={navigateToResource}
       />
     </ThemeProvider>,
   );
-  return { onInvoke, onCreate };
+  return { onInvoke, onCreate, navigateToResource };
 }
 
 describe("LambdaView", () => {
@@ -208,6 +213,51 @@ describe("LambdaView", () => {
     expect(screen.getByLabelText("Lambda function details")).toBeInTheDocument();
     expect(screen.getByText("Function")).toBeInTheDocument();
     expect(screen.getByText("Copy actions")).toBeInTheDocument();
+  });
+
+  it("opens Logs with region context via inspector cross-link when navigate is wired", () => {
+    mockMatchMedia(true);
+    const navigateToResource = vi.fn();
+    renderLambdaView({ navigateToResource });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open in Logs" }));
+
+    expect(navigateToResource).toHaveBeenCalledWith({
+      provider: "aws",
+      tab: "logs",
+      resourceKey: "/aws/lambda/process-order",
+      context: { logsRegion: "us-east-1" },
+    });
+  });
+
+  it("hides the Logs cross-link when logGroup is absent and the group is not in inventory", () => {
+    mockMatchMedia(true);
+    const navigateToResource = vi.fn();
+    renderLambdaView({
+      navigateToResource,
+      workspace: {
+        ...workspaceFixture,
+        lambdaFunctions: [
+          {
+            functionName: "process-order",
+            runtime: "nodejs20.x",
+            memorySize: 512,
+            state: "Active",
+            handler: "index.handler",
+          },
+        ],
+        logGroups: [],
+      },
+    });
+
+    expect(screen.queryByRole("button", { name: "Open in Logs" })).not.toBeInTheDocument();
+  });
+
+  it("hides inspector cross-links when navigate is not provided", () => {
+    mockMatchMedia(true);
+    renderLambdaView();
+
+    expect(screen.queryByRole("button", { name: "Open in Logs" })).not.toBeInTheDocument();
   });
 
   it("renders inventory, logs, and confirms invoke", async () => {

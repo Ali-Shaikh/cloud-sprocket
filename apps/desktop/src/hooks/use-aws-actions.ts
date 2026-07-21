@@ -1072,9 +1072,9 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setSecretsManagerActionStatus, setWorkspace]);
 
-  const selectLogsRegion = useCallback((region: string): void => {
+  const selectLogsRegion = useCallback((region: string): Promise<void> => {
     setLogsActionStatus(`Loading log groups for ${region}.`);
-    void requestWorkspaceSnapshot("aws.logs.selectRegion", { region })
+    return requestWorkspaceSnapshot("aws.logs.selectRegion", { region })
       .then((workspaceResult) => {
         startTransition(() => {
           setWorkspace(workspaceResult);
@@ -1085,6 +1085,9 @@ export function useAwsActions(params: UseAwsActionsParams) {
       })
       .catch((error: unknown) => {
         setLogsActionStatus(error instanceof Error ? error.message : String(error));
+        // Preserve rejection so sequential navigators do not select a log group
+        // against the previous Logs region after a failed region switch.
+        throw error;
       });
   }, [setLogsActionStatus, setWorkspace]);
 
@@ -1094,11 +1097,13 @@ export function useAwsActions(params: UseAwsActionsParams) {
       setLogsActionStatus("Select a region before refreshing log groups.");
       return;
     }
-    selectLogsRegion(region);
+    void selectLogsRegion(region).catch(() => {
+      // Status already set in selectLogsRegion.
+    });
   }, [selectLogsRegion, setLogsActionStatus, workspace.selectedLogsRegion]);
 
-  const selectLogGroup = useCallback((logGroupName: string): void => {
-    void requestWorkspaceSnapshot("aws.logs.selectLogGroup", { logGroupName })
+  const selectLogGroup = useCallback((logGroupName: string): Promise<void> => {
+    return requestWorkspaceSnapshot("aws.logs.selectLogGroup", { logGroupName })
       .then((workspaceResult) => {
         startTransition(() => {
           setWorkspace(workspaceResult);
@@ -1107,6 +1112,7 @@ export function useAwsActions(params: UseAwsActionsParams) {
       })
       .catch((error: unknown) => {
         setLogsActionStatus(error instanceof Error ? error.message : String(error));
+        throw error;
       });
   }, [setLogsActionStatus, setWorkspace]);
 

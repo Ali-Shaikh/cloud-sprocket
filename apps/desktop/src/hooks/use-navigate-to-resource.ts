@@ -26,6 +26,7 @@ type NavigateToResourceDeps = Pick<
   | "selectSNSTopic"
   | "selectRDSInstance"
   | "selectLogGroup"
+  | "selectLogsRegion"
   | "selectIAMRole"
   | "selectEC2Instance"
   | "selectAzureResourceGroup"
@@ -35,12 +36,19 @@ type NavigateToResourceDeps = Pick<
   recordLocation?: (location: NavigationLocation) => void;
 };
 
-const HANDLER_RPC_MAP: Record<string, (deps: NavigateToResourceDeps, value: string) => void> = {
+type SelectionHandler = (
+  deps: NavigateToResourceDeps,
+  value: string,
+) => void | Promise<void>;
+
+const HANDLER_RPC_MAP: Record<string, SelectionHandler> = {
   "aws.lambda.selectFunction": (deps, value) => deps.selectLambdaFunction(value),
   "aws.dynamodb.selectTable": (deps, value) => deps.selectDynamoDBTable(value),
   "aws.sqs.selectQueue": (deps, value) => deps.selectSQSQueue(value),
   "aws.sns.selectTopic": (deps, value) => deps.selectSNSTopic(value),
   "aws.rds.selectInstance": (deps, value) => deps.selectRDSInstance(value),
+  // Region must finish before log-group selection (see serialize Logs selections).
+  "aws.logs.selectRegion": (deps, value) => deps.selectLogsRegion(value),
   "aws.logs.selectLogGroup": (deps, value) => deps.selectLogGroup(value),
   "aws.iam.selectRole": (deps, value) => deps.selectIAMRole(value),
   "aws.ec2.selectInstance": (deps, value) => deps.selectEC2Instance(value),
@@ -78,44 +86,53 @@ export function useNavigateToResource(deps: NavigateToResourceDeps) {
         }
       }
 
-      for (const selection of plan.selections) {
-        const paramValue = Object.values(selection.params)[0];
-        if (typeof paramValue !== "string" || !paramValue) {
-          continue;
+      // Run selections in order so region RPCs complete before resource selection
+      // (e.g. Logs region then log group). Fire-and-forget would race. Stop the
+      // chain if a selection fails so later steps do not run against stale state.
+      void (async () => {
+        try {
+          for (const selection of plan.selections) {
+            const paramValue = Object.values(selection.params)[0];
+            if (typeof paramValue !== "string" || !paramValue) {
+              continue;
+            }
+
+            const handler = HANDLER_RPC_MAP[selection.method];
+            if (handler) {
+              await Promise.resolve(handler(deps, paramValue));
+              continue;
+            }
+
+            if (selection.method === "aws.s3.selectBucket") {
+              await Promise.resolve(
+                deps.mutateWorkspaceSelection(selection.method, selection.params, {
+                  merge: mergeAwsS3Selection,
+                  onOptimistic: () => {
+                    deps.setWorkspace((current) =>
+                      normaliseWorkspaceSnapshot({
+                        ...current,
+                        selectedS3BucketName: paramValue,
+                        selectedS3ObjectKey: undefined,
+                      }),
+                    );
+                  },
+                }),
+              );
+              continue;
+            }
+
+            await Promise.resolve(
+              deps.mutateWorkspaceSelection(selection.method, selection.params),
+            );
+          }
+
+          if (plan.uiFlags?.openLambdaCreate) {
+            deps.setLambdaCreateFormOpen(true);
+          }
+        } catch {
+          // Handlers surface status to the user; do not continue the chain.
         }
-
-        const handler = HANDLER_RPC_MAP[selection.method];
-        if (handler) {
-          handler(deps, paramValue);
-          continue;
-        }
-
-        if (selection.method === "aws.s3.selectBucket") {
-          void deps.mutateWorkspaceSelection(
-            selection.method,
-            selection.params,
-            {
-              merge: mergeAwsS3Selection,
-              onOptimistic: () => {
-                deps.setWorkspace((current) =>
-                  normaliseWorkspaceSnapshot({
-                    ...current,
-                    selectedS3BucketName: paramValue,
-                    selectedS3ObjectKey: undefined,
-                  }),
-                );
-              },
-            },
-          );
-          continue;
-        }
-
-        void deps.mutateWorkspaceSelection(selection.method, selection.params);
-      }
-
-      if (plan.uiFlags?.openLambdaCreate) {
-        deps.setLambdaCreateFormOpen(true);
-      }
+      })();
     },
     [deps],
   );
