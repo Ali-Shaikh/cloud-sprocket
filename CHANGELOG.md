@@ -9,6 +9,8 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.10] - 2026-07-22
+
 ### Added
 
 - Navigation history with Alt+Left/Right and palette Back/Forward commands (#213)
@@ -31,6 +33,8 @@ Installers for every release are published on the
   `LOCALSTACK_AUTH_TOKEN` and the Docker socket mount, fails fast when LocalStack
   exits for a missing 2026 licence, and times out `compose up` instead of
   hanging on silent preflight heartbeats
+- Deploy Stop cancels status immediately and notifies the UI; Stop also works when
+  Docker Compose preflight is hanging
 - Failed `az extension list` results are no longer cached for the full success
   TTL (#213)
 - Workspace snapshot runtime probes no longer hold `runtimeStatusMu` across
@@ -42,6 +46,7 @@ Installers for every release are published on the
   (`: Creating...`) more tightly, reducing false phase matches (#213)
 - Alt+Left/Right navigation does not fire while typing in inputs or when the
   command palette is open (#213)
+- `golang.org/x/text` bumped to v0.39.0 for GO-2026-5970 (#245)
 
 ## [0.9.9] - 2026-07-19
 
@@ -1006,7 +1011,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.9...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.10...HEAD
+[0.9.10]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.9...v0.9.10
 [0.9.9]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.8...v0.9.9
 [0.9.8]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.7...v0.9.8
 [0.9.7]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.6...v0.9.7
