@@ -20,6 +20,8 @@ Installers for every release are published on the
 - Copy as CLI for the selected inventory resource (palette action) (#213)
 - Deployment outputs can open matching inventory resources when the value is a
   resource identifier (#213)
+- Applied and planned deployments show resource changes with inventory deep links
+  where the OpenTofu type maps to a workspace tab (#245)
 
 ### Fixed
 
