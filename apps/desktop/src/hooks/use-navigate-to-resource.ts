@@ -26,6 +26,7 @@ type NavigateToResourceDeps = Pick<
   | "selectSNSTopic"
   | "selectRDSInstance"
   | "selectLogGroup"
+  | "selectLogsRegion"
   | "selectIAMRole"
   | "selectEC2Instance"
   | "selectAzureResourceGroup"
@@ -41,6 +42,7 @@ const HANDLER_RPC_MAP: Record<string, (deps: NavigateToResourceDeps, value: stri
   "aws.sqs.selectQueue": (deps, value) => deps.selectSQSQueue(value),
   "aws.sns.selectTopic": (deps, value) => deps.selectSNSTopic(value),
   "aws.rds.selectInstance": (deps, value) => deps.selectRDSInstance(value),
+  "aws.logs.selectRegion": (deps, value) => deps.selectLogsRegion(value),
   "aws.logs.selectLogGroup": (deps, value) => deps.selectLogGroup(value),
   "aws.iam.selectRole": (deps, value) => deps.selectIAMRole(value),
   "aws.ec2.selectInstance": (deps, value) => deps.selectEC2Instance(value),

@@ -29,16 +29,23 @@ describe("resolveLambdaLogGroupName", () => {
     ).toBe("/custom/path/process-order");
   });
 
-  it("falls back to the conventional path when logGroup is missing", () => {
-    expect(resolveLambdaLogGroupName({ functionName: "process-order" })).toBe(
-      "/aws/lambda/process-order",
-    );
+  it("does not invent a conventional path when the group is unknown", () => {
+    expect(resolveLambdaLogGroupName({ functionName: "process-order" })).toBeUndefined();
+  });
+
+  it("uses the conventional path when it appears in known inventory names", () => {
+    expect(
+      resolveLambdaLogGroupName(
+        { functionName: "process-order" },
+        { knownLogGroupNames: ["/aws/lambda/process-order", "/other"] },
+      ),
+    ).toBe("/aws/lambda/process-order");
   });
 
   it("treats blank logGroup as missing", () => {
     expect(
       resolveLambdaLogGroupName({ functionName: "process-order", logGroup: "   " }),
-    ).toBe("/aws/lambda/process-order");
+    ).toBeUndefined();
   });
 
   it("returns undefined when there is no function name and no log group", () => {
@@ -47,12 +54,15 @@ describe("resolveLambdaLogGroupName", () => {
 });
 
 describe("lambdaCrossLinks", () => {
-  it("links to the Logs tab with the resolved log group name", () => {
+  it("links to Logs with region context when the backend set logGroup", () => {
     expect(
-      lambdaCrossLinks({
-        functionName: "process-order",
-        logGroup: "/aws/lambda/process-order",
-      }),
+      lambdaCrossLinks(
+        {
+          functionName: "process-order",
+          logGroup: "/aws/lambda/process-order",
+        },
+        { region: "eu-west-1" },
+      ),
     ).toEqual([
       {
         id: "logs",
@@ -61,13 +71,23 @@ describe("lambdaCrossLinks", () => {
           provider: "aws",
           tab: "logs",
           resourceKey: "/aws/lambda/process-order",
+          context: { logsRegion: "eu-west-1" },
         },
       },
     ]);
   });
 
-  it("uses the conventional log group when the field is absent", () => {
-    expect(lambdaCrossLinks({ functionName: "checkout" })).toEqual([
+  it("returns no link when logGroup is absent and the conventional path is unknown", () => {
+    expect(lambdaCrossLinks({ functionName: "checkout" })).toEqual([]);
+  });
+
+  it("uses the conventional group only when known in inventory", () => {
+    expect(
+      lambdaCrossLinks(
+        { functionName: "checkout" },
+        { knownLogGroupNames: ["/aws/lambda/checkout"], region: "us-east-1" },
+      ),
+    ).toEqual([
       {
         id: "logs",
         label: "Open in Logs",
@@ -75,6 +95,7 @@ describe("lambdaCrossLinks", () => {
           provider: "aws",
           tab: "logs",
           resourceKey: "/aws/lambda/checkout",
+          context: { logsRegion: "us-east-1" },
         },
       },
     ]);

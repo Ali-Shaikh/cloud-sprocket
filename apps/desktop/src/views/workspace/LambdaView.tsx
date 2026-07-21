@@ -522,7 +522,10 @@ export default function LambdaView({
 
       {navigateToResource ? (
         <ResourceCrossLinks
-          links={lambdaCrossLinks(selectedFunction)}
+          links={lambdaCrossLinks(selectedFunction, {
+            region: workspace.selectedLambdaRegion,
+            knownLogGroupNames: (workspace.logGroups ?? []).map((g) => g.logGroupName),
+          })}
           onNavigate={navigateToResource}
         />
       ) : null}

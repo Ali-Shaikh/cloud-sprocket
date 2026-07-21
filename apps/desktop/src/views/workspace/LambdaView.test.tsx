@@ -170,6 +170,7 @@ const workspaceFixture: WorkspaceSnapshot = {
       memorySize: 512,
       state: "Active",
       handler: "index.handler",
+      logGroup: "/aws/lambda/process-order",
       recentLogs: ["2026-06-15 10:05:12 START RequestId: abc123"],
     },
   ],
@@ -214,7 +215,7 @@ describe("LambdaView", () => {
     expect(screen.getByText("Copy actions")).toBeInTheDocument();
   });
 
-  it("opens the conventional Logs group via inspector cross-link when navigate is wired", () => {
+  it("opens Logs with region context via inspector cross-link when navigate is wired", () => {
     mockMatchMedia(true);
     const navigateToResource = vi.fn();
     renderLambdaView({ navigateToResource });
@@ -225,7 +226,31 @@ describe("LambdaView", () => {
       provider: "aws",
       tab: "logs",
       resourceKey: "/aws/lambda/process-order",
+      context: { logsRegion: "us-east-1" },
     });
+  });
+
+  it("hides the Logs cross-link when logGroup is absent and the group is not in inventory", () => {
+    mockMatchMedia(true);
+    const navigateToResource = vi.fn();
+    renderLambdaView({
+      navigateToResource,
+      workspace: {
+        ...workspaceFixture,
+        lambdaFunctions: [
+          {
+            functionName: "process-order",
+            runtime: "nodejs20.x",
+            memorySize: 512,
+            state: "Active",
+            handler: "index.handler",
+          },
+        ],
+        logGroups: [],
+      },
+    });
+
+    expect(screen.queryByRole("button", { name: "Open in Logs" })).not.toBeInTheDocument();
   });
 
   it("hides inspector cross-links when navigate is not provided", () => {

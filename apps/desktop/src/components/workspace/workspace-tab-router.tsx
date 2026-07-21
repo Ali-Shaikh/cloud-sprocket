@@ -223,6 +223,7 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     selectSNSTopic,
     selectRDSInstance,
     selectLogGroup,
+    selectLogsRegion,
     selectIAMRole,
     selectEC2Instance,
     selectAzureResourceGroup,

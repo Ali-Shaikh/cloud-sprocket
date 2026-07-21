@@ -107,6 +107,27 @@ describe("planNavigateToResource", () => {
 
     expect(plan.subPage).toEqual({ tab: "s3", pageId: "objects" });
   });
+
+  it("selects Logs region before log group when logsRegion context is set", () => {
+    const plan = planNavigateToResource({
+      provider: "aws",
+      tab: "logs",
+      resourceKey: "/aws/lambda/api",
+      context: { logsRegion: "eu-west-1" },
+    });
+
+    expect(plan.tabId).toBe("logs");
+    expect(plan.selections).toEqual([
+      {
+        method: "aws.logs.selectRegion",
+        params: { region: "eu-west-1" },
+      },
+      {
+        method: "aws.logs.selectLogGroup",
+        params: { logGroupName: "/aws/lambda/api" },
+      },
+    ]);
+  });
 });
 
 describe("resolveOverviewProvider", () => {
