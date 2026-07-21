@@ -179,13 +179,16 @@ function renderLambdaView(overrides?: {
   invokeResult?: AwsLambdaInvokeResult | null;
   invokeInFlight?: boolean;
   onCreate?: (input: AwsLambdaCreateInput) => void;
+  navigateToResource?: (params: { provider: "aws" | "azure"; tab: string; resourceKey?: string }) => void;
+  workspace?: WorkspaceSnapshot;
 }) {
   const onInvoke = vi.fn();
   const onCreate = overrides?.onCreate ?? vi.fn<(input: AwsLambdaCreateInput) => void>();
+  const navigateToResource = overrides?.navigateToResource;
   render(
     <ThemeProvider>
       <LambdaView
-        workspace={workspaceFixture}
+        workspace={overrides?.workspace ?? workspaceFixture}
         actionStatus="Ready to invoke."
         invokeResult={overrides?.invokeResult ?? null}
         invokeInFlight={overrides?.invokeInFlight ?? false}
@@ -194,10 +197,11 @@ function renderLambdaView(overrides?: {
         onSelectFunction={vi.fn()}
         onInvoke={onInvoke}
         onCreate={onCreate}
+        navigateToResource={navigateToResource}
       />
     </ThemeProvider>,
   );
-  return { onInvoke, onCreate };
+  return { onInvoke, onCreate, navigateToResource };
 }
 
 describe("LambdaView", () => {
@@ -208,6 +212,27 @@ describe("LambdaView", () => {
     expect(screen.getByLabelText("Lambda function details")).toBeInTheDocument();
     expect(screen.getByText("Function")).toBeInTheDocument();
     expect(screen.getByText("Copy actions")).toBeInTheDocument();
+  });
+
+  it("opens the conventional Logs group via inspector cross-link when navigate is wired", () => {
+    mockMatchMedia(true);
+    const navigateToResource = vi.fn();
+    renderLambdaView({ navigateToResource });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open in Logs" }));
+
+    expect(navigateToResource).toHaveBeenCalledWith({
+      provider: "aws",
+      tab: "logs",
+      resourceKey: "/aws/lambda/process-order",
+    });
+  });
+
+  it("hides inspector cross-links when navigate is not provided", () => {
+    mockMatchMedia(true);
+    renderLambdaView();
+
+    expect(screen.queryByRole("button", { name: "Open in Logs" })).not.toBeInTheDocument();
   });
 
   it("renders inventory, logs, and confirms invoke", async () => {

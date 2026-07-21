@@ -397,6 +397,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onDeleteFunction={deleteLambdaFunction}
       openCreateForm={lambdaCreateFormOpen}
       onCreateFormOpenChange={setLambdaCreateFormOpen}
+      navigateToResource={props.navigateToResource}
     />
   ) : session.isLocked && activeWorkspaceTabId === "dynamodb" ? (
     <DynamoDBView

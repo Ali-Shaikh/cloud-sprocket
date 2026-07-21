@@ -22,6 +22,8 @@ Installers for every release are published on the
   resource identifier (#213)
 - Applied and planned deployments show resource changes with inventory deep links
   where the OpenTofu type maps to a workspace tab (#245)
+- Lambda inspector cross-link to open the matching CloudWatch Logs group in
+  inventory when the group is known (#246)
 
 ### Fixed
 

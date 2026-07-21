@@ -306,7 +306,7 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
   }
 
   if (session.isLocked && AWS_TAB_IDS.has(activeWorkspaceTabId)) {
-    return <AwsWorkspaceTabs {...props} />;
+    return <AwsWorkspaceTabs {...props} navigateToResource={navigateToResource} />;
   }
 
   if (session.isLocked && ["azure-overview","azure-resource-groups","azure-vms","azure-storage","azure-app-service","azure-tools","azure-log-analytics","azure-waf","azure-front-door","azure-functions","azure-key-vault","azure-cosmos","azure-postgres","azure-queues","azure-entra"].includes(activeWorkspaceTabId)) {

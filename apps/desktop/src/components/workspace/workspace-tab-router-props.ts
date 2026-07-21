@@ -265,5 +265,8 @@ export type WorkspaceTabRouterProps = {
   >;
 };
 
-export type AwsWorkspaceTabsProps = WorkspaceTabRouterProps;
+export type AwsWorkspaceTabsProps = WorkspaceTabRouterProps & {
+  /** Deep-link navigator for inventory inspector cross-links. */
+  navigateToResource?: (params: NavigateToResourceParams) => void;
+};
 export type AzureWorkspaceTabsProps = WorkspaceTabRouterProps;

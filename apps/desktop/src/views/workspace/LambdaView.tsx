@@ -34,11 +34,14 @@ import {
   ResourceInspectorPanel,
   ResourceInventoryShell,
 } from "@/components/inventory/resource-inspector";
+import { ResourceCrossLinks } from "@/components/inventory/resource-cross-links";
 import { ResourceTable } from "@/components/inventory/resource-table";
 import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
 import { DetailFieldList } from "./detail-fields";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
+import type { NavigateToResourceParams } from "@/lib/navigate-to-resource";
+import { lambdaCrossLinks } from "@/lib/resource-cross-links";
 import type {
   AwsLambdaCreateInput,
   AwsLambdaInvokeResult,
@@ -60,6 +63,8 @@ export type LambdaViewProps = {
   onDeleteFunction?: (functionName: string) => void;
   openCreateForm?: boolean;
   onCreateFormOpenChange?: (open: boolean) => void;
+  /** Optional deep-link navigator for inspector cross-links (e.g. Logs). */
+  navigateToResource?: (params: NavigateToResourceParams) => void;
 };
 
 const CODE_SOURCE_OPTIONS: Array<{ value: LambdaCreateCodeSource; label: string }> = [
@@ -206,6 +211,7 @@ export default function LambdaView({
   onDeleteFunction,
   openCreateForm = false,
   onCreateFormOpenChange,
+  navigateToResource,
 }: LambdaViewProps) {
   const [filterText, setFilterText] = useState("");
   const [pending, setPending] = useState<PendingLambdaInvoke | undefined>(undefined);
@@ -513,6 +519,13 @@ export default function LambdaView({
         ]}
         emptyText="No function details are available."
       />
+
+      {navigateToResource ? (
+        <ResourceCrossLinks
+          links={lambdaCrossLinks(selectedFunction)}
+          onNavigate={navigateToResource}
+        />
+      ) : null}
 
       {selectedFunction.recentLogs && selectedFunction.recentLogs.length > 0 ? (
         <div>
