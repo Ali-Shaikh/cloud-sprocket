@@ -87,45 +87,50 @@ export function useNavigateToResource(deps: NavigateToResourceDeps) {
       }
 
       // Run selections in order so region RPCs complete before resource selection
-      // (e.g. Logs region then log group). Fire-and-forget would race.
+      // (e.g. Logs region then log group). Fire-and-forget would race. Stop the
+      // chain if a selection fails so later steps do not run against stale state.
       void (async () => {
-        for (const selection of plan.selections) {
-          const paramValue = Object.values(selection.params)[0];
-          if (typeof paramValue !== "string" || !paramValue) {
-            continue;
-          }
+        try {
+          for (const selection of plan.selections) {
+            const paramValue = Object.values(selection.params)[0];
+            if (typeof paramValue !== "string" || !paramValue) {
+              continue;
+            }
 
-          const handler = HANDLER_RPC_MAP[selection.method];
-          if (handler) {
-            await Promise.resolve(handler(deps, paramValue));
-            continue;
-          }
+            const handler = HANDLER_RPC_MAP[selection.method];
+            if (handler) {
+              await Promise.resolve(handler(deps, paramValue));
+              continue;
+            }
 
-          if (selection.method === "aws.s3.selectBucket") {
+            if (selection.method === "aws.s3.selectBucket") {
+              await Promise.resolve(
+                deps.mutateWorkspaceSelection(selection.method, selection.params, {
+                  merge: mergeAwsS3Selection,
+                  onOptimistic: () => {
+                    deps.setWorkspace((current) =>
+                      normaliseWorkspaceSnapshot({
+                        ...current,
+                        selectedS3BucketName: paramValue,
+                        selectedS3ObjectKey: undefined,
+                      }),
+                    );
+                  },
+                }),
+              );
+              continue;
+            }
+
             await Promise.resolve(
-              deps.mutateWorkspaceSelection(selection.method, selection.params, {
-                merge: mergeAwsS3Selection,
-                onOptimistic: () => {
-                  deps.setWorkspace((current) =>
-                    normaliseWorkspaceSnapshot({
-                      ...current,
-                      selectedS3BucketName: paramValue,
-                      selectedS3ObjectKey: undefined,
-                    }),
-                  );
-                },
-              }),
+              deps.mutateWorkspaceSelection(selection.method, selection.params),
             );
-            continue;
           }
 
-          await Promise.resolve(
-            deps.mutateWorkspaceSelection(selection.method, selection.params),
-          );
-        }
-
-        if (plan.uiFlags?.openLambdaCreate) {
-          deps.setLambdaCreateFormOpen(true);
+          if (plan.uiFlags?.openLambdaCreate) {
+            deps.setLambdaCreateFormOpen(true);
+          }
+        } catch {
+          // Handlers surface status to the user; do not continue the chain.
         }
       })();
     },

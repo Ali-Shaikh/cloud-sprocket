@@ -524,7 +524,14 @@ export default function LambdaView({
         <ResourceCrossLinks
           links={lambdaCrossLinks(selectedFunction, {
             region: workspace.selectedLambdaRegion,
-            knownLogGroupNames: (workspace.logGroups ?? []).map((g) => g.logGroupName),
+            // logGroups inventory is scoped to selectedLogsRegion; only treat
+            // those names as known when Logs already matches the Lambda region.
+            knownLogGroupNames:
+              workspace.selectedLogsRegion &&
+              workspace.selectedLambdaRegion &&
+              workspace.selectedLogsRegion === workspace.selectedLambdaRegion
+                ? (workspace.logGroups ?? []).map((g) => g.logGroupName)
+                : [],
           })}
           onNavigate={navigateToResource}
         />
