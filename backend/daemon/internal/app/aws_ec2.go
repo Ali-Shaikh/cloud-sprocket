@@ -279,7 +279,11 @@ func (s *Service) runEC2Action(
 		}
 	}
 
-	workspace := s.buildWorkspaceSnapshot(snapshot, session)
+	// Scoped rebuild: EC2 action jobs must not re-enrich every AWS service.
+	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+		awsScope:           "ec2",
+		skipAzureInventory: true,
+	})
 	workspace.EC2Instances = instances
 	workspace.SelectedEC2Region = region
 	workspace.SelectedEC2InstanceID = instanceID

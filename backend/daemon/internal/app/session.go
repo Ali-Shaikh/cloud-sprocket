@@ -204,9 +204,11 @@ func (s *Service) handleWorkspaceGet(ctx context.Context, notifier Notifier) (an
 	opts := workspaceSnapshotOptions{lightweightAzure: true, lightweightAWS: true}
 	if session.CurrentProviderID == "azure" {
 		opts.azureDeferredInventory = true
+		opts.skipAwsInventory = true
 	}
 	if session.CurrentProviderID == "aws" {
 		opts.awsDeferredInventory = true
+		opts.skipAzureInventory = true
 	}
 	return s.buildWorkspaceSnapshotOpts(snapshot, session, opts), nil
 }

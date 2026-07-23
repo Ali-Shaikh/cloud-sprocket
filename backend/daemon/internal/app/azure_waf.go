@@ -341,7 +341,10 @@ func (s *Service) handleAzureWafConfigSetMode(ctx context.Context, params json.R
 	if err := s.azure.UpdateWafPolicyMode(timeoutCtx, profile, request.ResourceGroup, request.PolicyName, mode); err != nil {
 		return nil, err
 	}
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Updated WAF policy %s mode to %s.", request.PolicyName, mode))
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "waf",
+	}, "success", fmt.Sprintf("Updated WAF policy %s mode to %s.", request.PolicyName, mode))
 }
 
 func (s *Service) handleAzureWafConfigSetManagedRule(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -377,7 +380,10 @@ func (s *Service) handleAzureWafConfigSetManagedRule(ctx context.Context, params
 	if request.Enabled {
 		state = "enabled"
 	}
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("%s managed rule %s on policy %s.", state, request.RuleID, request.PolicyName))
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "waf",
+	}, "success", fmt.Sprintf("%s managed rule %s on policy %s.", state, request.RuleID, request.PolicyName))
 }
 
 func (s *Service) handleAzureWafConfigAddExclusion(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -423,7 +429,10 @@ func (s *Service) handleAzureWafConfigExclusionChange(
 	if changeErr != nil {
 		return nil, changeErr
 	}
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("%s exclusion on policy %s.", verb, request.PolicyName))
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "waf",
+	}, "success", fmt.Sprintf("%s exclusion on policy %s.", verb, request.PolicyName))
 }
 
 func (s *Service) lockedAzureProfileForMutation(ctx context.Context) (models.ProfileSummary, models.SessionSnapshot, discovery.Snapshot, error) {

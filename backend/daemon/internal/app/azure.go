@@ -200,6 +200,7 @@ func (s *Service) handleAzureSelectResourceGroup(ctx context.Context, params jso
 	s.mu.Unlock()
 	return s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
 		azureResourceGroupSelection: true,
+		skipAwsInventory:            true,
 	}), nil
 }
 
@@ -232,6 +233,7 @@ func (s *Service) handleAzureSelectVirtualMachine(ctx context.Context, params js
 	s.mu.Unlock()
 	return s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
 		azureResourceGroupSelection: true,
+		skipAwsInventory:            true,
 	}), nil
 }
 
@@ -292,7 +294,10 @@ func (s *Service) handleAzureResourceGroupsCreate(ctx context.Context, params js
 		return nil, err
 	}
 	s.mu.Unlock()
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Created Azure resource group %s.", created.Name))
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		azureResourceGroupSelection: true,
+		skipAwsInventory:            true,
+	}, "success", fmt.Sprintf("Created Azure resource group %s.", created.Name))
 }
 
 func (s *Service) handleAzureResourceGroupsDelete(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -352,7 +357,10 @@ func (s *Service) handleAzureResourceGroupsDelete(ctx context.Context, params js
 		return nil, err
 	}
 	s.mu.Unlock()
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Deleted Azure resource group %s.", name))
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		azureResourceGroupSelection: true,
+		skipAwsInventory:            true,
+	}, "success", fmt.Sprintf("Deleted Azure resource group %s.", name))
 }
 
 func (s *Service) handleAzureVirtualMachinesInvokeAction(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -406,11 +414,15 @@ func (s *Service) handleAzureVirtualMachinesInvokeAction(ctx context.Context, pa
 		return nil, err
 	}
 	s.mu.Unlock()
-	return s.finishAzureWorkspace(
+	return s.finishAzureWorkspaceOpts(
 		ctx,
 		snapshot,
 		session,
 		notifier,
+		workspaceSnapshotOptions{
+			azureResourceGroupSelection: true,
+			skipAwsInventory:            true,
+		},
 		"success",
 		fmt.Sprintf("Invoked %s on Azure virtual machine %s.", action, vm.Name),
 	)

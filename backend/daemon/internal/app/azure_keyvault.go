@@ -295,5 +295,8 @@ func (s *Service) handleAzureKeyVaultSetSecret(ctx context.Context, params json.
 		return nil, err
 	}
 	s.mu.Unlock()
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Set secret %s.", secretName))
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "keyvault",
+	}, "success", fmt.Sprintf("Set secret %s.", secretName))
 }

@@ -655,7 +655,11 @@ func (s *Service) runRDSAction(
 	s.mu.Unlock()
 
 	successMessage := fmt.Sprintf("RDS %s completed for %s in %s.", normalisedAction, instanceID, region)
-	workspace := s.buildWorkspaceSnapshot(snapshot, session)
+	// Scoped rebuild: RDS action jobs must not re-enrich every AWS service.
+	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+		awsScope:           "rds",
+		skipAzureInventory: true,
+	})
 	workspace.RDSInstances = s.rdsInstances(background, profile, region)
 	workspace.SelectedRDSRegion = region
 	workspace.SelectedRDSInstanceID = instanceID

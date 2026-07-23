@@ -40,6 +40,9 @@ func (s *Service) withLockedAzureWorkspace(
 	return snapshot, session, nil
 }
 
+// finishAzureWorkspace rebuilds a lightweight full Azure inventory without AWS.
+// Prefer finishAzureWorkspaceOpts with azureScope or azureResourceGroupSelection
+// on single-service mutation paths so only the relevant enrichers run.
 func (s *Service) finishAzureWorkspace(
 	ctx context.Context,
 	snapshot discovery.Snapshot,

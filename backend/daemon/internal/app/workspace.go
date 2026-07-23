@@ -43,6 +43,9 @@ type workspaceSnapshotOptions struct {
 	awsDeferredInventory bool
 }
 
+// buildWorkspaceSnapshot rebuilds a full inventory for the current provider.
+// Prefer buildWorkspaceSnapshotOpts with scope and skip flags on single-service
+// paths so callers do not accidentally re-enrich every enabled service.
 func (s *Service) buildWorkspaceSnapshot(
 	snapshot discovery.Snapshot,
 	session models.SessionSnapshot,

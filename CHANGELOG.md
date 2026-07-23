@@ -11,6 +11,10 @@ Installers for every release are published on the
 
 ### Changed
 
+- Workspace snapshot rebuilds on single-service AWS/Azure mutation and job
+  completion paths use scoped `workspaceSnapshotOptions` (service scope plus
+  skip opposite cloud) so handlers no longer re-enrich every inventory
+  accidentally. Wire shape is unchanged (architecture F-004 Phase 0).
 - Daemon `app.Service` construction uses an explicit `Deps` struct via
   `NewFromDeps`; production wiring in `cloudsprocketd` no longer passes ~23
   positional inventory arguments. `New` and `NewWithRuntimes` remain as
