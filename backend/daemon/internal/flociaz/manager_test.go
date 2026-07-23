@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"cloudsprocket/backend/daemon/internal/config"
+	"cloudsprocket/backend/daemon/internal/emulatordocker"
 	"cloudsprocket/backend/daemon/internal/models"
 	containerapi "github.com/moby/moby/api/types/container"
 	jsonstreamapi "github.com/moby/moby/api/types/jsonstream"
@@ -130,7 +131,7 @@ func newTestManager(t *testing.T, stub *stubDockerClient) *Manager {
 	return &Manager{
 		settings: settings,
 		image:    settings.FlociAZImage,
-		newClient: func(host string) (dockerClient, error) {
+		newClient: func(host string) (emulatordocker.DockerClient, error) {
 			if host != "unix:///tmp/cloudsprocket-test-docker.sock" {
 				t.Fatalf("unexpected Docker host %s", host)
 			}

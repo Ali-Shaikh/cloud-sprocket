@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"cloudsprocket/backend/daemon/internal/config"
+	"cloudsprocket/backend/daemon/internal/emulatordocker"
 	"cloudsprocket/backend/daemon/internal/models"
 	containerapi "github.com/moby/moby/api/types/container"
 	jsonstreamapi "github.com/moby/moby/api/types/jsonstream"
@@ -62,6 +63,10 @@ func (s *stubDockerClient) ContainerCreate(_ context.Context, options client.Con
 	s.lastCreateMounts = append([]mountapi.Mount(nil), options.HostConfig.Mounts...)
 	s.lastCreatePortBindings = options.HostConfig.PortBindings
 	return client.ContainerCreateResult{ID: "ctr-created"}, nil
+}
+
+func (s *stubDockerClient) ContainerInspect(context.Context, string, client.ContainerInspectOptions) (client.ContainerInspectResult, error) {
+	return client.ContainerInspectResult{}, nil
 }
 
 func (s *stubDockerClient) ContainerList(context.Context, client.ContainerListOptions) (client.ContainerListResult, error) {
@@ -166,7 +171,7 @@ func newTestManager(t *testing.T, stub *stubDockerClient) *Manager {
 	return &Manager{
 		settings: settings,
 		image:    settings.LocalStackImage,
-		newClient: func(host string) (dockerClient, error) {
+		newClient: func(host string) (emulatordocker.DockerClient, error) {
 			if host != "unix:///tmp/cloudsprocket-test-docker.sock" {
 				t.Fatalf("unexpected Docker host %s", host)
 			}

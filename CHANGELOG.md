@@ -28,6 +28,10 @@ Installers for every release are published on the
 - Daemon renames LocalStack-named status/start DTOs to generic emulator names
   (`EmulatorStatusDetail`, `EmulatorStartOptions`); JSON field tags and wire
   payloads are unchanged (architecture F-014 R1)
+- Daemon extracts shared Docker emulator lifecycle helpers into
+  `internal/emulatordocker` (client interface, log/env helpers, remove managed
+  container); LocalStack and floci-az managers keep product policy (architecture
+  F-014 R2)
 
 ## [0.9.10] - 2026-07-22
 

@@ -4,10 +4,8 @@
 package flociaz
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/netip"
@@ -20,9 +18,9 @@ import (
 
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/dockerruntime"
+	"cloudsprocket/backend/daemon/internal/emulatordocker"
 	"cloudsprocket/backend/daemon/internal/flociazcompat"
 	"cloudsprocket/backend/daemon/internal/models"
-	"github.com/moby/moby/api/pkg/stdcopy"
 	containerapi "github.com/moby/moby/api/types/container"
 	mountapi "github.com/moby/moby/api/types/mount"
 	networkapi "github.com/moby/moby/api/types/network"
@@ -43,24 +41,10 @@ const (
 	projectLabelValue = "cloud-sprocket"
 )
 
-type dockerClient interface {
-	ContainerCreate(ctx context.Context, options client.ContainerCreateOptions) (client.ContainerCreateResult, error)
-	ContainerInspect(ctx context.Context, containerID string, options client.ContainerInspectOptions) (client.ContainerInspectResult, error)
-	ContainerList(ctx context.Context, options client.ContainerListOptions) (client.ContainerListResult, error)
-	ContainerStart(ctx context.Context, container string, options client.ContainerStartOptions) (client.ContainerStartResult, error)
-	ContainerStop(ctx context.Context, container string, options client.ContainerStopOptions) (client.ContainerStopResult, error)
-	ContainerRemove(ctx context.Context, container string, options client.ContainerRemoveOptions) (client.ContainerRemoveResult, error)
-	ContainerLogs(ctx context.Context, container string, options client.ContainerLogsOptions) (client.ContainerLogsResult, error)
-	ImagePull(ctx context.Context, ref string, options client.ImagePullOptions) (client.ImagePullResponse, error)
-	Close() error
-}
-
-type dockerClientFactory func(host string) (dockerClient, error)
-
 type Manager struct {
 	settings  config.Settings
 	image     string
-	newClient dockerClientFactory
+	newClient emulatordocker.ClientFactory
 }
 
 func NewManager(settings config.Settings) *Manager {
@@ -69,11 +53,9 @@ func NewManager(settings config.Settings) *Manager {
 		image = defaultImage
 	}
 	return &Manager{
-		settings: settings,
-		image:    image,
-		newClient: func(host string) (dockerClient, error) {
-			return client.New(client.WithHost(host), client.WithAPIVersionNegotiation())
-		},
+		settings:  settings,
+		image:     image,
+		newClient: emulatordocker.DefaultClientFactory,
 	}
 }
 
@@ -104,12 +86,12 @@ func (m *Manager) Start(ctx context.Context, options models.EmulatorStartOptions
 			(container.State != "running" &&
 				(container.Image != m.image || options.Persistence || len(options.Environment) > 0))
 		if shouldReplace {
-			if err := m.removeManagedContainer(ctx, api, container); err != nil {
+			if err := emulatordocker.RemoveManagedContainer(ctx, api, container); err != nil {
 				return m.errorStatus("Failed to remove floci-az container: " + err.Error()), err
 			}
 		} else if container.State != "running" {
 			if _, err := api.ContainerStart(ctx, container.ID, client.ContainerStartOptions{}); err != nil {
-				if removeErr := m.removeManagedContainer(ctx, api, container); removeErr != nil {
+				if removeErr := emulatordocker.RemoveManagedContainer(ctx, api, container); removeErr != nil {
 					return m.errorStatus("Failed to start floci-az container: " + err.Error()), err
 				}
 			} else {
@@ -196,7 +178,7 @@ func (m *Manager) Logs(ctx context.Context, tail int) (models.EmulatorLogSnapsho
 		return emptyLogs("No managed floci-az container is present."), nil
 	}
 
-	tail = clampLogTail(tail)
+	tail = emulatordocker.ClampLogTail(tail)
 	result, err := api.ContainerLogs(ctx, containers.Items[0].ID, client.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
@@ -207,11 +189,11 @@ func (m *Manager) Logs(ctx context.Context, tail int) (models.EmulatorLogSnapsho
 	}
 	defer result.Close()
 
-	text, err := readContainerLogs(result)
+	text, err := emulatordocker.ReadContainerLogs(result)
 	if err != nil {
 		return emptyLogs("Failed to decode floci-az logs: " + err.Error()), err
 	}
-	lines := splitLogLines(text)
+	lines := emulatordocker.SplitLogLines(text)
 	return models.EmulatorLogSnapshot{
 		EmulatorID: "floci-az",
 		Lines:      lines,
@@ -241,7 +223,7 @@ func (m *Manager) EnsureManagedConfig() error {
 	return nil
 }
 
-func (m *Manager) dockerClient() (dockerClient, models.EmulatorStatusDetail, error) {
+func (m *Manager) dockerClient() (emulatordocker.DockerClient, models.EmulatorStatusDetail, error) {
 	host, _ := dockerruntime.ResolveDockerHost(m.settings)
 	if host == "" {
 		return nil, models.EmulatorStatusDetail{
@@ -260,7 +242,7 @@ func (m *Manager) dockerClient() (dockerClient, models.EmulatorStatusDetail, err
 	return api, models.EmulatorStatusDetail{}, nil
 }
 
-func (m *Manager) managedContainers(ctx context.Context, api dockerClient) (client.ContainerListResult, error) {
+func (m *Manager) managedContainers(ctx context.Context, api emulatordocker.DockerClient) (client.ContainerListResult, error) {
 	filters := client.Filters{}
 	filters.Add("label", managedLabelKey+"="+managedLabelValue)
 	filters.Add("label", projectLabelKey+"="+projectLabelValue)
@@ -268,7 +250,7 @@ func (m *Manager) managedContainers(ctx context.Context, api dockerClient) (clie
 	return api.ContainerList(ctx, client.ContainerListOptions{All: true, Filters: filters})
 }
 
-func (m *Manager) statusWithClient(ctx context.Context, api dockerClient) models.EmulatorStatusDetail {
+func (m *Manager) statusWithClient(ctx context.Context, api emulatordocker.DockerClient) models.EmulatorStatusDetail {
 	containers, err := m.managedContainers(ctx, api)
 	if err != nil {
 		return m.errorStatus("Failed to query Docker containers: " + err.Error())
@@ -326,7 +308,7 @@ func (m *Manager) statusWithClient(ctx context.Context, api dockerClient) models
 		Endpoint:    "http://localhost:" + restPort,
 		ConfigPath:  m.localEnvPath(),
 		Details: []models.DetailField{
-			{Label: "Container ID", Value: truncateID(container.ID)},
+			{Label: "Container ID", Value: emulatordocker.TruncateID(container.ID)},
 			{Label: "Image", Value: container.Image},
 			{Label: "State", Value: string(container.State)},
 			{Label: "Status", Value: container.Status},
@@ -350,7 +332,7 @@ func (m *Manager) errorStatus(summary string) models.EmulatorStatusDetail {
 	}
 }
 
-func (m *Manager) containerMissingOpenTofuContract(ctx context.Context, api dockerClient, containerID string) bool {
+func (m *Manager) containerMissingOpenTofuContract(ctx context.Context, api emulatordocker.DockerClient, containerID string) bool {
 	inspect, err := api.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
 	if err != nil {
 		return false
@@ -361,7 +343,7 @@ func (m *Manager) containerMissingOpenTofuContract(ctx context.Context, api dock
 	return !flociazcompat.ContainerHasOpenTofuContract(inspect.Container.Config.Env)
 }
 
-func (m *Manager) pullImage(ctx context.Context, api dockerClient) error {
+func (m *Manager) pullImage(ctx context.Context, api emulatordocker.DockerClient) error {
 	response, err := api.ImagePull(ctx, m.image, client.ImagePullOptions{})
 	if err != nil {
 		return err
@@ -388,7 +370,7 @@ func portConfig() (networkapi.PortSet, networkapi.PortMap, error) {
 func flociAZEnv(options models.EmulatorStartOptions) []string {
 	values := flociazcompat.DefaultContainerEnvironment()
 	for key, value := range options.Environment {
-		if validEnvName(key) && !isProtectedFlociAZEnvKey(key) {
+		if emulatordocker.ValidEnvName(key) && !isProtectedFlociAZEnvKey(key) {
 			values[key] = value
 		}
 	}
@@ -470,61 +452,6 @@ func storageConnectionString() string {
 		";TableEndpoint=http://localhost:" + restPort + "/devstoreaccount1;"
 }
 
-func validEnvName(value string) bool {
-	if value == "" {
-		return false
-	}
-	for index, r := range value {
-		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || r == '_' || (index > 0 && r >= '0' && r <= '9') {
-			continue
-		}
-		return false
-	}
-	return true
-}
-
-func clampLogTail(tail int) int {
-	if tail <= 0 {
-		return 200
-	}
-	if tail > 1000 {
-		return 1000
-	}
-	return tail
-}
-
-func readContainerLogs(result client.ContainerLogsResult) (string, error) {
-	raw, err := io.ReadAll(result)
-	if err != nil {
-		return "", err
-	}
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	if _, err := stdcopy.StdCopy(&stdout, &stderr, bytes.NewReader(raw)); err == nil {
-		if stderr.Len() == 0 {
-			return stdout.String(), nil
-		}
-		if stdout.Len() == 0 {
-			return stderr.String(), nil
-		}
-		return stdout.String() + stderr.String(), nil
-	}
-	return string(raw), nil
-}
-
-func splitLogLines(text string) []string {
-	text = strings.ReplaceAll(text, "\r\n", "\n")
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return []string{}
-	}
-	lines := strings.Split(text, "\n")
-	for index := range lines {
-		lines[index] = strings.TrimRight(lines[index], "\r")
-	}
-	return lines
-}
-
 func tcpHealth(ctx context.Context, address string) error {
 	dialer := net.Dialer{Timeout: 800 * time.Millisecond}
 	conn, err := dialer.DialContext(ctx, "tcp", address)
@@ -561,24 +488,6 @@ func (m *Manager) waitForReady(ctx context.Context, address string) error {
 		time.Sleep(250 * time.Millisecond)
 	}
 	return nil
-}
-
-func truncateID(id string) string {
-	if len(id) > 12 {
-		return id[:12]
-	}
-	return id
-}
-
-func (m *Manager) removeManagedContainer(ctx context.Context, api dockerClient, container containerapi.Summary) error {
-	if container.State == "running" {
-		timeoutSeconds := 10
-		if _, err := api.ContainerStop(ctx, container.ID, client.ContainerStopOptions{Timeout: &timeoutSeconds}); err != nil {
-			return err
-		}
-	}
-	_, err := api.ContainerRemove(ctx, container.ID, client.ContainerRemoveOptions{Force: true})
-	return err
 }
 
 func managedLabels() map[string]string {
