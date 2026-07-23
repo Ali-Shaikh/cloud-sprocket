@@ -40,14 +40,14 @@ Rules of thumb:
 | `workspace.get` | `WorkspaceSnapshot` | Yes | Yes (via snapshot builder cache) | **Deferred**: AWS → S3 + EC2 core only; Azure → RGs + VMs only. Opposite cloud not loaded (provider-gated). |
 | `aws.inventory.get` `{scope}` | `WorkspaceSnapshot` | Yes | Yes | **One** AWS service (`awsScope`); `skipAzureInventory` |
 | `azure.inventory.get` `{scope}` | `WorkspaceSnapshot` | Yes | Yes | **One** Azure service (`azureScope`); `skipAwsInventory`; storage is non-lightweight |
-| AWS selection / write finishes (`finishAWSWorkspaceOpts`) | `WorkspaceSnapshot` | Yes | Yes | Scoped `awsScope` + `skipAzureInventory` |
-| Azure selection / write finishes (`finishAzureWorkspaceOpts`) | `WorkspaceSnapshot` | Yes | Yes | Scoped `azureScope` / RG selection + `skipAwsInventory` |
+| AWS selection / write finishes (`finishAWSWorkspaceOpts`) | `WorkspaceSnapshot` | Yes | Yes | Prefer full AWS inventory + `skipAzureInventory` when the client **replaces** workspace (EC2 select, jobs). Use `awsScope` only where the client **merges** (e.g. `aws.inventory.get`). |
+| Azure selection / write finishes (`finishAzureWorkspaceOpts`) | `WorkspaceSnapshot` | Yes | Yes | Scoped `azureScope` / RG selection + `skipAwsInventory` where desktop merges; otherwise full Azure + skip AWS |
 | `runtime.get` | `RuntimeSnapshot` | No | Yes (live probe) | **Never** |
 | `session.get` / select provider-profile-auth | `SessionSnapshot` (not workspace) | Session only | No | No |
 | Discovery refresh job result | `WorkspaceSnapshot` | Yes | Yes | Same deferred options as `workspace.get` |
-| Async EC2 / RDS action job results | `WorkspaceSnapshot` | Yes | Yes | Scoped service only (Phase 0) |
+| Async EC2 / RDS action job results | `WorkspaceSnapshot` | Yes | Yes | **Full AWS inventory**, `skipAzureInventory` only. Desktop `job.updated` **replaces** workspace; service-scoped results would wipe other tabs. |
 
-**Empty-slice contract:** clients must treat an empty inventory array as “not loaded or empty”, and **merge** scoped responses into local state rather than replacing the whole inventory map blindly when a partial is returned. Desktop already does Azure partial merge in places; Phase 1 may formalise that.
+**Empty-slice contract:** clients must treat an empty inventory array as "not loaded or empty", and **merge** scoped responses into local state rather than replacing the whole inventory map blindly when a partial is returned. Desktop already does Azure partial merge in places; Phase 1 may formalise that. Paths that replace workspace wholesale must not return service-scoped inventory.
 
 ---
 
