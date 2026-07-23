@@ -279,7 +279,11 @@ func (s *Service) runEC2Action(
 		}
 	}
 
-	workspace := s.buildWorkspaceSnapshot(snapshot, session)
+	// Job results replace the full desktop workspace on job.updated, so load all
+	// AWS inventory. Skip Azure only (opposite cloud) to cut cost.
+	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+		skipAzureInventory: true,
+	})
 	workspace.EC2Instances = instances
 	workspace.SelectedEC2Region = region
 	workspace.SelectedEC2InstanceID = instanceID
@@ -350,7 +354,8 @@ func (s *Service) handleAwsEc2SelectRegion(ctx context.Context, params json.RawM
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "ec2", skipAzureInventory: true}, "info", fmt.Sprintf("Selected EC2 region %s.", request.Region), false)
+	// EC2 select RPCs replace workspace wholesale on the client (no merge helper).
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{skipAzureInventory: true}, "info", fmt.Sprintf("Selected EC2 region %s.", request.Region), false)
 }
 
 func (s *Service) handleAwsEc2SelectInstance(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -367,7 +372,7 @@ func (s *Service) handleAwsEc2SelectInstance(ctx context.Context, params json.Ra
 	if err != nil {
 		return nil, err
 	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "ec2", skipAzureInventory: true}, "", "", false)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{skipAzureInventory: true}, "", "", false)
 }
 
 func (s *Service) handleAwsEc2InvokeAction(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

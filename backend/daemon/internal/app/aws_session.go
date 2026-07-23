@@ -136,6 +136,9 @@ func (s *Service) finishAWSWriteAction(
 	)
 }
 
+// finishAWSWorkspace rebuilds an AWS workspace snapshot without Azure inventory.
+// Prefer finishAWSWorkspaceOpts with an explicit awsScope for selection and
+// mutation handlers so only one service enricher runs.
 func (s *Service) finishAWSWorkspace(
 	ctx context.Context,
 	snapshot discovery.Snapshot,
@@ -145,7 +148,9 @@ func (s *Service) finishAWSWorkspace(
 	logMsg string,
 	logOnly bool,
 ) (models.WorkspaceSnapshot, error) {
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{}, logLevel, logMsg, logOnly)
+	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAzureInventory: true,
+	}, logLevel, logMsg, logOnly)
 }
 
 func (s *Service) finishAWSWorkspaceOpts(

@@ -535,7 +535,10 @@ func (s *Service) handleAzureStorageCreateAccount(ctx context.Context, params js
 		return nil, err
 	}
 	s.mu.Unlock()
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Created storage account %s.", created.Name))
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "storage",
+	}, "success", fmt.Sprintf("Created storage account %s.", created.Name))
 }
 
 func (s *Service) handleAzureStorageCreateContainer(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -590,7 +593,10 @@ func (s *Service) handleAzureStorageCreateContainer(ctx context.Context, params 
 		return nil, err
 	}
 	s.mu.Unlock()
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Created blob container %s in %s.", containerName, accountName))
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "storage",
+	}, "success", fmt.Sprintf("Created blob container %s in %s.", containerName, accountName))
 }
 
 func (s *Service) handleAzureStorageUploadBlob(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -648,11 +654,15 @@ func (s *Service) handleAzureStorageUploadBlob(ctx context.Context, params json.
 		return nil, err
 	}
 	s.mu.Unlock()
-	workspace, notifyErr := s.finishAzureWorkspace(
+	workspace, notifyErr := s.finishAzureWorkspaceOpts(
 		ctx,
 		snapshot,
 		session,
 		notifier,
+		workspaceSnapshotOptions{
+			skipAwsInventory: true,
+			azureScope:       "storage",
+		},
 		"success",
 		fmt.Sprintf("Uploaded blob %s to %s/%s.", request.BlobName, accountName, containerName),
 	)
@@ -717,7 +727,10 @@ func (s *Service) handleAzureStorageDeleteBlob(ctx context.Context, params json.
 		return nil, err
 	}
 	s.mu.Unlock()
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Deleted blob %s from %s/%s.", blobName, accountName, containerName))
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "storage",
+	}, "success", fmt.Sprintf("Deleted blob %s from %s/%s.", blobName, accountName, containerName))
 }
 
 func (s *Service) handleAzureStorageCopyBlob(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -784,11 +797,15 @@ func (s *Service) handleAzureStorageCopyBlob(ctx context.Context, params json.Ra
 		return nil, err
 	}
 	s.mu.Unlock()
-	workspace, notifyErr := s.finishAzureWorkspace(
+	workspace, notifyErr := s.finishAzureWorkspaceOpts(
 		ctx,
 		snapshot,
 		session,
 		notifier,
+		workspaceSnapshotOptions{
+			skipAwsInventory: true,
+			azureScope:       "storage",
+		},
 		"success",
 		fmt.Sprintf("Copied blob %s to %s in %s/%s.", sourceBlobName, destinationBlobName, accountName, containerName),
 	)
@@ -855,11 +872,15 @@ func (s *Service) handleAzureStorageCreateFolderPrefix(ctx context.Context, para
 		return nil, err
 	}
 	s.mu.Unlock()
-	return s.finishAzureWorkspace(
+	return s.finishAzureWorkspaceOpts(
 		ctx,
 		snapshot,
 		session,
 		notifier,
+		workspaceSnapshotOptions{
+			skipAwsInventory: true,
+			azureScope:       "storage",
+		},
 		"success",
 		fmt.Sprintf("Created folder prefix %s in %s/%s.", result.FolderPrefix, accountName, containerName),
 	)

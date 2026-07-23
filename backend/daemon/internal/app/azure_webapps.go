@@ -530,7 +530,10 @@ func (s *Service) handleAzureWebAppsCreate(ctx context.Context, params json.RawM
 		return nil, err
 	}
 	s.mu.Unlock()
-	return s.finishAzureWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Created App Service web app %s.", created.Name))
+	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
+		skipAwsInventory: true,
+		azureScope:       "webapps",
+	}, "success", fmt.Sprintf("Created App Service web app %s.", created.Name))
 }
 
 func (s *Service) activeAzureVMSelection(
