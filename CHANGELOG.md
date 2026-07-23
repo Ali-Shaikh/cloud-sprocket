@@ -25,6 +25,9 @@ Installers for every release are published on the
 - SQLite store uses versioned `schema_migrations` so future schema changes can
   be applied in order; existing databases record baseline version 1 without
   data loss
+- Daemon renames LocalStack-named status/start DTOs to generic emulator names
+  (`EmulatorStatusDetail`, `EmulatorStartOptions`); JSON field tags and wire
+  payloads are unchanged (architecture F-014 R1)
 
 ## [0.9.10] - 2026-07-22
 

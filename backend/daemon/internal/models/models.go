@@ -173,7 +173,7 @@ type LocalConfigArtifact struct {
 	Summary    string `json:"summary"`
 }
 
-type LocalStackStatus struct {
+type EmulatorStatusDetail struct {
 	EmulatorID  string         `json:"emulatorId"`
 	ProviderID  string         `json:"providerId"`
 	Label       string         `json:"label"`
@@ -190,7 +190,7 @@ type LocalStackStatus struct {
 	Details     []DetailField  `json:"details"`
 }
 
-type LocalStackStartOptions struct {
+type EmulatorStartOptions struct {
 	EmulatorID  string            `json:"emulatorId,omitempty"`
 	AuthToken   string            `json:"authToken,omitempty"`
 	Persistence bool              `json:"persistence,omitempty"`
@@ -218,7 +218,7 @@ type EmulatorActionResult struct {
 	Action     string              `json:"action"`
 	State      EmulatorActionState `json:"state"`
 	Summary    string              `json:"summary"`
-	Status     LocalStackStatus    `json:"status"`
+	Status     EmulatorStatusDetail    `json:"status"`
 }
 
 type DockerOwnershipPolicy struct {

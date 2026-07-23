@@ -34,17 +34,17 @@ const (
 	containerPortSpec = "4566/tcp"
 	// LocalStack allocates RDS Postgres listeners inside this range; publish it
 	// to the host so developers can connect with psql or a desktop SQL client.
-	rdsPortStart = 4510
-	rdsPortEnd   = 4559
-	profileName  = "cloudsprocket-localstack"
-	managedLabelKey      = "com.cloudsprocket.managed"
-	managedLabelValue    = "true"
-	projectLabelKey      = "com.cloudsprocket.project"
-	projectLabelValue    = "cloud-sprocket"
-	localStackConfigKey           = "com.cloudsprocket.localstack.config"
-	localStackConfigValue         = "persist-volume-v1"
-	localStackPersistenceVolume   = "cloudsprocket-localstack-data"
-	dockerSocketPath              = "/var/run/docker.sock"
+	rdsPortStart                = 4510
+	rdsPortEnd                  = 4559
+	profileName                 = "cloudsprocket-localstack"
+	managedLabelKey             = "com.cloudsprocket.managed"
+	managedLabelValue           = "true"
+	projectLabelKey             = "com.cloudsprocket.project"
+	projectLabelValue           = "cloud-sprocket"
+	localStackConfigKey         = "com.cloudsprocket.localstack.config"
+	localStackConfigValue       = "persist-volume-v1"
+	localStackPersistenceVolume = "cloudsprocket-localstack-data"
+	dockerSocketPath            = "/var/run/docker.sock"
 )
 
 type dockerClient interface {
@@ -86,7 +86,7 @@ func NewManager(settings config.Settings) *Manager {
 }
 
 // Status returns the current LocalStack emulator status.
-func (m *Manager) Status(ctx context.Context) (models.LocalStackStatus, error) {
+func (m *Manager) Status(ctx context.Context) (models.EmulatorStatusDetail, error) {
 	api, unavailable, err := m.dockerClient()
 	if err != nil {
 		return unavailable, nil
@@ -97,7 +97,7 @@ func (m *Manager) Status(ctx context.Context) (models.LocalStackStatus, error) {
 }
 
 // Start ensures the managed LocalStack container exists and is running.
-func (m *Manager) Start(ctx context.Context, options models.LocalStackStartOptions) (models.LocalStackStatus, error) {
+func (m *Manager) Start(ctx context.Context, options models.EmulatorStartOptions) (models.EmulatorStatusDetail, error) {
 	api, unavailable, err := m.dockerClient()
 	if err != nil {
 		return unavailable, err
@@ -163,7 +163,7 @@ func (m *Manager) Start(ctx context.Context, options models.LocalStackStartOptio
 }
 
 // Stop stops the managed LocalStack container if it exists.
-func (m *Manager) Stop(ctx context.Context) (models.LocalStackStatus, error) {
+func (m *Manager) Stop(ctx context.Context) (models.EmulatorStatusDetail, error) {
 	api, unavailable, err := m.dockerClient()
 	if err != nil {
 		return unavailable, err
@@ -247,10 +247,10 @@ func (m *Manager) Logs(ctx context.Context, tail int) (models.EmulatorLogSnapsho
 	}, nil
 }
 
-func (m *Manager) dockerClient() (dockerClient, models.LocalStackStatus, error) {
+func (m *Manager) dockerClient() (dockerClient, models.EmulatorStatusDetail, error) {
 	host, _ := dockerruntime.ResolveDockerHost(m.settings)
 	if host == "" {
-		return nil, models.LocalStackStatus{
+		return nil, models.EmulatorStatusDetail{
 			EmulatorID: "localstack",
 			ProviderID: "aws",
 			Label:      "LocalStack",
@@ -264,7 +264,7 @@ func (m *Manager) dockerClient() (dockerClient, models.LocalStackStatus, error) 
 	if err != nil {
 		return nil, m.errorStatus("Failed to connect to Docker: " + err.Error()), err
 	}
-	return api, models.LocalStackStatus{}, nil
+	return api, models.EmulatorStatusDetail{}, nil
 }
 
 func (m *Manager) managedContainers(ctx context.Context, api dockerClient) (client.ContainerListResult, error) {
@@ -275,7 +275,7 @@ func (m *Manager) managedContainers(ctx context.Context, api dockerClient) (clie
 	return api.ContainerList(ctx, client.ContainerListOptions{All: true, Filters: filters})
 }
 
-func (m *Manager) statusWithClient(ctx context.Context, api dockerClient) models.LocalStackStatus {
+func (m *Manager) statusWithClient(ctx context.Context, api dockerClient) models.EmulatorStatusDetail {
 	containers, err := m.managedContainers(ctx, api)
 	if err != nil {
 		return m.errorStatus("Failed to query Docker containers: " + err.Error())
@@ -293,7 +293,7 @@ func (m *Manager) statusWithClient(ctx context.Context, api dockerClient) models
 			summary = "LocalStack not running, but managed profile is prepared. Start LocalStack to use it."
 		}
 
-		return models.LocalStackStatus{
+		return models.EmulatorStatusDetail{
 			EmulatorID:  "localstack",
 			ProviderID:  "aws",
 			Label:       "LocalStack",
@@ -327,7 +327,7 @@ func (m *Manager) statusWithClient(ctx context.Context, api dockerClient) models
 		}
 	}
 
-	return models.LocalStackStatus{
+	return models.EmulatorStatusDetail{
 		EmulatorID:  "localstack",
 		ProviderID:  "aws",
 		Label:       "LocalStack",
@@ -352,8 +352,8 @@ func (m *Manager) statusWithClient(ctx context.Context, api dockerClient) models
 	}
 }
 
-func (m *Manager) errorStatus(summary string) models.LocalStackStatus {
-	return models.LocalStackStatus{
+func (m *Manager) errorStatus(summary string) models.EmulatorStatusDetail {
+	return models.EmulatorStatusDetail{
 		EmulatorID: "localstack",
 		ProviderID: "aws",
 		Label:      "LocalStack",
@@ -372,7 +372,7 @@ func (m *Manager) pullImage(ctx context.Context, api dockerClient) error {
 	return response.Wait(ctx)
 }
 
-func localStackEnv(options models.LocalStackStartOptions) []string {
+func localStackEnv(options models.EmulatorStartOptions) []string {
 	values := map[string]string{}
 	for key, value := range options.Environment {
 		if validEnvName(key) && key != "LOCALSTACK_AUTH_TOKEN" && key != "PERSISTENCE" {
@@ -400,7 +400,7 @@ func localStackEnv(options models.LocalStackStartOptions) []string {
 	return env
 }
 
-func (m *Manager) containerMounts(options models.LocalStackStartOptions) ([]mountapi.Mount, error) {
+func (m *Manager) containerMounts(options models.EmulatorStartOptions) ([]mountapi.Mount, error) {
 	// LocalStack runs Lambda (and other compute) by spawning sibling Docker
 	// containers, which requires the host Docker socket mounted into the
 	// container. Without this, Lambda creation fails with "Docker not available".
@@ -567,9 +567,9 @@ func truncateID(id string) string {
 
 func managedLabels() map[string]string {
 	return map[string]string{
-		managedLabelKey:       managedLabelValue,
-		projectLabelKey:       projectLabelValue,
-		localStackConfigKey:   localStackConfigValue,
+		managedLabelKey:     managedLabelValue,
+		projectLabelKey:     projectLabelValue,
+		localStackConfigKey: localStackConfigValue,
 	}
 }
 

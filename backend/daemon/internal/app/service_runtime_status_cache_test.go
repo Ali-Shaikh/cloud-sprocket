@@ -44,8 +44,8 @@ type stubLocalStackManager struct {
 	stops  int
 }
 
-func (m *stubLocalStackManager) Status(context.Context) (models.LocalStackStatus, error) {
-	return models.LocalStackStatus{
+func (m *stubLocalStackManager) Status(context.Context) (models.EmulatorStatusDetail, error) {
+	return models.EmulatorStatusDetail{
 		EmulatorID: "localstack",
 		ProviderID: "aws",
 		Label:      "LocalStack",
@@ -55,14 +55,14 @@ func (m *stubLocalStackManager) Status(context.Context) (models.LocalStackStatus
 	}, nil
 }
 
-func (m *stubLocalStackManager) Start(context.Context, models.LocalStackStartOptions) (models.LocalStackStatus, error) {
+func (m *stubLocalStackManager) Start(context.Context, models.EmulatorStartOptions) (models.EmulatorStatusDetail, error) {
 	m.starts++
 	return m.Status(context.Background())
 }
 
-func (m *stubLocalStackManager) Stop(context.Context) (models.LocalStackStatus, error) {
+func (m *stubLocalStackManager) Stop(context.Context) (models.EmulatorStatusDetail, error) {
 	m.stops++
-	return models.LocalStackStatus{
+	return models.EmulatorStatusDetail{
 		EmulatorID: "localstack",
 		ProviderID: "aws",
 		Label:      "LocalStack",
@@ -148,7 +148,7 @@ func TestRuntimeStatusInvalidatedByEmulatorLifecycleAndRefresh(t *testing.T) {
 		t.Fatalf("expected initial probe, got %d", dock.snapshots)
 	}
 
-	if _, err := s.emulatorsStart(context.Background(), models.LocalStackStartOptions{EmulatorID: "localstack"}); err != nil {
+	if _, err := s.emulatorsStart(context.Background(), models.EmulatorStartOptions{EmulatorID: "localstack"}); err != nil {
 		t.Fatalf("emulatorsStart: %v", err)
 	}
 	_ = s.runtimeStatusForSnapshot()

@@ -26,23 +26,23 @@ import (
 )
 
 type stubDockerClient struct {
-	containers         []containerapi.Summary
-	createCalls        int
-	startCalls         []string
-	stopCalls          []string
-	removeCalls        []string
-	pullCalls          []string
-	closeCalled        bool
-	containerListError error
-	createError        error
-	startError         error
-	stopError          error
-	removeError        error
-	pullError          error
-	logsError          error
-	logsPayload        string
-	lastCreateEnv         []string
-	lastCreateMounts      []mountapi.Mount
+	containers             []containerapi.Summary
+	createCalls            int
+	startCalls             []string
+	stopCalls              []string
+	removeCalls            []string
+	pullCalls              []string
+	closeCalled            bool
+	containerListError     error
+	createError            error
+	startError             error
+	stopError              error
+	removeError            error
+	pullError              error
+	logsError              error
+	logsPayload            string
+	lastCreateEnv          []string
+	lastCreateMounts       []mountapi.Mount
 	lastCreatePortBindings networkapi.PortMap
 }
 
@@ -181,7 +181,7 @@ func TestStartCreatesAndStartsManagedContainer(t *testing.T) {
 	dockerClient := &stubDockerClient{}
 	manager := newTestManager(t, dockerClient)
 
-	status, err := manager.Start(context.Background(), models.LocalStackStartOptions{})
+	status, err := manager.Start(context.Background(), models.EmulatorStartOptions{})
 	if err != nil {
 		t.Fatalf("expected start to succeed, got %v", err)
 	}
@@ -214,7 +214,7 @@ func TestStartRecreatesExistingStoppedContainer(t *testing.T) {
 	}}}
 	manager := newTestManager(t, dockerClient)
 
-	status, err := manager.Start(context.Background(), models.LocalStackStartOptions{})
+	status, err := manager.Start(context.Background(), models.EmulatorStartOptions{})
 	if err != nil {
 		t.Fatalf("expected start to succeed, got %v", err)
 	}
@@ -267,7 +267,7 @@ func TestStartReturnsDockerErrors(t *testing.T) {
 	dockerClient := &stubDockerClient{pullError: errors.New("pull failed")}
 	manager := newTestManager(t, dockerClient)
 
-	status, err := manager.Start(context.Background(), models.LocalStackStartOptions{})
+	status, err := manager.Start(context.Background(), models.EmulatorStartOptions{})
 	if err == nil {
 		t.Fatalf("expected start error")
 	}
@@ -280,7 +280,7 @@ func TestStartPublishesGatewayAndRDSPorts(t *testing.T) {
 	dockerClient := &stubDockerClient{}
 	manager := newTestManager(t, dockerClient)
 
-	if _, err := manager.Start(context.Background(), models.LocalStackStartOptions{}); err != nil {
+	if _, err := manager.Start(context.Background(), models.EmulatorStartOptions{}); err != nil {
 		t.Fatalf("expected start to succeed, got %v", err)
 	}
 	if len(dockerClient.lastCreatePortBindings) != (rdsPortEnd-rdsPortStart+1)+1 {
@@ -304,20 +304,20 @@ func TestStartPublishesGatewayAndRDSPorts(t *testing.T) {
 
 func TestStartRecreateRemovesRunningContainer(t *testing.T) {
 	dockerClient := &stubDockerClient{containers: []containerapi.Summary{{
-		ID:    "ctr-running",
-		Names: []string{"/" + containerName},
-		Image: defaultImage,
-		State: containerapi.StateRunning,
+		ID:     "ctr-running",
+		Names:  []string{"/" + containerName},
+		Image:  defaultImage,
+		State:  containerapi.StateRunning,
 		Status: "Up 1 second",
 		Labels: map[string]string{
-			managedLabelKey:       managedLabelValue,
-			projectLabelKey:       projectLabelValue,
-			localStackConfigKey:   localStackConfigValue,
+			managedLabelKey:     managedLabelValue,
+			projectLabelKey:     projectLabelValue,
+			localStackConfigKey: localStackConfigValue,
 		},
 	}}}
 	manager := newTestManager(t, dockerClient)
 
-	if _, err := manager.Start(context.Background(), models.LocalStackStartOptions{Recreate: true}); err != nil {
+	if _, err := manager.Start(context.Background(), models.EmulatorStartOptions{Recreate: true}); err != nil {
 		t.Fatalf("expected recreate start to succeed, got %v", err)
 	}
 	if len(dockerClient.stopCalls) != 1 || dockerClient.stopCalls[0] != "ctr-running" {
@@ -339,13 +339,13 @@ func TestStartRecreatesRunningContainerWithoutRDSPortConfig(t *testing.T) {
 		State:  containerapi.StateRunning,
 		Status: "Up 1 second",
 		Labels: map[string]string{
-			managedLabelKey:    managedLabelValue,
-			projectLabelKey:    projectLabelValue,
+			managedLabelKey: managedLabelValue,
+			projectLabelKey: projectLabelValue,
 		},
 	}}}
 	manager := newTestManager(t, dockerClient)
 
-	if _, err := manager.Start(context.Background(), models.LocalStackStartOptions{}); err != nil {
+	if _, err := manager.Start(context.Background(), models.EmulatorStartOptions{}); err != nil {
 		t.Fatalf("expected start to succeed, got %v", err)
 	}
 	if len(dockerClient.stopCalls) != 1 || dockerClient.stopCalls[0] != "ctr-old" {
@@ -364,7 +364,7 @@ func TestStartUsesConfiguredImage(t *testing.T) {
 	manager := newTestManager(t, dockerClient)
 	manager.image = "registry.example.com/localstack:2026.05.0"
 
-	status, err := manager.Start(context.Background(), models.LocalStackStartOptions{})
+	status, err := manager.Start(context.Background(), models.EmulatorStartOptions{})
 	if err != nil {
 		t.Fatalf("expected start to succeed, got %v", err)
 	}
@@ -389,7 +389,7 @@ func TestStartReplacesStoppedContainerWithDifferentImage(t *testing.T) {
 	}}}
 	manager := newTestManager(t, dockerClient)
 
-	status, err := manager.Start(context.Background(), models.LocalStackStartOptions{})
+	status, err := manager.Start(context.Background(), models.EmulatorStartOptions{})
 	if err != nil {
 		t.Fatalf("expected start to succeed, got %v", err)
 	}
@@ -409,7 +409,7 @@ func TestStartPassesLocalStackAuthTokenWhenConfigured(t *testing.T) {
 	manager := newTestManager(t, dockerClient)
 	manager.image = "localstack/localstack:2026.05.0"
 
-	if _, err := manager.Start(context.Background(), models.LocalStackStartOptions{AuthToken: "test-token"}); err != nil {
+	if _, err := manager.Start(context.Background(), models.EmulatorStartOptions{AuthToken: "test-token"}); err != nil {
 		t.Fatalf("expected start to succeed, got %v", err)
 	}
 	if len(dockerClient.lastCreateEnv) != 1 || dockerClient.lastCreateEnv[0] != "LOCALSTACK_AUTH_TOKEN=test-token" {
@@ -422,7 +422,7 @@ func TestStartDoesNotUseAmbientAuthTokenWhenRequestEmpty(t *testing.T) {
 	dockerClient := &stubDockerClient{}
 	manager := newTestManager(t, dockerClient)
 
-	if _, err := manager.Start(context.Background(), models.LocalStackStartOptions{}); err != nil {
+	if _, err := manager.Start(context.Background(), models.EmulatorStartOptions{}); err != nil {
 		t.Fatalf("expected start to succeed, got %v", err)
 	}
 	for _, entry := range dockerClient.lastCreateEnv {
@@ -436,7 +436,7 @@ func TestStartIgnoresPersistenceEnvWhenPersistenceDisabled(t *testing.T) {
 	dockerClient := &stubDockerClient{}
 	manager := newTestManager(t, dockerClient)
 
-	if _, err := manager.Start(context.Background(), models.LocalStackStartOptions{
+	if _, err := manager.Start(context.Background(), models.EmulatorStartOptions{
 		Environment: map[string]string{"PERSISTENCE": "1", "DEBUG": "1"},
 	}); err != nil {
 		t.Fatalf("expected start to succeed, got %v", err)
@@ -457,7 +457,7 @@ func TestStartRecreatesStoppedContainerWhenAuthTokenProvided(t *testing.T) {
 	}}}
 	manager := newTestManager(t, dockerClient)
 
-	if _, err := manager.Start(context.Background(), models.LocalStackStartOptions{AuthToken: "test-token"}); err != nil {
+	if _, err := manager.Start(context.Background(), models.EmulatorStartOptions{AuthToken: "test-token"}); err != nil {
 		t.Fatalf("expected start to succeed, got %v", err)
 	}
 	if len(dockerClient.removeCalls) != 1 || dockerClient.removeCalls[0] != "ctr-stopped" {
@@ -476,7 +476,7 @@ func TestStartConfiguresPersistenceAndExtraEnvironment(t *testing.T) {
 	dockerClient := &stubDockerClient{}
 	manager := newTestManager(t, dockerClient)
 
-	_, err := manager.Start(context.Background(), models.LocalStackStartOptions{
+	_, err := manager.Start(context.Background(), models.EmulatorStartOptions{
 		Persistence: true,
 		Environment: map[string]string{
 			"DEBUG":                 "1",

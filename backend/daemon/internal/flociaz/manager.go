@@ -77,7 +77,7 @@ func NewManager(settings config.Settings) *Manager {
 	}
 }
 
-func (m *Manager) Status(ctx context.Context) (models.LocalStackStatus, error) {
+func (m *Manager) Status(ctx context.Context) (models.EmulatorStatusDetail, error) {
 	api, unavailable, err := m.dockerClient()
 	if err != nil {
 		return unavailable, nil
@@ -86,7 +86,7 @@ func (m *Manager) Status(ctx context.Context) (models.LocalStackStatus, error) {
 	return m.statusWithClient(ctx, api), nil
 }
 
-func (m *Manager) Start(ctx context.Context, options models.LocalStackStartOptions) (models.LocalStackStatus, error) {
+func (m *Manager) Start(ctx context.Context, options models.EmulatorStartOptions) (models.EmulatorStatusDetail, error) {
 	api, unavailable, err := m.dockerClient()
 	if err != nil {
 		return unavailable, err
@@ -157,7 +157,7 @@ func (m *Manager) Start(ctx context.Context, options models.LocalStackStartOptio
 	return m.statusWithClient(ctx, api), nil
 }
 
-func (m *Manager) Stop(ctx context.Context) (models.LocalStackStatus, error) {
+func (m *Manager) Stop(ctx context.Context) (models.EmulatorStatusDetail, error) {
 	api, unavailable, err := m.dockerClient()
 	if err != nil {
 		return unavailable, err
@@ -241,10 +241,10 @@ func (m *Manager) EnsureManagedConfig() error {
 	return nil
 }
 
-func (m *Manager) dockerClient() (dockerClient, models.LocalStackStatus, error) {
+func (m *Manager) dockerClient() (dockerClient, models.EmulatorStatusDetail, error) {
 	host, _ := dockerruntime.ResolveDockerHost(m.settings)
 	if host == "" {
-		return nil, models.LocalStackStatus{
+		return nil, models.EmulatorStatusDetail{
 			EmulatorID: "floci-az",
 			ProviderID: "azure",
 			Label:      "floci-az",
@@ -257,7 +257,7 @@ func (m *Manager) dockerClient() (dockerClient, models.LocalStackStatus, error) 
 	if err != nil {
 		return nil, m.errorStatus("Failed to connect to Docker: " + err.Error()), err
 	}
-	return api, models.LocalStackStatus{}, nil
+	return api, models.EmulatorStatusDetail{}, nil
 }
 
 func (m *Manager) managedContainers(ctx context.Context, api dockerClient) (client.ContainerListResult, error) {
@@ -268,7 +268,7 @@ func (m *Manager) managedContainers(ctx context.Context, api dockerClient) (clie
 	return api.ContainerList(ctx, client.ContainerListOptions{All: true, Filters: filters})
 }
 
-func (m *Manager) statusWithClient(ctx context.Context, api dockerClient) models.LocalStackStatus {
+func (m *Manager) statusWithClient(ctx context.Context, api dockerClient) models.EmulatorStatusDetail {
 	containers, err := m.managedContainers(ctx, api)
 	if err != nil {
 		return m.errorStatus("Failed to query Docker containers: " + err.Error())
@@ -279,7 +279,7 @@ func (m *Manager) statusWithClient(ctx context.Context, api dockerClient) models
 		if configReady {
 			summary = "floci-az not running, but the managed Azure env file is prepared."
 		}
-		return models.LocalStackStatus{
+		return models.EmulatorStatusDetail{
 			EmulatorID: "floci-az",
 			ProviderID: "azure",
 			Label:      "floci-az",
@@ -313,7 +313,7 @@ func (m *Manager) statusWithClient(ctx context.Context, api dockerClient) models
 		}
 	}
 
-	return models.LocalStackStatus{
+	return models.EmulatorStatusDetail{
 		EmulatorID:  "floci-az",
 		ProviderID:  "azure",
 		Label:       "floci-az",
@@ -338,8 +338,8 @@ func (m *Manager) statusWithClient(ctx context.Context, api dockerClient) models
 	}
 }
 
-func (m *Manager) errorStatus(summary string) models.LocalStackStatus {
-	return models.LocalStackStatus{
+func (m *Manager) errorStatus(summary string) models.EmulatorStatusDetail {
+	return models.EmulatorStatusDetail{
 		EmulatorID: "floci-az",
 		ProviderID: "azure",
 		Label:      "floci-az",
@@ -385,7 +385,7 @@ func portConfig() (networkapi.PortSet, networkapi.PortMap, error) {
 	return ports, bindings, nil
 }
 
-func flociAZEnv(options models.LocalStackStartOptions) []string {
+func flociAZEnv(options models.EmulatorStartOptions) []string {
 	values := flociazcompat.DefaultContainerEnvironment()
 	for key, value := range options.Environment {
 		if validEnvName(key) && !isProtectedFlociAZEnvKey(key) {
@@ -427,7 +427,7 @@ func isProtectedFlociAZEnvKey(key string) bool {
 	}
 }
 
-func (m *Manager) containerMounts(options models.LocalStackStartOptions) ([]mountapi.Mount, error) {
+func (m *Manager) containerMounts(options models.EmulatorStartOptions) ([]mountapi.Mount, error) {
 	// floci-az runs docker-backed services (PostgreSQL Flexible Server, Redis,
 	// ACR, AKS) by spawning sibling Docker containers, which requires the host
 	// Docker socket mounted into the container. Without it, e.g. PostgreSQL
