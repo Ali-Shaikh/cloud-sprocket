@@ -3,8 +3,16 @@ import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vitest/config";
 
+// Tauri CLI sets TAURI_ENV_PLATFORM for beforeDevCommand / beforeBuildCommand.
+// When present, drop the browser mock so production (and tauri dev) bundles do
+// not ship mock inventory fixtures or the parallel mock RPC implementation.
+const enableBrowserMock = !process.env.TAURI_ENV_PLATFORM;
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    __ENABLE_BROWSER_MOCK__: JSON.stringify(enableBrowserMock),
+  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
