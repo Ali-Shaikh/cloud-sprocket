@@ -411,7 +411,77 @@ func (s *Store) ListLogs(ctx context.Context, limit int) ([]models.ActivityLogEn
 	return logs, rows.Err()
 }
 
+// migration is a numbered schema step applied once and recorded in
+// schema_migrations. Add new steps at the end of schemaMigrations only.
+type migration struct {
+	version int
+	apply   func(ctx context.Context, tx *sql.Tx) error
+}
+
+// schemaMigrations is the ordered list of schema steps. Version 1 is the
+// baseline that matches stores created before versioned migrations existed.
+var schemaMigrations = []migration{
+	{version: 1, apply: migrateV1},
+}
+
 func (s *Store) migrate(ctx context.Context) error {
+	if _, err := s.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version INTEGER PRIMARY KEY,
+			applied_at TEXT NOT NULL
+		)`); err != nil {
+		return fmt.Errorf("create schema_migrations: %w", err)
+	}
+
+	current, err := s.schemaVersion(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, step := range schemaMigrations {
+		if step.version <= current {
+			continue
+		}
+		if err := s.applyMigration(ctx, step); err != nil {
+			return fmt.Errorf("apply migration %d: %w", step.version, err)
+		}
+	}
+	return nil
+}
+
+func (s *Store) schemaVersion(ctx context.Context) (int, error) {
+	var version int
+	err := s.db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&version)
+	if err != nil {
+		return 0, fmt.Errorf("read schema version: %w", err)
+	}
+	return version, nil
+}
+
+func (s *Store) applyMigration(ctx context.Context, step migration) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := step.apply(ctx, tx); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(
+		ctx,
+		`INSERT INTO schema_migrations (version, applied_at) VALUES (?, CURRENT_TIMESTAMP)`,
+		step.version,
+	); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// migrateV1 creates the baseline application tables. Statements use
+// IF NOT EXISTS so existing installs without schema_migrations upgrade
+// safely and record version 1 without data loss.
+func migrateV1(ctx context.Context, tx *sql.Tx) error {
 	statements := []string{
 		`CREATE TABLE IF NOT EXISTS app_settings (
 			setting_key TEXT PRIMARY KEY,
@@ -446,7 +516,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	}
 
 	for _, statement := range statements {
-		if _, err := s.db.ExecContext(ctx, statement); err != nil {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
 			return err
 		}
 	}
