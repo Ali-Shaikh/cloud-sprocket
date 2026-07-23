@@ -460,7 +460,8 @@ func (s *Store) migrate(ctx context.Context) error {
 }
 
 // validateRecordedMigrationHistory ensures schema_migrations is contiguous
-// from version 1 (detects gaps or partial history from older tools). When
+// from version 1 (detects gaps or partial history from older tools) and that
+// the ledger is not newer than this binary's declared migrations. When
 // allowEmpty is true, an empty table is accepted (fresh database).
 func (s *Store) validateRecordedMigrationHistory(ctx context.Context, allowEmpty bool) error {
 	rows, err := s.db.QueryContext(ctx, `SELECT version FROM schema_migrations ORDER BY version ASC`)
@@ -485,10 +486,29 @@ func (s *Store) validateRecordedMigrationHistory(ctx context.Context, allowEmpty
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	if count == 0 && !allowEmpty {
-		return fmt.Errorf("schema_migrations is empty after migrate")
+	if count == 0 {
+		if !allowEmpty {
+			return fmt.Errorf("schema_migrations is empty after migrate")
+		}
+		return nil
+	}
+	maxRecorded := expected - 1
+	maxSupported := maxDeclaredMigrationVersion()
+	if maxRecorded > maxSupported {
+		return fmt.Errorf(
+			"database schema version %d is newer than this binary supports (max %d); upgrade CloudSprocket",
+			maxRecorded,
+			maxSupported,
+		)
 	}
 	return nil
+}
+
+func maxDeclaredMigrationVersion() int {
+	if len(schemaMigrations) == 0 {
+		return 0
+	}
+	return schemaMigrations[len(schemaMigrations)-1].version
 }
 
 func validateMigrationSequence(steps []migration) error {
@@ -503,15 +523,6 @@ func validateMigrationSequence(steps []migration) error {
 		expected++
 	}
 	return nil
-}
-
-func (s *Store) schemaVersion(ctx context.Context) (int, error) {
-	var version int
-	err := s.db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&version)
-	if err != nil {
-		return 0, fmt.Errorf("read schema version: %w", err)
-	}
-	return version, nil
 }
 
 // applyMigration applies one step under BEGIN IMMEDIATE so concurrent Open
