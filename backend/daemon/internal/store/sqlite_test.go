@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -264,6 +265,56 @@ func TestLegacyDBWithoutSchemaMigrationsRecordsVersion1(t *testing.T) {
 	}
 	if theme != "dark" {
 		t.Fatalf("legacy data lost or corrupted: got %q", theme)
+	}
+}
+
+func TestGappedMigrationHistoryFailsBeforeApplying(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "gapped.db")
+
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open raw sqlite: %v", err)
+	}
+	seed := []string{
+		`CREATE TABLE schema_migrations (
+			version INTEGER PRIMARY KEY,
+			applied_at TEXT NOT NULL
+		)`,
+		// Contiguous prefix broken: version 1 missing, version 3 present.
+		`INSERT INTO schema_migrations (version, applied_at) VALUES (1, '2026-01-01T00:00:00Z')`,
+		`INSERT INTO schema_migrations (version, applied_at) VALUES (3, '2026-01-01T00:00:00Z')`,
+	}
+	for _, statement := range seed {
+		if _, err := db.Exec(statement); err != nil {
+			_ = db.Close()
+			t.Fatalf("seed gapped history: %v", err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close seed: %v", err)
+	}
+
+	store, err := Open(path)
+	if err == nil {
+		_ = store.Close()
+		t.Fatal("expected Open to fail on gapped schema_migrations history")
+	}
+	if !strings.Contains(err.Error(), "gap") {
+		t.Fatalf("expected gap error, got %v", err)
+	}
+
+	// History must be unchanged: no extra migration rows committed.
+	check, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("reopen for check: %v", err)
+	}
+	defer check.Close()
+	var count int
+	if err := check.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&count); err != nil {
+		t.Fatalf("count rows: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("expected gapped history left untouched (2 rows), got %d", count)
 	}
 }
 
