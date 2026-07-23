@@ -411,7 +411,212 @@ func (s *Store) ListLogs(ctx context.Context, limit int) ([]models.ActivityLogEn
 	return logs, rows.Err()
 }
 
+// execContext is the subset of *sql.Tx / *sql.Conn used by migrations.
+type execContext interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+// migration is a numbered schema step applied once and recorded in
+// schema_migrations. Add new steps at the end of schemaMigrations only.
+type migration struct {
+	version int
+	apply   func(ctx context.Context, exec execContext) error
+}
+
+// schemaMigrations is the ordered list of schema steps. Version 1 is the
+// baseline that matches stores created before versioned migrations existed.
+var schemaMigrations = []migration{
+	{version: 1, apply: migrateV1},
+}
+
 func (s *Store) migrate(ctx context.Context) error {
+	if _, err := s.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version INTEGER PRIMARY KEY,
+			applied_at TEXT NOT NULL
+		)`); err != nil {
+		return fmt.Errorf("create schema_migrations: %w", err)
+	}
+
+	if err := validateMigrationSequence(schemaMigrations); err != nil {
+		return err
+	}
+
+	// Reject gapped history before applying any pending step so a newer
+	// migration cannot commit on top of a broken ledger.
+	if err := s.validateRecordedMigrationHistory(ctx, true); err != nil {
+		return err
+	}
+
+	for _, step := range schemaMigrations {
+		if err := s.applyMigration(ctx, step); err != nil {
+			return fmt.Errorf("apply migration %d: %w", step.version, err)
+		}
+	}
+	if err := s.validateRecordedMigrationHistory(ctx, false); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateRecordedMigrationHistory ensures schema_migrations is contiguous
+// from version 1 (detects gaps or partial history from older tools) and that
+// the ledger is not newer than this binary's declared migrations. When
+// allowEmpty is true, an empty table is accepted (fresh database).
+func (s *Store) validateRecordedMigrationHistory(ctx context.Context, allowEmpty bool) error {
+	rows, err := s.db.QueryContext(ctx, `SELECT version FROM schema_migrations ORDER BY version ASC`)
+	if err != nil {
+		return fmt.Errorf("list schema migrations: %w", err)
+	}
+	defer rows.Close()
+
+	expected := 1
+	count := 0
+	for rows.Next() {
+		var version int
+		if err := rows.Scan(&version); err != nil {
+			return err
+		}
+		if version != expected {
+			return fmt.Errorf("schema_migrations has a gap or out-of-order entry: expected %d, found %d", expected, version)
+		}
+		expected++
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if count == 0 {
+		if !allowEmpty {
+			return fmt.Errorf("schema_migrations is empty after migrate")
+		}
+		return nil
+	}
+	maxRecorded := expected - 1
+	maxSupported := maxDeclaredMigrationVersion()
+	if maxRecorded > maxSupported {
+		return fmt.Errorf(
+			"database schema version %d is newer than this binary supports (max %d); upgrade CloudSprocket",
+			maxRecorded,
+			maxSupported,
+		)
+	}
+	return nil
+}
+
+func maxDeclaredMigrationVersion() int {
+	if len(schemaMigrations) == 0 {
+		return 0
+	}
+	return schemaMigrations[len(schemaMigrations)-1].version
+}
+
+func validateMigrationSequence(steps []migration) error {
+	expected := 1
+	for _, step := range steps {
+		if step.version != expected {
+			return fmt.Errorf("schema migrations must be contiguous from 1: expected version %d, got %d", expected, step.version)
+		}
+		if step.apply == nil {
+			return fmt.Errorf("schema migration %d has a nil apply function", step.version)
+		}
+		expected++
+	}
+	return nil
+}
+
+// applyMigration applies one step under BEGIN IMMEDIATE so concurrent Open
+// calls on the same database cannot both select and insert the same version.
+func (s *Store) applyMigration(ctx context.Context, step migration) error {
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(ctx, "ROLLBACK")
+		}
+	}()
+
+	var alreadyApplied int
+	if err := conn.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*) FROM schema_migrations WHERE version = ?`,
+		step.version,
+	).Scan(&alreadyApplied); err != nil {
+		return fmt.Errorf("read schema version %d: %w", step.version, err)
+	}
+	if alreadyApplied > 0 {
+		if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+			return err
+		}
+		committed = true
+		return nil
+	}
+
+	// Under the exclusive lock, history must still be contiguous and the next
+	// version must be exactly current+1 (or 1 when the ledger is empty).
+	var current int
+	if err := conn.QueryRowContext(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&current); err != nil {
+		return fmt.Errorf("read schema version: %w", err)
+	}
+	if step.version != current+1 {
+		return fmt.Errorf("cannot apply migration %d: next expected version is %d", step.version, current+1)
+	}
+	if err := validateRecordedVersionsOnConn(ctx, conn); err != nil {
+		return err
+	}
+
+	if err := step.apply(ctx, conn); err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(
+		ctx,
+		`INSERT INTO schema_migrations (version, applied_at) VALUES (?, CURRENT_TIMESTAMP)`,
+		step.version,
+	); err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
+// validateRecordedVersionsOnConn checks contiguous 1..N history on an open
+// connection (used inside BEGIN IMMEDIATE). Empty history is allowed.
+func validateRecordedVersionsOnConn(ctx context.Context, conn *sql.Conn) error {
+	rows, err := conn.QueryContext(ctx, `SELECT version FROM schema_migrations ORDER BY version ASC`)
+	if err != nil {
+		return fmt.Errorf("list schema migrations: %w", err)
+	}
+	defer rows.Close()
+
+	expected := 1
+	for rows.Next() {
+		var version int
+		if err := rows.Scan(&version); err != nil {
+			return err
+		}
+		if version != expected {
+			return fmt.Errorf("schema_migrations has a gap or out-of-order entry: expected %d, found %d", expected, version)
+		}
+		expected++
+	}
+	return rows.Err()
+}
+
+// migrateV1 creates the baseline application tables. Statements use
+// IF NOT EXISTS so existing installs without schema_migrations upgrade
+// safely and record version 1 without data loss.
+func migrateV1(ctx context.Context, exec execContext) error {
 	statements := []string{
 		`CREATE TABLE IF NOT EXISTS app_settings (
 			setting_key TEXT PRIMARY KEY,
@@ -446,7 +651,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	}
 
 	for _, statement := range statements {
-		if _, err := s.db.ExecContext(ctx, statement); err != nil {
+		if _, err := exec.ExecContext(ctx, statement); err != nil {
 			return err
 		}
 	}

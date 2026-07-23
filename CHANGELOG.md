@@ -22,6 +22,9 @@ Installers for every release are published on the
 - Daemon JSON-RPC dispatch uses a method registry map instead of a large switch (#262)
 - Daemon RPC handler registration is split into domain helpers (core, AWS, Azure,
   deploy, labs, runtime) while keeping the same method surface and dispatch path
+- SQLite store uses versioned `schema_migrations` so future schema changes can
+  be applied in order; existing databases record baseline version 1 without
+  data loss
 
 ## [0.9.10] - 2026-07-22
 
