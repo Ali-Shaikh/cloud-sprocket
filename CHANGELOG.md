@@ -19,6 +19,9 @@ Installers for every release are published on the
   only via dynamic import when `__ENABLE_BROWSER_MOCK__` is true. Tauri builds
   (when `TAURI_ENV_PLATFORM` is set) define the flag false so mock fixtures are
   not shipped in the production bundle (architecture finding F-003).
+- Daemon JSON-RPC dispatch uses a method registry map instead of a large switch (#262)
+- Daemon RPC handler registration is split into domain helpers (core, AWS, Azure,
+  deploy, labs, runtime) while keeping the same method surface and dispatch path
 
 ## [0.9.10] - 2026-07-22
 
