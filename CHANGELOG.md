@@ -9,6 +9,13 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Changed
+
+- Daemon `app.Service` construction uses an explicit `Deps` struct via
+  `NewFromDeps`; production wiring in `cloudsprocketd` no longer passes ~23
+  positional inventory arguments. `New` and `NewWithRuntimes` remain as
+  compatibility wrappers for tests (architecture F-002).
+
 ## [0.9.10] - 2026-07-22
 
 ### Added

@@ -92,6 +92,105 @@ type runtimeStatus struct {
 	Emulators []models.EmulatorSummary
 }
 
+// Deps holds the collaborators required to construct a Service.
+// Prefer NewFromDeps for production wiring so call sites stay labelled and
+// new inventory interfaces do not lengthen positional constructor argument lists.
+type Deps struct {
+	Settings       config.Settings
+	Store          *store.Store
+	Discovery      *discovery.Service
+	S3             S3Inventory
+	EC2            EC2Inventory
+	Lambda         LambdaInventory
+	DynamoDB       DynamoDBInventory
+	SQS            SQSInventory
+	SNS            SNSInventory
+	RDS            RDSInventory
+	ECS            ECSInventory
+	EKS            EKSInventory
+	CloudFormation CloudFormationInventory
+	EventBridge    EventBridgeInventory
+	Route53        Route53Inventory
+	Elbv2          Elbv2Inventory
+	Kms            KmsInventory
+	ApiGateway     ApiGatewayInventory
+	SecretsManager SecretsManagerInventory
+	Logs           LogsInventory
+	IAM            IAMInventory
+	Azure          AzureInventory
+	Docker         DockerRuntime
+	LocalStack     LocalStackManager
+	AzureRuntime   AzureRuntimeManager
+}
+
+// NewFromDeps constructs a Service from an explicit dependency set.
+// When LocalStack or AzureRuntime is nil, production defaults are created from Settings
+// (same behaviour as New).
+func NewFromDeps(deps Deps) *Service {
+	localStackMgr := deps.LocalStack
+	if localStackMgr == nil {
+		localStackMgr = localstack.NewManager(deps.Settings)
+	}
+	azureRuntime := deps.AzureRuntime
+	if azureRuntime == nil {
+		azureRuntime = flociaz.NewManager(deps.Settings)
+	}
+
+	recipeLoader := recipes.Bundled().WithImportedDir(deps.Settings.ImportedRecipesDir)
+	deployEngine := deploy.NewEngine(tofu.NewRunner(tofu.Resolve(deps.Settings)), deps.Settings, recipeLoader)
+	cipher, cipherErr := loadCipher(deps.Settings.SecretKeyPath)
+	service := &Service{
+		settings:              deps.Settings,
+		store:                 deps.Store,
+		discovery:             deps.Discovery,
+		s3:                    deps.S3,
+		ec2:                   deps.EC2,
+		lambda:                deps.Lambda,
+		dynamodb:              deps.DynamoDB,
+		sqs:                   deps.SQS,
+		sns:                   deps.SNS,
+		rds:                   deps.RDS,
+		ecs:                   deps.ECS,
+		eks:                   deps.EKS,
+		cloudformation:        deps.CloudFormation,
+		eventbridge:           deps.EventBridge,
+		route53:               deps.Route53,
+		elbv2:                 deps.Elbv2,
+		kms:                   deps.Kms,
+		apigateway:            deps.ApiGateway,
+		secretsManager:        deps.SecretsManager,
+		logs:                  deps.Logs,
+		iam:                   deps.IAM,
+		azure:                 deps.Azure,
+		docker:                deps.Docker,
+		localstackMgr:         localStackMgr,
+		azureRuntime:          azureRuntime,
+		recipes:               recipeLoader,
+		deployer:              deployEngine,
+		cipher:                cipher,
+		initialisationErr:     cipherErr,
+		azureInventoryTimeout: defaultAzureInventoryTimeout,
+		preferences:           defaultServicePreferences(),
+		now:                   func() time.Time { return time.Now().UTC() },
+	}
+	service.mu.Lock()
+	if err := service.loadPreferencesLocked(); err != nil {
+		log.Printf("preferences: could not load %s, using defaults: %v", service.preferencesPath(), err)
+		service.preferences = defaultServicePreferences()
+	}
+	service.mu.Unlock()
+	if service.initialisationErr == nil && service.store != nil {
+		recoveryCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := service.recoverLabFaults(recoveryCtx); err != nil {
+			log.Printf("labs: could not recover active faults at startup: %v", err)
+		}
+	}
+	return service
+}
+
+// New constructs a Service with default LocalStack and floci-az managers.
+// Prefer NewFromDeps for new call sites; this wrapper keeps existing tests stable.
 func New(
 	settings config.Settings,
 	store *store.Store,
@@ -117,11 +216,36 @@ func New(
 	azureInventory AzureInventory,
 	dockerRuntime DockerRuntime,
 ) *Service {
-	localStackMgr := localstack.NewManager(settings)
-	azureRuntime := flociaz.NewManager(settings)
-	return NewWithRuntimes(settings, store, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, eksInventory, cloudformationInventory, eventbridgeInventory, route53Inventory, elbv2Inventory, kmsInventory, apigatewayInventory, secretsManagerInventory, logsInventory, iamInventory, azureInventory, dockerRuntime, localStackMgr, azureRuntime)
+	return NewFromDeps(Deps{
+		Settings:       settings,
+		Store:          store,
+		Discovery:      discoveryService,
+		S3:             s3Inventory,
+		EC2:            ec2Inventory,
+		Lambda:         lambdaInventory,
+		DynamoDB:       dynamodbInventory,
+		SQS:            sqsInventory,
+		SNS:            snsInventory,
+		RDS:            rdsInventory,
+		ECS:            ecsInventory,
+		EKS:            eksInventory,
+		CloudFormation: cloudformationInventory,
+		EventBridge:    eventbridgeInventory,
+		Route53:        route53Inventory,
+		Elbv2:          elbv2Inventory,
+		Kms:            kmsInventory,
+		ApiGateway:     apigatewayInventory,
+		SecretsManager: secretsManagerInventory,
+		Logs:           logsInventory,
+		IAM:            iamInventory,
+		Azure:          azureInventory,
+		Docker:         dockerRuntime,
+		// LocalStack and AzureRuntime left nil so NewFromDeps applies defaults.
+	})
 }
 
+// NewWithRuntimes constructs a Service with explicit LocalStack and Azure runtime managers.
+// Prefer NewFromDeps for new call sites; this wrapper keeps existing tests stable.
 func NewWithRuntimes(
 	settings config.Settings,
 	store *store.Store,
@@ -149,57 +273,33 @@ func NewWithRuntimes(
 	localStackMgr LocalStackManager,
 	azureRuntime AzureRuntimeManager,
 ) *Service {
-	recipeLoader := recipes.Bundled().WithImportedDir(settings.ImportedRecipesDir)
-	deployEngine := deploy.NewEngine(tofu.NewRunner(tofu.Resolve(settings)), settings, recipeLoader)
-	cipher, cipherErr := loadCipher(settings.SecretKeyPath)
-	service := &Service{
-		settings:              settings,
-		store:                 store,
-		discovery:             discoveryService,
-		s3:                    s3Inventory,
-		ec2:                   ec2Inventory,
-		lambda:                lambdaInventory,
-		dynamodb:              dynamodbInventory,
-		sqs:                   sqsInventory,
-		sns:                   snsInventory,
-		rds:                   rdsInventory,
-		ecs:                   ecsInventory,
-		eks:                   eksInventory,
-		cloudformation:        cloudformationInventory,
-		eventbridge:           eventbridgeInventory,
-		route53:               route53Inventory,
-		elbv2:                 elbv2Inventory,
-		kms:                   kmsInventory,
-		apigateway:            apigatewayInventory,
-		secretsManager:        secretsManagerInventory,
-		logs:                  logsInventory,
-		iam:                   iamInventory,
-		azure:                 azureInventory,
-		docker:                dockerRuntime,
-		localstackMgr:         localStackMgr,
-		azureRuntime:          azureRuntime,
-		recipes:               recipeLoader,
-		deployer:              deployEngine,
-		cipher:                cipher,
-		initialisationErr:     cipherErr,
-		azureInventoryTimeout: defaultAzureInventoryTimeout,
-		preferences:           defaultServicePreferences(),
-		now:                   func() time.Time { return time.Now().UTC() },
-	}
-	service.mu.Lock()
-	if err := service.loadPreferencesLocked(); err != nil {
-		log.Printf("preferences: could not load %s, using defaults: %v", service.preferencesPath(), err)
-		service.preferences = defaultServicePreferences()
-	}
-	service.mu.Unlock()
-	if service.initialisationErr == nil && service.store != nil {
-		recoveryCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := service.recoverLabFaults(recoveryCtx); err != nil {
-			log.Printf("labs: could not recover active faults at startup: %v", err)
-		}
-	}
-	return service
+	return NewFromDeps(Deps{
+		Settings:       settings,
+		Store:          store,
+		Discovery:      discoveryService,
+		S3:             s3Inventory,
+		EC2:            ec2Inventory,
+		Lambda:         lambdaInventory,
+		DynamoDB:       dynamodbInventory,
+		SQS:            sqsInventory,
+		SNS:            snsInventory,
+		RDS:            rdsInventory,
+		ECS:            ecsInventory,
+		EKS:            eksInventory,
+		CloudFormation: cloudformationInventory,
+		EventBridge:    eventbridgeInventory,
+		Route53:        route53Inventory,
+		Elbv2:          elbv2Inventory,
+		Kms:            kmsInventory,
+		ApiGateway:     apigatewayInventory,
+		SecretsManager: secretsManagerInventory,
+		Logs:           logsInventory,
+		IAM:            iamInventory,
+		Azure:          azureInventory,
+		Docker:         dockerRuntime,
+		LocalStack:     localStackMgr,
+		AzureRuntime:   azureRuntime,
+	})
 }
 
 // InitialisationError reports a startup condition that makes it unsafe to
