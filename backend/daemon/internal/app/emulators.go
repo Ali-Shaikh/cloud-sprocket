@@ -144,7 +144,7 @@ func (s *Service) writeLocalAzureSubscription() error {
 // file while preserving all other sections, comments, and formatting. The file
 // and its parent directory are created when missing.
 
-func (s *Service) emulatorsStart(ctx context.Context, options models.LocalStackStartOptions) (models.EmulatorActionResult, error) {
+func (s *Service) emulatorsStart(ctx context.Context, options models.EmulatorStartOptions) (models.EmulatorActionResult, error) {
 	emulatorID := normaliseEmulatorID(options.EmulatorID)
 	if emulatorID == "floci-az" {
 		if s.azureRuntime == nil {
@@ -245,7 +245,7 @@ func (s *Service) handleEmulatorsPrepareProfile(params json.RawMessage) (any, er
 }
 
 func (s *Service) handleEmulatorsStart(ctx context.Context, params json.RawMessage) (any, error) {
-	var request models.LocalStackStartOptions
+	var request models.EmulatorStartOptions
 	_ = json.Unmarshal(params, &request)
 	return s.emulatorsStart(ctx, request)
 }

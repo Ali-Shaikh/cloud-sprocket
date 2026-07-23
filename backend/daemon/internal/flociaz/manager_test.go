@@ -24,7 +24,7 @@ import (
 
 type stubDockerClient struct {
 	containers       []containerapi.Summary
-	inspectEnv         []string
+	inspectEnv       []string
 	createCalls      int
 	startCalls       []string
 	stopCalls        []string
@@ -143,7 +143,7 @@ func TestStartCreatesAndStartsManagedContainer(t *testing.T) {
 	dockerClient := &stubDockerClient{}
 	manager := newTestManager(t, dockerClient)
 
-	status, err := manager.Start(context.Background(), models.LocalStackStartOptions{})
+	status, err := manager.Start(context.Background(), models.EmulatorStartOptions{})
 	if err != nil {
 		t.Fatalf("expected start to succeed, got %v", err)
 	}
@@ -168,7 +168,7 @@ func TestStartConfiguresPersistenceAndEnvironment(t *testing.T) {
 	dockerClient := &stubDockerClient{}
 	manager := newTestManager(t, dockerClient)
 
-	_, err := manager.Start(context.Background(), models.LocalStackStartOptions{
+	_, err := manager.Start(context.Background(), models.EmulatorStartOptions{
 		Persistence: true,
 		Environment: map[string]string{
 			"FLOCI_AZ_SERVICES_FUNCTIONS_ENABLED": "false",
@@ -205,7 +205,7 @@ func TestStartProtectsOpenTofuContractKeysFromOverride(t *testing.T) {
 	dockerClient := &stubDockerClient{}
 	manager := newTestManager(t, dockerClient)
 
-	_, err := manager.Start(context.Background(), models.LocalStackStartOptions{
+	_, err := manager.Start(context.Background(), models.EmulatorStartOptions{
 		Environment: map[string]string{
 			"FLOCI_AZ_TLS_ENABLED":         "false",
 			"FLOCI_AZ_HOSTNAME":            "attacker.example",
@@ -238,7 +238,7 @@ func TestStartReplacesContainerMissingOpenTofuContract(t *testing.T) {
 	}
 	manager := newTestManager(t, dockerClient)
 
-	if _, err := manager.Start(context.Background(), models.LocalStackStartOptions{}); err != nil {
+	if _, err := manager.Start(context.Background(), models.EmulatorStartOptions{}); err != nil {
 		t.Fatalf("expected start to replace stale container, got %v", err)
 	}
 	if dockerClient.createCalls != 1 {

@@ -212,7 +212,7 @@ func normaliseEmulatorID(value string) string {
 	return value
 }
 
-func emulatorActionResult(action string, status models.LocalStackStatus) models.EmulatorActionResult {
+func emulatorActionResult(action string, status models.EmulatorStatusDetail) models.EmulatorActionResult {
 	state := models.EmulatorActionSucceeded
 	switch status.Status {
 	case models.EmulatorStatusRunning, models.EmulatorStatusStopped:

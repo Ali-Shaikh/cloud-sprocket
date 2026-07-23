@@ -214,17 +214,17 @@ type DockerRuntime interface {
 }
 
 type LocalStackManager interface {
-	Status(ctx context.Context) (models.LocalStackStatus, error)
-	Start(ctx context.Context, options models.LocalStackStartOptions) (models.LocalStackStatus, error)
-	Stop(ctx context.Context) (models.LocalStackStatus, error)
+	Status(ctx context.Context) (models.EmulatorStatusDetail, error)
+	Start(ctx context.Context, options models.EmulatorStartOptions) (models.EmulatorStatusDetail, error)
+	Stop(ctx context.Context) (models.EmulatorStatusDetail, error)
 	Logs(ctx context.Context, tail int) (models.EmulatorLogSnapshot, error)
 	EnsureManagedProfile() error
 }
 
 type AzureRuntimeManager interface {
-	Status(ctx context.Context) (models.LocalStackStatus, error)
-	Start(ctx context.Context, options models.LocalStackStartOptions) (models.LocalStackStatus, error)
-	Stop(ctx context.Context) (models.LocalStackStatus, error)
+	Status(ctx context.Context) (models.EmulatorStatusDetail, error)
+	Start(ctx context.Context, options models.EmulatorStartOptions) (models.EmulatorStatusDetail, error)
+	Stop(ctx context.Context) (models.EmulatorStatusDetail, error)
 	Logs(ctx context.Context, tail int) (models.EmulatorLogSnapshot, error)
 	EnsureManagedConfig() error
 }
