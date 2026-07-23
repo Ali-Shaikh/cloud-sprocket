@@ -411,11 +411,16 @@ func (s *Store) ListLogs(ctx context.Context, limit int) ([]models.ActivityLogEn
 	return logs, rows.Err()
 }
 
+// execContext is the subset of *sql.Tx / *sql.Conn used by migrations.
+type execContext interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
 // migration is a numbered schema step applied once and recorded in
 // schema_migrations. Add new steps at the end of schemaMigrations only.
 type migration struct {
 	version int
-	apply   func(ctx context.Context, tx *sql.Tx) error
+	apply   func(ctx context.Context, exec execContext) error
 }
 
 // schemaMigrations is the ordered list of schema steps. Version 1 is the
@@ -433,18 +438,28 @@ func (s *Store) migrate(ctx context.Context) error {
 		return fmt.Errorf("create schema_migrations: %w", err)
 	}
 
-	current, err := s.schemaVersion(ctx)
-	if err != nil {
+	if err := validateMigrationSequence(schemaMigrations); err != nil {
 		return err
 	}
 
 	for _, step := range schemaMigrations {
-		if step.version <= current {
-			continue
-		}
 		if err := s.applyMigration(ctx, step); err != nil {
 			return fmt.Errorf("apply migration %d: %w", step.version, err)
 		}
+	}
+	return nil
+}
+
+func validateMigrationSequence(steps []migration) error {
+	expected := 1
+	for _, step := range steps {
+		if step.version != expected {
+			return fmt.Errorf("schema migrations must be contiguous from 1: expected version %d, got %d", expected, step.version)
+		}
+		if step.apply == nil {
+			return fmt.Errorf("schema migration %d has a nil apply function", step.version)
+		}
+		expected++
 	}
 	return nil
 }
@@ -458,30 +473,58 @@ func (s *Store) schemaVersion(ctx context.Context) (int, error) {
 	return version, nil
 }
 
+// applyMigration applies one step under BEGIN IMMEDIATE so concurrent Open
+// calls on the same database cannot both select and insert the same version.
 func (s *Store) applyMigration(ctx context.Context, step migration) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	conn, err := s.db.Conn(ctx)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer conn.Close()
 
-	if err := step.apply(ctx, tx); err != nil {
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(ctx, "ROLLBACK")
+		}
+	}()
+
+	var current int
+	if err := conn.QueryRowContext(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&current); err != nil {
+		return fmt.Errorf("read schema version: %w", err)
+	}
+	if step.version <= current {
+		if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+			return err
+		}
+		committed = true
+		return nil
+	}
+
+	if err := step.apply(ctx, conn); err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(
 		ctx,
 		`INSERT INTO schema_migrations (version, applied_at) VALUES (?, CURRENT_TIMESTAMP)`,
 		step.version,
 	); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return err
+	}
+	committed = true
+	return nil
 }
 
 // migrateV1 creates the baseline application tables. Statements use
 // IF NOT EXISTS so existing installs without schema_migrations upgrade
 // safely and record version 1 without data loss.
-func migrateV1(ctx context.Context, tx *sql.Tx) error {
+func migrateV1(ctx context.Context, exec execContext) error {
 	statements := []string{
 		`CREATE TABLE IF NOT EXISTS app_settings (
 			setting_key TEXT PRIMARY KEY,
@@ -516,7 +559,7 @@ func migrateV1(ctx context.Context, tx *sql.Tx) error {
 	}
 
 	for _, statement := range statements {
-		if _, err := tx.ExecContext(ctx, statement); err != nil {
+		if _, err := exec.ExecContext(ctx, statement); err != nil {
 			return err
 		}
 	}
