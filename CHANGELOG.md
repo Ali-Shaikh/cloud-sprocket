@@ -15,6 +15,10 @@ Installers for every release are published on the
   `NewFromDeps`; production wiring in `cloudsprocketd` no longer passes ~23
   positional inventory arguments. `New` and `NewWithRuntimes` remain as
   compatibility wrappers for tests (architecture F-002).
+- Desktop backend client splits the browser mock into `backend-mock.ts`, loaded
+  only via dynamic import when `__ENABLE_BROWSER_MOCK__` is true. Tauri builds
+  (when `TAURI_ENV_PLATFORM` is set) define the flag false so mock fixtures are
+  not shipped in the production bundle (architecture finding F-003).
 
 ## [0.9.10] - 2026-07-22
 
