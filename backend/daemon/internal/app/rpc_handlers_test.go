@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 )
@@ -59,8 +60,32 @@ func TestMethodHandlersMemoised(t *testing.T) {
 	if _, ok := a["providers.list"]; !ok {
 		t.Fatal("providers.list missing")
 	}
-	// sync.Once must return the same map instance.
-	if len(a) == 0 || len(b) == 0 {
-		t.Fatal("empty handler map")
+	// sync.Once must return the same map instance: mutate through one reference.
+	sentinel := RPCHandler(func(context.Context, json.RawMessage, Notifier) (any, error) {
+		return "memo-test", nil
+	})
+	a["__memo_identity_probe__"] = sentinel
+	got, ok := b["__memo_identity_probe__"]
+	if !ok {
+		t.Fatal("methodHandlers returned a different map on second call")
+	}
+	delete(a, "__memo_identity_probe__")
+	if _, still := b["__memo_identity_probe__"]; still {
+		t.Fatal("probe key still present after delete on shared map")
+	}
+	_ = got
+}
+
+func TestRegisteredMethodsSorted(t *testing.T) {
+	t.Parallel()
+	service := &Service{}
+	names := service.RegisteredMethods()
+	if len(names) != 171 {
+		t.Fatalf("RegisteredMethods length: got %d, want 171", len(names))
+	}
+	for i := 1; i < len(names); i++ {
+		if names[i-1] >= names[i] {
+			t.Fatalf("RegisteredMethods not sorted at %d: %q then %q", i, names[i-1], names[i])
+		}
 	}
 }

@@ -6,6 +6,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"sort"
 )
 
 // RPCHandler is the uniform signature for JSON-RPC method handlers.
@@ -211,6 +212,6 @@ func (s *Service) RegisteredMethods() []string {
 	for name := range handlers {
 		names = append(names, name)
 	}
-	// Insertion order is not stable; callers that need sorted order should sort.
+	sort.Strings(names)
 	return names
 }
