@@ -447,6 +447,40 @@ func (s *Store) migrate(ctx context.Context) error {
 			return fmt.Errorf("apply migration %d: %w", step.version, err)
 		}
 	}
+	if err := s.validateRecordedMigrationHistory(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateRecordedMigrationHistory ensures schema_migrations has contiguous
+// versions starting at 1 (detects gaps or partial history from older tools).
+func (s *Store) validateRecordedMigrationHistory(ctx context.Context) error {
+	rows, err := s.db.QueryContext(ctx, `SELECT version FROM schema_migrations ORDER BY version ASC`)
+	if err != nil {
+		return fmt.Errorf("list schema migrations: %w", err)
+	}
+	defer rows.Close()
+
+	expected := 1
+	count := 0
+	for rows.Next() {
+		var version int
+		if err := rows.Scan(&version); err != nil {
+			return err
+		}
+		if version != expected {
+			return fmt.Errorf("schema_migrations has a gap or out-of-order entry: expected %d, found %d", expected, version)
+		}
+		expected++
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if count == 0 {
+		return fmt.Errorf("schema_migrations is empty after migrate")
+	}
 	return nil
 }
 
