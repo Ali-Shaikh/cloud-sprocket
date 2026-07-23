@@ -40,27 +40,32 @@ func main() {
 	diagnosticLogger := log.New(diagnostics, "", log.Ldate|log.Ltime|log.LUTC)
 
 	discoveryService := discovery.New(settings, exec.LookPath)
-	s3Inventory := awsadapter.NewS3Inventory(settings)
-	ec2Inventory := awsadapter.NewEC2Inventory(settings)
-	lambdaInventory := awsadapter.NewLambdaInventory(settings)
-	dynamodbInventory := awsadapter.NewDynamoDBInventory(settings)
-	sqsInventory := awsadapter.NewSQSInventory(settings)
-	snsInventory := awsadapter.NewSNSInventory(settings)
-	rdsInventory := awsadapter.NewRDSInventory(settings)
-	ecsInventory := awsadapter.NewECSInventory(settings)
-	eksInventory := awsadapter.NewEKSInventory(settings)
-	cloudformationInventory := awsadapter.NewCloudFormationInventory(settings)
-	eventbridgeInventory := awsadapter.NewEventBridgeInventory(settings)
-	route53Inventory := awsadapter.NewRoute53Inventory(settings)
-	elbv2Inventory := awsadapter.NewElbv2Inventory(settings)
-	kmsInventory := awsadapter.NewKmsInventory(settings)
-	apigatewayInventory := awsadapter.NewApiGatewayInventory(settings)
-	secretsManagerInventory := awsadapter.NewSecretsManagerInventory(settings)
-	logsInventory := awsadapter.NewLogsInventory(settings)
-	iamInventory := awsadapter.NewIAMInventory(settings)
-	azureInventory := azureadapter.NewInventory(settings)
-	dockerRuntime := dockerruntime.New(settings)
-	service := app.New(settings, dataStore, discoveryService, s3Inventory, ec2Inventory, lambdaInventory, dynamodbInventory, sqsInventory, snsInventory, rdsInventory, ecsInventory, eksInventory, cloudformationInventory, eventbridgeInventory, route53Inventory, elbv2Inventory, kmsInventory, apigatewayInventory, secretsManagerInventory, logsInventory, iamInventory, azureInventory, dockerRuntime)
+	service := app.NewFromDeps(app.Deps{
+		Settings:       settings,
+		Store:          dataStore,
+		Discovery:      discoveryService,
+		S3:             awsadapter.NewS3Inventory(settings),
+		EC2:            awsadapter.NewEC2Inventory(settings),
+		Lambda:         awsadapter.NewLambdaInventory(settings),
+		DynamoDB:       awsadapter.NewDynamoDBInventory(settings),
+		SQS:            awsadapter.NewSQSInventory(settings),
+		SNS:            awsadapter.NewSNSInventory(settings),
+		RDS:            awsadapter.NewRDSInventory(settings),
+		ECS:            awsadapter.NewECSInventory(settings),
+		EKS:            awsadapter.NewEKSInventory(settings),
+		CloudFormation: awsadapter.NewCloudFormationInventory(settings),
+		EventBridge:    awsadapter.NewEventBridgeInventory(settings),
+		Route53:        awsadapter.NewRoute53Inventory(settings),
+		Elbv2:          awsadapter.NewElbv2Inventory(settings),
+		Kms:            awsadapter.NewKmsInventory(settings),
+		ApiGateway:     awsadapter.NewApiGatewayInventory(settings),
+		SecretsManager: awsadapter.NewSecretsManagerInventory(settings),
+		Logs:           awsadapter.NewLogsInventory(settings),
+		IAM:            awsadapter.NewIAMInventory(settings),
+		Azure:          azureadapter.NewInventory(settings),
+		Docker:         dockerruntime.New(settings),
+		// LocalStack and AzureRuntime left nil so NewFromDeps applies defaults.
+	})
 	if err := service.InitialisationError(); err != nil {
 		log.Fatal("failed to initialise secret storage; verify the key file and its permissions")
 	}
