@@ -469,7 +469,10 @@ export default function App() {
     setActiveWorkspaceTabId,
     reloadProvidersAndProfiles: () => reloadProvidersAndProfilesRef.current(),
   });
-  useVirtualisationPoll(activeWorkspaceTabId, refreshVirtualisationState);
+  const refreshEmulatorLogsOnEnter = useCallback(async () => {
+    await Promise.all([refreshLocalStackLogs(), refreshFlociAzLogs()]);
+  }, [refreshFlociAzLogs, refreshLocalStackLogs]);
+  useVirtualisationPoll(activeWorkspaceTabId, refreshVirtualisationState, refreshEmulatorLogsOnEnter);
   const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
   const azureInventoryFetchedScopesRef = useRef(new Set<string>());
   const awsInventoryFetchedScopesRef = useRef(new Set<string>());

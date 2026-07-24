@@ -11,6 +11,10 @@ Installers for every release are published on the
 
 ### Changed
 
+- Local Runtime virtualisation poll requests engine and emulator status only
+  (`runtime.get`). Emulator log tails load once when opening the tab, on
+  Refresh Logs, and after start/stop/recreate actions, so idle polling no
+  longer pulls both Docker log streams every 5s (architecture F-017 R3).
 - Workspace snapshot rebuilds on single-service AWS/Azure mutation and job
   completion paths use scoped `workspaceSnapshotOptions` (service scope plus
   skip opposite cloud) so handlers no longer re-enrich every inventory

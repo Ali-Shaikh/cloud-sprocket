@@ -4,19 +4,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { backendRequest } from "@/lib/backend";
-import { fetchVirtualisationSnapshot } from "@/lib/workspace-runtime";
+import { fetchEmulatorLogs, fetchVirtualisationStatus } from "@/lib/workspace-runtime";
 
 vi.mock("@/lib/backend", () => ({
   backendRequest: vi.fn(),
 }));
 
-describe("fetchVirtualisationSnapshot", () => {
+describe("fetchVirtualisationStatus", () => {
   beforeEach(() => {
     vi.mocked(backendRequest).mockReset();
   });
 
-  it("merges runtime.get with emulator log snapshots", async () => {
-    vi.mocked(backendRequest).mockImplementation(async (method: string, params?: { emulatorId?: string }) => {
+  it("loads runtime.get only without emulator log tails", async () => {
+    vi.mocked(backendRequest).mockImplementation(async (method: string) => {
       if (method === "runtime.get") {
         return {
           dockerRuntime: { reachable: true },
@@ -25,20 +25,46 @@ describe("fetchVirtualisationSnapshot", () => {
           dockerDiagnostics: [],
         };
       }
-      if (method === "emulators.logs" && params?.emulatorId === "localstack") {
-        return { emulatorId: "localstack", lines: ["line"], summary: "loaded" };
-      }
-      if (method === "emulators.logs" && params?.emulatorId === "floci-az") {
-        throw new Error("floci logs unavailable");
-      }
       throw new Error(`unexpected method ${method}`);
     });
 
-    const result = await fetchVirtualisationSnapshot();
+    const result = await fetchVirtualisationStatus();
 
     expect(result.dockerRuntime).toEqual({ reachable: true });
-    expect(result.localStackLogs.lines).toEqual(["line"]);
-    expect(result.flociAzLogs.summary).toContain("floci logs unavailable");
+    expect(result.emulatorSummaries).toHaveLength(1);
+    expect(vi.mocked(backendRequest)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(backendRequest)).toHaveBeenCalledWith("runtime.get");
+  });
+});
+
+describe("fetchEmulatorLogs", () => {
+  beforeEach(() => {
+    vi.mocked(backendRequest).mockReset();
+  });
+
+  it("returns log lines for a successful tail request", async () => {
+    vi.mocked(backendRequest).mockResolvedValue({
+      emulatorId: "localstack",
+      lines: ["line"],
+      summary: "loaded",
+    });
+
+    const result = await fetchEmulatorLogs("localstack");
+
+    expect(result.lines).toEqual(["line"]);
+    expect(vi.mocked(backendRequest)).toHaveBeenCalledWith("emulators.logs", {
+      emulatorId: "localstack",
+      tail: 200,
+    });
+  });
+
+  it("returns an empty snapshot with the error summary when logs fail", async () => {
+    vi.mocked(backendRequest).mockRejectedValue(new Error("floci logs unavailable"));
+
+    const result = await fetchEmulatorLogs("floci-az");
+
+    expect(result.emulatorId).toBe("floci-az");
+    expect(result.lines).toEqual([]);
+    expect(result.summary).toContain("floci logs unavailable");
   });
 });

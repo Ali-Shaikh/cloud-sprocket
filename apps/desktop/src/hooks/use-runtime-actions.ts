@@ -11,7 +11,7 @@ import {
   emulatorStatusFromWorkspace,
   normaliseEmulatorLogSnapshot,
 } from "@/lib/workspace-shell";
-import { fetchVirtualisationSnapshot } from "@/lib/workspace-runtime";
+import { fetchEmulatorLogs, fetchVirtualisationStatus } from "@/lib/workspace-runtime";
 import { normaliseWorkspaceSnapshot } from "@/lib/workspace-snapshot";
 import type {
   DockerRuntimeSnapshot,
@@ -101,8 +101,9 @@ export function useRuntimeActions({
     });
   }, [setWorkspace]);
 
+  /** Status only (`runtime.get`). Log tails load on Refresh Logs or tab enter. */
   const refreshVirtualisationState = useCallback(async (): Promise<WorkspaceSnapshot> => {
-    const result = await fetchVirtualisationSnapshot();
+    const result = await fetchVirtualisationStatus();
     return await new Promise<WorkspaceSnapshot>((resolve) => {
       startTransition(() => {
         setWorkspace((current) => {
@@ -116,38 +117,23 @@ export function useRuntimeActions({
           resolve(nextWorkspace);
           return nextWorkspace;
         });
-        setLocalStackLogs(normaliseEmulatorLogSnapshot(result.localStackLogs));
-        setFlociAzLogs(normaliseEmulatorLogSnapshot(result.flociAzLogs));
       });
     });
-  }, [setFlociAzLogs, setLocalStackLogs, setWorkspace]);
+  }, [setWorkspace]);
 
   const refreshLocalStackLogs = useCallback(async (): Promise<void> => {
     setLocalStackLogsStatus("Refreshing LocalStack logs...");
-    try {
-      const logsResult = await backendRequest<EmulatorLogSnapshot>("emulators.logs", {
-        emulatorId: "localstack",
-        tail: 200,
-      });
-      setLocalStackLogs(normaliseEmulatorLogSnapshot(logsResult));
-      setLocalStackLogsStatus("");
-    } catch (error) {
-      setLocalStackLogsStatus(error instanceof Error ? error.message : "Failed to refresh logs.");
-    }
+    const logsResult = await fetchEmulatorLogs("localstack");
+    setLocalStackLogs(normaliseEmulatorLogSnapshot(logsResult));
+    // Error text lives in logs.summary when the helper could not load a tail.
+    setLocalStackLogsStatus("");
   }, [setLocalStackLogs, setLocalStackLogsStatus]);
 
   const refreshFlociAzLogs = useCallback(async (): Promise<void> => {
     setFlociAzLogsStatus("Refreshing floci-az logs...");
-    try {
-      const logsResult = await backendRequest<EmulatorLogSnapshot>("emulators.logs", {
-        emulatorId: "floci-az",
-        tail: 200,
-      });
-      setFlociAzLogs(normaliseEmulatorLogSnapshot(logsResult));
-      setFlociAzLogsStatus("");
-    } catch (error) {
-      setFlociAzLogsStatus(error instanceof Error ? error.message : "Failed to refresh logs.");
-    }
+    const logsResult = await fetchEmulatorLogs("floci-az");
+    setFlociAzLogs(normaliseEmulatorLogSnapshot(logsResult));
+    setFlociAzLogsStatus("");
   }, [setFlociAzLogs, setFlociAzLogsStatus]);
 
   const localStackEnvironment = useCallback((): Record<string, string> => {
