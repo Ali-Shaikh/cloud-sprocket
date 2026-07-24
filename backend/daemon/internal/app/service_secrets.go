@@ -4,9 +4,11 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"cloudsprocket/backend/daemon/internal/deploy"
@@ -123,11 +125,14 @@ func (s *Service) sealForStore(deployment *deploy.Deployment) (*deploy.Deploymen
 }
 
 // openFromStore unseals sensitive variable and output values in place after a
-// deployment is loaded from the store. A nil cipher is a no-op.
-func (s *Service) openFromStore(deployment *deploy.Deployment) {
+// deployment is loaded from the store. Legacy plaintext sensitive values are
+// re-sealed and written back so they do not remain unencrypted at rest. A nil
+// cipher is a no-op.
+func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployment) {
 	if s.cipher == nil || deployment == nil {
 		return
 	}
+	needsReseal := s.hasLegacyPlaintextSecrets(deployment)
 	for _, name := range deployment.SensitiveVars {
 		if value, ok := deployment.Variables[name]; ok {
 			deployment.Variables[name] = s.openValue(value)
@@ -145,6 +150,55 @@ func (s *Service) openFromStore(deployment *deploy.Deployment) {
 			}
 		}
 	}
+	if !needsReseal {
+		return
+	}
+	// Persist the sealed form without mutating the in-memory plaintext used by
+	// the running operation. Failures are logged; the in-memory open still
+	// succeeds so the caller can keep working.
+	if err := s.saveDeployment(ctx, deployment, s.timestamp()); err != nil {
+		log.Printf("deployments: failed to re-seal legacy plaintext for %s: %v", deployment.ID, err)
+	}
+}
+
+// hasLegacyPlaintextSecrets reports whether any sensitive field is stored as
+// non-empty plaintext (missing the enc:v1: prefix) or as a non-string value
+// that still needs structured sealing.
+func (s *Service) hasLegacyPlaintextSecrets(deployment *deploy.Deployment) bool {
+	if deployment == nil {
+		return false
+	}
+	for _, name := range deployment.SensitiveVars {
+		if value, ok := deployment.Variables[name]; ok && isLegacyPlaintextSecret(value) {
+			return true
+		}
+	}
+	for _, output := range deployment.Outputs {
+		if output.Sensitive && isLegacyPlaintextSecret(output.Value) {
+			return true
+		}
+	}
+	for _, revision := range deployment.Revisions {
+		for _, name := range deployment.SensitiveVars {
+			if value, ok := revision.Variables[name]; ok && isLegacyPlaintextSecret(value) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isLegacyPlaintextSecret(value any) bool {
+	if value == nil {
+		return false
+	}
+	text, ok := value.(string)
+	if !ok {
+		// Non-string sensitive values must be JSON-encoded behind the marker
+		// and sealed; anything else at rest is legacy plaintext.
+		return true
+	}
+	return text != "" && !secrets.IsSealed(text)
 }
 
 func (s *Service) sealValue(value any) (any, error) {
@@ -179,9 +233,14 @@ func (s *Service) sealValue(value any) (any, error) {
 
 func (s *Service) openValue(value any) any {
 	text, ok := value.(string)
-	if !ok || !secrets.IsSealed(text) {
+	if !ok {
 		return value
 	}
+	if text == "" {
+		return value
+	}
+	// Open decrypts enc:v1: tokens and re-seals legacy plaintext (counted and
+	// logged on the cipher) so deployments are not left readable forever.
 	plain, err := s.cipher.Open(text)
 	if err != nil {
 		return value

@@ -37,6 +37,10 @@ Installers for every release are published on the
   `Reachable=false` into the shared Docker unreachable or runtime-status caches,
   so one aborted poll cannot make healthy Docker look unavailable to later
   callers until the TTL expires.
+- Daemon secrets cipher re-seals legacy plaintext on Open (counted and logged)
+  and deployment load writes the sealed form back to the store, so sensitive
+  values from older builds do not remain readable at rest forever (architecture
+  F-008).
 - Daemon app Docker host fallback uses `dockerruntime.ResolveDockerHost` instead
   of the foundation-era `detectDockerHost`, so Windows diagnostics report the
   default named pipe (`npipe:////./pipe/docker_engine`) instead of an empty host
