@@ -210,9 +210,10 @@ func (s *Service) runtimeStatusForSnapshot(ctx context.Context) runtimeStatus {
 	s.runtimeStatusMu.Unlock()
 
 	status := s.probeRuntimeStatus(ctx)
-	// Do not seed the shared runtime bundle from a cancelled request: one aborted
-	// poll must not make healthy Docker look unavailable to later callers.
-	if status.Docker.Reachable || !probeCancelled(ctx, nil) {
+	// Never seed the shared runtime bundle from a cancelled request. A mid-probe
+	// cancel can leave Docker reachable with incomplete resources/emulators;
+	// that partial bundle must not become the TTL snapshot for later callers.
+	if !probeCancelled(ctx, nil) {
 		s.runtimeStatusMu.Lock()
 		// Another goroutine may have filled a fresher value while we probed; prefer
 		// the newest wall-clock sample we just took so callers see live state.

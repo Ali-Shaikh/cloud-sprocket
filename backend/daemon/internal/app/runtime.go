@@ -17,8 +17,9 @@ import (
 func (s *Service) handleRuntimeGet(ctx context.Context) (any, error) {
 	status := s.probeRuntimeStatus(ctx)
 	// Seed the workspace snapshot cache only for completed probes. A cancelled
-	// Local Runtime poll must not poison shared Docker/emulator state.
-	if status.Docker.Reachable || !probeCancelled(ctx, nil) {
+	// Local Runtime poll can return Docker reachable with incomplete
+	// resources/emulators and must not become the shared TTL snapshot.
+	if !probeCancelled(ctx, nil) {
 		s.storeRuntimeStatus(status)
 	}
 	return models.RuntimeSnapshot{
