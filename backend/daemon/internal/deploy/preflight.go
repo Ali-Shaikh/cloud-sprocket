@@ -29,5 +29,5 @@ func (e *Engine) Preflight(ctx context.Context, deployment *Deployment) error {
 	if err := e.checkRecipeTargetCompat(deployment); err != nil {
 		return err
 	}
-	return target.Preflight(ctx, deployment, e.settings, e.registry.opts)
+	return target.Preflight(ctx, deployment, e.settings, e.registry.Options())
 }

@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"cloudsprocket/backend/daemon/internal/config"
 )
@@ -37,7 +38,12 @@ type targetFactory func(settings config.Settings, opts TargetOptions) Target
 
 // Registry resolves (provider, local, runtimeID) to a Target. Registration is
 // data, not a switch in the engine: new runtimes add a factory and one register call.
+//
+// Mutators are safe for concurrent use with Resolve so a shared Engine used by
+// many RPC workers cannot panic on concurrent map writes if a test helper or
+// feature registers after construction.
 type Registry struct {
+	mu       sync.RWMutex
 	settings config.Settings
 	opts     TargetOptions
 	// keyed by runtime id (e.g. "docker-compose") for additive test/custom targets.
@@ -79,22 +85,35 @@ func NewRegistry(settings config.Settings, opts TargetOptions) *Registry {
 
 // RegisterFactory adds a runtime factory. Used by built-in targets and tests.
 func (r *Registry) RegisterFactory(runtimeID string, factory targetFactory) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.factories[runtimeID] = factory
 }
 
 // Register adds a concrete target for a runtime id (e.g. a test stub).
 func (r *Registry) Register(runtimeID string, target Target) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.byRuntimeID[runtimeID] = target
 }
 
 // SetOptions updates probe endpoints (tests).
 func (r *Registry) SetOptions(opts TargetOptions) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if strings.TrimSpace(opts.LocalStackEndpoint) != "" {
 		r.opts.LocalStackEndpoint = opts.LocalStackEndpoint
 	}
 	if strings.TrimSpace(opts.FlociAzEndpoint) != "" {
 		r.opts.FlociAzEndpoint = opts.FlociAzEndpoint
 	}
+}
+
+// Options returns a snapshot of the current target options.
+func (r *Registry) Options() TargetOptions {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.opts
 }
 
 // ResolveTarget returns the deployment's target, or (nil, nil) when the
@@ -111,14 +130,19 @@ func (r *Registry) ResolveTarget(deployment *Deployment) (Target, error) {
 // Resolve picks the target for a deployment.
 func (r *Registry) Resolve(deployment *Deployment) (Target, error) {
 	runtimeID := resolveRuntimeID(deployment)
-	if custom, ok := r.byRuntimeID[runtimeID]; ok {
+	r.mu.RLock()
+	custom, hasCustom := r.byRuntimeID[runtimeID]
+	factory, hasFactory := r.factories[runtimeID]
+	settings := r.settings
+	opts := r.opts
+	r.mu.RUnlock()
+	if hasCustom {
 		return custom, nil
 	}
-	factory, ok := r.factories[runtimeID]
-	if !ok {
+	if !hasFactory {
 		return nil, fmt.Errorf("unsupported deployment runtime %q for provider %q", runtimeID, deployment.ProviderID)
 	}
-	return factory(r.settings, r.opts), nil
+	return factory(settings, opts), nil
 }
 
 // resolveRuntimeID maps a deployment to its runtime id. An explicit RuntimeID

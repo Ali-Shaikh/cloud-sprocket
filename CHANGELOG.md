@@ -20,6 +20,11 @@ Installers for every release are published on the
 
 ### Fixed
 
+- Daemon deploy `Registry` guards factory/target maps and option updates with
+  an `RWMutex`, so a shared engine used by concurrent RPC workers cannot panic
+  on concurrent map writes if registration happens after construction. The
+  backend race script also covers `internal/deploy` (architecture F-031).
+
 - Daemon `session.selectProvider` and `session.selectProfile` no longer clear
   `IsLocked`. A locked workspace must be closed with `session.unlock` first so
   alternate RPC clients cannot drop a lock without the desktop leave-workspace

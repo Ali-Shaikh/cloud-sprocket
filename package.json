@@ -22,7 +22,7 @@
     "typecheck:desktop": "pnpm --dir apps/desktop run typecheck",
     "test:backend": "go -C backend/daemon test ./...",
     "test:backend:coverage": "go -C backend/daemon test -coverprofile coverage.out ./...",
-    "test:backend:race": "go -C backend/daemon test -race ./internal/app/...",
+    "test:backend:race": "go -C backend/daemon test -race ./internal/app/... ./internal/deploy/...",
     "prepare:sidecar": "pnpm --dir apps/desktop build:sidecar",
     "lint:desktop": "pnpm --dir apps/desktop lint",
     "lint:backend": "node ./scripts/run-golangci.mjs",
