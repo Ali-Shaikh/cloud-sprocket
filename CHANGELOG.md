@@ -26,7 +26,10 @@ Installers for every release are published on the
   the wire as `••••••••` while keeping `sensitive: true` for the UI. Full
   secrets remain in local CLI config files; the daemon still loads credentials
   from disk/env for AWS/Azure SDKs. No `profiles.reveal` RPC yet (architecture
-  F-015).
+  F-015). PlaceholderView no longer offers a functional reveal when the value
+  is already the daemon redaction placeholder; fixtures that still carry a real
+  value keep the reveal toggle.
+
 - Daemon app Docker host fallback uses `dockerruntime.ResolveDockerHost` instead
   of the foundation-era `detectDockerHost`, so Windows diagnostics report the
   default named pipe (`npipe:////./pipe/docker_engine`) instead of an empty host
