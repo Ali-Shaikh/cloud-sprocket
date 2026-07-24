@@ -87,7 +87,7 @@ func TestAwsScopedEventBridgeInventoryLoadsBusesAndRules(t *testing.T) {
 		IsLocked:                   true,
 	}
 
-	workspace := service.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+	workspace := service.buildWorkspaceSnapshotOpts(context.Background(), snapshot, session, workspaceSnapshotOptions{
 		awsScope:           "eventbridge",
 		skipAzureInventory: true,
 	})

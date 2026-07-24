@@ -4,6 +4,7 @@
 package app
 
 import (
+	"context"
 	"slices"
 	"testing"
 
@@ -56,7 +57,7 @@ func TestAwsScopedEnrichmentSkipsDisabledService(t *testing.T) {
 		IsLocked:          true,
 	}
 
-	_ = service.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+	_ = service.buildWorkspaceSnapshotOpts(context.Background(), snapshot, session, workspaceSnapshotOptions{
 		awsScope:           "ec2",
 		skipAzureInventory: true,
 	})

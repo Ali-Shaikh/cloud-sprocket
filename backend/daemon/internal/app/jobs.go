@@ -84,7 +84,7 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 		opts.awsDeferredInventory = true
 		opts.skipAzureInventory = true
 	}
-	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, opts)
+	workspace := s.buildWorkspaceSnapshotOpts(background, snapshot, session, opts)
 
 	if notifier != nil {
 		_ = notifier.Notify("job.updated", models.JobStatus{

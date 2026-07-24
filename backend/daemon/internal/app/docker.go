@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"time"
@@ -12,6 +13,17 @@ import (
 	"cloudsprocket/backend/daemon/internal/dockerruntime"
 	"cloudsprocket/backend/daemon/internal/models"
 )
+
+// probeCancelled reports whether a Docker/runtime probe should be treated as a
+// soft cancellation rather than a genuine engine failure. Cancelled request
+// contexts must not seed the shared unreachable/runtime caches, or unrelated
+// callers would see Docker as down until the TTL expires.
+func probeCancelled(ctx context.Context, err error) bool {
+	if err != nil && errors.Is(err, context.Canceled) {
+		return true
+	}
+	return ctx != nil && ctx.Err() != nil
+}
 
 const (
 	// dockerProbeTimeout bounds Docker status, snapshot, and resource-listing
@@ -42,11 +54,11 @@ const (
 	azureCLIExtensionCacheTTL = 10 * time.Minute
 )
 
-func (s *Service) dockerRuntimeSnapshot() models.DockerRuntimeSnapshot {
+func (s *Service) dockerRuntimeSnapshot(ctx context.Context) models.DockerRuntimeSnapshot {
 	if cached, ok := s.cachedUnreachableDocker(); ok {
 		return cached
 	}
-	return s.probeDockerRuntimeSnapshot()
+	return s.probeDockerRuntimeSnapshot(ctx)
 }
 
 func (s *Service) cachedUnreachableDocker() (models.DockerRuntimeSnapshot, bool) {
@@ -61,36 +73,60 @@ func (s *Service) cachedUnreachableDocker() (models.DockerRuntimeSnapshot, bool)
 }
 
 // probeDockerRuntimeSnapshot always probes the engine (bypassing the cache) and
-// records the result. It backs the manual "Refresh Docker" action.
+// records the result. It backs the manual "Refresh Docker" action. Cancelled
+// probes return a soft unreachable snapshot without writing the shared cache.
 
-func (s *Service) probeDockerRuntimeSnapshot() models.DockerRuntimeSnapshot {
-	snapshot := s.buildDockerRuntimeSnapshot()
-	s.dockerSnapshotMu.Lock()
-	cached := snapshot
-	s.dockerSnapshotValue = &cached
-	s.dockerSnapshotAt = s.now()
-	s.dockerSnapshotMu.Unlock()
+func (s *Service) probeDockerRuntimeSnapshot(ctx context.Context) models.DockerRuntimeSnapshot {
+	snapshot := s.buildDockerRuntimeSnapshot(ctx)
+	// Successful probes always refresh the cache. Unreachable verdicts are only
+	// cached when the probe completed (timeout / genuine failure), never when the
+	// parent request was cancelled mid-dial.
+	if snapshot.Reachable || !probeCancelled(ctx, nil) {
+		s.dockerSnapshotMu.Lock()
+		cached := snapshot
+		s.dockerSnapshotValue = &cached
+		s.dockerSnapshotAt = s.now()
+		s.dockerSnapshotMu.Unlock()
+	}
 	return snapshot
 }
 
-func (s *Service) buildDockerRuntimeSnapshot() models.DockerRuntimeSnapshot {
+func (s *Service) buildDockerRuntimeSnapshot(ctx context.Context) models.DockerRuntimeSnapshot {
 	if s.docker != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+		probeCtx, cancel := context.WithTimeout(ctx, dockerProbeTimeout)
 		defer cancel()
-		snapshot, err := s.docker.Snapshot(ctx)
+		snapshot, err := s.docker.Snapshot(probeCtx)
 		if err == nil {
+			// Real dockerruntime folds connection errors (including cancel) into a
+			// Reachable=false snapshot with a nil error. Callers use probeCancelled
+			// on the parent context before writing shared caches.
 			return snapshot
+		}
+		// Cancelled dials still need a soft unreachable shape for the caller, but
+		// probeDockerRuntimeSnapshot / runtimeStatus paths will not cache it.
+		if probeCancelled(ctx, err) {
+			return s.softUnreachableDockerSnapshot("Docker probe was cancelled before the engine responded.")
 		}
 	}
 
 	// Fall back to the shared resolver used by dockerruntime so Windows named-pipe
 	// and Unix socket detection stay consistent when the live client is nil or
 	// Snapshot fails before returning a host.
+	return s.softUnreachableDockerSnapshot("")
+}
+
+// softUnreachableDockerSnapshot builds a Reachable=false snapshot using the
+// shared host resolver. When summaryOverride is empty, the usual host-aware
+// fallback copy is used (genuine miss / completed probe failure).
+func (s *Service) softUnreachableDockerSnapshot(summaryOverride string) models.DockerRuntimeSnapshot {
 	host, source := dockerruntime.ResolveDockerHost(s.settings)
 	contextName := strings.TrimSpace(os.Getenv("DOCKER_CONTEXT"))
-	summary := "Docker engine was not detected in the current local runtime."
-	if host != "" {
-		summary = "Docker engine endpoint was detected, but live runtime probing is unavailable."
+	summary := strings.TrimSpace(summaryOverride)
+	if summary == "" {
+		summary = "Docker engine was not detected in the current local runtime."
+		if host != "" {
+			summary = "Docker engine endpoint was detected, but live runtime probing is unavailable."
+		}
 	}
 
 	return models.DockerRuntimeSnapshot{
@@ -115,21 +151,21 @@ func (s *Service) buildDockerRuntimeSnapshot() models.DockerRuntimeSnapshot {
 	}
 }
 
-func (s *Service) dockerResources() []models.ManagedDockerResource {
+func (s *Service) dockerResources(ctx context.Context) []models.ManagedDockerResource {
 	if s.docker == nil {
 		return []models.ManagedDockerResource{}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+	probeCtx, cancel := context.WithTimeout(ctx, dockerProbeTimeout)
 	defer cancel()
-	resources, err := s.docker.ListOwnedResources(ctx)
+	resources, err := s.docker.ListOwnedResources(probeCtx)
 	if err != nil {
 		return []models.ManagedDockerResource{}
 	}
 	return resources
 }
 
-func (s *Service) dockerDiagnostics() models.DockerDiagnostics {
-	return s.dockerDiagnosticsFromSnapshot(s.dockerRuntimeSnapshot())
+func (s *Service) dockerDiagnostics(ctx context.Context) models.DockerDiagnostics {
+	return s.dockerDiagnosticsFromSnapshot(s.dockerRuntimeSnapshot(ctx))
 }
 
 func (s *Service) dockerDiagnosticsFromSnapshot(runtime models.DockerRuntimeSnapshot) models.DockerDiagnostics {
@@ -151,16 +187,16 @@ func (s *Service) dockerDiagnosticsFromSnapshot(runtime models.DockerRuntimeSnap
 	}
 }
 
-func (s *Service) handleDockerRuntimeGet() (any, error) {
+func (s *Service) handleDockerRuntimeGet(ctx context.Context) (any, error) {
 	// Manual refresh forces a fresh probe (bypassing the unreachable cache) and
 	// drops the broader runtime-status bundle so the next workspace snapshot
 	// rebuild re-probes resources and emulators too.
-	snapshot := s.probeDockerRuntimeSnapshot()
+	snapshot := s.probeDockerRuntimeSnapshot(ctx)
 	s.invalidateRuntimeStatus()
 	return snapshot, nil
 }
 
-func (s *Service) runtimeStatusForSnapshot() runtimeStatus {
+func (s *Service) runtimeStatusForSnapshot(ctx context.Context) runtimeStatus {
 	// Hold the mutex only for cache read/write so runtime.get can store its own
 	// probe without waiting out a cold Docker/emulator probe on this path.
 	// Concurrent snapshot builders may still race one extra probe under load;
@@ -173,22 +209,26 @@ func (s *Service) runtimeStatusForSnapshot() runtimeStatus {
 	}
 	s.runtimeStatusMu.Unlock()
 
-	status := s.probeRuntimeStatus()
-
-	s.runtimeStatusMu.Lock()
-	// Another goroutine may have filled a fresher value while we probed; prefer
-	// the newest wall-clock sample we just took so callers see live state.
-	cached := status
-	s.runtimeStatusValue = &cached
-	s.runtimeStatusAt = s.now()
-	s.runtimeStatusMu.Unlock()
+	status := s.probeRuntimeStatus(ctx)
+	// Never seed the shared runtime bundle from a cancelled request. A mid-probe
+	// cancel can leave Docker reachable with incomplete resources/emulators;
+	// that partial bundle must not become the TTL snapshot for later callers.
+	if !probeCancelled(ctx, nil) {
+		s.runtimeStatusMu.Lock()
+		// Another goroutine may have filled a fresher value while we probed; prefer
+		// the newest wall-clock sample we just took so callers see live state.
+		cached := status
+		s.runtimeStatusValue = &cached
+		s.runtimeStatusAt = s.now()
+		s.runtimeStatusMu.Unlock()
+	}
 	return status
 }
 
 // probeRuntimeStatus always performs the live Docker / resource / emulator
 // sequence used by workspace snapshots and Local Runtime polls.
-func (s *Service) probeRuntimeStatus() runtimeStatus {
-	dockerRuntime := s.dockerRuntimeSnapshot()
+func (s *Service) probeRuntimeStatus(ctx context.Context) runtimeStatus {
+	dockerRuntime := s.dockerRuntimeSnapshot(ctx)
 	// Only enumerate managed Docker resources when the engine is reachable. When
 	// Docker is stopped the resource probe would otherwise wait out its own
 	// timeout to return an empty list, doubling the Docker latency of every
@@ -200,8 +240,8 @@ func (s *Service) probeRuntimeStatus() runtimeStatus {
 	// several seconds to every workspace fetch and Local Runtime poll.
 	emulatorSummaries := s.emulatorSummaries()
 	if dockerRuntime.Reachable {
-		dockerResources = s.dockerResources()
-		emulatorSummaries = s.emulatorsList()
+		dockerResources = s.dockerResources(ctx)
+		emulatorSummaries = s.emulatorsList(ctx)
 	}
 	return runtimeStatus{
 		Docker:    dockerRuntime,
@@ -233,6 +273,6 @@ func (s *Service) invalidateAzureCLIExtensionCache() {
 	s.azureCLIExtAt = time.Time{}
 }
 
-func (s *Service) handleDockerResourcesList() (any, error) {
-	return s.dockerResources(), nil
+func (s *Service) handleDockerResourcesList(ctx context.Context) (any, error) {
+	return s.dockerResources(ctx), nil
 }

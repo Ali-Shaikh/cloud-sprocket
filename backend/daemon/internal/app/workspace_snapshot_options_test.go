@@ -206,7 +206,7 @@ func TestWorkspaceSnapshotOptionsEmptyInventorySlices(t *testing.T) {
 			switch tt.cloud {
 			case "aws":
 				service, s3, ec2, lambda := awsTestService(t)
-				ws := service.buildWorkspaceSnapshotOpts(awsSnapshot, awsSession, tt.opts)
+				ws := service.buildWorkspaceSnapshotOpts(context.Background(), awsSnapshot, awsSession, tt.opts)
 				if tt.want != nil {
 					tt.want(t, ws)
 				}
@@ -215,7 +215,7 @@ func TestWorkspaceSnapshotOptionsEmptyInventorySlices(t *testing.T) {
 				}
 			case "azure":
 				service, _ := azureOptionsTestService(t)
-				ws := service.buildWorkspaceSnapshotOpts(azureSnapshot, azureSession, tt.opts)
+				ws := service.buildWorkspaceSnapshotOpts(context.Background(), azureSnapshot, azureSession, tt.opts)
 				if tt.want != nil {
 					tt.want(t, ws)
 				}

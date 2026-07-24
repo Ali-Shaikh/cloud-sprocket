@@ -436,7 +436,7 @@ func (s *Service) handleAwsS3LoadMoreObjects(ctx context.Context, params json.Ra
 		return nil, fmt.Errorf("could not load more S3 objects: %w", listErr)
 	}
 
-	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+	workspace := s.buildWorkspaceSnapshotOpts(ctx, snapshot, session, workspaceSnapshotOptions{
 		awsScope:           "s3",
 		skipAzureInventory: true,
 		lightweightAWS:     true,

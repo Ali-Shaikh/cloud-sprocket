@@ -210,7 +210,7 @@ func (s *Service) handleWorkspaceGet(ctx context.Context, notifier Notifier) (an
 		opts.awsDeferredInventory = true
 		opts.skipAzureInventory = true
 	}
-	return s.buildWorkspaceSnapshotOpts(snapshot, session, opts), nil
+	return s.buildWorkspaceSnapshotOpts(ctx, snapshot, session, opts), nil
 }
 
 // errSessionLockedForSelect is returned when session.selectProvider or
