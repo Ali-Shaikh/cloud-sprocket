@@ -157,3 +157,29 @@ func TestListOwnedResourcesMapsDockerObjects(t *testing.T) {
 		t.Fatalf("expected three mapped resources, got %+v", resources)
 	}
 }
+
+func TestResolveDockerHostWindowsNamedPipe(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "")
+	settings := config.FromEnv(map[string]string{}, "windows", filepath.Join(t.TempDir(), "home"))
+
+	host, source := ResolveDockerHost(settings)
+	if host != "npipe:////./pipe/docker_engine" {
+		t.Fatalf("expected default Windows named pipe, got %q", host)
+	}
+	if source != "Default Windows named pipe" {
+		t.Fatalf("expected Windows named-pipe source, got %q", source)
+	}
+}
+
+func TestResolveDockerHostPrefersDOCKERHOST(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "npipe:////./pipe/custom_engine")
+	settings := config.FromEnv(map[string]string{}, "windows", filepath.Join(t.TempDir(), "home"))
+
+	host, source := ResolveDockerHost(settings)
+	if host != "npipe:////./pipe/custom_engine" {
+		t.Fatalf("expected DOCKER_HOST override, got %q", host)
+	}
+	if source != "DOCKER_HOST" {
+		t.Fatalf("expected DOCKER_HOST source, got %q", source)
+	}
+}
