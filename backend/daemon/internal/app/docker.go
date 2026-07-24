@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"time"
@@ -12,6 +13,17 @@ import (
 	"cloudsprocket/backend/daemon/internal/dockerruntime"
 	"cloudsprocket/backend/daemon/internal/models"
 )
+
+// probeCancelled reports whether a Docker/runtime probe should be treated as a
+// soft cancellation rather than a genuine engine failure. Cancelled request
+// contexts must not seed the shared unreachable/runtime caches, or unrelated
+// callers would see Docker as down until the TTL expires.
+func probeCancelled(ctx context.Context, err error) bool {
+	if err != nil && errors.Is(err, context.Canceled) {
+		return true
+	}
+	return ctx != nil && ctx.Err() != nil
+}
 
 const (
 	// dockerProbeTimeout bounds Docker status, snapshot, and resource-listing
@@ -61,15 +73,21 @@ func (s *Service) cachedUnreachableDocker() (models.DockerRuntimeSnapshot, bool)
 }
 
 // probeDockerRuntimeSnapshot always probes the engine (bypassing the cache) and
-// records the result. It backs the manual "Refresh Docker" action.
+// records the result. It backs the manual "Refresh Docker" action. Cancelled
+// probes return a soft unreachable snapshot without writing the shared cache.
 
 func (s *Service) probeDockerRuntimeSnapshot(ctx context.Context) models.DockerRuntimeSnapshot {
 	snapshot := s.buildDockerRuntimeSnapshot(ctx)
-	s.dockerSnapshotMu.Lock()
-	cached := snapshot
-	s.dockerSnapshotValue = &cached
-	s.dockerSnapshotAt = s.now()
-	s.dockerSnapshotMu.Unlock()
+	// Successful probes always refresh the cache. Unreachable verdicts are only
+	// cached when the probe completed (timeout / genuine failure), never when the
+	// parent request was cancelled mid-dial.
+	if snapshot.Reachable || !probeCancelled(ctx, nil) {
+		s.dockerSnapshotMu.Lock()
+		cached := snapshot
+		s.dockerSnapshotValue = &cached
+		s.dockerSnapshotAt = s.now()
+		s.dockerSnapshotMu.Unlock()
+	}
 	return snapshot
 }
 
@@ -79,18 +97,36 @@ func (s *Service) buildDockerRuntimeSnapshot(ctx context.Context) models.DockerR
 		defer cancel()
 		snapshot, err := s.docker.Snapshot(probeCtx)
 		if err == nil {
+			// Real dockerruntime folds connection errors (including cancel) into a
+			// Reachable=false snapshot with a nil error. Callers use probeCancelled
+			// on the parent context before writing shared caches.
 			return snapshot
+		}
+		// Cancelled dials still need a soft unreachable shape for the caller, but
+		// probeDockerRuntimeSnapshot / runtimeStatus paths will not cache it.
+		if probeCancelled(ctx, err) {
+			return s.softUnreachableDockerSnapshot("Docker probe was cancelled before the engine responded.")
 		}
 	}
 
 	// Fall back to the shared resolver used by dockerruntime so Windows named-pipe
 	// and Unix socket detection stay consistent when the live client is nil or
 	// Snapshot fails before returning a host.
+	return s.softUnreachableDockerSnapshot("")
+}
+
+// softUnreachableDockerSnapshot builds a Reachable=false snapshot using the
+// shared host resolver. When summaryOverride is empty, the usual host-aware
+// fallback copy is used (genuine miss / completed probe failure).
+func (s *Service) softUnreachableDockerSnapshot(summaryOverride string) models.DockerRuntimeSnapshot {
 	host, source := dockerruntime.ResolveDockerHost(s.settings)
 	contextName := strings.TrimSpace(os.Getenv("DOCKER_CONTEXT"))
-	summary := "Docker engine was not detected in the current local runtime."
-	if host != "" {
-		summary = "Docker engine endpoint was detected, but live runtime probing is unavailable."
+	summary := strings.TrimSpace(summaryOverride)
+	if summary == "" {
+		summary = "Docker engine was not detected in the current local runtime."
+		if host != "" {
+			summary = "Docker engine endpoint was detected, but live runtime probing is unavailable."
+		}
 	}
 
 	return models.DockerRuntimeSnapshot{
@@ -174,14 +210,17 @@ func (s *Service) runtimeStatusForSnapshot(ctx context.Context) runtimeStatus {
 	s.runtimeStatusMu.Unlock()
 
 	status := s.probeRuntimeStatus(ctx)
-
-	s.runtimeStatusMu.Lock()
-	// Another goroutine may have filled a fresher value while we probed; prefer
-	// the newest wall-clock sample we just took so callers see live state.
-	cached := status
-	s.runtimeStatusValue = &cached
-	s.runtimeStatusAt = s.now()
-	s.runtimeStatusMu.Unlock()
+	// Do not seed the shared runtime bundle from a cancelled request: one aborted
+	// poll must not make healthy Docker look unavailable to later callers.
+	if status.Docker.Reachable || !probeCancelled(ctx, nil) {
+		s.runtimeStatusMu.Lock()
+		// Another goroutine may have filled a fresher value while we probed; prefer
+		// the newest wall-clock sample we just took so callers see live state.
+		cached := status
+		s.runtimeStatusValue = &cached
+		s.runtimeStatusAt = s.now()
+		s.runtimeStatusMu.Unlock()
+	}
 	return status
 }
 

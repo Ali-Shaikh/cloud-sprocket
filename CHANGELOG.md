@@ -33,7 +33,10 @@ Installers for every release are published on the
 - Daemon Docker and emulator status probes derive timeouts from the RPC request
   context instead of `context.Background()`, so a cancelled request aborts
   Docker dials and status probes early rather than waiting out the full probe
-  timeout (architecture F-020).
+  timeout (architecture F-020). Cancelled probes no longer write
+  `Reachable=false` into the shared Docker unreachable or runtime-status caches,
+  so one aborted poll cannot make healthy Docker look unavailable to later
+  callers until the TTL expires.
 - Daemon app Docker host fallback uses `dockerruntime.ResolveDockerHost` instead
   of the foundation-era `detectDockerHost`, so Windows diagnostics report the
   default named pipe (`npipe:////./pipe/docker_engine`) instead of an empty host

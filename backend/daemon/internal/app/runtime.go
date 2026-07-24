@@ -16,7 +16,11 @@ import (
 // so a subsequent tab switch inside the TTL costs nothing.
 func (s *Service) handleRuntimeGet(ctx context.Context) (any, error) {
 	status := s.probeRuntimeStatus(ctx)
-	s.storeRuntimeStatus(status)
+	// Seed the workspace snapshot cache only for completed probes. A cancelled
+	// Local Runtime poll must not poison shared Docker/emulator state.
+	if status.Docker.Reachable || !probeCancelled(ctx, nil) {
+		s.storeRuntimeStatus(status)
+	}
 	return models.RuntimeSnapshot{
 		DockerRuntime:     status.Docker,
 		DockerResources:   status.Resources,
