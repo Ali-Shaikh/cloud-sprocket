@@ -15,23 +15,54 @@ function wrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe("useVirtualisationPoll", () => {
-  it("fetches immediately when the virtualisation tab is active", async () => {
-    const refresh = vi.fn().mockResolvedValue(null);
+  it("fetches status immediately when the virtualisation tab is active", async () => {
+    const refreshStatus = vi.fn().mockResolvedValue(null);
 
-    renderHook(() => useVirtualisationPoll("virtualisation", refresh), { wrapper });
+    renderHook(() => useVirtualisationPoll("virtualisation", refreshStatus), { wrapper });
 
     await waitFor(() => {
-      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(refreshStatus).toHaveBeenCalledTimes(1);
     });
   });
 
   it("does not fetch when another tab is active", async () => {
-    const refresh = vi.fn().mockResolvedValue(null);
+    const refreshStatus = vi.fn().mockResolvedValue(null);
 
-    renderHook(() => useVirtualisationPoll("overview", refresh), { wrapper });
+    renderHook(() => useVirtualisationPoll("overview", refreshStatus), { wrapper });
 
     await waitFor(() => {
-      expect(refresh).not.toHaveBeenCalled();
+      expect(refreshStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  it("loads logs once when entering the virtualisation tab", async () => {
+    const refreshStatus = vi.fn().mockResolvedValue(null);
+    const refreshLogsOnEnter = vi.fn().mockResolvedValue(null);
+
+    const { rerender } = renderHook(
+      ({ tabId }: { tabId: string }) => useVirtualisationPoll(tabId, refreshStatus, refreshLogsOnEnter),
+      { wrapper, initialProps: { tabId: "overview" } },
+    );
+
+    expect(refreshLogsOnEnter).not.toHaveBeenCalled();
+
+    rerender({ tabId: "virtualisation" });
+
+    await waitFor(() => {
+      expect(refreshLogsOnEnter).toHaveBeenCalledTimes(1);
+    });
+
+    rerender({ tabId: "virtualisation" });
+    await waitFor(() => {
+      expect(refreshStatus).toHaveBeenCalled();
+    });
+    expect(refreshLogsOnEnter).toHaveBeenCalledTimes(1);
+
+    rerender({ tabId: "overview" });
+    rerender({ tabId: "virtualisation" });
+
+    await waitFor(() => {
+      expect(refreshLogsOnEnter).toHaveBeenCalledTimes(2);
     });
   });
 });
