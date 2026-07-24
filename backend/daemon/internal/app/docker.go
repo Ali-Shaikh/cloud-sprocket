@@ -6,10 +6,10 @@ package app
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
+	"cloudsprocket/backend/daemon/internal/dockerruntime"
 	"cloudsprocket/backend/daemon/internal/models"
 )
 
@@ -83,7 +83,10 @@ func (s *Service) buildDockerRuntimeSnapshot() models.DockerRuntimeSnapshot {
 		}
 	}
 
-	host, source := s.detectDockerHost()
+	// Fall back to the shared resolver used by dockerruntime so Windows named-pipe
+	// and Unix socket detection stay consistent when the live client is nil or
+	// Snapshot fails before returning a host.
+	host, source := dockerruntime.ResolveDockerHost(s.settings)
 	contextName := strings.TrimSpace(os.Getenv("DOCKER_CONTEXT"))
 	summary := "Docker engine was not detected in the current local runtime."
 	if host != "" {
@@ -138,12 +141,6 @@ func (s *Service) dockerDiagnosticsFromSnapshot(runtime models.DockerRuntimeSnap
 		state = models.DockerEngineStateAvailable
 	}
 	details := append([]models.DetailField{}, runtime.Details...)
-	if s.settings.PlatformName == "windows" && runtime.Host == "" {
-		details = append(details, models.DetailField{
-			Label: "Note",
-			Value: "Windows named-pipe verification is deferred until the Docker runtime slice.",
-		})
-	}
 
 	return models.DockerDiagnostics{
 		EngineState: state,
@@ -152,40 +149,6 @@ func (s *Service) dockerDiagnosticsFromSnapshot(runtime models.DockerRuntimeSnap
 		Host:        runtime.Host,
 		Details:     details,
 	}
-}
-
-func (s *Service) detectDockerHost() (string, string) {
-	if host := strings.TrimSpace(os.Getenv("DOCKER_HOST")); host != "" {
-		return host, "DOCKER_HOST"
-	}
-
-	if s.settings.PlatformName == "windows" {
-		return "", "No named-pipe probe in foundation slice"
-	}
-
-	candidates := []string{}
-	if home := strings.TrimSpace(s.settings.HomeDir); home != "" {
-		if s.settings.PlatformName == "linux" {
-			candidates = append(candidates,
-				filepath.Join(home, ".docker", "desktop", "docker.sock"),
-			)
-			if runtimeDir := strings.TrimSpace(os.Getenv("XDG_RUNTIME_DIR")); runtimeDir != "" {
-				candidates = append(candidates, filepath.Join(runtimeDir, "docker.sock"))
-			}
-		}
-		if s.settings.PlatformName == "macos" {
-			candidates = append(candidates, filepath.Join(home, ".docker", "run", "docker.sock"))
-		}
-	}
-	candidates = append(candidates, "/var/run/docker.sock")
-
-	for _, candidate := range candidates {
-		if _, err := os.Stat(candidate); err == nil {
-			return "unix://" + candidate, "Local socket"
-		}
-	}
-
-	return "", "No Docker host detected"
 }
 
 func (s *Service) handleDockerRuntimeGet() (any, error) {

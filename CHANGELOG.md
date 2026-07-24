@@ -9,6 +9,14 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Fixed
+
+- Daemon app Docker host fallback uses `dockerruntime.ResolveDockerHost` instead
+  of the foundation-era `detectDockerHost`, so Windows diagnostics report the
+  default named pipe (`npipe:////./pipe/docker_engine`) instead of an empty host
+  with a deferred-probe message when the live Docker client is nil or Snapshot
+  errors (architecture F-016).
+
 ### Changed
 
 - Local Runtime config copy no longer claims isolation from default cloud CLI
