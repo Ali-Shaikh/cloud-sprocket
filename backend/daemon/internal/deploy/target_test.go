@@ -5,8 +5,10 @@ package deploy
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"cloudsprocket/backend/daemon/internal/config"
@@ -139,4 +141,47 @@ func TestStubTargetRegistersWithoutEngineEdits(t *testing.T) {
 	if label := engine.TargetLabel(deployment); label != "Docker Compose" {
 		t.Fatalf("TargetLabel = %q, want Docker Compose", label)
 	}
+}
+
+func TestRegistryConcurrentRegisterAndResolve(t *testing.T) {
+	registry := NewRegistry(config.Settings{}, TargetOptions{})
+	const workers = 32
+	const iterations = 50
+
+	var wg sync.WaitGroup
+	wg.Add(workers * 2)
+	for i := 0; i < workers; i++ {
+		i := i
+		go func() {
+			defer wg.Done()
+			for n := 0; n < iterations; n++ {
+				id := fmt.Sprintf("custom-%d", i)
+				registry.Register(id, &dockerComposeStubTarget{})
+				registry.RegisterFactory(id+"-factory", func(config.Settings, TargetOptions) Target {
+					return &dockerComposeStubTarget{}
+				})
+				registry.SetOptions(TargetOptions{
+					LocalStackEndpoint: fmt.Sprintf("http://127.0.0.1:%d", 4500+i),
+				})
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			for n := 0; n < iterations; n++ {
+				if _, err := registry.Resolve(&Deployment{ProviderID: "aws", Local: true}); err != nil {
+					t.Errorf("Resolve localstack: %v", err)
+					return
+				}
+				if _, err := registry.Resolve(&Deployment{
+					ProviderID: "aws",
+					Local:      true,
+					RuntimeID:  fmt.Sprintf("custom-%d", i),
+				}); err != nil {
+					// Registration may not have completed yet; that is fine for the race test.
+					_ = err
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
