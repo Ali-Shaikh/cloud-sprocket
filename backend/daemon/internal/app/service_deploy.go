@@ -101,18 +101,17 @@ func (s *Service) runTofuInstall(job models.JobStatus, notifier Notifier) {
 }
 
 func (s *Service) deploymentsList(ctx context.Context) ([]deploy.Deployment, error) {
-	payloads, err := s.store.ListDeploymentsJSON(ctx)
+	rows, err := s.store.ListDeployments(ctx)
 	if err != nil {
 		return nil, err
 	}
-	deployments := make([]deploy.Deployment, 0, len(payloads))
-	for _, payload := range payloads {
+	deployments := make([]deploy.Deployment, 0, len(rows))
+	for _, row := range rows {
 		var deployment deploy.Deployment
-		if err := json.Unmarshal(payload, &deployment); err != nil {
+		if err := json.Unmarshal(row.Payload, &deployment); err != nil {
 			continue
 		}
-		// ListDeploymentsJSON has no separate storage timestamp; preserve payload UpdatedAt.
-		if err := s.openFromStore(ctx, &deployment, string(payload), deployment.UpdatedAt); err != nil {
+		if err := s.openFromStore(ctx, &deployment, string(row.Payload), row.UpdatedAt); err != nil {
 			return nil, err
 		}
 		deployments = append(deployments, deployment)

@@ -387,23 +387,46 @@ func (s *Store) LoadDeployment(ctx context.Context, id string, target any) (bool
 	return true, nil
 }
 
+// DeploymentRow is a stored deployment payload plus its independent SQLite
+// updated_at column (which may differ from the payload's own UpdatedAt field).
+type DeploymentRow struct {
+	Payload   json.RawMessage
+	UpdatedAt string
+}
+
 // ListDeploymentsJSON returns every deployment payload, newest first.
+// Prefer ListDeployments when the storage updated_at is needed.
 func (s *Store) ListDeploymentsJSON(ctx context.Context) ([]json.RawMessage, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT payload_json FROM deployments ORDER BY created_at DESC, id DESC`)
+	rows, err := s.ListDeployments(ctx)
+	if err != nil {
+		return nil, err
+	}
+	payloads := make([]json.RawMessage, 0, len(rows))
+	for _, row := range rows {
+		payloads = append(payloads, row.Payload)
+	}
+	return payloads, nil
+}
+
+// ListDeployments returns every deployment payload with its storage updated_at,
+// newest first.
+func (s *Store) ListDeployments(ctx context.Context) ([]DeploymentRow, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT payload_json, updated_at FROM deployments ORDER BY created_at DESC, id DESC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	payloads := []json.RawMessage{}
+	out := []DeploymentRow{}
 	for rows.Next() {
 		var payload string
-		if err := rows.Scan(&payload); err != nil {
+		var updatedAt string
+		if err := rows.Scan(&payload, &updatedAt); err != nil {
 			return nil, err
 		}
-		payloads = append(payloads, json.RawMessage(payload))
+		out = append(out, DeploymentRow{Payload: json.RawMessage(payload), UpdatedAt: updatedAt})
 	}
-	return payloads, rows.Err()
+	return out, rows.Err()
 }
 
 // DeleteDeployment removes a deployment record.
