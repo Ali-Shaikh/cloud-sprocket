@@ -238,7 +238,9 @@ func TestLegacyResealReadDoesNotClobberStore(t *testing.T) {
 		t.Fatalf("SaveDeployment concurrent: %v", err)
 	}
 
-	s.openFromStore(context.Background(), &snapshot, raw, "t0")
+	if err := s.openFromStore(context.Background(), &snapshot, raw, "t0"); err != nil {
+		t.Fatalf("openFromStore: %v", err)
+	}
 	if snapshot.Variables["db_password"] != "race-s3cret" {
 		t.Fatalf("in-memory open lost password: %v", snapshot.Variables["db_password"])
 	}

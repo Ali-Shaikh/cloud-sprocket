@@ -128,9 +128,12 @@ func (s *Service) sealForStore(deployment *deploy.Deployment) (*deploy.Deploymen
 // re-sealed via Cipher.Open and, when storedPayloadJSON is provided, written
 // back with a payload-equality CAS so concurrent lifecycle saves win.
 // A nil cipher is a no-op.
-func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployment, storedPayloadJSON, storedUpdatedAt string) {
+//
+// Returns an error if reseal is required and the store write fails for a
+// reason other than a concurrent payload change (written=false is OK).
+func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployment, storedPayloadJSON, storedUpdatedAt string) error {
 	if s.cipher == nil || deployment == nil {
-		return
+		return nil
 	}
 	needsReseal := s.hasLegacyPlaintextSecrets(deployment)
 	for _, name := range deployment.SensitiveVars {
@@ -151,11 +154,11 @@ func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployme
 		}
 	}
 	if !needsReseal || storedPayloadJSON == "" {
-		return
+		return nil
 	}
 	sealed, err := s.sealForStore(deployment)
 	if err != nil {
-		return
+		return fmt.Errorf("seal legacy secrets for deployment %s: %w", deployment.ID, err)
 	}
 	// Prefer SQLite row updated_at; fall back to payload field.
 	ts := storedUpdatedAt
@@ -164,7 +167,17 @@ func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployme
 	}
 	// CAS on the full loaded JSON blob: any concurrent save changes the blob
 	// and this write is skipped (no status/output clobber).
-	_, _ = s.store.SaveDeploymentIfPayload(ctx, deployment.ID, sealed, storedPayloadJSON, ts)
+	written, err := s.store.SaveDeploymentIfPayload(ctx, deployment.ID, sealed, storedPayloadJSON, ts)
+	if err != nil {
+		return fmt.Errorf("persist resealed secrets for deployment %s: %w", deployment.ID, err)
+	}
+	if !written {
+		// Concurrent writer changed the row; secrets stay opened in memory for
+		// this request. The other writer may still hold plaintext until a later
+		// load migrates it.
+		return nil
+	}
+	return nil
 }
 
 // hasLegacyPlaintextSecrets reports whether any sensitive field is stored as

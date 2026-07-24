@@ -112,7 +112,9 @@ func (s *Service) deploymentsList(ctx context.Context) ([]deploy.Deployment, err
 			continue
 		}
 		// ListDeploymentsJSON has no separate storage timestamp; preserve payload UpdatedAt.
-		s.openFromStore(ctx, &deployment, string(payload), deployment.UpdatedAt)
+		if err := s.openFromStore(ctx, &deployment, string(payload), deployment.UpdatedAt); err != nil {
+			return nil, err
+		}
 		deployments = append(deployments, deployment)
 	}
 	return deployments, nil
@@ -130,7 +132,9 @@ func (s *Service) deploymentGet(ctx context.Context, id string) (*deploy.Deploym
 	if err := json.Unmarshal([]byte(raw), &deployment); err != nil {
 		return nil, err
 	}
-	s.openFromStore(ctx, &deployment, raw, storedUpdatedAt)
+	if err := s.openFromStore(ctx, &deployment, raw, storedUpdatedAt); err != nil {
+		return nil, err
+	}
 	return &deployment, nil
 }
 
