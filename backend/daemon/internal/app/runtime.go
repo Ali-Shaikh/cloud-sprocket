@@ -3,15 +3,19 @@
 
 package app
 
-import "cloudsprocket/backend/daemon/internal/models"
+import (
+	"context"
+
+	"cloudsprocket/backend/daemon/internal/models"
+)
 
 // handleRuntimeGet returns Docker and emulator state only. It must not call
 // discovery.Discover() or buildWorkspaceSnapshot — those costs are what this
 // RPC exists to avoid during Local Runtime polling. It always probes live so
 // the Local Runtime tab stays fresh, then seeds the workspace snapshot cache
 // so a subsequent tab switch inside the TTL costs nothing.
-func (s *Service) handleRuntimeGet() (any, error) {
-	status := s.probeRuntimeStatus()
+func (s *Service) handleRuntimeGet(ctx context.Context) (any, error) {
+	status := s.probeRuntimeStatus(ctx)
 	s.storeRuntimeStatus(status)
 	return models.RuntimeSnapshot{
 		DockerRuntime:     status.Docker,

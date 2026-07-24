@@ -163,7 +163,7 @@ func (s *Service) finishAWSWorkspaceOpts(
 	logMsg string,
 	logOnly bool,
 ) (models.WorkspaceSnapshot, error) {
-	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, opts)
+	workspace := s.buildWorkspaceSnapshotOpts(ctx, snapshot, session, opts)
 	if logMsg == "" {
 		return workspace, nil
 	}

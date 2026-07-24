@@ -76,7 +76,7 @@ func (s *Service) handleAwsInventoryGet(ctx context.Context, params json.RawMess
 		return nil, errors.New("open an AWS workspace before loading service inventory")
 	}
 
-	return s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+	return s.buildWorkspaceSnapshotOpts(ctx, snapshot, session, workspaceSnapshotOptions{
 		lightweightAWS:         true,
 		skipAzureInventory:     true,
 		awsScope:               scope,

@@ -100,20 +100,20 @@ func TestRuntimeStatusCachesReachableDockerProbes(t *testing.T) {
 		now:    func() time.Time { return clock },
 	}
 
-	first := s.runtimeStatusForSnapshot()
+	first := s.runtimeStatusForSnapshot(context.Background())
 	if !first.Docker.Reachable {
 		t.Fatal("expected reachable Docker runtime")
 	}
 	if len(first.Resources) != 1 {
 		t.Fatalf("expected managed resources on reachable engine, got %d", len(first.Resources))
 	}
-	_ = s.runtimeStatusForSnapshot()
+	_ = s.runtimeStatusForSnapshot(context.Background())
 	if dock.snapshots != 1 || dock.lists != 1 {
 		t.Fatalf("expected one probe while TTL is fresh, snapshots=%d lists=%d", dock.snapshots, dock.lists)
 	}
 
 	clock = clock.Add(runtimeStatusCacheTTL + time.Second)
-	_ = s.runtimeStatusForSnapshot()
+	_ = s.runtimeStatusForSnapshot(context.Background())
 	if dock.snapshots != 2 || dock.lists != 2 {
 		t.Fatalf("expected re-probe after TTL, snapshots=%d lists=%d", dock.snapshots, dock.lists)
 	}
@@ -143,7 +143,7 @@ func TestRuntimeStatusInvalidatedByEmulatorLifecycleAndRefresh(t *testing.T) {
 		settings:      settings,
 	}
 
-	_ = s.runtimeStatusForSnapshot()
+	_ = s.runtimeStatusForSnapshot(context.Background())
 	if dock.snapshots != 1 {
 		t.Fatalf("expected initial probe, got %d", dock.snapshots)
 	}
@@ -151,7 +151,7 @@ func TestRuntimeStatusInvalidatedByEmulatorLifecycleAndRefresh(t *testing.T) {
 	if _, err := s.emulatorsStart(context.Background(), models.EmulatorStartOptions{EmulatorID: "localstack"}); err != nil {
 		t.Fatalf("emulatorsStart: %v", err)
 	}
-	_ = s.runtimeStatusForSnapshot()
+	_ = s.runtimeStatusForSnapshot(context.Background())
 	if dock.snapshots != 2 {
 		t.Fatalf("expected start to invalidate runtime status cache, probes=%d", dock.snapshots)
 	}
@@ -159,7 +159,7 @@ func TestRuntimeStatusInvalidatedByEmulatorLifecycleAndRefresh(t *testing.T) {
 	if _, err := s.emulatorsStop(context.Background(), "localstack"); err != nil {
 		t.Fatalf("emulatorsStop: %v", err)
 	}
-	_ = s.runtimeStatusForSnapshot()
+	_ = s.runtimeStatusForSnapshot(context.Background())
 	if dock.snapshots != 3 {
 		t.Fatalf("expected stop to invalidate runtime status cache, probes=%d", dock.snapshots)
 	}
@@ -173,7 +173,7 @@ func TestRuntimeStatusInvalidatedByEmulatorLifecycleAndRefresh(t *testing.T) {
 		t.Fatalf("expected runRefresh path to re-probe after invalidation, before=%d after=%d", beforeRefresh, dock.snapshots)
 	}
 	afterRefresh := dock.snapshots
-	_ = s.runtimeStatusForSnapshot()
+	_ = s.runtimeStatusForSnapshot(context.Background())
 	if dock.snapshots != afterRefresh {
 		t.Fatalf("expected post-refresh cache hit, probes=%d want %d", dock.snapshots, afterRefresh)
 	}
@@ -187,12 +187,12 @@ func TestDockerRuntimeGetInvalidatesRuntimeStatusCache(t *testing.T) {
 		now:    func() time.Time { return clock },
 	}
 
-	_ = s.runtimeStatusForSnapshot()
+	_ = s.runtimeStatusForSnapshot(context.Background())
 	if dock.snapshots != 1 {
 		t.Fatalf("expected initial probe, got %d", dock.snapshots)
 	}
 
-	if _, err := s.handleDockerRuntimeGet(); err != nil {
+	if _, err := s.handleDockerRuntimeGet(context.Background()); err != nil {
 		t.Fatalf("handleDockerRuntimeGet: %v", err)
 	}
 	// Manual refresh always probes Docker once itself.
@@ -200,7 +200,7 @@ func TestDockerRuntimeGetInvalidatesRuntimeStatusCache(t *testing.T) {
 		t.Fatalf("expected manual Docker refresh to probe, got %d", dock.snapshots)
 	}
 
-	_ = s.runtimeStatusForSnapshot()
+	_ = s.runtimeStatusForSnapshot(context.Background())
 	if dock.snapshots != 3 {
 		t.Fatalf("expected runtime status rebuild after manual refresh invalidation, probes=%d", dock.snapshots)
 	}
@@ -214,14 +214,14 @@ func TestRuntimeGetSeedsRuntimeStatusCache(t *testing.T) {
 		now:    func() time.Time { return clock },
 	}
 
-	if _, err := s.handleRuntimeGet(); err != nil {
+	if _, err := s.handleRuntimeGet(context.Background()); err != nil {
 		t.Fatalf("handleRuntimeGet: %v", err)
 	}
 	if dock.snapshots != 1 {
 		t.Fatalf("expected live runtime.get probe, got %d", dock.snapshots)
 	}
 
-	_ = s.runtimeStatusForSnapshot()
+	_ = s.runtimeStatusForSnapshot(context.Background())
 	if dock.snapshots != 1 {
 		t.Fatalf("expected runtime.get to seed the workspace cache, probes=%d", dock.snapshots)
 	}

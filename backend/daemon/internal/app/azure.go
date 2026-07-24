@@ -198,7 +198,7 @@ func (s *Service) handleAzureSelectResourceGroup(ctx context.Context, params jso
 		return nil, err
 	}
 	s.mu.Unlock()
-	return s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+	return s.buildWorkspaceSnapshotOpts(ctx, snapshot, session, workspaceSnapshotOptions{
 		azureResourceGroupSelection: true,
 		skipAwsInventory:            true,
 	}), nil
@@ -231,7 +231,7 @@ func (s *Service) handleAzureSelectVirtualMachine(ctx context.Context, params js
 		return nil, err
 	}
 	s.mu.Unlock()
-	return s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+	return s.buildWorkspaceSnapshotOpts(ctx, snapshot, session, workspaceSnapshotOptions{
 		azureResourceGroupSelection: true,
 		skipAwsInventory:            true,
 	}), nil

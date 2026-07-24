@@ -1920,6 +1920,80 @@ func TestDockerRuntimeProbeIsBoundedWhenEngineBlocks(t *testing.T) {
 	}
 }
 
+// TestDockerAndEmulatorProbesRespectParentContextCancel is a regression for
+// architecture F-020: probes used context.Background(), so a cancelled RPC
+// still waited out dockerProbeTimeout on Docker dials. Parent cancel must
+// abort the probe well under the full timeout.
+func TestDockerAndEmulatorProbesRespectParentContextCancel(t *testing.T) {
+	s := &Service{
+		docker:        blockingDockerRuntime{},
+		localstackMgr: blockingLocalStackManager{},
+	}
+
+	// Docker Snapshot: cancel parent after a short delay; probe must exit early.
+	ctx, cancel := context.WithCancel(context.Background())
+	dockerDone := make(chan time.Duration, 1)
+	go func() {
+		start := time.Now()
+		_ = s.buildDockerRuntimeSnapshot(ctx)
+		dockerDone <- time.Since(start)
+	}()
+	time.Sleep(40 * time.Millisecond)
+	cancel()
+	select {
+	case elapsed := <-dockerDone:
+		if elapsed > time.Second {
+			t.Fatalf("Docker Snapshot took %v after parent cancel; expected early exit under 1s", elapsed)
+		}
+	case <-time.After(dockerProbeTimeout + time.Second):
+		t.Fatal("Docker Snapshot ignored parent context cancel")
+	}
+
+	// Emulator Status: same parent-cancel contract for emulatorsList.
+	ctx, cancel = context.WithCancel(context.Background())
+	emulatorDone := make(chan time.Duration, 1)
+	go func() {
+		start := time.Now()
+		_ = s.emulatorsList(ctx)
+		emulatorDone <- time.Since(start)
+	}()
+	time.Sleep(40 * time.Millisecond)
+	cancel()
+	select {
+	case elapsed := <-emulatorDone:
+		if elapsed > time.Second {
+			t.Fatalf("emulatorsList took %v after parent cancel; expected early exit under 1s", elapsed)
+		}
+	case <-time.After(dockerProbeTimeout + time.Second):
+		t.Fatal("emulatorsList ignored parent context cancel")
+	}
+}
+
+// blockingLocalStackManager blocks Status until the context is cancelled so
+// parent-cancel regression tests do not need a real Docker engine.
+type blockingLocalStackManager struct{}
+
+func (blockingLocalStackManager) Status(ctx context.Context) (models.EmulatorStatusDetail, error) {
+	<-ctx.Done()
+	return models.EmulatorStatusDetail{}, ctx.Err()
+}
+
+func (blockingLocalStackManager) Start(context.Context, models.EmulatorStartOptions) (models.EmulatorStatusDetail, error) {
+	return models.EmulatorStatusDetail{}, errors.New("not implemented")
+}
+
+func (blockingLocalStackManager) Stop(context.Context) (models.EmulatorStatusDetail, error) {
+	return models.EmulatorStatusDetail{}, errors.New("not implemented")
+}
+
+func (blockingLocalStackManager) Logs(context.Context, int) (models.EmulatorLogSnapshot, error) {
+	return models.EmulatorLogSnapshot{}, errors.New("not implemented")
+}
+
+func (blockingLocalStackManager) EnsureManagedProfile() error {
+	return nil
+}
+
 // TestUnlockNotBlockedBySlowWorkspaceFetch is a regression test for the unlock
 // freeze: the Local Runtime tab polls workspace.get, which builds the snapshot
 // with slow Docker probes. If that snapshot build holds the service mutex,

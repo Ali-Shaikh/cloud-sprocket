@@ -281,7 +281,7 @@ func (s *Service) runEC2Action(
 
 	// Job results replace the full desktop workspace on job.updated, so load all
 	// AWS inventory. Skip Azure only (opposite cloud) to cut cost.
-	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+	workspace := s.buildWorkspaceSnapshotOpts(background, snapshot, session, workspaceSnapshotOptions{
 		skipAzureInventory: true,
 	})
 	workspace.EC2Instances = instances

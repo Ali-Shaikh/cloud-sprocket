@@ -42,11 +42,11 @@ const (
 	azureCLIExtensionCacheTTL = 10 * time.Minute
 )
 
-func (s *Service) dockerRuntimeSnapshot() models.DockerRuntimeSnapshot {
+func (s *Service) dockerRuntimeSnapshot(ctx context.Context) models.DockerRuntimeSnapshot {
 	if cached, ok := s.cachedUnreachableDocker(); ok {
 		return cached
 	}
-	return s.probeDockerRuntimeSnapshot()
+	return s.probeDockerRuntimeSnapshot(ctx)
 }
 
 func (s *Service) cachedUnreachableDocker() (models.DockerRuntimeSnapshot, bool) {
@@ -63,8 +63,8 @@ func (s *Service) cachedUnreachableDocker() (models.DockerRuntimeSnapshot, bool)
 // probeDockerRuntimeSnapshot always probes the engine (bypassing the cache) and
 // records the result. It backs the manual "Refresh Docker" action.
 
-func (s *Service) probeDockerRuntimeSnapshot() models.DockerRuntimeSnapshot {
-	snapshot := s.buildDockerRuntimeSnapshot()
+func (s *Service) probeDockerRuntimeSnapshot(ctx context.Context) models.DockerRuntimeSnapshot {
+	snapshot := s.buildDockerRuntimeSnapshot(ctx)
 	s.dockerSnapshotMu.Lock()
 	cached := snapshot
 	s.dockerSnapshotValue = &cached
@@ -73,11 +73,11 @@ func (s *Service) probeDockerRuntimeSnapshot() models.DockerRuntimeSnapshot {
 	return snapshot
 }
 
-func (s *Service) buildDockerRuntimeSnapshot() models.DockerRuntimeSnapshot {
+func (s *Service) buildDockerRuntimeSnapshot(ctx context.Context) models.DockerRuntimeSnapshot {
 	if s.docker != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+		probeCtx, cancel := context.WithTimeout(ctx, dockerProbeTimeout)
 		defer cancel()
-		snapshot, err := s.docker.Snapshot(ctx)
+		snapshot, err := s.docker.Snapshot(probeCtx)
 		if err == nil {
 			return snapshot
 		}
@@ -115,21 +115,21 @@ func (s *Service) buildDockerRuntimeSnapshot() models.DockerRuntimeSnapshot {
 	}
 }
 
-func (s *Service) dockerResources() []models.ManagedDockerResource {
+func (s *Service) dockerResources(ctx context.Context) []models.ManagedDockerResource {
 	if s.docker == nil {
 		return []models.ManagedDockerResource{}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+	probeCtx, cancel := context.WithTimeout(ctx, dockerProbeTimeout)
 	defer cancel()
-	resources, err := s.docker.ListOwnedResources(ctx)
+	resources, err := s.docker.ListOwnedResources(probeCtx)
 	if err != nil {
 		return []models.ManagedDockerResource{}
 	}
 	return resources
 }
 
-func (s *Service) dockerDiagnostics() models.DockerDiagnostics {
-	return s.dockerDiagnosticsFromSnapshot(s.dockerRuntimeSnapshot())
+func (s *Service) dockerDiagnostics(ctx context.Context) models.DockerDiagnostics {
+	return s.dockerDiagnosticsFromSnapshot(s.dockerRuntimeSnapshot(ctx))
 }
 
 func (s *Service) dockerDiagnosticsFromSnapshot(runtime models.DockerRuntimeSnapshot) models.DockerDiagnostics {
@@ -151,16 +151,16 @@ func (s *Service) dockerDiagnosticsFromSnapshot(runtime models.DockerRuntimeSnap
 	}
 }
 
-func (s *Service) handleDockerRuntimeGet() (any, error) {
+func (s *Service) handleDockerRuntimeGet(ctx context.Context) (any, error) {
 	// Manual refresh forces a fresh probe (bypassing the unreachable cache) and
 	// drops the broader runtime-status bundle so the next workspace snapshot
 	// rebuild re-probes resources and emulators too.
-	snapshot := s.probeDockerRuntimeSnapshot()
+	snapshot := s.probeDockerRuntimeSnapshot(ctx)
 	s.invalidateRuntimeStatus()
 	return snapshot, nil
 }
 
-func (s *Service) runtimeStatusForSnapshot() runtimeStatus {
+func (s *Service) runtimeStatusForSnapshot(ctx context.Context) runtimeStatus {
 	// Hold the mutex only for cache read/write so runtime.get can store its own
 	// probe without waiting out a cold Docker/emulator probe on this path.
 	// Concurrent snapshot builders may still race one extra probe under load;
@@ -173,7 +173,7 @@ func (s *Service) runtimeStatusForSnapshot() runtimeStatus {
 	}
 	s.runtimeStatusMu.Unlock()
 
-	status := s.probeRuntimeStatus()
+	status := s.probeRuntimeStatus(ctx)
 
 	s.runtimeStatusMu.Lock()
 	// Another goroutine may have filled a fresher value while we probed; prefer
@@ -187,8 +187,8 @@ func (s *Service) runtimeStatusForSnapshot() runtimeStatus {
 
 // probeRuntimeStatus always performs the live Docker / resource / emulator
 // sequence used by workspace snapshots and Local Runtime polls.
-func (s *Service) probeRuntimeStatus() runtimeStatus {
-	dockerRuntime := s.dockerRuntimeSnapshot()
+func (s *Service) probeRuntimeStatus(ctx context.Context) runtimeStatus {
+	dockerRuntime := s.dockerRuntimeSnapshot(ctx)
 	// Only enumerate managed Docker resources when the engine is reachable. When
 	// Docker is stopped the resource probe would otherwise wait out its own
 	// timeout to return an empty list, doubling the Docker latency of every
@@ -200,8 +200,8 @@ func (s *Service) probeRuntimeStatus() runtimeStatus {
 	// several seconds to every workspace fetch and Local Runtime poll.
 	emulatorSummaries := s.emulatorSummaries()
 	if dockerRuntime.Reachable {
-		dockerResources = s.dockerResources()
-		emulatorSummaries = s.emulatorsList()
+		dockerResources = s.dockerResources(ctx)
+		emulatorSummaries = s.emulatorsList(ctx)
 	}
 	return runtimeStatus{
 		Docker:    dockerRuntime,
@@ -233,6 +233,6 @@ func (s *Service) invalidateAzureCLIExtensionCache() {
 	s.azureCLIExtAt = time.Time{}
 }
 
-func (s *Service) handleDockerResourcesList() (any, error) {
-	return s.dockerResources(), nil
+func (s *Service) handleDockerResourcesList(ctx context.Context) (any, error) {
+	return s.dockerResources(ctx), nil
 }

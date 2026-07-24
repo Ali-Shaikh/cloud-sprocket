@@ -10,11 +10,13 @@ import (
 
 // registerRuntimeHandlers registers docker, emulators, runtime, and actions methods.
 func (s *Service) registerRuntimeHandlers(m map[string]RPCHandler) {
-	m["runtime.get"] = func(_ context.Context, _ json.RawMessage, _ Notifier) (any, error) { return s.handleRuntimeGet() }
-	m["docker.runtime.get"] = func(_ context.Context, _ json.RawMessage, _ Notifier) (any, error) { return s.handleDockerRuntimeGet() }
-	m["docker.resources.list"] = func(_ context.Context, _ json.RawMessage, _ Notifier) (any, error) { return s.handleDockerResourcesList() }
-	m["emulators.list"] = func(_ context.Context, _ json.RawMessage, _ Notifier) (any, error) { return s.handleEmulatorsList() }
-	m["emulators.prepareProfile"] = func(_ context.Context, params json.RawMessage, _ Notifier) (any, error) { return s.handleEmulatorsPrepareProfile(params) }
+	m["runtime.get"] = func(ctx context.Context, _ json.RawMessage, _ Notifier) (any, error) { return s.handleRuntimeGet(ctx) }
+	m["docker.runtime.get"] = func(ctx context.Context, _ json.RawMessage, _ Notifier) (any, error) { return s.handleDockerRuntimeGet(ctx) }
+	m["docker.resources.list"] = func(ctx context.Context, _ json.RawMessage, _ Notifier) (any, error) { return s.handleDockerResourcesList(ctx) }
+	m["emulators.list"] = func(ctx context.Context, _ json.RawMessage, _ Notifier) (any, error) { return s.handleEmulatorsList(ctx) }
+	m["emulators.prepareProfile"] = func(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
+		return s.handleEmulatorsPrepareProfile(ctx, params)
+	}
 	m["emulators.start"] = func(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) { return s.handleEmulatorsStart(ctx, params) }
 	m["emulators.stop"] = func(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) { return s.handleEmulatorsStop(ctx, params) }
 	m["emulators.logs"] = func(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) { return s.handleEmulatorsLogs(ctx, params) }

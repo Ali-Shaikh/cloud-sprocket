@@ -66,7 +66,7 @@ func (s *Service) finishAzureWorkspaceOpts(
 	logLevel string,
 	logMsg string,
 ) (models.WorkspaceSnapshot, error) {
-	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, opts)
+	workspace := s.buildWorkspaceSnapshotOpts(ctx, snapshot, session, opts)
 	if logMsg == "" {
 		return workspace, nil
 	}

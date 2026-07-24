@@ -47,18 +47,20 @@ type workspaceSnapshotOptions struct {
 // Prefer buildWorkspaceSnapshotOpts with scope and skip flags on single-service
 // paths so callers do not accidentally re-enrich every enabled service.
 func (s *Service) buildWorkspaceSnapshot(
+	ctx context.Context,
 	snapshot discovery.Snapshot,
 	session models.SessionSnapshot,
 ) models.WorkspaceSnapshot {
-	return s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{})
+	return s.buildWorkspaceSnapshotOpts(ctx, snapshot, session, workspaceSnapshotOptions{})
 }
 
 func (s *Service) buildWorkspaceSnapshotOpts(
+	ctx context.Context,
 	snapshot discovery.Snapshot,
 	session models.SessionSnapshot,
 	opts workspaceSnapshotOptions,
 ) models.WorkspaceSnapshot {
-	runtime := s.runtimeStatusForSnapshot()
+	runtime := s.runtimeStatusForSnapshot(ctx)
 	workspace := models.WorkspaceSnapshot{
 		AuthMethod:             session.SelectedAuthMethod,
 		RuntimeSettings:        s.settingsSnapshot(),

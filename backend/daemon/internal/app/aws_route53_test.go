@@ -88,7 +88,7 @@ func TestAwsScopedRoute53InventoryLoadsHostedZonesAndRecords(t *testing.T) {
 		IsLocked:                    true,
 	}
 
-	workspace := service.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+	workspace := service.buildWorkspaceSnapshotOpts(context.Background(), snapshot, session, workspaceSnapshotOptions{
 		awsScope:           "route53",
 		skipAzureInventory: true,
 	})

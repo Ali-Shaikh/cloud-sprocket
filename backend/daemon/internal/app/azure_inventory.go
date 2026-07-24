@@ -62,7 +62,7 @@ func (s *Service) handleAzureInventoryGet(ctx context.Context, params json.RawMe
 	// Other scopes stay lightweight so expensive detail (WAF policy config,
 	// schema probes, etc.) still loads only when the user drills in.
 	lightweight := scope != "storage"
-	return s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+	return s.buildWorkspaceSnapshotOpts(ctx, snapshot, session, workspaceSnapshotOptions{
 		lightweightAzure:       lightweight,
 		skipAwsInventory:       true,
 		azureScope:             scope,

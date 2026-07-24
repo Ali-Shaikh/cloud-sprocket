@@ -30,6 +30,10 @@ Installers for every release are published on the
   is already the daemon redaction placeholder; fixtures that still carry a real
   value keep the reveal toggle.
 
+- Daemon Docker and emulator status probes derive timeouts from the RPC request
+  context instead of `context.Background()`, so a cancelled request aborts
+  Docker dials and status probes early rather than waiting out the full probe
+  timeout (architecture F-020).
 - Daemon app Docker host fallback uses `dockerruntime.ResolveDockerHost` instead
   of the foundation-era `detectDockerHost`, so Windows diagnostics report the
   default named pipe (`npipe:////./pipe/docker_engine`) instead of an empty host

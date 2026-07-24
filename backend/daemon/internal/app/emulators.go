@@ -17,13 +17,13 @@ import (
 
 const localAWSProfileName = "cloudsprocket-localstack"
 
-func (s *Service) emulatorsList() []models.EmulatorSummary {
+func (s *Service) emulatorsList(ctx context.Context) []models.EmulatorSummary {
 	summaries := []models.EmulatorSummary{}
 
 	if s.localstackMgr != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
-		defer cancel()
-		status, err := s.localstackMgr.Status(ctx)
+		statusCtx, cancel := context.WithTimeout(ctx, dockerProbeTimeout)
+		status, err := s.localstackMgr.Status(statusCtx)
+		cancel()
 		if err == nil {
 			summaries = append(summaries, models.EmulatorSummary{
 				EmulatorID: status.EmulatorID,
@@ -38,9 +38,9 @@ func (s *Service) emulatorsList() []models.EmulatorSummary {
 	}
 
 	if s.azureRuntime != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
-		defer cancel()
-		status, err := s.azureRuntime.Status(ctx)
+		statusCtx, cancel := context.WithTimeout(ctx, dockerProbeTimeout)
+		status, err := s.azureRuntime.Status(statusCtx)
+		cancel()
 		if err == nil {
 			summaries = append(summaries, models.EmulatorSummary{
 				EmulatorID: status.EmulatorID,
@@ -57,7 +57,7 @@ func (s *Service) emulatorsList() []models.EmulatorSummary {
 	return summaries
 }
 
-func (s *Service) emulatorsPrepareProfile(emulatorID string) (models.EmulatorActionResult, error) {
+func (s *Service) emulatorsPrepareProfile(ctx context.Context, emulatorID string) (models.EmulatorActionResult, error) {
 	emulatorID = normaliseEmulatorID(emulatorID)
 	if emulatorID == "floci-az" {
 		if s.azureRuntime == nil {
@@ -69,7 +69,7 @@ func (s *Service) emulatorsPrepareProfile(emulatorID string) (models.EmulatorAct
 		if err := s.writeLocalAzureSubscription(); err != nil {
 			return models.EmulatorActionResult{}, fmt.Errorf("failed to create local Azure profile: %w", err)
 		}
-		statusCtx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+		statusCtx, cancel := context.WithTimeout(ctx, dockerProbeTimeout)
 		defer cancel()
 		status, _ := s.azureRuntime.Status(statusCtx)
 		status.ProfileName = flociazcompat.LocalProfileID
@@ -91,7 +91,7 @@ func (s *Service) emulatorsPrepareProfile(emulatorID string) (models.EmulatorAct
 		return models.EmulatorActionResult{}, fmt.Errorf("failed to create local AWS profile: %w", err)
 	}
 
-	statusCtx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+	statusCtx, cancel := context.WithTimeout(ctx, dockerProbeTimeout)
 	defer cancel()
 	status, _ := s.localstackMgr.Status(statusCtx)
 	status.ProfileName = localAWSProfileName
@@ -232,16 +232,16 @@ func (s *Service) emulatorsLogs(ctx context.Context, emulatorID string, tail int
 	return s.localstackMgr.Logs(logsCtx, tail)
 }
 
-func (s *Service) handleEmulatorsList() (any, error) {
-	return s.emulatorsList(), nil
+func (s *Service) handleEmulatorsList(ctx context.Context) (any, error) {
+	return s.emulatorsList(ctx), nil
 }
 
-func (s *Service) handleEmulatorsPrepareProfile(params json.RawMessage) (any, error) {
+func (s *Service) handleEmulatorsPrepareProfile(ctx context.Context, params json.RawMessage) (any, error) {
 	var request struct {
 		EmulatorID string `json:"emulatorId"`
 	}
 	_ = json.Unmarshal(params, &request)
-	result, err := s.emulatorsPrepareProfile(request.EmulatorID)
+	result, err := s.emulatorsPrepareProfile(ctx, request.EmulatorID)
 	if err != nil {
 		return nil, err
 	}

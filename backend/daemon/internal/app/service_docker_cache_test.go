@@ -33,24 +33,25 @@ func TestDockerSnapshotCachesUnreachableVerdict(t *testing.T) {
 	clock := time.Now()
 	s := &Service{docker: dock, now: func() time.Time { return clock }}
 
-	if snapshot := s.dockerRuntimeSnapshot(); snapshot.Reachable {
+	ctx := context.Background()
+	if snapshot := s.dockerRuntimeSnapshot(ctx); snapshot.Reachable {
 		t.Fatal("expected the engine to be reported unreachable")
 	}
 	// A second poll within the TTL must be served from cache (no extra probe).
-	_ = s.dockerRuntimeSnapshot()
+	_ = s.dockerRuntimeSnapshot(ctx)
 	if dock.snapshots != 1 {
 		t.Fatalf("expected the unreachable verdict to be cached, probes = %d", dock.snapshots)
 	}
 
 	// After the TTL elapses, the engine is probed again.
 	clock = clock.Add(dockerUnreachableCacheTTL + time.Second)
-	_ = s.dockerRuntimeSnapshot()
+	_ = s.dockerRuntimeSnapshot(ctx)
 	if dock.snapshots != 2 {
 		t.Fatalf("expected a re-probe after the TTL, probes = %d", dock.snapshots)
 	}
 
 	// A manual refresh always probes, bypassing the cache.
-	_ = s.probeDockerRuntimeSnapshot()
+	_ = s.probeDockerRuntimeSnapshot(ctx)
 	if dock.snapshots != 3 {
 		t.Fatalf("expected a manual refresh to force a probe, probes = %d", dock.snapshots)
 	}
@@ -65,7 +66,7 @@ func TestBuildDockerRuntimeSnapshotFallsBackToResolveDockerHostOnWindows(t *test
 	}
 	s := &Service{settings: settings, docker: nil}
 
-	snapshot := s.buildDockerRuntimeSnapshot()
+	snapshot := s.buildDockerRuntimeSnapshot(context.Background())
 	if snapshot.Reachable {
 		t.Fatalf("expected unreachable snapshot when docker client is nil, got %+v", snapshot)
 	}
@@ -102,7 +103,7 @@ func TestBuildDockerRuntimeSnapshotFallsBackWhenSnapshotErrors(t *testing.T) {
 		docker:   &countingDockerRuntime{},
 	}
 
-	snapshot := s.buildDockerRuntimeSnapshot()
+	snapshot := s.buildDockerRuntimeSnapshot(context.Background())
 	if snapshot.Reachable {
 		t.Fatalf("expected unreachable snapshot after probe error, got %+v", snapshot)
 	}

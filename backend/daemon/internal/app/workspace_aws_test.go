@@ -108,7 +108,7 @@ func TestAwsScopedWorkspaceOnlyRunsTargetEnricher(t *testing.T) {
 		IsLocked:           true,
 	}
 
-	workspace := service.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+	workspace := service.buildWorkspaceSnapshotOpts(context.Background(), snapshot, session, workspaceSnapshotOptions{
 		awsScope:           "ec2",
 		skipAzureInventory: true,
 	})
@@ -146,7 +146,7 @@ func TestAwsDeferredWorkspaceGetSkipsNonCoreEnrichers(t *testing.T) {
 		IsLocked:          true,
 	}
 
-	workspace := service.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+	workspace := service.buildWorkspaceSnapshotOpts(context.Background(), snapshot, session, workspaceSnapshotOptions{
 		lightweightAWS:       true,
 		awsDeferredInventory: true,
 		skipAzureInventory:   true,
@@ -282,7 +282,7 @@ func TestBuildWorkspaceSnapshotParallelNoRace(t *testing.T) {
 		IsLocked:          true,
 	}
 
-	workspace := service.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{})
+	workspace := service.buildWorkspaceSnapshotOpts(context.Background(), snapshot, session, workspaceSnapshotOptions{})
 	if s3.listBuckets.Load() == 0 || ec2.listInstances.Load() == 0 || lambda.listFunctions.Load() == 0 {
 		t.Fatalf(
 			"expected parallel full enrichment, s3=%d ec2Instances=%d lambda=%d",

@@ -657,7 +657,7 @@ func (s *Service) runRDSAction(
 	successMessage := fmt.Sprintf("RDS %s completed for %s in %s.", normalisedAction, instanceID, region)
 	// Job results replace the full desktop workspace on job.updated, so load all
 	// AWS inventory. Skip Azure only (opposite cloud) to cut cost.
-	workspace := s.buildWorkspaceSnapshotOpts(snapshot, session, workspaceSnapshotOptions{
+	workspace := s.buildWorkspaceSnapshotOpts(background, snapshot, session, workspaceSnapshotOptions{
 		skipAzureInventory: true,
 	})
 	workspace.RDSInstances = s.rdsInstances(background, profile, region)
