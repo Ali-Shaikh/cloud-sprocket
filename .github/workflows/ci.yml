@@ -108,12 +108,27 @@ jobs:
       - name: Run desktop type-check
         run: pnpm run typecheck:desktop
 
+      # Non-blocking while the first-pass backlog is sized and fixed.
+      - name: Run desktop lint
+        continue-on-error: true
+        run: pnpm run lint:desktop
+
       - name: Run backend tests
         run: pnpm run test:backend
 
       - name: Run backend race tests
         if: runner.os == 'Linux'
         run: pnpm run test:backend:race
+
+      # Non-blocking while the first-pass backlog is sized and fixed.
+      - name: Run backend lint
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: v2.12.2
+          working-directory: backend/daemon
+          args: ./...
 
       - name: Run backend coverage gate
         if: runner.os == 'Linux'

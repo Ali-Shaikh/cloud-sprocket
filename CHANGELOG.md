@@ -9,6 +9,15 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Added
+
+- Non-blocking ESLint (TypeScript + react-hooks) and golangci-lint (govet,
+  staticcheck, errcheck, ineffassign) in CI and as `pnpm lint` /
+  `lint:desktop` / `lint:backend` scripts, so lint debt can be sized before
+  becoming a merge gate (architecture F-030). Desktop keeps TypeScript 7 for
+  `tsc` via `@typescript/native`, while the `typescript` package name resolves
+  to the TypeScript 6 API package that typescript-eslint still requires.
+
 ### Fixed
 
 - Daemon `session.selectProvider` and `session.selectProfile` no longer clear

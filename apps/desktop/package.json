@@ -21,7 +21,9 @@
     "build:desktop": "pnpm run build && pnpm run build:sidecar && tauri build && pnpm run verify:windows-subsystem",
     "bundle:macos:local:app": "pnpm run build && pnpm run build:sidecar && tauri build --config src-tauri/tauri.local.conf.json --bundles app --no-sign",
     "bundle:macos:local:dmg": "pnpm run build && pnpm run build:sidecar && tauri build --config src-tauri/tauri.local.conf.json --bundles dmg --no-sign",
-    "bundle:macos:release:dmg": "pnpm run build && pnpm run build:sidecar && tauri build --bundles dmg"
+    "bundle:macos:release:dmg": "pnpm run build && pnpm run build:sidecar && tauri build --bundles dmg",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",
@@ -59,6 +61,7 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@tailwindcss/vite": "^4.3.2",
     "@tauri-apps/cli": "^2.11.1",
     "@testing-library/jest-dom": "^6.0.0",
@@ -66,11 +69,16 @@
     "@testing-library/user-event": "^14.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@typescript/native": "npm:typescript@7.0.2",
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/coverage-v8": "4.1.10",
+    "eslint": "10.8.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.7.0",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4.3.2",
-    "typescript": "^7.0.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript-eslint": "8.65.0",
     "vite": "^8.0.13",
     "vitest": "^4.1.6"
   }
