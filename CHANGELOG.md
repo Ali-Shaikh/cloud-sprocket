@@ -15,6 +15,10 @@ Installers for every release are published on the
   configuration. Preparing a profile dual-writes app-managed files under the
   local config root and a named entry in the user's AWS config/credentials or
   Azure profile so Connect can discover it (architecture F-019).
+- Daemon JSON-RPC transport (`internal/rpc`) no longer imports `internal/app`.
+  Shared `PublicError` and `Notifier` contracts live in `internal/rpcapi`; app
+  keeps concrete error helpers and type aliases so handlers stay unchanged
+  (architecture F-006).
 - Desktop runtime actions collapse LocalStack and floci-az start/stop/recreate
   pipelines into one `invokeEmulatorAction(emulatorId, action, options?)` plus
   a shared status poller (recreate 95s vs default 22s timeouts preserved;

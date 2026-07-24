@@ -14,7 +14,7 @@ import (
 	"runtime/debug"
 	"sync"
 
-	"cloudsprocket/backend/daemon/internal/app"
+	"cloudsprocket/backend/daemon/internal/rpcapi"
 )
 
 const (
@@ -23,7 +23,7 @@ const (
 )
 
 type Handler interface {
-	Handle(context.Context, string, json.RawMessage, app.Notifier) (any, error)
+	Handle(context.Context, string, json.RawMessage, rpcapi.Notifier) (any, error)
 }
 
 type Server struct {
@@ -185,7 +185,7 @@ func (s *Server) write(payload any) error {
 }
 
 func classifyError(err error) *responseError {
-	var public app.PublicError
+	var public rpcapi.PublicError
 	if errors.As(err, &public) {
 		return newResponseError(public.JSONRPCCode(), public.StableCode(), public.SafeMessage())
 	}

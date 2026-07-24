@@ -15,12 +15,12 @@ import (
 	"testing"
 	"time"
 
-	"cloudsprocket/backend/daemon/internal/app"
+	"cloudsprocket/backend/daemon/internal/rpcapi"
 )
 
-type handlerFunc func(context.Context, string, json.RawMessage, app.Notifier) (any, error)
+type handlerFunc func(context.Context, string, json.RawMessage, rpcapi.Notifier) (any, error)
 
-func (f handlerFunc) Handle(ctx context.Context, method string, params json.RawMessage, notifier app.Notifier) (any, error) {
+func (f handlerFunc) Handle(ctx context.Context, method string, params json.RawMessage, notifier rpcapi.Notifier) (any, error) {
 	return f(ctx, method, params, notifier)
 }
 
@@ -39,7 +39,7 @@ func (testPublicError) SafeMessage() string { return "This operation is unavaila
 
 func TestServerRecoversHandlerPanicAndContinues(t *testing.T) {
 	var diagnostics bytes.Buffer
-	handler := handlerFunc(func(_ context.Context, method string, _ json.RawMessage, _ app.Notifier) (any, error) {
+	handler := handlerFunc(func(_ context.Context, method string, _ json.RawMessage, _ rpcapi.Notifier) (any, error) {
 		if method == "panic" {
 			panic("sensitive panic detail")
 		}
@@ -73,7 +73,7 @@ func TestServerRecoversHandlerPanicAndContinues(t *testing.T) {
 func TestServerKeepsRawHandlerErrorInDiagnostics(t *testing.T) {
 	const raw = "AWS request failed for arn:aws:iam::123456789012:role/private"
 	var diagnostics bytes.Buffer
-	server := NewWithLogger(handlerFunc(func(context.Context, string, json.RawMessage, app.Notifier) (any, error) {
+	server := NewWithLogger(handlerFunc(func(context.Context, string, json.RawMessage, rpcapi.Notifier) (any, error) {
 		return nil, errors.New(raw)
 	}), log.New(&diagnostics, "", 0))
 
@@ -92,7 +92,7 @@ func TestServerKeepsRawHandlerErrorInDiagnostics(t *testing.T) {
 
 func TestServerUsesPublicErrorContract(t *testing.T) {
 	var diagnostics bytes.Buffer
-	server := NewWithLogger(handlerFunc(func(context.Context, string, json.RawMessage, app.Notifier) (any, error) {
+	server := NewWithLogger(handlerFunc(func(context.Context, string, json.RawMessage, rpcapi.Notifier) (any, error) {
 		return nil, testPublicError{}
 	}), log.New(&diagnostics, "", 0))
 
@@ -110,7 +110,7 @@ func TestServerUsesPublicErrorContract(t *testing.T) {
 }
 
 func TestServerRejectsOversizedRequestAndProcessesNextLine(t *testing.T) {
-	server := New(handlerFunc(func(context.Context, string, json.RawMessage, app.Notifier) (any, error) {
+	server := New(handlerFunc(func(context.Context, string, json.RawMessage, rpcapi.Notifier) (any, error) {
 		return "ok", nil
 	}))
 	input := strings.Repeat("x", maxRequestBytes+1) + "\n" +
@@ -139,7 +139,7 @@ func TestServerRejectsOversizedRequestAndProcessesNextLine(t *testing.T) {
 func TestServerBoundsConcurrentHandlers(t *testing.T) {
 	var active atomic.Int32
 	var maximum atomic.Int32
-	handler := handlerFunc(func(context.Context, string, json.RawMessage, app.Notifier) (any, error) {
+	handler := handlerFunc(func(context.Context, string, json.RawMessage, rpcapi.Notifier) (any, error) {
 		current := active.Add(1)
 		defer active.Add(-1)
 		for {
@@ -169,7 +169,7 @@ func TestServerBoundsConcurrentHandlers(t *testing.T) {
 }
 
 func TestNotifyBeforeServeReturnsError(t *testing.T) {
-	server := New(handlerFunc(func(context.Context, string, json.RawMessage, app.Notifier) (any, error) {
+	server := New(handlerFunc(func(context.Context, string, json.RawMessage, rpcapi.Notifier) (any, error) {
 		return nil, nil
 	}))
 	if err := server.Notify("test.event", map[string]any{"ok": true}); err == nil {

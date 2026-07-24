@@ -8,6 +8,7 @@ import (
 
 	"cloudsprocket/backend/daemon/internal/deploy"
 	"cloudsprocket/backend/daemon/internal/models"
+	"cloudsprocket/backend/daemon/internal/rpcapi"
 	"cloudsprocket/backend/daemon/internal/tofu"
 )
 
@@ -229,9 +230,9 @@ type AzureRuntimeManager interface {
 	EnsureManagedConfig() error
 }
 
-type Notifier interface {
-	Notify(method string, payload any) error
-}
+// Notifier is the shared progress/notification contract used by the JSON-RPC
+// transport. Defined in rpcapi so package rpc does not depend on app.
+type Notifier = rpcapi.Notifier
 
 // Deployer runs recipe deployments through the IaC engine. Implemented by
 // *deploy.Engine; an interface so tests can inject a fake.
