@@ -21,7 +21,29 @@ import type {
   WorkspaceSnapshot,
 } from "@/types/backend";
 
-function parseEnvironment(text: string, blockedKeys: string[] = []): Record<string, string> {
+/** Known local emulator product ids for runtime actions. */
+export type RuntimeEmulatorId = "localstack" | "floci-az";
+
+export type EmulatorLifecycleAction = "prepareProfile" | "start" | "stop" | "recreate";
+
+/** Options for start/recreate; LocalStack alone uses authToken. */
+export type InvokeEmulatorActionOptions = {
+  authToken?: string;
+  persistence?: boolean;
+  environment?: Record<string, string>;
+};
+
+export const EMULATOR_ACTION_TIMEOUT_MS = {
+  default: 22_000,
+  recreate: 95_000,
+} as const;
+
+export const EMULATOR_POLL = {
+  attempts: 12,
+  intervalMs: 2_500,
+} as const;
+
+export function parseEnvironment(text: string, blockedKeys: string[] = []): Record<string, string> {
   const env: Record<string, string> = {};
   const blocked = new Set(blockedKeys);
   text.split("\n").forEach((line) => {
@@ -38,6 +60,64 @@ function parseEnvironment(text: string, blockedKeys: string[] = []): Record<stri
     }
   });
   return env;
+}
+
+export function emulatorDisplayName(emulatorId: RuntimeEmulatorId): string {
+  return emulatorId === "floci-az" ? "floci-az" : "LocalStack";
+}
+
+export function emulatorActionLabel(
+  emulatorId: RuntimeEmulatorId,
+  action: EmulatorLifecycleAction,
+): string {
+  const name = emulatorDisplayName(emulatorId);
+  switch (action) {
+    case "prepareProfile":
+      return emulatorId === "floci-az" ? `Prepare ${name} config` : `Prepare ${name} profile`;
+    case "start":
+      return `Start ${name}`;
+    case "recreate":
+      return `Recreate ${name}`;
+    case "stop":
+      return `Stop ${name}`;
+  }
+}
+
+export function emulatorActionMethod(action: EmulatorLifecycleAction): string {
+  if (action === "prepareProfile") {
+    return "emulators.prepareProfile";
+  }
+  if (action === "stop") {
+    return "emulators.stop";
+  }
+  return "emulators.start";
+}
+
+export function emulatorActionTimeoutMs(action: EmulatorLifecycleAction): number {
+  return action === "recreate" ? EMULATOR_ACTION_TIMEOUT_MS.recreate : EMULATOR_ACTION_TIMEOUT_MS.default;
+}
+
+export function buildEmulatorActionParams(
+  emulatorId: RuntimeEmulatorId,
+  action: EmulatorLifecycleAction,
+  options: InvokeEmulatorActionOptions = {},
+): Record<string, unknown> {
+  if (action !== "start" && action !== "recreate") {
+    return { emulatorId };
+  }
+  const params: Record<string, unknown> = {
+    emulatorId,
+    persistence: options.persistence ?? false,
+    environment: options.environment ?? {},
+  };
+  if (emulatorId === "localstack" && options.authToken !== undefined) {
+    params.authToken = options.authToken;
+  }
+  // Only sent for recreate so a normal start keeps its minimal payload.
+  if (action === "recreate") {
+    params.recreate = true;
+  }
+  return params;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> {
@@ -136,6 +216,17 @@ export function useRuntimeActions({
     setFlociAzLogsStatus("");
   }, [setFlociAzLogs, setFlociAzLogsStatus]);
 
+  const refreshEmulatorLogs = useCallback(
+    async (emulatorId: RuntimeEmulatorId): Promise<void> => {
+      if (emulatorId === "floci-az") {
+        await refreshFlociAzLogs();
+        return;
+      }
+      await refreshLocalStackLogs();
+    },
+    [refreshFlociAzLogs, refreshLocalStackLogs],
+  );
+
   const localStackEnvironment = useCallback((): Record<string, string> => {
     return parseEnvironment(localStackEnvironmentText, ["LOCALSTACK_AUTH_TOKEN", "PERSISTENCE"]);
   }, [localStackEnvironmentText]);
@@ -143,6 +234,54 @@ export function useRuntimeActions({
   const flociAzEnvironment = useCallback((): Record<string, string> => {
     return parseEnvironment(flociAzEnvironmentText);
   }, [flociAzEnvironmentText]);
+
+  const resolveStartOptions = useCallback(
+    (
+      emulatorId: RuntimeEmulatorId,
+      options?: InvokeEmulatorActionOptions,
+    ): InvokeEmulatorActionOptions => {
+      if (emulatorId === "floci-az") {
+        return {
+          persistence: options?.persistence ?? flociAzPersistence,
+          environment: options?.environment ?? flociAzEnvironment(),
+        };
+      }
+      return {
+        authToken: options?.authToken ?? localStackAuthToken,
+        persistence: options?.persistence ?? localStackPersistence,
+        environment: options?.environment ?? localStackEnvironment(),
+      };
+    },
+    [
+      flociAzEnvironment,
+      flociAzPersistence,
+      localStackAuthToken,
+      localStackEnvironment,
+      localStackPersistence,
+    ],
+  );
+
+  const setActionStatus = useCallback(
+    (emulatorId: RuntimeEmulatorId, status: string): void => {
+      if (emulatorId === "floci-az") {
+        setFlociAzActionStatus(status);
+        return;
+      }
+      setLocalStackActionStatus(status);
+    },
+    [setFlociAzActionStatus, setLocalStackActionStatus],
+  );
+
+  const setActionInFlight = useCallback(
+    (emulatorId: RuntimeEmulatorId, inFlight: boolean): void => {
+      if (emulatorId === "floci-az") {
+        setFlociAzActionInFlight(inFlight);
+        return;
+      }
+      setLocalStackActionInFlight(inFlight);
+    },
+    [setFlociAzActionInFlight, setLocalStackActionInFlight],
+  );
 
   const emulatorNotifyOptions = useCallback(
     (tone: NotificationTone) => {
@@ -159,24 +298,22 @@ export function useRuntimeActions({
     [setActiveWorkspaceTabId],
   );
 
-  const addLocalStackNotification = useCallback(
-    (tone: NotificationTone, header: string, content: string): void => {
-      notify(tone, header, content, emulatorNotifyOptions(tone));
-    },
-    [emulatorNotifyOptions],
-  );
-
   const addEmulatorNotification = useCallback(
-    (_emulatorId: string, tone: NotificationTone, header: string, content: string): void => {
+    (_emulatorId: RuntimeEmulatorId, tone: NotificationTone, header: string, content: string): void => {
       notify(tone, header, content, emulatorNotifyOptions(tone));
     },
     [emulatorNotifyOptions],
   );
 
-  const pollLocalStackState = useCallback(
-    (label: string, expectedStatus?: "running" | "stopped"): void => {
+  /** Shared status poll after start/stop/recreate (no log tails). */
+  const pollEmulatorState = useCallback(
+    (
+      emulatorId: RuntimeEmulatorId,
+      label: string,
+      expectedStatus?: "running" | "stopped",
+    ): void => {
       let resolved = false;
-      for (let attempt = 0; attempt < 12; attempt += 1) {
+      for (let attempt = 0; attempt < EMULATOR_POLL.attempts; attempt += 1) {
         window.setTimeout(() => {
           if (resolved) {
             return;
@@ -185,226 +322,110 @@ export function useRuntimeActions({
             if (resolved) {
               return;
             }
-            const localStack = emulatorStatusFromWorkspace(workspaceSnapshot, "localstack");
-            if (expectedStatus && localStack?.status === expectedStatus) {
+            const status = emulatorStatusFromWorkspace(workspaceSnapshot, emulatorId);
+            if (expectedStatus && status?.status === expectedStatus) {
               resolved = true;
-              const message = `${label} completed. ${localStack.summary}`;
-              setLocalStackActionStatus(message);
-              addLocalStackNotification("success", `${label} completed`, localStack.summary);
+              const message = `${label} completed. ${status.summary}`;
+              setActionStatus(emulatorId, message);
+              addEmulatorNotification(emulatorId, "success", `${label} completed`, status.summary);
               return;
             }
-            if (!expectedStatus && attempt === 11) {
+            if (!expectedStatus && attempt === EMULATOR_POLL.attempts - 1) {
               resolved = true;
-              setLocalStackActionStatus(`${label} completed.`);
+              setActionStatus(emulatorId, `${label} completed.`);
             }
           });
-        }, (attempt + 1) * 2500);
+        }, (attempt + 1) * EMULATOR_POLL.intervalMs);
       }
     },
-    [addLocalStackNotification, refreshVirtualisationState, setLocalStackActionStatus],
+    [addEmulatorNotification, refreshVirtualisationState, setActionStatus],
   );
 
-  const pollFlociAzState = useCallback(
-    (label: string, expectedStatus?: "running" | "stopped"): void => {
-      let resolved = false;
-      for (let attempt = 0; attempt < 12; attempt += 1) {
-        window.setTimeout(() => {
-          if (resolved) {
-            return;
-          }
-          void refreshVirtualisationState().then((workspaceSnapshot) => {
-            if (resolved) {
-              return;
-            }
-            const flociAz = emulatorStatusFromWorkspace(workspaceSnapshot, "floci-az");
-            if (expectedStatus && flociAz?.status === expectedStatus) {
-              resolved = true;
-              const message = `${label} completed. ${flociAz.summary}`;
-              setFlociAzActionStatus(message);
-              addEmulatorNotification("floci-az", "success", `${label} completed`, flociAz.summary);
-              return;
-            }
-            if (!expectedStatus && attempt === 11) {
-              resolved = true;
-              setFlociAzActionStatus(`${label} completed.`);
-            }
-          });
-        }, (attempt + 1) * 2500);
-      }
-    },
-    [addEmulatorNotification, refreshVirtualisationState, setFlociAzActionStatus],
-  );
+  const invokeEmulatorAction = useCallback(
+    async (
+      emulatorId: RuntimeEmulatorId,
+      action: EmulatorLifecycleAction,
+      options?: InvokeEmulatorActionOptions,
+    ): Promise<void> => {
+      const method = emulatorActionMethod(action);
+      const startOptions = resolveStartOptions(emulatorId, options);
+      const startParams = buildEmulatorActionParams(emulatorId, action, startOptions);
+      const label = emulatorActionLabel(emulatorId, action);
+      const name = emulatorDisplayName(emulatorId);
+      const requestTimeoutMs = emulatorActionTimeoutMs(action);
 
-  const invokeLocalStackAction = useCallback(
-    async (action: "prepareProfile" | "start" | "stop" | "recreate"): Promise<void> => {
-      const method =
-        action === "prepareProfile"
-          ? "emulators.prepareProfile"
-          : action === "stop"
-            ? "emulators.stop"
-            : "emulators.start";
-      const startParams =
-        action === "start" || action === "recreate"
-          ? {
-              emulatorId: "localstack",
-              authToken: localStackAuthToken,
-              persistence: localStackPersistence,
-              environment: localStackEnvironment(),
-              // Only sent for recreate so a normal start keeps its minimal payload.
-              ...(action === "recreate" ? { recreate: true } : {}),
-            }
-          : { emulatorId: "localstack" };
-      const label =
-        action === "prepareProfile"
-          ? "Prepare LocalStack profile"
-          : action === "start"
-            ? "Start LocalStack"
-            : action === "recreate"
-              ? "Recreate LocalStack"
-              : "Stop LocalStack";
-      const requestTimeoutMs = action === "recreate" ? 95000 : 22000;
-      setLocalStackActionInFlight(true);
-      setLocalStackActionStatus(`${label} requested.`);
+      setActionInFlight(emulatorId, true);
+      setActionStatus(emulatorId, `${label} requested.`);
       try {
         const result = await withTimeout(
           backendRequest<EmulatorActionResult>(method, startParams),
           requestTimeoutMs,
-          `${label} did not finish within ${Math.round(requestTimeoutMs / 1000)} seconds. Check Docker and LocalStack logs, then retry.`,
+          `${label} did not finish within ${Math.round(requestTimeoutMs / 1000)} seconds. Check Docker and ${name} logs, then retry.`,
         );
         const summary = result.summary || `${label} completed.`;
-        setLocalStackActionStatus(summary);
-        addLocalStackNotification(
+        setActionStatus(emulatorId, summary);
+        addEmulatorNotification(
+          emulatorId,
           result.state === "failed" ? "error" : result.state === "degraded" ? "warning" : "success",
           result.state === "degraded" ? `${label} needs attention` : `${label} ${result.state}`,
           summary,
         );
         await refreshVirtualisationState();
-        await refreshLocalStackLogs();
+        await refreshEmulatorLogs(emulatorId);
         if (action === "prepareProfile") {
           await reloadProvidersAndProfiles().catch(() => undefined);
         }
         if (action === "start" || action === "recreate" || action === "stop") {
-          pollLocalStackState(label, action === "stop" ? "stopped" : "running");
+          pollEmulatorState(emulatorId, label, action === "stop" ? "stopped" : "running");
         }
       } catch (error) {
         const rawMessage = error instanceof Error ? error.message : `${label} failed.`;
         const timedOut = rawMessage.includes("did not finish within");
         const message =
           rawMessage === `${label} failed.`
-            ? `${label} failed. Docker did not complete the request. Try Recreate LocalStack, refresh Docker, check the logs, then retry.`
+            ? `${label} failed. Docker did not complete the request. Try Recreate ${name}, refresh Docker, check the logs, then retry.`
             : rawMessage;
-        setLocalStackActionStatus(message);
-        addLocalStackNotification(
+        setActionStatus(emulatorId, message);
+        addEmulatorNotification(
+          emulatorId,
           timedOut ? "warning" : "error",
           timedOut ? `${label} still pending` : `${label} failed`,
           message,
         );
         await refreshVirtualisationState().catch(() => undefined);
         if (timedOut && (action === "start" || action === "recreate" || action === "stop")) {
-          pollLocalStackState(label, action === "stop" ? "stopped" : "running");
+          pollEmulatorState(emulatorId, label, action === "stop" ? "stopped" : "running");
         }
       } finally {
-        setLocalStackActionInFlight(false);
-      }
-    },
-    [
-      addLocalStackNotification,
-      localStackAuthToken,
-      localStackEnvironment,
-      localStackPersistence,
-      pollLocalStackState,
-      refreshLocalStackLogs,
-      refreshVirtualisationState,
-      reloadProvidersAndProfiles,
-      setLocalStackActionInFlight,
-      setLocalStackActionStatus,
-    ],
-  );
-
-  const invokeFlociAzAction = useCallback(
-    async (action: "prepareProfile" | "start" | "stop" | "recreate"): Promise<void> => {
-      const method =
-        action === "prepareProfile"
-          ? "emulators.prepareProfile"
-          : action === "stop"
-            ? "emulators.stop"
-            : "emulators.start";
-      const startParams =
-        action === "start" || action === "recreate"
-          ? {
-              emulatorId: "floci-az",
-              persistence: flociAzPersistence,
-              environment: flociAzEnvironment(),
-              // Only sent for recreate so a normal start keeps its minimal payload.
-              ...(action === "recreate" ? { recreate: true } : {}),
-            }
-          : { emulatorId: "floci-az" };
-      const label =
-        action === "prepareProfile"
-          ? "Prepare floci-az config"
-          : action === "start"
-            ? "Start floci-az"
-            : action === "recreate"
-              ? "Recreate floci-az"
-              : "Stop floci-az";
-      const requestTimeoutMs = action === "recreate" ? 95000 : 22000;
-      setFlociAzActionInFlight(true);
-      setFlociAzActionStatus(`${label} requested.`);
-      try {
-        const result = await withTimeout(
-          backendRequest<EmulatorActionResult>(method, startParams),
-          requestTimeoutMs,
-          `${label} did not finish within ${Math.round(requestTimeoutMs / 1000)} seconds. Check Docker and floci-az logs, then retry.`,
-        );
-        const summary = result.summary || `${label} completed.`;
-        setFlociAzActionStatus(summary);
-        addEmulatorNotification(
-          "floci-az",
-          result.state === "failed" ? "error" : result.state === "degraded" ? "warning" : "success",
-          result.state === "degraded" ? `${label} needs attention` : `${label} ${result.state}`,
-          summary,
-        );
-        await refreshVirtualisationState();
-        await refreshFlociAzLogs();
-        if (action === "prepareProfile") {
-          await reloadProvidersAndProfiles().catch(() => undefined);
-        }
-        if (action === "start" || action === "recreate" || action === "stop") {
-          pollFlociAzState(label, action === "stop" ? "stopped" : "running");
-        }
-      } catch (error) {
-        const rawMessage = error instanceof Error ? error.message : `${label} failed.`;
-        const timedOut = rawMessage.includes("did not finish within");
-        const message =
-          rawMessage === `${label} failed.`
-            ? `${label} failed. Docker did not complete the request. Try Recreate floci-az, refresh Docker, check the logs, then retry.`
-            : rawMessage;
-        setFlociAzActionStatus(message);
-        addEmulatorNotification(
-          "floci-az",
-          timedOut ? "warning" : "error",
-          timedOut ? `${label} still pending` : `${label} failed`,
-          message,
-        );
-        await refreshVirtualisationState().catch(() => undefined);
-        if (timedOut && (action === "start" || action === "recreate" || action === "stop")) {
-          pollFlociAzState(label, action === "stop" ? "stopped" : "running");
-        }
-      } finally {
-        setFlociAzActionInFlight(false);
+        setActionInFlight(emulatorId, false);
       }
     },
     [
       addEmulatorNotification,
-      flociAzEnvironment,
-      flociAzPersistence,
-      pollFlociAzState,
-      refreshFlociAzLogs,
+      pollEmulatorState,
+      refreshEmulatorLogs,
       refreshVirtualisationState,
       reloadProvidersAndProfiles,
-      setFlociAzActionInFlight,
-      setFlociAzActionStatus,
+      resolveStartOptions,
+      setActionInFlight,
+      setActionStatus,
     ],
+  );
+
+  /** Public wrapper: LocalStack lifecycle (auth token from hook state). */
+  const invokeLocalStackAction = useCallback(
+    async (action: EmulatorLifecycleAction): Promise<void> => {
+      await invokeEmulatorAction("localstack", action, { authToken: localStackAuthToken });
+    },
+    [invokeEmulatorAction, localStackAuthToken],
+  );
+
+  /** Public wrapper: floci-az lifecycle. */
+  const invokeFlociAzAction = useCallback(
+    async (action: EmulatorLifecycleAction): Promise<void> => {
+      await invokeEmulatorAction("floci-az", action);
+    },
+    [invokeEmulatorAction],
   );
 
   return {
@@ -412,6 +433,7 @@ export function useRuntimeActions({
     refreshVirtualisationState,
     refreshLocalStackLogs,
     refreshFlociAzLogs,
+    invokeEmulatorAction,
     invokeLocalStackAction,
     invokeFlociAzAction,
   };
