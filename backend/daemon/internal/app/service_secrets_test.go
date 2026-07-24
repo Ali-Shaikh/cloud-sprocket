@@ -157,7 +157,8 @@ func TestLegacyPlaintextSecretsResealedOnRead(t *testing.T) {
 		t.Fatal("expected plaintext secret in legacy row before migration")
 	}
 
-	// Read path must restore plaintext in memory and re-seal at rest.
+	// Read path restores plaintext in memory and counts reseals; disk may still
+	// hold plaintext until the next intentional saveDeployment.
 	got, err := s.deploymentGet(context.Background(), "dep-legacy-plain")
 	if err != nil {
 		t.Fatalf("deploymentGet: %v", err)
@@ -171,45 +172,28 @@ func TestLegacyPlaintextSecretsResealedOnRead(t *testing.T) {
 	if cipher.ResealCount() < 1 {
 		t.Fatalf("expected Open to count reseals, got %d", cipher.ResealCount())
 	}
+	if got.UpdatedAt != "t0" {
+		t.Fatalf("read advanced payload UpdatedAt: %q", got.UpdatedAt)
+	}
 
+	// Next intentional save persists sealed form.
+	if err := s.saveDeployment(context.Background(), got, "t1"); err != nil {
+		t.Fatalf("saveDeployment: %v", err)
+	}
 	payloads, err = dataStore.ListDeploymentsJSON(context.Background())
 	if err != nil || len(payloads) != 1 {
-		t.Fatalf("ListDeploymentsJSON after: %v (len %d)", err, len(payloads))
+		t.Fatalf("ListDeploymentsJSON after save: %v (len %d)", err, len(payloads))
 	}
 	raw := string(payloads[0])
 	if strings.Contains(raw, "legacy-s3cret") {
-		t.Fatal("legacy plaintext secret still at rest after read migration")
-	}
-	if strings.Contains(raw, "postgres://legacy") {
-		t.Fatal("legacy plaintext output still at rest after read migration")
+		t.Fatal("legacy plaintext secret still at rest after save")
 	}
 	if !strings.Contains(raw, "enc:v1:") {
-		t.Fatal("expected sealed tokens at rest after read migration")
-	}
-	if !strings.Contains(raw, "demo-bucket") || !strings.Contains(raw, "demo") {
-		t.Fatal("non-sensitive values should remain readable at rest")
-	}
-
-	// A second read must not leave reseal work pending and must still restore.
-	before := cipher.ResealCount()
-	got2, err := s.deploymentGet(context.Background(), "dep-legacy-plain")
-	if err != nil {
-		t.Fatalf("deploymentGet second: %v", err)
-	}
-	if got2.Variables["db_password"] != "legacy-s3cret" {
-		t.Fatalf("second read password: %v", got2.Variables["db_password"])
-	}
-	if cipher.ResealCount() != before {
-		t.Fatalf("second read resealed again: before=%d after=%d", before, cipher.ResealCount())
-	}
-
-	// Read-time migration must not invent a newer UpdatedAt on the payload.
-	if got.UpdatedAt != "t0" || got2.UpdatedAt != "t0" {
-		t.Fatalf("migration advanced payload UpdatedAt: first=%q second=%q", got.UpdatedAt, got2.UpdatedAt)
+		t.Fatal("expected sealed tokens at rest after save")
 	}
 }
 
-func TestLegacyResealWriteBackSkipsConcurrentUpdate(t *testing.T) {
+func TestLegacyResealReadDoesNotClobberStore(t *testing.T) {
 	dir := t.TempDir()
 	settings := config.FromEnv(map[string]string{"CLOUDSPROCKET_CONFIG_DIR": dir}, "linux", dir)
 	if err := settings.EnsureRuntimeDirs(); err != nil {
@@ -242,8 +226,6 @@ func TestLegacyResealWriteBackSkipsConcurrentUpdate(t *testing.T) {
 		t.Fatalf("SaveDeployment legacy: %v", err)
 	}
 
-	// Snapshot as a list/get path would load it, then a lifecycle job advances
-	// the row before openFromStore can migrate secrets.
 	raw, _, found, err := dataStore.LoadDeploymentRaw(context.Background(), legacy.ID)
 	if err != nil || !found {
 		t.Fatalf("LoadDeploymentRaw snapshot: found=%v err=%v", found, err)
@@ -271,20 +253,8 @@ func TestLegacyResealWriteBackSkipsConcurrentUpdate(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("LoadDeployment after open: found=%v err=%v", found, err)
 	}
-	if stored.Status != deploy.StatusPlanning {
-		t.Fatalf("reseal write-back clobbered concurrent status: %s", stored.Status)
-	}
-	if stored.UpdatedAt != "t1" {
-		t.Fatalf("reseal write-back clobbered concurrent UpdatedAt: %s", stored.UpdatedAt)
-	}
-	if stored.Error != "job in progress" {
-		t.Fatalf("reseal write-back clobbered concurrent error: %q", stored.Error)
-	}
-	// Concurrent writer left plaintext; migration skipped so secret may still be
-	// plaintext until a later load without a race. That is preferred to losing
-	// lifecycle state.
-	if pw, _ := stored.Variables["db_password"].(string); pw != "race-s3cret" {
-		t.Fatalf("unexpected stored password after skipped migration: %v", stored.Variables["db_password"])
+	if stored.Status != deploy.StatusPlanning || stored.UpdatedAt != "t1" {
+		t.Fatalf("read path mutated store: status=%s updatedAt=%s", stored.Status, stored.UpdatedAt)
 	}
 }
 

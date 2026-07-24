@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 
 	"cloudsprocket/backend/daemon/internal/deploy"
@@ -126,19 +125,20 @@ func (s *Service) sealForStore(deployment *deploy.Deployment) (*deploy.Deploymen
 
 // openFromStore unseals sensitive variable and output values in place after a
 // deployment is loaded from the store. Legacy plaintext sensitive values are
-// re-sealed and written back so they do not remain unencrypted at rest. A nil
-// cipher is a no-op.
+// re-sealed in memory via Cipher.Open (which increments ResealCount and logs).
+// A nil cipher is a no-op.
 //
-// Write-back is conditional on the exact store payload that was loaded
-// (storedPayloadJSON). A concurrent lifecycle save changes the blob and wins;
-// we skip rather than clobber status, progress, or outputs. Matching the full
-// JSON avoids same-second timestamp races. The SQLite row updated_at is preserved
-// via storedUpdatedAt (not the payload's UpdatedAt field).
+// Persistence of the sealed form is deferred to the next intentional
+// saveDeployment (plan/apply/stop/etc.). Read-time write-back was removed so a
+// list/get cannot race lifecycle jobs or rewrite store timestamps.
+// storedPayloadJSON and storedUpdatedAt are retained for call-site compatibility.
 func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployment, storedPayloadJSON, storedUpdatedAt string) {
+	_ = ctx
+	_ = storedPayloadJSON
+	_ = storedUpdatedAt
 	if s.cipher == nil || deployment == nil {
 		return
 	}
-	needsReseal := s.hasLegacyPlaintextSecrets(deployment)
 	for _, name := range deployment.SensitiveVars {
 		if value, ok := deployment.Variables[name]; ok {
 			deployment.Variables[name] = s.openValue(value)
@@ -155,32 +155,6 @@ func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployme
 				deployment.Revisions[i].Variables[name] = s.openValue(value)
 			}
 		}
-	}
-	if !needsReseal || storedPayloadJSON == "" {
-		return
-	}
-	// Persist the sealed form without mutating the in-memory plaintext used by
-	// the running operation.
-	sealed, err := s.sealForStore(deployment)
-	if err != nil {
-		log.Printf("deployments: failed to seal legacy plaintext for %s: %v", deployment.ID, err)
-		return
-	}
-	// Preserve the row's storage timestamp (not the payload UpdatedAt field).
-	ts := storedUpdatedAt
-	if ts == "" {
-		ts = deployment.UpdatedAt
-	}
-	written, err := s.store.SaveDeploymentIfPayload(ctx, deployment.ID, sealed, storedPayloadJSON, ts)
-	if err != nil {
-		log.Printf("deployments: failed to re-seal legacy plaintext for %s: %v", deployment.ID, err)
-		return
-	}
-	if !written {
-		log.Printf(
-			"deployments: skip re-seal write-back for %s: concurrent payload change",
-			deployment.ID,
-		)
 	}
 }
 
