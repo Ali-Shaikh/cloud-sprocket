@@ -17,10 +17,24 @@ describe("mock session provider fidelity", () => {
     }
   });
 
-  it("unlocks and clears profile selection on session.selectProvider", async () => {
+  it("refuses session.selectProvider while locked (F-011)", async () => {
     await backendRequest("session.lock");
     const locked = await backendRequest<SessionSnapshot>("session.get");
     expect(locked.isLocked).toBe(true);
+
+    await expect(
+      backendRequest<SessionSnapshot>("session.selectProvider", {
+        providerId: "azure",
+      }),
+    ).rejects.toThrow(/session\.unlock/);
+
+    const stillLocked = await backendRequest<SessionSnapshot>("session.get");
+    expect(stillLocked.isLocked).toBe(true);
+  });
+
+  it("clears profile selection on session.selectProvider after unlock", async () => {
+    await backendRequest("session.lock");
+    await backendRequest("session.unlock");
 
     const next = await backendRequest<SessionSnapshot>("session.selectProvider", {
       providerId: "azure",
@@ -30,12 +44,21 @@ describe("mock session provider fidelity", () => {
     expect(next.currentProviderId).toBe("azure");
     expect(next.selectedProfileId).toBeUndefined();
     expect(next.selectedAuthMethod).toBeUndefined();
-    expect(next.lockedProviderId).toBeUndefined();
-    expect(next.lockedProfileId).toBeUndefined();
   });
 
-  it("unlocks on session.selectProfile", async () => {
+  it("refuses session.selectProfile while locked (F-011)", async () => {
     await backendRequest("session.lock");
+    await expect(
+      backendRequest<SessionSnapshot>("session.selectProfile", {
+        providerId: "azure",
+        profileId: "sub-001",
+      }),
+    ).rejects.toThrow(/session\.unlock/);
+  });
+
+  it("selects profile after unlock", async () => {
+    await backendRequest("session.lock");
+    await backendRequest("session.unlock");
     const next = await backendRequest<SessionSnapshot>("session.selectProfile", {
       providerId: "azure",
       profileId: "sub-001",

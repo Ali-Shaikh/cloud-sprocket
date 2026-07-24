@@ -44,8 +44,16 @@ export function useProviderSwitchFlow(params: UseProviderSwitchFlowParams) {
     async (providerId: string): Promise<void> => {
       setSwitchPending(true);
       try {
+        // Daemon policy (F-011): selectProvider refuses while locked. After the
+        // leave-workspace dialog confirms, unlock explicitly, then select.
         // mutateSession swallows backend errors and returns false so callers
         // can avoid navigating away when the switch did not apply.
+        if (session.isLocked) {
+          const unlocked = await mutateSession("session.unlock");
+          if (!unlocked) {
+            return;
+          }
+        }
         const ok = await mutateSession("session.selectProvider", { providerId });
         if (ok) {
           onSwitched();
@@ -55,7 +63,7 @@ export function useProviderSwitchFlow(params: UseProviderSwitchFlowParams) {
         setPendingProviderId(null);
       }
     },
-    [mutateSession, onSwitched],
+    [mutateSession, onSwitched, session.isLocked],
   );
 
   const requestProviderSwitch = useCallback(

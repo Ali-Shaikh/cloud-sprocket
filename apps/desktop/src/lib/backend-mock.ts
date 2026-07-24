@@ -1331,7 +1331,8 @@ function appendLog(level: ActivityLogEntry["level"], message: string): void {
 }
 
 function clearMockWorkspaceSelections(): void {
-  // Mirror the daemon's session.selectProvider / selectProfile unlock clears.
+  // Mirror the daemon's session.selectProvider / selectProfile selection clears
+  // (unlock is session.unlock only; F-011).
   mockState.session.selectedAzureResourceGroup = undefined;
   mockState.session.selectedAzureVmId = undefined;
   mockState.session.selectedS3BucketName = undefined;
@@ -1341,12 +1342,14 @@ function clearMockWorkspaceSelections(): void {
   mockState.session.selectedEc2InstanceId = undefined;
 }
 
+const sessionLockedForSelectMessage =
+  "close the active workspace with session.unlock before changing provider or profile";
+
 function setCurrentProvider(providerId: string): void {
-  // Real daemon unlocks and clears profile selection when the provider changes.
-  mockState.session.isLocked = false;
-  mockState.session.lockedProviderId = undefined;
-  mockState.session.lockedProfileId = undefined;
-  mockState.session.lockedAuthMethod = undefined;
+  // Real daemon refuses select while locked (F-011); unlock is session.unlock.
+  if (mockState.session.isLocked) {
+    throw new Error(sessionLockedForSelectMessage);
+  }
   mockState.session.currentProviderId = providerId;
   mockState.session.selectedProfileId = undefined;
   mockState.session.selectedAuthMethod = undefined;
@@ -3507,15 +3510,15 @@ export function handleMockRequest<T>(
       return Promise.resolve(buildMockWorkspace() as T);
     }
     case "session.selectProvider":
+      // Throws when locked (same policy as the daemon; F-011).
       setCurrentProvider(String(params.providerId ?? ""));
       emitStateChanged();
       appendLog("info", `Selected provider ${params.providerId}.`);
       return Promise.resolve(mockState.session as T);
     case "session.selectProfile":
-      mockState.session.isLocked = false;
-      mockState.session.lockedProviderId = undefined;
-      mockState.session.lockedProfileId = undefined;
-      mockState.session.lockedAuthMethod = undefined;
+      if (mockState.session.isLocked) {
+        return Promise.reject(new Error(sessionLockedForSelectMessage));
+      }
       mockState.session.currentProviderId = String(params.providerId ?? "");
       mockState.session.selectedProfileId = String(params.profileId ?? "");
       mockState.session.selectedAuthMethod = undefined;
