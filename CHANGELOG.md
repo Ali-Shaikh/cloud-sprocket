@@ -11,6 +11,10 @@ Installers for every release are published on the
 
 ### Changed
 
+- Local Runtime config copy no longer claims isolation from default cloud CLI
+  configuration. Preparing a profile dual-writes app-managed files under the
+  local config root and a named entry in the user's AWS config/credentials or
+  Azure profile so Connect can discover it (architecture F-019).
 - Desktop runtime actions collapse LocalStack and floci-az start/stop/recreate
   pipelines into one `invokeEmulatorAction(emulatorId, action, options?)` plus
   a shared status poller (recreate 95s vs default 22s timeouts preserved;
