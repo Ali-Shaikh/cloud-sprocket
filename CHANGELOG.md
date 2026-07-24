@@ -21,6 +21,15 @@ Installers for every release are published on the
   shadowing `apps/desktop/vitest.config.ts` so test + coverage settings live
   only in `vite.config.ts`. CI `test:desktop:coverage` now enforces the gate
   and emits `lcov.info` plus `coverage-summary.json` (architecture F-027).
+- Discovery profile attributes redact sensitive credential values
+  (`aws_secret_access_key`, session tokens, passwords, and related fields) on
+  the wire as `••••••••` while keeping `sensitive: true` for the UI. Full
+  secrets remain in local CLI config files; the daemon still loads credentials
+  from disk/env for AWS/Azure SDKs. No `profiles.reveal` RPC yet (architecture
+  F-015). PlaceholderView no longer offers a functional reveal when the value
+  is already the daemon redaction placeholder; fixtures that still carry a real
+  value keep the reveal toggle.
+
 - Daemon app Docker host fallback uses `dockerruntime.ResolveDockerHost` instead
   of the foundation-era `detectDockerHost`, so Windows diagnostics report the
   default named pipe (`npipe:////./pipe/docker_engine`) instead of an empty host

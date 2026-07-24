@@ -20,6 +20,12 @@ import (
 	"cloudsprocket/backend/daemon/internal/models"
 )
 
+// RedactedSensitivePlaceholder is the on-the-wire value for fields classified
+// as sensitive. Full secret material stays in local CLI config files only; the
+// daemon still loads credentials from disk/env for AWS/Azure SDKs. A future
+// profiles.reveal (or field-level unmask) RPC may reintroduce opt-in reveal.
+const RedactedSensitivePlaceholder = "••••••••"
+
 var (
 	sensitiveFieldNames = map[string]struct{}{
 		"aws_access_key_id":     {},
@@ -183,14 +189,15 @@ func (s *Service) discoverUncached() (Snapshot, error) {
 	for _, profile := range rawProfiles {
 		counts[profile.ProviderID]++
 		probe := probes[profile.ProviderID]
+		attributes := redactSensitiveAttributes(profile.Attributes)
 		profiles = append(profiles, models.ProfileSummary{
 			ProviderID:  profile.ProviderID,
 			ProfileID:   profile.ProfileID,
 			DisplayName: profile.DisplayName,
 			Summary:     profile.Summary,
 			SourcePaths: profile.SourcePaths,
-			Attributes:  profile.Attributes,
-			AuthMethods: buildAuthMethods(profile.ProviderID, profile.Attributes, probe.commandPath != ""),
+			Attributes:  attributes,
+			AuthMethods: buildAuthMethods(profile.ProviderID, attributes, probe.commandPath != ""),
 		})
 	}
 
@@ -310,11 +317,7 @@ func (s *Service) discoverAWS() []rawProfile {
 		sort.Strings(sourcePaths)
 		attributes := make([]models.DetailField, 0, len(values))
 		for _, key := range sortedKeys(values) {
-			attributes = append(attributes, models.DetailField{
-				Label:     humaniseLabel(key),
-				Value:     values[key],
-				Sensitive: isSensitiveField(key),
-			})
+			attributes = append(attributes, detailFieldForProfile(key, values[key]))
 		}
 		profiles = append(profiles, rawProfile{
 			ProviderID:  "aws",
@@ -474,8 +477,12 @@ func parseINIFile(path string) (map[string]map[string]string, error) {
 }
 
 func isSensitiveField(label string) bool {
-	normalised := strings.ToLower(label)
+	normalised := strings.ToLower(strings.TrimSpace(label))
+	normalisedKey := strings.ReplaceAll(strings.ReplaceAll(normalised, " ", "_"), "-", "_")
 	if _, ok := sensitiveFieldNames[normalised]; ok {
+		return true
+	}
+	if _, ok := sensitiveFieldNames[normalisedKey]; ok {
 		return true
 	}
 	for _, marker := range sensitiveMarkers {
@@ -484,6 +491,40 @@ func isSensitiveField(label string) bool {
 		}
 	}
 	return false
+}
+
+// detailFieldForProfile builds a profile attribute, redacting the value when
+// the key is sensitive so secrets never enter the discovery Snapshot cache.
+func detailFieldForProfile(key, value string) models.DetailField {
+	label := humaniseLabel(key)
+	sensitive := isSensitiveField(key) || isSensitiveField(label)
+	field := models.DetailField{
+		Label:     label,
+		Value:     value,
+		Sensitive: sensitive,
+	}
+	if sensitive {
+		field.Value = RedactedSensitivePlaceholder
+	}
+	return field
+}
+
+// redactSensitiveAttributes ensures any sensitive DetailField on the wire has
+// its Value replaced with RedactedSensitivePlaceholder. Safe to call more than
+// once (idempotent for already-redacted values).
+func redactSensitiveAttributes(fields []models.DetailField) []models.DetailField {
+	if len(fields) == 0 {
+		return fields
+	}
+	out := make([]models.DetailField, len(fields))
+	for i, field := range fields {
+		out[i] = field
+		if field.Sensitive || isSensitiveField(field.Label) {
+			out[i].Sensitive = true
+			out[i].Value = RedactedSensitivePlaceholder
+		}
+	}
+	return out
 }
 
 func humaniseLabel(label string) string {

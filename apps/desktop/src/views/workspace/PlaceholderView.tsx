@@ -7,6 +7,13 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import type { WorkspaceSnapshot, WorkspaceTab } from "@/types/backend";
 
+/**
+ * Matches discovery.RedactedSensitivePlaceholder from the daemon. Values that
+ * already equal this string cannot be unmasked in the UI; secrets never left
+ * the daemon on the wire.
+ */
+export const REDACTED_SENSITIVE_PLACEHOLDER = "••••••••";
+
 export type PlaceholderViewProps = {
   /** The active workspace tab; used for the heading and copy. */
   tab?: WorkspaceTab;
@@ -14,6 +21,27 @@ export type PlaceholderViewProps = {
   showSensitiveValues: boolean;
   onToggleSensitiveValues: () => void;
 };
+
+function isDaemonRedactedValue(value: string): boolean {
+  return value === REDACTED_SENSITIVE_PLACEHOLDER;
+}
+
+function formatAttributeValue(
+  attribute: { sensitive?: boolean; value: string },
+  showSensitiveValues: boolean,
+): string {
+  if (!attribute.sensitive) {
+    return attribute.value;
+  }
+  // Daemon-redacted placeholders stay masked; reveal would only unmask a lie.
+  if (isDaemonRedactedValue(attribute.value)) {
+    return REDACTED_SENSITIVE_PLACEHOLDER;
+  }
+  if (!showSensitiveValues) {
+    return "Hidden until revealed";
+  }
+  return attribute.value;
+}
 
 /**
  * M5d: Tailwind placeholder for workspace tabs without a dedicated view yet
@@ -29,6 +57,18 @@ export default function PlaceholderView({
   const profile = workspace.profile;
   const hasSensitiveAttributes = Boolean(
     profile?.attributes.some((attribute) => attribute.sensitive),
+  );
+  // Only offer a functional reveal when at least one sensitive attribute still
+  // carries a real value (fixtures/tests). Daemon-redacted rows cannot unmask.
+  const canRevealSensitive = Boolean(
+    profile?.attributes.some(
+      (attribute) => attribute.sensitive && !isDaemonRedactedValue(attribute.value),
+    ),
+  );
+  const hasDaemonRedactedAttributes = Boolean(
+    profile?.attributes.some(
+      (attribute) => attribute.sensitive && isDaemonRedactedValue(attribute.value),
+    ),
   );
 
   return (
@@ -56,15 +96,27 @@ export default function PlaceholderView({
                 : "The open workspace snapshot will populate this profile detail."}
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!hasSensitiveAttributes}
-            onClick={onToggleSensitiveValues}
-          >
-            {showSensitiveValues ? "Hide Sensitive Values" : "Reveal Sensitive Values"}
-          </Button>
+          {canRevealSensitive ? (
+            <Button variant="outline" size="sm" onClick={onToggleSensitiveValues}>
+              {showSensitiveValues ? "Hide Sensitive Values" : "Reveal Sensitive Values"}
+            </Button>
+          ) : hasDaemonRedactedAttributes ? (
+            <span className="shrink-0 text-xs font-medium text-muted-foreground">
+              Redacted by daemon
+            </span>
+          ) : (
+            <Button variant="outline" size="sm" disabled>
+              Reveal Sensitive Values
+            </Button>
+          )}
         </div>
+        {hasSensitiveAttributes ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Credential and secret fields are redacted by the daemon before they
+            reach the UI. Full values stay in local CLI config files only until a
+            dedicated reveal path exists.
+          </p>
+        ) : null}
         {!profile ? (
           <p className="mt-4 text-sm text-muted-foreground">
             No open workspace profile is available yet.
@@ -80,9 +132,7 @@ export default function PlaceholderView({
                   {attribute.label}
                 </div>
                 <div className="break-words text-sm text-foreground">
-                  {attribute.sensitive && !showSensitiveValues
-                    ? "Hidden until revealed"
-                    : attribute.value}
+                  {formatAttributeValue(attribute, showSensitiveValues)}
                 </div>
               </div>
             ))}

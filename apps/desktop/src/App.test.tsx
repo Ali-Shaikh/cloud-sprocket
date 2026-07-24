@@ -1135,7 +1135,11 @@ describe("App", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Profile" }));
     expect(await screen.findByText("Hidden until revealed")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Credential and secret fields are redacted by the daemon/i),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reveal Sensitive Values" }));
+    // Fixture path may still carry a value; live discovery redacts secrets server-side.
     expect(await screen.findByText("super-secret-value")).toBeInTheDocument();
   });
 
