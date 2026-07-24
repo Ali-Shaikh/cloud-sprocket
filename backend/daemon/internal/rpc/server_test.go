@@ -180,7 +180,7 @@ func TestNotifyBeforeServeReturnsError(t *testing.T) {
 }
 
 func TestServeStopsOnContextCancel(t *testing.T) {
-	server := New(handlerFunc(func(context.Context, string, json.RawMessage, app.Notifier) (any, error) {
+	server := New(handlerFunc(func(context.Context, string, json.RawMessage, rpcapi.Notifier) (any, error) {
 		return map[string]any{"ok": true}, nil
 	}))
 	// os.Pipe supports SetReadDeadline so cancel can unblock the reader helper.
@@ -221,7 +221,7 @@ func TestServeStopsOnContextCancel(t *testing.T) {
 }
 
 func TestServeEOFStillShutsDownCleanly(t *testing.T) {
-	server := New(handlerFunc(func(context.Context, string, json.RawMessage, app.Notifier) (any, error) {
+	server := New(handlerFunc(func(context.Context, string, json.RawMessage, rpcapi.Notifier) (any, error) {
 		return "ok", nil
 	}))
 	var output bytes.Buffer
