@@ -54,6 +54,9 @@ export default defineConfig({
     port: 4173,
   },
   test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    globals: true,
     coverage: {
       provider: "v8",
       include: ["src/**/*.{ts,tsx}"],
