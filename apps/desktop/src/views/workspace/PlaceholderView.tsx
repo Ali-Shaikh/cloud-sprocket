@@ -65,6 +65,13 @@ export default function PlaceholderView({
             {showSensitiveValues ? "Hide Sensitive Values" : "Reveal Sensitive Values"}
           </Button>
         </div>
+        {hasSensitiveAttributes ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Credential and secret fields are redacted by the daemon before they
+            reach the UI. Full values stay in local CLI config files only until a
+            dedicated reveal path exists.
+          </p>
+        ) : null}
         {!profile ? (
           <p className="mt-4 text-sm text-muted-foreground">
             No open workspace profile is available yet.
