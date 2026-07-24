@@ -132,8 +132,9 @@ func (s *Service) sealForStore(deployment *deploy.Deployment) (*deploy.Deploymen
 // Write-back is conditional on the exact store payload that was loaded
 // (storedPayloadJSON). A concurrent lifecycle save changes the blob and wins;
 // we skip rather than clobber status, progress, or outputs. Matching the full
-// JSON avoids same-second timestamp races where UpdatedAt is unchanged.
-func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployment, storedPayloadJSON string) {
+// JSON avoids same-second timestamp races. The SQLite row updated_at is preserved
+// via storedUpdatedAt (not the payload's UpdatedAt field).
+func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployment, storedPayloadJSON, storedUpdatedAt string) {
 	if s.cipher == nil || deployment == nil {
 		return
 	}
@@ -165,9 +166,12 @@ func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployme
 		log.Printf("deployments: failed to seal legacy plaintext for %s: %v", deployment.ID, err)
 		return
 	}
-	// Keep the original UpdatedAt so a read-time migration does not advance the
-	// store timestamp or the payload's own updatedAt field.
-	written, err := s.store.SaveDeploymentIfPayload(ctx, deployment.ID, sealed, storedPayloadJSON, deployment.UpdatedAt)
+	// Preserve the row's storage timestamp (not the payload UpdatedAt field).
+	ts := storedUpdatedAt
+	if ts == "" {
+		ts = deployment.UpdatedAt
+	}
+	written, err := s.store.SaveDeploymentIfPayload(ctx, deployment.ID, sealed, storedPayloadJSON, ts)
 	if err != nil {
 		log.Printf("deployments: failed to re-seal legacy plaintext for %s: %v", deployment.ID, err)
 		return
