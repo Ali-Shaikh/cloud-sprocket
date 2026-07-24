@@ -11,8 +11,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	"cloudsprocket/backend/daemon/internal/rpcapi"
 )
@@ -83,27 +85,74 @@ func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 	s.writer = bufio.NewWriter(out)
 	s.mu.Unlock()
 
-	reader := bufio.NewReaderSize(in, 64*1024)
-	var serveErr error
-	for {
-		line, tooLarge, err := readRequestLine(reader)
-		if tooLarge {
-			s.logger.Printf("rpc request rejected: payload exceeds %d bytes", maxRequestBytes)
-			_ = s.write(errorResponse(nullID(), -32600, "request_too_large", "The backend request is too large."))
-		}
-		if !tooLarge && len(line) > 0 {
-			if err := s.dispatch(ctx, line); err != nil {
-				serveErr = err
-				break
+	// When in is an *os.File (stdin or an os.Pipe), cancel unblocks the reader
+	// via SetReadDeadline so Serve can join the helper before return. Stdin EOF
+	// remains the normal Tauri sidecar shutdown path.
+	clearDeadline := armReadCancel(ctx, in)
+	defer clearDeadline()
+
+	type readOutcome struct {
+		line     []byte
+		tooLarge bool
+		err      error
+	}
+	outcomes := make(chan readOutcome)
+	readerDone := make(chan struct{})
+	go func() {
+		defer close(readerDone)
+		reader := bufio.NewReaderSize(in, 64*1024)
+		for {
+			line, tooLarge, err := readRequestLine(reader)
+			select {
+			case outcomes <- readOutcome{line: line, tooLarge: tooLarge, err: err}:
+			case <-ctx.Done():
+				return
+			}
+			if err != nil {
+				return
 			}
 		}
-		if errors.Is(err, io.EOF) {
-			break
+	}()
+
+	var serveErr error
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			serveErr = ctx.Err()
+			break loop
+		case outcome := <-outcomes:
+			if outcome.tooLarge {
+				s.logger.Printf("rpc request rejected: payload exceeds %d bytes", maxRequestBytes)
+				_ = s.write(errorResponse(nullID(), -32600, "request_too_large", "The backend request is too large."))
+			}
+			if !outcome.tooLarge && len(outcome.line) > 0 {
+				if err := s.dispatch(ctx, outcome.line); err != nil {
+					serveErr = err
+					break loop
+				}
+			}
+			if errors.Is(outcome.err, io.EOF) {
+				break loop
+			}
+			if outcome.err != nil {
+				if ctx.Err() != nil {
+					// Deadline/cancel unblocked the read; prefer the serve context error.
+					serveErr = ctx.Err()
+					break loop
+				}
+				serveErr = outcome.err
+				break loop
+			}
 		}
-		if err != nil {
-			serveErr = err
-			break
-		}
+	}
+
+	// Prefer to join the reader after deadline unblocks it. Cap the wait so a
+	// non-file reader that cannot be interrupted cannot hang process exit;
+	// process termination still reaps any leftover helper.
+	select {
+	case <-readerDone:
+	case <-time.After(250 * time.Millisecond):
 	}
 
 	s.wg.Wait()
@@ -111,6 +160,32 @@ func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 	s.writer = nil
 	s.mu.Unlock()
 	return serveErr
+}
+
+// armReadCancel sets a past read deadline on *os.File when ctx is cancelled so
+// a blocked Read returns and the serve reader helper can exit. No-op for other
+// readers (those rely on EOF or process exit).
+func armReadCancel(ctx context.Context, in io.Reader) (clear func()) {
+	file, ok := in.(*os.File)
+	if !ok {
+		return func() {}
+	}
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = file.SetReadDeadline(time.Now())
+		case <-done:
+		}
+	}()
+	return func() {
+		select {
+		case <-done:
+		default:
+			close(done)
+		}
+		_ = file.SetReadDeadline(time.Time{})
+	}
 }
 
 func (s *Server) dispatch(ctx context.Context, data []byte) error {

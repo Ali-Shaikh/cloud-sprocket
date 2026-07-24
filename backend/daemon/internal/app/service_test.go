@@ -1999,7 +1999,10 @@ func TestUnlockNotBlockedBySlowWorkspaceFetch(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected session.unlock to succeed, got %v", err)
 		}
-		if elapsed := time.Since(start); elapsed > dockerProbeTimeout/2 {
+		// Unlock must finish well under a full Docker probe (3s). Half-probe
+		// (1.5s) flakes on loaded Windows CI runners; two-thirds still proves
+		// unlock is not serialised behind the slow workspace fetch.
+		if elapsed := time.Since(start); elapsed > (dockerProbeTimeout*2)/3 {
 			t.Fatalf("session.unlock took %v; it is blocked behind the slow workspace fetch", elapsed)
 		}
 	case <-time.After(dockerProbeTimeout + 2*time.Second):

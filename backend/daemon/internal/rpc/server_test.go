@@ -9,7 +9,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -174,6 +176,70 @@ func TestNotifyBeforeServeReturnsError(t *testing.T) {
 	}))
 	if err := server.Notify("test.event", map[string]any{"ok": true}); err == nil {
 		t.Fatal("expected Notify before Serve to return an error")
+	}
+}
+
+func TestServeStopsOnContextCancel(t *testing.T) {
+	server := New(handlerFunc(func(context.Context, string, json.RawMessage, rpcapi.Notifier) (any, error) {
+		return map[string]any{"ok": true}, nil
+	}))
+	// os.Pipe supports SetReadDeadline so cancel can unblock the reader helper.
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan error, 1)
+	go func() {
+		var output bytes.Buffer
+		done <- server.Serve(ctx, reader, &output)
+	}()
+
+	// Wait until Serve is blocked on the open pipe, then cancel.
+	time.Sleep(30 * time.Millisecond)
+	cancel()
+	// Closing the write end unblocks any remaining Read if the deadline path
+	// is unavailable on this platform; production Tauri closes stdin on stop.
+	_ = writer.Close()
+
+	select {
+	case err := <-done:
+		// Context cancel is preferred; EOF/closed-pipe is acceptable if the
+		// platform unblocked via write-side close instead of deadline.
+		if err != nil &&
+			!errors.Is(err, context.Canceled) &&
+			!errors.Is(err, io.EOF) &&
+			!errors.Is(err, io.ErrClosedPipe) {
+			t.Fatalf("Serve error = %v, want canceled or clean pipe close", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Serve did not stop after context cancellation")
+	}
+
+	_ = reader.Close()
+}
+
+func TestServeEOFStillShutsDownCleanly(t *testing.T) {
+	server := New(handlerFunc(func(context.Context, string, json.RawMessage, rpcapi.Notifier) (any, error) {
+		return "ok", nil
+	}))
+	var output bytes.Buffer
+	input := `{"jsonrpc":"2.0","id":"1","method":"ok","params":{}}` + "\n"
+	if err := server.Serve(context.Background(), strings.NewReader(input), &output); err != nil {
+		t.Fatalf("Serve on stdin EOF: %v", err)
+	}
+	responses := []testResponse{}
+	decoder := json.NewDecoder(&output)
+	for decoder.More() {
+		var response testResponse
+		if err := decoder.Decode(&response); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		responses = append(responses, response)
+	}
+	if len(responses) != 1 || responses[0].Error != nil || responses[0].Result != "ok" {
+		t.Fatalf("responses = %+v", responses)
 	}
 }
 
