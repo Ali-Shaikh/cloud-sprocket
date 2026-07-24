@@ -125,20 +125,14 @@ func (s *Service) sealForStore(deployment *deploy.Deployment) (*deploy.Deploymen
 
 // openFromStore unseals sensitive variable and output values in place after a
 // deployment is loaded from the store. Legacy plaintext sensitive values are
-// re-sealed in memory via Cipher.Open (which increments ResealCount and logs).
+// re-sealed via Cipher.Open and, when storedPayloadJSON is provided, written
+// back with a payload-equality CAS so concurrent lifecycle saves win.
 // A nil cipher is a no-op.
-//
-// Persistence of the sealed form is deferred to the next intentional
-// saveDeployment (plan/apply/stop/etc.). Read-time write-back was removed so a
-// list/get cannot race lifecycle jobs or rewrite store timestamps.
-// storedPayloadJSON and storedUpdatedAt are retained for call-site compatibility.
 func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployment, storedPayloadJSON, storedUpdatedAt string) {
-	_ = ctx
-	_ = storedPayloadJSON
-	_ = storedUpdatedAt
 	if s.cipher == nil || deployment == nil {
 		return
 	}
+	needsReseal := s.hasLegacyPlaintextSecrets(deployment)
 	for _, name := range deployment.SensitiveVars {
 		if value, ok := deployment.Variables[name]; ok {
 			deployment.Variables[name] = s.openValue(value)
@@ -156,6 +150,21 @@ func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployme
 			}
 		}
 	}
+	if !needsReseal || storedPayloadJSON == "" {
+		return
+	}
+	sealed, err := s.sealForStore(deployment)
+	if err != nil {
+		return
+	}
+	// Prefer SQLite row updated_at; fall back to payload field.
+	ts := storedUpdatedAt
+	if ts == "" {
+		ts = deployment.UpdatedAt
+	}
+	// CAS on the full loaded JSON blob: any concurrent save changes the blob
+	// and this write is skipped (no status/output clobber).
+	_, _ = s.store.SaveDeploymentIfPayload(ctx, deployment.ID, sealed, storedPayloadJSON, ts)
 }
 
 // hasLegacyPlaintextSecrets reports whether any sensitive field is stored as

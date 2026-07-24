@@ -157,8 +157,7 @@ func TestLegacyPlaintextSecretsResealedOnRead(t *testing.T) {
 		t.Fatal("expected plaintext secret in legacy row before migration")
 	}
 
-	// Read path restores plaintext in memory and counts reseals; disk may still
-	// hold plaintext until the next intentional saveDeployment.
+	// Read path restores plaintext in memory, reseals, and CAS-writes ciphertext.
 	got, err := s.deploymentGet(context.Background(), "dep-legacy-plain")
 	if err != nil {
 		t.Fatalf("deploymentGet: %v", err)
@@ -172,24 +171,20 @@ func TestLegacyPlaintextSecretsResealedOnRead(t *testing.T) {
 	if cipher.ResealCount() < 1 {
 		t.Fatalf("expected Open to count reseals, got %d", cipher.ResealCount())
 	}
-	if got.UpdatedAt != "t0" {
-		t.Fatalf("read advanced payload UpdatedAt: %q", got.UpdatedAt)
-	}
 
-	// Next intentional save persists sealed form.
-	if err := s.saveDeployment(context.Background(), got, "t1"); err != nil {
-		t.Fatalf("saveDeployment: %v", err)
-	}
 	payloads, err = dataStore.ListDeploymentsJSON(context.Background())
 	if err != nil || len(payloads) != 1 {
-		t.Fatalf("ListDeploymentsJSON after save: %v (len %d)", err, len(payloads))
+		t.Fatalf("ListDeploymentsJSON after: %v (len %d)", err, len(payloads))
 	}
 	raw := string(payloads[0])
 	if strings.Contains(raw, "legacy-s3cret") {
-		t.Fatal("legacy plaintext secret still at rest after save")
+		t.Fatal("legacy plaintext secret still at rest after read migration")
 	}
 	if !strings.Contains(raw, "enc:v1:") {
-		t.Fatal("expected sealed tokens at rest after save")
+		t.Fatal("expected sealed tokens at rest after read migration")
+	}
+	if got.UpdatedAt != "t0" {
+		t.Fatalf("read advanced payload UpdatedAt: %q", got.UpdatedAt)
 	}
 }
 
