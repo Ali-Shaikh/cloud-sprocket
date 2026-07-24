@@ -9,6 +9,13 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Changed
+
+- Desktop AWS inventory and write callbacks are provided via
+  `AwsActionsProvider` instead of the workspace tab router prop bag, cutting
+  about seventy fields from `WorkspaceTabRouterProps` (architecture F-028
+  slice 1).
+
 ### Added
 
 - Non-blocking ESLint (TypeScript + react-hooks) and golangci-lint (govet,

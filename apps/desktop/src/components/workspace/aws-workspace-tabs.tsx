@@ -30,6 +30,7 @@ import {
   SQSView,
   StorageView,
 } from "@/views/workspace/lazy-views";
+import { useAwsActionsContext } from "./aws-actions-context";
 import type { AwsWorkspaceTabsProps } from "./workspace-tab-router-props";
 
 export const AWS_TAB_IDS = new Set([
@@ -106,9 +107,6 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     kmsActionStatus,
     apiGatewayActionStatus,
     secretsManagerActionStatus,
-    refreshSecretsManagerInventory,
-    selectSecretsManagerRegion,
-    selectSecretsManagerSecret,
     logsActionStatus,
     iamActionStatus,
     azureActionStatus,
@@ -153,6 +151,22 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     refreshDockerRuntime,
     refreshLocalStackLogs,
     refreshFlociAzLogs,
+    selectAzureResourceGroup,
+    selectAzureVirtualMachine,
+    selectAzureWebApp,
+    selectAzureWebAppSlot,
+    selectAzureLogAnalyticsWorkspace,
+    selectAzureWafPolicy,
+    refreshAzureFrontDoorTopology,
+    listLogAnalyticsHistory,
+    listLogAnalyticsSaved,
+    invokeLocalStackAction,
+    invokeFlociAzAction,
+    openWorkspace,
+    chooseAuthMethod,
+  } = props;
+
+  const {
     refreshEC2Inventory,
     selectEC2Region,
     selectEC2Instance,
@@ -217,26 +231,16 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     refreshApiGatewayInventory,
     selectApiGatewayRegion,
     selectApiGatewayApi,
+    refreshSecretsManagerInventory,
+    selectSecretsManagerRegion,
+    selectSecretsManagerSecret,
     refreshLogsInventory,
     selectLogsRegion,
     selectLogGroup,
     refreshIAMInventory,
     selectIAMRole,
     applyS3PrefixFilter,
-    selectAzureResourceGroup,
-    selectAzureVirtualMachine,
-    selectAzureWebApp,
-    selectAzureWebAppSlot,
-    selectAzureLogAnalyticsWorkspace,
-    selectAzureWafPolicy,
-    refreshAzureFrontDoorTopology,
-    listLogAnalyticsHistory,
-    listLogAnalyticsSaved,
-    invokeLocalStackAction,
-    invokeFlociAzAction,
-    openWorkspace,
-    chooseAuthMethod,
-  } = props;
+  } = useAwsActionsContext();
 
   if (!session.isLocked || !AWS_TAB_IDS.has(activeWorkspaceTabId)) {
     return null;
