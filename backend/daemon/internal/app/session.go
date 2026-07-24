@@ -220,7 +220,14 @@ func (s *Service) handleWorkspaceGet(ctx context.Context, notifier Notifier) (an
 // The desktop leave-workspace dialog confirms with the user, then calls unlock
 // before select so UX is unchanged. Select must not clear IsLocked itself;
 // otherwise any RPC client could drop a lock without that confirm step.
-var errSessionLockedForSelect = errors.New("close the active workspace with session.unlock before changing provider or profile")
+//
+// PublicError so JSON-RPC classifyError preserves a stable code and SafeMessage
+// (plain errors become generic internal_error and drop the unlock guidance).
+var errSessionLockedForSelect = &publicError{
+	jsonRPCCode: -32003,
+	stableCode:  "session_locked",
+	safeMessage: "Close the active workspace with session.unlock before changing provider or profile.",
+}
 
 func (s *Service) handleSessionSelectProvider(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {

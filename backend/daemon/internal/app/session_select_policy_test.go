@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -77,17 +78,13 @@ func TestSessionSelectRefusesWhileLocked(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected session.selectProvider to refuse while locked")
 	}
-	if !strings.Contains(err.Error(), "session.unlock") {
-		t.Fatalf("expected unlock guidance in error, got %v", err)
-	}
+	assertSessionLockedForSelect(t, err)
 
 	_, err = service.Handle(ctx, "session.selectProfile", []byte(`{"providerId":"aws","profileId":"sandbox"}`), nil)
 	if err == nil {
 		t.Fatal("expected session.selectProfile to refuse while locked")
 	}
-	if !strings.Contains(err.Error(), "session.unlock") {
-		t.Fatalf("expected unlock guidance in error, got %v", err)
-	}
+	assertSessionLockedForSelect(t, err)
 
 	locked, err := service.Handle(ctx, "session.get", nil, nil)
 	if err != nil {
@@ -111,5 +108,25 @@ func TestSessionSelectRefusesWhileLocked(t *testing.T) {
 	}
 	if unlocked.CurrentProviderID != "aws" {
 		t.Fatalf("expected current provider aws, got %q", unlocked.CurrentProviderID)
+	}
+}
+
+func assertSessionLockedForSelect(t *testing.T, err error) {
+	t.Helper()
+	var public PublicError
+	if !errors.As(err, &public) {
+		t.Fatalf("expected PublicError so JSON-RPC clients get unlock guidance, got %T: %v", err, err)
+	}
+	if public.StableCode() != "session_locked" {
+		t.Fatalf("stable code: got %q, want session_locked", public.StableCode())
+	}
+	if public.JSONRPCCode() != -32003 {
+		t.Fatalf("json-rpc code: got %d, want -32003", public.JSONRPCCode())
+	}
+	if !strings.Contains(public.SafeMessage(), "session.unlock") {
+		t.Fatalf("expected SafeMessage unlock guidance, got %q", public.SafeMessage())
+	}
+	if !strings.Contains(err.Error(), "session.unlock") {
+		t.Fatalf("expected unlock guidance in Error(), got %v", err)
 	}
 }

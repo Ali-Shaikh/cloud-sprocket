@@ -15,6 +15,8 @@ Installers for every release are published on the
   `IsLocked`. A locked workspace must be closed with `session.unlock` first so
   alternate RPC clients cannot drop a lock without the desktop leave-workspace
   confirmation (architecture F-011). The UI unlocks after confirm, then selects.
+  Refusal returns PublicError stable code `session_locked` with SafeMessage
+  unlock guidance instead of a plain error that became generic `internal_error`.
 - Daemon app Docker host fallback uses `dockerruntime.ResolveDockerHost` instead
   of the foundation-era `detectDockerHost`, so Windows diagnostics report the
   default named pipe (`npipe:////./pipe/docker_engine`) instead of an empty host

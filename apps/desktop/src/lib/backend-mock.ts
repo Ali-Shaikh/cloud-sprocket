@@ -1343,7 +1343,7 @@ function clearMockWorkspaceSelections(): void {
 }
 
 const sessionLockedForSelectMessage =
-  "close the active workspace with session.unlock before changing provider or profile";
+  "Close the active workspace with session.unlock before changing provider or profile.";
 
 function setCurrentProvider(providerId: string): void {
   // Real daemon refuses select while locked (F-011); unlock is session.unlock.

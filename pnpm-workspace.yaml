@@ -6,3 +6,4 @@ allowBuilds:
   esbuild: true
 minimumReleaseAgeExclude:
   - '@codemirror/view@6.43.6'
+  - js-yaml@5.2.2
