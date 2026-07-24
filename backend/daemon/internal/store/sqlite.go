@@ -259,6 +259,40 @@ func (s *Store) SaveDeployment(ctx context.Context, id string, value any, timest
 	return err
 }
 
+// SaveDeploymentIfUpdatedAt updates a deployment only when the store row still
+// has the expected updated_at. The write uses a single conditional UPDATE so a
+// concurrent lifecycle save cannot be clobbered by a read-time reseal
+// migration. Returns false when the row is missing or has moved on.
+func (s *Store) SaveDeploymentIfUpdatedAt(
+	ctx context.Context,
+	id string,
+	value any,
+	expectedUpdatedAt string,
+	timestamp string,
+) (bool, error) {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return false, err
+	}
+	result, err := s.db.ExecContext(
+		ctx,
+		`UPDATE deployments SET payload_json = ?, updated_at = ?
+		 WHERE id = ? AND updated_at = ?`,
+		string(payload),
+		timestamp,
+		id,
+		expectedUpdatedAt,
+	)
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return rows > 0, nil
+}
+
 // SaveDeploymentWithLog atomically persists a deployment and its related
 // activity entry. Neither write is visible unless both succeed.
 func (s *Store) SaveDeploymentWithLog(

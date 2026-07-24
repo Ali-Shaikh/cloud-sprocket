@@ -160,31 +160,26 @@ func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployme
 		return
 	}
 	// Persist the sealed form without mutating the in-memory plaintext used by
-	// the running operation. Failures and concurrent updates are logged; the
-	// in-memory open still succeeds so the caller can keep working.
-	var current deploy.Deployment
-	found, err := s.store.LoadDeployment(ctx, deployment.ID, &current)
+	// the running operation. Use a conditional store update so concurrent
+	// lifecycle saves cannot be clobbered by this read-time migration.
+	sealed, err := s.sealForStore(deployment)
 	if err != nil {
-		log.Printf("deployments: failed to re-load before re-seal write-back for %s: %v", deployment.ID, err)
-		return
-	}
-	if !found {
-		log.Printf("deployments: skip re-seal write-back for %s: record disappeared", deployment.ID)
-		return
-	}
-	if current.UpdatedAt != expectedUpdatedAt {
-		log.Printf(
-			"deployments: skip re-seal write-back for %s: concurrent update (expected updated_at %q, got %q)",
-			deployment.ID,
-			expectedUpdatedAt,
-			current.UpdatedAt,
-		)
+		log.Printf("deployments: failed to seal legacy plaintext for %s: %v", deployment.ID, err)
 		return
 	}
 	// Keep the original UpdatedAt so a read-time migration does not advance the
 	// store timestamp or the payload's own updatedAt field.
-	if err := s.saveDeployment(ctx, deployment, expectedUpdatedAt); err != nil {
+	written, err := s.store.SaveDeploymentIfUpdatedAt(ctx, deployment.ID, sealed, expectedUpdatedAt, expectedUpdatedAt)
+	if err != nil {
 		log.Printf("deployments: failed to re-seal legacy plaintext for %s: %v", deployment.ID, err)
+		return
+	}
+	if !written {
+		log.Printf(
+			"deployments: skip re-seal write-back for %s: concurrent update or missing row (expected updated_at %q)",
+			deployment.ID,
+			expectedUpdatedAt,
+		)
 	}
 }
 
