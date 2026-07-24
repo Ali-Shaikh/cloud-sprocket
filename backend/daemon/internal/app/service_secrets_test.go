@@ -201,6 +201,87 @@ func TestLegacyPlaintextSecretsResealedOnRead(t *testing.T) {
 	if cipher.ResealCount() != before {
 		t.Fatalf("second read resealed again: before=%d after=%d", before, cipher.ResealCount())
 	}
+
+	// Read-time migration must not invent a newer UpdatedAt on the payload.
+	if got.UpdatedAt != "t0" || got2.UpdatedAt != "t0" {
+		t.Fatalf("migration advanced payload UpdatedAt: first=%q second=%q", got.UpdatedAt, got2.UpdatedAt)
+	}
+}
+
+func TestLegacyResealWriteBackSkipsConcurrentUpdate(t *testing.T) {
+	dir := t.TempDir()
+	settings := config.FromEnv(map[string]string{"CLOUDSPROCKET_CONFIG_DIR": dir}, "linux", dir)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("EnsureRuntimeDirs: %v", err)
+	}
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = dataStore.Close() })
+
+	cipher, err := loadCipher(settings.SecretKeyPath)
+	if err != nil {
+		t.Fatalf("loadCipher: %v", err)
+	}
+	s := &Service{store: dataStore, cipher: cipher, now: func() time.Time { return time.Now().UTC() }}
+
+	legacy := &deploy.Deployment{
+		ID:            "dep-legacy-race",
+		SensitiveVars: []string{"db_password"},
+		Variables: map[string]any{
+			"db_password": "race-s3cret",
+			"app_name":    "demo",
+		},
+		Status:    deploy.StatusApplied,
+		CreatedAt: "t0",
+		UpdatedAt: "t0",
+	}
+	if err := dataStore.SaveDeployment(context.Background(), legacy.ID, legacy, "t0"); err != nil {
+		t.Fatalf("SaveDeployment legacy: %v", err)
+	}
+
+	// Snapshot as a list/get path would load it, then a lifecycle job advances
+	// the row before openFromStore can migrate secrets.
+	var snapshot deploy.Deployment
+	found, err := dataStore.LoadDeployment(context.Background(), legacy.ID, &snapshot)
+	if err != nil || !found {
+		t.Fatalf("LoadDeployment snapshot: found=%v err=%v", found, err)
+	}
+
+	concurrent := *legacy
+	concurrent.Status = deploy.StatusPlanning
+	concurrent.UpdatedAt = "t1"
+	concurrent.Error = "job in progress"
+	if err := dataStore.SaveDeployment(context.Background(), concurrent.ID, &concurrent, "t1"); err != nil {
+		t.Fatalf("SaveDeployment concurrent: %v", err)
+	}
+
+	s.openFromStore(context.Background(), &snapshot)
+	if snapshot.Variables["db_password"] != "race-s3cret" {
+		t.Fatalf("in-memory open lost password: %v", snapshot.Variables["db_password"])
+	}
+
+	var stored deploy.Deployment
+	found, err = dataStore.LoadDeployment(context.Background(), legacy.ID, &stored)
+	if err != nil || !found {
+		t.Fatalf("LoadDeployment after open: found=%v err=%v", found, err)
+	}
+	if stored.Status != deploy.StatusPlanning {
+		t.Fatalf("reseal write-back clobbered concurrent status: %s", stored.Status)
+	}
+	if stored.UpdatedAt != "t1" {
+		t.Fatalf("reseal write-back clobbered concurrent UpdatedAt: %s", stored.UpdatedAt)
+	}
+	if stored.Error != "job in progress" {
+		t.Fatalf("reseal write-back clobbered concurrent error: %q", stored.Error)
+	}
+	// Concurrent writer left plaintext; migration skipped so secret may still be
+	// plaintext until a later load without a race. That is preferred to losing
+	// lifecycle state.
+	if pw, _ := stored.Variables["db_password"].(string); pw != "race-s3cret" {
+		t.Fatalf("unexpected stored password after skipped migration: %v", stored.Variables["db_password"])
+	}
 }
 
 func TestLoadCipherRejectsCorruptExistingKey(t *testing.T) {
