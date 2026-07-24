@@ -9,6 +9,7 @@ import {
   planNavigateToResource,
 } from "@/lib/navigate-to-resource";
 import { mergeAwsS3Selection, normaliseWorkspaceSnapshot } from "@/lib/workspace-snapshot";
+import type { AwsActions } from "@/components/workspace/aws-actions-context";
 import type { WorkspaceTabRouterProps } from "@/components/workspace/workspace-tab-router-props";
 
 type NavigateToResourceDeps = Pick<
@@ -20,18 +21,21 @@ type NavigateToResourceDeps = Pick<
   | "setLambdaCreateFormOpen"
   | "mutateWorkspaceSelection"
   | "setWorkspace"
-  | "selectLambdaFunction"
-  | "selectDynamoDBTable"
-  | "selectSQSQueue"
-  | "selectSNSTopic"
-  | "selectRDSInstance"
-  | "selectLogGroup"
-  | "selectLogsRegion"
-  | "selectIAMRole"
-  | "selectEC2Instance"
   | "selectAzureResourceGroup"
   | "selectAzureVirtualMachine"
-> & {
+> &
+  Pick<
+    AwsActions,
+    | "selectLambdaFunction"
+    | "selectDynamoDBTable"
+    | "selectSQSQueue"
+    | "selectSNSTopic"
+    | "selectRDSInstance"
+    | "selectLogGroup"
+    | "selectLogsRegion"
+    | "selectIAMRole"
+    | "selectEC2Instance"
+  > & {
   /** Optional history/recents recorder (shell navigation controller). */
   recordLocation?: (location: NavigationLocation) => void;
 };
