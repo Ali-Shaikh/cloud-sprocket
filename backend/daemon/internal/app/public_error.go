@@ -3,16 +3,15 @@
 
 package app
 
-import "fmt"
+import (
+	"fmt"
 
-// PublicError exposes a stable, safe error contract to the local UI while the
-// underlying diagnostic remains available to the daemon logger.
-type PublicError interface {
-	error
-	JSONRPCCode() int
-	StableCode() string
-	SafeMessage() string
-}
+	"cloudsprocket/backend/daemon/internal/rpcapi"
+)
+
+// PublicError is the shared safe-error contract used by the JSON-RPC transport.
+// Defined in rpcapi so package rpc does not depend on app.
+type PublicError = rpcapi.PublicError
 
 type publicError struct {
 	jsonRPCCode int
