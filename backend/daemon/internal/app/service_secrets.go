@@ -129,16 +129,15 @@ func (s *Service) sealForStore(deployment *deploy.Deployment) (*deploy.Deploymen
 // re-sealed and written back so they do not remain unencrypted at rest. A nil
 // cipher is a no-op.
 //
-// Write-back is conditional: the deployment is re-loaded and the sealed form is
-// saved only when UpdatedAt still matches the snapshot we opened. A concurrent
-// lifecycle save wins; we skip rather than clobber status, progress, or outputs.
-// The store timestamp is preserved (no phantom update from a read-time migration).
-func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployment) {
+// Write-back is conditional on the exact store payload that was loaded
+// (storedPayloadJSON). A concurrent lifecycle save changes the blob and wins;
+// we skip rather than clobber status, progress, or outputs. Matching the full
+// JSON avoids same-second timestamp races where UpdatedAt is unchanged.
+func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployment, storedPayloadJSON string) {
 	if s.cipher == nil || deployment == nil {
 		return
 	}
 	needsReseal := s.hasLegacyPlaintextSecrets(deployment)
-	expectedUpdatedAt := deployment.UpdatedAt
 	for _, name := range deployment.SensitiveVars {
 		if value, ok := deployment.Variables[name]; ok {
 			deployment.Variables[name] = s.openValue(value)
@@ -156,12 +155,11 @@ func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployme
 			}
 		}
 	}
-	if !needsReseal {
+	if !needsReseal || storedPayloadJSON == "" {
 		return
 	}
 	// Persist the sealed form without mutating the in-memory plaintext used by
-	// the running operation. Use a conditional store update so concurrent
-	// lifecycle saves cannot be clobbered by this read-time migration.
+	// the running operation.
 	sealed, err := s.sealForStore(deployment)
 	if err != nil {
 		log.Printf("deployments: failed to seal legacy plaintext for %s: %v", deployment.ID, err)
@@ -169,16 +167,15 @@ func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployme
 	}
 	// Keep the original UpdatedAt so a read-time migration does not advance the
 	// store timestamp or the payload's own updatedAt field.
-	written, err := s.store.SaveDeploymentIfUpdatedAt(ctx, deployment.ID, sealed, expectedUpdatedAt, expectedUpdatedAt)
+	written, err := s.store.SaveDeploymentIfPayload(ctx, deployment.ID, sealed, storedPayloadJSON, deployment.UpdatedAt)
 	if err != nil {
 		log.Printf("deployments: failed to re-seal legacy plaintext for %s: %v", deployment.ID, err)
 		return
 	}
 	if !written {
 		log.Printf(
-			"deployments: skip re-seal write-back for %s: concurrent update or missing row (expected updated_at %q)",
+			"deployments: skip re-seal write-back for %s: concurrent payload change",
 			deployment.ID,
-			expectedUpdatedAt,
 		)
 	}
 }

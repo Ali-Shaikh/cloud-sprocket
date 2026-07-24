@@ -111,22 +111,25 @@ func (s *Service) deploymentsList(ctx context.Context) ([]deploy.Deployment, err
 		if err := json.Unmarshal(payload, &deployment); err != nil {
 			continue
 		}
-		s.openFromStore(ctx, &deployment)
+		s.openFromStore(ctx, &deployment, string(payload))
 		deployments = append(deployments, deployment)
 	}
 	return deployments, nil
 }
 
 func (s *Service) deploymentGet(ctx context.Context, id string) (*deploy.Deployment, error) {
-	var deployment deploy.Deployment
-	found, err := s.store.LoadDeployment(ctx, id, &deployment)
+	raw, _, found, err := s.store.LoadDeploymentRaw(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	if !found {
 		return nil, fmt.Errorf("deployment %s not found", id)
 	}
-	s.openFromStore(ctx, &deployment)
+	var deployment deploy.Deployment
+	if err := json.Unmarshal([]byte(raw), &deployment); err != nil {
+		return nil, err
+	}
+	s.openFromStore(ctx, &deployment, raw)
 	return &deployment, nil
 }
 

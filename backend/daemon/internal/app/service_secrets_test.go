@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -243,10 +244,13 @@ func TestLegacyResealWriteBackSkipsConcurrentUpdate(t *testing.T) {
 
 	// Snapshot as a list/get path would load it, then a lifecycle job advances
 	// the row before openFromStore can migrate secrets.
-	var snapshot deploy.Deployment
-	found, err := dataStore.LoadDeployment(context.Background(), legacy.ID, &snapshot)
+	raw, _, found, err := dataStore.LoadDeploymentRaw(context.Background(), legacy.ID)
 	if err != nil || !found {
-		t.Fatalf("LoadDeployment snapshot: found=%v err=%v", found, err)
+		t.Fatalf("LoadDeploymentRaw snapshot: found=%v err=%v", found, err)
+	}
+	var snapshot deploy.Deployment
+	if err := json.Unmarshal([]byte(raw), &snapshot); err != nil {
+		t.Fatalf("unmarshal snapshot: %v", err)
 	}
 
 	concurrent := *legacy
@@ -257,7 +261,7 @@ func TestLegacyResealWriteBackSkipsConcurrentUpdate(t *testing.T) {
 		t.Fatalf("SaveDeployment concurrent: %v", err)
 	}
 
-	s.openFromStore(context.Background(), &snapshot)
+	s.openFromStore(context.Background(), &snapshot, raw)
 	if snapshot.Variables["db_password"] != "race-s3cret" {
 		t.Fatalf("in-memory open lost password: %v", snapshot.Variables["db_password"])
 	}

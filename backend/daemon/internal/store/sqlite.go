@@ -259,15 +259,16 @@ func (s *Store) SaveDeployment(ctx context.Context, id string, value any, timest
 	return err
 }
 
-// SaveDeploymentIfUpdatedAt updates a deployment only when the store row still
-// has the expected updated_at. The write uses a single conditional UPDATE so a
-// concurrent lifecycle save cannot be clobbered by a read-time reseal
-// migration. Returns false when the row is missing or has moved on.
-func (s *Store) SaveDeploymentIfUpdatedAt(
+// SaveDeploymentIfPayload updates a deployment only when the stored payload
+// still matches expectedPayloadJSON. Equality is on the full JSON blob so a
+// same-second lifecycle save that changed the payload cannot be overwritten by
+// a read-time reseal migration. Returns false when the row is missing or has
+// moved on.
+func (s *Store) SaveDeploymentIfPayload(
 	ctx context.Context,
 	id string,
 	value any,
-	expectedUpdatedAt string,
+	expectedPayloadJSON string,
 	timestamp string,
 ) (bool, error) {
 	payload, err := json.Marshal(value)
@@ -277,11 +278,11 @@ func (s *Store) SaveDeploymentIfUpdatedAt(
 	result, err := s.db.ExecContext(
 		ctx,
 		`UPDATE deployments SET payload_json = ?, updated_at = ?
-		 WHERE id = ? AND updated_at = ?`,
+		 WHERE id = ? AND payload_json = ?`,
 		string(payload),
 		timestamp,
 		id,
-		expectedUpdatedAt,
+		expectedPayloadJSON,
 	)
 	if err != nil {
 		return false, err
@@ -291,6 +292,19 @@ func (s *Store) SaveDeploymentIfUpdatedAt(
 		return false, err
 	}
 	return rows > 0, nil
+}
+
+// LoadDeploymentRaw returns the raw JSON payload and updated_at for a
+// deployment row. ok is false when the id is missing.
+func (s *Store) LoadDeploymentRaw(ctx context.Context, id string) (payload string, updatedAt string, ok bool, err error) {
+	row := s.db.QueryRowContext(ctx, `SELECT payload_json, updated_at FROM deployments WHERE id = ?`, id)
+	if err := row.Scan(&payload, &updatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return "", "", false, nil
+		}
+		return "", "", false, err
+	}
+	return payload, updatedAt, true, nil
 }
 
 // SaveDeploymentWithLog atomically persists a deployment and its related
