@@ -124,22 +124,29 @@ vi.mock("./lib/backend", () => ({
       case "session.get":
         return sessionFixture;
       case "session.selectProvider": {
+        // Mirrors daemon F-011: select refuses while a workspace is locked.
+        if (sessionFixture.isLocked) {
+          throw new Error(
+            "close the active workspace with session.unlock before changing provider or profile",
+          );
+        }
         const providerId = String(params?.providerId ?? "");
         sessionFixture = {
           ...sessionFixture,
-          isLocked: false,
           currentProviderId: providerId,
           selectedProfileId: undefined,
           selectedAuthMethod: undefined,
-          lockedProviderId: undefined,
-          lockedProfileId: undefined,
-          lockedAuthMethod: undefined,
           availableAuthMethods: [],
           workspaceTabs: [],
         };
         return sessionFixture;
       }
       case "session.selectProfile": {
+        if (sessionFixture.isLocked) {
+          throw new Error(
+            "close the active workspace with session.unlock before changing provider or profile",
+          );
+        }
         const providerId = String(params?.providerId ?? "");
         const profileId = String(params?.profileId ?? "");
         const profile = profileFixtures.find(
@@ -147,13 +154,9 @@ vi.mock("./lib/backend", () => ({
         );
         sessionFixture = {
           ...sessionFixture,
-          isLocked: false,
           currentProviderId: providerId,
           selectedProfileId: profileId,
           selectedAuthMethod: undefined,
-          lockedProviderId: undefined,
-          lockedProfileId: undefined,
-          lockedAuthMethod: undefined,
           availableAuthMethods: profile?.authMethods ?? [],
           workspaceTabs: [],
         };
@@ -1553,6 +1556,9 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Switch to Azure" }));
 
     await waitFor(() => {
+      const methods = vi.mocked(backendRequest).mock.calls.map(([method]) => method);
+      // Confirm path: unlock first (F-011), then selectProvider.
+      expect(methods).toContain("session.unlock");
       expect(
         vi.mocked(backendRequest).mock.calls.some(
           ([method, params]) =>
@@ -1560,6 +1566,16 @@ describe("App", () => {
             (params as { providerId?: string } | undefined)?.providerId === "azure",
         ),
       ).toBe(true);
+      const unlockIdx = methods.indexOf("session.unlock");
+      const selectIdx = methods.findIndex(
+        (method, index) =>
+          method === "session.selectProvider" &&
+          index > unlockIdx &&
+          (vi.mocked(backendRequest).mock.calls[index][1] as { providerId?: string } | undefined)
+            ?.providerId === "azure",
+      );
+      expect(unlockIdx).toBeGreaterThanOrEqual(0);
+      expect(selectIdx).toBeGreaterThan(unlockIdx);
     });
     expect(await screen.findByRole("heading", { name: "Your clouds" })).toBeInTheDocument();
     expect(sessionFixture.isLocked).toBe(false);

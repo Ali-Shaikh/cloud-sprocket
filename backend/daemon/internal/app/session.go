@@ -213,6 +213,22 @@ func (s *Service) handleWorkspaceGet(ctx context.Context, notifier Notifier) (an
 	return s.buildWorkspaceSnapshotOpts(snapshot, session, opts), nil
 }
 
+// errSessionLockedForSelect is returned when session.selectProvider or
+// session.selectProfile is called while a workspace is locked.
+//
+// Policy (architecture F-011): only session.unlock closes a locked workspace.
+// The desktop leave-workspace dialog confirms with the user, then calls unlock
+// before select so UX is unchanged. Select must not clear IsLocked itself;
+// otherwise any RPC client could drop a lock without that confirm step.
+//
+// PublicError so JSON-RPC classifyError preserves a stable code and SafeMessage
+// (plain errors become generic internal_error and drop the unlock guidance).
+var errSessionLockedForSelect = &publicError{
+	jsonRPCCode: -32003,
+	stableCode:  "session_locked",
+	safeMessage: "Close the active workspace with session.unlock before changing provider or profile.",
+}
+
 func (s *Service) handleSessionSelectProvider(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		ProviderID string `json:"providerId"`
@@ -230,7 +246,11 @@ func (s *Service) handleSessionSelectProvider(ctx context.Context, params json.R
 	if err != nil {
 		return nil, err
 	}
-	session.IsLocked = false
+	if session.IsLocked {
+		return nil, errSessionLockedForSelect
+	}
+	// Selection while unlocked only; lock state is owned by session.lock /
+	// session.unlock (reconcileSession clears locked fields when unlocked).
 	session.CurrentProviderID = request.ProviderID
 	session.SelectedProfileID = ""
 	session.SelectedAuthMethod = ""
@@ -266,7 +286,9 @@ func (s *Service) handleSessionSelectProfile(ctx context.Context, params json.Ra
 	if err != nil {
 		return nil, err
 	}
-	session.IsLocked = false
+	if session.IsLocked {
+		return nil, errSessionLockedForSelect
+	}
 	session.CurrentProviderID = request.ProviderID
 	session.SelectedProfileID = request.ProfileID
 	session.SelectedAuthMethod = ""
@@ -426,6 +448,9 @@ func (s *Service) handleSessionSetWriteMode(ctx context.Context, params json.Raw
 	return session, nil
 }
 
+// handleSessionUnlock is the only intentional path that clears IsLocked.
+// Desktop "Switch connection" and the leave-workspace confirm flow call this
+// before session.selectProvider/selectProfile (architecture F-011).
 func (s *Service) handleSessionUnlock(ctx context.Context, notifier Notifier) (any, error) {
 	snapshot, err := s.discovery.Discover()
 	if err != nil {
