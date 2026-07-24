@@ -27,6 +27,11 @@ Installers for every release are published on the
   Shared `PublicError` and `Notifier` contracts live in `internal/rpcapi`; app
   keeps concrete error helpers and type aliases so handlers stay unchanged
   (architecture F-006).
+- Daemon `cloudsprocketd` cancels RPC Serve via `signal.NotifyContext` on
+  SIGINT/SIGTERM instead of a bare `context.Background()`. Tauri still owns
+  sidecar lifetime through stdin EOF; signal cancel is for alternate hosts and
+  manual stops. Serve observes context cancellation without changing the line
+  protocol (architecture F-007).
 - Desktop runtime actions collapse LocalStack and floci-az start/stop/recreate
   pipelines into one `invokeEmulatorAction(emulatorId, action, options?)` plus
   a shared status poller (recreate 95s vs default 22s timeouts preserved;

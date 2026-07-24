@@ -83,26 +83,55 @@ func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 	s.writer = bufio.NewWriter(out)
 	s.mu.Unlock()
 
-	reader := bufio.NewReaderSize(in, 64*1024)
-	var serveErr error
-	for {
-		line, tooLarge, err := readRequestLine(reader)
-		if tooLarge {
-			s.logger.Printf("rpc request rejected: payload exceeds %d bytes", maxRequestBytes)
-			_ = s.write(errorResponse(nullID(), -32600, "request_too_large", "The backend request is too large."))
-		}
-		if !tooLarge && len(line) > 0 {
-			if err := s.dispatch(ctx, line); err != nil {
-				serveErr = err
-				break
+	// Read lines on a helper so the serve loop can also honour ctx cancellation
+	// (SIGINT/SIGTERM via signal.NotifyContext). Stdin EOF remains the normal
+	// sidecar shutdown path when Tauri closes the pipe.
+	type readOutcome struct {
+		line     []byte
+		tooLarge bool
+		err      error
+	}
+	outcomes := make(chan readOutcome)
+	go func() {
+		reader := bufio.NewReaderSize(in, 64*1024)
+		for {
+			line, tooLarge, err := readRequestLine(reader)
+			select {
+			case outcomes <- readOutcome{line: line, tooLarge: tooLarge, err: err}:
+			case <-ctx.Done():
+				return
+			}
+			if err != nil {
+				return
 			}
 		}
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			serveErr = err
-			break
+	}()
+
+	var serveErr error
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			serveErr = ctx.Err()
+			break loop
+		case outcome := <-outcomes:
+			if outcome.tooLarge {
+				s.logger.Printf("rpc request rejected: payload exceeds %d bytes", maxRequestBytes)
+				_ = s.write(errorResponse(nullID(), -32600, "request_too_large", "The backend request is too large."))
+			}
+			if !outcome.tooLarge && len(outcome.line) > 0 {
+				if err := s.dispatch(ctx, outcome.line); err != nil {
+					serveErr = err
+					break loop
+				}
+			}
+			if errors.Is(outcome.err, io.EOF) {
+				break loop
+			}
+			if outcome.err != nil {
+				serveErr = outcome.err
+				break loop
+			}
 		}
 	}
 

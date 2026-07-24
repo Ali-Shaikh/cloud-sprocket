@@ -5,9 +5,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
+	"syscall"
 
 	"cloudsprocket/backend/daemon/internal/app"
 	"cloudsprocket/backend/daemon/internal/awsadapter"
@@ -71,7 +74,14 @@ func main() {
 	}
 	server := rpc.NewWithLogger(service, diagnosticLogger)
 
-	if err := server.Serve(context.Background(), os.Stdin, os.Stdout); err != nil {
+	// Tauri owns the sidecar process lifetime and normally shuts the daemon down
+	// by closing stdin (EOF). signal.NotifyContext also cancels on SIGINT/SIGTERM
+	// so alternate hosts and manual stops can stop Serve without relying only on
+	// stdin EOF. context.Canceled is a clean shutdown, not a fatal error.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := server.Serve(ctx, os.Stdin, os.Stdout); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatalf("rpc server stopped: %v", err)
 	}
 }

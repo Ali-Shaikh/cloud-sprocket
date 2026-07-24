@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"strings"
 	"sync/atomic"
@@ -174,6 +175,59 @@ func TestNotifyBeforeServeReturnsError(t *testing.T) {
 	}))
 	if err := server.Notify("test.event", map[string]any{"ok": true}); err == nil {
 		t.Fatal("expected Notify before Serve to return an error")
+	}
+}
+
+func TestServeStopsOnContextCancel(t *testing.T) {
+	server := New(handlerFunc(func(context.Context, string, json.RawMessage, app.Notifier) (any, error) {
+		return map[string]any{"ok": true}, nil
+	}))
+	reader, writer := io.Pipe()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan error, 1)
+	go func() {
+		var output bytes.Buffer
+		done <- server.Serve(ctx, reader, &output)
+	}()
+
+	// Wait until Serve is blocked on the open pipe, then cancel.
+	time.Sleep(30 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Serve error = %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Serve did not stop after context cancellation")
+	}
+
+	_ = writer.Close()
+	_ = reader.Close()
+}
+
+func TestServeEOFStillShutsDownCleanly(t *testing.T) {
+	server := New(handlerFunc(func(context.Context, string, json.RawMessage, app.Notifier) (any, error) {
+		return "ok", nil
+	}))
+	var output bytes.Buffer
+	input := `{"jsonrpc":"2.0","id":"1","method":"ok","params":{}}` + "\n"
+	if err := server.Serve(context.Background(), strings.NewReader(input), &output); err != nil {
+		t.Fatalf("Serve on stdin EOF: %v", err)
+	}
+	responses := []testResponse{}
+	decoder := json.NewDecoder(&output)
+	for decoder.More() {
+		var response testResponse
+		if err := decoder.Decode(&response); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		responses = append(responses, response)
+	}
+	if len(responses) != 1 || responses[0].Error != nil || responses[0].Result != "ok" {
+		t.Fatalf("responses = %+v", responses)
 	}
 }
 
