@@ -203,17 +203,29 @@ export function useRuntimeActions({
 
   const refreshLocalStackLogs = useCallback(async (): Promise<void> => {
     setLocalStackLogsStatus("Refreshing LocalStack logs...");
-    const logsResult = await fetchEmulatorLogs("localstack");
-    setLocalStackLogs(normaliseEmulatorLogSnapshot(logsResult));
-    // Error text lives in logs.summary when the helper could not load a tail.
-    setLocalStackLogsStatus("");
+    try {
+      const logsResult = await fetchEmulatorLogs("localstack");
+      setLocalStackLogs(normaliseEmulatorLogSnapshot(logsResult));
+      setLocalStackLogsStatus("");
+    } catch (error) {
+      // Keep the last successful tail; only surface the failure in status.
+      setLocalStackLogsStatus(
+        error instanceof Error ? error.message : "Failed to load LocalStack logs.",
+      );
+    }
   }, [setLocalStackLogs, setLocalStackLogsStatus]);
 
   const refreshFlociAzLogs = useCallback(async (): Promise<void> => {
     setFlociAzLogsStatus("Refreshing floci-az logs...");
-    const logsResult = await fetchEmulatorLogs("floci-az");
-    setFlociAzLogs(normaliseEmulatorLogSnapshot(logsResult));
-    setFlociAzLogsStatus("");
+    try {
+      const logsResult = await fetchEmulatorLogs("floci-az");
+      setFlociAzLogs(normaliseEmulatorLogSnapshot(logsResult));
+      setFlociAzLogsStatus("");
+    } catch (error) {
+      setFlociAzLogsStatus(
+        error instanceof Error ? error.message : "Failed to load floci-az logs.",
+      );
+    }
   }, [setFlociAzLogs, setFlociAzLogsStatus]);
 
   const refreshEmulatorLogs = useCallback(

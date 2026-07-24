@@ -58,13 +58,9 @@ describe("fetchEmulatorLogs", () => {
     });
   });
 
-  it("returns an empty snapshot with the error summary when logs fail", async () => {
+  it("propagates failures so callers can keep previously loaded lines", async () => {
     vi.mocked(backendRequest).mockRejectedValue(new Error("floci logs unavailable"));
 
-    const result = await fetchEmulatorLogs("floci-az");
-
-    expect(result.emulatorId).toBe("floci-az");
-    expect(result.lines).toEqual([]);
-    expect(result.summary).toContain("floci logs unavailable");
+    await expect(fetchEmulatorLogs("floci-az")).rejects.toThrow("floci logs unavailable");
   });
 });

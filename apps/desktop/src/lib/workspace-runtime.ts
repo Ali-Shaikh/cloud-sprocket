@@ -29,21 +29,12 @@ export async function fetchVirtualisationStatus(): Promise<VirtualisationStatusR
 }
 
 /**
- * On-demand emulator log tail. Failures resolve to an empty snapshot with
- * the error message in `summary` so the UI can show copy without throwing.
+ * On-demand emulator log tail. Callers should catch failures and keep any
+ * previously loaded lines rather than replacing them with an empty snapshot.
  */
 export async function fetchEmulatorLogs(
   emulatorId: string,
   tail: number = DEFAULT_LOG_TAIL,
 ): Promise<EmulatorLogSnapshot> {
-  try {
-    return await backendRequest<EmulatorLogSnapshot>("emulators.logs", { emulatorId, tail });
-  } catch (error) {
-    const label = emulatorId === "floci-az" ? "floci-az" : "LocalStack";
-    return {
-      emulatorId,
-      lines: [],
-      summary: error instanceof Error ? error.message : `Failed to load ${label} logs.`,
-    };
-  }
+  return await backendRequest<EmulatorLogSnapshot>("emulators.logs", { emulatorId, tail });
 }
