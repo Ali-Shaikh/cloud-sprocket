@@ -109,6 +109,13 @@ func (r *Registry) SetOptions(opts TargetOptions) {
 	}
 }
 
+// Options returns a snapshot of the current target options.
+func (r *Registry) Options() TargetOptions {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.opts
+}
+
 // ResolveTarget returns the deployment's target, or (nil, nil) when the
 // deployment is target-less (a provider with no default runtime and no explicit
 // RuntimeID). A non-nil error means a runtime was expected but is unknown, which

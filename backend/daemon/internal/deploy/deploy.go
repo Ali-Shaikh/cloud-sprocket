@@ -318,7 +318,7 @@ func (e *Engine) writeWorkspaceFiles(dir string, deployment *Deployment) error {
 		return err
 	}
 	if target != nil {
-		if err := target.WriteOverrides(dir, deployment, e.registry.opts); err != nil {
+		if err := target.WriteOverrides(dir, deployment, e.registry.Options()); err != nil {
 			return fmt.Errorf("write provider overrides: %w", err)
 		}
 	}
