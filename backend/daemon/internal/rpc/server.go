@@ -83,17 +83,33 @@ func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 	s.writer = bufio.NewWriter(out)
 	s.mu.Unlock()
 
-	// Read lines on a helper so the serve loop can also honour ctx cancellation
-	// (SIGINT/SIGTERM via signal.NotifyContext). Stdin EOF remains the normal
-	// sidecar shutdown path when Tauri closes the pipe.
+	// Bridge stdin through a pipe so context cancel can close the read side and
+	// unblock the line reader. Stdin EOF still ends the copy and shuts down
+	// cleanly (Tauri sidecar path). On cancel, Serve waits for the reader
+	// helper to exit before returning.
+	pr, pw := io.Pipe()
+	copyDone := make(chan struct{})
+	go func() {
+		defer close(copyDone)
+		_, copyErr := io.Copy(pw, in)
+		_ = pw.CloseWithError(copyErr)
+	}()
+	go func() {
+		<-ctx.Done()
+		_ = pr.CloseWithError(ctx.Err())
+		_ = pw.CloseWithError(ctx.Err())
+	}()
+
 	type readOutcome struct {
 		line     []byte
 		tooLarge bool
 		err      error
 	}
 	outcomes := make(chan readOutcome)
+	readerDone := make(chan struct{})
 	go func() {
-		reader := bufio.NewReaderSize(in, 64*1024)
+		defer close(readerDone)
+		reader := bufio.NewReaderSize(pr, 64*1024)
 		for {
 			line, tooLarge, err := readRequestLine(reader)
 			select {
@@ -129,11 +145,26 @@ loop:
 				break loop
 			}
 			if outcome.err != nil {
+				// Pipe closed on context cancel surfaces as ctx.Err().
+				if errors.Is(outcome.err, context.Canceled) || errors.Is(outcome.err, context.DeadlineExceeded) {
+					serveErr = outcome.err
+					break loop
+				}
+				if ctx.Err() != nil && errors.Is(outcome.err, io.ErrClosedPipe) {
+					serveErr = ctx.Err()
+					break loop
+				}
 				serveErr = outcome.err
 				break loop
 			}
 		}
 	}
+
+	_ = pr.Close()
+	_ = pw.Close()
+	<-readerDone
+	// copyDone may still wait on a blocked stdin read until the process exits
+	// or the caller closes the original reader (Tauri closes the pipe).
 
 	s.wg.Wait()
 	s.mu.Lock()
