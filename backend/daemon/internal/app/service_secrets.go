@@ -4,6 +4,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -123,11 +124,18 @@ func (s *Service) sealForStore(deployment *deploy.Deployment) (*deploy.Deploymen
 }
 
 // openFromStore unseals sensitive variable and output values in place after a
-// deployment is loaded from the store. A nil cipher is a no-op.
-func (s *Service) openFromStore(deployment *deploy.Deployment) {
+// deployment is loaded from the store. Legacy plaintext sensitive values are
+// re-sealed via Cipher.Open and, when storedPayloadJSON is provided, written
+// back with a payload-equality CAS so concurrent lifecycle saves win.
+// A nil cipher is a no-op.
+//
+// Returns an error if reseal is required and the store write fails for a
+// reason other than a concurrent payload change (written=false is OK).
+func (s *Service) openFromStore(ctx context.Context, deployment *deploy.Deployment, storedPayloadJSON, storedUpdatedAt string) error {
 	if s.cipher == nil || deployment == nil {
-		return
+		return nil
 	}
+	needsReseal := s.hasLegacyPlaintextSecrets(deployment)
 	for _, name := range deployment.SensitiveVars {
 		if value, ok := deployment.Variables[name]; ok {
 			deployment.Variables[name] = s.openValue(value)
@@ -145,6 +153,71 @@ func (s *Service) openFromStore(deployment *deploy.Deployment) {
 			}
 		}
 	}
+	if !needsReseal || storedPayloadJSON == "" {
+		return nil
+	}
+	sealed, err := s.sealForStore(deployment)
+	if err != nil {
+		return fmt.Errorf("seal legacy secrets for deployment %s: %w", deployment.ID, err)
+	}
+	// Prefer SQLite row updated_at; fall back to payload field.
+	ts := storedUpdatedAt
+	if ts == "" {
+		ts = deployment.UpdatedAt
+	}
+	// CAS on the full loaded JSON blob: any concurrent save changes the blob
+	// and this write is skipped (no status/output clobber).
+	written, err := s.store.SaveDeploymentIfPayload(ctx, deployment.ID, sealed, storedPayloadJSON, ts)
+	if err != nil {
+		return fmt.Errorf("persist resealed secrets for deployment %s: %w", deployment.ID, err)
+	}
+	if !written {
+		// Concurrent writer changed the row; secrets stay opened in memory for
+		// this request. The other writer may still hold plaintext until a later
+		// load migrates it.
+		return nil
+	}
+	return nil
+}
+
+// hasLegacyPlaintextSecrets reports whether any sensitive field is stored as
+// non-empty plaintext (missing the enc:v1: prefix) or as a non-string value
+// that still needs structured sealing.
+func (s *Service) hasLegacyPlaintextSecrets(deployment *deploy.Deployment) bool {
+	if deployment == nil {
+		return false
+	}
+	for _, name := range deployment.SensitiveVars {
+		if value, ok := deployment.Variables[name]; ok && isLegacyPlaintextSecret(value) {
+			return true
+		}
+	}
+	for _, output := range deployment.Outputs {
+		if output.Sensitive && isLegacyPlaintextSecret(output.Value) {
+			return true
+		}
+	}
+	for _, revision := range deployment.Revisions {
+		for _, name := range deployment.SensitiveVars {
+			if value, ok := revision.Variables[name]; ok && isLegacyPlaintextSecret(value) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isLegacyPlaintextSecret(value any) bool {
+	if value == nil {
+		return false
+	}
+	text, ok := value.(string)
+	if !ok {
+		// Non-string sensitive values must be JSON-encoded behind the marker
+		// and sealed; anything else at rest is legacy plaintext.
+		return true
+	}
+	return text != "" && !secrets.IsSealed(text)
 }
 
 func (s *Service) sealValue(value any) (any, error) {
@@ -179,9 +252,14 @@ func (s *Service) sealValue(value any) (any, error) {
 
 func (s *Service) openValue(value any) any {
 	text, ok := value.(string)
-	if !ok || !secrets.IsSealed(text) {
+	if !ok {
 		return value
 	}
+	if text == "" {
+		return value
+	}
+	// Open decrypts enc:v1: tokens and re-seals legacy plaintext (counted and
+	// logged on the cipher) so deployments are not left readable forever.
 	plain, err := s.cipher.Open(text)
 	if err != nil {
 		return value

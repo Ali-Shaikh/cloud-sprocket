@@ -101,32 +101,39 @@ func (s *Service) runTofuInstall(job models.JobStatus, notifier Notifier) {
 }
 
 func (s *Service) deploymentsList(ctx context.Context) ([]deploy.Deployment, error) {
-	payloads, err := s.store.ListDeploymentsJSON(ctx)
+	rows, err := s.store.ListDeployments(ctx)
 	if err != nil {
 		return nil, err
 	}
-	deployments := make([]deploy.Deployment, 0, len(payloads))
-	for _, payload := range payloads {
+	deployments := make([]deploy.Deployment, 0, len(rows))
+	for _, row := range rows {
 		var deployment deploy.Deployment
-		if err := json.Unmarshal(payload, &deployment); err != nil {
+		if err := json.Unmarshal(row.Payload, &deployment); err != nil {
 			continue
 		}
-		s.openFromStore(&deployment)
+		if err := s.openFromStore(ctx, &deployment, string(row.Payload), row.UpdatedAt); err != nil {
+			return nil, err
+		}
 		deployments = append(deployments, deployment)
 	}
 	return deployments, nil
 }
 
 func (s *Service) deploymentGet(ctx context.Context, id string) (*deploy.Deployment, error) {
-	var deployment deploy.Deployment
-	found, err := s.store.LoadDeployment(ctx, id, &deployment)
+	raw, storedUpdatedAt, found, err := s.store.LoadDeploymentRaw(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	if !found {
 		return nil, fmt.Errorf("deployment %s not found", id)
 	}
-	s.openFromStore(&deployment)
+	var deployment deploy.Deployment
+	if err := json.Unmarshal([]byte(raw), &deployment); err != nil {
+		return nil, err
+	}
+	if err := s.openFromStore(ctx, &deployment, raw, storedUpdatedAt); err != nil {
+		return nil, err
+	}
 	return &deployment, nil
 }
 

@@ -49,15 +49,75 @@ func TestSealOpenRoundTrip(t *testing.T) {
 	}
 }
 
-func TestOpenPassesThroughPlaintext(t *testing.T) {
+func TestOpenResealsLegacyPlaintext(t *testing.T) {
 	cipher := newTestCipher(t)
-	// A value that is not a sealed token is returned unchanged (back-compat).
+	// Legacy plaintext is still returned as the usable secret, but Open
+	// re-seals it so callers can persist the enc:v1: form.
 	got, err := cipher.Open("plain-value")
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	if got != "plain-value" {
-		t.Fatalf("passthrough = %q", got)
+		t.Fatalf("plaintext = %q, want plain-value", got)
+	}
+	if cipher.ResealCount() != 1 {
+		t.Fatalf("ResealCount = %d, want 1", cipher.ResealCount())
+	}
+
+	// Empty strings stay empty and do not count as a reseal.
+	empty, err := cipher.Open("")
+	if err != nil {
+		t.Fatalf("Open empty: %v", err)
+	}
+	if empty != "" {
+		t.Fatalf("empty open = %q", empty)
+	}
+	if cipher.ResealCount() != 1 {
+		t.Fatalf("ResealCount after empty = %d, want 1", cipher.ResealCount())
+	}
+}
+
+func TestOpenDetailedPlaintextToSealedRoundTrip(t *testing.T) {
+	cipher := newTestCipher(t)
+	const legacy = "legacy-db-password"
+
+	first, err := cipher.OpenDetailed(legacy)
+	if err != nil {
+		t.Fatalf("OpenDetailed: %v", err)
+	}
+	if !first.DidReseal {
+		t.Fatal("expected DidReseal for legacy plaintext")
+	}
+	if first.Plaintext != legacy {
+		t.Fatalf("plaintext = %q, want %q", first.Plaintext, legacy)
+	}
+	if !IsSealed(first.Sealed) {
+		t.Fatalf("expected sealed token, got %q", first.Sealed)
+	}
+	if strings.Contains(first.Sealed, legacy) {
+		t.Fatal("plaintext leaked into resealed token")
+	}
+	if cipher.ResealCount() != 1 {
+		t.Fatalf("ResealCount = %d, want 1", cipher.ResealCount())
+	}
+
+	// Opening the resealed token returns the original plaintext and does not
+	// reseal again.
+	second, err := cipher.OpenDetailed(first.Sealed)
+	if err != nil {
+		t.Fatalf("OpenDetailed sealed: %v", err)
+	}
+	if second.DidReseal {
+		t.Fatal("already-sealed token should not reseal")
+	}
+	if second.Plaintext != legacy {
+		t.Fatalf("round trip plaintext = %q, want %q", second.Plaintext, legacy)
+	}
+	if second.Sealed != first.Sealed {
+		t.Fatalf("sealed form changed: %q vs %q", second.Sealed, first.Sealed)
+	}
+	if cipher.ResealCount() != 1 {
+		t.Fatalf("ResealCount after sealed open = %d, want 1", cipher.ResealCount())
 	}
 }
 

@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -107,6 +108,150 @@ func TestDeploymentSecretsSealedAtRest(t *testing.T) {
 	}
 	if got.Outputs[2].Value != "demo-bucket" {
 		t.Fatalf("non-sensitive output changed: %v", got.Outputs[2].Value)
+	}
+}
+
+func TestLegacyPlaintextSecretsResealedOnRead(t *testing.T) {
+	dir := t.TempDir()
+	settings := config.FromEnv(map[string]string{"CLOUDSPROCKET_CONFIG_DIR": dir}, "linux", dir)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("EnsureRuntimeDirs: %v", err)
+	}
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = dataStore.Close() })
+
+	cipher, err := loadCipher(settings.SecretKeyPath)
+	if err != nil {
+		t.Fatalf("loadCipher: %v", err)
+	}
+	s := &Service{store: dataStore, cipher: cipher, now: func() time.Time { return time.Now().UTC() }}
+
+	// Simulate a pre-encryption deployment row with sensitive values in plaintext.
+	legacy := &deploy.Deployment{
+		ID:            "dep-legacy-plain",
+		SensitiveVars: []string{"db_password"},
+		Variables: map[string]any{
+			"db_password": "legacy-s3cret",
+			"app_name":    "demo",
+		},
+		Outputs: []deploy.Output{
+			{Name: "db_url", Sensitive: true, Value: "postgres://legacy"},
+			{Name: "bucket", Value: "demo-bucket"},
+		},
+		Status:    deploy.StatusApplied,
+		CreatedAt: "t0",
+		UpdatedAt: "t0",
+	}
+	if err := dataStore.SaveDeployment(context.Background(), legacy.ID, legacy, "t0"); err != nil {
+		t.Fatalf("SaveDeployment legacy: %v", err)
+	}
+
+	payloads, err := dataStore.ListDeploymentsJSON(context.Background())
+	if err != nil || len(payloads) != 1 {
+		t.Fatalf("ListDeploymentsJSON before: %v (len %d)", err, len(payloads))
+	}
+	if !strings.Contains(string(payloads[0]), "legacy-s3cret") {
+		t.Fatal("expected plaintext secret in legacy row before migration")
+	}
+
+	// Read path restores plaintext in memory, reseals, and CAS-writes ciphertext.
+	got, err := s.deploymentGet(context.Background(), "dep-legacy-plain")
+	if err != nil {
+		t.Fatalf("deploymentGet: %v", err)
+	}
+	if got.Variables["db_password"] != "legacy-s3cret" {
+		t.Fatalf("db_password not restored: %v", got.Variables["db_password"])
+	}
+	if got.Outputs[0].Value != "postgres://legacy" {
+		t.Fatalf("sensitive output not restored: %v", got.Outputs[0].Value)
+	}
+	if cipher.ResealCount() < 1 {
+		t.Fatalf("expected Open to count reseals, got %d", cipher.ResealCount())
+	}
+
+	payloads, err = dataStore.ListDeploymentsJSON(context.Background())
+	if err != nil || len(payloads) != 1 {
+		t.Fatalf("ListDeploymentsJSON after: %v (len %d)", err, len(payloads))
+	}
+	raw := string(payloads[0])
+	if strings.Contains(raw, "legacy-s3cret") {
+		t.Fatal("legacy plaintext secret still at rest after read migration")
+	}
+	if !strings.Contains(raw, "enc:v1:") {
+		t.Fatal("expected sealed tokens at rest after read migration")
+	}
+	if got.UpdatedAt != "t0" {
+		t.Fatalf("read advanced payload UpdatedAt: %q", got.UpdatedAt)
+	}
+}
+
+func TestLegacyResealReadDoesNotClobberStore(t *testing.T) {
+	dir := t.TempDir()
+	settings := config.FromEnv(map[string]string{"CLOUDSPROCKET_CONFIG_DIR": dir}, "linux", dir)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("EnsureRuntimeDirs: %v", err)
+	}
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = dataStore.Close() })
+
+	cipher, err := loadCipher(settings.SecretKeyPath)
+	if err != nil {
+		t.Fatalf("loadCipher: %v", err)
+	}
+	s := &Service{store: dataStore, cipher: cipher, now: func() time.Time { return time.Now().UTC() }}
+
+	legacy := &deploy.Deployment{
+		ID:            "dep-legacy-race",
+		SensitiveVars: []string{"db_password"},
+		Variables: map[string]any{
+			"db_password": "race-s3cret",
+			"app_name":    "demo",
+		},
+		Status:    deploy.StatusApplied,
+		CreatedAt: "t0",
+		UpdatedAt: "t0",
+	}
+	if err := dataStore.SaveDeployment(context.Background(), legacy.ID, legacy, "t0"); err != nil {
+		t.Fatalf("SaveDeployment legacy: %v", err)
+	}
+
+	raw, _, found, err := dataStore.LoadDeploymentRaw(context.Background(), legacy.ID)
+	if err != nil || !found {
+		t.Fatalf("LoadDeploymentRaw snapshot: found=%v err=%v", found, err)
+	}
+	var snapshot deploy.Deployment
+	if err := json.Unmarshal([]byte(raw), &snapshot); err != nil {
+		t.Fatalf("unmarshal snapshot: %v", err)
+	}
+
+	concurrent := *legacy
+	concurrent.Status = deploy.StatusPlanning
+	concurrent.UpdatedAt = "t1"
+	concurrent.Error = "job in progress"
+	if err := dataStore.SaveDeployment(context.Background(), concurrent.ID, &concurrent, "t1"); err != nil {
+		t.Fatalf("SaveDeployment concurrent: %v", err)
+	}
+
+	if err := s.openFromStore(context.Background(), &snapshot, raw, "t0"); err != nil {
+		t.Fatalf("openFromStore: %v", err)
+	}
+	if snapshot.Variables["db_password"] != "race-s3cret" {
+		t.Fatalf("in-memory open lost password: %v", snapshot.Variables["db_password"])
+	}
+
+	var stored deploy.Deployment
+	found, err = dataStore.LoadDeployment(context.Background(), legacy.ID, &stored)
+	if err != nil || !found {
+		t.Fatalf("LoadDeployment after open: found=%v err=%v", found, err)
+	}
+	if stored.Status != deploy.StatusPlanning || stored.UpdatedAt != "t1" {
+		t.Fatalf("read path mutated store: status=%s updatedAt=%s", stored.Status, stored.UpdatedAt)
 	}
 }
 
