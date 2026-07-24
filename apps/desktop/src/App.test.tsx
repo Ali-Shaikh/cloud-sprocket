@@ -1266,7 +1266,7 @@ describe("App", () => {
     expect(await screen.findByText("Docker Runtime")).toBeInTheDocument();
     expect(await screen.findByText("Local Runtimes")).toBeInTheDocument();
     expect(await screen.findByText("Managed Docker Resources")).toBeInTheDocument();
-    expect(await screen.findByText("Local Config Artifacts")).toBeInTheDocument();
+    expect(await screen.findByText("Local Config Artefacts")).toBeInTheDocument();
     expect(await screen.findByText("LocalStack")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create AWS Profile" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start LocalStack" })).toBeInTheDocument();

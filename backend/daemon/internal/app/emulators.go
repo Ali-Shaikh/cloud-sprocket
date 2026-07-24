@@ -104,6 +104,10 @@ func (s *Service) emulatorsPrepareProfile(emulatorID string) (models.EmulatorAct
 	return emulatorActionResult("prepareProfile", status), nil
 }
 
+// writeLocalAWSProfile upserts the LocalStack-targeted profile into the user's
+// real AWS config and credentials files (dual-write alongside EnsureManagedProfile
+// under LocalConfigDir) so discovery and Connect can open it. Other sections are
+// preserved.
 func (s *Service) writeLocalAWSProfile() error {
 	if strings.TrimSpace(s.settings.AWSConfigPath) == "" || strings.TrimSpace(s.settings.AWSCredentialsPath) == "" {
 		return errors.New("AWS config paths are not configured")
@@ -117,9 +121,9 @@ func (s *Service) writeLocalAWSProfile() error {
 }
 
 // writeLocalAzureSubscription upserts a floci-az-targeted subscription into the
-// user's real Azure profile so it is discovered and can be opened. Existing
-// subscriptions are preserved.
-
+// user's real Azure profile (dual-write alongside EnsureManagedConfig under
+// LocalConfigDir) so it is discovered and can be opened. Existing subscriptions
+// are preserved.
 func (s *Service) writeLocalAzureSubscription() error {
 	path := s.settings.AzureProfilePath()
 	if strings.TrimSpace(path) == "" {

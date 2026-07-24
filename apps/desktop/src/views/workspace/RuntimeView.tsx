@@ -404,10 +404,11 @@ export default function RuntimeView({
 
       <section className={sectionCard}>
         <div>
-          <h2 className="text-base font-bold">Local Config Artifacts</h2>
+          <h2 className="text-base font-bold">Local Config Artefacts</h2>
           <p className="text-sm text-muted-foreground">
-            App-managed local configuration artefacts are isolated from the user's default
-            cloud configuration.
+            Paths below live under CloudSprocket&apos;s local config root. Preparing a
+            profile also upserts a named entry into your default AWS config/credentials or
+            Azure CLI profile so Connect can discover it; existing CLI entries are preserved.
           </p>
         </div>
         {workspace.localConfigArtifacts.length === 0 ? (
