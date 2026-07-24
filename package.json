@@ -19,10 +19,13 @@
     "test": "pnpm run test:desktop && pnpm run test:backend",
     "test:desktop": "pnpm --dir apps/desktop test",
     "test:desktop:coverage": "pnpm --dir apps/desktop test:coverage",
-    "typecheck:desktop": "pnpm --dir apps/desktop exec tsc --noEmit",
+    "typecheck:desktop": "pnpm --dir apps/desktop run typecheck",
     "test:backend": "go -C backend/daemon test ./...",
     "test:backend:coverage": "go -C backend/daemon test -coverprofile coverage.out ./...",
     "test:backend:race": "go -C backend/daemon test -race ./internal/app/...",
-    "prepare:sidecar": "pnpm --dir apps/desktop build:sidecar"
+    "prepare:sidecar": "pnpm --dir apps/desktop build:sidecar",
+    "lint:desktop": "pnpm --dir apps/desktop lint",
+    "lint:backend": "node ./scripts/run-golangci.mjs",
+    "lint": "pnpm run lint:desktop && pnpm run lint:backend"
   }
 }
