@@ -17,6 +17,10 @@ Installers for every release are published on the
   confirmation (architecture F-011). The UI unlocks after confirm, then selects.
   Refusal returns PublicError stable code `session_locked` with SafeMessage
   unlock guidance instead of a plain error that became generic `internal_error`.
+- Desktop Vitest no longer ignores coverage thresholds and reporters: removed
+  shadowing `apps/desktop/vitest.config.ts` so test + coverage settings live
+  only in `vite.config.ts`. CI `test:desktop:coverage` now enforces the gate
+  and emits `lcov.info` plus `coverage-summary.json` (architecture F-027).
 - Daemon app Docker host fallback uses `dockerruntime.ResolveDockerHost` instead
   of the foundation-era `detectDockerHost`, so Windows diagnostics report the
   default named pipe (`npipe:////./pipe/docker_engine`) instead of an empty host
