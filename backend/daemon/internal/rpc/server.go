@@ -11,8 +11,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	"cloudsprocket/backend/daemon/internal/rpcapi"
 )
@@ -83,22 +85,11 @@ func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 	s.writer = bufio.NewWriter(out)
 	s.mu.Unlock()
 
-	// Bridge stdin through a pipe so context cancel can close the read side and
-	// unblock the line reader. Stdin EOF still ends the copy and shuts down
-	// cleanly (Tauri sidecar path). On cancel, Serve waits for the reader
-	// helper to exit before returning.
-	pr, pw := io.Pipe()
-	copyDone := make(chan struct{})
-	go func() {
-		defer close(copyDone)
-		_, copyErr := io.Copy(pw, in)
-		_ = pw.CloseWithError(copyErr)
-	}()
-	go func() {
-		<-ctx.Done()
-		_ = pr.CloseWithError(ctx.Err())
-		_ = pw.CloseWithError(ctx.Err())
-	}()
+	// When in is an *os.File (stdin or an os.Pipe), cancel unblocks the reader
+	// via SetReadDeadline so Serve can join the helper before return. Stdin EOF
+	// remains the normal Tauri sidecar shutdown path.
+	clearDeadline := armReadCancel(ctx, in)
+	defer clearDeadline()
 
 	type readOutcome struct {
 		line     []byte
@@ -109,7 +100,7 @@ func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 	readerDone := make(chan struct{})
 	go func() {
 		defer close(readerDone)
-		reader := bufio.NewReaderSize(pr, 64*1024)
+		reader := bufio.NewReaderSize(in, 64*1024)
 		for {
 			line, tooLarge, err := readRequestLine(reader)
 			select {
@@ -145,12 +136,8 @@ loop:
 				break loop
 			}
 			if outcome.err != nil {
-				// Pipe closed on context cancel surfaces as ctx.Err().
-				if errors.Is(outcome.err, context.Canceled) || errors.Is(outcome.err, context.DeadlineExceeded) {
-					serveErr = outcome.err
-					break loop
-				}
-				if ctx.Err() != nil && errors.Is(outcome.err, io.ErrClosedPipe) {
+				if ctx.Err() != nil {
+					// Deadline/cancel unblocked the read; prefer the serve context error.
 					serveErr = ctx.Err()
 					break loop
 				}
@@ -160,17 +147,45 @@ loop:
 		}
 	}
 
-	_ = pr.Close()
-	_ = pw.Close()
-	<-readerDone
-	// copyDone may still wait on a blocked stdin read until the process exits
-	// or the caller closes the original reader (Tauri closes the pipe).
+	// Prefer to join the reader after deadline unblocks it. Cap the wait so a
+	// non-file reader that cannot be interrupted cannot hang process exit;
+	// process termination still reaps any leftover helper.
+	select {
+	case <-readerDone:
+	case <-time.After(250 * time.Millisecond):
+	}
 
 	s.wg.Wait()
 	s.mu.Lock()
 	s.writer = nil
 	s.mu.Unlock()
 	return serveErr
+}
+
+// armReadCancel sets a past read deadline on *os.File when ctx is cancelled so
+// a blocked Read returns and the serve reader helper can exit. No-op for other
+// readers (those rely on EOF or process exit).
+func armReadCancel(ctx context.Context, in io.Reader) (clear func()) {
+	file, ok := in.(*os.File)
+	if !ok {
+		return func() {}
+	}
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = file.SetReadDeadline(time.Now())
+		case <-done:
+		}
+	}()
+	return func() {
+		select {
+		case <-done:
+		default:
+			close(done)
+		}
+		_ = file.SetReadDeadline(time.Time{})
+	}
 }
 
 func (s *Server) dispatch(ctx context.Context, data []byte) error {
