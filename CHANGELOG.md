@@ -11,6 +11,11 @@ Installers for every release are published on the
 
 ### Changed
 
+- Desktop runtime actions collapse LocalStack and floci-az start/stop/recreate
+  pipelines into one `invokeEmulatorAction(emulatorId, action, options?)` plus
+  a shared status poller (recreate 95s vs default 22s timeouts preserved;
+  LocalStack auth token remains options-only). Public wrappers keep App and
+  Runtime View call sites stable (architecture F-018 R4).
 - Local Runtime virtualisation poll requests engine and emulator status only
   (`runtime.get`). Emulator log tails load once when opening the tab, on
   Refresh Logs, and after start/stop/recreate actions, so idle polling no
