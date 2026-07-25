@@ -3,7 +3,6 @@
 
 import { useCallback } from "react";
 
-import type { NavigationLocation } from "@/lib/navigation-location";
 import {
   type NavigateToResourceParams,
   planNavigateToResource,
@@ -11,18 +10,17 @@ import {
 import { mergeAwsS3Selection, normaliseWorkspaceSnapshot } from "@/lib/workspace-snapshot";
 import type { AwsActions } from "@/components/workspace/aws-actions-context";
 import type { AzureActions } from "@/components/workspace/azure-actions-context";
+import type { WorkspaceNavigationContextValue } from "@/components/workspace/workspace-navigation-context";
 import type { WorkspaceTabRouterProps } from "@/components/workspace/workspace-tab-router-props";
 
 type NavigateToResourceDeps = Pick<
-  WorkspaceTabRouterProps,
+  WorkspaceNavigationContextValue,
   | "setActiveWorkspaceTabId"
-  | "setActiveS3PageId"
   | "setActiveAzurePageId"
-  | "setActiveAzureStoragePageId"
   | "setLambdaCreateFormOpen"
-  | "mutateWorkspaceSelection"
-  | "setWorkspace"
+  | "recordLocation"
 > &
+  Pick<WorkspaceTabRouterProps, "mutateWorkspaceSelection" | "setWorkspace"> &
   Pick<
     AwsActions,
     | "selectLambdaFunction"
@@ -39,10 +37,7 @@ type NavigateToResourceDeps = Pick<
     AzureActions,
     | "selectAzureResourceGroup"
     | "selectAzureVirtualMachine"
-  > & {
-  /** Optional history/recents recorder (shell navigation controller). */
-  recordLocation?: (location: NavigationLocation) => void;
-};
+  >;
 
 type SelectionHandler = (
   deps: NavigateToResourceDeps,

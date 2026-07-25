@@ -11,6 +11,11 @@ Installers for every release are published on the
 
 ### Changed
 
+- Desktop workspace navigation, Azure overview selection, deep-link refs, Lambda
+  create-form state, and Azure cross-view prefill state are provided via
+  `WorkspaceNavigationProvider`. This removes twelve live fields and four
+  unused legacy page-state fields from `WorkspaceTabRouterProps` (architecture
+  F-028 slice 3).
 - Desktop Azure inventory and selection callbacks are provided via
   `AzureActionsProvider` instead of the workspace tab router prop bag, removing
   seven more fields from `WorkspaceTabRouterProps` (architecture F-028 slice 2).

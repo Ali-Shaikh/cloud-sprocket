@@ -43,6 +43,7 @@ import type {
   WorkspaceSnapshot,
 } from "@/types/backend";
 import { useAzureActionsContext } from "./azure-actions-context";
+import { useWorkspaceNavigationContext } from "./workspace-navigation-context";
 import type { AzureWorkspaceTabsProps } from "./workspace-tab-router-props";
 
 const AZURE_TAB_IDS = new Set([
@@ -67,6 +68,13 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
   const {
     activeWorkspaceTabId,
     setActiveWorkspaceTabId,
+    activeAzurePageId,
+    logAnalyticsPrefill,
+    setLogAnalyticsPrefill,
+    frontDoorAccessPrefill,
+    setFrontDoorAccessPrefill,
+  } = useWorkspaceNavigationContext();
+  const {
     session,
     activeWorkspace,
     workspace,
@@ -79,7 +87,6 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
     logs,
     showSensitiveValues,
     setShowSensitiveValues,
-    activeAzurePageId,
     s3UploadStatus,
     setS3UploadStatus,
     s3SignedUrlStatus,
@@ -95,8 +102,6 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
     lambdaInvokeResult,
     lambdaInvokeInFlight,
     lambdaCreateInFlight,
-    lambdaCreateFormOpen,
-    setLambdaCreateFormOpen,
     dynamodbActionStatus,
     sqsActionStatus,
     sqsPeekResult,
@@ -117,10 +122,6 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
     azureLogWorkspaceSelectionLoading,
     azureWafConfigLoading,
     azureFrontDoorTopologyLoading,
-    logAnalyticsPrefill,
-    setLogAnalyticsPrefill,
-    frontDoorAccessPrefill,
-    setFrontDoorAccessPrefill,
     localStackAuthToken,
     setLocalStackAuthToken,
     localStackPersistence,

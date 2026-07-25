@@ -21,6 +21,7 @@ import { AwsWorkspaceTabs, AWS_TAB_IDS } from "./aws-workspace-tabs";
 import { AzureWorkspaceTabs } from "./azure-workspace-tabs";
 import { useAwsActionsContext } from "./aws-actions-context";
 import { useAzureActionsContext } from "./azure-actions-context";
+import { useWorkspaceNavigationContext } from "./workspace-navigation-context";
 import type { WorkspaceTabRouterProps } from "./workspace-tab-router-props";
 
 export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
@@ -29,6 +30,12 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
   const {
     activeWorkspaceTabId,
     setActiveWorkspaceTabId,
+    setActiveAzurePageId,
+    setLambdaCreateFormOpen,
+    recordLocation,
+    navigateToResourceRef,
+  } = useWorkspaceNavigationContext();
+  const {
     session,
     activeWorkspace,
     workspace,
@@ -41,12 +48,6 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     logs,
     showSensitiveValues,
     setShowSensitiveValues,
-    activeS3PageId,
-    setActiveS3PageId,
-    activeAzurePageId,
-    setActiveAzurePageId,
-    activeAzureStoragePageId,
-    setActiveAzureStoragePageId,
     s3UploadStatus,
     setS3UploadStatus,
     s3SignedUrlStatus,
@@ -62,8 +63,6 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     lambdaInvokeResult,
     lambdaInvokeInFlight,
     lambdaCreateInFlight,
-    lambdaCreateFormOpen,
-    setLambdaCreateFormOpen,
     dynamodbActionStatus,
     sqsActionStatus,
     sqsPeekResult,
@@ -93,10 +92,6 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     azureLogWorkspaceSelectionLoading,
     azureWafConfigLoading,
     azureFrontDoorTopologyLoading,
-    logAnalyticsPrefill,
-    setLogAnalyticsPrefill,
-    frontDoorAccessPrefill,
-    setFrontDoorAccessPrefill,
     localStackAuthToken,
     setLocalStackAuthToken,
     localStackPersistence,
@@ -146,9 +141,7 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
 
   const navigateToResource = useNavigateToResource({
     setActiveWorkspaceTabId,
-    setActiveS3PageId,
     setActiveAzurePageId,
-    setActiveAzureStoragePageId,
     setLambdaCreateFormOpen,
     mutateWorkspaceSelection,
     setWorkspace,
@@ -163,15 +156,15 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     selectEC2Instance,
     selectAzureResourceGroup,
     selectAzureVirtualMachine,
-    recordLocation: props.recordLocation,
+    recordLocation,
   });
 
   // Expose deep-link navigation to the shell (palette resource search, history).
   useEffect(() => {
-    if (props.navigateToResourceRef) {
-      props.navigateToResourceRef.current = navigateToResource;
+    if (navigateToResourceRef) {
+      navigateToResourceRef.current = navigateToResource;
     }
-  }, [navigateToResource, props.navigateToResourceRef]);
+  }, [navigateToResource, navigateToResourceRef]);
 
   if (activeWorkspaceTabId === "debug") {
     return <DebugView />;
