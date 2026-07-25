@@ -1,27 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import type { WorkspaceSnapshot } from "@/types/backend";
-
-export type AwsInventoryScope =
-  | "s3"
-  | "ec2"
-  | "lambda"
-  | "dynamodb"
-  | "sqs"
-  | "sns"
-  | "rds"
-  | "ecs"
-  | "eks"
-  | "cloudformation"
-  | "eventbridge"
-  | "route53"
-  | "elb"
-  | "kms"
-  | "apigateway"
-  | "secrets"
-  | "logs"
-  | "iam";
+import type { AwsInventoryScope, WorkspaceSnapshot } from "@/types/backend";
 
 const TAB_SCOPE_MAP: Record<string, AwsInventoryScope | undefined> = {
   s3: "s3",

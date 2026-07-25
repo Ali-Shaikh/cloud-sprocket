@@ -15,6 +15,8 @@ import type {
   ActivityLogEntry,
   AppSettingsSnapshot,
   AuthMethod,
+  AwsInventoryScope,
+  AwsInventorySlice,
   Deployment,
   DeploymentJob,
   DeploymentLogEvent,
@@ -41,6 +43,7 @@ import type {
   AwsLambdaInvokeResult,
   DriftReport,
 } from "../types/backend";
+import { awsInventoryScopeForTab } from "./aws-inventory";
 import {
   isProviderEnabled,
   isServiceEnabled,
@@ -2087,6 +2090,241 @@ function buildMockWorkspace(): WorkspaceSnapshot {
   };
 }
 
+function buildMockAwsInventorySlice(scope: AwsInventoryScope): AwsInventorySlice {
+  const workspace = buildMockWorkspace();
+  switch (scope) {
+    case "s3":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedS3BucketName: workspace.selectedS3BucketName,
+          selectedS3ObjectKey: workspace.selectedS3ObjectKey,
+          s3PrefixFilter: workspace.s3PrefixFilter,
+          s3StatusMessage: workspace.s3StatusMessage,
+          s3Buckets: workspace.s3Buckets,
+          s3Objects: workspace.s3Objects,
+          s3ObjectsNextToken: workspace.s3ObjectsNextToken,
+          s3ObjectsHasMore: workspace.s3ObjectsHasMore,
+          s3ObjectMetadata: workspace.s3ObjectMetadata,
+          s3ExportSnippets: workspace.s3ExportSnippets,
+        },
+      };
+    case "ec2":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedEc2Region: workspace.selectedEc2Region,
+          selectedEc2InstanceId: workspace.selectedEc2InstanceId,
+          ec2StatusMessage: workspace.ec2StatusMessage,
+          ec2Regions: workspace.ec2Regions,
+          ec2Instances: workspace.ec2Instances,
+        },
+      };
+    case "lambda":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedLambdaRegion: workspace.selectedLambdaRegion,
+          selectedLambdaFunctionName: workspace.selectedLambdaFunctionName,
+          lambdaStatusMessage: workspace.lambdaStatusMessage,
+          lambdaRegions: workspace.lambdaRegions,
+          lambdaFunctions: workspace.lambdaFunctions,
+        },
+      };
+    case "dynamodb":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedDynamodbRegion: workspace.selectedDynamodbRegion,
+          selectedDynamodbTableName: workspace.selectedDynamodbTableName,
+          dynamodbStatusMessage: workspace.dynamodbStatusMessage,
+          dynamodbRegions: workspace.dynamodbRegions,
+          dynamodbTables: workspace.dynamodbTables,
+        },
+      };
+    case "sqs":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedSqsRegion: workspace.selectedSqsRegion,
+          selectedSqsQueueUrl: workspace.selectedSqsQueueUrl,
+          sqsStatusMessage: workspace.sqsStatusMessage,
+          sqsRegions: workspace.sqsRegions,
+          sqsQueues: workspace.sqsQueues,
+        },
+      };
+    case "sns":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedSnsRegion: workspace.selectedSnsRegion,
+          selectedSnsTopicArn: workspace.selectedSnsTopicArn,
+          snsStatusMessage: workspace.snsStatusMessage,
+          snsRegions: workspace.snsRegions,
+          snsTopics: workspace.snsTopics,
+        },
+      };
+    case "rds":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedRdsRegion: workspace.selectedRdsRegion,
+          selectedRdsInstanceId: workspace.selectedRdsInstanceId,
+          rdsStatusMessage: workspace.rdsStatusMessage,
+          rdsRegions: workspace.rdsRegions,
+          rdsInstances: workspace.rdsInstances,
+        },
+      };
+    case "ecs":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedEcsRegion: workspace.selectedEcsRegion,
+          selectedEcsClusterArn: workspace.selectedEcsClusterArn,
+          selectedEcsServiceArn: workspace.selectedEcsServiceArn,
+          selectedEcsTaskArn: workspace.selectedEcsTaskArn,
+          ecsStatusMessage: workspace.ecsStatusMessage,
+          ecsRegions: workspace.ecsRegions,
+          ecsClusters: workspace.ecsClusters,
+          ecsServices: workspace.ecsServices,
+          ecsTasks: workspace.ecsTasks,
+        },
+      };
+    case "eks":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedEksRegion: workspace.selectedEksRegion,
+          selectedEksClusterName: workspace.selectedEksClusterName,
+          eksStatusMessage: workspace.eksStatusMessage,
+          eksRegions: workspace.eksRegions,
+          eksClusters: workspace.eksClusters,
+          eksNodeGroups: workspace.eksNodeGroups,
+        },
+      };
+    case "cloudformation":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedCloudFormationRegion: workspace.selectedCloudFormationRegion,
+          selectedCloudFormationStackName: workspace.selectedCloudFormationStackName,
+          cloudFormationStatusMessage: workspace.cloudFormationStatusMessage,
+          cloudFormationRegions: workspace.cloudFormationRegions,
+          cloudFormationStacks: workspace.cloudFormationStacks,
+          cloudFormationStackEvents: workspace.cloudFormationStackEvents,
+        },
+      };
+    case "eventbridge":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedEventBridgeRegion: workspace.selectedEventBridgeRegion,
+          selectedEventBridgeBusName: workspace.selectedEventBridgeBusName,
+          eventBridgeStatusMessage: workspace.eventBridgeStatusMessage,
+          eventBridgeRegions: workspace.eventBridgeRegions,
+          eventBridgeBuses: workspace.eventBridgeBuses,
+          eventBridgeRules: workspace.eventBridgeRules,
+        },
+      };
+    case "route53":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedRoute53HostedZoneId: workspace.selectedRoute53HostedZoneId,
+          route53StatusMessage: workspace.route53StatusMessage,
+          route53HostedZones: workspace.route53HostedZones,
+          route53ResourceRecordSets: workspace.route53ResourceRecordSets,
+        },
+      };
+    case "elb":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedElbRegion: workspace.selectedElbRegion,
+          selectedElbLoadBalancerArn: workspace.selectedElbLoadBalancerArn,
+          elbStatusMessage: workspace.elbStatusMessage,
+          elbRegions: workspace.elbRegions,
+          elbLoadBalancers: workspace.elbLoadBalancers,
+          elbTargetGroups: workspace.elbTargetGroups,
+        },
+      };
+    case "kms":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedKmsRegion: workspace.selectedKmsRegion,
+          selectedKmsKeyId: workspace.selectedKmsKeyId,
+          kmsStatusMessage: workspace.kmsStatusMessage,
+          kmsRegions: workspace.kmsRegions,
+          kmsKeys: workspace.kmsKeys,
+          kmsAliases: workspace.kmsAliases,
+        },
+      };
+    case "apigateway":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedApiGatewayRegion: workspace.selectedApiGatewayRegion,
+          selectedApiGatewayApiKey: workspace.selectedApiGatewayApiKey,
+          apiGatewayStatusMessage: workspace.apiGatewayStatusMessage,
+          apiGatewayRegions: workspace.apiGatewayRegions,
+          apiGatewayApis: workspace.apiGatewayApis,
+          apiGatewayStages: workspace.apiGatewayStages,
+        },
+      };
+    case "secrets":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedSecretsManagerRegion: workspace.selectedSecretsManagerRegion,
+          selectedSecretsManagerName: workspace.selectedSecretsManagerName,
+          secretsManagerStatusMessage: workspace.secretsManagerStatusMessage,
+          secretsManagerRegions: workspace.secretsManagerRegions,
+          secretsManagerSecrets: workspace.secretsManagerSecrets,
+        },
+      };
+    case "logs":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedLogsRegion: workspace.selectedLogsRegion,
+          selectedLogGroupName: workspace.selectedLogGroupName,
+          logsStatusMessage: workspace.logsStatusMessage,
+          logsRegions: workspace.logsRegions,
+          logGroups: workspace.logGroups,
+        },
+      };
+    case "iam":
+      return {
+        providerId: "aws",
+        scope,
+        payload: {
+          selectedIamRoleName: workspace.selectedIamRoleName,
+          iamStatusMessage: workspace.iamStatusMessage,
+          iamRoles: workspace.iamRoles,
+          iamPolicies: workspace.iamPolicies,
+        },
+      };
+  }
+}
+
 export function handleMockRequest<T>(
   method: string,
   params: Record<string, unknown>,
@@ -2106,9 +2344,15 @@ export function handleMockRequest<T>(
     case "workspace.get":
       rebuildSessionDerivedState();
       return Promise.resolve(buildMockWorkspace() as T);
-    case "aws.inventory.get":
+    case "aws.inventory.get": {
       rebuildSessionDerivedState();
-      return Promise.resolve(buildMockWorkspace() as T);
+      const requestedScope = String(params.scope ?? "").trim().toLowerCase();
+      const scope = awsInventoryScopeForTab(requestedScope);
+      if (!scope) {
+        return Promise.reject(new Error(`unknown AWS inventory scope ${requestedScope}`));
+      }
+      return Promise.resolve(buildMockAwsInventorySlice(scope) as T);
+    }
     case "azure.inventory.get":
       rebuildSessionDerivedState();
       return Promise.resolve(buildMockWorkspace() as T);

@@ -41,7 +41,11 @@ import {
 import { WorkspaceTabRouter } from "./components/workspace/workspace-tab-router";
 import type { WorkspaceTabRouterProps } from "./components/workspace/workspace-tab-router-props";
 import { backendRequest, subscribeToBackendEvent, addDebugLog } from "./lib/backend";
-import { normaliseWorkspaceFromUnknown, requestWorkspaceSnapshot } from "./lib/workspace-request";
+import {
+  normaliseWorkspaceFromUnknown,
+  requestAwsInventorySlice,
+  requestWorkspaceSnapshot,
+} from "./lib/workspace-request";
 
 import { awsInventoryLoaded, awsInventoryScopeForTab } from "./lib/aws-inventory";
 import { azureInventoryLoaded, azureInventoryScopeForTab } from "./lib/azure-inventory";
@@ -895,11 +899,11 @@ export default function App() {
     }
     awsInventoryFetchedScopesRef.current.add(scope);
     beginAwsInventoryFetch();
-    void requestWorkspaceSnapshot("aws.inventory.get", { scope })
-      .then((workspaceResult) => {
+    void requestAwsInventorySlice(scope)
+      .then((inventorySlice) => {
         startTransition(() => {
           setWorkspace((current) =>
-            mergeAwsInventoryScope(current, workspaceResult, scope),
+            mergeAwsInventoryScope(current, inventorySlice),
           );
         });
       })

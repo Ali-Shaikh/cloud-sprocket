@@ -3,6 +3,8 @@
 
 import { describe, expect, it } from "vitest";
 
+import type { AwsInventorySlice } from "@/types/backend";
+
 import {
   emptyWorkspace,
   formatBackendError,
@@ -23,23 +25,74 @@ describe("normaliseWorkspaceSnapshot", () => {
 });
 
 describe("mergeAwsInventoryScope", () => {
-  it("merges only the requested S3 scope fields", () => {
+  it("merges only the requested S3 payload and preserves unrelated workspace state", () => {
     const current = normaliseWorkspaceSnapshot({
+      awsWritesEnabled: true,
+      selectedAzureStorageAccount: "keep-store",
+      azureStorageAccounts: [
+        {
+          name: "keep-store",
+          kind: "StorageV2",
+          location: "uaenorth",
+          blobEndpoint: "https://keep-store.blob.core.windows.net/",
+        },
+      ],
+      selectedEc2Region: "us-east-1",
       ec2Instances: [{ instanceId: "i-keep", state: "running" }],
       s3Buckets: [{ name: "old-bucket" }],
     });
-    const incoming = normaliseWorkspaceSnapshot({
-      s3Buckets: [{ name: "new-bucket" }],
-      selectedS3BucketName: "new-bucket",
-      ec2Instances: [{ instanceId: "i-drop", state: "stopped" }],
-    });
+    const incoming: AwsInventorySlice<"s3"> = {
+      providerId: "aws",
+      scope: "s3",
+      payload: {
+        selectedS3BucketName: "new-bucket",
+        s3Buckets: [{ name: "new-bucket" }],
+        s3Objects: [],
+        s3ObjectMetadata: [],
+        s3ExportSnippets: [],
+      },
+    };
 
-    const merged = mergeAwsInventoryScope(current, incoming, "s3");
+    const merged = mergeAwsInventoryScope(current, incoming);
 
     expect(merged.s3Buckets).toEqual([{ name: "new-bucket" }]);
     expect(merged.selectedS3BucketName).toBe("new-bucket");
     expect(merged.ec2Instances[0]?.instanceId).toBe("i-keep");
     expect(merged.ec2Instances[0]?.state).toBe("running");
+    expect(merged.selectedEc2Region).toBe("us-east-1");
+    expect(merged.azureStorageAccounts[0]?.name).toBe("keep-store");
+    expect(merged.selectedAzureStorageAccount).toBe("keep-store");
+    expect(merged.awsWritesEnabled).toBe(true);
+  });
+
+  it("treats empty requested-scope lists as authoritative without clearing other scopes", () => {
+    const current = normaliseWorkspaceSnapshot({
+      selectedLambdaRegion: "us-east-1",
+      selectedLambdaFunctionName: "stale-function",
+      lambdaRegions: ["us-east-1"],
+      lambdaFunctions: [{ functionName: "stale-function" }],
+      lambdaStatusMessage: "Loaded stale inventory.",
+      ec2Regions: ["eu-west-2"],
+      ec2Instances: [{ instanceId: "i-keep", state: "running" }],
+    });
+
+    const merged = mergeAwsInventoryScope(current, {
+      providerId: "aws",
+      scope: "lambda",
+      payload: {
+        lambdaRegions: [],
+        lambdaFunctions: [],
+        lambdaStatusMessage: "No Lambda functions found.",
+      },
+    });
+
+    expect(merged.selectedLambdaRegion).toBeUndefined();
+    expect(merged.selectedLambdaFunctionName).toBeUndefined();
+    expect(merged.lambdaRegions).toEqual([]);
+    expect(merged.lambdaFunctions).toEqual([]);
+    expect(merged.lambdaStatusMessage).toBe("No Lambda functions found.");
+    expect(merged.ec2Regions).toEqual(["eu-west-2"]);
+    expect(merged.ec2Instances[0]?.instanceId).toBe("i-keep");
   });
 });
 
