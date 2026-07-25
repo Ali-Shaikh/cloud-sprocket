@@ -11,6 +11,9 @@ Installers for every release are published on the
 
 ### Changed
 
+- `aws.inventory.get` now returns a typed, service-scoped inventory slice
+  instead of serialising the full workspace snapshot. Desktop callers validate
+  and merge the slice so unrelated AWS service state is preserved.
 - Desktop session, workspace snapshot, and provider/profile selection state are
   provided via `WorkspaceSessionProvider`, removing nine more fields from
   `WorkspaceTabRouterProps` (architecture F-028 slice 4).

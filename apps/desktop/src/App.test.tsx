@@ -222,26 +222,32 @@ vi.mock("./lib/backend", () => ({
       case "workspace.get":
         return workspaceFixture;
       case "aws.inventory.get":
+        if (params?.scope !== "lambda") {
+          throw new Error(`unexpected AWS inventory test scope ${String(params?.scope)}`);
+        }
         return {
-          ...workspaceFixture,
-          selectedLambdaRegion: "us-east-1",
-          selectedLambdaFunctionName: "process-order",
-          lambdaRegions: ["us-east-1", "eu-west-2"],
-          lambdaFunctions: [
-            {
-              functionName: "process-order",
-              runtime: "nodejs20.x",
-              memorySize: 512,
-              lastModified: "2026-06-10T12:00:00Z",
-              description: "Handles order processing from SQS",
-              state: "Active",
-              handler: "index.handler",
-              timeout: 30,
-              logGroup: "/aws/lambda/process-order",
-              recentLogs: ["2026-06-15 10:05:12 START RequestId: abc123"],
-            },
-          ],
-          lambdaStatusMessage: "Loaded 1 Lambda function from us-east-1.",
+          providerId: "aws",
+          scope: "lambda",
+          payload: {
+            selectedLambdaRegion: "us-east-1",
+            selectedLambdaFunctionName: "process-order",
+            lambdaRegions: ["us-east-1", "eu-west-2"],
+            lambdaFunctions: [
+              {
+                functionName: "process-order",
+                runtime: "nodejs20.x",
+                memorySize: 512,
+                lastModified: "2026-06-10T12:00:00Z",
+                description: "Handles order processing from SQS",
+                state: "Active",
+                handler: "index.handler",
+                timeout: 30,
+                logGroup: "/aws/lambda/process-order",
+                recentLogs: ["2026-06-15 10:05:12 START RequestId: abc123"],
+              },
+            ],
+            lambdaStatusMessage: "Loaded 1 Lambda function from us-east-1.",
+          },
         };
       case "azure.inventory.get":
         return {
@@ -2483,6 +2489,12 @@ describe("App", () => {
       expect(inventoryCalls.length).toBeGreaterThan(0);
       expect(inventoryCalls.at(-1)?.[1]).toEqual({ scope: "lambda" });
     });
+    expect((await screen.findAllByText("process-order")).length).toBeGreaterThan(0);
+
+    await act(async () => {
+      fireEvent.click(awsNav.getByRole("button", { name: /^S3/ }));
+    });
+    expect((await screen.findAllByText("cloudsprocket-artifacts")).length).toBeGreaterThan(0);
   }, 15000);
 
   it("reloads Azure scoped inventory after Refresh Discovery completes", async () => {

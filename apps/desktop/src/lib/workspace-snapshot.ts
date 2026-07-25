@@ -6,6 +6,7 @@ import type {
   AppSettingsSnapshot,
   AwsDynamoDBTable,
   AwsEc2Instance,
+  AwsInventorySlice,
   AwsApiGatewayApi,
   AwsApiGatewayStage,
   AwsSecretsManagerSecret,
@@ -879,13 +880,12 @@ export function mergeAwsS3LoadMore(
 
 export function mergeAwsInventoryScope(
   current: WorkspaceSnapshot,
-  incoming: WorkspaceSnapshot,
-  scope: string,
+  incoming: AwsInventorySlice,
 ): WorkspaceSnapshot {
-  const normalised = normaliseWorkspaceSnapshot(incoming);
-  switch (scope) {
+  const normalised = normaliseWorkspaceSnapshot(incoming.payload);
+  switch (incoming.scope) {
     case "s3":
-      return mergeAwsS3Selection(current, incoming);
+      return mergeAwsS3Selection(current, normalised);
     case "ec2":
       return normaliseWorkspaceSnapshot({
         ...current,

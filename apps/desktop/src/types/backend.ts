@@ -1219,6 +1219,179 @@ export interface WorkspaceSnapshot {
   iamPolicies: AwsIamPolicy[];
 }
 
+/**
+ * The AWS inventory RPC returns only the authoritative fields for its requested
+ * scope. Required list fields deliberately stay required so an empty list can
+ * clear stale inventory in the desktop store.
+ */
+export interface AwsInventoryPayloadByScope {
+  s3: Pick<
+    WorkspaceSnapshot,
+    | "selectedS3BucketName"
+    | "selectedS3ObjectKey"
+    | "s3PrefixFilter"
+    | "s3StatusMessage"
+    | "s3Buckets"
+    | "s3Objects"
+    | "s3ObjectsNextToken"
+    | "s3ObjectsHasMore"
+    | "s3ObjectMetadata"
+    | "s3ExportSnippets"
+  >;
+  ec2: Pick<
+    WorkspaceSnapshot,
+    | "selectedEc2Region"
+    | "selectedEc2InstanceId"
+    | "ec2StatusMessage"
+    | "ec2Regions"
+    | "ec2Instances"
+  >;
+  lambda: Pick<
+    WorkspaceSnapshot,
+    | "selectedLambdaRegion"
+    | "selectedLambdaFunctionName"
+    | "lambdaStatusMessage"
+    | "lambdaRegions"
+    | "lambdaFunctions"
+  >;
+  dynamodb: Pick<
+    WorkspaceSnapshot,
+    | "selectedDynamodbRegion"
+    | "selectedDynamodbTableName"
+    | "dynamodbStatusMessage"
+    | "dynamodbRegions"
+    | "dynamodbTables"
+  >;
+  sqs: Pick<
+    WorkspaceSnapshot,
+    | "selectedSqsRegion"
+    | "selectedSqsQueueUrl"
+    | "sqsStatusMessage"
+    | "sqsRegions"
+    | "sqsQueues"
+  >;
+  sns: Pick<
+    WorkspaceSnapshot,
+    | "selectedSnsRegion"
+    | "selectedSnsTopicArn"
+    | "snsStatusMessage"
+    | "snsRegions"
+    | "snsTopics"
+  >;
+  rds: Pick<
+    WorkspaceSnapshot,
+    | "selectedRdsRegion"
+    | "selectedRdsInstanceId"
+    | "rdsStatusMessage"
+    | "rdsRegions"
+    | "rdsInstances"
+  >;
+  ecs: Pick<
+    WorkspaceSnapshot,
+    | "selectedEcsRegion"
+    | "selectedEcsClusterArn"
+    | "selectedEcsServiceArn"
+    | "selectedEcsTaskArn"
+    | "ecsStatusMessage"
+    | "ecsRegions"
+    | "ecsClusters"
+    | "ecsServices"
+    | "ecsTasks"
+  >;
+  eks: Pick<
+    WorkspaceSnapshot,
+    | "selectedEksRegion"
+    | "selectedEksClusterName"
+    | "eksStatusMessage"
+    | "eksRegions"
+    | "eksClusters"
+    | "eksNodeGroups"
+  >;
+  cloudformation: Pick<
+    WorkspaceSnapshot,
+    | "selectedCloudFormationRegion"
+    | "selectedCloudFormationStackName"
+    | "cloudFormationStatusMessage"
+    | "cloudFormationRegions"
+    | "cloudFormationStacks"
+    | "cloudFormationStackEvents"
+  >;
+  eventbridge: Pick<
+    WorkspaceSnapshot,
+    | "selectedEventBridgeRegion"
+    | "selectedEventBridgeBusName"
+    | "eventBridgeStatusMessage"
+    | "eventBridgeRegions"
+    | "eventBridgeBuses"
+    | "eventBridgeRules"
+  >;
+  route53: Pick<
+    WorkspaceSnapshot,
+    | "selectedRoute53HostedZoneId"
+    | "route53StatusMessage"
+    | "route53HostedZones"
+    | "route53ResourceRecordSets"
+  >;
+  elb: Pick<
+    WorkspaceSnapshot,
+    | "selectedElbRegion"
+    | "selectedElbLoadBalancerArn"
+    | "elbStatusMessage"
+    | "elbRegions"
+    | "elbLoadBalancers"
+    | "elbTargetGroups"
+  >;
+  kms: Pick<
+    WorkspaceSnapshot,
+    | "selectedKmsRegion"
+    | "selectedKmsKeyId"
+    | "kmsStatusMessage"
+    | "kmsRegions"
+    | "kmsKeys"
+    | "kmsAliases"
+  >;
+  apigateway: Pick<
+    WorkspaceSnapshot,
+    | "selectedApiGatewayRegion"
+    | "selectedApiGatewayApiKey"
+    | "apiGatewayStatusMessage"
+    | "apiGatewayRegions"
+    | "apiGatewayApis"
+    | "apiGatewayStages"
+  >;
+  secrets: Pick<
+    WorkspaceSnapshot,
+    | "selectedSecretsManagerRegion"
+    | "selectedSecretsManagerName"
+    | "secretsManagerStatusMessage"
+    | "secretsManagerRegions"
+    | "secretsManagerSecrets"
+  >;
+  logs: Pick<
+    WorkspaceSnapshot,
+    | "selectedLogsRegion"
+    | "selectedLogGroupName"
+    | "logsStatusMessage"
+    | "logsRegions"
+    | "logGroups"
+  >;
+  iam: Pick<
+    WorkspaceSnapshot,
+    "selectedIamRoleName" | "iamStatusMessage" | "iamRoles" | "iamPolicies"
+  >;
+}
+
+export type AwsInventoryScope = keyof AwsInventoryPayloadByScope;
+
+/** Correlates each AWS inventory scope with only that scope's payload fields. */
+export type AwsInventorySlice<S extends AwsInventoryScope = AwsInventoryScope> = {
+  [K in S]: {
+    providerId: "aws";
+    scope: K;
+    payload: AwsInventoryPayloadByScope[K];
+  };
+}[S];
+
 export interface JobStatus {
   jobId: string;
   label: string;

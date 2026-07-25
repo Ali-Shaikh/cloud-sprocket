@@ -4,7 +4,11 @@
 import { startTransition, useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 
 import { backendRequest } from "@/lib/backend";
-import { requestWorkspaceSnapshot } from "@/lib/workspace-request";
+import {
+  requestAwsInventorySlice,
+  requestWorkspaceSnapshot,
+} from "@/lib/workspace-request";
+import { mergeAwsInventoryScope } from "@/lib/workspace-snapshot";
 import type {
   AwsLambdaCreateInput,
   AwsLambdaInvokeResult,
@@ -868,13 +872,15 @@ export function useAwsActions(params: UseAwsActionsParams) {
 
   const refreshRoute53Inventory = useCallback((): void => {
     setRoute53ActionStatus("Refreshing Route 53 hosted zones.");
-    void requestWorkspaceSnapshot("aws.inventory.get", { scope: "route53" })
-      .then((workspaceResult) => {
+    void requestAwsInventorySlice("route53")
+      .then((inventorySlice) => {
         startTransition(() => {
-          setWorkspace(workspaceResult);
+          setWorkspace((current) =>
+            mergeAwsInventoryScope(current, inventorySlice),
+          );
         });
         setRoute53ActionStatus(
-          workspaceResult.route53StatusMessage || "Route 53 inventory refreshed.",
+          inventorySlice.payload.route53StatusMessage || "Route 53 inventory refreshed.",
         );
       })
       .catch((error: unknown) => {
@@ -900,13 +906,15 @@ export function useAwsActions(params: UseAwsActionsParams) {
 
   const refreshElbInventory = useCallback((): void => {
     setElbActionStatus("Refreshing load balancer inventory.");
-    void requestWorkspaceSnapshot("aws.inventory.get", { scope: "elb" })
-      .then((workspaceResult) => {
+    void requestAwsInventorySlice("elb")
+      .then((inventorySlice) => {
         startTransition(() => {
-          setWorkspace(workspaceResult);
+          setWorkspace((current) =>
+            mergeAwsInventoryScope(current, inventorySlice),
+          );
         });
         setElbActionStatus(
-          workspaceResult.elbStatusMessage || "Load balancer inventory refreshed.",
+          inventorySlice.payload.elbStatusMessage || "Load balancer inventory refreshed.",
         );
       })
       .catch((error: unknown) => {
@@ -948,13 +956,15 @@ export function useAwsActions(params: UseAwsActionsParams) {
 
   const refreshKmsInventory = useCallback((): void => {
     setKmsActionStatus("Refreshing KMS inventory.");
-    void requestWorkspaceSnapshot("aws.inventory.get", { scope: "kms" })
-      .then((workspaceResult) => {
+    void requestAwsInventorySlice("kms")
+      .then((inventorySlice) => {
         startTransition(() => {
-          setWorkspace(workspaceResult);
+          setWorkspace((current) =>
+            mergeAwsInventoryScope(current, inventorySlice),
+          );
         });
         setKmsActionStatus(
-          workspaceResult.kmsStatusMessage || "KMS inventory refreshed.",
+          inventorySlice.payload.kmsStatusMessage || "KMS inventory refreshed.",
         );
       })
       .catch((error: unknown) => {
