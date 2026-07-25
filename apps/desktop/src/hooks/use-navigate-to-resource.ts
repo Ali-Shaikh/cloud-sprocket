@@ -11,6 +11,7 @@ import { mergeAwsS3Selection, normaliseWorkspaceSnapshot } from "@/lib/workspace
 import type { AwsActions } from "@/components/workspace/aws-actions-context";
 import type { AzureActions } from "@/components/workspace/azure-actions-context";
 import type { WorkspaceNavigationContextValue } from "@/components/workspace/workspace-navigation-context";
+import type { WorkspaceSessionContextValue } from "@/components/workspace/workspace-session-context";
 import type { WorkspaceTabRouterProps } from "@/components/workspace/workspace-tab-router-props";
 
 type NavigateToResourceDeps = Pick<
@@ -20,7 +21,8 @@ type NavigateToResourceDeps = Pick<
   | "setLambdaCreateFormOpen"
   | "recordLocation"
 > &
-  Pick<WorkspaceTabRouterProps, "mutateWorkspaceSelection" | "setWorkspace"> &
+  Pick<WorkspaceSessionContextValue, "setWorkspace"> &
+  Pick<WorkspaceTabRouterProps, "mutateWorkspaceSelection"> &
   Pick<
     AwsActions,
     | "selectLambdaFunction"

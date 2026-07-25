@@ -32,6 +32,7 @@ import {
 } from "@/views/workspace/lazy-views";
 import { useAwsActionsContext } from "./aws-actions-context";
 import { useWorkspaceNavigationContext } from "./workspace-navigation-context";
+import { useWorkspaceSessionContext } from "./workspace-session-context";
 import type { AwsWorkspaceTabsProps } from "./workspace-tab-router-props";
 
 export const AWS_TAB_IDS = new Set([
@@ -68,11 +69,9 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
   const {
     session,
     activeWorkspace,
-    workspace,
-    selectedProvider,
-    selectedProfile,
-    profiles,
-    providers,
+    setWorkspace,
+  } = useWorkspaceSessionContext();
+  const {
     loading,
     openingProfileId,
     logs,
@@ -140,8 +139,6 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     flociAzLogsStatus,
     flociAzActionStatus,
     flociAzActionInFlight,
-    setWorkspace,
-    setSession,
     mutateWorkspaceSelection,
     mutateSession,
     refreshDiscovery,

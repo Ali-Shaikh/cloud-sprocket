@@ -34,6 +34,10 @@ import {
   WorkspaceNavigationProvider,
   type WorkspaceNavigationContextValue,
 } from "./components/workspace/workspace-navigation-context";
+import {
+  WorkspaceSessionProvider,
+  type WorkspaceSessionContextValue,
+} from "./components/workspace/workspace-session-context";
 import { WorkspaceTabRouter } from "./components/workspace/workspace-tab-router";
 import type { WorkspaceTabRouterProps } from "./components/workspace/workspace-tab-router-props";
 import { backendRequest, subscribeToBackendEvent, addDebugLog } from "./lib/backend";
@@ -1296,14 +1300,32 @@ export default function App() {
     ],
   );
 
+  const workspaceSession = useMemo<WorkspaceSessionContextValue>(
+    () => ({
+      session,
+      setSession,
+      workspace,
+      setWorkspace,
+      activeWorkspace,
+      providers,
+      profiles,
+      selectedProvider,
+      selectedProfile,
+    }),
+    [
+      activeWorkspace,
+      profiles,
+      providers,
+      selectedProfile,
+      selectedProvider,
+      session,
+      setSession,
+      setWorkspace,
+      workspace,
+    ],
+  );
+
   const workspaceTabRouterProps: WorkspaceTabRouterProps = {
-    session,
-    activeWorkspace,
-    workspace,
-    selectedProvider,
-    selectedProfile,
-    profiles,
-    providers,
     loading,
     openingProfileId,
     logs,
@@ -1371,8 +1393,6 @@ export default function App() {
     flociAzLogsStatus,
     flociAzActionStatus,
     flociAzActionInFlight,
-    setWorkspace,
-    setSession,
     mutateWorkspaceSelection,
     mutateSession,
     refreshDiscovery,
@@ -1395,13 +1415,15 @@ export default function App() {
   };
 
   const content = (
-    <WorkspaceNavigationProvider value={workspaceNavigation}>
-      <AwsActionsProvider value={awsActions}>
-        <AzureActionsProvider value={azureActions}>
-          <WorkspaceTabRouter {...workspaceTabRouterProps} />
-        </AzureActionsProvider>
-      </AwsActionsProvider>
-    </WorkspaceNavigationProvider>
+    <WorkspaceSessionProvider value={workspaceSession}>
+      <WorkspaceNavigationProvider value={workspaceNavigation}>
+        <AwsActionsProvider value={awsActions}>
+          <AzureActionsProvider value={azureActions}>
+            <WorkspaceTabRouter {...workspaceTabRouterProps} />
+          </AzureActionsProvider>
+        </AwsActionsProvider>
+      </WorkspaceNavigationProvider>
+    </WorkspaceSessionProvider>
   );
 
   return (

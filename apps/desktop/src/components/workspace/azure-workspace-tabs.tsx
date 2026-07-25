@@ -44,6 +44,7 @@ import type {
 } from "@/types/backend";
 import { useAzureActionsContext } from "./azure-actions-context";
 import { useWorkspaceNavigationContext } from "./workspace-navigation-context";
+import { useWorkspaceSessionContext } from "./workspace-session-context";
 import type { AzureWorkspaceTabsProps } from "./workspace-tab-router-props";
 
 const AZURE_TAB_IDS = new Set([
@@ -80,8 +81,10 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
     workspace,
     selectedProvider,
     selectedProfile,
-    profiles,
-    providers,
+    setWorkspace,
+    setSession,
+  } = useWorkspaceSessionContext();
+  const {
     loading,
     openingProfileId,
     logs,
@@ -140,8 +143,6 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
     flociAzLogsStatus,
     flociAzActionStatus,
     flociAzActionInFlight,
-    setWorkspace,
-    setSession,
     mutateWorkspaceSelection,
     mutateSession,
     refreshDiscovery,
