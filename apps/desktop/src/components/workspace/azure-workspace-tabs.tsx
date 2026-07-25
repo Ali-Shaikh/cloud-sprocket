@@ -42,6 +42,7 @@ import type {
   AzureWafLogSchemaProfile,
   WorkspaceSnapshot,
 } from "@/types/backend";
+import { useAzureActionsContext } from "./azure-actions-context";
 import type { AzureWorkspaceTabsProps } from "./workspace-tab-router-props";
 
 const AZURE_TAB_IDS = new Set([
@@ -146,13 +147,6 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
     refreshDockerRuntime,
     refreshLocalStackLogs,
     refreshFlociAzLogs,
-    selectAzureResourceGroup,
-    selectAzureVirtualMachine,
-    selectAzureWebApp,
-    selectAzureWebAppSlot,
-    selectAzureLogAnalyticsWorkspace,
-    selectAzureWafPolicy,
-    refreshAzureFrontDoorTopology,
     listLogAnalyticsHistory,
     listLogAnalyticsSaved,
     invokeLocalStackAction,
@@ -160,6 +154,16 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
     openWorkspace,
     chooseAuthMethod,
   } = props;
+
+  const {
+    selectAzureResourceGroup,
+    selectAzureVirtualMachine,
+    selectAzureWebApp,
+    selectAzureWebAppSlot,
+    selectAzureLogAnalyticsWorkspace,
+    selectAzureWafPolicy,
+    refreshAzureFrontDoorTopology,
+  } = useAzureActionsContext();
 
   if (!session.isLocked || !AZURE_TAB_IDS.has(activeWorkspaceTabId)) {
     return null;

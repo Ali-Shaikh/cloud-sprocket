@@ -7,7 +7,6 @@ import type { NavigationLocation } from "@/lib/navigation-location";
 import type { NavigateToResourceParams } from "@/lib/navigate-to-resource";
 import type {
   ActivityLogEntry,
-  AwsLambdaCreateInput,
   AwsLambdaInvokeResult,
   AwsS3PresignResult,
   AwsSqsPeekResult,
@@ -25,8 +24,6 @@ import type {
   UrlValidationResult,
   WorkspaceSnapshot,
 } from "@/types/backend";
-
-type EC2LifecycleAction = "start" | "stop" | "reboot";
 
 type MutateWorkspaceSelectionOptions = {
   merge?: (current: WorkspaceSnapshot, incoming: WorkspaceSnapshot) => WorkspaceSnapshot;
@@ -156,17 +153,6 @@ export type WorkspaceTabRouterProps = {
   refreshDockerRuntime: () => Promise<void>;
   refreshLocalStackLogs: () => Promise<void>;
   refreshFlociAzLogs: () => Promise<void>;
-  selectAzureResourceGroup: (resourceGroup: string) => Promise<void>;
-  selectAzureVirtualMachine: (vmId: string) => Promise<void>;
-  selectAzureWebApp: (appName: string) => Promise<void>;
-  selectAzureWebAppSlot: (slot: string) => Promise<void>;
-  selectAzureLogAnalyticsWorkspace: (workspaceName: string) => Promise<void>;
-  selectAzureWafPolicy: (policyName: string) => Promise<void>;
-  refreshAzureFrontDoorTopology: (
-    workspace: WorkspaceSnapshot,
-    profileId: string,
-    options?: { force?: boolean },
-  ) => Promise<void>;
   listLogAnalyticsHistory: (workspace: string) => Promise<AzureLogAnalyticsHistoryEntry[]>;
   listLogAnalyticsSaved: (workspace: string) => Promise<AzureLogAnalyticsSavedQuery[]>;
   invokeLocalStackAction: (

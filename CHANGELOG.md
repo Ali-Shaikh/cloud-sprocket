@@ -9,6 +9,12 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Changed
+
+- Desktop Azure inventory and selection callbacks are provided via
+  `AzureActionsProvider` instead of the workspace tab router prop bag, removing
+  seven more fields from `WorkspaceTabRouterProps` (architecture F-028 slice 2).
+
 ## [0.9.11] - 2026-07-25
 
 ### Changed

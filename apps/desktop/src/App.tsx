@@ -29,6 +29,7 @@ import { useWriteModeFlow } from "./hooks/use-write-mode-flow";
 import { useWorkspaceLoading } from "./hooks/use-workspace-loading";
 import { useWorkspaceState } from "./hooks/use-workspace-state";
 import { AwsActionsProvider } from "./components/workspace/aws-actions-context";
+import { AzureActionsProvider } from "./components/workspace/azure-actions-context";
 import { WorkspaceTabRouter } from "./components/workspace/workspace-tab-router";
 import type { WorkspaceTabRouterProps } from "./components/workspace/workspace-tab-router-props";
 import { backendRequest, subscribeToBackendEvent, addDebugLog } from "./lib/backend";
@@ -797,16 +798,7 @@ export default function App() {
     }
   }
 
-  const {
-    selectAzureWebAppSlot,
-    selectAzureWebApp,
-    selectAzureVirtualMachine,
-    selectAzureResourceGroup,
-    refreshAzureFrontDoorTopology,
-    refreshAzureWafPolicyConfig,
-    selectAzureWafPolicy,
-    selectAzureLogAnalyticsWorkspace,
-  } = useAzureActions({
+  const azureActions = useAzureActions({
     workspace,
     setWorkspace,
     setSession,
@@ -821,6 +813,7 @@ export default function App() {
     setAzureWafConfigLoading,
     setAzureFrontDoorActionStatus,
   });
+  const { refreshAzureFrontDoorTopology, refreshAzureWafPolicyConfig } = azureActions;
 
   useEffect(() => {
     azureInventoryFetchedScopesRef.current.clear();
@@ -1376,13 +1369,6 @@ export default function App() {
     refreshDockerRuntime,
     refreshLocalStackLogs,
     refreshFlociAzLogs,
-    selectAzureResourceGroup,
-    selectAzureVirtualMachine,
-    selectAzureWebApp,
-    selectAzureWebAppSlot,
-    selectAzureLogAnalyticsWorkspace,
-    selectAzureWafPolicy,
-    refreshAzureFrontDoorTopology,
     listLogAnalyticsHistory,
     listLogAnalyticsSaved,
     invokeLocalStackAction,
@@ -1400,7 +1386,9 @@ export default function App() {
 
   const content = (
     <AwsActionsProvider value={awsActions}>
-      <WorkspaceTabRouter {...workspaceTabRouterProps} />
+      <AzureActionsProvider value={azureActions}>
+        <WorkspaceTabRouter {...workspaceTabRouterProps} />
+      </AzureActionsProvider>
     </AwsActionsProvider>
   );
 

@@ -20,6 +20,7 @@ import SettingsView from "@/views/SettingsView";
 import { AwsWorkspaceTabs, AWS_TAB_IDS } from "./aws-workspace-tabs";
 import { AzureWorkspaceTabs } from "./azure-workspace-tabs";
 import { useAwsActionsContext } from "./aws-actions-context";
+import { useAzureActionsContext } from "./azure-actions-context";
 import type { WorkspaceTabRouterProps } from "./workspace-tab-router-props";
 
 export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
@@ -122,13 +123,6 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     refreshDockerRuntime,
     refreshLocalStackLogs,
     refreshFlociAzLogs,
-    selectAzureResourceGroup,
-    selectAzureVirtualMachine,
-    selectAzureWebApp,
-    selectAzureWebAppSlot,
-    selectAzureLogAnalyticsWorkspace,
-    selectAzureWafPolicy,
-    refreshAzureFrontDoorTopology,
     listLogAnalyticsHistory,
     listLogAnalyticsSaved,
     invokeLocalStackAction,
@@ -148,6 +142,7 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     selectIAMRole,
     selectEC2Instance,
   } = useAwsActionsContext();
+  const { selectAzureResourceGroup, selectAzureVirtualMachine } = useAzureActionsContext();
 
   const navigateToResource = useNavigateToResource({
     setActiveWorkspaceTabId,
