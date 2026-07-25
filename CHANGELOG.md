@@ -9,6 +9,8 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.11] - 2026-07-25
+
 ### Changed
 
 - Desktop AWS inventory and write callbacks are provided via
@@ -1120,7 +1122,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.10...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.11...HEAD
+[0.9.11]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.10...v0.9.11
 [0.9.10]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.9...v0.9.10
 [0.9.9]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.8...v0.9.9
 [0.9.8]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.7...v0.9.8
