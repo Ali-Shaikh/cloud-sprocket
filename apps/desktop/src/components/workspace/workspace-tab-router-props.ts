@@ -15,10 +15,7 @@ import type {
   JobLifecycle,
   HiddenResourceHit,
   PreferencesSnapshot,
-  ProfileSummary,
-  ProviderSummary,
   ServicePreferences,
-  SessionSnapshot,
   UrlInspection,
   UrlValidationResult,
   WorkspaceSnapshot,
@@ -35,13 +32,6 @@ type MutateWorkspaceSelectionOptions = {
 };
 
 export type WorkspaceTabRouterProps = {
-  session: SessionSnapshot;
-  activeWorkspace: WorkspaceSnapshot;
-  workspace: WorkspaceSnapshot;
-  selectedProvider?: ProviderSummary;
-  selectedProfile?: ProfileSummary;
-  profiles: ProfileSummary[];
-  providers: ProviderSummary[];
   loading: boolean;
   openingProfileId?: string;
   logs: ActivityLogEntry[];
@@ -114,8 +104,6 @@ export type WorkspaceTabRouterProps = {
   flociAzLogsStatus: string;
   flociAzActionStatus: string;
   flociAzActionInFlight: boolean;
-  setWorkspace: Dispatch<SetStateAction<WorkspaceSnapshot>>;
-  setSession: Dispatch<SetStateAction<SessionSnapshot>>;
   mutateWorkspaceSelection: (
     method: string,
     params: Record<string, unknown>,

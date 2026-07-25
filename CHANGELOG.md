@@ -11,6 +11,9 @@ Installers for every release are published on the
 
 ### Changed
 
+- Desktop session, workspace snapshot, and provider/profile selection state are
+  provided via `WorkspaceSessionProvider`, removing nine more fields from
+  `WorkspaceTabRouterProps` (architecture F-028 slice 4).
 - Desktop workspace navigation, Azure overview selection, deep-link refs, Lambda
   create-form state, and Azure cross-view prefill state are provided via
   `WorkspaceNavigationProvider`. This removes twelve live fields and four

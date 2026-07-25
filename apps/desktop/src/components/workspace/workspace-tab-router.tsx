@@ -22,6 +22,7 @@ import { AzureWorkspaceTabs } from "./azure-workspace-tabs";
 import { useAwsActionsContext } from "./aws-actions-context";
 import { useAzureActionsContext } from "./azure-actions-context";
 import { useWorkspaceNavigationContext } from "./workspace-navigation-context";
+import { useWorkspaceSessionContext } from "./workspace-session-context";
 import type { WorkspaceTabRouterProps } from "./workspace-tab-router-props";
 
 export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
@@ -43,6 +44,9 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     selectedProfile,
     profiles,
     providers,
+    setWorkspace,
+  } = useWorkspaceSessionContext();
+  const {
     loading,
     openingProfileId,
     logs,
@@ -110,8 +114,6 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     flociAzLogsStatus,
     flociAzActionStatus,
     flociAzActionInFlight,
-    setWorkspace,
-    setSession,
     mutateWorkspaceSelection,
     mutateSession,
     refreshDiscovery,
