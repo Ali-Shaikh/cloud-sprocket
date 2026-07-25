@@ -31,6 +31,7 @@ import {
   StorageView,
 } from "@/views/workspace/lazy-views";
 import { useAwsActionsContext } from "./aws-actions-context";
+import { useWorkspaceNavigationContext } from "./workspace-navigation-context";
 import type { AwsWorkspaceTabsProps } from "./workspace-tab-router-props";
 
 export const AWS_TAB_IDS = new Set([
@@ -61,7 +62,10 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
   const s3ListingGenerationRef = useRef(0);
   const {
     activeWorkspaceTabId,
-    setActiveWorkspaceTabId,
+    lambdaCreateFormOpen,
+    setLambdaCreateFormOpen,
+  } = useWorkspaceNavigationContext();
+  const {
     session,
     activeWorkspace,
     workspace,
@@ -74,7 +78,6 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     logs,
     showSensitiveValues,
     setShowSensitiveValues,
-    activeAzurePageId,
     s3UploadStatus,
     setS3UploadStatus,
     s3SignedUrlStatus,
@@ -90,8 +93,6 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     lambdaInvokeResult,
     lambdaInvokeInFlight,
     lambdaCreateInFlight,
-    lambdaCreateFormOpen,
-    setLambdaCreateFormOpen,
     dynamodbActionStatus,
     sqsActionStatus,
     sqsPeekResult,
@@ -121,10 +122,6 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     azureLogWorkspaceSelectionLoading,
     azureWafConfigLoading,
     azureFrontDoorTopologyLoading,
-    logAnalyticsPrefill,
-    setLogAnalyticsPrefill,
-    frontDoorAccessPrefill,
-    setFrontDoorAccessPrefill,
     localStackAuthToken,
     setLocalStackAuthToken,
     localStackPersistence,

@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import type { Dispatch, MutableRefObject, SetStateAction } from "react";
+import type { Dispatch, SetStateAction } from "react";
 
-import type { NavigationLocation } from "@/lib/navigation-location";
 import type { NavigateToResourceParams } from "@/lib/navigate-to-resource";
 import type {
   ActivityLogEntry,
@@ -36,8 +35,6 @@ type MutateWorkspaceSelectionOptions = {
 };
 
 export type WorkspaceTabRouterProps = {
-  activeWorkspaceTabId: string;
-  setActiveWorkspaceTabId: Dispatch<SetStateAction<string>>;
   session: SessionSnapshot;
   activeWorkspace: WorkspaceSnapshot;
   workspace: WorkspaceSnapshot;
@@ -50,12 +47,6 @@ export type WorkspaceTabRouterProps = {
   logs: ActivityLogEntry[];
   showSensitiveValues: boolean;
   setShowSensitiveValues: Dispatch<SetStateAction<boolean>>;
-  activeS3PageId: string;
-  setActiveS3PageId: Dispatch<SetStateAction<string>>;
-  activeAzurePageId: string;
-  setActiveAzurePageId: Dispatch<SetStateAction<string>>;
-  activeAzureStoragePageId: string;
-  setActiveAzureStoragePageId: Dispatch<SetStateAction<string>>;
   s3UploadStatus: string;
   setS3UploadStatus: Dispatch<SetStateAction<string>>;
   s3SignedUrlStatus: string;
@@ -76,8 +67,6 @@ export type WorkspaceTabRouterProps = {
   lambdaInvokeResult: AwsLambdaInvokeResult | null;
   lambdaInvokeInFlight: boolean;
   lambdaCreateInFlight: boolean;
-  lambdaCreateFormOpen: boolean;
-  setLambdaCreateFormOpen: Dispatch<SetStateAction<boolean>>;
   dynamodbActionStatus: string;
   sqsActionStatus: string;
   sqsPeekResult: AwsSqsPeekResult | null;
@@ -107,22 +96,6 @@ export type WorkspaceTabRouterProps = {
   azureLogWorkspaceSelectionLoading: boolean;
   azureWafConfigLoading: boolean;
   azureFrontDoorTopologyLoading: boolean;
-  logAnalyticsPrefill: { query?: string; timespan?: string } | null;
-  setLogAnalyticsPrefill: Dispatch<
-    SetStateAction<{ query?: string; timespan?: string } | null>
-  >;
-  frontDoorAccessPrefill: {
-    trackingReference: string;
-    workspace?: string;
-    timespan?: string;
-  } | null;
-  setFrontDoorAccessPrefill: Dispatch<
-    SetStateAction<{
-      trackingReference: string;
-      workspace?: string;
-      timespan?: string;
-    } | null>
-  >;
   localStackAuthToken: string;
   setLocalStackAuthToken: Dispatch<SetStateAction<string>>;
   localStackPersistence: boolean;
@@ -170,12 +143,6 @@ export type WorkspaceTabRouterProps = {
   hiddenResourceHits: HiddenResourceHit[];
   hiddenResourceEnablingServiceId: string | null;
   onEnableHiddenService: (hit: HiddenResourceHit) => Promise<void>;
-  /** History/recents recorder for resource deep links. */
-  recordLocation?: (location: NavigationLocation) => void;
-  /** Shell holds a ref so the palette can jump to resources. */
-  navigateToResourceRef?: MutableRefObject<
-    ((params: NavigateToResourceParams, options?: { record?: boolean }) => void) | null
-  >;
 };
 
 export type AwsWorkspaceTabsProps = WorkspaceTabRouterProps & {

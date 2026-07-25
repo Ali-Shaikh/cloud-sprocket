@@ -30,6 +30,10 @@ import { useWorkspaceLoading } from "./hooks/use-workspace-loading";
 import { useWorkspaceState } from "./hooks/use-workspace-state";
 import { AwsActionsProvider } from "./components/workspace/aws-actions-context";
 import { AzureActionsProvider } from "./components/workspace/azure-actions-context";
+import {
+  WorkspaceNavigationProvider,
+  type WorkspaceNavigationContextValue,
+} from "./components/workspace/workspace-navigation-context";
 import { WorkspaceTabRouter } from "./components/workspace/workspace-tab-router";
 import type { WorkspaceTabRouterProps } from "./components/workspace/workspace-tab-router-props";
 import { backendRequest, subscribeToBackendEvent, addDebugLog } from "./lib/backend";
@@ -321,12 +325,8 @@ export default function App() {
     setFrontDoorAccessPrefill,
     logAnalyticsPrefill,
     setLogAnalyticsPrefill,
-    activeS3PageId,
-    setActiveS3PageId,
     activeAzurePageId,
     setActiveAzurePageId,
-    activeAzureStoragePageId,
-    setActiveAzureStoragePageId,
     showSensitiveValues,
     setShowSensitiveValues,
     listLogAnalyticsHistory,
@@ -1168,11 +1168,7 @@ export default function App() {
     setActiveWorkspaceTabId,
     navigateToTab,
     navigateToLocation,
-    activeS3PageId,
-    setActiveS3PageId,
     setActiveAzurePageId,
-    activeAzureStoragePageId,
-    setActiveAzureStoragePageId,
     workspaceFetching,
     workspaceLoading,
     workspaceLoaded,
@@ -1270,11 +1266,37 @@ export default function App() {
     shortcutCheatsheetOpen,
   ]);
 
+  const workspaceNavigation = useMemo<WorkspaceNavigationContextValue>(
+    () => ({
+      activeWorkspaceTabId,
+      setActiveWorkspaceTabId,
+      activeAzurePageId,
+      setActiveAzurePageId,
+      lambdaCreateFormOpen,
+      setLambdaCreateFormOpen,
+      logAnalyticsPrefill,
+      setLogAnalyticsPrefill,
+      frontDoorAccessPrefill,
+      setFrontDoorAccessPrefill,
+      recordLocation,
+      navigateToResourceRef,
+    }),
+    [
+      activeAzurePageId,
+      activeWorkspaceTabId,
+      frontDoorAccessPrefill,
+      lambdaCreateFormOpen,
+      logAnalyticsPrefill,
+      recordLocation,
+      setActiveAzurePageId,
+      setActiveWorkspaceTabId,
+      setFrontDoorAccessPrefill,
+      setLambdaCreateFormOpen,
+      setLogAnalyticsPrefill,
+    ],
+  );
+
   const workspaceTabRouterProps: WorkspaceTabRouterProps = {
-    activeWorkspaceTabId,
-    setActiveWorkspaceTabId,
-    recordLocation,
-    navigateToResourceRef,
     session,
     activeWorkspace,
     workspace,
@@ -1287,12 +1309,6 @@ export default function App() {
     logs,
     showSensitiveValues,
     setShowSensitiveValues,
-    activeS3PageId,
-    setActiveS3PageId,
-    activeAzurePageId,
-    setActiveAzurePageId,
-    activeAzureStoragePageId,
-    setActiveAzureStoragePageId,
     s3UploadStatus,
     setS3UploadStatus,
     s3SignedUrlStatus,
@@ -1308,8 +1324,6 @@ export default function App() {
     lambdaInvokeResult,
     lambdaInvokeInFlight,
     lambdaCreateInFlight,
-    lambdaCreateFormOpen,
-    setLambdaCreateFormOpen,
     dynamodbActionStatus,
     sqsActionStatus,
     sqsPeekResult,
@@ -1339,10 +1353,6 @@ export default function App() {
     azureLogWorkspaceSelectionLoading,
     azureWafConfigLoading,
     azureFrontDoorTopologyLoading,
-    logAnalyticsPrefill,
-    setLogAnalyticsPrefill,
-    frontDoorAccessPrefill,
-    setFrontDoorAccessPrefill,
     localStackAuthToken,
     setLocalStackAuthToken,
     localStackPersistence,
@@ -1385,11 +1395,13 @@ export default function App() {
   };
 
   const content = (
-    <AwsActionsProvider value={awsActions}>
-      <AzureActionsProvider value={azureActions}>
-        <WorkspaceTabRouter {...workspaceTabRouterProps} />
-      </AzureActionsProvider>
-    </AwsActionsProvider>
+    <WorkspaceNavigationProvider value={workspaceNavigation}>
+      <AwsActionsProvider value={awsActions}>
+        <AzureActionsProvider value={azureActions}>
+          <WorkspaceTabRouter {...workspaceTabRouterProps} />
+        </AzureActionsProvider>
+      </AwsActionsProvider>
+    </WorkspaceNavigationProvider>
   );
 
   return (

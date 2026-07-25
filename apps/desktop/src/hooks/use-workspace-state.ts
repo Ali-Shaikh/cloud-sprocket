@@ -149,10 +149,7 @@ export function useWorkspaceState(session: SessionSnapshot) {
     query?: string;
     timespan?: string;
   } | null>(null);
-  const [activeS3PageId, setActiveS3PageId] = useState("buckets");
   const [activeAzurePageId, setActiveAzurePageId] = useState("resource-groups");
-  // Accounts first so the user can pick a storage account before containers/blobs.
-  const [activeAzureStoragePageId, setActiveAzureStoragePageId] = useState("accounts");
   const [showSensitiveValues, setShowSensitiveValues] = useState(false);
 
   const activeWorkspace = useMemo(
@@ -199,7 +196,6 @@ export function useWorkspaceState(session: SessionSnapshot) {
     setFlociAzLogsStatus("");
     setFlociAzActionStatus("No floci-az action has run yet.");
     setFlociAzActionInFlight(false);
-    setActiveS3PageId("buckets");
     setActiveAzurePageId("resource-groups");
     setShowSensitiveValues(false);
   }, []);
@@ -336,12 +332,8 @@ export function useWorkspaceState(session: SessionSnapshot) {
     setFrontDoorAccessPrefill,
     logAnalyticsPrefill,
     setLogAnalyticsPrefill,
-    activeS3PageId,
-    setActiveS3PageId,
     activeAzurePageId,
     setActiveAzurePageId,
-    activeAzureStoragePageId,
-    setActiveAzureStoragePageId,
     showSensitiveValues,
     setShowSensitiveValues,
     listLogAnalyticsHistory,

@@ -42,11 +42,7 @@ export type UseAppShellNavigationParams = {
   /** Prefer this for user-initiated tab jumps so history/recents stay in sync. */
   navigateToTab?: (tabId: string) => void;
   navigateToLocation?: (location: NavigationLocation) => void;
-  activeS3PageId: string;
-  setActiveS3PageId: Dispatch<SetStateAction<string>>;
   setActiveAzurePageId: Dispatch<SetStateAction<string>>;
-  activeAzureStoragePageId: string;
-  setActiveAzureStoragePageId: Dispatch<SetStateAction<string>>;
   workspaceFetching: boolean;
   workspaceLoading: boolean;
   workspaceLoaded: boolean;
