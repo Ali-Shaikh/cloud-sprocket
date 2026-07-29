@@ -9,10 +9,20 @@ import (
 )
 
 // registerLabsHandlers registers labs.* JSON-RPC methods.
-func (s *Service) registerLabsHandlers(m map[string]RPCHandler) {
-	m["labs.start"] = func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) { return s.handleLabsStart(ctx, params, notifier) }
-	m["labs.get"] = func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) { return s.handleLabsGet(ctx, params, notifier) }
-	m["labs.verifyStep"] = func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) { return s.handleLabsVerifyStep(ctx, params, notifier) }
-	m["labs.runAction"] = func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) { return s.handleLabsRunAction(ctx, params, notifier) }
-	m["labs.reset"] = func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) { return s.handleLabsReset(ctx, params, notifier) }
+func (s *Service) registerLabsHandlers(m *handlerRegistry) {
+	m.register("labs.start", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleLabsStart(ctx, params, notifier)
+	})
+	m.register("labs.get", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleLabsGet(ctx, params, notifier)
+	})
+	m.register("labs.verifyStep", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleLabsVerifyStep(ctx, params, notifier)
+	})
+	m.register("labs.runAction", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleLabsRunAction(ctx, params, notifier)
+	})
+	m.register("labs.reset", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleLabsReset(ctx, params, notifier)
+	})
 }

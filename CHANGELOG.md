@@ -11,6 +11,10 @@ Installers for every release are published on the
 
 ### Changed
 
+- Daemon RPC registration panics on duplicate method names and ships an exact
+  171-method golden list plus façade snapshot contract tests so domain
+  extraction cannot silently shrink or reshape the wire surface (architecture
+  F-029 Phase 0).
 - `aws.inventory.get` now returns a typed, service-scoped inventory slice
   instead of serialising the full workspace snapshot. Desktop callers validate
   and merge the slice so unrelated AWS service state is preserved.
