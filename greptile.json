@@ -1,0 +1,14 @@
+{
+  "excludeAuthors": [
+    "dependabot[bot]",
+    "renovate[bot]",
+    "*-bot"
+  ],
+  "excludeBranches": [
+    "dependabot/**",
+    "renovate/**"
+  ],
+  "disabledLabels": [
+    "dependencies"
+  ]
+}
