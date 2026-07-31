@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	appdeployment "cloudsprocket/backend/daemon/internal/app/deployment"
 	appruntime "cloudsprocket/backend/daemon/internal/app/runtime"
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/deploy"
@@ -58,9 +59,10 @@ type Service struct {
 	iam            IAMInventory
 	azure          AzureInventory
 	// rt owns Docker probing, emulator lifecycle, and both runtime caches (F-029).
-	rt                    *appruntime.Service
-	recipes               *recipes.Loader
-	deployer              Deployer
+	rt *appruntime.Service
+	// deploy owns recipe catalogue helpers, tofu install, deployment lifecycle,
+	// and cancel map ownership (F-029 Phase 2).
+	deploy                *appdeployment.Service
 	cipher                *secrets.Cipher
 	initialisationErr     error
 	azureInventoryTimeout time.Duration
@@ -71,8 +73,6 @@ type Service struct {
 	azureCLIExtProfileID string
 	azureCLIExtStatuses  []models.AzureCLIExtensionStatus
 	azureCLIExtAt        time.Time
-	deployCancelsMu      sync.Mutex
-	deployCancels        map[string]context.CancelFunc
 	labRunnerOnce        sync.Once
 	labRunnerValue       *labs.Runner
 	preferences          models.ServicePreferences
@@ -166,14 +166,20 @@ func NewFromDeps(deps Deps) *Service {
 		iam:                   deps.IAM,
 		azure:                 deps.Azure,
 		rt:                    rt,
-		recipes:               recipeLoader,
-		deployer:              deployEngine,
 		cipher:                cipher,
 		initialisationErr:     cipherErr,
 		azureInventoryTimeout: defaultAzureInventoryTimeout,
 		preferences:           defaultServicePreferences(),
 		now:                   now,
 	}
+	service.deploy = appdeployment.New(appdeployment.Deps{
+		Settings: settings,
+		Store:    deps.Store,
+		Recipes:  recipeLoader,
+		Deployer: deployEngine,
+		Secrets:  deploySecretsAdapter{s: service},
+		Now:      now,
+	})
 	service.mu.Lock()
 	if err := service.loadPreferencesLocked(); err != nil {
 		log.Printf("preferences: could not load %s, using defaults: %v", service.preferencesPath(), err)

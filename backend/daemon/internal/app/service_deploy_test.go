@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	appdeployment "cloudsprocket/backend/daemon/internal/app/deployment"
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/deploy"
 	"cloudsprocket/backend/daemon/internal/policy"
@@ -193,14 +194,22 @@ func newDeployTestService(t *testing.T, deployer Deployer) *Service {
 	if err != nil {
 		t.Fatalf("loadCipher: %v", err)
 	}
-	return &Service{
+	now := func() time.Time { return time.Now().UTC() }
+	service := &Service{
 		settings: settings,
 		store:    dataStore,
 		cipher:   cipher,
-		recipes:  recipes.Bundled().WithImportedDir(settings.ImportedRecipesDir),
-		deployer: deployer,
-		now:      func() time.Time { return time.Now().UTC() },
+		now:      now,
 	}
+	service.deploy = appdeployment.New(appdeployment.Deps{
+		Settings: settings,
+		Store:    dataStore,
+		Recipes:  recipes.Bundled().WithImportedDir(settings.ImportedRecipesDir),
+		Deployer: deployer,
+		Secrets:  deploySecretsAdapter{s: service},
+		Now:      now,
+	})
+	return service
 }
 
 func waitForStatus(t *testing.T, s *Service, notifier *captureNotifier, id string, want deploy.Status) *deploy.Deployment {

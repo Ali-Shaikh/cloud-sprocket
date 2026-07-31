@@ -6,11 +6,10 @@ package app
 import (
 	"context"
 
+	appdeployment "cloudsprocket/backend/daemon/internal/app/deployment"
 	appruntime "cloudsprocket/backend/daemon/internal/app/runtime"
-	"cloudsprocket/backend/daemon/internal/deploy"
 	"cloudsprocket/backend/daemon/internal/models"
 	"cloudsprocket/backend/daemon/internal/rpcapi"
-	"cloudsprocket/backend/daemon/internal/tofu"
 )
 
 type S3Inventory interface {
@@ -220,23 +219,6 @@ type AzureRuntimeManager = appruntime.AzureRuntime
 // transport. Defined in rpcapi so package rpc does not depend on app.
 type Notifier = rpcapi.Notifier
 
-// Deployer runs recipe deployments through the IaC engine. Implemented by
-// *deploy.Engine; an interface so tests can inject a fake.
-type Deployer interface {
-	Available() bool
-	Version(ctx context.Context) (string, error)
-	BinaryPath() string
-	Install(ctx context.Context) (string, error)
-	Preflight(ctx context.Context, deployment *deploy.Deployment) error
-	TargetLabel(deployment *deploy.Deployment) string
-	Prepare(deployment *deploy.Deployment) error
-	Plan(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) (deploy.PlanSummary, error)
-	Apply(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) (deploy.ApplyResult, error)
-	RetryPostApply(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) error
-	Destroy(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) error
-	CheckDrift(ctx context.Context, deployment *deploy.Deployment, onLine tofu.LogFunc) (deploy.DriftReport, error)
-	RemoveWorkspace(id string) error
-	// ReleaseWorkspace stops leftover provider processes under a deployment dir
-	// after cancel/stop so Windows file locks do not block removal.
-	ReleaseWorkspace(id string)
-}
+// Deployer is an alias of the consumer-owned port defined in
+// internal/app/deployment (F-029 Phase 2).
+type Deployer = appdeployment.Deployer
