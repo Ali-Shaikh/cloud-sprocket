@@ -6,6 +6,7 @@ package app
 import (
 	"context"
 
+	appruntime "cloudsprocket/backend/daemon/internal/app/runtime"
 	"cloudsprocket/backend/daemon/internal/deploy"
 	"cloudsprocket/backend/daemon/internal/models"
 	"cloudsprocket/backend/daemon/internal/rpcapi"
@@ -209,26 +210,11 @@ type AzureInventory interface {
 	CheckCLIExtensions(ctx context.Context) []models.AzureCLIExtensionStatus
 }
 
-type DockerRuntime interface {
-	Snapshot(ctx context.Context) (models.DockerRuntimeSnapshot, error)
-	ListOwnedResources(ctx context.Context) ([]models.ManagedDockerResource, error)
-}
-
-type LocalStackManager interface {
-	Status(ctx context.Context) (models.EmulatorStatusDetail, error)
-	Start(ctx context.Context, options models.EmulatorStartOptions) (models.EmulatorStatusDetail, error)
-	Stop(ctx context.Context) (models.EmulatorStatusDetail, error)
-	Logs(ctx context.Context, tail int) (models.EmulatorLogSnapshot, error)
-	EnsureManagedProfile() error
-}
-
-type AzureRuntimeManager interface {
-	Status(ctx context.Context) (models.EmulatorStatusDetail, error)
-	Start(ctx context.Context, options models.EmulatorStartOptions) (models.EmulatorStatusDetail, error)
-	Stop(ctx context.Context) (models.EmulatorStatusDetail, error)
-	Logs(ctx context.Context, tail int) (models.EmulatorLogSnapshot, error)
-	EnsureManagedConfig() error
-}
+// DockerRuntime, LocalStackManager, and AzureRuntimeManager are aliases of the
+// consumer-owned ports defined in internal/app/runtime (F-029 Phase 1).
+type DockerRuntime = appruntime.Docker
+type LocalStackManager = appruntime.LocalStack
+type AzureRuntimeManager = appruntime.AzureRuntime
 
 // Notifier is the shared progress/notification contract used by the JSON-RPC
 // transport. Defined in rpcapi so package rpc does not depend on app.

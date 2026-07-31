@@ -11,6 +11,10 @@ Installers for every release are published on the
 
 ### Changed
 
+- Daemon runtime ownership (Docker probing, emulator lifecycle, and both
+  runtime caches) moves into `internal/app/runtime`. The façade keeps the same
+  eight runtime RPC routes and registers `actions.invoke` with core
+  (architecture F-029 Phase 1).
 - Daemon RPC registration panics on duplicate method names and ships an exact
   171-method golden list plus façade snapshot contract tests so domain
   extraction cannot silently shrink or reshape the wire surface (architecture

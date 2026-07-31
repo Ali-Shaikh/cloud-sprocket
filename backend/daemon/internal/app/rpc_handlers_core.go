@@ -52,4 +52,8 @@ func (s *Service) registerCoreHandlers(m *handlerRegistry) {
 	m.register("app.reset", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAppReset(ctx, params, notifier)
 	})
+	// actions.invoke is session/core behaviour (not the runtime domain package).
+	m.register("actions.invoke", func(_ context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleActionsInvoke(params, notifier)
+	})
 }

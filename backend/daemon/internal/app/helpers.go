@@ -477,7 +477,3 @@ func runtimeModeFromSettings(value string) models.RuntimeMode {
 		return models.RuntimeModeCloud
 	}
 }
-
-// dockerRuntimeSnapshot returns the Docker runtime state, serving a recent
-// "unreachable" verdict from cache so polling does not repeatedly pay the probe
-// timeout while the engine is stopped.
