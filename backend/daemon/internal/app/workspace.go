@@ -268,39 +268,4 @@ func (s *Service) localConfigArtifacts() []models.LocalConfigArtifact {
 	return artifacts
 }
 
-func (s *Service) emulatorSummaries() []models.EmulatorSummary {
-	artifacts := s.localConfigArtifacts()
-	awsDetails := []models.DetailField{
-		{Label: "Image", Value: s.settings.LocalStackImage},
-		{Label: "Managed Config Root", Value: filepath.Join(s.settings.LocalConfigDir, "aws")},
-	}
-	azureDetails := []models.DetailField{
-		{Label: "Image", Value: s.settings.FlociAZImage},
-		{Label: "Managed Config Root", Value: filepath.Join(s.settings.LocalConfigDir, "azure")},
-	}
-	if len(artifacts) > 0 {
-		awsDetails = append(awsDetails, models.DetailField{Label: "Managed Artifacts", Value: "Prepared paths only in this slice"})
-		azureDetails = append(azureDetails, models.DetailField{Label: "Managed Artifacts", Value: "Prepared paths only in this slice"})
-	}
 
-	return []models.EmulatorSummary{
-		{
-			EmulatorID: "localstack",
-			ProviderID: "aws",
-			Label:      "LocalStack",
-			Kind:       "docker",
-			Status:     models.EmulatorStatusNotConfigured,
-			Summary:    "Managed AWS local runtime is planned but not configured yet.",
-			Details:    awsDetails,
-		},
-		{
-			EmulatorID: "floci-az",
-			ProviderID: "azure",
-			Label:      "floci-az",
-			Kind:       "docker",
-			Status:     models.EmulatorStatusNotConfigured,
-			Summary:    "Managed Azure local runtime is planned but not configured yet.",
-			Details:    azureDetails,
-		},
-	}
-}

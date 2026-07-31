@@ -11,9 +11,11 @@ import (
 	"sync"
 	"time"
 
+	appruntime "cloudsprocket/backend/daemon/internal/app/runtime"
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/deploy"
 	"cloudsprocket/backend/daemon/internal/discovery"
+	"cloudsprocket/backend/daemon/internal/dockerruntime"
 	"cloudsprocket/backend/daemon/internal/flociaz"
 	"cloudsprocket/backend/daemon/internal/labs"
 	"cloudsprocket/backend/daemon/internal/localstack"
@@ -24,47 +26,44 @@ import (
 	"cloudsprocket/backend/daemon/internal/tofu"
 )
 
+const (
+	// defaultAzureInventoryTimeout bounds Azure inventory calls (floci-az ARM
+	// pager / `az` CLI) so a stalled response cannot hang a workspace snapshot.
+	defaultAzureInventoryTimeout = 30 * time.Second
+	// azureCLIExtensionCacheTTL bounds az extension list subprocess cost.
+	azureCLIExtensionCacheTTL = 10 * time.Minute
+)
+
 type Service struct {
-	settings              config.Settings
-	store                 *store.Store
-	discovery             *discovery.Service
-	s3                    S3Inventory
-	ec2                   EC2Inventory
-	lambda                LambdaInventory
-	dynamodb              DynamoDBInventory
-	sqs                   SQSInventory
-	sns                   SNSInventory
-	rds                   RDSInventory
-	ecs                   ECSInventory
-	eks                   EKSInventory
-	cloudformation        CloudFormationInventory
-	eventbridge           EventBridgeInventory
-	route53               Route53Inventory
-	elbv2                 Elbv2Inventory
-	kms                   KmsInventory
-	apigateway            ApiGatewayInventory
-	secretsManager        SecretsManagerInventory
-	logs                  LogsInventory
-	iam                   IAMInventory
-	azure                 AzureInventory
-	docker                DockerRuntime
-	localstackMgr         LocalStackManager
-	azureRuntime          AzureRuntimeManager
+	settings       config.Settings
+	store          *store.Store
+	discovery      *discovery.Service
+	s3             S3Inventory
+	ec2            EC2Inventory
+	lambda         LambdaInventory
+	dynamodb       DynamoDBInventory
+	sqs            SQSInventory
+	sns            SNSInventory
+	rds            RDSInventory
+	ecs            ECSInventory
+	eks            EKSInventory
+	cloudformation CloudFormationInventory
+	eventbridge    EventBridgeInventory
+	route53        Route53Inventory
+	elbv2          Elbv2Inventory
+	kms            KmsInventory
+	apigateway     ApiGatewayInventory
+	secretsManager SecretsManagerInventory
+	logs           LogsInventory
+	iam            IAMInventory
+	azure          AzureInventory
+	// rt owns Docker probing, emulator lifecycle, and both runtime caches (F-029).
+	rt                    *appruntime.Service
 	recipes               *recipes.Loader
 	deployer              Deployer
 	cipher                *secrets.Cipher
 	initialisationErr     error
 	azureInventoryTimeout time.Duration
-	dockerSnapshotMu      sync.Mutex
-	dockerSnapshotValue   *models.DockerRuntimeSnapshot
-	dockerSnapshotAt      time.Time
-	// runtimeStatus* caches the Docker + managed-resources + emulator bundle used
-	// by workspace snapshots so selection RPCs do not re-probe live runtimes on
-	// every click. Dedicated runtime.get and manual Docker refresh keep their own
-	// live paths and seed or invalidate this cache.
-	runtimeStatusMu    sync.Mutex
-	runtimeStatusValue *runtimeStatus
-	runtimeStatusAt    time.Time
 	// azureCLIExt* caches az extension list output per profile. The check shells
 	// out to a Python CLI and can take seconds; it does not need to run on every
 	// workspace snapshot for the same profile.
@@ -82,14 +81,6 @@ type Service struct {
 	// handlers maps JSON-RPC method names to handlers (built once).
 	handlersOnce sync.Once
 	handlers     map[string]RPCHandler
-}
-
-// runtimeStatus is the Docker and emulator bundle embedded in every workspace
-// snapshot. Cached briefly so interactive selection handlers avoid live probes.
-type runtimeStatus struct {
-	Docker    models.DockerRuntimeSnapshot
-	Resources []models.ManagedDockerResource
-	Emulators []models.EmulatorSummary
 }
 
 // Deps holds the collaborators required to construct a Service.
@@ -139,6 +130,18 @@ func NewFromDeps(deps Deps) *Service {
 	recipeLoader := recipes.Bundled().WithImportedDir(deps.Settings.ImportedRecipesDir)
 	deployEngine := deploy.NewEngine(tofu.NewRunner(tofu.Resolve(deps.Settings)), deps.Settings, recipeLoader)
 	cipher, cipherErr := loadCipher(deps.Settings.SecretKeyPath)
+	now := func() time.Time { return time.Now().UTC() }
+	settings := deps.Settings
+	rt := appruntime.New(appruntime.Deps{
+		Settings:     settings,
+		Docker:       deps.Docker,
+		LocalStack:   localStackMgr,
+		AzureRuntime: azureRuntime,
+		ResolveDockerHost: func() (string, string) {
+			return dockerruntime.ResolveDockerHost(settings)
+		},
+		Now: now,
+	})
 	service := &Service{
 		settings:              deps.Settings,
 		store:                 deps.Store,
@@ -162,16 +165,14 @@ func NewFromDeps(deps Deps) *Service {
 		logs:                  deps.Logs,
 		iam:                   deps.IAM,
 		azure:                 deps.Azure,
-		docker:                deps.Docker,
-		localstackMgr:         localStackMgr,
-		azureRuntime:          azureRuntime,
+		rt:                    rt,
 		recipes:               recipeLoader,
 		deployer:              deployEngine,
 		cipher:                cipher,
 		initialisationErr:     cipherErr,
 		azureInventoryTimeout: defaultAzureInventoryTimeout,
 		preferences:           defaultServicePreferences(),
-		now:                   func() time.Time { return time.Now().UTC() },
+		now:                   now,
 	}
 	service.mu.Lock()
 	if err := service.loadPreferencesLocked(); err != nil {

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	appruntime "cloudsprocket/backend/daemon/internal/app/runtime"
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
@@ -275,7 +276,9 @@ func (s *stubLogsInventory) CreateLogGroup(_ context.Context, _ models.ProfileSu
 	if s.groups == nil {
 		s.groups = map[string][]models.AwsLogGroup{}
 	}
-	if region == "" { region = "us-east-1" }
+	if region == "" {
+		region = "us-east-1"
+	}
 	s.groups[region] = append(s.groups[region], models.AwsLogGroup{LogGroupName: logGroupName})
 	return models.AwsLogsCreateLogGroupResult{LogGroupName: logGroupName, Region: region}, nil
 }
@@ -311,7 +314,9 @@ func (s *stubIAMInventory) CreateRole(_ context.Context, _ models.ProfileSummary
 	if s.roles == nil {
 		s.roles = map[string][]models.AwsIamRole{}
 	}
-	if region == "" { region = "us-east-1" }
+	if region == "" {
+		region = "us-east-1"
+	}
 	s.roles[region] = append(s.roles[region], models.AwsIamRole{RoleName: roleName})
 	return models.AwsIamCreateRoleResult{
 		RoleName: roleName,
@@ -359,14 +364,22 @@ func (s *stubS3Inventory) UploadFile(_ context.Context, _ models.ProfileSummary,
 func (s *stubS3Inventory) DeleteObject(_ context.Context, _ models.ProfileSummary, bucketName string, objectKey string) (models.AwsS3DeleteObjectResult, error) {
 	if objs, ok := s.objects[bucketName]; ok {
 		filtered := []models.AwsS3Object{}
-		for _, o := range objs { if o.Key != objectKey { filtered = append(filtered, o) } }
+		for _, o := range objs {
+			if o.Key != objectKey {
+				filtered = append(filtered, o)
+			}
+		}
 		s.objects[bucketName] = filtered
 	}
 	return models.AwsS3DeleteObjectResult{BucketName: bucketName, ObjectKey: objectKey, Summary: "Deleted object " + objectKey + "."}, nil
 }
 
 func (s *stubS3Inventory) CreateBucket(_ context.Context, _ models.ProfileSummary, bucketName string, region string) (models.AwsS3CreateBucketResult, error) {
-	for _, b := range s.buckets { if b.Name == bucketName { return models.AwsS3CreateBucketResult{BucketName: bucketName, Region: region}, nil } }
+	for _, b := range s.buckets {
+		if b.Name == bucketName {
+			return models.AwsS3CreateBucketResult{BucketName: bucketName, Region: region}, nil
+		}
+	}
 	s.buckets = append(s.buckets, models.AwsS3Bucket{Name: bucketName})
 	return models.AwsS3CreateBucketResult{BucketName: bucketName, Region: region}, nil
 }
@@ -418,7 +431,9 @@ func (s *stubEC2Inventory) StopInstance(_ context.Context, _ models.ProfileSumma
 
 func (s *stubEC2Inventory) RunInstances(_ context.Context, _ models.ProfileSummary, region string, instanceType string) (models.AwsEc2RunInstancesResult, error) {
 	id := "i-launched00001"
-	if s.instances == nil { s.instances = map[string][]models.AwsEc2Instance{} }
+	if s.instances == nil {
+		s.instances = map[string][]models.AwsEc2Instance{}
+	}
 	s.instances[region] = append(s.instances[region], models.AwsEc2Instance{InstanceID: id, State: "running"})
 	return models.AwsEc2RunInstancesResult{InstanceID: id, Region: region, InstanceType: instanceType, Summary: "Launched EC2 instance " + id + "."}, nil
 }
@@ -1915,27 +1930,27 @@ func TestDockerRuntimeProbeIsBoundedWhenEngineBlocks(t *testing.T) {
 		if snapshot.Reachable {
 			t.Fatalf("expected an unreachable docker snapshot when the engine blocks, got %+v", snapshot)
 		}
-	case <-time.After(dockerProbeTimeout + 5*time.Second):
+	case <-time.After(appruntime.DockerProbeTimeout + 5*time.Second):
 		t.Fatalf("docker.runtime.get hung past the probe timeout; the Docker call is not bounded")
 	}
 }
 
 // TestDockerAndEmulatorProbesRespectParentContextCancel is a regression for
 // architecture F-020: probes used context.Background(), so a cancelled RPC
-// still waited out dockerProbeTimeout on Docker dials. Parent cancel must
+// still waited out DockerProbeTimeout on Docker dials. Parent cancel must
 // abort the probe well under the full timeout.
 func TestDockerAndEmulatorProbesRespectParentContextCancel(t *testing.T) {
-	s := &Service{
-		docker:        blockingDockerRuntime{},
-		localstackMgr: blockingLocalStackManager{},
-	}
+	rt := appruntime.New(appruntime.Deps{
+		Docker:     blockingDockerRuntime{},
+		LocalStack: blockingLocalStackManager{},
+	})
 
 	// Docker Snapshot: cancel parent after a short delay; probe must exit early.
 	ctx, cancel := context.WithCancel(context.Background())
 	dockerDone := make(chan time.Duration, 1)
 	go func() {
 		start := time.Now()
-		_ = s.buildDockerRuntimeSnapshot(ctx)
+		_ = rt.ProbeDockerRuntimeSnapshot(ctx)
 		dockerDone <- time.Since(start)
 	}()
 	time.Sleep(40 * time.Millisecond)
@@ -1945,16 +1960,16 @@ func TestDockerAndEmulatorProbesRespectParentContextCancel(t *testing.T) {
 		if elapsed > time.Second {
 			t.Fatalf("Docker Snapshot took %v after parent cancel; expected early exit under 1s", elapsed)
 		}
-	case <-time.After(dockerProbeTimeout + time.Second):
+	case <-time.After(appruntime.DockerProbeTimeout + time.Second):
 		t.Fatal("Docker Snapshot ignored parent context cancel")
 	}
 
-	// Emulator Status: same parent-cancel contract for emulatorsList.
+	// Emulator Status: same parent-cancel contract for live emulator listing.
 	ctx, cancel = context.WithCancel(context.Background())
 	emulatorDone := make(chan time.Duration, 1)
 	go func() {
 		start := time.Now()
-		_ = s.emulatorsList(ctx)
+		_, _ = rt.HandleEmulatorsList(ctx)
 		emulatorDone <- time.Since(start)
 	}()
 	time.Sleep(40 * time.Millisecond)
@@ -1962,10 +1977,10 @@ func TestDockerAndEmulatorProbesRespectParentContextCancel(t *testing.T) {
 	select {
 	case elapsed := <-emulatorDone:
 		if elapsed > time.Second {
-			t.Fatalf("emulatorsList took %v after parent cancel; expected early exit under 1s", elapsed)
+			t.Fatalf("emulators list took %v after parent cancel; expected early exit under 1s", elapsed)
 		}
-	case <-time.After(dockerProbeTimeout + time.Second):
-		t.Fatal("emulatorsList ignored parent context cancel")
+	case <-time.After(appruntime.DockerProbeTimeout + time.Second):
+		t.Fatal("emulators list ignored parent context cancel")
 	}
 }
 
@@ -2076,10 +2091,10 @@ func TestUnlockNotBlockedBySlowWorkspaceFetch(t *testing.T) {
 		// Unlock must finish well under a full Docker probe (3s). Half-probe
 		// (1.5s) flakes on loaded Windows CI runners; two-thirds still proves
 		// unlock is not serialised behind the slow workspace fetch.
-		if elapsed := time.Since(start); elapsed > (dockerProbeTimeout*2)/3 {
+		if elapsed := time.Since(start); elapsed > (appruntime.DockerProbeTimeout*2)/3 {
 			t.Fatalf("session.unlock took %v; it is blocked behind the slow workspace fetch", elapsed)
 		}
-	case <-time.After(dockerProbeTimeout + 2*time.Second):
+	case <-time.After(appruntime.DockerProbeTimeout + 2*time.Second):
 		t.Fatalf("session.unlock is starved while workspace.get holds the lock during Docker probing")
 	}
 
