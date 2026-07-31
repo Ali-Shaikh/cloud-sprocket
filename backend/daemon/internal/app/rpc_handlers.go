@@ -13,13 +13,28 @@ import (
 // Registration replaces the former 171-case switch in Service.Handle.
 type RPCHandler func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error)
 
+type handlerRegistry struct {
+	handlers map[string]RPCHandler
+}
+
+func newHandlerRegistry(capacity int) *handlerRegistry {
+	return &handlerRegistry{handlers: make(map[string]RPCHandler, capacity)}
+}
+
+func (r *handlerRegistry) register(name string, handler RPCHandler) {
+	if _, exists := r.handlers[name]; exists {
+		panic("duplicate RPC method registration: " + name)
+	}
+	r.handlers[name] = handler
+}
+
 // buildMethodHandlers returns the method name -> handler map.
 // Built once per Service via sync.Once (see methodHandlers).
 func (s *Service) buildMethodHandlers() map[string]RPCHandler {
 	// Pre-size for the known surface so the map does not rehash during register.
-	m := make(map[string]RPCHandler, 171)
-	s.registerMethodHandlers(m)
-	return m
+	registry := newHandlerRegistry(171)
+	s.registerMethodHandlers(registry)
+	return registry.handlers
 }
 
 func (s *Service) methodHandlers() map[string]RPCHandler {
@@ -31,7 +46,7 @@ func (s *Service) methodHandlers() map[string]RPCHandler {
 
 // registerMethodHandlers maps every RPC method name to its Service handler.
 // Domain helpers keep registration organised; method names and targets must stay stable.
-func (s *Service) registerMethodHandlers(m map[string]RPCHandler) {
+func (s *Service) registerMethodHandlers(m *handlerRegistry) {
 	s.registerCoreHandlers(m)
 	s.registerAWSHandlers(m)
 	s.registerAzureHandlers(m)

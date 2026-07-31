@@ -9,16 +9,30 @@ import (
 )
 
 // registerRuntimeHandlers registers docker, emulators, runtime, and actions methods.
-func (s *Service) registerRuntimeHandlers(m map[string]RPCHandler) {
-	m["runtime.get"] = func(ctx context.Context, _ json.RawMessage, _ Notifier) (any, error) { return s.handleRuntimeGet(ctx) }
-	m["docker.runtime.get"] = func(ctx context.Context, _ json.RawMessage, _ Notifier) (any, error) { return s.handleDockerRuntimeGet(ctx) }
-	m["docker.resources.list"] = func(ctx context.Context, _ json.RawMessage, _ Notifier) (any, error) { return s.handleDockerResourcesList(ctx) }
-	m["emulators.list"] = func(ctx context.Context, _ json.RawMessage, _ Notifier) (any, error) { return s.handleEmulatorsList(ctx) }
-	m["emulators.prepareProfile"] = func(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
+func (s *Service) registerRuntimeHandlers(m *handlerRegistry) {
+	m.register("runtime.get", func(ctx context.Context, _ json.RawMessage, _ Notifier) (any, error) { return s.handleRuntimeGet(ctx) })
+	m.register("docker.runtime.get", func(ctx context.Context, _ json.RawMessage, _ Notifier) (any, error) {
+		return s.handleDockerRuntimeGet(ctx)
+	})
+	m.register("docker.resources.list", func(ctx context.Context, _ json.RawMessage, _ Notifier) (any, error) {
+		return s.handleDockerResourcesList(ctx)
+	})
+	m.register("emulators.list", func(ctx context.Context, _ json.RawMessage, _ Notifier) (any, error) {
+		return s.handleEmulatorsList(ctx)
+	})
+	m.register("emulators.prepareProfile", func(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
 		return s.handleEmulatorsPrepareProfile(ctx, params)
-	}
-	m["emulators.start"] = func(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) { return s.handleEmulatorsStart(ctx, params) }
-	m["emulators.stop"] = func(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) { return s.handleEmulatorsStop(ctx, params) }
-	m["emulators.logs"] = func(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) { return s.handleEmulatorsLogs(ctx, params) }
-	m["actions.invoke"] = func(_ context.Context, params json.RawMessage, notifier Notifier) (any, error) { return s.handleActionsInvoke(params, notifier) }
+	})
+	m.register("emulators.start", func(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
+		return s.handleEmulatorsStart(ctx, params)
+	})
+	m.register("emulators.stop", func(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
+		return s.handleEmulatorsStop(ctx, params)
+	})
+	m.register("emulators.logs", func(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
+		return s.handleEmulatorsLogs(ctx, params)
+	})
+	m.register("actions.invoke", func(_ context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleActionsInvoke(params, notifier)
+	})
 }
