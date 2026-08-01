@@ -25,9 +25,10 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 	}
 
 	s.discovery.Invalidate()
-	s.invalidateRuntimeStatus()
-	s.invalidateAzureCLIExtensionCache()
-	s.invalidateCloudResourceCaches(background)
+	// Explicit invalidation through sessionport.Invalidator (F-029 Phase 3).
+	s.InvalidateRuntimeStatus()
+	s.InvalidateAzureCLIExtensionCache()
+	s.InvalidateCloudResourceCaches(background)
 
 	snapshot, err := s.discovery.Discover()
 	if err != nil {

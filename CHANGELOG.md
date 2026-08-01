@@ -11,6 +11,11 @@ Installers for every release are published on the
 
 ### Changed
 
+- Daemon session/workspace capabilities are exposed as narrow ports in
+  `internal/app/sessionport` (session load/update under one façade lock,
+  workspace build options, explicit cache invalidation, activity helpers) so
+  AWS/Azure/labs extraction can depend on interfaces instead of the façade
+  (architecture F-029 Phase 3).
 - Daemon deployment ownership (recipe helpers, OpenTofu install, plan/apply/
   destroy/cancel, and the cancel map) moves into `internal/app/deployment`.
   Secrets sealing stays on the façade via a narrow port (architecture F-029

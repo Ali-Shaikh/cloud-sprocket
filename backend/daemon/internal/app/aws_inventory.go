@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"cloudsprocket/backend/daemon/internal/app/sessionport"
 	"cloudsprocket/backend/daemon/internal/models"
 )
 
@@ -247,9 +248,7 @@ func (s *Service) handleAwsInventoryGet(ctx context.Context, params json.RawMess
 	if err != nil {
 		return nil, err
 	}
-	s.mu.Lock()
-	session, err := s.currentState(ctx, snapshot)
-	s.mu.Unlock()
+	session, err := s.Load(ctx, snapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -257,11 +256,10 @@ func (s *Service) handleAwsInventoryGet(ctx context.Context, params json.RawMess
 		return nil, errors.New("open an AWS workspace before loading service inventory")
 	}
 
-	workspace := s.buildWorkspaceSnapshotOpts(ctx, snapshot, session, workspaceSnapshotOptions{
-		lightweightAWS:       true,
-		skipAzureInventory:   true,
-		awsScope:             scope,
-		awsDeferredInventory: false,
+	workspace := s.Build(ctx, snapshot, session, sessionport.SnapshotOptions{
+		LightweightAWS:     true,
+		SkipAzureInventory: true,
+		AWSScope:           scope,
 	})
 	return awsInventorySliceFromWorkspace(scope, workspace)
 }
