@@ -1,6 +1,6 @@
 {
   "name": "cloud-sprocket-workspace",
-  "version": "0.9.11",
+  "version": "0.9.12",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "packageManager": "pnpm@11.15.1",
@@ -29,3 +29,4 @@
     "lint": "pnpm run lint:desktop && pnpm run lint:backend"
   }
 }
+
