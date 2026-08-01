@@ -20,22 +20,25 @@ func (s *Service) withLockedAzureWorkspace(
 	if err != nil {
 		return discovery.Snapshot{}, models.SessionSnapshot{}, err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	session, err := s.currentState(ctx, snapshot)
+	// Session lock is held only inside sessionport.Session.Load/Update.
+	if mutate == nil {
+		session, loadErr := s.Load(ctx, snapshot)
+		if loadErr != nil {
+			return discovery.Snapshot{}, models.SessionSnapshot{}, loadErr
+		}
+		if !session.IsLocked || session.CurrentProviderID != "azure" {
+			return discovery.Snapshot{}, models.SessionSnapshot{}, errors.New(guardMsg)
+		}
+		return snapshot, session, nil
+	}
+	session, err := s.Update(ctx, snapshot, func(sess *models.SessionSnapshot) error {
+		if !sess.IsLocked || sess.CurrentProviderID != "azure" {
+			return errors.New(guardMsg)
+		}
+		return mutate(sess)
+	})
 	if err != nil {
 		return discovery.Snapshot{}, models.SessionSnapshot{}, err
-	}
-	if !session.IsLocked || session.CurrentProviderID != "azure" {
-		return discovery.Snapshot{}, models.SessionSnapshot{}, errors.New(guardMsg)
-	}
-	if mutate != nil {
-		if err := mutate(&session); err != nil {
-			return discovery.Snapshot{}, models.SessionSnapshot{}, err
-		}
-		if err := s.store.SaveSession(ctx, session); err != nil {
-			return discovery.Snapshot{}, models.SessionSnapshot{}, err
-		}
 	}
 	return snapshot, session, nil
 }
@@ -66,11 +69,11 @@ func (s *Service) finishAzureWorkspaceOpts(
 	logLevel string,
 	logMsg string,
 ) (models.WorkspaceSnapshot, error) {
-	workspace := s.buildWorkspaceSnapshotOpts(ctx, snapshot, session, opts)
+	workspace := s.Build(ctx, snapshot, session, snapshotOptionsToPort(opts))
 	if logMsg == "" {
 		return workspace, nil
 	}
-	return workspace, s.notifyStateAndLog(ctx, snapshot, session, notifier, logLevel, logMsg)
+	return workspace, s.NotifyStateAndLog(ctx, snapshot, session, notifier, logLevel, logMsg)
 }
 
 func (s *Service) azureProviderCommandPath(snapshot discovery.Snapshot) string {

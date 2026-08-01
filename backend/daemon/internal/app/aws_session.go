@@ -20,19 +20,17 @@ func (s *Service) withLockedAWSWorkspace(
 	if err != nil {
 		return discovery.Snapshot{}, models.SessionSnapshot{}, err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	session, err := s.currentState(ctx, snapshot)
+	// Session lock is held only inside sessionport.Session.Update.
+	session, err := s.Update(ctx, snapshot, func(sess *models.SessionSnapshot) error {
+		if !sess.IsLocked || sess.CurrentProviderID != "aws" {
+			return errors.New(guardMsg)
+		}
+		if mutate != nil {
+			return mutate(sess)
+		}
+		return nil
+	})
 	if err != nil {
-		return discovery.Snapshot{}, models.SessionSnapshot{}, err
-	}
-	if !session.IsLocked || session.CurrentProviderID != "aws" {
-		return discovery.Snapshot{}, models.SessionSnapshot{}, errors.New(guardMsg)
-	}
-	if err := mutate(&session); err != nil {
-		return discovery.Snapshot{}, models.SessionSnapshot{}, err
-	}
-	if err := s.store.SaveSession(ctx, session); err != nil {
 		return discovery.Snapshot{}, models.SessionSnapshot{}, err
 	}
 	return snapshot, session, nil
@@ -54,9 +52,7 @@ func (s *Service) authorizeAWSWriteSelection(
 	gateMsg string,
 	selection awsWriteSelection,
 ) (models.ProfileSummary, string, string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	session, err := s.currentState(ctx, snapshot)
+	session, err := s.Load(ctx, snapshot)
 	if err != nil {
 		return models.ProfileSummary{}, "", "", err
 	}
@@ -80,9 +76,7 @@ func (s *Service) authorizeAWSWrite(
 	openMsg string,
 	gateMsg string,
 ) (models.SessionSnapshot, models.ProfileSummary, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	session, err := s.currentState(ctx, snapshot)
+	session, err := s.Load(ctx, snapshot)
 	if err != nil {
 		return models.SessionSnapshot{}, models.ProfileSummary{}, err
 	}
@@ -112,18 +106,16 @@ func (s *Service) finishAWSWriteAction(
 	successMsg string,
 	mutate func(*models.SessionSnapshot),
 ) (models.WorkspaceSnapshot, error) {
-	s.mu.Lock()
-	session, err := s.currentState(ctx, snapshot)
+	// Session lock is held only for Load/Update via sessionport.Session.
+	session, err := s.Update(ctx, snapshot, func(sess *models.SessionSnapshot) error {
+		if mutate != nil {
+			mutate(sess)
+		}
+		return nil
+	})
 	if err != nil {
-		s.mu.Unlock()
 		return models.WorkspaceSnapshot{}, err
 	}
-	mutate(&session)
-	if err := s.store.SaveSession(ctx, session); err != nil {
-		s.mu.Unlock()
-		return models.WorkspaceSnapshot{}, err
-	}
-	s.mu.Unlock()
 	return s.finishAWSWorkspaceOpts(
 		ctx,
 		snapshot,
@@ -163,7 +155,9 @@ func (s *Service) finishAWSWorkspaceOpts(
 	logMsg string,
 	logOnly bool,
 ) (models.WorkspaceSnapshot, error) {
-	workspace := s.buildWorkspaceSnapshotOpts(ctx, snapshot, session, opts)
+	// Build through the sessionport.Workspace surface so AWS extraction can call
+	// the same port without importing unexported façade helpers.
+	workspace := s.Build(ctx, snapshot, session, snapshotOptionsToPort(opts))
 	if logMsg == "" {
 		return workspace, nil
 	}
@@ -172,10 +166,10 @@ func (s *Service) finishAWSWorkspaceOpts(
 			_ = notifier.Notify("log.appended", models.ActivityLogEntry{
 				Level:     logLevel,
 				Message:   logMsg,
-				Timestamp: s.timestamp(),
+				Timestamp: s.Timestamp(),
 			})
 		}
 		return workspace, nil
 	}
-	return workspace, s.notifyStateAndLog(ctx, snapshot, session, notifier, logLevel, logMsg)
+	return workspace, s.NotifyStateAndLog(ctx, snapshot, session, notifier, logLevel, logMsg)
 }
