@@ -1,6 +1,6 @@
 [package]
 name = "cloudsprocket-desktop"
-version = "0.9.11"
+version = "0.9.12"
 edition = "2021"
 license = "AGPL-3.0-or-later"
 
@@ -17,3 +17,4 @@ tauri-plugin-shell = "2"
 thiserror = "2"
 time = { version = "0.3", features = ["formatting"] }
 tokio = { version = "1", features = ["rt", "sync", "time"] }
+

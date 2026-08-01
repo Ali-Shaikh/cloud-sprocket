@@ -9,28 +9,24 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.12] - 2026-08-01
+
 ### Changed
 
-- Daemon session/workspace capabilities are exposed as narrow ports in
-  `internal/app/sessionport` (session load/update under one façade lock,
-  workspace build options, explicit cache invalidation, activity helpers) so
-  AWS/Azure/labs extraction can depend on interfaces instead of the façade
-  (architecture F-029 Phase 3).
-- Daemon deployment ownership (recipe helpers, OpenTofu install, plan/apply/
-  destroy/cancel, and the cancel map) moves into `internal/app/deployment`.
-  Secrets sealing stays on the façade via a narrow port (architecture F-029
-  Phase 2).
-- Daemon runtime ownership (Docker probing, emulator lifecycle, and both
-  runtime caches) moves into `internal/app/runtime`. The façade keeps the same
-  eight runtime RPC routes and registers `actions.invoke` with core
-  (architecture F-029 Phase 1).
-- Daemon RPC registration panics on duplicate method names and ships an exact
-  171-method golden list plus façade snapshot contract tests so domain
-  extraction cannot silently shrink or reshape the wire surface (architecture
-  F-029 Phase 0).
-- `aws.inventory.get` now returns a typed, service-scoped inventory slice
-  instead of serialising the full workspace snapshot. Desktop callers validate
-  and merge the slice so unrelated AWS service state is preserved.
+- Daemon application domain extraction (architecture F-029 Phases 0–3):
+  - exact 171-method RPC contract guards and façade snapshot tests
+  - `internal/app/runtime` owns Docker probing, emulators, and runtime caches
+  - `internal/app/deployment` owns recipes, OpenTofu install, and deploy lifecycle
+  - `internal/app/sessionport` exposes narrow session/workspace/invalidation ports
+- Recipe zip import rejects archive paths containing `..` before extraction
+  (Zip Slip hardening).
+- Greptile skips Dependabot/Renovate bot authors and dependency branches via
+  root `greptile.json`.
+- Dependency consolidation for open bot package bumps (desktop, AWS SDK Go v2,
+  recipe sample APIs).
+- `aws.inventory.get` returns a typed, service-scoped inventory slice instead of
+  serialising the full workspace snapshot. Desktop callers validate and merge
+  the slice so unrelated AWS service state is preserved.
 - Desktop session, workspace snapshot, and provider/profile selection state are
   provided via `WorkspaceSessionProvider`, removing nine more fields from
   `WorkspaceTabRouterProps` (architecture F-028 slice 4).
@@ -1156,7 +1152,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.11...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.12...HEAD
+[0.9.12]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.11...v0.9.12
 [0.9.11]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.10...v0.9.11
 [0.9.10]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.9...v0.9.10
 [0.9.9]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.8...v0.9.9
