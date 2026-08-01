@@ -12,10 +12,28 @@ import (
 	"testing"
 	"time"
 
+	appdeployment "cloudsprocket/backend/daemon/internal/app/deployment"
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/deploy"
+	"cloudsprocket/backend/daemon/internal/recipes"
 	"cloudsprocket/backend/daemon/internal/store"
 )
+
+// attachDeploy wires the deployment domain used for status persistence helpers.
+func attachDeploy(s *Service) {
+	now := s.now
+	if now == nil {
+		now = func() time.Time { return time.Now().UTC() }
+	}
+	s.deploy = appdeployment.New(appdeployment.Deps{
+		Settings: s.settings,
+		Store:    s.store,
+		Recipes:  recipes.Bundled().WithImportedDir(s.settings.ImportedRecipesDir),
+		Deployer: &fakeDeployer{available: true},
+		Secrets:  deploySecretsAdapter{s: s},
+		Now:      now,
+	})
+}
 
 func TestDeploymentSecretsSealedAtRest(t *testing.T) {
 	dir := t.TempDir()
@@ -34,6 +52,7 @@ func TestDeploymentSecretsSealedAtRest(t *testing.T) {
 		t.Fatalf("loadCipher: %v", err)
 	}
 	s := &Service{store: dataStore, cipher: cipher, now: func() time.Time { return time.Now().UTC() }}
+	attachDeploy(s)
 
 	deployment := &deploy.Deployment{
 		ID:            "dep-secret",
@@ -128,6 +147,7 @@ func TestLegacyPlaintextSecretsResealedOnRead(t *testing.T) {
 		t.Fatalf("loadCipher: %v", err)
 	}
 	s := &Service{store: dataStore, cipher: cipher, now: func() time.Time { return time.Now().UTC() }}
+	attachDeploy(s)
 
 	// Simulate a pre-encryption deployment row with sensitive values in plaintext.
 	legacy := &deploy.Deployment{
@@ -282,6 +302,7 @@ func TestSensitiveDeploymentPersistenceFailsClosedWithoutCipher(t *testing.T) {
 	t.Cleanup(func() { _ = dataStore.Close() })
 
 	s := &Service{store: dataStore, now: func() time.Time { return time.Now().UTC() }}
+	attachDeploy(s)
 	deployment := &deploy.Deployment{
 		ID:            "dep-unsealed",
 		SensitiveVars: []string{"password"},

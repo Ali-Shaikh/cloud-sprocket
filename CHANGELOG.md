@@ -11,6 +11,10 @@ Installers for every release are published on the
 
 ### Changed
 
+- Daemon deployment ownership (recipe helpers, OpenTofu install, plan/apply/
+  destroy/cancel, and the cancel map) moves into `internal/app/deployment`.
+  Secrets sealing stays on the façade via a narrow port (architecture F-029
+  Phase 2).
 - Daemon runtime ownership (Docker probing, emulator lifecycle, and both
   runtime caches) moves into `internal/app/runtime`. The façade keeps the same
   eight runtime RPC routes and registers `actions.invoke` with core

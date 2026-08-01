@@ -118,7 +118,7 @@ func (s *Service) loadDeploymentLab(ctx context.Context, deploymentID string) (*
 	if err != nil {
 		return nil, nil, err
 	}
-	recipe, err := s.recipes.Load(deployment.RecipeID)
+	recipe, err := s.loadRecipe(deployment.RecipeID)
 	if err != nil {
 		return nil, nil, err
 	}
