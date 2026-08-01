@@ -957,9 +957,14 @@ func extractRecipeZip(zipPath string) (string, error) {
 	const maxTotalBytes int64 = 128 << 20 // 128 MiB total uncompressed
 	var totalWritten int64
 	for _, file := range reader.File {
+		// Zip Slip: reject raw archive paths that contain ".." before any join
+		// (CodeQL go/zipslip; also covers Windows-style separators).
+		if strings.Contains(file.Name, "..") {
+			_ = os.RemoveAll(tmp)
+			return "", fmt.Errorf("zip entry escapes root: %s", file.Name)
+		}
 		name := filepath.Clean(file.Name)
-		// Zip slip guard.
-		if name == ".." || strings.HasPrefix(name, ".."+string(os.PathSeparator)) {
+		if name == "." || name == "" || filepath.IsAbs(name) {
 			_ = os.RemoveAll(tmp)
 			return "", fmt.Errorf("zip entry escapes root: %s", file.Name)
 		}
@@ -968,7 +973,9 @@ func extractRecipeZip(zipPath string) (string, error) {
 			continue
 		}
 		target := filepath.Join(tmp, name)
-		if !strings.HasPrefix(filepath.Clean(target), cleanTmp+string(os.PathSeparator)) && filepath.Clean(target) != cleanTmp {
+		// Double-check the resolved path stays under the extraction root.
+		rel, relErr := filepath.Rel(cleanTmp, filepath.Clean(target))
+		if relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
 			_ = os.RemoveAll(tmp)
 			return "", fmt.Errorf("zip entry escapes root: %s", file.Name)
 		}
