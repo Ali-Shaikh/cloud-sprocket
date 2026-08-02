@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	appaws "cloudsprocket/backend/daemon/internal/app/aws"
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
@@ -507,9 +508,9 @@ func TestAwsInventorySliceJSONIsScopedAndPreservesEmptyArrays(t *testing.T) {
 			if _, ok := catalogueScopes[tt.scope]; !ok {
 				t.Fatalf("scope %q is not present in the AWS service catalogue", tt.scope)
 			}
-			slice, err := awsInventorySliceFromWorkspace(tt.scope, workspace)
+			slice, err := appaws.InventorySliceFromWorkspace(tt.scope, workspace)
 			if err != nil {
-				t.Fatalf("awsInventorySliceFromWorkspace: %v", err)
+				t.Fatalf("InventorySliceFromWorkspace: %v", err)
 			}
 			encoded, err := json.Marshal(slice)
 			if err != nil {

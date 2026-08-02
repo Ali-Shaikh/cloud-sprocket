@@ -9,6 +9,12 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Changed
+
+- Daemon AWS inventory RPC (`aws.inventory.get`) moves into `internal/app/aws`
+  with pure slice projection and session/workspace ports, leaving selection and
+  write handlers on the façade for later F-029 slices.
+
 ## [0.9.12] - 2026-08-01
 
 ### Changed
