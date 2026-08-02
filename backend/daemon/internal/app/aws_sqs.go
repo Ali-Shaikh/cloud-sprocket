@@ -174,41 +174,6 @@ func (s *Service) enrichSQSInventory(
 	})
 }
 
-func (s *Service) handleAwsSqsSelectRegion(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Region string `json:"region"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting an SQS region", func(session *models.SessionSnapshot) error {
-		session.SelectedSQSRegion = request.Region
-		session.SelectedSQSQueueURL = ""
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "sqs", skipAzureInventory: true}, "info", fmt.Sprintf("Selected SQS region %s.", request.Region), true)
-}
-
-func (s *Service) handleAwsSqsSelectQueue(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		QueueURL string `json:"queueUrl"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting an SQS queue", func(session *models.SessionSnapshot) error {
-		session.SelectedSQSQueueURL = request.QueueURL
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "sqs", skipAzureInventory: true}, "", "", false)
-}
-
 func (s *Service) handleAwsSqsPeek(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		QueueURL string `json:"queueUrl"`

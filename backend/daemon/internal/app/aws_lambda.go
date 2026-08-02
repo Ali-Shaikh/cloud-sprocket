@@ -198,40 +198,6 @@ func (s *Service) enrichLambdaInventory(
 	})
 }
 
-func (s *Service) handleAwsLambdaSelectRegion(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Region string `json:"region"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting a Lambda region", func(session *models.SessionSnapshot) error {
-		session.SelectedLambdaRegion = request.Region
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "lambda", skipAzureInventory: true}, "info", fmt.Sprintf("Selected Lambda region %s.", request.Region), true)
-}
-
-func (s *Service) handleAwsLambdaSelectFunction(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		FunctionName string `json:"functionName"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting a Lambda function", func(session *models.SessionSnapshot) error {
-		session.SelectedLambdaFunctionName = request.FunctionName
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "lambda", skipAzureInventory: true}, "", "", false)
-}
-
 func (s *Service) handleAwsLambdaDescribe(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		FunctionName string `json:"functionName"`

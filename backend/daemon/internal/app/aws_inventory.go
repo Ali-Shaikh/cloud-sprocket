@@ -6,7 +6,6 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
@@ -37,8 +36,8 @@ func (s *Service) enrichAwsInventory(
 }
 
 func (s *Service) handleAwsInventoryGet(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
-	if s.aws == nil {
-		return nil, errors.New("aws inventory service is not available")
+	if err := s.requireAWS(); err != nil {
+		return nil, err
 	}
 	return s.aws.HandleInventoryGet(ctx, params)
 }

@@ -5,7 +5,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -270,78 +269,4 @@ func (s *Service) selectedECSTaskArn(
 		}
 	}
 	return ""
-}
-
-func (s *Service) handleAwsEcsSelectRegion(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Region string `json:"region"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting an ECS region", func(session *models.SessionSnapshot) error {
-		session.SelectedECSRegion = request.Region
-		session.SelectedECSClusterArn = ""
-		session.SelectedECSServiceArn = ""
-		session.SelectedECSTaskArn = ""
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "ecs", skipAzureInventory: true}, "", "", false)
-}
-
-func (s *Service) handleAwsEcsSelectCluster(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		ClusterArn string `json:"clusterArn"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting an ECS cluster", func(session *models.SessionSnapshot) error {
-		session.SelectedECSClusterArn = request.ClusterArn
-		session.SelectedECSServiceArn = ""
-		session.SelectedECSTaskArn = ""
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "ecs", skipAzureInventory: true}, "", "", false)
-}
-
-func (s *Service) handleAwsEcsSelectService(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		ServiceArn string `json:"serviceArn"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting an ECS service", func(session *models.SessionSnapshot) error {
-		session.SelectedECSServiceArn = request.ServiceArn
-		session.SelectedECSTaskArn = ""
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "ecs", skipAzureInventory: true}, "", "", false)
-}
-
-func (s *Service) handleAwsEcsSelectTask(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		TaskArn string `json:"taskArn"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting an ECS task", func(session *models.SessionSnapshot) error {
-		session.SelectedECSTaskArn = request.TaskArn
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "ecs", skipAzureInventory: true}, "", "", false)
 }

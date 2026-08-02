@@ -155,41 +155,6 @@ func (s *Service) enrichDynamoDBInventory(
 	})
 }
 
-func (s *Service) handleAwsDynamodbSelectRegion(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Region string `json:"region"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting a DynamoDB region", func(session *models.SessionSnapshot) error {
-		session.SelectedDynamoDBRegion = request.Region
-		session.SelectedDynamoDBTableName = ""
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "dynamodb", skipAzureInventory: true}, "info", fmt.Sprintf("Selected DynamoDB region %s.", request.Region), true)
-}
-
-func (s *Service) handleAwsDynamodbSelectTable(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		TableName string `json:"tableName"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting a DynamoDB table", func(session *models.SessionSnapshot) error {
-		session.SelectedDynamoDBTableName = request.TableName
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "dynamodb", skipAzureInventory: true}, "", "", false)
-}
-
 func (s *Service) activeDynamoDBSelection(
 	snapshot discovery.Snapshot,
 	session models.SessionSnapshot,

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Ali Shaikh
 
 // Package aws owns AWS-domain RPC handlers that no longer need the full app
-// façade. Phase 4 starts with aws.inventory.get; selection and write groups
+// façade. Phase 4 covers inventory.get and selection groups; write groups
 // move in later slices (F-029).
 package aws
 
@@ -12,29 +12,35 @@ import (
 
 // Deps holds collaborators required to construct an AWS domain Service.
 type Deps struct {
-	Discovery Discovery
-	Session   sessionport.Session
-	Workspace sessionport.Workspace
-	Gate      ServiceGate
-	Catalog   ScopeCatalog
+	Discovery   Discovery
+	Session     sessionport.Session
+	Workspace   sessionport.Workspace
+	Activity    sessionport.Activity
+	Invalidator sessionport.Invalidator
+	Gate        ServiceGate
+	Catalog     ScopeCatalog
 }
 
-// Service owns the extracted AWS inventory RPC path.
+// Service owns the extracted AWS inventory and selection RPC paths.
 type Service struct {
-	discovery Discovery
-	session   sessionport.Session
-	workspace sessionport.Workspace
-	gate      ServiceGate
-	catalog   ScopeCatalog
+	discovery   Discovery
+	session     sessionport.Session
+	workspace   sessionport.Workspace
+	activity    sessionport.Activity
+	invalidator sessionport.Invalidator
+	gate        ServiceGate
+	catalog     ScopeCatalog
 }
 
 // New constructs an AWS domain Service.
 func New(deps Deps) *Service {
 	return &Service{
-		discovery: deps.Discovery,
-		session:   deps.Session,
-		workspace: deps.Workspace,
-		gate:      deps.Gate,
-		catalog:   deps.Catalog,
+		discovery:   deps.Discovery,
+		session:     deps.Session,
+		workspace:   deps.Workspace,
+		activity:    deps.Activity,
+		invalidator: deps.Invalidator,
+		gate:        deps.Gate,
+		catalog:     deps.Catalog,
 	}
 }
