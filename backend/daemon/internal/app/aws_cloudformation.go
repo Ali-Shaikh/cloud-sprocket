@@ -5,7 +5,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -175,39 +174,4 @@ func (s *Service) cloudFormationStackEvents(
 		return cached
 	}
 	return []models.AwsCloudFormationStackEvent{}
-}
-
-func (s *Service) handleAwsCloudFormationSelectRegion(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Region string `json:"region"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting a CloudFormation region", func(session *models.SessionSnapshot) error {
-		session.SelectedCloudFormationRegion = request.Region
-		session.SelectedCloudFormationStackName = ""
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "cloudformation", skipAzureInventory: true}, "", "", false)
-}
-
-func (s *Service) handleAwsCloudFormationSelectStack(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		StackName string `json:"stackName"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting a CloudFormation stack", func(session *models.SessionSnapshot) error {
-		session.SelectedCloudFormationStackName = request.StackName
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "cloudformation", skipAzureInventory: true}, "", "", false)
 }

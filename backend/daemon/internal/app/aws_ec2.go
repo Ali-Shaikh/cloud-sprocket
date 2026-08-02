@@ -339,42 +339,6 @@ func (s *Service) waitForEC2ActionState(
 	}
 }
 
-func (s *Service) handleAwsEc2SelectRegion(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Region string `json:"region"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting an EC2 region", func(session *models.SessionSnapshot) error {
-		session.SelectedEC2Region = request.Region
-		session.SelectedEC2InstanceID = ""
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	// EC2 select RPCs replace workspace wholesale on the client (no merge helper).
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{skipAzureInventory: true}, "info", fmt.Sprintf("Selected EC2 region %s.", request.Region), false)
-}
-
-func (s *Service) handleAwsEc2SelectInstance(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		InstanceID string `json:"instanceId"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting an EC2 instance", func(session *models.SessionSnapshot) error {
-		session.SelectedEC2InstanceID = request.InstanceID
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{skipAzureInventory: true}, "", "", false)
-}
-
 func (s *Service) handleAwsEc2InvokeAction(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		Action     string `json:"action"`

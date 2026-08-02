@@ -5,7 +5,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -135,21 +134,4 @@ func (s *Service) route53ResourceRecordSets(
 		return cached
 	}
 	return []models.AwsRoute53ResourceRecordSet{}
-}
-
-func (s *Service) handleAwsRoute53SelectHostedZone(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		HostedZoneID string `json:"hostedZoneId"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting a Route 53 hosted zone", func(session *models.SessionSnapshot) error {
-		session.SelectedRoute53HostedZoneID = request.HostedZoneID
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "route53", skipAzureInventory: true}, "", "", false)
 }

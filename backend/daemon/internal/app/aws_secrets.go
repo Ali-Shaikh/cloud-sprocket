@@ -135,41 +135,6 @@ func (s *Service) selectedSecretsManagerName(
 	return secrets[0].Name
 }
 
-func (s *Service) handleAwsSecretsManagerSelectRegion(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Region string `json:"region"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting a Secrets Manager region", func(session *models.SessionSnapshot) error {
-		session.SelectedSecretsManagerRegion = request.Region
-		session.SelectedSecretsManagerName = ""
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "secrets", skipAzureInventory: true}, "", "", false)
-}
-
-func (s *Service) handleAwsSecretsManagerSelectSecret(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		SecretName string `json:"secretName"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting a secret", func(session *models.SessionSnapshot) error {
-		session.SelectedSecretsManagerName = strings.TrimSpace(request.SecretName)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "secrets", skipAzureInventory: true}, "", "", false)
-}
-
 func (s *Service) handleAwsSecretsManagerReveal(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
 	var request struct {
 		Region     string `json:"region"`

@@ -5,7 +5,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -177,39 +176,4 @@ func (s *Service) apiGatewayStages(
 		return cached
 	}
 	return []models.AwsApiGatewayStage{}
-}
-
-func (s *Service) handleAwsApiGatewaySelectRegion(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Region string `json:"region"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting an API Gateway region", func(session *models.SessionSnapshot) error {
-		session.SelectedApiGatewayRegion = request.Region
-		session.SelectedApiGatewayApiKey = ""
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "apigateway", skipAzureInventory: true}, "", "", false)
-}
-
-func (s *Service) handleAwsApiGatewaySelectApi(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		ApiKey string `json:"apiKey"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting an API Gateway API", func(session *models.SessionSnapshot) error {
-		session.SelectedApiGatewayApiKey = request.ApiKey
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "apigateway", skipAzureInventory: true}, "", "", false)
 }

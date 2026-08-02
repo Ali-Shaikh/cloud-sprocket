@@ -5,7 +5,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -185,39 +184,4 @@ func (s *Service) eksNodeGroups(
 		return cached
 	}
 	return []models.AwsEksNodeGroup{}
-}
-
-func (s *Service) handleAwsEksSelectRegion(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Region string `json:"region"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting an EKS region", func(session *models.SessionSnapshot) error {
-		session.SelectedEKSRegion = request.Region
-		session.SelectedEKSClusterName = ""
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "eks", skipAzureInventory: true}, "", "", false)
-}
-
-func (s *Service) handleAwsEksSelectCluster(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		ClusterName string `json:"clusterName"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAWSWorkspace(ctx, "open an AWS workspace before selecting an EKS cluster", func(session *models.SessionSnapshot) error {
-		session.SelectedEKSClusterName = request.ClusterName
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAWSWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{awsScope: "eks", skipAzureInventory: true}, "", "", false)
 }

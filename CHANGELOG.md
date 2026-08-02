@@ -12,8 +12,12 @@ Installers for every release are published on the
 ### Changed
 
 - Daemon AWS inventory RPC (`aws.inventory.get`) moves into `internal/app/aws`
-  with pure slice projection and session/workspace ports, leaving selection and
-  write handlers on the façade for later F-029 slices.
+  with pure slice projection and session/workspace ports.
+- Daemon AWS selection RPCs (region/resource select across S3, EC2, Lambda,
+  DynamoDB, SQS, SNS, RDS, ECS, EKS, CloudFormation, EventBridge, Route 53,
+  ELB, KMS, API Gateway, Secrets Manager, Logs, IAM) move into
+  `internal/app/aws` with session/workspace/activity/invalidator ports; write
+  handlers remain on the façade for F-029 Phase 4c.
 
 ## [0.9.12] - 2026-08-01
 
