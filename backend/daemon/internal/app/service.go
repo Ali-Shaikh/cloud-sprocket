@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	appaws "cloudsprocket/backend/daemon/internal/app/aws"
 	appdeployment "cloudsprocket/backend/daemon/internal/app/deployment"
 	appruntime "cloudsprocket/backend/daemon/internal/app/runtime"
 	"cloudsprocket/backend/daemon/internal/config"
@@ -62,7 +63,9 @@ type Service struct {
 	rt *appruntime.Service
 	// deploy owns recipe catalogue helpers, tofu install, deployment lifecycle,
 	// and cancel map ownership (F-029 Phase 2).
-	deploy                *appdeployment.Service
+	deploy *appdeployment.Service
+	// aws owns extracted AWS domain RPCs, starting with inventory.get (F-029 Phase 4).
+	aws                   *appaws.Service
 	cipher                *secrets.Cipher
 	initialisationErr     error
 	azureInventoryTimeout time.Duration
@@ -179,6 +182,13 @@ func NewFromDeps(deps Deps) *Service {
 		Deployer: deployEngine,
 		Secrets:  deploySecretsAdapter{s: service},
 		Now:      now,
+	})
+	service.aws = appaws.New(appaws.Deps{
+		Discovery: deps.Discovery,
+		Session:   service,
+		Workspace: service,
+		Gate:      awsServiceGate{s: service},
+		Catalog:   awsScopeCatalog{},
 	})
 	service.mu.Lock()
 	if err := service.loadPreferencesLocked(); err != nil {
