@@ -9,6 +9,14 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Added
+
+- GCP Cloud Storage foundation: `gcpadapter` lists buckets via
+  `gcloud storage buckets list`, `WorkspaceSnapshot` carries
+  `gcpStorageBuckets` / status, catalogue promotes `gcp-storage` to a live
+  service (`inventoryScope: gcs`), and the desktop Storage tab shows the
+  inventory. Object browsing remains deferred.
+
 ### Changed
 
 - Daemon Azure inventory RPC (`azure.inventory.get`) moves into

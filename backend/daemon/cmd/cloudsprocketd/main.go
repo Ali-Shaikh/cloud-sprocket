@@ -16,6 +16,7 @@ import (
 	"cloudsprocket/backend/daemon/internal/awsadapter"
 	"cloudsprocket/backend/daemon/internal/azureadapter"
 	"cloudsprocket/backend/daemon/internal/config"
+	"cloudsprocket/backend/daemon/internal/gcpadapter"
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/dockerruntime"
 	"cloudsprocket/backend/daemon/internal/rpc"
@@ -66,6 +67,7 @@ func main() {
 		Logs:           awsadapter.NewLogsInventory(settings),
 		IAM:            awsadapter.NewIAMInventory(settings),
 		Azure:          azureadapter.NewInventory(settings),
+		GcpStorage:     gcpadapter.NewInventory(settings),
 		Docker:         dockerruntime.New(settings),
 		// LocalStack and AzureRuntime left nil so NewFromDeps applies defaults.
 	})

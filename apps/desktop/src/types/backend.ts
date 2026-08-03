@@ -245,6 +245,15 @@ export interface AwsS3Bucket {
   summary?: string;
 }
 
+export interface GcpStorageBucket {
+  name: string;
+  location?: string;
+  locationType?: string;
+  storageClass?: string;
+  createdAt?: string;
+  summary?: string;
+}
+
 export interface AwsS3Object {
   key: string;
   size?: string;
@@ -1114,6 +1123,10 @@ export interface WorkspaceSnapshot {
   azureEntraUsers: AzureEntraUser[];
   azureEntraGroups: AzureEntraGroup[];
   azureEntraApps: AzureEntraApp[];
+  selectedGcpStorageBucket?: string;
+  gcpStorageStatusMessage?: string;
+  /** Present after GCP Storage enrichment; omit in fixtures/mocks. */
+  gcpStorageBuckets?: GcpStorageBucket[];
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;

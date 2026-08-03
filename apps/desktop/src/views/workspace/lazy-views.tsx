@@ -37,4 +37,5 @@ export const AzureQueuesView = lazy(() => import("./AzureQueuesView"));
 export const AzureEntraView = lazy(() => import("./AzureEntraView"));
 export const RuntimeView = lazy(() => import("./RuntimeView"));
 export const PlaceholderView = lazy(() => import("./PlaceholderView"));
+export const GcpStorageView = lazy(() => import("./GcpStorageView"));
 export const ActivityView = lazy(() => import("./ActivityView"));

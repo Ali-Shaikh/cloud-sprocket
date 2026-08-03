@@ -85,6 +85,7 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 		LambdaFunctions:        []models.AwsLambdaFunction{},
 		DynamoDBRegions:        []string{},
 		DynamoDBTables:         []models.AwsDynamoDBTable{},
+		GcpStorageBuckets:      []models.GcpStorageBucket{},
 	}
 
 	if provider, ok := findProvider(snapshot.Providers, session.CurrentProviderID); ok {
@@ -151,6 +152,11 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 		} else {
 			s.enrichAwsWorkspace(&workspace, session, awsOpts)
 		}
+	}
+	if workspace.Provider != nil &&
+		workspace.Provider.ProviderID == "gcp" &&
+		s.isProviderEnabled("gcp") {
+		s.enrichGcpWorkspace(&workspace, session)
 	}
 
 	return workspace

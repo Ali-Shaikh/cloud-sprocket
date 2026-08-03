@@ -33,6 +33,7 @@ import type {
   AwsS3Bucket,
   AwsS3ExportSnippet,
   AwsS3Object,
+  GcpStorageBucket,
   AwsS3PresignResult,
   AwsS3UploadResult,
   AwsSnsTopic,
@@ -146,6 +147,7 @@ export const emptyWorkspace: WorkspaceSnapshot = {
   azureEntraUsers: [],
   azureEntraGroups: [],
   azureEntraApps: [],
+  gcpStorageBuckets: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -335,6 +337,10 @@ function normaliseAzureVirtualMachine(vm: AzureVirtualMachine): AzureVirtualMach
 }
 
 function normaliseS3Bucket(bucket: AwsS3Bucket): AwsS3Bucket {
+  return { ...bucket };
+}
+
+function normaliseGcpStorageBucket(bucket: GcpStorageBucket): GcpStorageBucket {
   return { ...bucket };
 }
 
@@ -1166,6 +1172,7 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     azureEntraUsers: normaliseArray(source.azureEntraUsers),
     azureEntraGroups: normaliseArray(source.azureEntraGroups),
     azureEntraApps: normaliseArray(source.azureEntraApps),
+    gcpStorageBuckets: normaliseArray(source.gcpStorageBuckets).map(normaliseGcpStorageBucket),
     s3Buckets: normaliseArray(source.s3Buckets).map(normaliseS3Bucket),
     s3Objects: normaliseArray(source.s3Objects).map(normaliseS3Object),
     s3ObjectsNextToken: source.s3ObjectsNextToken,

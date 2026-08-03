@@ -27,15 +27,24 @@ func TestAzureWorkspaceTabsIncludePostgres(t *testing.T) {
 func TestGCPWorkspaceTabsMarkFutureServicesAsComingSoon(t *testing.T) {
 	tabs := workspaceTabs("gcp")
 	comingSoon := 0
-	for _, tab := range tabs {
+	var storage *models.WorkspaceTab
+	for index := range tabs {
+		tab := tabs[index]
 		if tab.Category == workspaceTabCategoryComingSoon {
 			comingSoon++
 		}
+		if tab.TabID == "gcp-storage" {
+			storage = &tabs[index]
+		}
 	}
-	if comingSoon < 3 {
-		t.Fatalf("expected at least 3 GCP coming_soon tabs, got %d", comingSoon)
+	// Cloud Storage is live; remaining GCP services stay coming_soon for now.
+	if comingSoon < 2 {
+		t.Fatalf("expected at least 2 GCP coming_soon tabs, got %d", comingSoon)
 	}
-	if !slices.ContainsFunc(tabs, func(tab models.WorkspaceTab) bool { return tab.TabID == "gcp-storage" }) {
+	if storage == nil {
 		t.Fatal("gcp workspace tabs missing gcp-storage")
+	}
+	if storage.Category != workspaceTabCategoryService {
+		t.Fatalf("gcp-storage category = %q, want %q", storage.Category, workspaceTabCategoryService)
 	}
 }

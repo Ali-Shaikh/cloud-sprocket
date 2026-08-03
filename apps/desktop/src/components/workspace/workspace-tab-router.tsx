@@ -15,7 +15,13 @@ import {
   markOnboardingComplete,
 } from "@/views/onboarding/onboarding-state";
 import DebugView from "@/views/DebugView";
-import { ActivityView, RuntimeView, PlaceholderView, DeveloperToolsView } from "@/views/workspace/lazy-views";
+import {
+  ActivityView,
+  RuntimeView,
+  PlaceholderView,
+  DeveloperToolsView,
+  GcpStorageView,
+} from "@/views/workspace/lazy-views";
 import SettingsView from "@/views/SettingsView";
 import { AwsWorkspaceTabs, AWS_TAB_IDS } from "./aws-workspace-tabs";
 import { AzureWorkspaceTabs } from "./azure-workspace-tabs";
@@ -242,6 +248,17 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
 
   if (session.isLocked && ["azure-overview","azure-resource-groups","azure-vms","azure-storage","azure-app-service","azure-tools","azure-log-analytics","azure-waf","azure-front-door","azure-functions","azure-key-vault","azure-cosmos","azure-postgres","azure-queues","azure-entra"].includes(activeWorkspaceTabId)) {
     return <AzureWorkspaceTabs {...props} />;
+  }
+
+  if (session.isLocked && activeWorkspaceTabId === "gcp-storage") {
+    return (
+      <GcpStorageView
+        workspace={activeWorkspace}
+        onRefresh={() => {
+          void refreshDiscovery();
+        }}
+      />
+    );
   }
 
   return activeWorkspaceTabId === "virtualisation" ? (
