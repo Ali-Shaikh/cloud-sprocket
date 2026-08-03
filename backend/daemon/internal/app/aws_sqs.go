@@ -5,41 +5,11 @@ package app
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
-	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
 )
-
-func (s *Service) activeSQSSelection(
-	snapshot discovery.Snapshot,
-	session models.SessionSnapshot,
-	requestQueueURL string,
-) (models.ProfileSummary, string, string, error) {
-	if !session.IsLocked || session.CurrentProviderID != "aws" {
-		return models.ProfileSummary{}, "", "", errors.New("open an AWS workspace before using SQS actions")
-	}
-	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
-	if !ok {
-		return models.ProfileSummary{}, "", "", errors.New("the workspace's AWS profile is not available")
-	}
-	region := session.SelectedSQSRegion
-	if region == "" {
-		region = profileRegionHint(profile)
-	}
-	queueURL := strings.TrimSpace(requestQueueURL)
-	if queueURL == "" {
-		queueURL = session.SelectedSQSQueueURL
-	}
-	if queueURL == "" {
-		return models.ProfileSummary{}, "", "", errors.New("select an SQS queue before using this action")
-	}
-	return profile, region, queueURL, nil
-}
 
 func (s *Service) sqsRegions(ctx context.Context, profile models.ProfileSummary) []string {
 	return s.lambdaRegions(ctx, profile)
@@ -172,100 +142,4 @@ func (s *Service) enrichSQSInventory(
 		workspace.SelectedSQSQueueURL = selectedQueue
 		workspace.SQSStatusMessage = status
 	})
-}
-
-func (s *Service) handleAwsSqsPeek(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		QueueURL string `json:"queueUrl"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, err := s.discovery.Discover()
-	if err != nil {
-		return nil, err
-	}
-	profile, region, queueURL, err := s.authorizeAWSWriteSelection(
-		ctx, snapshot,
-		"SQS peek requires write mode to be enabled",
-		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
-			return s.activeSQSSelection(snap, session, request.QueueURL)
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-	actionCtx, cancel := s.withAWSTimeout(ctx)
-	defer cancel()
-	return s.sqs.PeekMessages(actionCtx, profile, region, queueURL)
-}
-
-func (s *Service) handleAwsSqsSendMessage(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		QueueURL    string `json:"queueUrl"`
-		MessageBody string `json:"messageBody"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, err := s.discovery.Discover()
-	if err != nil {
-		return nil, err
-	}
-	profile, region, queueURL, err := s.authorizeAWSWriteSelection(
-		ctx, snapshot,
-		"SQS send requires write mode to be enabled",
-		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
-			return s.activeSQSSelection(snap, session, request.QueueURL)
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-	actionCtx, cancel := s.withAWSTimeout(ctx)
-	defer cancel()
-	return s.sqs.SendMessage(actionCtx, profile, region, queueURL, request.MessageBody)
-}
-
-func (s *Service) handleAwsSqsCreateQueue(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		QueueName string `json:"queueName"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	queueName := strings.TrimSpace(request.QueueName)
-	if queueName == "" {
-		return nil, errors.New("queue name is required")
-	}
-	snapshot, err := s.discovery.Discover()
-	if err != nil {
-		return nil, err
-	}
-	session, profile, err := s.authorizeAWSWrite(
-		ctx, snapshot,
-		"open an AWS workspace before creating an SQS queue",
-		"SQS create requires write mode to be enabled",
-	)
-	if err != nil {
-		return nil, err
-	}
-	region := session.SelectedSQSRegion
-	if region == "" {
-		region = profileRegionHint(profile)
-	}
-
-	actionCtx, cancel := s.withAWSTimeout(ctx)
-	created, err := s.sqs.CreateQueue(actionCtx, profile, region, queueName)
-	cancel()
-	if err != nil {
-		return nil, err
-	}
-	s.invalidateResourceCache(ctx, "aws.sqs.queues", profile.ProfileID+"|"+region)
-
-	return s.finishAWSWriteAction(
-		ctx, snapshot, notifier, "sqs",
-		fmt.Sprintf("Created SQS queue %s in %s.", created.QueueName, region),
-		func(session *models.SessionSnapshot) { session.SelectedSQSQueueURL = created.QueueURL },
-	)
 }

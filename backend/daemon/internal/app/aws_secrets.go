@@ -5,10 +5,7 @@ package app
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
@@ -133,51 +130,4 @@ func (s *Service) selectedSecretsManagerName(
 		return ""
 	}
 	return secrets[0].Name
-}
-
-func (s *Service) handleAwsSecretsManagerReveal(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
-	var request struct {
-		Region     string `json:"region"`
-		SecretName string `json:"secretName"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	region := strings.TrimSpace(request.Region)
-	secretName := strings.TrimSpace(request.SecretName)
-	if region == "" || secretName == "" {
-		return nil, errors.New("a region and secret name are required")
-	}
-
-	snapshot, err := s.discovery.Discover()
-	if err != nil {
-		return nil, err
-	}
-	s.mu.Lock()
-	session, err := s.currentState(ctx, snapshot)
-	s.mu.Unlock()
-	if err != nil {
-		return nil, err
-	}
-	if !session.IsLocked || session.CurrentProviderID != "aws" {
-		return nil, errors.New("open a locked AWS workspace before revealing a secret")
-	}
-	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
-	if !ok {
-		return nil, errors.New("the workspace's AWS profile is not available")
-	}
-	if enabled, reason := awsActionGate(session, profile); !enabled {
-		if reason == "" {
-			reason = "Reveal requires write mode to be enabled for this AWS workspace."
-		}
-		return nil, errors.New(reason)
-	}
-
-	timeoutCtx, cancel := s.withAWSTimeout(ctx)
-	defer cancel()
-	value, err := s.secretsManager.GetSecretValue(timeoutCtx, profile, region, secretName)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]string{"value": value}, nil
 }

@@ -16,8 +16,11 @@ Installers for every release are published on the
 - Daemon AWS selection RPCs (region/resource select across S3, EC2, Lambda,
   DynamoDB, SQS, SNS, RDS, ECS, EKS, CloudFormation, EventBridge, Route 53,
   ELB, KMS, API Gateway, Secrets Manager, Logs, IAM) move into
-  `internal/app/aws` with session/workspace/activity/invalidator ports; write
-  handlers remain on the façade for F-029 Phase 4c.
+  `internal/app/aws` with session/workspace/activity/invalidator ports.
+- Daemon AWS sync write RPCs for SQS, SNS, DynamoDB, IAM create-role, and
+  Secrets Manager reveal move into `internal/app/aws` with writer ports and
+  shared authorise/finish helpers; async EC2/RDS jobs and remaining S3/Lambda
+  writes stay on the façade for a later F-029 slice.
 
 ## [0.9.12] - 2026-08-01
 

@@ -553,48 +553,6 @@ func (s *Service) handleAwsLogsPutLogEvents(ctx context.Context, params json.Raw
 	return result, nil
 }
 
-func (s *Service) handleAwsIamCreateRole(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		RoleName string `json:"roleName"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	roleName := strings.TrimSpace(request.RoleName)
-	if roleName == "" {
-		return nil, errors.New("role name is required")
-	}
-	snapshot, err := s.discovery.Discover()
-	if err != nil {
-		return nil, err
-	}
-	_, profile, err := s.authorizeAWSWrite(
-		ctx, snapshot,
-		"open an AWS workspace before creating an IAM role",
-		"IAM create requires write mode to be enabled",
-	)
-	if err != nil {
-		return nil, err
-	}
-	region := profileRegionHint(profile)
-
-	actionCtx, cancel := s.withAWSTimeout(ctx)
-	created, err := s.iam.CreateRole(actionCtx, profile, region, roleName)
-	cancel()
-	if err != nil {
-		return nil, err
-	}
-	s.invalidateResourceCache(ctx, "aws.iam.roles", profile.ProfileID+"|"+region)
-
-	return s.finishAWSWriteAction(
-		ctx, snapshot, notifier, "iam",
-		fmt.Sprintf("Created IAM role %s.", created.RoleName),
-		func(session *models.SessionSnapshot) {
-			session.SelectedIAMRoleName = created.RoleName
-		},
-	)
-}
-
 func (s *Service) runRDSAction(
 	job models.JobStatus,
 	notifier Notifier,
