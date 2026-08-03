@@ -11,6 +11,10 @@ Installers for every release are published on the
 
 ### Changed
 
+- Daemon Azure inventory RPC (`azure.inventory.get`) moves into
+  `internal/app/azure` with pure scope helpers and session/workspace ports
+  (architecture F-029 Phase 5a). The RPC still returns a scoped
+  `WorkspaceSnapshot` (not a typed slice).
 - Daemon AWS inventory RPC (`aws.inventory.get`) moves into `internal/app/aws`
   with pure slice projection and session/workspace ports.
 - Daemon AWS selection RPCs (region/resource select across S3, EC2, Lambda,

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	appaws "cloudsprocket/backend/daemon/internal/app/aws"
+	appazure "cloudsprocket/backend/daemon/internal/app/azure"
 	appdeployment "cloudsprocket/backend/daemon/internal/app/deployment"
 	appruntime "cloudsprocket/backend/daemon/internal/app/runtime"
 	"cloudsprocket/backend/daemon/internal/config"
@@ -65,7 +66,10 @@ type Service struct {
 	// and cancel map ownership (F-029 Phase 2).
 	deploy *appdeployment.Service
 	// aws owns extracted AWS domain RPCs: inventory, selection, and sync writes (F-029 Phase 4).
-	aws                   *appaws.Service
+	aws *appaws.Service
+	// azureDomain owns extracted Azure domain RPCs (inventory first; F-029 Phase 5).
+	// Named azureDomain so it does not collide with the azure AzureInventory field.
+	azureDomain           *appazure.Service
 	cipher                *secrets.Cipher
 	initialisationErr     error
 	azureInventoryTimeout time.Duration
@@ -201,6 +205,15 @@ func NewFromDeps(deps Deps) *Service {
 		Lambda:        service.lambda,
 		Logs:          service.logs,
 		EC2:           service.ec2,
+	})
+	service.azureDomain = appazure.New(appazure.Deps{
+		Discovery:   deps.Discovery,
+		Session:     service,
+		Workspace:   service,
+		Activity:    service,
+		Invalidator: service,
+		Gate:        azureServiceGate{s: service},
+		Catalog:     azureScopeCatalog{},
 	})
 	service.mu.Lock()
 	if err := service.loadPreferencesLocked(); err != nil {
