@@ -321,9 +321,10 @@ func gcpServiceCatalog() []serviceCatalogEntry {
 		},
 		{
 			ProviderID: "gcp", ServiceID: "gcp-storage", Label: "Cloud Storage",
-			Summary: "GCS bucket and object inventory.",
-			Detail:  "Planned for a future release once floci-gcp inventory is wired.",
-			Category: workspaceTabCategoryComingSoon, Domain: serviceDomainStorage,
+			Summary: "GCS bucket inventory via gcloud.",
+			Detail:  "Lists Cloud Storage buckets for the open gcloud configuration and project. Object browsing follows in a later release.",
+			Category: workspaceTabCategoryService, Domain: serviceDomainStorage,
+			InventoryScope: "gcs",
 		},
 		{
 			ProviderID: "gcp", ServiceID: "gcp-compute", Label: "Compute Engine",

@@ -23,12 +23,37 @@ func TestDisabledCatalogueEntriesSkipsComingSoon(t *testing.T) {
 	service := &Service{
 		preferences: models.ServicePreferences{
 			DisabledServices: map[string][]string{
-				"gcp": {"gcp-storage"},
+				// Still coming_soon; must not appear in hidden-resource probes.
+				"gcp": {"gcp-compute"},
 			},
 		},
 	}
 	entries := service.disabledCatalogueEntries("gcp")
 	if len(entries) != 0 {
 		t.Fatalf("coming soon entries should not be probed: %+v", entries)
+	}
+}
+
+func TestDisabledCatalogueEntriesIncludesLiveGcpStorage(t *testing.T) {
+	service := &Service{
+		preferences: models.ServicePreferences{
+			DisabledServices: map[string][]string{
+				"gcp": {"gcp-storage"},
+			},
+		},
+	}
+	entries := service.disabledCatalogueEntries("gcp")
+	if len(entries) != 1 || entries[0].ServiceID != "gcp-storage" {
+		t.Fatalf("disabled live entries = %+v, want gcp-storage only", entries)
+	}
+}
+
+func TestCountCatalogueResourcesDetectsGcpStorageBuckets(t *testing.T) {
+	workspace := &models.WorkspaceSnapshot{
+		GcpStorageBuckets: []models.GcpStorageBucket{{Name: "demo"}},
+	}
+	count, ok := countCatalogueResources(workspace, "gcp", "gcp-storage")
+	if !ok || count != 1 {
+		t.Fatalf("count = %d ok = %v", count, ok)
 	}
 }

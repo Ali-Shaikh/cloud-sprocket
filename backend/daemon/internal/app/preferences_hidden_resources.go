@@ -132,6 +132,22 @@ func (s *Service) probeCatalogueEntryResources(
 		return countCatalogueResources(&workspace, entry.ProviderID, entry.ServiceID)
 	case "azure":
 		return s.probeAzureCatalogueEntry(&workspace, session, entry)
+	case "gcp":
+		return s.probeGcpCatalogueEntry(&workspace, session, entry)
+	default:
+		return 0, false
+	}
+}
+
+func (s *Service) probeGcpCatalogueEntry(
+	workspace *models.WorkspaceSnapshot,
+	session models.SessionSnapshot,
+	entry serviceCatalogEntry,
+) (int, bool) {
+	switch entry.ServiceID {
+	case "gcp-storage":
+		s.enrichGcpStorageInventory(workspace, session, nil)
+		return countCatalogueResources(workspace, entry.ProviderID, entry.ServiceID)
 	default:
 		return 0, false
 	}
@@ -326,6 +342,11 @@ func countCatalogueResources(
 			return len(workspace.AzureWafPolicies), true
 		case "azure-front-door":
 			return len(workspace.AzureFrontDoorProfiles), true
+		}
+	case "gcp":
+		switch serviceID {
+		case "gcp-storage":
+			return len(workspace.GcpStorageBuckets), true
 		}
 	}
 	return 0, false

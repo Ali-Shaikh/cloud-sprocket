@@ -1473,6 +1473,20 @@ type WorkspaceSnapshot struct {
 	AzureEntraUsers                   []AzureEntraUser             `json:"azureEntraUsers"`
 	AzureEntraGroups                  []AzureEntraGroup            `json:"azureEntraGroups"`
 	AzureEntraApps                    []AzureEntraApp              `json:"azureEntraApps"`
+	// GCP Cloud Storage inventory (foundation slice).
+	SelectedGcpStorageBucket  string             `json:"selectedGcpStorageBucket,omitempty"`
+	GcpStorageStatusMessage   string             `json:"gcpStorageStatusMessage,omitempty"`
+	GcpStorageBuckets         []GcpStorageBucket `json:"gcpStorageBuckets"`
+}
+
+// GcpStorageBucket is a Cloud Storage bucket from gcloud inventory.
+type GcpStorageBucket struct {
+	Name         string `json:"name"`
+	Location     string `json:"location,omitempty"`
+	LocationType string `json:"locationType,omitempty"`
+	StorageClass string `json:"storageClass,omitempty"`
+	CreatedAt    string `json:"createdAt,omitempty"`
+	Summary      string `json:"summary,omitempty"`
 }
 
 type ActivityLogEntry struct {

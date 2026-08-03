@@ -60,6 +60,7 @@ type Service struct {
 	logs           LogsInventory
 	iam            IAMInventory
 	azure          AzureInventory
+	gcpStorage     GcpStorageInventory
 	// rt owns Docker probing, emulator lifecycle, and both runtime caches (F-029).
 	rt *appruntime.Service
 	// deploy owns recipe catalogue helpers, tofu install, deployment lifecycle,
@@ -116,6 +117,7 @@ type Deps struct {
 	Logs           LogsInventory
 	IAM            IAMInventory
 	Azure          AzureInventory
+	GcpStorage     GcpStorageInventory
 	Docker         DockerRuntime
 	LocalStack     LocalStackManager
 	AzureRuntime   AzureRuntimeManager
@@ -172,6 +174,7 @@ func NewFromDeps(deps Deps) *Service {
 		logs:                  deps.Logs,
 		iam:                   deps.IAM,
 		azure:                 deps.Azure,
+		gcpStorage:            deps.GcpStorage,
 		rt:                    rt,
 		cipher:                cipher,
 		initialisationErr:     cipherErr,
