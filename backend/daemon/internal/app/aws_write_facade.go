@@ -149,3 +149,61 @@ func (s *Service) handleAwsEc2RunInstances(ctx context.Context, params json.RawM
 	}
 	return s.aws.HandleEC2RunInstances(ctx, params, notifier)
 }
+
+// Thin façade wrappers for AWS async job RPCs owned by internal/app/aws (F-029 Phase 4d).
+
+func (s *Service) handleAwsS3LoadMoreObjects(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleS3LoadMoreObjects(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsS3UploadObject(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleS3UploadObject(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsS3PresignObject(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleS3PresignObject(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsS3ValidateUrl(_ context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleS3ValidateUrl(params, notifier)
+}
+
+func (s *Service) handleAwsEc2InvokeAction(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleEC2InvokeAction(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsEc2TerminateInstances(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleEC2TerminateInstances(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsRdsStartInstance(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleRDSStartInstance(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsRdsStopInstance(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleRDSStopInstance(ctx, params, notifier)
+}

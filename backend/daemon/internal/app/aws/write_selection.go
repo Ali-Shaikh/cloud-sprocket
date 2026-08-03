@@ -190,3 +190,57 @@ func ActiveEC2Region(session models.SessionSnapshot, profile models.ProfileSumma
 	}
 	return region, nil
 }
+
+// ActiveEC2Selection resolves profile/region/instance for EC2 lifecycle jobs.
+func ActiveEC2Selection(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	instanceIDOverride string,
+) (models.ProfileSummary, string, string, error) {
+	profile, err := LockedAWSProfile(snapshot.Profiles, session, "open an AWS workspace before using EC2 actions")
+	if err != nil {
+		return models.ProfileSummary{}, "", "", err
+	}
+	region := strings.TrimSpace(session.SelectedEC2Region)
+	if region == "" {
+		region = ProfileRegionHint(profile)
+	}
+	if region == "" {
+		return models.ProfileSummary{}, "", "", errors.New("select an EC2 region before using this action")
+	}
+	instanceID := strings.TrimSpace(instanceIDOverride)
+	if instanceID == "" {
+		instanceID = strings.TrimSpace(session.SelectedEC2InstanceID)
+	}
+	if instanceID == "" {
+		return models.ProfileSummary{}, "", "", errors.New("select an EC2 instance before using this action")
+	}
+	return profile, region, instanceID, nil
+}
+
+// ActiveRDSSelection resolves profile/region/instance for RDS lifecycle jobs.
+func ActiveRDSSelection(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	instanceIDOverride string,
+) (models.ProfileSummary, string, string, error) {
+	profile, err := LockedAWSProfile(snapshot.Profiles, session, "open an AWS workspace before using RDS actions")
+	if err != nil {
+		return models.ProfileSummary{}, "", "", err
+	}
+	region := strings.TrimSpace(session.SelectedRDSRegion)
+	if region == "" {
+		region = ProfileRegionHint(profile)
+	}
+	if region == "" {
+		return models.ProfileSummary{}, "", "", errors.New("select an RDS region before using this action")
+	}
+	instanceID := strings.TrimSpace(instanceIDOverride)
+	if instanceID == "" {
+		instanceID = strings.TrimSpace(session.SelectedRDSInstanceID)
+	}
+	if instanceID == "" {
+		return models.ProfileSummary{}, "", "", errors.New("select an RDS instance before using this action")
+	}
+	return profile, region, instanceID, nil
+}

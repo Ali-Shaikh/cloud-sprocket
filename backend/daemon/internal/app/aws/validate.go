@@ -5,10 +5,92 @@ package aws
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
+
+// ValidateS3UploadRequest checks local source path and destination object key
+// rules used by aws.s3.uploadObject (and Azure blob upload reuses the same rules).
+func ValidateS3UploadRequest(sourcePath string, objectKey string) error {
+	sourcePath = strings.TrimSpace(sourcePath)
+	objectKey = strings.TrimSpace(objectKey)
+	if sourcePath == "" || objectKey == "" {
+		return errors.New("source path and destination object key are required")
+	}
+	if strings.HasPrefix(objectKey, "/") || strings.HasPrefix(objectKey, "\\") {
+		return errors.New("destination object key must be relative to the selected bucket")
+	}
+	if strings.Contains(objectKey, "\\") {
+		return errors.New("destination object key must use forward slashes")
+	}
+	for _, segment := range strings.Split(objectKey, "/") {
+		if segment == "." || segment == ".." {
+			return errors.New("destination object key must not contain dot path segments")
+		}
+	}
+	if strings.ContainsAny(objectKey, "\x00\r\n\t") {
+		return errors.New("destination object key contains unsupported control characters")
+	}
+	info, err := os.Stat(sourcePath)
+	if err != nil {
+		return fmt.Errorf("source file is not available: %w", err)
+	}
+	if info.IsDir() || !info.Mode().IsRegular() {
+		return errors.New("source path must be a regular file")
+	}
+	const maxUploadBytes = 512 * 1024 * 1024
+	if info.Size() > maxUploadBytes {
+		return errors.New("source file is larger than the current 512 MiB upload safety limit")
+	}
+	return nil
+}
+
+// ClampPresignDuration normalises a requested presign TTL to AWS SigV4 limits.
+func ClampPresignDuration(durationSeconds int) int {
+	if durationSeconds <= 0 {
+		return 900
+	}
+	// AWS SigV4 presigned URLs are valid for at most 7 days.
+	const maxPresignSeconds = 7 * 24 * 60 * 60
+	if durationSeconds > maxPresignSeconds {
+		return maxPresignSeconds
+	}
+	return durationSeconds
+}
+
+// EC2DesiredState returns the state polled after a lifecycle action, if any.
+func EC2DesiredState(action string) string {
+	switch strings.ToLower(strings.TrimSpace(action)) {
+	case "start", "reboot":
+		return "running"
+	case "stop":
+		return "stopped"
+	default:
+		return ""
+	}
+}
+
+// SelectedEC2State returns the state of the instance with the given id.
+func SelectedEC2State(instances []models.AwsEc2Instance, instanceID string) string {
+	for _, instance := range instances {
+		if instance.InstanceID == instanceID {
+			return instance.State
+		}
+	}
+	return ""
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
 
 // ValidateLambdaCreateInput checks starter Lambda create request fields.
 func ValidateLambdaCreateInput(input models.AwsLambdaCreateInput) error {

@@ -186,10 +186,29 @@ func (secretsStub) GetSecretValue(context.Context, models.ProfileSummary, string
 }
 
 type fakeS3 struct {
-	deleted bool
-	created bool
+	deleted   bool
+	created   bool
+	uploaded  bool
+	presigned bool
+	listed    bool
 }
 
+func (f *fakeS3) ListObjects(context.Context, models.ProfileSummary, string, string, string) (models.AwsS3ObjectListPage, error) {
+	f.listed = true
+	return models.AwsS3ObjectListPage{
+		Entries:               []models.AwsS3Object{{Key: "next.txt"}},
+		NextContinuationToken: "",
+		IsTruncated:           false,
+	}, nil
+}
+func (f *fakeS3) UploadFile(context.Context, models.ProfileSummary, string, string, string) (models.AwsS3UploadResult, error) {
+	f.uploaded = true
+	return models.AwsS3UploadResult{DestinationURI: "s3://b/k"}, nil
+}
+func (f *fakeS3) PresignGetObject(context.Context, models.ProfileSummary, string, string, int) (models.AwsS3PresignResult, error) {
+	f.presigned = true
+	return models.AwsS3PresignResult{URL: "https://signed.example"}, nil
+}
 func (f *fakeS3) DeleteObject(context.Context, models.ProfileSummary, string, string) (models.AwsS3DeleteObjectResult, error) {
 	f.deleted = true
 	return models.AwsS3DeleteObjectResult{}, nil

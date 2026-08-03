@@ -2,15 +2,16 @@
 // Copyright (C) 2026 Ali Shaikh
 
 // Package aws owns AWS-domain RPC handlers that no longer need the full app
-// façade. Phase 4 covers inventory.get, selection groups, and sync write
-// groups. Async EC2/RDS lifecycle jobs and S3 upload/presign stay on the
-// façade (F-029).
+// façade. Phase 4 covers inventory.get, selection groups, sync writes, and
+// async S3/EC2/RDS job handlers (F-029).
 package aws
 
 import (
+	"fmt"
 	"time"
 
 	"cloudsprocket/backend/daemon/internal/app/sessionport"
+	"cloudsprocket/backend/daemon/internal/models"
 )
 
 // Deps holds collaborators required to construct an AWS domain Service.
@@ -23,6 +24,7 @@ type Deps struct {
 	Gate          ServiceGate
 	Catalog       ScopeCatalog
 	ActionTimeout time.Duration
+	Now           func() time.Time
 	SQS           SQSWriter
 	SNS           SNSWriter
 	DynamoDB      DynamoDBWriter
@@ -32,9 +34,11 @@ type Deps struct {
 	Lambda        LambdaWriter
 	Logs          LogsWriter
 	EC2           EC2Writer
+	EC2Lifecycle  EC2Lifecycle
+	RDSLifecycle  RDSLifecycle
 }
 
-// Service owns the extracted AWS inventory, selection, and write RPC paths.
+// Service owns the extracted AWS inventory, selection, write, and job RPC paths.
 type Service struct {
 	discovery     Discovery
 	session       sessionport.Session
@@ -44,6 +48,7 @@ type Service struct {
 	gate          ServiceGate
 	catalog       ScopeCatalog
 	actionTimeout time.Duration
+	now           func() time.Time
 	sqs           SQSWriter
 	sns           SNSWriter
 	dynamodb      DynamoDBWriter
@@ -53,10 +58,16 @@ type Service struct {
 	lambda        LambdaWriter
 	logs          LogsWriter
 	ec2           EC2Writer
+	ec2Lifecycle  EC2Lifecycle
+	rdsLifecycle  RDSLifecycle
 }
 
 // New constructs an AWS domain Service.
 func New(deps Deps) *Service {
+	now := deps.Now
+	if now == nil {
+		now = func() time.Time { return time.Now().UTC() }
+	}
 	return &Service{
 		discovery:     deps.Discovery,
 		session:       deps.Session,
@@ -66,6 +77,7 @@ func New(deps Deps) *Service {
 		gate:          deps.Gate,
 		catalog:       deps.Catalog,
 		actionTimeout: deps.ActionTimeout,
+		now:           now,
 		sqs:           deps.SQS,
 		sns:           deps.SNS,
 		dynamodb:      deps.DynamoDB,
@@ -75,5 +87,28 @@ func New(deps Deps) *Service {
 		lambda:        deps.Lambda,
 		logs:          deps.Logs,
 		ec2:           deps.EC2,
+		ec2Lifecycle:  deps.EC2Lifecycle,
+		rdsLifecycle:  deps.RDSLifecycle,
+	}
+}
+
+func (s *Service) newJobID() string {
+	return fmt.Sprintf("job-%d", s.now().UnixNano())
+}
+
+func (s *Service) jobTimestamp() string {
+	if s != nil && s.activity != nil {
+		return s.activity.Timestamp()
+	}
+	return s.now().UTC().Format(time.RFC3339)
+}
+
+func (s *Service) notifyJob(notifier sessionport.Notifier, job models.JobStatus) {
+	if s != nil && s.activity != nil {
+		s.activity.NotifyJob(notifier, job)
+		return
+	}
+	if notifier != nil {
+		_ = notifier.Notify("job.updated", job)
 	}
 }
