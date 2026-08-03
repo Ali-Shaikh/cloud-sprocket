@@ -1125,7 +1125,8 @@ export interface WorkspaceSnapshot {
   azureEntraApps: AzureEntraApp[];
   selectedGcpStorageBucket?: string;
   gcpStorageStatusMessage?: string;
-  gcpStorageBuckets: GcpStorageBucket[];
+  /** Present after GCP Storage enrichment; omit in fixtures/mocks. */
+  gcpStorageBuckets?: GcpStorageBucket[];
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;
