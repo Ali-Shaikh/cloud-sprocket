@@ -82,3 +82,111 @@ func ActiveDynamoDBSelection(
 	}
 	return profile, region, tableName, nil
 }
+
+// ActiveS3Bucket resolves profile and bucket from the locked session.
+// It does not list inventory; the workspace selection is required when requireBucket is true.
+func ActiveS3Bucket(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	requireBucket bool,
+) (models.ProfileSummary, string, error) {
+	profile, err := LockedAWSProfile(snapshot.Profiles, session, "open an AWS workspace before using S3 actions")
+	if err != nil {
+		return models.ProfileSummary{}, "", err
+	}
+	bucketName := strings.TrimSpace(session.SelectedS3BucketName)
+	if requireBucket && bucketName == "" {
+		return models.ProfileSummary{}, "", errors.New("select an S3 bucket before using this action")
+	}
+	return profile, bucketName, nil
+}
+
+// ActiveS3ObjectSelection resolves profile/bucket/object for S3 object actions.
+func ActiveS3ObjectSelection(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	objectKeyOverride string,
+) (models.ProfileSummary, string, string, error) {
+	profile, bucketName, err := ActiveS3Bucket(snapshot, session, true)
+	if err != nil {
+		return models.ProfileSummary{}, "", "", err
+	}
+	objectKey := strings.TrimSpace(objectKeyOverride)
+	if objectKey == "" {
+		objectKey = strings.TrimSpace(session.SelectedS3ObjectKey)
+	}
+	if objectKey == "" {
+		return models.ProfileSummary{}, "", "", errors.New("select an S3 object before using this action")
+	}
+	return profile, bucketName, objectKey, nil
+}
+
+// ActiveLambdaRegion resolves profile/region for Lambda actions from session.
+func ActiveLambdaRegion(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+) (models.ProfileSummary, string, error) {
+	profile, err := LockedAWSProfile(snapshot.Profiles, session, "open an AWS workspace before using Lambda actions")
+	if err != nil {
+		return models.ProfileSummary{}, "", err
+	}
+	region := strings.TrimSpace(session.SelectedLambdaRegion)
+	if region == "" {
+		region = ProfileRegionHint(profile)
+	}
+	if region == "" {
+		return models.ProfileSummary{}, "", errors.New("select a Lambda region before using this action")
+	}
+	return profile, region, nil
+}
+
+// ActiveLambdaSelection resolves profile/region/function for Lambda actions.
+func ActiveLambdaSelection(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	functionNameOverride string,
+) (models.ProfileSummary, string, string, error) {
+	profile, region, err := ActiveLambdaRegion(snapshot, session)
+	if err != nil {
+		return models.ProfileSummary{}, "", "", err
+	}
+	functionName := strings.TrimSpace(functionNameOverride)
+	if functionName == "" {
+		functionName = strings.TrimSpace(session.SelectedLambdaFunctionName)
+	}
+	if functionName == "" {
+		return models.ProfileSummary{}, "", "", errors.New("select a Lambda function before using this action")
+	}
+	return profile, region, functionName, nil
+}
+
+// ActiveLogsRegion resolves profile/region for CloudWatch Logs actions from session.
+func ActiveLogsRegion(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+) (models.ProfileSummary, string, error) {
+	profile, err := LockedAWSProfile(snapshot.Profiles, session, "open an AWS workspace before using CloudWatch Logs actions")
+	if err != nil {
+		return models.ProfileSummary{}, "", err
+	}
+	region := strings.TrimSpace(session.SelectedLogsRegion)
+	if region == "" {
+		region = ProfileRegionHint(profile)
+	}
+	if region == "" {
+		return models.ProfileSummary{}, "", errors.New("select a CloudWatch Logs region before using this action")
+	}
+	return profile, region, nil
+}
+
+// ActiveEC2Region resolves the EC2 region from session selection or profile hint.
+func ActiveEC2Region(session models.SessionSnapshot, profile models.ProfileSummary) (string, error) {
+	region := strings.TrimSpace(session.SelectedEC2Region)
+	if region == "" {
+		region = ProfileRegionHint(profile)
+	}
+	if region == "" {
+		return "", errors.New("select an EC2 region before launching instances")
+	}
+	return region, nil
+}

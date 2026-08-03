@@ -197,6 +197,10 @@ func NewFromDeps(deps Deps) *Service {
 		DynamoDB:      service.dynamodb,
 		IAM:           service.iam,
 		Secrets:       service.secretsManager,
+		S3:            service.s3,
+		Lambda:        service.lambda,
+		Logs:          service.logs,
+		EC2:           service.ec2,
 	})
 	service.mu.Lock()
 	if err := service.loadPreferencesLocked(); err != nil {

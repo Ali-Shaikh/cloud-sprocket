@@ -37,3 +37,30 @@ type IAMWriter interface {
 type SecretsReader interface {
 	GetSecretValue(ctx context.Context, profile models.ProfileSummary, region string, secretID string) (string, error)
 }
+
+// S3Writer is the synchronous S3 mutation surface (upload/presign stay async on the façade).
+type S3Writer interface {
+	DeleteObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string) (models.AwsS3DeleteObjectResult, error)
+	CreateBucket(ctx context.Context, profile models.ProfileSummary, bucketName string, region string) (models.AwsS3CreateBucketResult, error)
+	CopyObject(ctx context.Context, profile models.ProfileSummary, bucketName string, sourceObjectKey string, destinationObjectKey string) (models.AwsS3CopyObjectResult, error)
+	CreateFolderPrefix(ctx context.Context, profile models.ProfileSummary, bucketName string, folderPrefix string) (models.AwsS3CreateFolderPrefixResult, error)
+}
+
+// LambdaWriter is the Lambda describe/invoke/create/delete surface.
+type LambdaWriter interface {
+	DescribeFunction(ctx context.Context, profile models.ProfileSummary, region string, functionName string) (models.AwsLambdaFunction, error)
+	InvokeFunction(ctx context.Context, profile models.ProfileSummary, region string, functionName string, payload []byte) (models.AwsLambdaInvokeResult, error)
+	CreateFunction(ctx context.Context, profile models.ProfileSummary, region string, input models.AwsLambdaCreateInput) (models.AwsLambdaFunction, error)
+	DeleteFunction(ctx context.Context, profile models.ProfileSummary, region string, functionName string) (models.AwsLambdaDeleteFunctionResult, error)
+}
+
+// LogsWriter is the CloudWatch Logs create/put surface.
+type LogsWriter interface {
+	CreateLogGroup(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string) (models.AwsLogsCreateLogGroupResult, error)
+	PutLogEvents(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string, message string) (models.AwsLogsPutLogEventsResult, error)
+}
+
+// EC2Writer is the synchronous EC2 launch surface (lifecycle jobs stay on the façade).
+type EC2Writer interface {
+	RunInstances(ctx context.Context, profile models.ProfileSummary, region string, instanceType string) (models.AwsEc2RunInstancesResult, error)
+}

@@ -17,10 +17,11 @@ Installers for every release are published on the
   DynamoDB, SQS, SNS, RDS, ECS, EKS, CloudFormation, EventBridge, Route 53,
   ELB, KMS, API Gateway, Secrets Manager, Logs, IAM) move into
   `internal/app/aws` with session/workspace/activity/invalidator ports.
-- Daemon AWS sync write RPCs for SQS, SNS, DynamoDB, IAM create-role, and
-  Secrets Manager reveal move into `internal/app/aws` with writer ports and
-  shared authorise/finish helpers; async EC2/RDS jobs and remaining S3/Lambda
-  writes stay on the façade for a later F-029 slice.
+- Daemon AWS sync write RPCs move into `internal/app/aws` with writer ports and
+  shared authorise/finish helpers: SQS, SNS, DynamoDB, IAM create-role, Secrets
+  reveal, S3 delete/create/copy/folder, Lambda describe/invoke/create/delete,
+  Logs create/put, and EC2 runInstances. Async EC2/RDS lifecycle jobs and S3
+  upload/presign remain on the façade.
 
 ## [0.9.12] - 2026-08-01
 
