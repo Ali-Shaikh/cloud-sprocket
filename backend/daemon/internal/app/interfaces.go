@@ -132,6 +132,7 @@ type LogsInventory interface {
 	DescribeLogGroup(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string) (models.AwsLogGroup, error)
 	CreateLogGroup(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string) (models.AwsLogsCreateLogGroupResult, error)
 	PutLogEvents(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string, message string) (models.AwsLogsPutLogEventsResult, error)
+	FilterEvents(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string, filterPattern string, limit int) (models.AwsLogsFilterEventsResult, error)
 }
 
 type IAMInventory interface {
@@ -199,6 +200,8 @@ type AzureInventory interface {
 	ListCosmosItems(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string, database string, container string) ([]models.AzureCosmosItem, error)
 	ListPostgresServers(ctx context.Context, profile models.ProfileSummary) ([]models.AzurePostgresServer, error)
 	GetPostgresConnection(ctx context.Context, profile models.ProfileSummary, resourceGroup string, serverName string) (models.AzurePostgresConnection, error)
+	StartPostgresServer(ctx context.Context, profile models.ProfileSummary, resourceGroup string, serverName string) (models.AzurePostgresLifecycleResult, error)
+	StopPostgresServer(ctx context.Context, profile models.ProfileSummary, resourceGroup string, serverName string) (models.AzurePostgresLifecycleResult, error)
 	ListStorageQueues(ctx context.Context, profile models.ProfileSummary, accountName string) ([]models.AzureStorageQueue, error)
 	PeekQueueMessages(ctx context.Context, profile models.ProfileSummary, accountName string, queueName string) ([]models.AzureQueueMessage, error)
 	// GetQueueApproximateMessageCount returns the queue's approximate message count.

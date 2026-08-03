@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { Copy, Database } from "lucide-react";
 
+import { actionCapabilityState } from "@/lib/action-capabilities";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -25,6 +26,9 @@ export type AzurePostgresViewProps = {
   workspace: WorkspaceSnapshot;
   inventoryLoading?: boolean;
   onSelectServer: (server: string) => void;
+  onStartServer?: (server: string, resourceGroup: string) => void;
+  onStopServer?: (server: string, resourceGroup: string) => void;
+  actionStatus?: string;
 };
 
 const fieldLabel =
@@ -83,6 +87,9 @@ export default function AzurePostgresView({
   workspace,
   inventoryLoading = false,
   onSelectServer,
+  onStartServer,
+  onStopServer,
+  actionStatus = "",
 }: AzurePostgresViewProps) {
   const servers = workspace.azurePostgresServers ?? [];
   const selectedServer =
@@ -92,6 +99,13 @@ export default function AzurePostgresView({
   const connection = workspace.azurePostgresConnection;
   const localProfile = isLocalFlociProfile(workspace);
   const [revealed, setRevealed] = useState(false);
+  const startCapability = actionCapabilityState(workspace, "postgres", "startServer", "azure");
+  const stopCapability = actionCapabilityState(workspace, "postgres", "stopServer", "azure");
+  const stateLabel = (active?.provisioningState || "").toLowerCase();
+  const looksStopped =
+    stateLabel.includes("stop") || stateLabel === "disabled" || stateLabel === "inactive";
+  const canStart = Boolean(onStartServer && active && startCapability.enabled);
+  const canStop = Boolean(onStopServer && active && stopCapability.enabled && !looksStopped);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -163,7 +177,52 @@ export default function AzurePostgresView({
 
       {active ? (
         <section className={sectionCard}>
-          <h2 className="text-base font-bold">Server details · {active.name}</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-base font-bold">Server details · {active.name}</h2>
+            {onStartServer || onStopServer ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!canStart}
+                  title={
+                    canStart
+                      ? undefined
+                      : startCapability.reason || "Start is unavailable for this server."
+                  }
+                  onClick={() => {
+                    if (active) {
+                      onStartServer?.(active.name, active.resourceGroup || "");
+                    }
+                  }}
+                >
+                  Start server
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!canStop}
+                  title={
+                    canStop
+                      ? undefined
+                      : stopCapability.reason || "Stop is unavailable for this server."
+                  }
+                  onClick={() => {
+                    if (active) {
+                      onStopServer?.(active.name, active.resourceGroup || "");
+                    }
+                  }}
+                >
+                  Stop server
+                </Button>
+              </div>
+            ) : null}
+          </div>
+          {actionStatus ? (
+            <p className="text-sm text-muted-foreground">{actionStatus}</p>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <div className={fieldLabel}>Administrator login</div>

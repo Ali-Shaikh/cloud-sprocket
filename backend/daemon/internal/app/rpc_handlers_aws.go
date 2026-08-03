@@ -202,6 +202,9 @@ func (s *Service) registerAWSHandlers(m *handlerRegistry) {
 	m.register("aws.logs.createLogGroup", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsLogsCreateLogGroup(ctx, params, notifier)
 	})
+	m.register("aws.logs.filterEvents", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleAwsLogsFilterEvents(ctx, params, notifier)
+	})
 	m.register("aws.logs.putLogEvents", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsLogsPutLogEvents(ctx, params, notifier)
 	})

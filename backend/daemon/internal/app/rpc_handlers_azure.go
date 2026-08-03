@@ -175,6 +175,12 @@ func (s *Service) registerAzureHandlers(m *handlerRegistry) {
 	m.register("azure.postgres.selectServer", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAzurePostgresSelectServer(ctx, params, notifier)
 	})
+	m.register("azure.postgres.startServer", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleAzurePostgresStartServer(ctx, params, notifier)
+	})
+	m.register("azure.postgres.stopServer", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleAzurePostgresStopServer(ctx, params, notifier)
+	})
 	m.register("azure.queues.selectQueue", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAzureQueuesSelectQueue(ctx, params, notifier)
 	})

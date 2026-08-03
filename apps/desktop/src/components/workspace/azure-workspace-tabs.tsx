@@ -1046,6 +1046,28 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
           errorTitle: "Could not select PostgreSQL server",
         });
       }}
+      onStartServer={(server, resourceGroup) => {
+        void mutateWorkspaceSelection(
+          "azure.postgres.startServer",
+          { server, resourceGroup },
+          {
+            panelLoading: true,
+            merge: mergeAzurePostgresSelection,
+            errorTitle: "Could not start PostgreSQL server",
+          },
+        );
+      }}
+      onStopServer={(server, resourceGroup) => {
+        void mutateWorkspaceSelection(
+          "azure.postgres.stopServer",
+          { server, resourceGroup },
+          {
+            panelLoading: true,
+            merge: mergeAzurePostgresSelection,
+            errorTitle: "Could not stop PostgreSQL server",
+          },
+        );
+      }}
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-queues" ? (
     <AzureQueuesView

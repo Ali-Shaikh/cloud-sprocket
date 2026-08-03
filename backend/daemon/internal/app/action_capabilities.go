@@ -148,6 +148,10 @@ func buildAzureActionCapabilities(
 		"keyvault": {
 			cap("setSecret", "Set secret"),
 		},
+		"postgres": {
+			cap("startServer", "Start server"),
+			cap("stopServer", "Stop server"),
+		},
 		"appService": {
 			cap("createWebApp", "Create web app"),
 			cap("lifecycleAction", "Lifecycle action"),

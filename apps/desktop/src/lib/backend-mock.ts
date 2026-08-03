@@ -3074,6 +3074,28 @@ export function handleMockRequest<T>(
         logStreamName: "cloudsprocket-test",
         summary: "Injected test event.",
       } as T);
+    case "aws.logs.filterEvents": {
+      const logGroupName = String(
+        params.logGroupName ?? mockState.session.selectedLogGroupName ?? "",
+      );
+      const filterPattern = String(params.filterPattern ?? "").trim();
+      const group = mockWorkspaceLogGroups.find((entry) => entry.logGroupName === logGroupName);
+      const baseEvents = group?.recentEvents ?? [
+        "2024-06-15 12:00:00 INFO application started",
+        "2024-06-15 12:01:00 ERROR request failed",
+      ];
+      const events = filterPattern
+        ? baseEvents.filter((line) => line.toLowerCase().includes(filterPattern.toLowerCase()))
+        : baseEvents;
+      return Promise.resolve({
+        logGroupName,
+        filterPattern,
+        events,
+        summary: filterPattern
+          ? `Found ${events.length} event(s) in ${logGroupName} matching "${filterPattern}".`
+          : `Found ${events.length} recent event(s) in ${logGroupName}.`,
+      } as T);
+    }
     case "aws.iam.selectRole":
       mockState.session.selectedIamRoleName = String(params.roleName ?? "");
       appendLog("info", `Selected IAM role ${params.roleName}.`);
@@ -3582,6 +3604,40 @@ export function handleMockRequest<T>(
     case "azure.postgres.selectServer":
       mockState.session.selectedAzurePostgresServer = String(params.server ?? "");
       return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.postgres.startServer": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(
+          new Error(
+            "PostgreSQL server actions require write mode to be enabled for this Azure workspace",
+          ),
+        );
+      }
+      const serverName = String(params.server ?? mockState.session.selectedAzurePostgresServer ?? "");
+      mockState.session.selectedAzurePostgresServer = serverName;
+      const server = mockAzurePostgresServers.find((entry) => entry.name === serverName);
+      if (server) {
+        server.provisioningState = "Ready";
+      }
+      appendLog("success", `Started PostgreSQL flexible server ${serverName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "azure.postgres.stopServer": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(
+          new Error(
+            "PostgreSQL server actions require write mode to be enabled for this Azure workspace",
+          ),
+        );
+      }
+      const serverName = String(params.server ?? mockState.session.selectedAzurePostgresServer ?? "");
+      mockState.session.selectedAzurePostgresServer = serverName;
+      const server = mockAzurePostgresServers.find((entry) => entry.name === serverName);
+      if (server) {
+        server.provisioningState = "Stopped";
+      }
+      appendLog("success", `Stopped PostgreSQL flexible server ${serverName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "azure.frontDoor.selectProfile":
       mockState.session.selectedAzureFrontDoorProfile = String(params.profile ?? "");
       mockState.session.selectedAzureFrontDoorEndpoint = "";

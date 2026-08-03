@@ -227,6 +227,16 @@ func (blockingAzure) GetPostgresConnection(ctx context.Context, _ models.Profile
 	return models.AzurePostgresConnection{}, ctx.Err()
 }
 
+func (blockingAzure) StartPostgresServer(ctx context.Context, _ models.ProfileSummary, _ string, _ string) (models.AzurePostgresLifecycleResult, error) {
+	<-ctx.Done()
+	return models.AzurePostgresLifecycleResult{}, ctx.Err()
+}
+
+func (blockingAzure) StopPostgresServer(ctx context.Context, _ models.ProfileSummary, _ string, _ string) (models.AzurePostgresLifecycleResult, error) {
+	<-ctx.Done()
+	return models.AzurePostgresLifecycleResult{}, ctx.Err()
+}
+
 func (blockingAzure) ListStorageQueues(ctx context.Context, _ models.ProfileSummary, _ string) ([]models.AzureStorageQueue, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()

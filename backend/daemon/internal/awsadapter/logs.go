@@ -18,7 +18,11 @@ import (
 	"cloudsprocket/backend/daemon/internal/models"
 )
 
-const maxLogGroupRecentEvents = 25
+const (
+	maxLogGroupRecentEvents = 25
+	defaultFilterEventsLimit  = 25
+	maxFilterEventsLimit      = 100
+)
 
 // LogsInventory provides read-only CloudWatch Logs group inventory and event tail.
 type LogsInventory struct {
@@ -176,10 +180,81 @@ func (l *LogsInventory) PutLogEvents(
 	}, nil
 }
 
+// FilterEvents searches recent CloudWatch log events for a group with an optional filter pattern.
+func (l *LogsInventory) FilterEvents(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	logGroupName string,
+	filterPattern string,
+	limit int,
+) (models.AwsLogsFilterEventsResult, error) {
+	logGroupName = strings.TrimSpace(logGroupName)
+	filterPattern = strings.TrimSpace(filterPattern)
+	if logGroupName == "" {
+		return models.AwsLogsFilterEventsResult{}, fmt.Errorf("log group name is required")
+	}
+	limit = clampFilterEventsLimit(limit)
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := l.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsLogsFilterEventsResult{}, err
+	}
+	client := logsClient(cfg, profile)
+	events, err := l.filterLogEvents(ctx, client, logGroupName, filterPattern, limit)
+	if err != nil {
+		return models.AwsLogsFilterEventsResult{}, err
+	}
+	return models.AwsLogsFilterEventsResult{
+		LogGroupName:  logGroupName,
+		FilterPattern: filterPattern,
+		Events:        events,
+		Summary:       filterEventsSummary(logGroupName, filterPattern, len(events)),
+	}, nil
+}
+
+func clampFilterEventsLimit(limit int) int {
+	if limit <= 0 {
+		return defaultFilterEventsLimit
+	}
+	if limit > maxFilterEventsLimit {
+		return maxFilterEventsLimit
+	}
+	return limit
+}
+
+func filterEventsSummary(logGroupName, filterPattern string, count int) string {
+	if filterPattern == "" {
+		return fmt.Sprintf("Found %d recent event(s) in %s.", count, logGroupName)
+	}
+	return fmt.Sprintf("Found %d event(s) in %s matching %q.", count, logGroupName, filterPattern)
+}
+
+func formatFilteredLogEvent(event cwtypes.FilteredLogEvent) string {
+	message := awsString(event.Message)
+	if event.Timestamp != nil {
+		ts := time.UnixMilli(*event.Timestamp).UTC().Format("2006-01-02 15:04:05")
+		return fmt.Sprintf("%s %s", ts, message)
+	}
+	return message
+}
+
 func (l *LogsInventory) recentEvents(
 	ctx context.Context,
 	client *cloudwatchlogs.Client,
 	logGroupName string,
+	limit int,
+) ([]string, error) {
+	return l.filterLogEvents(ctx, client, logGroupName, "", limit)
+}
+
+func (l *LogsInventory) filterLogEvents(
+	ctx context.Context,
+	client *cloudwatchlogs.Client,
+	logGroupName string,
+	filterPattern string,
 	limit int,
 ) ([]string, error) {
 	if logGroupName == "" || limit <= 0 {
@@ -190,6 +265,9 @@ func (l *LogsInventory) recentEvents(
 		LogGroupName: aws.String(logGroupName),
 		StartTime:    aws.Int64(start),
 		Limit:        aws.Int32(int32(limit)),
+	}
+	if filterPattern != "" {
+		input.FilterPattern = aws.String(filterPattern)
 	}
 	paginator := cloudwatchlogs.NewFilterLogEventsPaginator(client, input)
 	events := []cwtypes.FilteredLogEvent{}
@@ -216,13 +294,7 @@ func (l *LogsInventory) recentEvents(
 	}
 	lines := make([]string, 0, len(events))
 	for _, event := range events {
-		message := awsString(event.Message)
-		if event.Timestamp != nil {
-			ts := time.UnixMilli(*event.Timestamp).UTC().Format("2006-01-02 15:04:05")
-			lines = append(lines, fmt.Sprintf("%s %s", ts, message))
-		} else {
-			lines = append(lines, message)
-		}
+		lines = append(lines, formatFilteredLogEvent(event))
 	}
 	return lines, nil
 }

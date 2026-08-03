@@ -52,6 +52,7 @@ export type LogsViewProps = {
   onSelectEntity: (logGroupName: string) => void;
   onCreateLogGroup?: (logGroupName: string) => void;
   onPutLogEvents?: (logGroupName: string, message: string) => void;
+  onFilterEvents?: (logGroupName: string, filterPattern: string) => Promise<string[]>;
 };
 
 const fieldLabel =
@@ -102,8 +103,12 @@ export default function LogsView({
   onSelectEntity,
   onCreateLogGroup,
   onPutLogEvents,
+  onFilterEvents,
 }: LogsViewProps) {
   const [filterText, setFilterText] = useState("");
+  const [eventFilterPattern, setEventFilterPattern] = useState("");
+  const [filteredEvents, setFilteredEvents] = useState<string[] | null>(null);
+  const [filterInFlight, setFilterInFlight] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedLogGroupName));
   const lastSelectedLogGroupRef = useRef(workspace.selectedLogGroupName || "");
   const [newLogGroupName, setNewLogGroupName] = useState("/aws/test/group");
@@ -166,8 +171,18 @@ export default function LogsView({
     if (nextLogGroupName !== lastSelectedLogGroupRef.current) {
       lastSelectedLogGroupRef.current = nextLogGroupName;
       setInspectorOpen(Boolean(nextLogGroupName));
+      setFilteredEvents(null);
+      setEventFilterPattern("");
     }
   }, [workspace.selectedLogGroupName]);
+
+  const displayEvents = filteredEvents ?? selectedLogGroup?.recentEvents ?? [];
+  const eventsHeading =
+    filteredEvents != null
+      ? eventFilterPattern.trim()
+        ? `Filtered events (${eventFilterPattern.trim()})`
+        : "Filtered recent events"
+      : "Recent events (read-only tail)";
 
   if (workspace.provider?.providerId && workspace.provider.providerId !== "aws") {
     return (
@@ -230,26 +245,92 @@ export default function LogsView({
         emptyText="No log group details are available."
       />
 
-      {selectedLogGroup.recentEvents && selectedLogGroup.recentEvents.length > 0 ? (
+      {onFilterEvents ? (
+        <div className="space-y-2">
+          <div className={fieldLabel}>Search events</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={eventFilterPattern}
+              placeholder='Filter pattern (e.g. ERROR or "timeout")'
+              className="min-w-48 flex-1 font-mono text-xs"
+              onChange={(event) => {
+                setEventFilterPattern(event.target.value);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && selectedLogGroup && !filterInFlight) {
+                  setFilterInFlight(true);
+                  void onFilterEvents(selectedLogGroup.logGroupName, eventFilterPattern)
+                    .then((events) => {
+                      setFilteredEvents(events);
+                    })
+                    .catch(() => {
+                      /* status is set by the action hook */
+                    })
+                    .finally(() => {
+                      setFilterInFlight(false);
+                    });
+                }
+              }}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={filterInFlight}
+              onClick={() => {
+                if (!selectedLogGroup) {
+                  return;
+                }
+                setFilterInFlight(true);
+                void onFilterEvents(selectedLogGroup.logGroupName, eventFilterPattern)
+                  .then((events) => {
+                    setFilteredEvents(events);
+                  })
+                  .catch(() => {
+                    /* status is set by the action hook */
+                  })
+                  .finally(() => {
+                    setFilterInFlight(false);
+                  });
+              }}
+            >
+              {filterInFlight ? "Searching…" : "Search"}
+            </Button>
+            {filteredEvents != null ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setFilteredEvents(null);
+                  setEventFilterPattern("");
+                }}
+              >
+                Clear
+              </Button>
+            ) : null}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            CloudWatch filter pattern over the last 24 hours (bounded result set).
+          </p>
+        </div>
+      ) : null}
+
+      {displayEvents.length > 0 ? (
         <div>
-          <div className={fieldLabel}>Recent events (read-only tail)</div>
+          <div className={fieldLabel}>{eventsHeading}</div>
           <div
             className={cn(
               snippetCard,
               "mt-2 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-[11px]",
             )}
           >
-            {selectedLogGroup.recentEvents.join("\n")}
+            {displayEvents.join("\n")}
           </div>
           <Button
             size="sm"
             variant="ghost"
             className="mt-2 h-7 px-2 text-[10px]"
             onClick={() => {
-              copyToClipboard(
-                selectedLogGroup.recentEvents?.join("\n") ?? "",
-                "Recent events copied",
-              );
+              copyToClipboard(displayEvents.join("\n"), "Log events copied");
             }}
           >
             <Copy className="mr-1 h-3 w-3" />
@@ -258,7 +339,9 @@ export default function LogsView({
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
-          No recent log events were returned for this log group.
+          {filteredEvents != null
+            ? "No log events matched the filter pattern."
+            : "No recent log events were returned for this log group."}
         </p>
       )}
 
