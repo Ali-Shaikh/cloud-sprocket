@@ -64,7 +64,7 @@ type Service struct {
 	// deploy owns recipe catalogue helpers, tofu install, deployment lifecycle,
 	// and cancel map ownership (F-029 Phase 2).
 	deploy *appdeployment.Service
-	// aws owns extracted AWS domain RPCs: inventory.get and selection groups (F-029 Phase 4).
+	// aws owns extracted AWS domain RPCs: inventory, selection, and sync writes (F-029 Phase 4).
 	aws                   *appaws.Service
 	cipher                *secrets.Cipher
 	initialisationErr     error
@@ -184,13 +184,19 @@ func NewFromDeps(deps Deps) *Service {
 		Now:      now,
 	})
 	service.aws = appaws.New(appaws.Deps{
-		Discovery:   deps.Discovery,
-		Session:     service,
-		Workspace:   service,
-		Activity:    service,
-		Invalidator: service,
-		Gate:        awsServiceGate{s: service},
-		Catalog:     awsScopeCatalog{},
+		Discovery:     deps.Discovery,
+		Session:       service,
+		Workspace:     service,
+		Activity:      service,
+		Invalidator:   service,
+		Gate:          awsServiceGate{s: service},
+		Catalog:       awsScopeCatalog{},
+		ActionTimeout: service.azureInventoryTimeout,
+		SQS:           service.sqs,
+		SNS:           service.sns,
+		DynamoDB:      service.dynamodb,
+		IAM:           service.iam,
+		Secrets:       service.secretsManager,
 	})
 	service.mu.Lock()
 	if err := service.loadPreferencesLocked(); err != nil {

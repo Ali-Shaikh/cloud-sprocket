@@ -5,13 +5,9 @@ package app
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
-	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
 )
 
@@ -153,106 +149,4 @@ func (s *Service) enrichDynamoDBInventory(
 		workspace.SelectedDynamoDBTableName = selectedTable
 		workspace.DynamoDBStatusMessage = status
 	})
-}
-
-func (s *Service) activeDynamoDBSelection(
-	snapshot discovery.Snapshot,
-	session models.SessionSnapshot,
-	requestTableName string,
-) (models.ProfileSummary, string, string, error) {
-	if !session.IsLocked || session.CurrentProviderID != "aws" {
-		return models.ProfileSummary{}, "", "", errors.New("open an AWS workspace before using DynamoDB actions")
-	}
-	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
-	if !ok {
-		return models.ProfileSummary{}, "", "", errors.New("the workspace's AWS profile is not available")
-	}
-	region := session.SelectedDynamoDBRegion
-	if region == "" {
-		region = profileRegionHint(profile)
-	}
-	tableName := strings.TrimSpace(requestTableName)
-	if tableName == "" {
-		tableName = session.SelectedDynamoDBTableName
-	}
-	if tableName == "" {
-		return models.ProfileSummary{}, "", "", errors.New("select a DynamoDB table before using this action")
-	}
-	return profile, region, tableName, nil
-}
-
-func (s *Service) handleAwsDynamodbPutItem(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		TableName string `json:"tableName"`
-		ItemJSON  string `json:"itemJson"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, err := s.discovery.Discover()
-	if err != nil {
-		return nil, err
-	}
-	profile, region, tableName, err := s.authorizeAWSWriteSelection(
-		ctx, snapshot,
-		"DynamoDB put requires write mode to be enabled",
-		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
-			return s.activeDynamoDBSelection(snap, session, request.TableName)
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	actionCtx, cancel := s.withAWSTimeout(ctx)
-	result, err := s.dynamodb.PutItem(actionCtx, profile, region, tableName, request.ItemJSON)
-	cancel()
-	if err != nil {
-		return nil, err
-	}
-	s.invalidateResourceCache(ctx, "aws.dynamodb.tables", profile.ProfileID+"|"+region)
-
-	return s.finishAWSWriteAction(
-		ctx, snapshot, notifier, "dynamodb",
-		result.Summary,
-		func(session *models.SessionSnapshot) { session.SelectedDynamoDBTableName = tableName },
-	)
-}
-
-func (s *Service) handleAwsDynamodbDeleteItem(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		TableName string `json:"tableName"`
-		KeyJSON   string `json:"keyJson"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, err := s.discovery.Discover()
-	if err != nil {
-		return nil, err
-	}
-	profile, region, tableName, err := s.authorizeAWSWriteSelection(
-		ctx, snapshot,
-		"DynamoDB delete requires write mode to be enabled",
-		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
-			return s.activeDynamoDBSelection(snap, session, request.TableName)
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	actionCtx, cancel := s.withAWSTimeout(ctx)
-	result, err := s.dynamodb.DeleteItem(actionCtx, profile, region, tableName, request.KeyJSON)
-	cancel()
-	if err != nil {
-		return nil, err
-	}
-	s.invalidateResourceCache(ctx, "aws.dynamodb.tables", profile.ProfileID+"|"+region)
-
-	return s.finishAWSWriteAction(
-		ctx, snapshot, notifier, "dynamodb",
-		result.Summary,
-		func(session *models.SessionSnapshot) { session.SelectedDynamoDBTableName = tableName },
-	)
 }
