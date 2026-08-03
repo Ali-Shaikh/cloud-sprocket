@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	appazure "cloudsprocket/backend/daemon/internal/app/azure"
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
@@ -685,17 +686,25 @@ func TestAzurePhaseTwoEnrichmentRunsInParallel(t *testing.T) {
 }
 
 func TestAzureInventoryGetRejectsUnknownScope(t *testing.T) {
-	dataStore, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatalf("store.Open: %v", err)
-	}
-	defer dataStore.Close()
-
-	service := &Service{store: dataStore}
+	// Wire only the Azure domain so the façade reject path is exercised without
+	// full NewFromDeps secret-key initialisation.
+	service := &Service{}
+	service.azureDomain = appazure.New(appazure.Deps{
+		Discovery: discovery.New(config.Settings{}, func(string) (string, error) {
+			return "", nil
+		}),
+		Session:   service,
+		Workspace: service,
+		Gate:      azureServiceGate{s: service},
+		Catalog:   azureScopeCatalog{},
+	})
 	ctx := context.Background()
-	_, err = service.Handle(ctx, "azure.inventory.get", []byte(`{"scope":"unknown"}`), nil)
+	_, err := service.Handle(ctx, "azure.inventory.get", []byte(`{"scope":"unknown"}`), nil)
 	if err == nil {
 		t.Fatal("expected error for unknown scope")
+	}
+	if !strings.Contains(err.Error(), "unknown Azure inventory scope") {
+		t.Fatalf("err = %v, want unknown scope message", err)
 	}
 }
 

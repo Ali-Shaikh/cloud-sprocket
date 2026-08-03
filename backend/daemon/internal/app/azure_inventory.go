@@ -7,67 +7,24 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 )
 
-var validAzureInventoryScopes = map[string]struct{}{
-	"storage":       {},
-	"functions":     {},
-	"keyvault":      {},
-	"cosmos":        {},
-	"postgres":      {},
-	"waf":           {},
-	"queues":        {},
-	"webapps":       {},
-	"frontdoor":     {},
-	"loganalytics":  {},
-	"entra":         {},
+// Thin façade wrapper for azure.inventory.get owned by internal/app/azure (F-029 Phase 5a).
+
+func (s *Service) requireAzureDomain() error {
+	if s.azureDomain == nil {
+		return errors.New("azure inventory service is not available")
+	}
+	return nil
 }
 
 func (s *Service) handleAzureInventoryGet(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
-	var request struct {
-		Scope string `json:"scope"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
+	if err := s.requireAzureDomain(); err != nil {
 		return nil, err
 	}
-	scope := strings.TrimSpace(strings.ToLower(request.Scope))
-	if scope == "" {
-		return nil, errors.New("scope is required")
-	}
-	if _, ok := validAzureInventoryScopes[scope]; !ok {
-		return nil, fmt.Errorf("unknown Azure inventory scope %q", request.Scope)
-	}
-	if serviceID := azureServiceIDForInventoryScope(scope); serviceID != "" && !s.isServiceEnabled("azure", serviceID) {
-		return nil, errors.New("that Azure service is disabled in settings")
-	}
-
-	snapshot, err := s.discovery.Discover()
-	if err != nil {
-		return nil, err
-	}
-	s.mu.Lock()
-	session, err := s.currentState(ctx, snapshot)
-	s.mu.Unlock()
-	if err != nil {
-		return nil, err
-	}
-	if !session.IsLocked || session.CurrentProviderID != "azure" {
-		return nil, errors.New("open an Azure workspace before loading service inventory")
-	}
-
-	// Storage path browser needs accounts + containers + blobs on first open.
-	// Other scopes stay lightweight so expensive detail (WAF policy config,
-	// schema probes, etc.) still loads only when the user drills in.
-	lightweight := scope != "storage"
-	return s.buildWorkspaceSnapshotOpts(ctx, snapshot, session, workspaceSnapshotOptions{
-		lightweightAzure:       lightweight,
-		skipAwsInventory:       true,
-		azureScope:             scope,
-		azureDeferredInventory: false,
-	}), nil
+	return s.azureDomain.HandleInventoryGet(ctx, params)
 }
 
 func azureInventoryProfilingEnabled() bool {
