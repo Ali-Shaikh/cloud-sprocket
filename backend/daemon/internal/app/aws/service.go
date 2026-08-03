@@ -3,8 +3,8 @@
 
 // Package aws owns AWS-domain RPC handlers that no longer need the full app
 // façade. Phase 4 covers inventory.get, selection groups, and sync write
-// groups (SQS/SNS/DynamoDB/IAM/secrets); async EC2/RDS jobs stay on the
-// façade until a later slice (F-029).
+// groups. Async EC2/RDS lifecycle jobs and S3 upload/presign stay on the
+// façade (F-029).
 package aws
 
 import (
@@ -28,6 +28,10 @@ type Deps struct {
 	DynamoDB      DynamoDBWriter
 	IAM           IAMWriter
 	Secrets       SecretsReader
+	S3            S3Writer
+	Lambda        LambdaWriter
+	Logs          LogsWriter
+	EC2           EC2Writer
 }
 
 // Service owns the extracted AWS inventory, selection, and write RPC paths.
@@ -45,6 +49,10 @@ type Service struct {
 	dynamodb      DynamoDBWriter
 	iam           IAMWriter
 	secrets       SecretsReader
+	s3            S3Writer
+	lambda        LambdaWriter
+	logs          LogsWriter
+	ec2           EC2Writer
 }
 
 // New constructs an AWS domain Service.
@@ -63,5 +71,9 @@ func New(deps Deps) *Service {
 		dynamodb:      deps.DynamoDB,
 		iam:           deps.IAM,
 		secrets:       deps.Secrets,
+		s3:            deps.S3,
+		lambda:        deps.Lambda,
+		logs:          deps.Logs,
+		ec2:           deps.EC2,
 	}
 }

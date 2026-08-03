@@ -72,3 +72,80 @@ func (s *Service) handleAwsSecretsManagerReveal(ctx context.Context, params json
 	}
 	return s.aws.HandleSecretsReveal(ctx, params, notifier)
 }
+
+func (s *Service) handleAwsS3DeleteObject(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleS3DeleteObject(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsS3CreateBucket(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleS3CreateBucket(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsS3CopyObject(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleS3CopyObject(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsS3CreateFolderPrefix(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleS3CreateFolderPrefix(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsLambdaDescribe(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleLambdaDescribe(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsLambdaInvoke(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleLambdaInvoke(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsLambdaCreate(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleLambdaCreate(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsLambdaDeleteFunction(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleLambdaDeleteFunction(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsLogsCreateLogGroup(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleLogsCreateLogGroup(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsLogsPutLogEvents(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleLogsPutLogEvents(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsEc2RunInstances(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleEC2RunInstances(ctx, params, notifier)
+}

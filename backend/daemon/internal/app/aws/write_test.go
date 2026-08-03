@@ -184,3 +184,103 @@ type secretsStub struct{}
 func (secretsStub) GetSecretValue(context.Context, models.ProfileSummary, string, string) (string, error) {
 	return "secret", nil
 }
+
+type fakeS3 struct {
+	deleted bool
+	created bool
+}
+
+func (f *fakeS3) DeleteObject(context.Context, models.ProfileSummary, string, string) (models.AwsS3DeleteObjectResult, error) {
+	f.deleted = true
+	return models.AwsS3DeleteObjectResult{}, nil
+}
+func (f *fakeS3) CreateBucket(context.Context, models.ProfileSummary, string, string) (models.AwsS3CreateBucketResult, error) {
+	f.created = true
+	return models.AwsS3CreateBucketResult{BucketName: "b", Region: "us-east-1"}, nil
+}
+func (f *fakeS3) CopyObject(context.Context, models.ProfileSummary, string, string, string) (models.AwsS3CopyObjectResult, error) {
+	return models.AwsS3CopyObjectResult{DestinationObjectKey: "dest"}, nil
+}
+func (f *fakeS3) CreateFolderPrefix(context.Context, models.ProfileSummary, string, string) (models.AwsS3CreateFolderPrefixResult, error) {
+	return models.AwsS3CreateFolderPrefixResult{FolderPrefix: "f/"}, nil
+}
+
+func TestHandleS3CreateBucket(t *testing.T) {
+	s3 := &fakeS3{}
+	sess := &fakeSession{session: models.SessionSnapshot{
+		IsLocked: true, CurrentProviderID: "aws", SelectedProfileID: "p1", AWSWriteModeEnabled: true,
+	}}
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: sess, Workspace: &fakeWorkspace{}, Activity: &fakeActivity{}, Invalidator: &fakeInvalidator{}, S3: s3,
+	})
+	params, _ := json.Marshal(map[string]string{"bucketName": "b", "region": "us-east-1"})
+	if _, err := svc.HandleS3CreateBucket(context.Background(), params, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !s3.created || sess.session.SelectedS3BucketName != "b" {
+		t.Fatalf("created=%v bucket=%q", s3.created, sess.session.SelectedS3BucketName)
+	}
+}
+
+func TestActiveS3ObjectSelectionRequiresKey(t *testing.T) {
+	snap := discovery.Snapshot{Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}}}
+	session := models.SessionSnapshot{
+		IsLocked: true, CurrentProviderID: "aws", SelectedProfileID: "p1", SelectedS3BucketName: "b",
+	}
+	_, _, _, err := ActiveS3ObjectSelection(snap, session, "")
+	if err == nil {
+		t.Fatal("expected missing object error")
+	}
+}
+
+func TestValidateLambdaCreateInput(t *testing.T) {
+	if err := ValidateLambdaCreateInput(models.AwsLambdaCreateInput{}); err == nil {
+		t.Fatal("expected error")
+	}
+	err := ValidateLambdaCreateInput(models.AwsLambdaCreateInput{
+		FunctionName: "ok", Runtime: "nodejs20.x", HandlerSource: "exports.handler=async()=>({})",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHandleLambdaDescribe(t *testing.T) {
+	lam := &fakeLambda{}
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: &fakeSession{session: models.SessionSnapshot{
+			IsLocked: true, CurrentProviderID: "aws", SelectedProfileID: "p1",
+			SelectedLambdaRegion: "us-east-1", SelectedLambdaFunctionName: "fn",
+		}},
+		Workspace: &fakeWorkspace{}, Lambda: lam,
+	})
+	params, _ := json.Marshal(map[string]string{"functionName": ""})
+	if _, err := svc.HandleLambdaDescribe(context.Background(), params, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !lam.described {
+		t.Fatal("expected describe")
+	}
+}
+
+type fakeLambda struct{ described bool }
+
+func (f *fakeLambda) DescribeFunction(context.Context, models.ProfileSummary, string, string) (models.AwsLambdaFunction, error) {
+	f.described = true
+	return models.AwsLambdaFunction{FunctionName: "fn"}, nil
+}
+func (f *fakeLambda) InvokeFunction(context.Context, models.ProfileSummary, string, string, []byte) (models.AwsLambdaInvokeResult, error) {
+	return models.AwsLambdaInvokeResult{}, nil
+}
+func (f *fakeLambda) CreateFunction(context.Context, models.ProfileSummary, string, models.AwsLambdaCreateInput) (models.AwsLambdaFunction, error) {
+	return models.AwsLambdaFunction{}, nil
+}
+func (f *fakeLambda) DeleteFunction(context.Context, models.ProfileSummary, string, string) (models.AwsLambdaDeleteFunctionResult, error) {
+	return models.AwsLambdaDeleteFunctionResult{}, nil
+}
