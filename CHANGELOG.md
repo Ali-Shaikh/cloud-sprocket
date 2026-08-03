@@ -20,8 +20,10 @@ Installers for every release are published on the
 - Daemon AWS sync write RPCs move into `internal/app/aws` with writer ports and
   shared authorise/finish helpers: SQS, SNS, DynamoDB, IAM create-role, Secrets
   reveal, S3 delete/create/copy/folder, Lambda describe/invoke/create/delete,
-  Logs create/put, and EC2 runInstances. Async EC2/RDS lifecycle jobs and S3
-  upload/presign remain on the façade.
+  Logs create/put, and EC2 runInstances.
+- Daemon AWS async job RPCs move into `internal/app/aws` with lifecycle and
+  extended S3 writer ports: S3 loadMore/upload/presign/validateUrl jobs, EC2
+  invoke/terminate, and RDS start/stop. Façade keeps thin wrappers only.
 
 ## [0.9.12] - 2026-08-01
 

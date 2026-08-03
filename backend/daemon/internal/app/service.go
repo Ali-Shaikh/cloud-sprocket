@@ -192,6 +192,7 @@ func NewFromDeps(deps Deps) *Service {
 		Gate:          awsServiceGate{s: service},
 		Catalog:       awsScopeCatalog{},
 		ActionTimeout: service.azureInventoryTimeout,
+		Now:           now,
 		SQS:           service.sqs,
 		SNS:           service.sns,
 		DynamoDB:      service.dynamodb,
@@ -201,6 +202,8 @@ func NewFromDeps(deps Deps) *Service {
 		Lambda:        service.lambda,
 		Logs:          service.logs,
 		EC2:           service.ec2,
+		EC2Lifecycle:  service.ec2,
+		RDSLifecycle:  service.rds,
 	})
 	service.mu.Lock()
 	if err := service.loadPreferencesLocked(); err != nil {

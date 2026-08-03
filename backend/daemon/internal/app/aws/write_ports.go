@@ -38,8 +38,11 @@ type SecretsReader interface {
 	GetSecretValue(ctx context.Context, profile models.ProfileSummary, region string, secretID string) (string, error)
 }
 
-// S3Writer is the synchronous S3 mutation surface (upload/presign stay async on the façade).
+// S3Writer is the S3 mutation and async job surface (list/upload/presign).
 type S3Writer interface {
+	ListObjects(ctx context.Context, profile models.ProfileSummary, bucketName string, prefix string, continuationToken string) (models.AwsS3ObjectListPage, error)
+	UploadFile(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, sourcePath string) (models.AwsS3UploadResult, error)
+	PresignGetObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, durationSeconds int) (models.AwsS3PresignResult, error)
 	DeleteObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string) (models.AwsS3DeleteObjectResult, error)
 	CreateBucket(ctx context.Context, profile models.ProfileSummary, bucketName string, region string) (models.AwsS3CreateBucketResult, error)
 	CopyObject(ctx context.Context, profile models.ProfileSummary, bucketName string, sourceObjectKey string, destinationObjectKey string) (models.AwsS3CopyObjectResult, error)
@@ -60,7 +63,23 @@ type LogsWriter interface {
 	PutLogEvents(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string, message string) (models.AwsLogsPutLogEventsResult, error)
 }
 
-// EC2Writer is the synchronous EC2 launch surface (lifecycle jobs stay on the façade).
+// EC2Writer is the synchronous EC2 launch surface.
 type EC2Writer interface {
 	RunInstances(ctx context.Context, profile models.ProfileSummary, region string, instanceType string) (models.AwsEc2RunInstancesResult, error)
+}
+
+// EC2Lifecycle is the async EC2 start/stop/reboot/terminate surface used by job handlers.
+type EC2Lifecycle interface {
+	StartInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
+	StopInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
+	RebootInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
+	TerminateInstances(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
+	ListInstances(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsEc2Instance, error)
+}
+
+// RDSLifecycle is the async RDS start/stop surface used by job handlers.
+type RDSLifecycle interface {
+	StartDBInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
+	StopDBInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
+	ListInstances(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsRdsInstance, error)
 }

@@ -5,11 +5,8 @@ package app
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net"
 	"net/url"
-	"os"
 	"strings"
 
 	appaws "cloudsprocket/backend/daemon/internal/app/aws"
@@ -88,35 +85,5 @@ func validateLambdaCreateInput(input models.AwsLambdaCreateInput) error {
 }
 
 func validateS3UploadRequest(sourcePath string, objectKey string) error {
-	sourcePath = strings.TrimSpace(sourcePath)
-	objectKey = strings.TrimSpace(objectKey)
-	if sourcePath == "" || objectKey == "" {
-		return errors.New("source path and destination object key are required")
-	}
-	if strings.HasPrefix(objectKey, "/") || strings.HasPrefix(objectKey, "\\") {
-		return errors.New("destination object key must be relative to the selected bucket")
-	}
-	if strings.Contains(objectKey, "\\") {
-		return errors.New("destination object key must use forward slashes")
-	}
-	for _, segment := range strings.Split(objectKey, "/") {
-		if segment == "." || segment == ".." {
-			return errors.New("destination object key must not contain dot path segments")
-		}
-	}
-	if strings.ContainsAny(objectKey, "\x00\r\n\t") {
-		return errors.New("destination object key contains unsupported control characters")
-	}
-	info, err := os.Stat(sourcePath)
-	if err != nil {
-		return fmt.Errorf("source file is not available: %w", err)
-	}
-	if info.IsDir() || !info.Mode().IsRegular() {
-		return errors.New("source path must be a regular file")
-	}
-	const maxUploadBytes = 512 * 1024 * 1024
-	if info.Size() > maxUploadBytes {
-		return errors.New("source file is larger than the current 512 MiB upload safety limit")
-	}
-	return nil
+	return appaws.ValidateS3UploadRequest(sourcePath, objectKey)
 }

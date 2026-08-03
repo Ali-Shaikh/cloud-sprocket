@@ -43,8 +43,8 @@ func (s *Service) registerAWSHandlers(m *handlerRegistry) {
 	m.register("aws.s3.analyseUrl", func(_ context.Context, params json.RawMessage, _ Notifier) (any, error) {
 		return s.handleAwsS3AnalyseUrl(params)
 	})
-	m.register("aws.s3.validateUrl", func(_ context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-		return s.handleAwsS3ValidateUrl(params, notifier)
+	m.register("aws.s3.validateUrl", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleAwsS3ValidateUrl(ctx, params, notifier)
 	})
 	m.register("aws.ec2.selectRegion", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsEc2SelectRegion(ctx, params, notifier)
