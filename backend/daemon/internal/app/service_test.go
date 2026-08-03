@@ -291,6 +291,15 @@ func (stubLogsInventory) PutLogEvents(context.Context, models.ProfileSummary, st
 	}, nil
 }
 
+func (stubLogsInventory) FilterEvents(_ context.Context, _ models.ProfileSummary, _ string, logGroupName string, filterPattern string, _ int) (models.AwsLogsFilterEventsResult, error) {
+	return models.AwsLogsFilterEventsResult{
+		LogGroupName:  logGroupName,
+		FilterPattern: filterPattern,
+		Events:        []string{"2024-06-15 12:00:00 stub event"},
+		Summary:       "Found 1 recent event(s).",
+	}, nil
+}
+
 type stubIAMInventory struct {
 	roles map[string][]models.AwsIamRole
 }
@@ -721,6 +730,24 @@ func (stubAzureInventory) GetPostgresConnection(context.Context, models.ProfileS
 		JDBCUrl: "jdbc:postgresql://localhost:54983/postgres?user=psqladmin&password=secret&sslmode=disable",
 		Psql:    `psql "host=localhost port=54983 dbname=postgres user=psqladmin password=secret sslmode=disable"`,
 		DotNet:  "Host=localhost;Port=54983;Database=postgres;Username=psqladmin;Password=secret;SSL Mode=Disable;",
+	}, nil
+}
+
+func (stubAzureInventory) StartPostgresServer(_ context.Context, _ models.ProfileSummary, resourceGroup string, serverName string) (models.AzurePostgresLifecycleResult, error) {
+	return models.AzurePostgresLifecycleResult{
+		ServerName:    serverName,
+		ResourceGroup: resourceGroup,
+		Action:        "start",
+		Summary:       "Started PostgreSQL flexible server " + serverName + ".",
+	}, nil
+}
+
+func (stubAzureInventory) StopPostgresServer(_ context.Context, _ models.ProfileSummary, resourceGroup string, serverName string) (models.AzurePostgresLifecycleResult, error) {
+	return models.AzurePostgresLifecycleResult{
+		ServerName:    serverName,
+		ResourceGroup: resourceGroup,
+		Action:        "stop",
+		Summary:       "Stopped PostgreSQL flexible server " + serverName + ".",
 	}, nil
 }
 

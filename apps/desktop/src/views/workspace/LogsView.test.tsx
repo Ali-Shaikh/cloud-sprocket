@@ -221,6 +221,34 @@ describe("LogsView", () => {
     expect(screen.getAllByText(/START RequestId: abc123/).length).toBeGreaterThan(0);
   });
 
+  it("searches events with a filter pattern", async () => {
+    mockMatchMedia(true);
+    const onFilterEvents = vi.fn().mockResolvedValue([
+      "2026-06-15 10:05:12 ERROR request failed",
+    ]);
+    render(
+      <ThemeProvider>
+        <LogsView
+          workspace={workspaceFixture}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectEntity={vi.fn()}
+          onFilterEvents={onFilterEvents}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/Filter pattern/), {
+      target: { value: "ERROR" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(onFilterEvents).toHaveBeenCalledWith("/aws/lambda/process-order", "ERROR");
+    expect(await screen.findByText(/Filtered events \(ERROR\)/)).toBeInTheDocument();
+    expect(screen.getByText(/ERROR request failed/)).toBeInTheDocument();
+  });
+
   it("selects a log group when a row is clicked", () => {
     const { onSelectEntity } = renderLogsView();
 

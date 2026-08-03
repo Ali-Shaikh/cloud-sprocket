@@ -16,6 +16,12 @@ Installers for every release are published on the
   `gcpStorageBuckets` / status, catalogue promotes `gcp-storage` to a live
   service (`inventoryScope: gcs`), and the desktop Storage tab shows the
   inventory. Object browsing remains deferred.
+- AWS CloudWatch Logs filter/search: `aws.logs.filterEvents` searches recent
+  events for the selected log group with an optional CloudWatch filter pattern.
+  The Logs workspace panel adds a Search control in the inspector.
+- Azure PostgreSQL Flexible Server start/stop write actions:
+  `azure.postgres.startServer` and `azure.postgres.stopServer`, gated by Azure
+  write mode, with Start/Stop buttons on the PostgreSQL workspace panel.
 
 ### Changed
 

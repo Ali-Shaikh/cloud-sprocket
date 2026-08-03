@@ -143,6 +143,13 @@ func (s *Service) handleAwsLogsPutLogEvents(ctx context.Context, params json.Raw
 	return s.aws.HandleLogsPutLogEvents(ctx, params, notifier)
 }
 
+func (s *Service) handleAwsLogsFilterEvents(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleLogsFilterEvents(ctx, params, notifier)
+}
+
 func (s *Service) handleAwsEc2RunInstances(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	if err := s.requireAWS(); err != nil {
 		return nil, err

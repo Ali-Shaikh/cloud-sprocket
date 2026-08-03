@@ -87,3 +87,89 @@ func TestGetPostgresConnectionCloud(t *testing.T) {
 		t.Fatal("expected cloud connection note about password")
 	}
 }
+
+func TestParsePostgresLifecycleAction(t *testing.T) {
+	start, err := parsePostgresLifecycleAction(" start ")
+	if err != nil || start != "start" {
+		t.Fatalf("start = %q err=%v", start, err)
+	}
+	stop, err := parsePostgresLifecycleAction("STOP")
+	if err != nil || stop != "stop" {
+		t.Fatalf("stop = %q err=%v", stop, err)
+	}
+	if _, err := parsePostgresLifecycleAction("restart"); err == nil {
+		t.Fatal("expected unsupported action error")
+	}
+}
+
+func TestStartPostgresServerCloud(t *testing.T) {
+	fake := &fakeCLI{out: []byte(`{}`)}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	result, err := inv.StartPostgresServer(context.Background(), cloudAzureProfile(), "rg-data", "prod-pg")
+	if err != nil {
+		t.Fatalf("StartPostgresServer: %v", err)
+	}
+	if result.Action != "start" || result.ServerName != "prod-pg" || result.Summary == "" {
+		t.Fatalf("result = %+v", result)
+	}
+	joined := strings.Join(fake.args, " ")
+	if !strings.Contains(joined, "postgres flexible-server start") ||
+		!strings.Contains(joined, "--name prod-pg") {
+		t.Fatalf("unexpected az args: %v", fake.args)
+	}
+}
+
+func TestStopPostgresServerCloud(t *testing.T) {
+	fake := &fakeCLI{out: []byte(`{}`)}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	result, err := inv.StopPostgresServer(context.Background(), cloudAzureProfile(), "rg-data", "prod-pg")
+	if err != nil {
+		t.Fatalf("StopPostgresServer: %v", err)
+	}
+	if result.Action != "stop" {
+		t.Fatalf("result = %+v", result)
+	}
+	if !strings.Contains(strings.Join(fake.args, " "), "postgres flexible-server stop") {
+		t.Fatalf("unexpected az args: %v", fake.args)
+	}
+}
+
+func TestStartPostgresServerLocalFloci(t *testing.T) {
+	var sawPath string
+	var sawMethod string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawPath = r.URL.Path
+		sawMethod = r.Method
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	t.Cleanup(server.Close)
+
+	inv := newLocalInventory(server.URL)
+	result, err := inv.StartPostgresServer(context.Background(), localFlociProfile(), "app-rg", "lab-dev-pg")
+	if err != nil {
+		t.Fatalf("StartPostgresServer local: %v", err)
+	}
+	if result.Action != "start" || result.ResourceGroup != "app-rg" {
+		t.Fatalf("result = %+v", result)
+	}
+	if sawMethod != http.MethodPost {
+		t.Fatalf("method = %s", sawMethod)
+	}
+	if !strings.Contains(sawPath, "/flexibleServers/lab-dev-pg/start") {
+		t.Fatalf("path = %s", sawPath)
+	}
+}
+
+func TestInvokePostgresLifecycleRequiresNames(t *testing.T) {
+	inv := NewInventory(config.Settings{})
+	if _, err := inv.StartPostgresServer(context.Background(), cloudAzureProfile(), "", "prod-pg"); err == nil {
+		t.Fatal("expected resource group required")
+	}
+	if _, err := inv.StopPostgresServer(context.Background(), cloudAzureProfile(), "rg", ""); err == nil {
+		t.Fatal("expected server name required")
+	}
+}

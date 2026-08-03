@@ -64,4 +64,70 @@ describe("AzurePostgresView", () => {
     fireEvent.click(screen.getByText("lab-dev-pg"));
     expect(onSelectServer).toHaveBeenCalledWith("lab-dev-pg");
   });
+
+  it("invokes start and stop when write capabilities allow it", () => {
+    const onStartServer = vi.fn();
+    const onStopServer = vi.fn();
+    const writeWorkspace = {
+      ...workspace,
+      actionCapabilities: {
+        postgres: [
+          { actionId: "startServer", label: "Start server", enabled: true },
+          { actionId: "stopServer", label: "Stop server", enabled: true },
+        ],
+      },
+    } as unknown as WorkspaceSnapshot;
+
+    render(
+      <ThemeProvider>
+        <AzurePostgresView
+          workspace={writeWorkspace}
+          onSelectServer={vi.fn()}
+          onStartServer={onStartServer}
+          onStopServer={onStopServer}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Start server" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop server" }));
+    expect(onStartServer).toHaveBeenCalledWith("lab-dev-pg", "app-rg");
+    expect(onStopServer).toHaveBeenCalledWith("lab-dev-pg", "app-rg");
+  });
+
+  it("disables start and stop when write mode is off", () => {
+    const writeWorkspace = {
+      ...workspace,
+      actionCapabilities: {
+        postgres: [
+          {
+            actionId: "startServer",
+            label: "Start server",
+            enabled: false,
+            reason: "Turn on write mode from the top bar to run mutating actions.",
+          },
+          {
+            actionId: "stopServer",
+            label: "Stop server",
+            enabled: false,
+            reason: "Turn on write mode from the top bar to run mutating actions.",
+          },
+        ],
+      },
+    } as unknown as WorkspaceSnapshot;
+
+    render(
+      <ThemeProvider>
+        <AzurePostgresView
+          workspace={writeWorkspace}
+          onSelectServer={vi.fn()}
+          onStartServer={vi.fn()}
+          onStopServer={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Start server" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Stop server" })).toBeDisabled();
+  });
 });

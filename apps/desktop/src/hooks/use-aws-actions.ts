@@ -671,6 +671,31 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setLogsActionStatus]);
 
+  const filterLogEvents = useCallback(
+    (logGroupName: string, filterPattern: string): Promise<string[]> => {
+      setLogsActionStatus(
+        filterPattern.trim()
+          ? `Searching log events for ${filterPattern.trim()}.`
+          : "Loading recent log events.",
+      );
+      return backendRequest<{ events?: string[]; summary?: string }>("aws.logs.filterEvents", {
+        logGroupName,
+        filterPattern,
+        limit: 25,
+      })
+        .then((result) => {
+          setLogsActionStatus(result.summary || "Log event search completed.");
+          return result.events ?? [];
+        })
+        .catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          setLogsActionStatus(message);
+          throw error;
+        });
+    },
+    [setLogsActionStatus],
+  );
+
   const createIAMRole = useCallback((roleName: string): void => {
     setIamActionStatus(`Creating IAM role ${roleName}.`);
     void requestWorkspaceSnapshot("aws.iam.createRole", { roleName })
@@ -1207,6 +1232,7 @@ export function useAwsActions(params: UseAwsActionsParams) {
     invokeRDSLifecycleAction,
     createLogGroup,
     putLogEvents,
+    filterLogEvents,
     createIAMRole,
     refreshECSInventory,
     selectECSRegion,

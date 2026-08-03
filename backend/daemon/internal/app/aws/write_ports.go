@@ -57,10 +57,11 @@ type LambdaWriter interface {
 	DeleteFunction(ctx context.Context, profile models.ProfileSummary, region string, functionName string) (models.AwsLambdaDeleteFunctionResult, error)
 }
 
-// LogsWriter is the CloudWatch Logs create/put surface.
+// LogsWriter is the CloudWatch Logs create/put/filter surface.
 type LogsWriter interface {
 	CreateLogGroup(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string) (models.AwsLogsCreateLogGroupResult, error)
 	PutLogEvents(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string, message string) (models.AwsLogsPutLogEventsResult, error)
+	FilterEvents(ctx context.Context, profile models.ProfileSummary, region string, logGroupName string, filterPattern string, limit int) (models.AwsLogsFilterEventsResult, error)
 }
 
 // EC2Writer is the synchronous EC2 launch surface.

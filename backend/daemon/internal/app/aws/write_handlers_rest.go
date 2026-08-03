@@ -476,6 +476,45 @@ func (s *Service) HandleLogsPutLogEvents(ctx context.Context, params json.RawMes
 	return result, nil
 }
 
+// HandleLogsFilterEvents implements aws.logs.filterEvents (read-only search).
+func (s *Service) HandleLogsFilterEvents(ctx context.Context, params json.RawMessage, _ sessionport.Notifier) (any, error) {
+	if s == nil || s.logs == nil || s.session == nil || s.discovery == nil {
+		return nil, errors.New("aws write service is not available")
+	}
+	var request struct {
+		LogGroupName  string `json:"logGroupName"`
+		FilterPattern string `json:"filterPattern"`
+		Limit         int    `json:"limit"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	logGroupName := strings.TrimSpace(request.LogGroupName)
+	if logGroupName == "" {
+		return nil, errors.New("log group name is required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	session, err := s.session.Load(ctx, snapshot)
+	if err != nil {
+		return nil, err
+	}
+	profile, region, err := ActiveLogsRegion(snapshot, session)
+	if err != nil {
+		return nil, err
+	}
+
+	actionCtx, cancel := s.WithActionTimeout(ctx)
+	result, err := s.logs.FilterEvents(actionCtx, profile, region, logGroupName, request.FilterPattern, request.Limit)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // HandleEC2RunInstances implements aws.ec2.runInstances.
 func (s *Service) HandleEC2RunInstances(ctx context.Context, params json.RawMessage, notifier sessionport.Notifier) (any, error) {
 	if s == nil || s.ec2 == nil {

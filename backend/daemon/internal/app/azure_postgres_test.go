@@ -43,3 +43,16 @@ func TestAzurePostgresConnectionReturnsNilForEmptyServerName(t *testing.T) {
 		t.Fatalf("expected nil for empty server name, got %+v", got)
 	}
 }
+
+func TestResourceGroupForPostgresServer(t *testing.T) {
+	servers := []models.AzurePostgresServer{
+		{Name: "a", ResourceGroup: "rg-a"},
+		{Name: "b", ResourceGroup: "rg-b"},
+	}
+	if got := resourceGroupForPostgresServer(servers, "b"); got != "rg-b" {
+		t.Fatalf("got %q", got)
+	}
+	if got := resourceGroupForPostgresServer(servers, "missing"); got != "" {
+		t.Fatalf("got %q", got)
+	}
+}

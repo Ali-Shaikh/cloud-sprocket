@@ -560,6 +560,14 @@ type AwsLogsPutLogEventsResult struct {
 	Summary       string `json:"summary"`
 }
 
+// AwsLogsFilterEventsResult is a bounded CloudWatch Logs filter/search response.
+type AwsLogsFilterEventsResult struct {
+	LogGroupName  string   `json:"logGroupName"`
+	FilterPattern string   `json:"filterPattern,omitempty"`
+	Events        []string `json:"events"`
+	Summary       string   `json:"summary"`
+}
+
 type AwsIamCreateRoleResult struct {
 	RoleName string `json:"roleName"`
 	RoleArn  string `json:"roleArn"`
@@ -1235,6 +1243,14 @@ type AzurePostgresConnection struct {
 	Psql    string `json:"psql"`
 	DotNet  string `json:"dotNet"`
 	Note    string `json:"note,omitempty"`
+}
+
+// AzurePostgresLifecycleResult reports a start/stop action on a flexible server.
+type AzurePostgresLifecycleResult struct {
+	ServerName    string `json:"serverName"`
+	ResourceGroup string `json:"resourceGroup"`
+	Action        string `json:"action"`
+	Summary       string `json:"summary"`
 }
 
 // AzureStorageQueue is a queue within a storage account.

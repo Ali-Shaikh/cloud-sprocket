@@ -192,6 +192,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     invokeRDSLifecycleAction,
     createLogGroup,
     putLogEvents,
+    filterLogEvents,
     createIAMRole,
     refreshECSInventory,
     selectECSRegion,
@@ -519,6 +520,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onSelectEntity={selectLogGroup}
       onCreateLogGroup={createLogGroup}
       onPutLogEvents={putLogEvents}
+      onFilterEvents={filterLogEvents}
     />
   ) : session.isLocked && activeWorkspaceTabId === "iam" ? (
     <IAMView

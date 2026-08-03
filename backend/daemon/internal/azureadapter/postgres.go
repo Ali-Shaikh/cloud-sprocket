@@ -144,6 +144,102 @@ func (i *Inventory) getLocalPostgresConnection(
 	}, nil
 }
 
+// StartPostgresServer starts a PostgreSQL Flexible Server (write action).
+func (i *Inventory) StartPostgresServer(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	resourceGroup string,
+	serverName string,
+) (models.AzurePostgresLifecycleResult, error) {
+	return i.invokePostgresLifecycle(ctx, profile, resourceGroup, serverName, "start")
+}
+
+// StopPostgresServer stops a PostgreSQL Flexible Server (write action).
+func (i *Inventory) StopPostgresServer(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	resourceGroup string,
+	serverName string,
+) (models.AzurePostgresLifecycleResult, error) {
+	return i.invokePostgresLifecycle(ctx, profile, resourceGroup, serverName, "stop")
+}
+
+func parsePostgresLifecycleAction(action string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(action)) {
+	case "start":
+		return "start", nil
+	case "stop":
+		return "stop", nil
+	default:
+		return "", fmt.Errorf("unsupported postgres server action %q", action)
+	}
+}
+
+func (i *Inventory) invokePostgresLifecycle(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	resourceGroup string,
+	serverName string,
+	action string,
+) (models.AzurePostgresLifecycleResult, error) {
+	resourceGroup = strings.TrimSpace(resourceGroup)
+	serverName = strings.TrimSpace(serverName)
+	normalised, err := parsePostgresLifecycleAction(action)
+	if err != nil {
+		return models.AzurePostgresLifecycleResult{}, err
+	}
+	if serverName == "" {
+		return models.AzurePostgresLifecycleResult{}, fmt.Errorf("a server name is required")
+	}
+	if resourceGroup == "" {
+		return models.AzurePostgresLifecycleResult{}, fmt.Errorf("a resource group is required")
+	}
+	if isLocalFlociProfile(profile) {
+		if err := i.invokeLocalPostgresLifecycle(ctx, resourceGroup, serverName, normalised); err != nil {
+			return models.AzurePostgresLifecycleResult{}, err
+		}
+	} else {
+		_, err := i.run(ctx,
+			"postgres", "flexible-server", normalised,
+			"--subscription", profile.ProfileID,
+			"--resource-group", resourceGroup,
+			"--name", serverName,
+			"--only-show-errors",
+		)
+		if err != nil {
+			return models.AzurePostgresLifecycleResult{}, err
+		}
+	}
+	verb := "Started"
+	if normalised == "stop" {
+		verb = "Stopped"
+	}
+	return models.AzurePostgresLifecycleResult{
+		ServerName:    serverName,
+		ResourceGroup: resourceGroup,
+		Action:        normalised,
+		Summary:       fmt.Sprintf("%s PostgreSQL flexible server %s.", verb, serverName),
+	}, nil
+}
+
+func (i *Inventory) invokeLocalPostgresLifecycle(
+	ctx context.Context,
+	resourceGroup string,
+	serverName string,
+	action string,
+) error {
+	url := fmt.Sprintf(
+		"%s/subscriptions/%s/resourceGroups/%s/providers/Microsoft.DBforPostgreSQL/flexibleServers/%s/%s?api-version=%s",
+		i.flociBaseURL(),
+		i.localSubscriptionID,
+		resourceGroup,
+		serverName,
+		action,
+		postgresAPIVersion,
+	)
+	return i.flociJSON(ctx, http.MethodPost, url, nil, nil)
+}
+
 func decodePostgresServers(payload []byte, local bool) ([]models.AzurePostgresServer, error) {
 	var decoded []json.RawMessage
 	if err := json.Unmarshal(payload, &decoded); err != nil {

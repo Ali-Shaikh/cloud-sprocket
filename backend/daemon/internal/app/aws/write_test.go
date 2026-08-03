@@ -185,6 +185,83 @@ func (secretsStub) GetSecretValue(context.Context, models.ProfileSummary, string
 	return "secret", nil
 }
 
+type fakeLogs struct {
+	filtered bool
+	pattern  string
+	group    string
+}
+
+func (f *fakeLogs) CreateLogGroup(context.Context, models.ProfileSummary, string, string) (models.AwsLogsCreateLogGroupResult, error) {
+	return models.AwsLogsCreateLogGroupResult{}, nil
+}
+func (f *fakeLogs) PutLogEvents(context.Context, models.ProfileSummary, string, string, string) (models.AwsLogsPutLogEventsResult, error) {
+	return models.AwsLogsPutLogEventsResult{}, nil
+}
+func (f *fakeLogs) FilterEvents(_ context.Context, _ models.ProfileSummary, _ string, logGroupName string, filterPattern string, _ int) (models.AwsLogsFilterEventsResult, error) {
+	f.filtered = true
+	f.group = logGroupName
+	f.pattern = filterPattern
+	return models.AwsLogsFilterEventsResult{
+		LogGroupName:  logGroupName,
+		FilterPattern: filterPattern,
+		Events:        []string{"2024-06-15 12:00:00 ERROR boom"},
+		Summary:       "Found 1 event(s).",
+	}, nil
+}
+
+func TestHandleLogsFilterEventsIsReadOnly(t *testing.T) {
+	logs := &fakeLogs{}
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: &fakeSession{session: models.SessionSnapshot{
+			IsLocked:           true,
+			CurrentProviderID:  "aws",
+			SelectedProfileID:  "p1",
+			SelectedLogsRegion: "eu-west-1",
+		}},
+		Workspace:     &fakeWorkspace{},
+		Logs:          logs,
+		ActionTimeout: 5 * time.Second,
+	})
+	params, _ := json.Marshal(map[string]any{
+		"logGroupName":  "/aws/lambda/app",
+		"filterPattern": "ERROR",
+		"limit":         10,
+	})
+	result, err := svc.HandleLogsFilterEvents(context.Background(), params, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !logs.filtered || logs.group != "/aws/lambda/app" || logs.pattern != "ERROR" {
+		t.Fatalf("filter call = %+v", logs)
+	}
+	got, ok := result.(models.AwsLogsFilterEventsResult)
+	if !ok || len(got.Events) != 1 {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestHandleLogsFilterEventsRequiresLogGroup(t *testing.T) {
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: &fakeSession{session: models.SessionSnapshot{
+			IsLocked:          true,
+			CurrentProviderID: "aws",
+			SelectedProfileID: "p1",
+		}},
+		Workspace: &fakeWorkspace{},
+		Logs:      &fakeLogs{},
+	})
+	params, _ := json.Marshal(map[string]string{"logGroupName": ""})
+	if _, err := svc.HandleLogsFilterEvents(context.Background(), params, nil); err == nil {
+		t.Fatal("expected log group name required")
+	}
+}
+
 type fakeS3 struct {
 	deleted   bool
 	created   bool
