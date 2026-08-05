@@ -14,6 +14,7 @@ import (
 	appaws "cloudsprocket/backend/daemon/internal/app/aws"
 	appazure "cloudsprocket/backend/daemon/internal/app/azure"
 	appdeployment "cloudsprocket/backend/daemon/internal/app/deployment"
+	applabs "cloudsprocket/backend/daemon/internal/app/labs"
 	appruntime "cloudsprocket/backend/daemon/internal/app/runtime"
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/deploy"
@@ -71,7 +72,10 @@ type Service struct {
 	aws *appaws.Service
 	// azureDomain owns extracted Azure domain RPCs (inventory first; F-029 Phase 5).
 	// Named azureDomain so it does not collide with the azure AzureInventory field.
-	azureDomain           *appazure.Service
+	azureDomain *appazure.Service
+	// labsDomain owns labs.* RPC handlers and startup fault recovery (F-029 Phase 6a).
+	// Named labsDomain so it does not collide with the labs package import.
+	labsDomain            *applabs.Service
 	cipher                *secrets.Cipher
 	initialisationErr     error
 	azureInventoryTimeout time.Duration
@@ -223,6 +227,15 @@ func NewFromDeps(deps Deps) *Service {
 		Invalidator: service,
 		Gate:        azureServiceGate{s: service},
 		Catalog:     azureScopeCatalog{},
+	})
+	service.labsDomain = applabs.New(applabs.Deps{
+		Discovery:   deps.Discovery,
+		Session:     service,
+		Invalidator: service,
+		Deployments: labsDeploymentsAdapter{s: service},
+		Recipes:     labsRecipesAdapter{s: service},
+		Runner:      labsRunnerAdapter{s: service},
+		Writes:      labsWriteExecutorAdapter{s: service},
 	})
 	service.mu.Lock()
 	if err := service.loadPreferencesLocked(); err != nil {
