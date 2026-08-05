@@ -145,47 +145,6 @@ func (s *Service) enrichAzureKeyVaultInventory(
 	})
 }
 
-func (s *Service) handleAzureKeyVaultSelectVault(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		VaultName string `json:"vaultName"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a key vault", func(session *models.SessionSnapshot) error {
-		session.SelectedAzureKeyVault = strings.TrimSpace(request.VaultName)
-		session.SelectedAzureSecret = ""
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "keyvault",
-	}, "", "")
-}
-
-func (s *Service) handleAzureKeyVaultSelectSecret(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		SecretName string `json:"secretName"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a secret", func(session *models.SessionSnapshot) error {
-		session.SelectedAzureSecret = strings.TrimSpace(request.SecretName)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "keyvault",
-	}, "", "")
-}
-
 // lockedAzureProfile resolves the locked Azure workspace's profile, returning an
 // error when the workspace is not an open Azure session.
 func (s *Service) lockedAzureProfile(ctx context.Context) (models.ProfileSummary, models.SessionSnapshot, error) {

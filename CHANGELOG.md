@@ -25,6 +25,12 @@ Installers for every release are published on the
 
 ### Changed
 
+- Daemon Azure selection RPCs (resource group, VM, storage account/container/blob
+  and prefix filter, web app/slot, Log Analytics workspace, WAF policy, Front Door
+  profile/endpoint/origin group, Function App/function, Key Vault vault/secret,
+  Cosmos account/database/container, PostgreSQL server, queue) move into
+  `internal/app/azure` with session/workspace/activity ports (architecture F-029
+  Phase 5b). Write and refresh actions stay on the façade.
 - Daemon Azure inventory RPC (`azure.inventory.get`) moves into
   `internal/app/azure` with pure scope helpers and session/workspace ports
   (architecture F-029 Phase 5a). The RPC still returns a scoped
