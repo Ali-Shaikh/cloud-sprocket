@@ -263,6 +263,11 @@ func (s *Service) HandleRDSStopInstance(ctx context.Context, params json.RawMess
 	return s.handleRDSLifecycleInstance(ctx, params, notifier, "stop")
 }
 
+// HandleRDSRebootInstance implements aws.rds.rebootInstance (queues an async job).
+func (s *Service) HandleRDSRebootInstance(ctx context.Context, params json.RawMessage, notifier sessionport.Notifier) (any, error) {
+	return s.handleRDSLifecycleInstance(ctx, params, notifier, "reboot")
+}
+
 func (s *Service) handleRDSLifecycleInstance(ctx context.Context, params json.RawMessage, notifier sessionport.Notifier, action string) (any, error) {
 	if s == nil || s.rdsLifecycle == nil || s.session == nil {
 		return nil, errors.New("aws write service is not available")
@@ -334,6 +339,8 @@ func (s *Service) RunRDSAction(
 		err = s.rdsLifecycle.StartDBInstance(background, profile, region, instanceID)
 	case "stop":
 		err = s.rdsLifecycle.StopDBInstance(background, profile, region, instanceID)
+	case "reboot":
+		err = s.rdsLifecycle.RebootDBInstance(background, profile, region, instanceID)
 	default:
 		err = fmt.Errorf("RDS action %q is not implemented", action)
 	}

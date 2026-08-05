@@ -466,6 +466,98 @@ func TestHandleLambdaDescribe(t *testing.T) {
 
 type fakeLambda struct{ described bool }
 
+type fakeDynamoDB struct {
+	scanned bool
+	token   string
+}
+
+func (f *fakeDynamoDB) PutItem(context.Context, models.ProfileSummary, string, string, string) (models.AwsDynamoDBWriteResult, error) {
+	return models.AwsDynamoDBWriteResult{}, nil
+}
+func (f *fakeDynamoDB) DeleteItem(context.Context, models.ProfileSummary, string, string, string) (models.AwsDynamoDBWriteResult, error) {
+	return models.AwsDynamoDBWriteResult{}, nil
+}
+func (f *fakeDynamoDB) ScanSampleItems(_ context.Context, _ models.ProfileSummary, _ string, _ string, token string, _ int32) (models.AwsDynamoDBScanPage, error) {
+	f.scanned = true
+	f.token = token
+	return models.AwsDynamoDBScanPage{
+		Items:                []string{`{"id":"page-2"}`},
+		SampleItemsNextToken: "next-token",
+		SampleItemsHasMore:   true,
+	}, nil
+}
+
+func TestHandleDynamoDBLoadMoreItems(t *testing.T) {
+	ddb := &fakeDynamoDB{}
+	ws := &fakeWorkspace{
+		snapshot: models.WorkspaceSnapshot{
+			DynamoDBTables: []models.AwsDynamoDBTable{
+				{
+					TableName:   "orders",
+					SampleItems: []string{`{"id":"page-1"}`},
+				},
+			},
+		},
+	}
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: &fakeSession{session: models.SessionSnapshot{
+			IsLocked:                  true,
+			CurrentProviderID:         "aws",
+			SelectedProfileID:         "p1",
+			SelectedDynamoDBRegion:    "us-east-1",
+			SelectedDynamoDBTableName: "orders",
+		}},
+		Workspace:     ws,
+		DynamoDB:      ddb,
+		ActionTimeout: 5 * time.Second,
+	})
+	params, _ := json.Marshal(map[string]string{
+		"tableName":         "orders",
+		"continuationToken": "page-token",
+	})
+	result, err := svc.HandleDynamoDBLoadMoreItems(context.Background(), params, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ddb.scanned || ddb.token != "page-token" {
+		t.Fatalf("scan token = %q scanned=%v", ddb.token, ddb.scanned)
+	}
+	workspace, ok := result.(models.WorkspaceSnapshot)
+	if !ok {
+		t.Fatalf("result type %T", result)
+	}
+	if len(workspace.DynamoDBTables) != 1 {
+		t.Fatalf("tables = %d", len(workspace.DynamoDBTables))
+	}
+	table := workspace.DynamoDBTables[0]
+	if len(table.SampleItems) != 1 || table.SampleItems[0] != `{"id":"page-2"}` {
+		t.Fatalf("sample items = %#v", table.SampleItems)
+	}
+	if !table.SampleItemsHasMore || table.SampleItemsNextToken != "next-token" {
+		t.Fatalf("pagination = hasMore=%v token=%q", table.SampleItemsHasMore, table.SampleItemsNextToken)
+	}
+}
+
+func TestHandleDynamoDBLoadMoreItemsRequiresToken(t *testing.T) {
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: &fakeSession{session: models.SessionSnapshot{
+			IsLocked: true, CurrentProviderID: "aws", SelectedProfileID: "p1",
+			SelectedDynamoDBTableName: "orders",
+		}},
+		Workspace: &fakeWorkspace{},
+		DynamoDB:  &fakeDynamoDB{},
+	})
+	if _, err := svc.HandleDynamoDBLoadMoreItems(context.Background(), []byte(`{"tableName":"orders"}`), nil); err == nil {
+		t.Fatal("expected continuation token error")
+	}
+}
+
 func (f *fakeLambda) DescribeFunction(context.Context, models.ProfileSummary, string, string) (models.AwsLambdaFunction, error) {
 	f.described = true
 	return models.AwsLambdaFunction{FunctionName: "fn"}, nil

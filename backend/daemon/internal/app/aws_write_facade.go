@@ -59,6 +59,13 @@ func (s *Service) handleAwsDynamodbDeleteItem(ctx context.Context, params json.R
 	return s.aws.HandleDynamoDBDeleteItem(ctx, params, notifier)
 }
 
+func (s *Service) handleAwsDynamodbLoadMoreItems(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleDynamoDBLoadMoreItems(ctx, params, notifier)
+}
+
 func (s *Service) handleAwsIamCreateRole(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	if err := s.requireAWS(); err != nil {
 		return nil, err
@@ -213,6 +220,13 @@ func (s *Service) handleAwsRdsStopInstance(ctx context.Context, params json.RawM
 		return nil, err
 	}
 	return s.aws.HandleRDSStopInstance(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsRdsRebootInstance(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleRDSRebootInstance(ctx, params, notifier)
 }
 
 func (s *Service) handleAwsEcsForceNewDeployment(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {

@@ -64,6 +64,7 @@ func TestBuildAWSActionCapabilitiesIncludePhase2And3Writes(t *testing.T) {
 		{"lambda", "deleteFunction"},
 		{"rds", "startInstance"},
 		{"rds", "stopInstance"},
+		{"rds", "rebootInstance"},
 		{"logs", "createLogGroup"},
 		{"logs", "putLogEvents"},
 		{"iam", "createRole"},

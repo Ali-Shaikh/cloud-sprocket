@@ -108,6 +108,7 @@ func buildAWSActionCapabilities(
 		"rds": {
 			awsActionCapability(session, profile, "startInstance", "Start instance"),
 			awsActionCapability(session, profile, "stopInstance", "Stop instance"),
+			awsActionCapability(session, profile, "rebootInstance", "Reboot instance"),
 		},
 		"logs": {
 			awsActionCapability(session, profile, "createLogGroup", "Create log group"),

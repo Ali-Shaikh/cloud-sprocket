@@ -48,11 +48,18 @@ func (f *fakeSession) Update(_ context.Context, _ discovery.Snapshot, mutate fun
 type fakeWorkspace struct {
 	lastOpts sessionport.SnapshotOptions
 	built    int
+	snapshot models.WorkspaceSnapshot
 }
 
 func (f *fakeWorkspace) Build(_ context.Context, _ discovery.Snapshot, _ models.SessionSnapshot, opts sessionport.SnapshotOptions) models.WorkspaceSnapshot {
 	f.built++
 	f.lastOpts = opts
+	if f.snapshot.DynamoDBTables != nil || f.snapshot.SelectedDynamoDBTableName != "" {
+		return f.snapshot
+	}
+	if f.snapshot.SelectedS3BucketName != "" {
+		return f.snapshot
+	}
 	return models.WorkspaceSnapshot{SelectedS3BucketName: "built"}
 }
 

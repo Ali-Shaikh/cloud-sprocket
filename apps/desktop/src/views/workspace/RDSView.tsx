@@ -58,7 +58,7 @@ export type RDSViewProps = {
   onRefresh: () => void;
   onSelectRegion: (region: string) => void;
   onSelectEntity: (dbInstanceIdentifier: string) => void;
-  onInvokeLifecycleAction?: (action: "start" | "stop", instanceId: string) => void;
+  onInvokeLifecycleAction?: (action: "start" | "stop" | "reboot", instanceId: string) => void;
 };
 
 const fieldLabel =
@@ -127,6 +127,7 @@ export default function RDSView({
   const lastSelectedInstanceRef = useRef(workspace.selectedRdsInstanceId || "");
   const startCapability = actionCapabilityState(workspace, "rds", "startInstance");
   const stopCapability = actionCapabilityState(workspace, "rds", "stopInstance");
+  const rebootCapability = actionCapabilityState(workspace, "rds", "rebootInstance");
 
   const regions =
     workspace.rdsRegions.length > 0
@@ -403,6 +404,16 @@ export default function RDSView({
                 onClick={() => onInvokeLifecycleAction("stop", selectedInstance.dbInstanceIdentifier)}
               >
                 Stop instance
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!rebootCapability.enabled}
+                title={rebootCapability.enabled ? undefined : rebootCapability.reason}
+                onClick={() =>
+                  onInvokeLifecycleAction("reboot", selectedInstance.dbInstanceIdentifier)
+                }
+              >
+                Reboot instance
               </Button>
             </>
           ) : null}

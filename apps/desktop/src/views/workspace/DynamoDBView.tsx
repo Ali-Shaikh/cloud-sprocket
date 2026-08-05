@@ -47,6 +47,8 @@ export type DynamoDBViewProps = {
   onSelectTable: (tableName: string) => void;
   onPutItem: (tableName: string, itemJson: string) => void;
   onDeleteItem: (tableName: string, keyJson: string) => void;
+  onLoadMoreItems?: () => void;
+  loadMoreInFlight?: boolean;
 };
 
 const fieldLabel =
@@ -107,6 +109,8 @@ export default function DynamoDBView({
   onSelectTable,
   onPutItem,
   onDeleteItem,
+  onLoadMoreItems,
+  loadMoreInFlight = false,
 }: DynamoDBViewProps) {
   const [filterText, setFilterText] = useState("");
   const [putDialogOpen, setPutDialogOpen] = useState(false);
@@ -296,6 +300,18 @@ export default function DynamoDBView({
               </div>
             ))}
           </div>
+          {selectedTable.sampleItemsHasMore && onLoadMoreItems ? (
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loadMoreInFlight || !selectedTable.sampleItemsNextToken}
+                onClick={() => onLoadMoreItems()}
+              >
+                {loadMoreInFlight ? "Loading…" : "Load more items"}
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">

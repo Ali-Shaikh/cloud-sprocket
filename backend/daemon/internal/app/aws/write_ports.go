@@ -22,10 +22,12 @@ type SNSWriter interface {
 	CreateTopic(ctx context.Context, profile models.ProfileSummary, region string, topicName string) (models.AwsSnsCreateTopicResult, error)
 }
 
-// DynamoDBWriter is the DynamoDB write surface.
+// DynamoDBWriter is the DynamoDB write and sample-scan surface.
 type DynamoDBWriter interface {
 	PutItem(ctx context.Context, profile models.ProfileSummary, region string, tableName string, itemJSON string) (models.AwsDynamoDBWriteResult, error)
 	DeleteItem(ctx context.Context, profile models.ProfileSummary, region string, tableName string, keyJSON string) (models.AwsDynamoDBWriteResult, error)
+	// ScanSampleItems returns one page of sample items. exclusiveStartToken empty means the first page.
+	ScanSampleItems(ctx context.Context, profile models.ProfileSummary, region string, tableName string, exclusiveStartToken string, limit int32) (models.AwsDynamoDBScanPage, error)
 }
 
 // IAMWriter is the IAM create-role surface.
@@ -78,10 +80,11 @@ type EC2Lifecycle interface {
 	ListInstances(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsEc2Instance, error)
 }
 
-// RDSLifecycle is the async RDS start/stop surface used by job handlers.
+// RDSLifecycle is the async RDS start/stop/reboot surface used by job handlers.
 type RDSLifecycle interface {
 	StartDBInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
 	StopDBInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
+	RebootDBInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
 	ListInstances(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsRdsInstance, error)
 }
 

@@ -293,6 +293,85 @@ func (s *Service) HandleDynamoDBDeleteItem(ctx context.Context, params json.RawM
 	)
 }
 
+// HandleDynamoDBLoadMoreItems implements aws.dynamodb.loadMoreItems (read-only scan page).
+func (s *Service) HandleDynamoDBLoadMoreItems(ctx context.Context, params json.RawMessage, _ sessionport.Notifier) (any, error) {
+	if s == nil || s.dynamodb == nil || s.session == nil || s.workspace == nil {
+		return nil, errors.New("aws write service is not available")
+	}
+	var request struct {
+		TableName          string `json:"tableName"`
+		ContinuationToken  string `json:"continuationToken"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	token := strings.TrimSpace(request.ContinuationToken)
+	if token == "" {
+		return nil, errors.New("continuation token is required to load more DynamoDB items")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	session, err := s.session.Load(ctx, snapshot)
+	if err != nil {
+		return nil, err
+	}
+	profile, region, tableName, err := ActiveDynamoDBSelection(snapshot, session, request.TableName)
+	if err != nil {
+		return nil, err
+	}
+
+	actionCtx, cancel := s.WithActionTimeout(ctx)
+	page, scanErr := s.dynamodb.ScanSampleItems(actionCtx, profile, region, tableName, token, 0)
+	cancel()
+	if scanErr != nil {
+		return nil, fmt.Errorf("could not load more DynamoDB items: %w", scanErr)
+	}
+
+	workspace := s.workspace.Build(ctx, snapshot, session, sessionport.SnapshotOptions{
+		AWSScope:           "dynamodb",
+		SkipAzureInventory: true,
+		LightweightAWS:     true,
+	})
+	// Replace selected table sample page only; the UI appends to the list.
+	updatedTables := make([]models.AwsDynamoDBTable, 0, len(workspace.DynamoDBTables))
+	found := false
+	for _, table := range workspace.DynamoDBTables {
+		if table.TableName != tableName {
+			updatedTables = append(updatedTables, table)
+			continue
+		}
+		found = true
+		table.SampleItems = page.Items
+		table.SampleItemsNextToken = page.SampleItemsNextToken
+		table.SampleItemsHasMore = page.SampleItemsHasMore
+		updatedTables = append(updatedTables, table)
+	}
+	if !found {
+		updatedTables = append(updatedTables, models.AwsDynamoDBTable{
+			TableName:            tableName,
+			SampleItems:          page.Items,
+			SampleItemsNextToken: page.SampleItemsNextToken,
+			SampleItemsHasMore:   page.SampleItemsHasMore,
+		})
+	}
+	workspace.DynamoDBTables = updatedTables
+	workspace.SelectedDynamoDBRegion = region
+	workspace.SelectedDynamoDBTableName = tableName
+	moreNote := "End of scan."
+	if page.SampleItemsHasMore {
+		moreNote = "More items available."
+	}
+	workspace.DynamoDBStatusMessage = fmt.Sprintf(
+		"Loaded %d more sample item(s) from %s. %s",
+		len(page.Items),
+		tableName,
+		moreNote,
+	)
+	return workspace, nil
+}
+
 // HandleIAMCreateRole implements aws.iam.createRole.
 func (s *Service) HandleIAMCreateRole(ctx context.Context, params json.RawMessage, notifier sessionport.Notifier) (any, error) {
 	if s == nil || s.iam == nil {
