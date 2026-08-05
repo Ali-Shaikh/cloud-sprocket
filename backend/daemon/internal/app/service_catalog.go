@@ -328,9 +328,10 @@ func gcpServiceCatalog() []serviceCatalogEntry {
 		},
 		{
 			ProviderID: "gcp", ServiceID: "gcp-compute", Label: "Compute Engine",
-			Summary: "VM instance inventory.",
-			Detail:  "Planned for a future release once floci-gcp inventory is wired.",
-			Category: workspaceTabCategoryComingSoon, Domain: serviceDomainCompute,
+			Summary: "VM instance inventory via gcloud.",
+			Detail:  "Lists Compute Engine instances for the open gcloud configuration and project. Lifecycle actions follow in a later release.",
+			Category: workspaceTabCategoryService, Domain: serviceDomainCompute,
+			InventoryScope: "gce",
 		},
 		{
 			ProviderID: "gcp", ServiceID: "gcp-functions", Label: "Cloud Functions",

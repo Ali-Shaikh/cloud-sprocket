@@ -24,13 +24,27 @@ func TestDisabledCatalogueEntriesSkipsComingSoon(t *testing.T) {
 		preferences: models.ServicePreferences{
 			DisabledServices: map[string][]string{
 				// Still coming_soon; must not appear in hidden-resource probes.
-				"gcp": {"gcp-compute"},
+				"gcp": {"gcp-functions"},
 			},
 		},
 	}
 	entries := service.disabledCatalogueEntries("gcp")
 	if len(entries) != 0 {
 		t.Fatalf("coming soon entries should not be probed: %+v", entries)
+	}
+}
+
+func TestDisabledCatalogueEntriesIncludesLiveGcpCompute(t *testing.T) {
+	service := &Service{
+		preferences: models.ServicePreferences{
+			DisabledServices: map[string][]string{
+				"gcp": {"gcp-compute"},
+			},
+		},
+	}
+	entries := service.disabledCatalogueEntries("gcp")
+	if len(entries) != 1 || entries[0].ServiceID != "gcp-compute" {
+		t.Fatalf("disabled live entries = %+v, want gcp-compute only", entries)
 	}
 }
 

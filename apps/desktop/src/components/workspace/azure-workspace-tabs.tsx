@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { startTransition } from "react";
+import { startTransition, useState } from "react";
 import type { ReactNode } from "react";
 import { backendRequest } from "@/lib/backend";
 import { requestWorkspaceSnapshot } from "@/lib/workspace-request";
@@ -35,6 +35,7 @@ import {
 import type {
   AzureBastionConnectResult,
   AzureBastionHost,
+  AzureBlobPresignResult,
   AzureFunctionInvokeResult,
   AzureLogAnalyticsSavedQuery,
   AzureLogAnalyticsTableInfo,
@@ -66,6 +67,10 @@ const AZURE_TAB_IDS = new Set([
 ]);
 
 export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
+  const [azureBlobSignedUrlResult, setAzureBlobSignedUrlResult] = useState<
+    AzureBlobPresignResult | undefined
+  >();
+  const [azureBlobSignedUrlStatus, setAzureBlobSignedUrlStatus] = useState("");
   const {
     activeWorkspaceTabId,
     setActiveWorkspaceTabId,
@@ -242,6 +247,8 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
       workspace={activeWorkspace}
       actionStatus={azureStorageActionStatus}
       inventoryLoading={azureServiceInventoryLoading}
+      signedUrlResult={azureBlobSignedUrlResult}
+      signedUrlStatus={azureBlobSignedUrlStatus}
       onSelectAccount={(accountName) => {
         void mutateWorkspaceSelection("azure.storage.selectAccount", { accountName }, {
           panelLoading: true,
@@ -424,6 +431,23 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
           })
           .catch((error: unknown) => {
             setAzureStorageActionStatus(error instanceof Error ? error.message : String(error));
+          });
+      }}
+      onPresignBlob={(blobName, durationSeconds) => {
+        setAzureBlobSignedUrlStatus(`Generating signed link for ${blobName}...`);
+        setAzureBlobSignedUrlResult(undefined);
+        void backendRequest<{ result: AzureBlobPresignResult }>("azure.storage.presignBlob", {
+          blobName,
+          durationSeconds,
+        })
+          .then((response) => {
+            setAzureBlobSignedUrlResult(response.result);
+            setAzureBlobSignedUrlStatus(
+              `Signed link ready · expires ${response.result.expiresAt}.`,
+            );
+          })
+          .catch((error: unknown) => {
+            setAzureBlobSignedUrlStatus(error instanceof Error ? error.message : String(error));
           });
       }}
     />

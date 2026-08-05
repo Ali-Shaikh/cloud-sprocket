@@ -28,6 +28,7 @@ func TestGCPWorkspaceTabsMarkFutureServicesAsComingSoon(t *testing.T) {
 	tabs := workspaceTabs("gcp")
 	comingSoon := 0
 	var storage *models.WorkspaceTab
+	var compute *models.WorkspaceTab
 	for index := range tabs {
 		tab := tabs[index]
 		if tab.Category == workspaceTabCategoryComingSoon {
@@ -36,8 +37,11 @@ func TestGCPWorkspaceTabsMarkFutureServicesAsComingSoon(t *testing.T) {
 		if tab.TabID == "gcp-storage" {
 			storage = &tabs[index]
 		}
+		if tab.TabID == "gcp-compute" {
+			compute = &tabs[index]
+		}
 	}
-	// Cloud Storage is live; remaining GCP services stay coming_soon for now.
+	// Cloud Storage and Compute Engine are live; remaining GCP services stay coming_soon.
 	if comingSoon < 2 {
 		t.Fatalf("expected at least 2 GCP coming_soon tabs, got %d", comingSoon)
 	}
@@ -46,5 +50,11 @@ func TestGCPWorkspaceTabsMarkFutureServicesAsComingSoon(t *testing.T) {
 	}
 	if storage.Category != workspaceTabCategoryService {
 		t.Fatalf("gcp-storage category = %q, want %q", storage.Category, workspaceTabCategoryService)
+	}
+	if compute == nil {
+		t.Fatal("gcp workspace tabs missing gcp-compute")
+	}
+	if compute.Category != workspaceTabCategoryService {
+		t.Fatalf("gcp-compute category = %q, want %q", compute.Category, workspaceTabCategoryService)
 	}
 }

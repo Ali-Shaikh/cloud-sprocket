@@ -82,6 +82,9 @@ func (s *Service) registerAzureHandlers(m *handlerRegistry) {
 	m.register("azure.storage.createFolderPrefix", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAzureStorageCreateFolderPrefix(ctx, params, notifier)
 	})
+	m.register("azure.storage.presignBlob", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleAzureStoragePresignBlob(ctx, params, notifier)
+	})
 	m.register("azure.logAnalytics.selectWorkspace", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAzureLogAnalyticsSelectWorkspace(ctx, params, notifier)
 	})

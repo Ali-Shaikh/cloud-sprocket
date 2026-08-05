@@ -88,6 +88,7 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 		GcpStorageBuckets:      []models.GcpStorageBucket{},
 		GcpStorageObjects:      []models.GcpStorageObject{},
 		GcpStoragePrefixFilter: session.GcpStoragePrefixFilter,
+		GcpComputeInstances:    []models.GcpComputeInstance{},
 	}
 
 	if provider, ok := findProvider(snapshot.Providers, session.CurrentProviderID); ok {

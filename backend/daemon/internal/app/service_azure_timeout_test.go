@@ -82,6 +82,11 @@ func (blockingAzure) CreateFolderPrefix(ctx context.Context, _ models.ProfileSum
 	return models.AzureBlobCreateFolderPrefixResult{}, ctx.Err()
 }
 
+func (blockingAzure) PresignBlob(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ int) (models.AzureBlobPresignResult, error) {
+	<-ctx.Done()
+	return models.AzureBlobPresignResult{}, ctx.Err()
+}
+
 func (blockingAzure) InvokeVirtualMachineAction(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) error {
 	<-ctx.Done()
 	return ctx.Err()

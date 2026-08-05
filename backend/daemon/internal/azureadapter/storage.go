@@ -319,6 +319,65 @@ func (i *Inventory) DeleteBlob(
 	return nil
 }
 
+// PresignBlob returns a short-lived read SAS URL for the selected blob.
+// durationSeconds is clamped to [60, 7 days]; default is one hour.
+func (i *Inventory) PresignBlob(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	accountName string,
+	containerName string,
+	blobName string,
+	durationSeconds int,
+) (models.AzureBlobPresignResult, error) {
+	accountName = strings.TrimSpace(accountName)
+	containerName = strings.TrimSpace(containerName)
+	blobName = strings.TrimSpace(blobName)
+	if accountName == "" || containerName == "" || blobName == "" {
+		return models.AzureBlobPresignResult{}, fmt.Errorf("account, container, and blob name are required")
+	}
+	durationSeconds = clampAzurePresignDuration(durationSeconds)
+	client, err := i.blobServiceClient(ctx, profile, accountName)
+	if err != nil {
+		return models.AzureBlobPresignResult{}, err
+	}
+	blobClient := client.ServiceClient().NewContainerClient(containerName).NewBlobClient(blobName)
+	expiresAt := time.Now().UTC().Add(time.Duration(durationSeconds) * time.Second)
+	url, err := blobClient.GetSASURL(
+		sas.BlobPermissions{Read: true},
+		expiresAt,
+		nil,
+	)
+	if err != nil {
+		return models.AzureBlobPresignResult{}, fmt.Errorf("presign blob: %w", err)
+	}
+	return models.AzureBlobPresignResult{
+		AccountName:     accountName,
+		ContainerName:   containerName,
+		BlobName:        blobName,
+		URL:             url,
+		DurationSeconds: durationSeconds,
+		ExpiresAt:       expiresAt.Format(time.RFC3339),
+	}, nil
+}
+
+func clampAzurePresignDuration(durationSeconds int) int {
+	const (
+		defaultSeconds = 3600
+		minSeconds     = 60
+		maxSeconds     = 7 * 24 * 60 * 60
+	)
+	if durationSeconds <= 0 {
+		return defaultSeconds
+	}
+	if durationSeconds < minSeconds {
+		return minSeconds
+	}
+	if durationSeconds > maxSeconds {
+		return maxSeconds
+	}
+	return durationSeconds
+}
+
 func (i *Inventory) blobServiceClient(
 	ctx context.Context,
 	profile models.ProfileSummary,

@@ -816,3 +816,47 @@ func validateAzureBlobUploadRequest(sourcePath string, blobName string) error {
 	}
 	return validateS3UploadRequest(sourcePath, blobName)
 }
+
+func (s *Service) handleAzureStoragePresignBlob(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
+	var request struct {
+		BlobName        string `json:"blobName"`
+		DurationSeconds int    `json:"durationSeconds"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	profile, accountName, containerName, err := s.activeAzureStorageSelection(snapshot, session, true)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	blobName := strings.TrimSpace(request.BlobName)
+	if blobName == "" {
+		blobName = session.SelectedAzureBlobName
+	}
+	if blobName == "" {
+		s.mu.Unlock()
+		return nil, errors.New("select a blob before generating a signed URL")
+	}
+	s.mu.Unlock()
+
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+	result, err := s.azure.PresignBlob(timeoutCtx, profile, accountName, containerName, blobName, request.DurationSeconds)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"result": result,
+	}, nil
+}

@@ -68,6 +68,7 @@ func main() {
 		IAM:            awsadapter.NewIAMInventory(settings),
 		Azure:          azureadapter.NewInventory(settings),
 		GcpStorage:     gcpadapter.NewInventory(settings),
+		GcpCompute:     gcpadapter.NewInventory(settings),
 		Docker:         dockerruntime.New(settings),
 		// LocalStack and AzureRuntime left nil so NewFromDeps applies defaults.
 	})
