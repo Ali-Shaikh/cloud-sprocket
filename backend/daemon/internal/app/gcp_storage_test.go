@@ -5,17 +5,28 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"cloudsprocket/backend/daemon/internal/config"
+	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
+	"cloudsprocket/backend/daemon/internal/store"
 )
 
 type stubGcpStorageInventory struct {
-	buckets []models.GcpStorageBucket
-	err     error
-	calls   int
+	buckets     []models.GcpStorageBucket
+	objects     models.GcpStorageObjectListPage
+	err         error
+	objectsErr  error
+	calls       int
+	objectCalls int
+	lastBucket  string
+	lastPrefix  string
+	lastToken   string
 }
 
 func (s *stubGcpStorageInventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.GcpStorageBucket, error) {
@@ -24,6 +35,27 @@ func (s *stubGcpStorageInventory) ListBuckets(context.Context, models.ProfileSum
 		return nil, s.err
 	}
 	return append([]models.GcpStorageBucket(nil), s.buckets...), nil
+}
+
+func (s *stubGcpStorageInventory) ListObjects(
+	_ context.Context,
+	_ models.ProfileSummary,
+	bucketName string,
+	prefix string,
+	pageToken string,
+) (models.GcpStorageObjectListPage, error) {
+	s.objectCalls++
+	s.lastBucket = bucketName
+	s.lastPrefix = prefix
+	s.lastToken = pageToken
+	if s.objectsErr != nil {
+		return models.GcpStorageObjectListPage{}, s.objectsErr
+	}
+	return models.GcpStorageObjectListPage{
+		Entries:       append([]models.GcpStorageObject(nil), s.objects.Entries...),
+		NextPageToken: s.objects.NextPageToken,
+		IsTruncated:   s.objects.IsTruncated,
+	}, nil
 }
 
 func TestEnrichGcpStorageInventorySuccess(t *testing.T) {
@@ -45,10 +77,56 @@ func TestEnrichGcpStorageInventorySuccess(t *testing.T) {
 	if inv.calls != 1 {
 		t.Fatalf("calls = %d", inv.calls)
 	}
+	if inv.objectCalls != 0 {
+		t.Fatalf("objectCalls = %d, want 0 without selected bucket", inv.objectCalls)
+	}
 	if len(workspace.GcpStorageBuckets) != 2 {
 		t.Fatalf("buckets = %+v", workspace.GcpStorageBuckets)
 	}
-	if !strings.Contains(workspace.GcpStorageStatusMessage, "Loaded 2") {
+	if !strings.Contains(workspace.GcpStorageStatusMessage, "Select one") {
+		t.Fatalf("status = %q", workspace.GcpStorageStatusMessage)
+	}
+}
+
+func TestEnrichGcpStorageInventoryListsObjectsWhenBucketSelected(t *testing.T) {
+	inv := &stubGcpStorageInventory{
+		buckets: []models.GcpStorageBucket{{Name: "alpha"}, {Name: "beta"}},
+		objects: models.GcpStorageObjectListPage{
+			Entries: []models.GcpStorageObject{
+				{Key: "folder/", IsFolder: true, Size: "Folder"},
+				{Key: "readme.txt", Size: "12 B"},
+			},
+		},
+	}
+	service := &Service{
+		gcpStorage:  inv,
+		preferences: defaultServicePreferences(),
+	}
+	workspace := models.WorkspaceSnapshot{
+		Provider: &models.ProviderSummary{ProviderID: "gcp"},
+		Profile:  &models.ProfileSummary{ProviderID: "gcp", ProfileID: "default"},
+	}
+	session := models.SessionSnapshot{
+		SelectedGcpStorageBucket: "alpha",
+		GcpStoragePrefixFilter:   "docs/",
+	}
+	service.enrichGcpStorageInventory(&workspace, session, nil)
+	if inv.objectCalls != 1 {
+		t.Fatalf("objectCalls = %d, want 1", inv.objectCalls)
+	}
+	if inv.lastBucket != "alpha" || inv.lastPrefix != "docs/" {
+		t.Fatalf("list args bucket=%q prefix=%q", inv.lastBucket, inv.lastPrefix)
+	}
+	if workspace.SelectedGcpStorageBucket != "alpha" {
+		t.Fatalf("selected = %q", workspace.SelectedGcpStorageBucket)
+	}
+	if workspace.GcpStoragePrefixFilter != "docs/" {
+		t.Fatalf("prefix = %q", workspace.GcpStoragePrefixFilter)
+	}
+	if len(workspace.GcpStorageObjects) != 2 {
+		t.Fatalf("objects = %+v", workspace.GcpStorageObjects)
+	}
+	if !strings.Contains(workspace.GcpStorageStatusMessage, "1 folder") {
 		t.Fatalf("status = %q", workspace.GcpStorageStatusMessage)
 	}
 }
@@ -102,5 +180,158 @@ func TestEnrichGcpStorageInventorySkipsWhenDisabled(t *testing.T) {
 	service.enrichGcpStorageInventory(&workspace, models.SessionSnapshot{}, nil)
 	if inv.calls != 0 {
 		t.Fatalf("ListBuckets calls = %d, want 0 when service disabled", inv.calls)
+	}
+}
+
+func TestSelectedGcpStorageBucketRequiresListedName(t *testing.T) {
+	service := &Service{}
+	buckets := []models.GcpStorageBucket{{Name: "alpha"}, {Name: "beta"}}
+	if got := service.selectedGcpStorageBucket(models.SessionSnapshot{SelectedGcpStorageBucket: "missing"}, buckets); got != "" {
+		t.Fatalf("selected missing = %q, want empty", got)
+	}
+	if got := service.selectedGcpStorageBucket(models.SessionSnapshot{SelectedGcpStorageBucket: "beta"}, buckets); got != "beta" {
+		t.Fatalf("selected = %q, want beta", got)
+	}
+}
+
+func gcpStorageTestService(t *testing.T, inv *stubGcpStorageInventory) *Service {
+	t.Helper()
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+	mustWriteFile(
+		t,
+		filepath.Join(home, ".config", "gcloud", "configurations", "config_default"),
+		"[core]\naccount = ali@example.com\nproject = platform-prod\n",
+	)
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("expected runtime dirs to be created, got %v", err)
+	}
+
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("expected sqlite store to open, got %v", err)
+	}
+	t.Cleanup(func() { _ = dataStore.Close() })
+
+	discoveryService := discovery.New(settings, func(command string) (string, error) {
+		if command == "gcloud" {
+			return "/usr/bin/gcloud", nil
+		}
+		return "", nil
+	})
+
+	return NewFromDeps(Deps{
+		Settings:   settings,
+		Store:      dataStore,
+		Discovery:  discoveryService,
+		GcpStorage: inv,
+		Docker:     stubDockerRuntime{},
+	})
+}
+
+func lockGcpWorkspace(t *testing.T, service *Service) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := service.Handle(ctx, "session.selectProvider", []byte(`{"providerId":"gcp"}`), nil); err != nil {
+		t.Fatalf("selectProvider: %v", err)
+	}
+	if _, err := service.Handle(ctx, "session.selectProfile", []byte(`{"providerId":"gcp","profileId":"default"}`), nil); err != nil {
+		t.Fatalf("selectProfile: %v", err)
+	}
+	if _, err := service.Handle(ctx, "session.selectAuthMethod", []byte(`{"authMethod":"cli"}`), nil); err != nil {
+		t.Fatalf("selectAuthMethod: %v", err)
+	}
+	if _, err := service.Handle(ctx, "session.lock", nil, nil); err != nil {
+		t.Fatalf("session.lock: %v", err)
+	}
+}
+
+func TestHandleGcpStorageSelectBucketPersistsSession(t *testing.T) {
+	inv := &stubGcpStorageInventory{
+		buckets: []models.GcpStorageBucket{{Name: "alpha"}},
+		objects: models.GcpStorageObjectListPage{
+			Entries: []models.GcpStorageObject{{Key: "a.txt"}},
+		},
+	}
+	service := gcpStorageTestService(t, inv)
+	lockGcpWorkspace(t, service)
+
+	result, err := service.Handle(context.Background(), "gcp.storage.selectBucket", []byte(`{"bucketName":"alpha"}`), nil)
+	if err != nil {
+		t.Fatalf("selectBucket: %v", err)
+	}
+	workspace, ok := result.(models.WorkspaceSnapshot)
+	if !ok {
+		t.Fatalf("result type %T", result)
+	}
+	if workspace.SelectedGcpStorageBucket != "alpha" {
+		t.Fatalf("workspace selected = %q", workspace.SelectedGcpStorageBucket)
+	}
+	if len(workspace.GcpStorageObjects) != 1 || workspace.GcpStorageObjects[0].Key != "a.txt" {
+		t.Fatalf("objects = %+v", workspace.GcpStorageObjects)
+	}
+	if inv.objectCalls < 1 {
+		t.Fatalf("expected object list after select, calls=%d", inv.objectCalls)
+	}
+
+	loaded, ok, err := service.store.LoadSession(context.Background())
+	if err != nil || !ok {
+		t.Fatalf("LoadSession ok=%v err=%v", ok, err)
+	}
+	if loaded.SelectedGcpStorageBucket != "alpha" {
+		t.Fatalf("session selected = %q", loaded.SelectedGcpStorageBucket)
+	}
+	if loaded.GcpStoragePrefixFilter != "" {
+		t.Fatalf("prefix should clear on bucket select, got %q", loaded.GcpStoragePrefixFilter)
+	}
+}
+
+func TestHandleGcpStorageSetPrefixFilter(t *testing.T) {
+	inv := &stubGcpStorageInventory{
+		buckets: []models.GcpStorageBucket{{Name: "alpha"}},
+		objects: models.GcpStorageObjectListPage{
+			Entries: []models.GcpStorageObject{{Key: "docs/readme.txt"}},
+		},
+	}
+	service := gcpStorageTestService(t, inv)
+	lockGcpWorkspace(t, service)
+
+	if _, err := service.Handle(context.Background(), "gcp.storage.selectBucket", []byte(`{"bucketName":"alpha"}`), nil); err != nil {
+		t.Fatalf("selectBucket: %v", err)
+	}
+	result, err := service.Handle(context.Background(), "gcp.storage.setPrefixFilter", []byte(`{"prefix":"docs/"}`), nil)
+	if err != nil {
+		t.Fatalf("setPrefixFilter: %v", err)
+	}
+	workspace, ok := result.(models.WorkspaceSnapshot)
+	if !ok {
+		t.Fatalf("result type %T", result)
+	}
+	if workspace.GcpStoragePrefixFilter != "docs/" {
+		t.Fatalf("workspace prefix = %q", workspace.GcpStoragePrefixFilter)
+	}
+	if inv.lastPrefix != "docs/" {
+		t.Fatalf("list prefix = %q", inv.lastPrefix)
+	}
+
+	loaded, ok, err := service.store.LoadSession(context.Background())
+	if err != nil || !ok {
+		t.Fatalf("LoadSession ok=%v err=%v", ok, err)
+	}
+	if loaded.GcpStoragePrefixFilter != "docs/" {
+		t.Fatalf("session prefix = %q", loaded.GcpStoragePrefixFilter)
+	}
+}
+
+func TestHandleGcpStorageSelectBucketRejectsUnlocked(t *testing.T) {
+	service := gcpStorageTestService(t, &stubGcpStorageInventory{})
+	_, err := service.Handle(context.Background(), "gcp.storage.selectBucket", json.RawMessage(`{"bucketName":"alpha"}`), nil)
+	if err == nil {
+		t.Fatal("expected error for unlocked workspace")
+	}
+	if !strings.Contains(err.Error(), "GCP workspace") {
+		t.Fatalf("error = %v", err)
 	}
 }

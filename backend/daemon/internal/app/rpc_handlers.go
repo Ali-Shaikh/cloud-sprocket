@@ -32,7 +32,7 @@ func (r *handlerRegistry) register(name string, handler RPCHandler) {
 // Built once per Service via sync.Once (see methodHandlers).
 func (s *Service) buildMethodHandlers() map[string]RPCHandler {
 	// Pre-size for the known surface so the map does not rehash during register.
-	registry := newHandlerRegistry(171)
+	registry := newHandlerRegistry(174)
 	s.registerMethodHandlers(registry)
 	return registry.handlers
 }
@@ -50,6 +50,7 @@ func (s *Service) registerMethodHandlers(m *handlerRegistry) {
 	s.registerCoreHandlers(m)
 	s.registerAWSHandlers(m)
 	s.registerAzureHandlers(m)
+	s.registerGcpHandlers(m)
 	s.registerDeployHandlers(m)
 	s.registerLabsHandlers(m)
 	s.registerRuntimeHandlers(m)
