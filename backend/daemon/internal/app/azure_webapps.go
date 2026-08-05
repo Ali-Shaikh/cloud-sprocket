@@ -5,12 +5,9 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
-	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
 )
 
@@ -84,40 +81,4 @@ func (s *Service) enrichAzureAppServiceInventory(workspace *models.WorkspaceSnap
 		workspace.SelectedAzureWebAppName = selectedApp
 		workspace.AzureAppServiceStatusMessage = status
 	})
-}
-
-func (s *Service) activeAzureVMSelection(
-	snapshot discovery.Snapshot,
-	session models.SessionSnapshot,
-	vmID string,
-) (models.ProfileSummary, string, models.AzureVirtualMachine, error) {
-	if !session.IsLocked || session.CurrentProviderID != "azure" {
-		return models.ProfileSummary{}, "", models.AzureVirtualMachine{}, errors.New("open an Azure workspace before invoking virtual machine actions")
-	}
-	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
-	if !ok {
-		return models.ProfileSummary{}, "", models.AzureVirtualMachine{}, errors.New("the workspace's Azure profile is not available")
-	}
-	resourceGroup := session.SelectedAzureResourceGroup
-	if resourceGroup == "" {
-		groups, _ := s.azureResourceGroups(context.Background(), profile)
-		resourceGroup = s.selectedAzureResourceGroup(session, groups)
-	}
-	if resourceGroup == "" {
-		return models.ProfileSummary{}, "", models.AzureVirtualMachine{}, errors.New("select a resource group before invoking virtual machine actions")
-	}
-	vms := s.azureVirtualMachines(context.Background(), profile, resourceGroup)
-	targetID := strings.TrimSpace(vmID)
-	if targetID == "" {
-		targetID = s.selectedAzureVMID(session, vms)
-	}
-	if targetID == "" {
-		return models.ProfileSummary{}, "", models.AzureVirtualMachine{}, errors.New("select a virtual machine before invoking an action")
-	}
-	for _, vm := range vms {
-		if vm.VMID == targetID {
-			return profile, resourceGroup, vm, nil
-		}
-	}
-	return models.ProfileSummary{}, "", models.AzureVirtualMachine{}, fmt.Errorf("virtual machine %s was not found in %s", targetID, resourceGroup)
 }
