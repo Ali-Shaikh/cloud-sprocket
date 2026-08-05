@@ -4,11 +4,15 @@
 package awsadapter
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
+
+	"cloudsprocket/backend/daemon/internal/config"
+	"cloudsprocket/backend/daemon/internal/models"
 )
 
 func TestEcsClusterSummaryMapsCounts(t *testing.T) {
@@ -66,5 +70,17 @@ func TestEcsTaskSummaryMapsContainers(t *testing.T) {
 func TestServiceNameFromArn(t *testing.T) {
 	if got := serviceNameFromArn("arn:aws:ecs:us-east-1:123:service/demo/web"); got != "web" {
 		t.Fatalf("service name = %q", got)
+	}
+}
+
+func TestForceNewDeploymentRequiresClusterAndService(t *testing.T) {
+	inv := NewECSInventory(config.Settings{})
+	_, err := inv.ForceNewDeployment(context.Background(), models.ProfileSummary{}, "us-east-1", "", "arn:aws:ecs:us-east-1:123:service/demo/web")
+	if err == nil {
+		t.Fatal("expected error for empty cluster")
+	}
+	_, err = inv.ForceNewDeployment(context.Background(), models.ProfileSummary{}, "us-east-1", "arn:aws:ecs:us-east-1:123:cluster/demo", "")
+	if err == nil {
+		t.Fatal("expected error for empty service")
 	}
 }

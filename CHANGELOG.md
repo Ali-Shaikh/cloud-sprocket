@@ -11,6 +11,13 @@ Installers for every release are published on the
 
 ### Added
 
+- AWS ECS force new deployment: write-gated `aws.ecs.forceNewDeployment` calls
+  `UpdateService` with `ForceNewDeployment`, invalidates service/task inventory
+  caches, and adds a Force new deployment control on the selected service in the
+  ECS inspector.
+- Azure Storage Queues purge: write-gated `azure.queues.purge` clears all
+  messages via `ClearMessages`, refreshes the queues scope, and adds a Purge
+  queue action with confirmation on the Queues panel.
 - GCP Cloud Storage object browser (read-only): `gcpadapter.ListObjects` via
   `gcloud storage ls --json`, session fields for selected bucket and prefix,
   RPCs `gcp.storage.selectBucket` / `setPrefixFilter` / `loadMoreObjects`,

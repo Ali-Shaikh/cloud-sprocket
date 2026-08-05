@@ -229,6 +229,47 @@ func (e *ECSInventory) ListTasks(
 	return tasks, nil
 }
 
+// ForceNewDeployment starts a new deployment for the selected ECS service
+// without changing the task definition (UpdateService ForceNewDeployment).
+func (e *ECSInventory) ForceNewDeployment(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	clusterArn string,
+	serviceArn string,
+) (models.AwsEcsForceNewDeploymentResult, error) {
+	clusterArn = strings.TrimSpace(clusterArn)
+	serviceArn = strings.TrimSpace(serviceArn)
+	if clusterArn == "" || serviceArn == "" {
+		return models.AwsEcsForceNewDeploymentResult{}, fmt.Errorf("cluster ARN and service ARN are required")
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := e.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsEcsForceNewDeploymentResult{}, err
+	}
+
+	serviceName := serviceNameFromArn(serviceArn)
+	client := ecsClient(cfg, profile)
+	_, err = client.UpdateService(ctx, &ecs.UpdateServiceInput{
+		Cluster:            aws.String(clusterArn),
+		Service:            aws.String(serviceName),
+		ForceNewDeployment: true,
+	})
+	if err != nil {
+		return models.AwsEcsForceNewDeploymentResult{}, fmt.Errorf("force new ECS deployment for %s: %w", serviceName, err)
+	}
+	return models.AwsEcsForceNewDeploymentResult{
+		ClusterArn:  clusterArn,
+		ServiceArn:  serviceArn,
+		ServiceName: serviceName,
+		Region:      region,
+		Summary:     fmt.Sprintf("Forced a new deployment for ECS service %s.", serviceName),
+	}, nil
+}
+
 func (e *ECSInventory) DescribeTask(
 	ctx context.Context,
 	profile models.ProfileSummary,

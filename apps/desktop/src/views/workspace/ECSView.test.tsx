@@ -192,26 +192,40 @@ const workspaceFixture: EcsWorkspaceSnapshot = {
 
 };
 
-function renderECSView() {
+function renderECSView(overrides?: {
+  workspace?: EcsWorkspaceSnapshot;
+  onForceNewDeployment?: (clusterArn: string, serviceArn: string) => void;
+}) {
   const onSelectRegion = vi.fn();
   const onSelectCluster = vi.fn();
   const onSelectService = vi.fn();
   const onSelectTask = vi.fn();
   const onRefresh = vi.fn();
+  const onForceNewDeployment =
+    overrides?.onForceNewDeployment ??
+    vi.fn<(clusterArn: string, serviceArn: string) => void>();
   render(
     <ThemeProvider>
       <ECSView
-        workspace={workspaceFixture}
+        workspace={overrides?.workspace ?? workspaceFixture}
         actionStatus="Ready to browse ECS inventory."
         onRefresh={onRefresh}
         onSelectRegion={onSelectRegion}
         onSelectCluster={onSelectCluster}
         onSelectService={onSelectService}
         onSelectTask={onSelectTask}
+        onForceNewDeployment={onForceNewDeployment}
       />
     </ThemeProvider>,
   );
-  return { onSelectRegion, onSelectCluster, onSelectService, onSelectTask, onRefresh };
+  return {
+    onSelectRegion,
+    onSelectCluster,
+    onSelectService,
+    onSelectTask,
+    onRefresh,
+    onForceNewDeployment,
+  };
 }
 
 describe("ECSView", () => {
@@ -242,6 +256,50 @@ describe("ECSView", () => {
     fireEvent.click(screen.getByRole("cell", { name: "abc123" }));
 
     expect(onSelectTask).toHaveBeenCalledWith("arn:aws:ecs:us-east-1:123:task/demo/abc123");
+  });
+
+  it("forces a new deployment when write mode allows it", () => {
+    mockMatchMedia(true);
+    const onForceNewDeployment = vi.fn();
+    const workspace = {
+      ...workspaceFixture,
+      awsWritesEnabled: true,
+      awsWriteModeEnabled: true,
+      actionCapabilities: {
+        ecs: [{ actionId: "forceNewDeployment", label: "Force new deployment", enabled: true }],
+      },
+    } as EcsWorkspaceSnapshot;
+
+    renderECSView({ workspace, onForceNewDeployment });
+
+    fireEvent.click(screen.getByRole("button", { name: "Force new deployment" }));
+    fireEvent.click(screen.getByRole("button", { name: "Force deployment" }));
+
+    expect(onForceNewDeployment).toHaveBeenCalledWith(
+      "arn:aws:ecs:us-east-1:123:cluster/demo",
+      "arn:aws:ecs:us-east-1:123:service/demo/web",
+    );
+  });
+
+  it("disables force new deployment when write mode is off", () => {
+    mockMatchMedia(true);
+    const workspace = {
+      ...workspaceFixture,
+      actionCapabilities: {
+        ecs: [
+          {
+            actionId: "forceNewDeployment",
+            label: "Force new deployment",
+            enabled: false,
+            reason: "Turn on write mode from the top bar to run mutating actions.",
+          },
+        ],
+      },
+    } as EcsWorkspaceSnapshot;
+
+    renderECSView({ workspace });
+
+    expect(screen.getByRole("button", { name: "Force new deployment" })).toBeDisabled();
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {

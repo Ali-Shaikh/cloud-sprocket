@@ -2968,6 +2968,19 @@ export function handleMockRequest<T>(
       mockState.session.selectedEcsTaskArn = String(params.taskArn ?? "");
       appendLog("info", `Selected ECS task ${params.taskArn}.`);
       return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.ecs.forceNewDeployment": {
+      if (!mockState.session.awsWriteModeEnabled) {
+        return Promise.reject(
+          new Error("ECS force new deployment requires write mode to be enabled"),
+        );
+      }
+      const clusterArn = String(params.clusterArn ?? mockState.session.selectedEcsClusterArn ?? "");
+      const serviceArn = String(params.serviceArn ?? mockState.session.selectedEcsServiceArn ?? "");
+      mockState.session.selectedEcsClusterArn = clusterArn;
+      mockState.session.selectedEcsServiceArn = serviceArn;
+      appendLog("success", `Forced a new deployment for ECS service ${serviceArn}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "aws.eks.selectRegion":
       mockState.session.selectedEksRegion = String(params.region ?? "");
       mockState.session.selectedEksClusterName = undefined;
@@ -3664,6 +3677,19 @@ export function handleMockRequest<T>(
     case "azure.queues.selectQueue":
       mockState.session.selectedAzureQueue = String(params.queue ?? "");
       return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.queues.purge": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(
+          new Error("queue purge requires write mode to be enabled for this Azure workspace"),
+        );
+      }
+      const accountName = String(params.account ?? mockState.session.selectedAzureStorageAccount ?? "");
+      const queueName = String(params.queue ?? mockState.session.selectedAzureQueue ?? "");
+      mockState.session.selectedAzureStorageAccount = accountName;
+      mockState.session.selectedAzureQueue = queueName;
+      appendLog("success", `Purged all messages from queue ${queueName} in ${accountName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "azure.webApps.create": {
       if (!mockState.session.azureWriteModeEnabled) {
         return Promise.reject(new Error("web app create requires write mode to be enabled for this Azure workspace"));

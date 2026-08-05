@@ -36,6 +36,7 @@ type Deps struct {
 	EC2           EC2Writer
 	EC2Lifecycle  EC2Lifecycle
 	RDSLifecycle  RDSLifecycle
+	ECS           ECSWriter
 }
 
 // Service owns the extracted AWS inventory, selection, write, and job RPC paths.
@@ -60,6 +61,7 @@ type Service struct {
 	ec2           EC2Writer
 	ec2Lifecycle  EC2Lifecycle
 	rdsLifecycle  RDSLifecycle
+	ecs           ECSWriter
 }
 
 // New constructs an AWS domain Service.
@@ -89,6 +91,7 @@ func New(deps Deps) *Service {
 		ec2:           deps.EC2,
 		ec2Lifecycle:  deps.EC2Lifecycle,
 		rdsLifecycle:  deps.RDSLifecycle,
+		ecs:           deps.ECS,
 	}
 }
 

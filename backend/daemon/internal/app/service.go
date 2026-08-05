@@ -214,6 +214,7 @@ func NewFromDeps(deps Deps) *Service {
 		EC2:           service.ec2,
 		EC2Lifecycle:  service.ec2,
 		RDSLifecycle:  service.rds,
+		ECS:           service.ecs,
 	})
 	service.azureDomain = appazure.New(appazure.Deps{
 		Discovery:   deps.Discovery,

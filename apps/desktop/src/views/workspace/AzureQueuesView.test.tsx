@@ -33,4 +33,58 @@ describe("AzureQueuesView", () => {
     fireEvent.click(screen.getByText("events"));
     expect(onSelectQueue).toHaveBeenCalledWith("events");
   });
+
+  it("purges a queue when write mode allows it", () => {
+    const onPurgeQueue = vi.fn();
+    const writeWorkspace = {
+      ...workspace,
+      actionCapabilities: {
+        queues: [{ actionId: "purge", label: "Purge queue", enabled: true }],
+      },
+    } as unknown as WorkspaceSnapshot;
+
+    render(
+      <ThemeProvider>
+        <AzureQueuesView
+          workspace={writeWorkspace}
+          onSelectAccount={() => {}}
+          onSelectQueue={() => {}}
+          onPurgeQueue={onPurgeQueue}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Purge queue" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Purge queue" }));
+    expect(onPurgeQueue).toHaveBeenCalledWith("devstoreaccount1", "jobs");
+  });
+
+  it("disables purge when write mode is off", () => {
+    const writeWorkspace = {
+      ...workspace,
+      actionCapabilities: {
+        queues: [
+          {
+            actionId: "purge",
+            label: "Purge queue",
+            enabled: false,
+            reason: "Turn on write mode from the top bar to run mutating actions.",
+          },
+        ],
+      },
+    } as unknown as WorkspaceSnapshot;
+
+    render(
+      <ThemeProvider>
+        <AzureQueuesView
+          workspace={writeWorkspace}
+          onSelectAccount={() => {}}
+          onSelectQueue={() => {}}
+          onPurgeQueue={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Purge queue" })).toBeDisabled();
+  });
 });

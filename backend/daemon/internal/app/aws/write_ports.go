@@ -84,3 +84,8 @@ type RDSLifecycle interface {
 	StopDBInstance(ctx context.Context, profile models.ProfileSummary, region string, instanceID string) error
 	ListInstances(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsRdsInstance, error)
 }
+
+// ECSWriter is the ECS force-new-deployment surface.
+type ECSWriter interface {
+	ForceNewDeployment(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, serviceArn string) (models.AwsEcsForceNewDeploymentResult, error)
+}

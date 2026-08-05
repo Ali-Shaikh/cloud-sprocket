@@ -144,3 +144,30 @@ func (i *Inventory) PeekQueueMessages(
 	}
 	return messages, nil
 }
+
+// PurgeQueueMessages deletes all messages from the selected storage queue (write action).
+func (i *Inventory) PurgeQueueMessages(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	accountName string,
+	queueName string,
+) (models.AzureQueuePurgeResult, error) {
+	accountName = strings.TrimSpace(accountName)
+	queueName = strings.TrimSpace(queueName)
+	if accountName == "" || queueName == "" {
+		return models.AzureQueuePurgeResult{}, fmt.Errorf("a storage account and queue are required")
+	}
+	client, err := i.queueServiceClient(ctx, profile, accountName)
+	if err != nil {
+		return models.AzureQueuePurgeResult{}, err
+	}
+	queueClient := client.NewQueueClient(queueName)
+	if _, err := queueClient.ClearMessages(ctx, nil); err != nil {
+		return models.AzureQueuePurgeResult{}, fmt.Errorf("purge azure queue %s: %w", queueName, err)
+	}
+	return models.AzureQueuePurgeResult{
+		AccountName: accountName,
+		QueueName:   queueName,
+		Summary:     fmt.Sprintf("Purged all messages from queue %s in %s.", queueName, accountName),
+	}, nil
+}

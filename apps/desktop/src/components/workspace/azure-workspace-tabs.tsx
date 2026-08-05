@@ -1143,6 +1143,17 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
           errorTitle: "Could not select queue",
         });
       }}
+      onPurgeQueue={(account, queue) => {
+        void mutateWorkspaceSelection(
+          "azure.queues.purge",
+          { account, queue },
+          {
+            panelLoading: true,
+            merge: mergeAzureQueuesSelection,
+            errorTitle: "Could not purge queue",
+          },
+        );
+      }}
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-entra" ? (
     <AzureEntraView

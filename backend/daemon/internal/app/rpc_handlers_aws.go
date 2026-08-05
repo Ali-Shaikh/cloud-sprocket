@@ -124,6 +124,9 @@ func (s *Service) registerAWSHandlers(m *handlerRegistry) {
 	m.register("aws.ecs.selectTask", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsEcsSelectTask(ctx, params, notifier)
 	})
+	m.register("aws.ecs.forceNewDeployment", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleAwsEcsForceNewDeployment(ctx, params, notifier)
+	})
 	m.register("aws.eks.selectRegion", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsEksSelectRegion(ctx, params, notifier)
 	})
