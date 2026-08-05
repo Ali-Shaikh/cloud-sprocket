@@ -448,6 +448,16 @@ type AwsDynamoDBTable struct {
 	RangeKey               string                            `json:"rangeKey,omitempty"`
 	GlobalSecondaryIndexes []AwsDynamoDBGlobalSecondaryIndex `json:"globalSecondaryIndexes,omitempty"`
 	SampleItems            []string                          `json:"sampleItems,omitempty"`
+	// SampleItemsNextToken is an opaque exclusive-start key for load-more scans.
+	SampleItemsNextToken string `json:"sampleItemsNextToken,omitempty"`
+	SampleItemsHasMore   bool   `json:"sampleItemsHasMore,omitempty"`
+}
+
+// AwsDynamoDBScanPage is one page of sample items from a table scan.
+type AwsDynamoDBScanPage struct {
+	Items                 []string `json:"items"`
+	SampleItemsNextToken  string   `json:"sampleItemsNextToken,omitempty"`
+	SampleItemsHasMore    bool     `json:"sampleItemsHasMore,omitempty"`
 }
 
 // AwsSqsQueue models an SQS queue for inventory (list + describe).

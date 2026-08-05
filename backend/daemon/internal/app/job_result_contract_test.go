@@ -49,6 +49,10 @@ func (jobContractRDSInventory) StopDBInstance(context.Context, models.ProfileSum
 	return nil
 }
 
+func (jobContractRDSInventory) RebootDBInstance(context.Context, models.ProfileSummary, string, string) error {
+	return nil
+}
+
 func TestAWSLifecycleJobUpdatedResultRemainsFullWorkspaceSnapshot(t *testing.T) {
 	tests := []struct {
 		name               string

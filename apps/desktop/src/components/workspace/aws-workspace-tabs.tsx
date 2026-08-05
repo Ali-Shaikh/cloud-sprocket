@@ -4,6 +4,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { backendRequest } from "@/lib/backend";
 import {
+  mergeAwsDynamoDBLoadMore,
   mergeAwsS3LoadMore,
   mergeAwsS3ObjectSelection,
   mergeAwsS3Selection,
@@ -61,6 +62,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
   const [s3ListingLoading, setS3ListingLoading] = useState(false);
   const [s3ListingLabel, setS3ListingLabel] = useState("Loading objects…");
   const s3ListingGenerationRef = useRef(0);
+  const [dynamodbLoadMoreInFlight, setDynamodbLoadMoreInFlight] = useState(false);
   const {
     activeWorkspaceTabId,
     lambdaCreateFormOpen,
@@ -401,6 +403,30 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onSelectTable={selectDynamoDBTable}
       onPutItem={putDynamoDBItem}
       onDeleteItem={deleteDynamoDBItem}
+      loadMoreInFlight={dynamodbLoadMoreInFlight}
+      onLoadMoreItems={() => {
+        const selectedTable = activeWorkspace.dynamodbTables.find(
+          (table) => table.tableName === activeWorkspace.selectedDynamodbTableName,
+        );
+        const token = selectedTable?.sampleItemsNextToken;
+        if (!token || dynamodbLoadMoreInFlight) {
+          return;
+        }
+        setDynamodbLoadMoreInFlight(true);
+        void mutateWorkspaceSelection(
+          "aws.dynamodb.loadMoreItems",
+          {
+            tableName: selectedTable?.tableName,
+            continuationToken: token,
+          },
+          {
+            merge: mergeAwsDynamoDBLoadMore,
+            errorTitle: "Could not load more DynamoDB items",
+          },
+        ).finally(() => {
+          setDynamodbLoadMoreInFlight(false);
+        });
+      }}
     />
   ) : session.isLocked && activeWorkspaceTabId === "sqs" ? (
     <SQSView

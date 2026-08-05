@@ -5,6 +5,7 @@ package awsadapter
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -87,9 +88,39 @@ func (d *DynamoDBInventory) DescribeTable(
 	}
 
 	table := dynamoTableSummary(res.Table)
-	sample, _ := d.scanSampleItems(ctx, client, tableName, maxDynamoDBSampleItems)
-	table.SampleItems = sample
+	page, _ := d.scanSampleItems(ctx, client, tableName, maxDynamoDBSampleItems, "")
+	table.SampleItems = page.Items
+	table.SampleItemsNextToken = page.SampleItemsNextToken
+	table.SampleItemsHasMore = page.SampleItemsHasMore
 	return table, nil
+}
+
+// ScanSampleItems returns one page of sample items for a table scan.
+// exclusiveStartToken is the opaque SampleItemsNextToken from a prior page.
+func (d *DynamoDBInventory) ScanSampleItems(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	tableName string,
+	exclusiveStartToken string,
+	limit int32,
+) (models.AwsDynamoDBScanPage, error) {
+	tableName = strings.TrimSpace(tableName)
+	if tableName == "" {
+		return models.AwsDynamoDBScanPage{}, fmt.Errorf("table name is required")
+	}
+	if limit <= 0 {
+		limit = maxDynamoDBSampleItems
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := d.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsDynamoDBScanPage{}, err
+	}
+	client := dynamodbClient(cfg, profile)
+	return d.scanSampleItems(ctx, client, tableName, limit, exclusiveStartToken)
 }
 
 func (d *DynamoDBInventory) scanSampleItems(
@@ -97,16 +128,25 @@ func (d *DynamoDBInventory) scanSampleItems(
 	client *dynamodb.Client,
 	tableName string,
 	limit int32,
-) ([]string, error) {
+	exclusiveStartToken string,
+) (models.AwsDynamoDBScanPage, error) {
 	if limit <= 0 {
-		return nil, nil
+		return models.AwsDynamoDBScanPage{}, nil
 	}
-	res, err := client.Scan(ctx, &dynamodb.ScanInput{
+	input := &dynamodb.ScanInput{
 		TableName: aws.String(tableName),
 		Limit:     aws.Int32(limit),
-	})
+	}
+	if strings.TrimSpace(exclusiveStartToken) != "" {
+		startKey, err := decodeDynamoExclusiveStartKey(exclusiveStartToken)
+		if err != nil {
+			return models.AwsDynamoDBScanPage{}, fmt.Errorf("invalid scan continuation token: %w", err)
+		}
+		input.ExclusiveStartKey = startKey
+	}
+	res, err := client.Scan(ctx, input)
 	if err != nil {
-		return nil, err
+		return models.AwsDynamoDBScanPage{}, err
 	}
 	items := make([]string, 0, len(res.Items))
 	for _, item := range res.Items {
@@ -120,7 +160,46 @@ func (d *DynamoDBInventory) scanSampleItems(
 		}
 		items = append(items, string(encoded))
 	}
-	return items, nil
+	nextToken, err := encodeDynamoExclusiveStartKey(res.LastEvaluatedKey)
+	if err != nil {
+		return models.AwsDynamoDBScanPage{}, err
+	}
+	return models.AwsDynamoDBScanPage{
+		Items:                items,
+		SampleItemsNextToken: nextToken,
+		SampleItemsHasMore:   nextToken != "",
+	}, nil
+}
+
+func encodeDynamoExclusiveStartKey(key map[string]types.AttributeValue) (string, error) {
+	if len(key) == 0 {
+		return "", nil
+	}
+	var native map[string]any
+	if err := attributevalue.UnmarshalMap(key, &native); err != nil {
+		return "", err
+	}
+	raw, err := json.Marshal(native)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(raw), nil
+}
+
+func decodeDynamoExclusiveStartKey(token string) (map[string]types.AttributeValue, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, nil
+	}
+	raw, err := base64.StdEncoding.DecodeString(token)
+	if err != nil {
+		return nil, err
+	}
+	var native map[string]any
+	if err := json.Unmarshal(raw, &native); err != nil {
+		return nil, err
+	}
+	return attributevalue.MarshalMap(native)
 }
 
 // GetItem loads one item by key JSON object. found is false when the key misses.

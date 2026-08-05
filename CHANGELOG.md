@@ -11,6 +11,13 @@ Installers for every release are published on the
 
 ### Added
 
+- AWS DynamoDB sample scan pagination: table describe returns the first scan page
+  with `sampleItemsNextToken` / `sampleItemsHasMore`, and read-only
+  `aws.dynamodb.loadMoreItems` loads the next page. The DynamoDB inspector adds a
+  Load more items control that appends results client-side.
+- AWS RDS reboot: write-gated `aws.rds.rebootInstance` queues an async
+  `RebootDBInstance` job (same local-endpoint write mode rules as start/stop) and
+  adds a Reboot instance control on the RDS fleet panel.
 - AWS ECS force new deployment: write-gated `aws.ecs.forceNewDeployment` calls
   `UpdateService` with `ForceNewDeployment`, invalidates service/task inventory
   caches, and adds a Force new deployment control on the selected service in the

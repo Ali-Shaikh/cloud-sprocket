@@ -111,6 +111,7 @@ func TestServiceRejectsPhase2And3WriteRPCsWithoutWriteMode(t *testing.T) {
 		{name: "Lambda delete function", method: "aws.lambda.deleteFunction", params: `{"functionName":"demo-fn"}`},
 		{name: "RDS start instance", method: "aws.rds.startInstance", params: `{"instanceId":"cloudsprocket-db"}`},
 		{name: "RDS stop instance", method: "aws.rds.stopInstance", params: `{"instanceId":"cloudsprocket-db"}`},
+		{name: "RDS reboot instance", method: "aws.rds.rebootInstance", params: `{"instanceId":"cloudsprocket-db"}`},
 		{name: "Logs create log group", method: "aws.logs.createLogGroup", params: `{"logGroupName":"/aws/test/group"}`},
 		{name: "Logs put log events", method: "aws.logs.putLogEvents", params: `{"logGroupName":"/aws/test/group","message":"hello"}`},
 		{name: "IAM create role", method: "aws.iam.createRole", params: `{"roleName":"demo-lambda-role"}`},

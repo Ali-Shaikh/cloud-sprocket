@@ -106,6 +106,15 @@ func (r *RDSInventory) StopDBInstance(
 	return r.lifecycleAction(ctx, profile, region, instanceID, "stop")
 }
 
+func (r *RDSInventory) RebootDBInstance(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	instanceID string,
+) error {
+	return r.lifecycleAction(ctx, profile, region, instanceID, "reboot")
+}
+
 func (r *RDSInventory) lifecycleAction(
 	ctx context.Context,
 	profile models.ProfileSummary,
@@ -132,6 +141,10 @@ func (r *RDSInventory) lifecycleAction(
 		})
 	case "stop":
 		_, err = client.StopDBInstance(ctx, &rds.StopDBInstanceInput{
+			DBInstanceIdentifier: aws.String(instanceID),
+		})
+	case "reboot":
+		_, err = client.RebootDBInstance(ctx, &rds.RebootDBInstanceInput{
 			DBInstanceIdentifier: aws.String(instanceID),
 		})
 	default:

@@ -8,6 +8,7 @@ import type { AwsInventorySlice } from "@/types/backend";
 import {
   emptyWorkspace,
   formatBackendError,
+  mergeAwsDynamoDBLoadMore,
   mergeAwsInventoryScope,
   mergeAwsS3ObjectSelection,
   normaliseWorkspaceSnapshot,
@@ -130,6 +131,52 @@ describe("mergeAwsS3ObjectSelection", () => {
     expect(merged.s3ObjectsHasMore).toBe(true);
     expect(merged.s3ObjectMetadata).toEqual([{ label: "Size", value: "12 B" }]);
     expect(merged.s3StatusMessage).toBe("Selected object.");
+  });
+});
+
+describe("mergeAwsDynamoDBLoadMore", () => {
+  it("appends sample items for the selected table and keeps pagination tokens", () => {
+    const current = normaliseWorkspaceSnapshot({
+      selectedDynamodbTableName: "orders",
+      dynamodbTables: [
+        {
+          tableName: "orders",
+          sampleItems: ['{"id":"1"}'],
+          sampleItemsNextToken: "token-1",
+          sampleItemsHasMore: true,
+        },
+        {
+          tableName: "sessions",
+          sampleItems: ['{"sid":"a"}'],
+        },
+      ],
+    });
+    const incoming = normaliseWorkspaceSnapshot({
+      selectedDynamodbTableName: "orders",
+      dynamodbTables: [
+        {
+          tableName: "orders",
+          sampleItems: ['{"id":"2"}'],
+          sampleItemsNextToken: "token-2",
+          sampleItemsHasMore: true,
+        },
+      ],
+      dynamodbStatusMessage: "Loaded 1 more sample item(s) from orders. More items available.",
+    });
+
+    const merged = mergeAwsDynamoDBLoadMore(current, incoming);
+
+    expect(merged.dynamodbTables.find((table) => table.tableName === "orders")?.sampleItems).toEqual([
+      '{"id":"1"}',
+      '{"id":"2"}',
+    ]);
+    expect(merged.dynamodbTables.find((table) => table.tableName === "orders")?.sampleItemsNextToken).toBe(
+      "token-2",
+    );
+    expect(merged.dynamodbTables.find((table) => table.tableName === "sessions")?.sampleItems).toEqual([
+      '{"sid":"a"}',
+    ]);
+    expect(merged.dynamodbStatusMessage).toContain("Loaded 1 more");
   });
 });
 

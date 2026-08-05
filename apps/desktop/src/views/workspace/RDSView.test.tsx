@@ -270,4 +270,47 @@ describe("RDSView", () => {
 
     expect(screen.getByText("RDS requires an AWS workspace")).toBeInTheDocument();
   });
+
+  it("invokes reboot when write mode enables lifecycle actions", () => {
+    mockMatchMedia(true);
+    const onInvokeLifecycleAction = vi.fn();
+    render(
+      <ThemeProvider>
+        <RDSView
+          workspace={{
+            ...workspaceFixture,
+            awsWritesEnabled: true,
+            actionCapabilities: {
+              rds: [
+                {
+                  actionId: "startInstance",
+                  label: "Start instance",
+                  enabled: true,
+                },
+                {
+                  actionId: "stopInstance",
+                  label: "Stop instance",
+                  enabled: true,
+                },
+                {
+                  actionId: "rebootInstance",
+                  label: "Reboot instance",
+                  enabled: true,
+                },
+              ],
+            },
+          }}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectEntity={vi.fn()}
+          onInvokeLifecycleAction={onInvokeLifecycleAction}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Reboot instance" }));
+
+    expect(onInvokeLifecycleAction).toHaveBeenCalledWith("reboot", "cloudsprocket-app-db");
+  });
 });

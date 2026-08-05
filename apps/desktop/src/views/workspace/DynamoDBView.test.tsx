@@ -183,6 +183,8 @@ const workspaceFixture: WorkspaceSnapshot = {
       sampleItems: [
         '{"orderId":"ord-001","customerId":"cust-42","createdAt":"2026-06-14T10:00:00Z","total":49.99}',
       ],
+      sampleItemsNextToken: "token-page-2",
+      sampleItemsHasMore: true,
     },
     {
       tableName: "cloudsprocket-sessions",
@@ -233,6 +235,29 @@ describe("DynamoDBView", () => {
     expect(screen.getByText("customer-index")).toBeInTheDocument();
     expect(screen.getByText(/Sample items \(read-only scan\)/)).toBeInTheDocument();
     expect(screen.getByText(/"orderId":"ord-001"/)).toBeInTheDocument();
+  });
+
+  it("loads more sample items when more pages remain", () => {
+    mockMatchMedia(true);
+    const onLoadMoreItems = vi.fn();
+    render(
+      <ThemeProvider>
+        <DynamoDBView
+          workspace={workspaceFixture}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectTable={vi.fn()}
+          onPutItem={vi.fn()}
+          onDeleteItem={vi.fn()}
+          onLoadMoreItems={onLoadMoreItems}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Load more items" }));
+
+    expect(onLoadMoreItems).toHaveBeenCalledTimes(1);
   });
 
   it("selects a table when a row is clicked", () => {

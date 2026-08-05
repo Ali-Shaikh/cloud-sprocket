@@ -79,6 +79,9 @@ func (s *Service) registerAWSHandlers(m *handlerRegistry) {
 	m.register("aws.dynamodb.deleteItem", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsDynamodbDeleteItem(ctx, params, notifier)
 	})
+	m.register("aws.dynamodb.loadMoreItems", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleAwsDynamodbLoadMoreItems(ctx, params, notifier)
+	})
 	m.register("aws.sqs.selectRegion", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsSqsSelectRegion(ctx, params, notifier)
 	})
@@ -201,6 +204,9 @@ func (s *Service) registerAWSHandlers(m *handlerRegistry) {
 	})
 	m.register("aws.rds.stopInstance", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsRdsStopInstance(ctx, params, notifier)
+	})
+	m.register("aws.rds.rebootInstance", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleAwsRdsRebootInstance(ctx, params, notifier)
 	})
 	m.register("aws.logs.createLogGroup", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsLogsCreateLogGroup(ctx, params, notifier)

@@ -635,16 +635,19 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setLambdaActionStatus, setLambdaInvokeResult, setWorkspace]);
 
-  const invokeRDSLifecycleAction = useCallback((action: "start" | "stop", instanceId: string): void => {
-    setRdsActionStatus(`Queueing RDS ${action} for ${instanceId}.`);
-    void backendRequest<JobStatus>(`aws.rds.${action}Instance`, { instanceId })
-      .then((job) => {
-        setRdsActionStatus(job.message);
-      })
-      .catch((error: unknown) => {
-        setRdsActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }, [setRdsActionStatus]);
+  const invokeRDSLifecycleAction = useCallback(
+    (action: "start" | "stop" | "reboot", instanceId: string): void => {
+      setRdsActionStatus(`Queueing RDS ${action} for ${instanceId}.`);
+      void backendRequest<JobStatus>(`aws.rds.${action}Instance`, { instanceId })
+        .then((job) => {
+          setRdsActionStatus(job.message);
+        })
+        .catch((error: unknown) => {
+          setRdsActionStatus(error instanceof Error ? error.message : String(error));
+        });
+    },
+    [setRdsActionStatus],
+  );
 
   const createLogGroup = useCallback((logGroupName: string): void => {
     setLogsActionStatus(`Creating log group ${logGroupName}.`);

@@ -414,6 +414,8 @@ export interface AwsDynamoDBTable {
   rangeKey?: string;
   globalSecondaryIndexes?: AwsDynamoDBGlobalSecondaryIndex[];
   sampleItems?: string[];
+  sampleItemsNextToken?: string;
+  sampleItemsHasMore?: boolean;
 }
 
 export interface AwsSqsQueue {

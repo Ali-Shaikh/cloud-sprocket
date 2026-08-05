@@ -89,6 +89,10 @@ func (stubDynamoDBInventory) DeleteItem(context.Context, models.ProfileSummary, 
 	return models.AwsDynamoDBWriteResult{}, nil
 }
 
+func (stubDynamoDBInventory) ScanSampleItems(context.Context, models.ProfileSummary, string, string, string, int32) (models.AwsDynamoDBScanPage, error) {
+	return models.AwsDynamoDBScanPage{}, nil
+}
+
 type stubSQSInventory struct{}
 
 func (stubSQSInventory) ListQueues(context.Context, models.ProfileSummary, string) ([]models.AwsSqsQueue, error) {
@@ -144,6 +148,10 @@ func (stubRDSInventory) StartDBInstance(context.Context, models.ProfileSummary, 
 }
 
 func (stubRDSInventory) StopDBInstance(context.Context, models.ProfileSummary, string, string) error {
+	return nil
+}
+
+func (stubRDSInventory) RebootDBInstance(context.Context, models.ProfileSummary, string, string) error {
 	return nil
 }
 

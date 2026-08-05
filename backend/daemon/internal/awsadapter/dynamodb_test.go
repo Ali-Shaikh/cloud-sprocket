@@ -63,3 +63,43 @@ func TestDynamoTableSummaryNilTable(t *testing.T) {
 		t.Fatalf("expected empty summary, got %+v", got)
 	}
 }
+
+func TestDynamoExclusiveStartKeyRoundTrip(t *testing.T) {
+	key := map[string]types.AttributeValue{
+		"pk": &types.AttributeValueMemberS{Value: "order-1"},
+		"sk": &types.AttributeValueMemberN{Value: "42"},
+	}
+	token, err := encodeDynamoExclusiveStartKey(key)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	if token == "" {
+		t.Fatal("expected non-empty token")
+	}
+	decoded, err := decodeDynamoExclusiveStartKey(token)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(decoded) != 2 {
+		t.Fatalf("decoded len = %d", len(decoded))
+	}
+	pk, ok := decoded["pk"].(*types.AttributeValueMemberS)
+	if !ok || pk.Value != "order-1" {
+		t.Fatalf("pk = %#v", decoded["pk"])
+	}
+	sk, ok := decoded["sk"].(*types.AttributeValueMemberN)
+	if !ok || sk.Value != "42" {
+		t.Fatalf("sk = %#v", decoded["sk"])
+	}
+}
+
+func TestDynamoExclusiveStartKeyEmpty(t *testing.T) {
+	token, err := encodeDynamoExclusiveStartKey(nil)
+	if err != nil || token != "" {
+		t.Fatalf("encode nil = %q err=%v", token, err)
+	}
+	decoded, err := decodeDynamoExclusiveStartKey("")
+	if err != nil || decoded != nil {
+		t.Fatalf("decode empty = %#v err=%v", decoded, err)
+	}
+}

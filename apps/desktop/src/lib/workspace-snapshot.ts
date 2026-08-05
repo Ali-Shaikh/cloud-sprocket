@@ -391,6 +391,8 @@ function normaliseDynamoDBTable(table: AwsDynamoDBTable): AwsDynamoDBTable {
     ...table,
     globalSecondaryIndexes: normaliseArray(table.globalSecondaryIndexes),
     sampleItems: normaliseArray(table.sampleItems),
+    sampleItemsNextToken: table.sampleItemsNextToken,
+    sampleItemsHasMore: table.sampleItemsHasMore ?? false,
   };
 }
 
@@ -901,6 +903,43 @@ export function mergeAwsS3LoadMore(
     s3ObjectsNextToken: normalised.s3ObjectsNextToken,
     s3ObjectsHasMore: normalised.s3ObjectsHasMore,
     s3StatusMessage: normalised.s3StatusMessage || current.s3StatusMessage,
+  });
+}
+
+/** Append a Load more sample-item page onto the selected DynamoDB table. */
+export function mergeAwsDynamoDBLoadMore(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  const selectedTableName =
+    normalised.selectedDynamodbTableName || current.selectedDynamodbTableName || "";
+  const incomingByName = new Map(
+    normalised.dynamodbTables.map((table) => [table.tableName, table] as const),
+  );
+  const tables = current.dynamodbTables.map((table) => {
+    const next = incomingByName.get(table.tableName);
+    if (!next || table.tableName !== selectedTableName) {
+      return table;
+    }
+    const existing = new Set(table.sampleItems ?? []);
+    const appended = [
+      ...(table.sampleItems ?? []),
+      ...(next.sampleItems ?? []).filter((item) => !existing.has(item)),
+    ];
+    return {
+      ...table,
+      sampleItems: appended,
+      sampleItemsNextToken: next.sampleItemsNextToken,
+      sampleItemsHasMore: next.sampleItemsHasMore ?? false,
+    };
+  });
+  return normaliseWorkspaceSnapshot({
+    ...current,
+    selectedDynamodbRegion: normalised.selectedDynamodbRegion || current.selectedDynamodbRegion,
+    selectedDynamodbTableName: selectedTableName || current.selectedDynamodbTableName,
+    dynamodbTables: tables,
+    dynamodbStatusMessage: normalised.dynamodbStatusMessage || current.dynamodbStatusMessage,
   });
 }
 
