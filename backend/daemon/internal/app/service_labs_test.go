@@ -3,34 +3,5 @@
 
 package app
 
-import (
-	"strings"
-	"testing"
-)
-
-type trackedHTTPBody struct {
-	reader *strings.Reader
-	closed bool
-}
-
-func (b *trackedHTTPBody) Read(buffer []byte) (int, error) {
-	return b.reader.Read(buffer)
-}
-
-func (b *trackedHTTPBody) Close() error {
-	b.closed = true
-	return nil
-}
-
-func TestDrainAndCloseHTTPBody(t *testing.T) {
-	t.Parallel()
-	body := &trackedHTTPBody{reader: strings.NewReader("health response")}
-
-	drainAndCloseHTTPBody(body)
-	if body.reader.Len() != 0 {
-		t.Fatalf("response body has %d unread bytes", body.reader.Len())
-	}
-	if !body.closed {
-		t.Fatal("response body was not closed")
-	}
-}
+// Lab pure helpers and handler unit tests live in internal/app/labs (F-029 Phase 6a).
+// This file remains as a package marker so existing test filters stay valid.

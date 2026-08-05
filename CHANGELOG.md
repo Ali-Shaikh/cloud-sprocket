@@ -39,6 +39,11 @@ Installers for every release are published on the
 
 ### Changed
 
+- Daemon labs RPCs (`labs.start`, `labs.get`, `labs.verifyStep`, `labs.runAction`,
+  `labs.reset`) and startup fault recovery move into `internal/app/labs` with
+  discovery/session/invalidator, deployment, recipe, runner, and write-executor
+  ports (architecture F-029 Phase 6a). AWS invoke-write ops and check-registry
+  construction stay on the façade.
 - Daemon Azure selection RPCs (resource group, VM, storage account/container/blob
   and prefix filter, web app/slot, Log Analytics workspace, WAF policy, Front Door
   profile/endpoint/origin group, Function App/function, Key Vault vault/secret,
