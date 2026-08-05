@@ -227,13 +227,20 @@ func NewFromDeps(deps Deps) *Service {
 		ECS:           service.ecs,
 	})
 	service.azureDomain = appazure.New(appazure.Deps{
-		Discovery:   deps.Discovery,
-		Session:     service,
-		Workspace:   service,
-		Activity:    service,
-		Invalidator: service,
-		Gate:        azureServiceGate{s: service},
-		Catalog:     azureScopeCatalog{},
+		Discovery:     deps.Discovery,
+		Session:       service,
+		Workspace:     service,
+		Activity:      service,
+		Invalidator:   service,
+		Gate:          azureServiceGate{s: service},
+		Catalog:       azureScopeCatalog{},
+		ActionTimeout: service.azureInventoryTimeout,
+		Storage:       service.azure,
+		KeyVault:      service.azure,
+		Postgres:      service.azure,
+		Functions:     service.azure,
+		WebApps:       service.azure,
+		Waf:           service.azure,
 	})
 	service.labsDomain = applabs.New(applabs.Deps{
 		Discovery:   deps.Discovery,

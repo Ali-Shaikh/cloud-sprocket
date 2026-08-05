@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	appazure "cloudsprocket/backend/daemon/internal/app/azure"
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/models"
@@ -19,21 +20,21 @@ func TestNormaliseWafPolicyMode(t *testing.T) {
 		want string
 		ok   bool
 	}{
-		"prevention": {"Prevention", true},
-		"Prevention": {"Prevention", true},
-		" detection": {"Detection", true},
-		"DETECTION":  {"Detection", true},
-		"":           {"", false},
+		"prevention":                  {"Prevention", true},
+		"Prevention":                  {"Prevention", true},
+		" detection":                  {"Detection", true},
+		"DETECTION":                   {"Detection", true},
+		"":                            {"", false},
 		"Prevention --subscription x": {"", false},
 		"audit":                       {"", false},
 	}
 	for input, expect := range cases {
-		got, err := normaliseWafPolicyMode(input)
+		got, err := appazure.NormaliseWafPolicyMode(input)
 		if expect.ok && (err != nil || got != expect.want) {
-			t.Fatalf("normaliseWafPolicyMode(%q) = %q, %v; want %q, nil", input, got, err, expect.want)
+			t.Fatalf("NormaliseWafPolicyMode(%q) = %q, %v; want %q, nil", input, got, err, expect.want)
 		}
 		if !expect.ok && err == nil {
-			t.Fatalf("normaliseWafPolicyMode(%q) = %q, nil; want error", input, got)
+			t.Fatalf("NormaliseWafPolicyMode(%q) = %q, nil; want error", input, got)
 		}
 	}
 }

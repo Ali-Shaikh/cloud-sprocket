@@ -5,10 +5,8 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
@@ -165,97 +163,5 @@ func (s *Service) lockedAzureProfile(ctx context.Context) (models.ProfileSummary
 	if !ok {
 		return models.ProfileSummary{}, session, errors.New("the workspace's Azure profile is not available")
 	}
-	if !effectiveAzureWritesEnabled(session, profile, s.azureProviderCommandPath(snapshot)) {
-		// Caller decides whether writes are required; return the profile and a sentinel.
-		return profile, session, nil
-	}
 	return profile, session, nil
-}
-
-func (s *Service) handleAzureKeyVaultRevealSecret(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
-	var request struct {
-		VaultName  string `json:"vaultName"`
-		SecretName string `json:"secretName"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(request.VaultName) == "" || strings.TrimSpace(request.SecretName) == "" {
-		return nil, errors.New("a key vault and secret name are required")
-	}
-	profile, _, err := s.lockedAzureProfile(ctx)
-	if err != nil {
-		return nil, err
-	}
-	timeoutCtx, cancel := s.withAzureTimeout(ctx)
-	defer cancel()
-	value, err := s.azure.GetKeyVaultSecret(timeoutCtx, profile, request.VaultName, request.SecretName)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]string{"value": value}, nil
-}
-
-func (s *Service) handleAzureKeyVaultSetSecret(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		VaultName  string `json:"vaultName"`
-		SecretName string `json:"secretName"`
-		Value      string `json:"value"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	vaultName := strings.TrimSpace(request.VaultName)
-	secretName := strings.TrimSpace(request.SecretName)
-	if vaultName == "" || secretName == "" {
-		return nil, errors.New("a key vault and secret name are required")
-	}
-	snapshot, err := s.discovery.Discover()
-	if err != nil {
-		return nil, err
-	}
-	s.mu.Lock()
-	session, err := s.currentState(ctx, snapshot)
-	if err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-	if !session.IsLocked || session.CurrentProviderID != "azure" {
-		s.mu.Unlock()
-		return nil, errors.New("open a locked Azure workspace before setting a secret")
-	}
-	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
-	if !ok {
-		s.mu.Unlock()
-		return nil, errors.New("the workspace's Azure profile is not available")
-	}
-	if !effectiveAzureWritesEnabled(session, profile, s.azureProviderCommandPath(snapshot)) {
-		s.mu.Unlock()
-		return nil, errors.New("setting a secret requires write mode to be enabled for this Azure workspace")
-	}
-	s.mu.Unlock()
-
-	timeoutCtx, cancel := s.withAzureTimeout(ctx)
-	defer cancel()
-	if _, err := s.azure.SetKeyVaultSecret(timeoutCtx, profile, vaultName, secretName, request.Value); err != nil {
-		return nil, err
-	}
-
-	s.mu.Lock()
-	session, err = s.currentState(ctx, snapshot)
-	if err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-	session.SelectedAzureKeyVault = vaultName
-	session.SelectedAzureSecret = secretName
-	if err := s.store.SaveSession(ctx, session); err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-	s.mu.Unlock()
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "keyvault",
-	}, "success", fmt.Sprintf("Set secret %s.", secretName))
 }
