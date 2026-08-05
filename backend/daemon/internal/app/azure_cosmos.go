@@ -5,7 +5,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -182,65 +181,4 @@ func (s *Service) enrichAzureCosmosInventory(
 	})
 }
 
-func (s *Service) handleAzureCosmosSelectAccount(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Account string `json:"account"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a Cosmos account", func(session *models.SessionSnapshot) error {
-		session.SelectedAzureCosmosAccount = request.Account
-		session.SelectedAzureCosmosDatabase = ""
-		session.SelectedAzureCosmosContainer = ""
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "cosmos",
-	}, "", "")
-}
 
-func (s *Service) handleAzureCosmosSelectDatabase(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Database string `json:"database"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a Cosmos database", func(session *models.SessionSnapshot) error {
-		session.SelectedAzureCosmosDatabase = request.Database
-		session.SelectedAzureCosmosContainer = ""
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "cosmos",
-	}, "", "")
-}
-
-func (s *Service) handleAzureCosmosSelectContainer(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Container string `json:"container"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a Cosmos container", func(session *models.SessionSnapshot) error {
-		session.SelectedAzureCosmosContainer = request.Container
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "cosmos",
-	}, "", "")
-}

@@ -5,7 +5,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -79,22 +78,4 @@ func (s *Service) enrichAzureQueuesInventory(
 	})
 }
 
-func (s *Service) handleAzureQueuesSelectQueue(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Queue string `json:"queue"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a queue", func(session *models.SessionSnapshot) error {
-		session.SelectedAzureQueue = request.Queue
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "queues",
-	}, "", "")
-}
+

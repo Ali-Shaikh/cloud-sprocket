@@ -116,26 +116,6 @@ func (s *Service) enrichAzurePostgresInventory(
 	})
 }
 
-func (s *Service) handleAzurePostgresSelectServer(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Server string `json:"server"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a PostgreSQL server", func(session *models.SessionSnapshot) error {
-		session.SelectedAzurePostgresServer = request.Server
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "postgres",
-	}, "", "")
-}
-
 func (s *Service) handleAzurePostgresStartServer(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	return s.handleAzurePostgresLifecycle(ctx, params, notifier, "start")
 }

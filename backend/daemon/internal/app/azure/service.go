@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Ali Shaikh
 
 // Package azure owns Azure-domain RPC handlers that no longer need the full
-// app façade. Phase 5a covers inventory.get. Selection groups and writes
-// remain on the façade until later Phase 5 slices (F-029).
+// app façade. Phase 5a covers inventory.get; Phase 5b covers selection groups.
+// Write/async actions remain on the façade until later Phase 5 slices (F-029).
 package azure
 
 import (
@@ -21,8 +21,8 @@ type Deps struct {
 	Catalog     ScopeCatalog
 }
 
-// Service owns the extracted Azure inventory RPC paths (and later selection
-// and write groups).
+// Service owns the extracted Azure inventory and selection RPC paths (and later
+// write groups).
 type Service struct {
 	discovery   Discovery
 	session     sessionport.Session

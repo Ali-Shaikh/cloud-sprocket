@@ -210,68 +210,6 @@ func (s *Service) enrichAzureFrontDoorInventory(
 	})
 }
 
-func (s *Service) handleAzureFrontDoorSelectProfile(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Profile string `json:"profile"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a Front Door profile", func(session *models.SessionSnapshot) error {
-		session.SelectedAzureFrontDoorProfile = request.Profile
-		session.SelectedAzureFrontDoorEndpoint = ""
-		session.SelectedAzureFrontDoorOriginGroup = ""
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "frontdoor",
-	}, "", "")
-}
-
-func (s *Service) handleAzureFrontDoorSelectEndpoint(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Endpoint string `json:"endpoint"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a Front Door endpoint", func(session *models.SessionSnapshot) error {
-		session.SelectedAzureFrontDoorEndpoint = request.Endpoint
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "frontdoor",
-	}, "", "")
-}
-
-func (s *Service) handleAzureFrontDoorSelectOriginGroup(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		OriginGroup string `json:"originGroup"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a Front Door origin group", func(session *models.SessionSnapshot) error {
-		session.SelectedAzureFrontDoorOriginGroup = request.OriginGroup
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "frontdoor",
-	}, "", "")
-}
-
 func (s *Service) handleAzureFrontDoorRefresh(ctx context.Context, _ json.RawMessage, notifier Notifier) (any, error) {
 	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before refreshing Front Door topology", nil)
 	if err != nil {

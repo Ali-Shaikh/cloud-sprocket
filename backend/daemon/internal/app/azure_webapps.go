@@ -298,47 +298,6 @@ func (s *Service) handleAzureWebAppsDeleteSetting(ctx context.Context, params js
 	}, "success", fmt.Sprintf("Deleted application setting %s from web app %s.", settingName, app.Name))
 }
 
-func (s *Service) handleAzureSelectWebApp(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		AppName string `json:"appName"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a web app", func(session *models.SessionSnapshot) error {
-		session.SelectedAzureWebAppName = request.AppName
-		session.SelectedAzureWebAppSlot = ""
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "webapps",
-	}, "", "")
-}
-
-func (s *Service) handleAzureWebAppsSelectSlot(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		Slot string `json:"slot"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a deployment slot", func(session *models.SessionSnapshot) error {
-		session.SelectedAzureWebAppSlot = strings.TrimSpace(request.Slot)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "webapps",
-	}, "", "")
-}
-
 func (s *Service) handleAzureWebAppsCreateSlot(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		AppName  string `json:"appName"`

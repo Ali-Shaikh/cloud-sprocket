@@ -130,23 +130,6 @@ func (s *Service) enrichAzureLogAnalyticsInventory(workspace *models.WorkspaceSn
 	})
 }
 
-func (s *Service) handleAzureLogAnalyticsSelectWorkspace(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
-	var request struct {
-		Workspace string `json:"workspace"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	_, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a Log Analytics workspace", func(session *models.SessionSnapshot) error {
-		session.SelectedAzureLogWorkspace = strings.TrimSpace(request.Workspace)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return models.AzureLogAnalyticsSelectionResult{Workspace: session.SelectedAzureLogWorkspace}, nil
-}
-
 func (s *Service) handleAzureLogAnalyticsQuery(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
 	var request struct {
 		Workspace    string `json:"workspace"`

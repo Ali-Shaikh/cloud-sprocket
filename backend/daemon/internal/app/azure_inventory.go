@@ -15,7 +15,7 @@ import (
 
 func (s *Service) requireAzureDomain() error {
 	if s.azureDomain == nil {
-		return errors.New("azure inventory service is not available")
+		return errors.New("azure domain service is not available")
 	}
 	return nil
 }

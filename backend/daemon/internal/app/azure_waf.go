@@ -282,26 +282,6 @@ func (s *Service) handleAzureWafRefresh(ctx context.Context, _ json.RawMessage, 
 	}, "", "")
 }
 
-func (s *Service) handleAzureWafSelectPolicy(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		PolicyName string `json:"policyName"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a WAF policy", func(session *models.SessionSnapshot) error {
-		session.SelectedAzureWafPolicy = strings.TrimSpace(request.PolicyName)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "waf",
-	}, "", "")
-}
-
 // normaliseWafPolicyMode validates and canonicalises the WAF policy mode so only
 // the two values az accepts reach the CLI.
 func normaliseWafPolicyMode(mode string) (string, error) {

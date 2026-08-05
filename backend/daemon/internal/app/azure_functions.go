@@ -156,47 +156,6 @@ func (s *Service) enrichAzureFunctionsInventory(
 	})
 }
 
-func (s *Service) handleAzureFunctionsSelectApp(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		AppName string `json:"appName"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a Function App", func(session *models.SessionSnapshot) error {
-		session.SelectedAzureFunctionApp = strings.TrimSpace(request.AppName)
-		session.SelectedAzureFunction = ""
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "functions",
-	}, "", "")
-}
-
-func (s *Service) handleAzureFunctionsSelectFunction(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	var request struct {
-		FunctionName string `json:"functionName"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	snapshot, session, err := s.withLockedAzureWorkspace(ctx, "open an Azure workspace before selecting a function", func(session *models.SessionSnapshot) error {
-		session.SelectedAzureFunction = strings.TrimSpace(request.FunctionName)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "functions",
-	}, "", "")
-}
-
 func (s *Service) handleAzureFunctionsInvoke(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
 	var request struct {
 		AppName      string `json:"appName"`
