@@ -19,18 +19,46 @@ func TestCountCatalogueResourcesDetectsAwsS3Buckets(t *testing.T) {
 	}
 }
 
-func TestDisabledCatalogueEntriesSkipsComingSoon(t *testing.T) {
+func TestDisabledCatalogueEntriesIncludesLiveGcpFunctions(t *testing.T) {
 	service := &Service{
 		preferences: models.ServicePreferences{
 			DisabledServices: map[string][]string{
-				// Still coming_soon; must not appear in hidden-resource probes.
 				"gcp": {"gcp-functions"},
 			},
 		},
 	}
 	entries := service.disabledCatalogueEntries("gcp")
-	if len(entries) != 0 {
-		t.Fatalf("coming soon entries should not be probed: %+v", entries)
+	if len(entries) != 1 || entries[0].ServiceID != "gcp-functions" {
+		t.Fatalf("disabled live entries = %+v, want gcp-functions only", entries)
+	}
+}
+
+func TestDisabledCatalogueEntriesIncludesLiveGcpGke(t *testing.T) {
+	service := &Service{
+		preferences: models.ServicePreferences{
+			DisabledServices: map[string][]string{
+				"gcp": {"gcp-gke"},
+			},
+		},
+	}
+	entries := service.disabledCatalogueEntries("gcp")
+	if len(entries) != 1 || entries[0].ServiceID != "gcp-gke" {
+		t.Fatalf("disabled live entries = %+v, want gcp-gke only", entries)
+	}
+}
+
+func TestCountCatalogueResourcesDetectsGcpFunctionsAndGke(t *testing.T) {
+	workspace := &models.WorkspaceSnapshot{
+		GcpFunctions:   []models.GcpCloudFunction{{Name: "fn"}},
+		GcpGkeClusters: []models.GcpGkeCluster{{Name: "cluster"}},
+	}
+	count, ok := countCatalogueResources(workspace, "gcp", "gcp-functions")
+	if !ok || count != 1 {
+		t.Fatalf("functions count = %d ok = %v", count, ok)
+	}
+	count, ok = countCatalogueResources(workspace, "gcp", "gcp-gke")
+	if !ok || count != 1 {
+		t.Fatalf("gke count = %d ok = %v", count, ok)
 	}
 }
 

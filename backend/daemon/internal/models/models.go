@@ -214,11 +214,11 @@ const (
 )
 
 type EmulatorActionResult struct {
-	EmulatorID string              `json:"emulatorId"`
-	Action     string              `json:"action"`
-	State      EmulatorActionState `json:"state"`
-	Summary    string              `json:"summary"`
-	Status     EmulatorStatusDetail    `json:"status"`
+	EmulatorID string               `json:"emulatorId"`
+	Action     string               `json:"action"`
+	State      EmulatorActionState  `json:"state"`
+	Summary    string               `json:"summary"`
+	Status     EmulatorStatusDetail `json:"status"`
 }
 
 type DockerOwnershipPolicy struct {
@@ -346,9 +346,9 @@ type AwsS3Object struct {
 
 // AwsS3ObjectListPage is one delimiter-scoped page of folders and objects.
 type AwsS3ObjectListPage struct {
-	Entries                 []AwsS3Object `json:"entries"`
-	NextContinuationToken   string        `json:"nextContinuationToken,omitempty"`
-	IsTruncated             bool          `json:"isTruncated,omitempty"`
+	Entries               []AwsS3Object `json:"entries"`
+	NextContinuationToken string        `json:"nextContinuationToken,omitempty"`
+	IsTruncated           bool          `json:"isTruncated,omitempty"`
 }
 
 type AwsS3ExportSnippet struct {
@@ -522,10 +522,10 @@ type AwsS3CreateBucketResult struct {
 }
 
 type AwsS3CopyObjectResult struct {
-	BucketName            string `json:"bucketName"`
-	SourceObjectKey       string `json:"sourceObjectKey"`
-	DestinationObjectKey  string `json:"destinationObjectKey"`
-	DestinationURI        string `json:"destinationUri"`
+	BucketName           string `json:"bucketName"`
+	SourceObjectKey      string `json:"sourceObjectKey"`
+	DestinationObjectKey string `json:"destinationObjectKey"`
+	DestinationURI       string `json:"destinationUri"`
 }
 
 type AwsS3CreateFolderPrefixResult struct {
@@ -741,12 +741,12 @@ type AwsRoute53HostedZone struct {
 
 // AwsRoute53ResourceRecordSet models a Route 53 record preview for inventory.
 type AwsRoute53ResourceRecordSet struct {
-	Name           string   `json:"name"`
-	Type           string   `json:"type,omitempty"`
-	SetIdentifier  string   `json:"setIdentifier,omitempty"`
-	TTL            int64    `json:"ttl,omitempty"`
-	Values         []string `json:"values,omitempty"`
-	AliasTarget    string   `json:"aliasTarget,omitempty"`
+	Name          string   `json:"name"`
+	Type          string   `json:"type,omitempty"`
+	SetIdentifier string   `json:"setIdentifier,omitempty"`
+	TTL           int64    `json:"ttl,omitempty"`
+	Values        []string `json:"values,omitempty"`
+	AliasTarget   string   `json:"aliasTarget,omitempty"`
 }
 
 // AwsElbLoadBalancer models an ELBv2 load balancer for inventory.
@@ -1322,207 +1322,207 @@ type RuntimeSnapshot struct {
 }
 
 type WorkspaceSnapshot struct {
-	Provider                          *ProviderSummary             `json:"provider,omitempty"`
-	Profile                           *ProfileSummary              `json:"profile,omitempty"`
-	AuthMethod                        AuthMethod                   `json:"authMethod,omitempty"`
-	RuntimeSettings                   AppSettingsSnapshot          `json:"runtimeSettings"`
-	EnvironmentDiagnostics            []DetailField                `json:"environmentDiagnostics"`
-	DockerDiagnostics                 DockerDiagnostics            `json:"dockerDiagnostics"`
-	DockerRuntime                     DockerRuntimeSnapshot        `json:"dockerRuntime"`
-	DockerResources                   []ManagedDockerResource      `json:"dockerResources"`
-	EmulatorSummaries                 []EmulatorSummary            `json:"emulatorSummaries"`
-	LocalConfigArtifacts              []LocalConfigArtifact        `json:"localConfigArtifacts"`
-	AWSEndpointURL                    string                       `json:"awsEndpointUrl,omitempty"`
-	AWSWriteCapable                   bool                         `json:"awsWriteCapable"`
-	AWSWriteTargetIsLocal             bool                         `json:"awsWriteTargetIsLocal"`
-	AWSWriteModeEnabled               bool                         `json:"awsWriteModeEnabled"`
-	AWSWritesEnabled                  bool                         `json:"awsWritesEnabled"`
-	ActionCapabilities                map[string][]ActionCapability `json:"actionCapabilities,omitempty"`
-	SelectedS3BucketName              string                       `json:"selectedS3BucketName,omitempty"`
-	SelectedS3ObjectKey               string                       `json:"selectedS3ObjectKey,omitempty"`
-	S3PrefixFilter                    string                       `json:"s3PrefixFilter,omitempty"`
-	S3StatusMessage                   string                       `json:"s3StatusMessage,omitempty"`
-	S3Buckets                         []AwsS3Bucket                `json:"s3Buckets"`
-	S3Objects                         []AwsS3Object                `json:"s3Objects"`
+	Provider               *ProviderSummary              `json:"provider,omitempty"`
+	Profile                *ProfileSummary               `json:"profile,omitempty"`
+	AuthMethod             AuthMethod                    `json:"authMethod,omitempty"`
+	RuntimeSettings        AppSettingsSnapshot           `json:"runtimeSettings"`
+	EnvironmentDiagnostics []DetailField                 `json:"environmentDiagnostics"`
+	DockerDiagnostics      DockerDiagnostics             `json:"dockerDiagnostics"`
+	DockerRuntime          DockerRuntimeSnapshot         `json:"dockerRuntime"`
+	DockerResources        []ManagedDockerResource       `json:"dockerResources"`
+	EmulatorSummaries      []EmulatorSummary             `json:"emulatorSummaries"`
+	LocalConfigArtifacts   []LocalConfigArtifact         `json:"localConfigArtifacts"`
+	AWSEndpointURL         string                        `json:"awsEndpointUrl,omitempty"`
+	AWSWriteCapable        bool                          `json:"awsWriteCapable"`
+	AWSWriteTargetIsLocal  bool                          `json:"awsWriteTargetIsLocal"`
+	AWSWriteModeEnabled    bool                          `json:"awsWriteModeEnabled"`
+	AWSWritesEnabled       bool                          `json:"awsWritesEnabled"`
+	ActionCapabilities     map[string][]ActionCapability `json:"actionCapabilities,omitempty"`
+	SelectedS3BucketName   string                        `json:"selectedS3BucketName,omitempty"`
+	SelectedS3ObjectKey    string                        `json:"selectedS3ObjectKey,omitempty"`
+	S3PrefixFilter         string                        `json:"s3PrefixFilter,omitempty"`
+	S3StatusMessage        string                        `json:"s3StatusMessage,omitempty"`
+	S3Buckets              []AwsS3Bucket                 `json:"s3Buckets"`
+	S3Objects              []AwsS3Object                 `json:"s3Objects"`
 	// S3ObjectsNextToken is the ListObjectsV2 continuation token for Load more.
 	S3ObjectsNextToken string `json:"s3ObjectsNextToken,omitempty"`
 	// S3ObjectsHasMore is true when another page is available under the current prefix.
-	S3ObjectsHasMore bool `json:"s3ObjectsHasMore,omitempty"`
-	S3ObjectMetadata []DetailField         `json:"s3ObjectMetadata"`
-	S3ExportSnippets []AwsS3ExportSnippet  `json:"s3ExportSnippets"`
-	SelectedEC2Region                 string                       `json:"selectedEc2Region,omitempty"`
-	SelectedEC2InstanceID             string                       `json:"selectedEc2InstanceId,omitempty"`
-	EC2StatusMessage                  string                       `json:"ec2StatusMessage,omitempty"`
-	EC2Regions                        []string                     `json:"ec2Regions"`
-	EC2Instances                      []AwsEc2Instance             `json:"ec2Instances"`
-	SelectedLambdaRegion              string                       `json:"selectedLambdaRegion,omitempty"`
-	SelectedLambdaFunctionName        string                       `json:"selectedLambdaFunctionName,omitempty"`
-	LambdaStatusMessage               string                       `json:"lambdaStatusMessage,omitempty"`
-	LambdaRegions                     []string                     `json:"lambdaRegions"`
-	LambdaFunctions                   []AwsLambdaFunction          `json:"lambdaFunctions"`
-	SelectedDynamoDBRegion            string                       `json:"selectedDynamodbRegion,omitempty"`
-	SelectedDynamoDBTableName         string                       `json:"selectedDynamodbTableName,omitempty"`
-	DynamoDBStatusMessage             string                       `json:"dynamodbStatusMessage,omitempty"`
-	DynamoDBRegions                   []string                     `json:"dynamodbRegions"`
-	DynamoDBTables                    []AwsDynamoDBTable           `json:"dynamodbTables"`
-	SelectedSQSRegion                 string                       `json:"selectedSqsRegion,omitempty"`
-	SelectedSQSQueueURL               string                       `json:"selectedSqsQueueUrl,omitempty"`
-	SQSStatusMessage                  string                       `json:"sqsStatusMessage,omitempty"`
-	SQSRegions                        []string                     `json:"sqsRegions"`
-	SQSQueues                         []AwsSqsQueue                `json:"sqsQueues"`
-	SelectedSNSRegion                 string                       `json:"selectedSnsRegion,omitempty"`
-	SelectedSNSTopicArn               string                       `json:"selectedSnsTopicArn,omitempty"`
-	SNSStatusMessage                  string                       `json:"snsStatusMessage,omitempty"`
-	SNSRegions                        []string                     `json:"snsRegions"`
-	SNSTopics                         []AwsSnsTopic                `json:"snsTopics"`
-	SelectedRDSRegion                 string                       `json:"selectedRdsRegion,omitempty"`
-	SelectedRDSInstanceID             string                       `json:"selectedRdsInstanceId,omitempty"`
-	RDSStatusMessage                  string                       `json:"rdsStatusMessage,omitempty"`
-	RDSRegions                        []string                     `json:"rdsRegions"`
-	RDSInstances                      []AwsRdsInstance             `json:"rdsInstances"`
-	SelectedECSRegion                 string                       `json:"selectedEcsRegion,omitempty"`
-	SelectedECSClusterArn             string                       `json:"selectedEcsClusterArn,omitempty"`
-	SelectedECSServiceArn             string                       `json:"selectedEcsServiceArn,omitempty"`
-	SelectedECSTaskArn                string                       `json:"selectedEcsTaskArn,omitempty"`
-	ECSStatusMessage                  string                       `json:"ecsStatusMessage,omitempty"`
-	ECSRegions                        []string                     `json:"ecsRegions"`
-	ECSClusters                       []AwsEcsCluster              `json:"ecsClusters"`
-	ECSServices                       []AwsEcsService              `json:"ecsServices"`
-	ECSTasks                          []AwsEcsTask                 `json:"ecsTasks"`
-	SelectedEKSRegion                 string                       `json:"selectedEksRegion,omitempty"`
-	SelectedEKSClusterName            string                       `json:"selectedEksClusterName,omitempty"`
-	EKSStatusMessage                  string                       `json:"eksStatusMessage,omitempty"`
-	EKSRegions                        []string                     `json:"eksRegions"`
-	EKSClusters                       []AwsEksCluster              `json:"eksClusters"`
-	EKSNodeGroups                     []AwsEksNodeGroup            `json:"eksNodeGroups"`
-	SelectedCloudFormationRegion      string                       `json:"selectedCloudFormationRegion,omitempty"`
-	SelectedCloudFormationStackName   string                       `json:"selectedCloudFormationStackName,omitempty"`
-	CloudFormationStatusMessage       string                       `json:"cloudFormationStatusMessage,omitempty"`
-	CloudFormationRegions             []string                     `json:"cloudFormationRegions"`
-	CloudFormationStacks              []AwsCloudFormationStack     `json:"cloudFormationStacks"`
+	S3ObjectsHasMore                  bool                          `json:"s3ObjectsHasMore,omitempty"`
+	S3ObjectMetadata                  []DetailField                 `json:"s3ObjectMetadata"`
+	S3ExportSnippets                  []AwsS3ExportSnippet          `json:"s3ExportSnippets"`
+	SelectedEC2Region                 string                        `json:"selectedEc2Region,omitempty"`
+	SelectedEC2InstanceID             string                        `json:"selectedEc2InstanceId,omitempty"`
+	EC2StatusMessage                  string                        `json:"ec2StatusMessage,omitempty"`
+	EC2Regions                        []string                      `json:"ec2Regions"`
+	EC2Instances                      []AwsEc2Instance              `json:"ec2Instances"`
+	SelectedLambdaRegion              string                        `json:"selectedLambdaRegion,omitempty"`
+	SelectedLambdaFunctionName        string                        `json:"selectedLambdaFunctionName,omitempty"`
+	LambdaStatusMessage               string                        `json:"lambdaStatusMessage,omitempty"`
+	LambdaRegions                     []string                      `json:"lambdaRegions"`
+	LambdaFunctions                   []AwsLambdaFunction           `json:"lambdaFunctions"`
+	SelectedDynamoDBRegion            string                        `json:"selectedDynamodbRegion,omitempty"`
+	SelectedDynamoDBTableName         string                        `json:"selectedDynamodbTableName,omitempty"`
+	DynamoDBStatusMessage             string                        `json:"dynamodbStatusMessage,omitempty"`
+	DynamoDBRegions                   []string                      `json:"dynamodbRegions"`
+	DynamoDBTables                    []AwsDynamoDBTable            `json:"dynamodbTables"`
+	SelectedSQSRegion                 string                        `json:"selectedSqsRegion,omitempty"`
+	SelectedSQSQueueURL               string                        `json:"selectedSqsQueueUrl,omitempty"`
+	SQSStatusMessage                  string                        `json:"sqsStatusMessage,omitempty"`
+	SQSRegions                        []string                      `json:"sqsRegions"`
+	SQSQueues                         []AwsSqsQueue                 `json:"sqsQueues"`
+	SelectedSNSRegion                 string                        `json:"selectedSnsRegion,omitempty"`
+	SelectedSNSTopicArn               string                        `json:"selectedSnsTopicArn,omitempty"`
+	SNSStatusMessage                  string                        `json:"snsStatusMessage,omitempty"`
+	SNSRegions                        []string                      `json:"snsRegions"`
+	SNSTopics                         []AwsSnsTopic                 `json:"snsTopics"`
+	SelectedRDSRegion                 string                        `json:"selectedRdsRegion,omitempty"`
+	SelectedRDSInstanceID             string                        `json:"selectedRdsInstanceId,omitempty"`
+	RDSStatusMessage                  string                        `json:"rdsStatusMessage,omitempty"`
+	RDSRegions                        []string                      `json:"rdsRegions"`
+	RDSInstances                      []AwsRdsInstance              `json:"rdsInstances"`
+	SelectedECSRegion                 string                        `json:"selectedEcsRegion,omitempty"`
+	SelectedECSClusterArn             string                        `json:"selectedEcsClusterArn,omitempty"`
+	SelectedECSServiceArn             string                        `json:"selectedEcsServiceArn,omitempty"`
+	SelectedECSTaskArn                string                        `json:"selectedEcsTaskArn,omitempty"`
+	ECSStatusMessage                  string                        `json:"ecsStatusMessage,omitempty"`
+	ECSRegions                        []string                      `json:"ecsRegions"`
+	ECSClusters                       []AwsEcsCluster               `json:"ecsClusters"`
+	ECSServices                       []AwsEcsService               `json:"ecsServices"`
+	ECSTasks                          []AwsEcsTask                  `json:"ecsTasks"`
+	SelectedEKSRegion                 string                        `json:"selectedEksRegion,omitempty"`
+	SelectedEKSClusterName            string                        `json:"selectedEksClusterName,omitempty"`
+	EKSStatusMessage                  string                        `json:"eksStatusMessage,omitempty"`
+	EKSRegions                        []string                      `json:"eksRegions"`
+	EKSClusters                       []AwsEksCluster               `json:"eksClusters"`
+	EKSNodeGroups                     []AwsEksNodeGroup             `json:"eksNodeGroups"`
+	SelectedCloudFormationRegion      string                        `json:"selectedCloudFormationRegion,omitempty"`
+	SelectedCloudFormationStackName   string                        `json:"selectedCloudFormationStackName,omitempty"`
+	CloudFormationStatusMessage       string                        `json:"cloudFormationStatusMessage,omitempty"`
+	CloudFormationRegions             []string                      `json:"cloudFormationRegions"`
+	CloudFormationStacks              []AwsCloudFormationStack      `json:"cloudFormationStacks"`
 	CloudFormationStackEvents         []AwsCloudFormationStackEvent `json:"cloudFormationStackEvents"`
-	SelectedEventBridgeRegion         string                       `json:"selectedEventBridgeRegion,omitempty"`
-	SelectedEventBridgeBusName        string                       `json:"selectedEventBridgeBusName,omitempty"`
-	EventBridgeStatusMessage          string                       `json:"eventBridgeStatusMessage,omitempty"`
-	EventBridgeRegions                []string                     `json:"eventBridgeRegions"`
-	EventBridgeBuses                  []AwsEventBridgeBus          `json:"eventBridgeBuses"`
-	EventBridgeRules                  []AwsEventBridgeRule         `json:"eventBridgeRules"`
-	SelectedRoute53HostedZoneID       string                       `json:"selectedRoute53HostedZoneId,omitempty"`
-	Route53StatusMessage              string                       `json:"route53StatusMessage,omitempty"`
-	Route53HostedZones                []AwsRoute53HostedZone       `json:"route53HostedZones"`
+	SelectedEventBridgeRegion         string                        `json:"selectedEventBridgeRegion,omitempty"`
+	SelectedEventBridgeBusName        string                        `json:"selectedEventBridgeBusName,omitempty"`
+	EventBridgeStatusMessage          string                        `json:"eventBridgeStatusMessage,omitempty"`
+	EventBridgeRegions                []string                      `json:"eventBridgeRegions"`
+	EventBridgeBuses                  []AwsEventBridgeBus           `json:"eventBridgeBuses"`
+	EventBridgeRules                  []AwsEventBridgeRule          `json:"eventBridgeRules"`
+	SelectedRoute53HostedZoneID       string                        `json:"selectedRoute53HostedZoneId,omitempty"`
+	Route53StatusMessage              string                        `json:"route53StatusMessage,omitempty"`
+	Route53HostedZones                []AwsRoute53HostedZone        `json:"route53HostedZones"`
 	Route53ResourceRecordSets         []AwsRoute53ResourceRecordSet `json:"route53ResourceRecordSets"`
-	SelectedElbRegion                 string                       `json:"selectedElbRegion,omitempty"`
-	SelectedElbLoadBalancerArn        string                       `json:"selectedElbLoadBalancerArn,omitempty"`
-	ElbStatusMessage                  string                       `json:"elbStatusMessage,omitempty"`
-	ElbRegions                        []string                     `json:"elbRegions"`
-	ElbLoadBalancers                  []AwsElbLoadBalancer         `json:"elbLoadBalancers"`
-	ElbTargetGroups                   []AwsElbTargetGroup          `json:"elbTargetGroups"`
-	SelectedKmsRegion                 string                       `json:"selectedKmsRegion,omitempty"`
-	SelectedKmsKeyId                  string                       `json:"selectedKmsKeyId,omitempty"`
-	KmsStatusMessage                  string                       `json:"kmsStatusMessage,omitempty"`
-	KmsRegions                        []string                     `json:"kmsRegions"`
-	KmsKeys                           []AwsKmsKey                  `json:"kmsKeys"`
-	KmsAliases                        []AwsKmsAlias                `json:"kmsAliases"`
-	SelectedApiGatewayRegion          string                       `json:"selectedApiGatewayRegion,omitempty"`
-	SelectedApiGatewayApiKey          string                       `json:"selectedApiGatewayApiKey,omitempty"`
-	ApiGatewayStatusMessage           string                       `json:"apiGatewayStatusMessage,omitempty"`
-	ApiGatewayRegions                 []string                     `json:"apiGatewayRegions"`
-	ApiGatewayApis                    []AwsApiGatewayApi           `json:"apiGatewayApis"`
-	ApiGatewayStages                  []AwsApiGatewayStage         `json:"apiGatewayStages"`
-	SelectedSecretsManagerRegion      string                       `json:"selectedSecretsManagerRegion,omitempty"`
-	SelectedSecretsManagerName        string                       `json:"selectedSecretsManagerName,omitempty"`
-	SecretsManagerStatusMessage       string                       `json:"secretsManagerStatusMessage,omitempty"`
-	SecretsManagerRegions             []string                     `json:"secretsManagerRegions"`
-	SecretsManagerSecrets             []AwsSecretsManagerSecret    `json:"secretsManagerSecrets"`
-	SelectedLogsRegion                string                       `json:"selectedLogsRegion,omitempty"`
-	SelectedLogGroupName              string                       `json:"selectedLogGroupName,omitempty"`
-	LogsStatusMessage                 string                       `json:"logsStatusMessage,omitempty"`
-	LogsRegions                       []string                     `json:"logsRegions"`
-	LogGroups                         []AwsLogGroup                `json:"logGroups"`
-	SelectedIAMRoleName               string                       `json:"selectedIamRoleName,omitempty"`
-	IAMStatusMessage                  string                       `json:"iamStatusMessage,omitempty"`
-	IAMRoles                          []AwsIamRole                 `json:"iamRoles"`
-	IAMPolicies                       []AwsIamPolicy               `json:"iamPolicies"`
-	AzureEndpointURL                  string                       `json:"azureEndpointUrl,omitempty"`
-	AzureCLIExtensions                []AzureCLIExtensionStatus    `json:"azureCliExtensions,omitempty"`
-	AzureWriteCapable                 bool                         `json:"azureWriteCapable"`
-	AzureWriteModeEnabled             bool                         `json:"azureWriteModeEnabled"`
-	AzureWritesEnabled                bool                         `json:"azureWritesEnabled"`
-	SelectedAzureResourceGroup        string                       `json:"selectedAzureResourceGroup,omitempty"`
-	SelectedAzureVMID                 string                       `json:"selectedAzureVmId,omitempty"`
-	SelectedAzureStorageAccount       string                       `json:"selectedAzureStorageAccount,omitempty"`
-	SelectedAzureBlobContainer        string                       `json:"selectedAzureBlobContainer,omitempty"`
-	SelectedAzureBlobName             string                       `json:"selectedAzureBlobName,omitempty"`
-	AzureBlobPrefixFilter             string                       `json:"azureBlobPrefixFilter,omitempty"`
-	SelectedAzureWebAppName           string                       `json:"selectedAzureWebAppName,omitempty"`
-	SelectedAzureWebAppSlot           string                       `json:"selectedAzureWebAppSlot,omitempty"`
-	SelectedAzureLogWorkspace         string                       `json:"selectedAzureLogWorkspace,omitempty"`
-	SelectedAzureWafPolicy            string                       `json:"selectedAzureWafPolicy,omitempty"`
-	SelectedAzureFunctionApp          string                       `json:"selectedAzureFunctionApp,omitempty"`
-	SelectedAzureFunction             string                       `json:"selectedAzureFunction,omitempty"`
-	AzureStatusMessage                string                       `json:"azureStatusMessage,omitempty"`
-	AzureStorageStatusMessage         string                       `json:"azureStorageStatusMessage,omitempty"`
-	AzureAppServiceStatusMessage      string                       `json:"azureAppServiceStatusMessage,omitempty"`
-	AzureLogAnalyticsStatusMessage    string                       `json:"azureLogAnalyticsStatusMessage,omitempty"`
-	AzureFunctionsStatusMessage       string                       `json:"azureFunctionsStatusMessage,omitempty"`
-	AzureKeyVaultStatusMessage        string                       `json:"azureKeyVaultStatusMessage,omitempty"`
-	AzureCosmosStatusMessage          string                       `json:"azureCosmosStatusMessage,omitempty"`
-	AzurePostgresStatusMessage        string                       `json:"azurePostgresStatusMessage,omitempty"`
-	AzureQueuesStatusMessage          string                       `json:"azureQueuesStatusMessage,omitempty"`
-	SelectedAzureQueue                string                       `json:"selectedAzureQueue,omitempty"`
-	SelectedAzureKeyVault             string                       `json:"selectedAzureKeyVault,omitempty"`
-	SelectedAzureSecret               string                       `json:"selectedAzureSecret,omitempty"`
-	SelectedAzureCosmosAccount        string                       `json:"selectedAzureCosmosAccount,omitempty"`
-	SelectedAzureCosmosDatabase       string                       `json:"selectedAzureCosmosDatabase,omitempty"`
-	SelectedAzureCosmosContainer      string                       `json:"selectedAzureCosmosContainer,omitempty"`
-	SelectedAzurePostgresServer       string                       `json:"selectedAzurePostgresServer,omitempty"`
-	SelectedAzureFrontDoorProfile     string                       `json:"selectedAzureFrontDoorProfile,omitempty"`
-	SelectedAzureFrontDoorEndpoint    string                       `json:"selectedAzureFrontDoorEndpoint,omitempty"`
-	SelectedAzureFrontDoorOriginGroup string                       `json:"selectedAzureFrontDoorOriginGroup,omitempty"`
-	AzureFrontDoorStatusMessage       string                       `json:"azureFrontDoorStatusMessage,omitempty"`
-	AzureFrontDoorProfiles            []AzureFrontDoorProfile      `json:"azureFrontDoorProfiles"`
-	AzureFrontDoorEndpoints           []AzureFrontDoorEndpoint     `json:"azureFrontDoorEndpoints"`
-	AzureFrontDoorOriginGroups        []AzureFrontDoorOriginGroup  `json:"azureFrontDoorOriginGroups"`
-	AzureFrontDoorOrigins             []AzureFrontDoorOrigin       `json:"azureFrontDoorOrigins"`
-	AzureResourceGroups               []AzureResourceGroup         `json:"azureResourceGroups"`
-	AzureVirtualMachines              []AzureVirtualMachine        `json:"azureVirtualMachines"`
-	AzureStorageAccounts              []AzureStorageAccount        `json:"azureStorageAccounts"`
-	AzureBlobContainers               []AzureBlobContainer         `json:"azureBlobContainers"`
-	AzureBlobs                        []AzureBlob                  `json:"azureBlobs"`
-	AzureBlobMetadata                 []DetailField                `json:"azureBlobMetadata"`
-	AzureWebApps                      []AzureWebApp                `json:"azureWebApps"`
-	AzureAppServicePlans              []AzureAppServicePlan        `json:"azureAppServicePlans"`
-	AzureWebAppSettings               []AzureWebAppSetting         `json:"azureWebAppSettings"`
-	AzureWebAppDeploymentSlots        []AzureWebAppDeploymentSlot  `json:"azureWebAppDeploymentSlots"`
-	AzureWebAppActiveDetail           *AzureWebApp                 `json:"azureWebAppActiveDetail,omitempty"`
-	AzureLogAnalyticsWorkspaces       []AzureLogAnalyticsWorkspace `json:"azureLogAnalyticsWorkspaces"`
-	AzureWafLogSchema                 *AzureWafLogSchemaProfile    `json:"azureWafLogSchema,omitempty"`
-	AzureWafStatusMessage             string                       `json:"azureWafStatusMessage,omitempty"`
-	AzureWafPolicies                  []AzureWafPolicySummary      `json:"azureWafPolicies"`
-	AzureWafPolicyDetail              *AzureWafPolicyDetail        `json:"azureWafPolicyDetail,omitempty"`
-	AzureWafRuleFireCounts            []AzureWafRuleFireCount      `json:"azureWafRuleFireCounts"`
-	AzureFunctionApps                 []AzureFunctionApp           `json:"azureFunctionApps"`
-	AzureFunctions                    []AzureFunction              `json:"azureFunctions"`
-	AzureKeyVaults                    []AzureKeyVault              `json:"azureKeyVaults"`
-	AzureKeyVaultSecrets              []AzureKeyVaultSecret        `json:"azureKeyVaultSecrets"`
-	AzureCosmosAccounts               []AzureCosmosAccount         `json:"azureCosmosAccounts"`
-	AzureCosmosDatabases              []AzureCosmosDatabase        `json:"azureCosmosDatabases"`
-	AzureCosmosContainers             []AzureCosmosContainer       `json:"azureCosmosContainers"`
-	AzureCosmosItems                  []AzureCosmosItem            `json:"azureCosmosItems"`
-	AzurePostgresServers              []AzurePostgresServer        `json:"azurePostgresServers"`
-	AzurePostgresConnection           *AzurePostgresConnection     `json:"azurePostgresConnection,omitempty"`
-	AzureStorageQueues                []AzureStorageQueue          `json:"azureStorageQueues"`
-	AzureQueueMessages                []AzureQueueMessage          `json:"azureQueueMessages"`
-	AzureEntraStatusMessage           string                       `json:"azureEntraStatusMessage,omitempty"`
-	AzureEntraUsers                   []AzureEntraUser             `json:"azureEntraUsers"`
-	AzureEntraGroups                  []AzureEntraGroup            `json:"azureEntraGroups"`
-	AzureEntraApps                    []AzureEntraApp              `json:"azureEntraApps"`
+	SelectedElbRegion                 string                        `json:"selectedElbRegion,omitempty"`
+	SelectedElbLoadBalancerArn        string                        `json:"selectedElbLoadBalancerArn,omitempty"`
+	ElbStatusMessage                  string                        `json:"elbStatusMessage,omitempty"`
+	ElbRegions                        []string                      `json:"elbRegions"`
+	ElbLoadBalancers                  []AwsElbLoadBalancer          `json:"elbLoadBalancers"`
+	ElbTargetGroups                   []AwsElbTargetGroup           `json:"elbTargetGroups"`
+	SelectedKmsRegion                 string                        `json:"selectedKmsRegion,omitempty"`
+	SelectedKmsKeyId                  string                        `json:"selectedKmsKeyId,omitempty"`
+	KmsStatusMessage                  string                        `json:"kmsStatusMessage,omitempty"`
+	KmsRegions                        []string                      `json:"kmsRegions"`
+	KmsKeys                           []AwsKmsKey                   `json:"kmsKeys"`
+	KmsAliases                        []AwsKmsAlias                 `json:"kmsAliases"`
+	SelectedApiGatewayRegion          string                        `json:"selectedApiGatewayRegion,omitempty"`
+	SelectedApiGatewayApiKey          string                        `json:"selectedApiGatewayApiKey,omitempty"`
+	ApiGatewayStatusMessage           string                        `json:"apiGatewayStatusMessage,omitempty"`
+	ApiGatewayRegions                 []string                      `json:"apiGatewayRegions"`
+	ApiGatewayApis                    []AwsApiGatewayApi            `json:"apiGatewayApis"`
+	ApiGatewayStages                  []AwsApiGatewayStage          `json:"apiGatewayStages"`
+	SelectedSecretsManagerRegion      string                        `json:"selectedSecretsManagerRegion,omitempty"`
+	SelectedSecretsManagerName        string                        `json:"selectedSecretsManagerName,omitempty"`
+	SecretsManagerStatusMessage       string                        `json:"secretsManagerStatusMessage,omitempty"`
+	SecretsManagerRegions             []string                      `json:"secretsManagerRegions"`
+	SecretsManagerSecrets             []AwsSecretsManagerSecret     `json:"secretsManagerSecrets"`
+	SelectedLogsRegion                string                        `json:"selectedLogsRegion,omitempty"`
+	SelectedLogGroupName              string                        `json:"selectedLogGroupName,omitempty"`
+	LogsStatusMessage                 string                        `json:"logsStatusMessage,omitempty"`
+	LogsRegions                       []string                      `json:"logsRegions"`
+	LogGroups                         []AwsLogGroup                 `json:"logGroups"`
+	SelectedIAMRoleName               string                        `json:"selectedIamRoleName,omitempty"`
+	IAMStatusMessage                  string                        `json:"iamStatusMessage,omitempty"`
+	IAMRoles                          []AwsIamRole                  `json:"iamRoles"`
+	IAMPolicies                       []AwsIamPolicy                `json:"iamPolicies"`
+	AzureEndpointURL                  string                        `json:"azureEndpointUrl,omitempty"`
+	AzureCLIExtensions                []AzureCLIExtensionStatus     `json:"azureCliExtensions,omitempty"`
+	AzureWriteCapable                 bool                          `json:"azureWriteCapable"`
+	AzureWriteModeEnabled             bool                          `json:"azureWriteModeEnabled"`
+	AzureWritesEnabled                bool                          `json:"azureWritesEnabled"`
+	SelectedAzureResourceGroup        string                        `json:"selectedAzureResourceGroup,omitempty"`
+	SelectedAzureVMID                 string                        `json:"selectedAzureVmId,omitempty"`
+	SelectedAzureStorageAccount       string                        `json:"selectedAzureStorageAccount,omitempty"`
+	SelectedAzureBlobContainer        string                        `json:"selectedAzureBlobContainer,omitempty"`
+	SelectedAzureBlobName             string                        `json:"selectedAzureBlobName,omitempty"`
+	AzureBlobPrefixFilter             string                        `json:"azureBlobPrefixFilter,omitempty"`
+	SelectedAzureWebAppName           string                        `json:"selectedAzureWebAppName,omitempty"`
+	SelectedAzureWebAppSlot           string                        `json:"selectedAzureWebAppSlot,omitempty"`
+	SelectedAzureLogWorkspace         string                        `json:"selectedAzureLogWorkspace,omitempty"`
+	SelectedAzureWafPolicy            string                        `json:"selectedAzureWafPolicy,omitempty"`
+	SelectedAzureFunctionApp          string                        `json:"selectedAzureFunctionApp,omitempty"`
+	SelectedAzureFunction             string                        `json:"selectedAzureFunction,omitempty"`
+	AzureStatusMessage                string                        `json:"azureStatusMessage,omitempty"`
+	AzureStorageStatusMessage         string                        `json:"azureStorageStatusMessage,omitempty"`
+	AzureAppServiceStatusMessage      string                        `json:"azureAppServiceStatusMessage,omitempty"`
+	AzureLogAnalyticsStatusMessage    string                        `json:"azureLogAnalyticsStatusMessage,omitempty"`
+	AzureFunctionsStatusMessage       string                        `json:"azureFunctionsStatusMessage,omitempty"`
+	AzureKeyVaultStatusMessage        string                        `json:"azureKeyVaultStatusMessage,omitempty"`
+	AzureCosmosStatusMessage          string                        `json:"azureCosmosStatusMessage,omitempty"`
+	AzurePostgresStatusMessage        string                        `json:"azurePostgresStatusMessage,omitempty"`
+	AzureQueuesStatusMessage          string                        `json:"azureQueuesStatusMessage,omitempty"`
+	SelectedAzureQueue                string                        `json:"selectedAzureQueue,omitempty"`
+	SelectedAzureKeyVault             string                        `json:"selectedAzureKeyVault,omitempty"`
+	SelectedAzureSecret               string                        `json:"selectedAzureSecret,omitempty"`
+	SelectedAzureCosmosAccount        string                        `json:"selectedAzureCosmosAccount,omitempty"`
+	SelectedAzureCosmosDatabase       string                        `json:"selectedAzureCosmosDatabase,omitempty"`
+	SelectedAzureCosmosContainer      string                        `json:"selectedAzureCosmosContainer,omitempty"`
+	SelectedAzurePostgresServer       string                        `json:"selectedAzurePostgresServer,omitempty"`
+	SelectedAzureFrontDoorProfile     string                        `json:"selectedAzureFrontDoorProfile,omitempty"`
+	SelectedAzureFrontDoorEndpoint    string                        `json:"selectedAzureFrontDoorEndpoint,omitempty"`
+	SelectedAzureFrontDoorOriginGroup string                        `json:"selectedAzureFrontDoorOriginGroup,omitempty"`
+	AzureFrontDoorStatusMessage       string                        `json:"azureFrontDoorStatusMessage,omitempty"`
+	AzureFrontDoorProfiles            []AzureFrontDoorProfile       `json:"azureFrontDoorProfiles"`
+	AzureFrontDoorEndpoints           []AzureFrontDoorEndpoint      `json:"azureFrontDoorEndpoints"`
+	AzureFrontDoorOriginGroups        []AzureFrontDoorOriginGroup   `json:"azureFrontDoorOriginGroups"`
+	AzureFrontDoorOrigins             []AzureFrontDoorOrigin        `json:"azureFrontDoorOrigins"`
+	AzureResourceGroups               []AzureResourceGroup          `json:"azureResourceGroups"`
+	AzureVirtualMachines              []AzureVirtualMachine         `json:"azureVirtualMachines"`
+	AzureStorageAccounts              []AzureStorageAccount         `json:"azureStorageAccounts"`
+	AzureBlobContainers               []AzureBlobContainer          `json:"azureBlobContainers"`
+	AzureBlobs                        []AzureBlob                   `json:"azureBlobs"`
+	AzureBlobMetadata                 []DetailField                 `json:"azureBlobMetadata"`
+	AzureWebApps                      []AzureWebApp                 `json:"azureWebApps"`
+	AzureAppServicePlans              []AzureAppServicePlan         `json:"azureAppServicePlans"`
+	AzureWebAppSettings               []AzureWebAppSetting          `json:"azureWebAppSettings"`
+	AzureWebAppDeploymentSlots        []AzureWebAppDeploymentSlot   `json:"azureWebAppDeploymentSlots"`
+	AzureWebAppActiveDetail           *AzureWebApp                  `json:"azureWebAppActiveDetail,omitempty"`
+	AzureLogAnalyticsWorkspaces       []AzureLogAnalyticsWorkspace  `json:"azureLogAnalyticsWorkspaces"`
+	AzureWafLogSchema                 *AzureWafLogSchemaProfile     `json:"azureWafLogSchema,omitempty"`
+	AzureWafStatusMessage             string                        `json:"azureWafStatusMessage,omitempty"`
+	AzureWafPolicies                  []AzureWafPolicySummary       `json:"azureWafPolicies"`
+	AzureWafPolicyDetail              *AzureWafPolicyDetail         `json:"azureWafPolicyDetail,omitempty"`
+	AzureWafRuleFireCounts            []AzureWafRuleFireCount       `json:"azureWafRuleFireCounts"`
+	AzureFunctionApps                 []AzureFunctionApp            `json:"azureFunctionApps"`
+	AzureFunctions                    []AzureFunction               `json:"azureFunctions"`
+	AzureKeyVaults                    []AzureKeyVault               `json:"azureKeyVaults"`
+	AzureKeyVaultSecrets              []AzureKeyVaultSecret         `json:"azureKeyVaultSecrets"`
+	AzureCosmosAccounts               []AzureCosmosAccount          `json:"azureCosmosAccounts"`
+	AzureCosmosDatabases              []AzureCosmosDatabase         `json:"azureCosmosDatabases"`
+	AzureCosmosContainers             []AzureCosmosContainer        `json:"azureCosmosContainers"`
+	AzureCosmosItems                  []AzureCosmosItem             `json:"azureCosmosItems"`
+	AzurePostgresServers              []AzurePostgresServer         `json:"azurePostgresServers"`
+	AzurePostgresConnection           *AzurePostgresConnection      `json:"azurePostgresConnection,omitempty"`
+	AzureStorageQueues                []AzureStorageQueue           `json:"azureStorageQueues"`
+	AzureQueueMessages                []AzureQueueMessage           `json:"azureQueueMessages"`
+	AzureEntraStatusMessage           string                        `json:"azureEntraStatusMessage,omitempty"`
+	AzureEntraUsers                   []AzureEntraUser              `json:"azureEntraUsers"`
+	AzureEntraGroups                  []AzureEntraGroup             `json:"azureEntraGroups"`
+	AzureEntraApps                    []AzureEntraApp               `json:"azureEntraApps"`
 	// GCP Cloud Storage inventory (bucket list + object browser).
-	SelectedGcpStorageBucket  string             `json:"selectedGcpStorageBucket,omitempty"`
-	GcpStoragePrefixFilter    string             `json:"gcpStoragePrefixFilter,omitempty"`
-	GcpStorageStatusMessage   string             `json:"gcpStorageStatusMessage,omitempty"`
-	GcpStorageBuckets         []GcpStorageBucket `json:"gcpStorageBuckets"`
-	GcpStorageObjects         []GcpStorageObject `json:"gcpStorageObjects"`
+	SelectedGcpStorageBucket string             `json:"selectedGcpStorageBucket,omitempty"`
+	GcpStoragePrefixFilter   string             `json:"gcpStoragePrefixFilter,omitempty"`
+	GcpStorageStatusMessage  string             `json:"gcpStorageStatusMessage,omitempty"`
+	GcpStorageBuckets        []GcpStorageBucket `json:"gcpStorageBuckets"`
+	GcpStorageObjects        []GcpStorageObject `json:"gcpStorageObjects"`
 	// GcpStorageObjectsNextToken is the gcloud page token for Load more.
 	GcpStorageObjectsNextToken string `json:"gcpStorageObjectsNextToken,omitempty"`
 	// GcpStorageObjectsHasMore is true when another page is available under the current prefix.
@@ -1531,6 +1531,14 @@ type WorkspaceSnapshot struct {
 	SelectedGcpComputeInstance string               `json:"selectedGcpComputeInstance,omitempty"`
 	GcpComputeStatusMessage    string               `json:"gcpComputeStatusMessage,omitempty"`
 	GcpComputeInstances        []GcpComputeInstance `json:"gcpComputeInstances"`
+	// GCP Cloud Functions inventory (foundation slice).
+	SelectedGcpFunction       string             `json:"selectedGcpFunction,omitempty"`
+	GcpFunctionsStatusMessage string             `json:"gcpFunctionsStatusMessage,omitempty"`
+	GcpFunctions              []GcpCloudFunction `json:"gcpFunctions"`
+	// GCP GKE inventory (foundation slice).
+	SelectedGcpGkeCluster string          `json:"selectedGcpGkeCluster,omitempty"`
+	GcpGkeStatusMessage   string          `json:"gcpGkeStatusMessage,omitempty"`
+	GcpGkeClusters        []GcpGkeCluster `json:"gcpGkeClusters"`
 }
 
 // GcpStorageBucket is a Cloud Storage bucket from gcloud inventory.
@@ -1570,6 +1578,34 @@ type GcpComputeInstance struct {
 	ExternalIP  string `json:"externalIp,omitempty"`
 	CreatedAt   string `json:"createdAt,omitempty"`
 	Summary     string `json:"summary,omitempty"`
+}
+
+// GcpCloudFunction is a Cloud Functions (1st or 2nd gen) entry from gcloud inventory.
+type GcpCloudFunction struct {
+	Name    string `json:"name"`
+	Region  string `json:"region,omitempty"`
+	Runtime string `json:"runtime,omitempty"`
+	Status  string `json:"status,omitempty"`
+	// Generation is "1st gen" or "2nd gen" when known.
+	Generation string `json:"generation,omitempty"`
+	Trigger    string `json:"trigger,omitempty"`
+	URL        string `json:"url,omitempty"`
+	UpdatedAt  string `json:"updatedAt,omitempty"`
+	Summary    string `json:"summary,omitempty"`
+}
+
+// GcpGkeCluster is a Google Kubernetes Engine cluster from gcloud inventory.
+type GcpGkeCluster struct {
+	Name          string `json:"name"`
+	Location      string `json:"location,omitempty"`
+	Status        string `json:"status,omitempty"`
+	MasterVersion string `json:"masterVersion,omitempty"`
+	NodeCount     int    `json:"nodeCount,omitempty"`
+	Endpoint      string `json:"endpoint,omitempty"`
+	// Mode is "Autopilot" or "Standard" when known.
+	Mode      string `json:"mode,omitempty"`
+	CreatedAt string `json:"createdAt,omitempty"`
+	Summary   string `json:"summary,omitempty"`
 }
 
 type ActivityLogEntry struct {

@@ -69,6 +69,8 @@ func main() {
 		Azure:          azureadapter.NewInventory(settings),
 		GcpStorage:     gcpadapter.NewInventory(settings),
 		GcpCompute:     gcpadapter.NewInventory(settings),
+		GcpFunctions:   gcpadapter.NewInventory(settings),
+		GcpGke:         gcpadapter.NewInventory(settings),
 		Docker:         dockerruntime.New(settings),
 		// LocalStack and AzureRuntime left nil so NewFromDeps applies defaults.
 	})

@@ -18,6 +18,16 @@ Installers for every release are published on the
 - Azure Storage Queues purge: write-gated `azure.queues.purge` clears all
   messages via `ClearMessages`, refreshes the queues scope, and adds a Purge
   queue action with confirmation on the Queues panel.
+- GCP Cloud Functions foundation: `gcpadapter` lists 1st and 2nd gen functions
+  via `gcloud functions list` (with `--gen2`), `WorkspaceSnapshot` carries
+  `gcpFunctions` / status, catalogue promotes `gcp-functions` to a live service
+  (`inventoryScope: gcf`), hidden-resource probes when disabled, and the
+  desktop Cloud Functions tab shows the inventory. Invoke remains deferred.
+- GCP GKE foundation: `gcpadapter` lists clusters via
+  `gcloud container clusters list`, `WorkspaceSnapshot` carries
+  `gcpGkeClusters` / status, catalogue promotes `gcp-gke` to a live service
+  (`inventoryScope: gke`), hidden-resource probes when disabled, and the
+  desktop GKE tab shows the inventory. Node pool actions remain deferred.
 - GCP Cloud Storage object browser (read-only): `gcpadapter.ListObjects` via
   `gcloud storage ls --json`, session fields for selected bucket and prefix,
   RPCs `gcp.storage.selectBucket` / `setPrefixFilter` / `loadMoreObjects`,

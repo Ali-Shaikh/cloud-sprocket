@@ -241,6 +241,30 @@ export function navItemForTab(tab: WorkspaceTab, workspace: WorkspaceSnapshot): 
       return { ...base, icon: Server, count: workspace.emulatorSummaries.length };
     case "gcp-overview":
       return { ...base, iconUrl: gcpIconUrl };
+    case "gcp-storage":
+      return {
+        ...base,
+        iconUrl: gcpIconUrl,
+        count: (workspace.gcpStorageBuckets ?? []).length,
+      };
+    case "gcp-compute":
+      return {
+        ...base,
+        iconUrl: gcpIconUrl,
+        count: (workspace.gcpComputeInstances ?? []).length,
+      };
+    case "gcp-functions":
+      return {
+        ...base,
+        iconUrl: gcpIconUrl,
+        count: (workspace.gcpFunctions ?? []).length,
+      };
+    case "gcp-gke":
+      return {
+        ...base,
+        iconUrl: gcpIconUrl,
+        count: (workspace.gcpGkeClusters ?? []).length,
+      };
     case "debug":
       return { ...base, icon: Bug };
     case "developer-tools":

@@ -151,6 +151,12 @@ func (s *Service) probeGcpCatalogueEntry(
 	case "gcp-compute":
 		s.enrichGcpComputeInventory(workspace, session, nil)
 		return countCatalogueResources(workspace, entry.ProviderID, entry.ServiceID)
+	case "gcp-functions":
+		s.enrichGcpFunctionsInventory(workspace, session, nil)
+		return countCatalogueResources(workspace, entry.ProviderID, entry.ServiceID)
+	case "gcp-gke":
+		s.enrichGcpGkeInventory(workspace, session, nil)
+		return countCatalogueResources(workspace, entry.ProviderID, entry.ServiceID)
 	default:
 		return 0, false
 	}
@@ -216,49 +222,49 @@ func (s *Service) emptyProbeWorkspace(
 	session models.SessionSnapshot,
 ) models.WorkspaceSnapshot {
 	workspace := models.WorkspaceSnapshot{
-		S3Buckets:              []models.AwsS3Bucket{},
-		EC2Regions:             []string{},
-		EC2Instances:           []models.AwsEc2Instance{},
-		LambdaRegions:          []string{},
-		LambdaFunctions:        []models.AwsLambdaFunction{},
-		DynamoDBRegions:        []string{},
-		DynamoDBTables:         []models.AwsDynamoDBTable{},
-		SQSRegions:             []string{},
-		SQSQueues:              []models.AwsSqsQueue{},
-		SNSRegions:             []string{},
-		SNSTopics:              []models.AwsSnsTopic{},
-		RDSRegions:             []string{},
-		RDSInstances:           []models.AwsRdsInstance{},
-		ECSRegions:             []string{},
-		ECSClusters:            []models.AwsEcsCluster{},
-		EKSRegions:             []string{},
-		EKSClusters:            []models.AwsEksCluster{},
-		CloudFormationRegions:  []string{},
-		CloudFormationStacks:   []models.AwsCloudFormationStack{},
-		EventBridgeRegions:     []string{},
-		EventBridgeBuses:       []models.AwsEventBridgeBus{},
-		Route53HostedZones:     []models.AwsRoute53HostedZone{},
-		ApiGatewayRegions:      []string{},
-		ApiGatewayApis:         []models.AwsApiGatewayApi{},
-		SecretsManagerRegions:  []string{},
-		SecretsManagerSecrets:  []models.AwsSecretsManagerSecret{},
-		LogsRegions:            []string{},
-		LogGroups:              []models.AwsLogGroup{},
-		IAMRoles:               []models.AwsIamRole{},
-		IAMPolicies:            []models.AwsIamPolicy{},
-		AzureResourceGroups:    []models.AzureResourceGroup{},
-		AzureVirtualMachines:   []models.AzureVirtualMachine{},
-		AzureStorageAccounts:   []models.AzureStorageAccount{},
-		AzureWebApps:           []models.AzureWebApp{},
-		AzureFunctionApps:      []models.AzureFunctionApp{},
-		AzureKeyVaults:         []models.AzureKeyVault{},
-		AzureCosmosAccounts:    []models.AzureCosmosAccount{},
-		AzurePostgresServers:   []models.AzurePostgresServer{},
-		AzureStorageQueues:     []models.AzureStorageQueue{},
-		AzureEntraUsers:        []models.AzureEntraUser{},
+		S3Buckets:                   []models.AwsS3Bucket{},
+		EC2Regions:                  []string{},
+		EC2Instances:                []models.AwsEc2Instance{},
+		LambdaRegions:               []string{},
+		LambdaFunctions:             []models.AwsLambdaFunction{},
+		DynamoDBRegions:             []string{},
+		DynamoDBTables:              []models.AwsDynamoDBTable{},
+		SQSRegions:                  []string{},
+		SQSQueues:                   []models.AwsSqsQueue{},
+		SNSRegions:                  []string{},
+		SNSTopics:                   []models.AwsSnsTopic{},
+		RDSRegions:                  []string{},
+		RDSInstances:                []models.AwsRdsInstance{},
+		ECSRegions:                  []string{},
+		ECSClusters:                 []models.AwsEcsCluster{},
+		EKSRegions:                  []string{},
+		EKSClusters:                 []models.AwsEksCluster{},
+		CloudFormationRegions:       []string{},
+		CloudFormationStacks:        []models.AwsCloudFormationStack{},
+		EventBridgeRegions:          []string{},
+		EventBridgeBuses:            []models.AwsEventBridgeBus{},
+		Route53HostedZones:          []models.AwsRoute53HostedZone{},
+		ApiGatewayRegions:           []string{},
+		ApiGatewayApis:              []models.AwsApiGatewayApi{},
+		SecretsManagerRegions:       []string{},
+		SecretsManagerSecrets:       []models.AwsSecretsManagerSecret{},
+		LogsRegions:                 []string{},
+		LogGroups:                   []models.AwsLogGroup{},
+		IAMRoles:                    []models.AwsIamRole{},
+		IAMPolicies:                 []models.AwsIamPolicy{},
+		AzureResourceGroups:         []models.AzureResourceGroup{},
+		AzureVirtualMachines:        []models.AzureVirtualMachine{},
+		AzureStorageAccounts:        []models.AzureStorageAccount{},
+		AzureWebApps:                []models.AzureWebApp{},
+		AzureFunctionApps:           []models.AzureFunctionApp{},
+		AzureKeyVaults:              []models.AzureKeyVault{},
+		AzureCosmosAccounts:         []models.AzureCosmosAccount{},
+		AzurePostgresServers:        []models.AzurePostgresServer{},
+		AzureStorageQueues:          []models.AzureStorageQueue{},
+		AzureEntraUsers:             []models.AzureEntraUser{},
 		AzureLogAnalyticsWorkspaces: []models.AzureLogAnalyticsWorkspace{},
-		AzureWafPolicies:       []models.AzureWafPolicySummary{},
-		AzureFrontDoorProfiles: []models.AzureFrontDoorProfile{},
+		AzureWafPolicies:            []models.AzureWafPolicySummary{},
+		AzureFrontDoorProfiles:      []models.AzureFrontDoorProfile{},
 	}
 	if provider, ok := findProvider(snapshot.Providers, session.CurrentProviderID); ok {
 		workspace.Provider = &provider
@@ -352,8 +358,11 @@ func countCatalogueResources(
 			return len(workspace.GcpStorageBuckets), true
 		case "gcp-compute":
 			return len(workspace.GcpComputeInstances), true
+		case "gcp-functions":
+			return len(workspace.GcpFunctions), true
+		case "gcp-gke":
+			return len(workspace.GcpGkeClusters), true
 		}
 	}
 	return 0, false
 }
-

@@ -276,6 +276,30 @@ export interface GcpComputeInstance {
   summary?: string;
 }
 
+export interface GcpCloudFunction {
+  name: string;
+  region?: string;
+  runtime?: string;
+  status?: string;
+  generation?: string;
+  trigger?: string;
+  url?: string;
+  updatedAt?: string;
+  summary?: string;
+}
+
+export interface GcpGkeCluster {
+  name: string;
+  location?: string;
+  status?: string;
+  masterVersion?: string;
+  nodeCount?: number;
+  endpoint?: string;
+  mode?: string;
+  createdAt?: string;
+  summary?: string;
+}
+
 export interface AwsS3Object {
   key: string;
   size?: string;
@@ -1166,6 +1190,14 @@ export interface WorkspaceSnapshot {
   gcpComputeStatusMessage?: string;
   /** Present after GCP Compute enrichment; omit in fixtures/mocks. */
   gcpComputeInstances?: GcpComputeInstance[];
+  selectedGcpFunction?: string;
+  gcpFunctionsStatusMessage?: string;
+  /** Present after GCP Functions enrichment; omit in fixtures/mocks. */
+  gcpFunctions?: GcpCloudFunction[];
+  selectedGcpGkeCluster?: string;
+  gcpGkeStatusMessage?: string;
+  /** Present after GCP GKE enrichment; omit in fixtures/mocks. */
+  gcpGkeClusters?: GcpGkeCluster[];
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;
