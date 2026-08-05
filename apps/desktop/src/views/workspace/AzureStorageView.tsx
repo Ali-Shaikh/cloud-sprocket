@@ -10,6 +10,7 @@ import {
   Database,
   FileIcon,
   FolderPlus,
+  Link2,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -50,12 +51,14 @@ import {
 } from "@/components/inventory/resource-inspector";
 import { ResourceTable } from "@/components/inventory/resource-table";
 import { DetailFieldList } from "./detail-fields";
-import type { WorkspaceSnapshot } from "@/types/backend";
+import type { AzureBlobPresignResult, WorkspaceSnapshot } from "@/types/backend";
 
 export type AzureStorageViewProps = {
   workspace: WorkspaceSnapshot;
   actionStatus: string;
   inventoryLoading?: boolean;
+  signedUrlResult?: AzureBlobPresignResult;
+  signedUrlStatus?: string;
   onSelectAccount: (accountName: string) => void;
   onSelectContainer: (containerName: string) => void;
   onSelectBlob: (blobName: string) => void;
@@ -66,6 +69,7 @@ export type AzureStorageViewProps = {
   onDeleteBlob: (blobName: string) => void;
   onCopyBlob?: (sourceBlobName: string, destinationBlobName: string) => void;
   onCreateFolderPrefix?: (folderPrefix: string) => void;
+  onPresignBlob?: (blobName: string, durationSeconds: number) => void;
 };
 
 const fieldLabel =
@@ -93,10 +97,19 @@ function defaultUploadName(sourcePath: string, prefix?: string): string {
  * Single Azure blob browser: account + container + path on one surface.
  * Selection never sends the user to another rail page.
  */
+function copyToClipboard(value: string, label = "Copied to clipboard"): void {
+  if (navigator.clipboard) {
+    void navigator.clipboard.writeText(value);
+    notify("success", label);
+  }
+}
+
 export default function AzureStorageView({
   workspace,
   actionStatus,
   inventoryLoading = false,
+  signedUrlResult,
+  signedUrlStatus,
   onSelectAccount,
   onSelectContainer,
   onSelectBlob,
@@ -107,6 +120,7 @@ export default function AzureStorageView({
   onDeleteBlob,
   onCopyBlob,
   onCreateFolderPrefix,
+  onPresignBlob,
 }: AzureStorageViewProps) {
   const writeCapability = actionCapabilityState(workspace, "storage", "uploadBlob", "azure");
   const copyCapability = actionCapabilityState(workspace, "storage", "copyBlob", "azure");
@@ -236,6 +250,16 @@ export default function AzureStorageView({
         emptyText="No blob metadata available."
       />
       <div className="flex flex-wrap gap-2">
+        {onPresignBlob ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPresignBlob(selectedBlob.name, 3600)}
+          >
+            <Link2 />
+            Signed link (1h)
+          </Button>
+        ) : null}
         {onCopyBlob ? (
           <Button
             variant="outline"
@@ -262,6 +286,29 @@ export default function AzureStorageView({
           </Button>
         ) : null}
       </div>
+      {signedUrlStatus ? (
+        <p className="text-xs text-muted-foreground">{signedUrlStatus}</p>
+      ) : null}
+      {signedUrlResult && signedUrlResult.blobName === selectedBlob.name ? (
+        <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+          <span className={fieldLabel}>
+            Signed link · expires {formatTimestamp(signedUrlResult.expiresAt)}
+          </span>
+          <code
+            className="block break-all rounded bg-background/60 p-2 font-mono text-xs leading-relaxed"
+            title={signedUrlResult.url}
+          >
+            {signedUrlResult.url}
+          </code>
+          <Button
+            size="sm"
+            onClick={() => copyToClipboard(signedUrlResult.url, "Signed URL copied")}
+          >
+            <Copy />
+            Copy link
+          </Button>
+        </div>
+      ) : null}
     </ResourceInspectorPanel>
   ) : null;
 

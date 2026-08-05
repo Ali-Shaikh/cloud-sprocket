@@ -156,6 +156,7 @@ type AzureInventory interface {
 	DeleteBlob(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, blobName string) error
 	CopyBlob(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, sourceBlobName string, destinationBlobName string) (models.AzureBlobCopyResult, error)
 	CreateFolderPrefix(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, folderPrefix string) (models.AzureBlobCreateFolderPrefixResult, error)
+	PresignBlob(ctx context.Context, profile models.ProfileSummary, accountName string, containerName string, blobName string, durationSeconds int) (models.AzureBlobPresignResult, error)
 	InvokeVirtualMachineAction(ctx context.Context, profile models.ProfileSummary, resourceGroup string, vmName string, action string) error
 	GetVirtualMachine(ctx context.Context, profile models.ProfileSummary, resourceGroup string, vmName string) (models.AzureVirtualMachine, error)
 	ListBastionHosts(ctx context.Context, profile models.ProfileSummary) ([]models.AzureBastionHost, error)
@@ -216,6 +217,11 @@ type AzureInventory interface {
 type GcpStorageInventory interface {
 	ListBuckets(ctx context.Context, profile models.ProfileSummary) ([]models.GcpStorageBucket, error)
 	ListObjects(ctx context.Context, profile models.ProfileSummary, bucketName string, prefix string, pageToken string) (models.GcpStorageObjectListPage, error)
+}
+
+// GcpComputeInventory lists Compute Engine VMs via the gcloud CLI adapter.
+type GcpComputeInventory interface {
+	ListInstances(ctx context.Context, profile models.ProfileSummary) ([]models.GcpComputeInstance, error)
 }
 
 // DockerRuntime, LocalStackManager, and AzureRuntimeManager are aliases of the

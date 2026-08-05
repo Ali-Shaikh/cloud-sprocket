@@ -122,6 +122,7 @@ var expectedRPCMethods = []string{
 	"azure.storage.createContainer",
 	"azure.storage.createFolderPrefix",
 	"azure.storage.deleteBlob",
+	"azure.storage.presignBlob",
 	"azure.storage.selectAccount",
 	"azure.storage.selectBlob",
 	"azure.storage.selectContainer",

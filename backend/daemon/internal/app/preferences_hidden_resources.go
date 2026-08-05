@@ -148,6 +148,9 @@ func (s *Service) probeGcpCatalogueEntry(
 	case "gcp-storage":
 		s.enrichGcpStorageInventory(workspace, session, nil)
 		return countCatalogueResources(workspace, entry.ProviderID, entry.ServiceID)
+	case "gcp-compute":
+		s.enrichGcpComputeInventory(workspace, session, nil)
+		return countCatalogueResources(workspace, entry.ProviderID, entry.ServiceID)
 	default:
 		return 0, false
 	}
@@ -347,6 +350,8 @@ func countCatalogueResources(
 		switch serviceID {
 		case "gcp-storage":
 			return len(workspace.GcpStorageBuckets), true
+		case "gcp-compute":
+			return len(workspace.GcpComputeInstances), true
 		}
 	}
 	return 0, false

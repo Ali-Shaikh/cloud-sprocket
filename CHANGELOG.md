@@ -17,6 +17,14 @@ Installers for every release are published on the
   enrichment of the first object page when a bucket is selected, and the
   desktop Storage tab with bucket selection, folder breadcrumbs, and an
   objects table.
+- GCP Compute Engine foundation: `gcpadapter` lists VMs via
+  `gcloud compute instances list`, `WorkspaceSnapshot` carries
+  `gcpComputeInstances` / status, catalogue promotes `gcp-compute` to a live
+  service (`inventoryScope: gce`), and the desktop Compute Engine tab shows
+  the inventory. Lifecycle actions remain deferred.
+- Azure Storage signed read links: `azure.storage.presignBlob` issues a
+  short-lived read SAS URL for the selected blob (no write mode required).
+  The blob inspector offers a "Signed link (1h)" control with copy support.
 - GCP Cloud Storage foundation: `gcpadapter` lists buckets via
   `gcloud storage buckets list`, `WorkspaceSnapshot` carries
   `gcpStorageBuckets` / status, catalogue promotes `gcp-storage` to a live

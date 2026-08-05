@@ -246,6 +246,7 @@ func (s *Service) enrichGcpWorkspace(
 		return
 	}
 	s.enrichGcpStorageInventory(workspace, session, nil)
+	s.enrichGcpComputeInventory(workspace, session, nil)
 }
 
 func (s *Service) withLockedGcpWorkspace(

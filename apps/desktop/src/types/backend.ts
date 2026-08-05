@@ -265,6 +265,17 @@ export interface GcpStorageObject {
   isFolder?: boolean;
 }
 
+export interface GcpComputeInstance {
+  name: string;
+  zone?: string;
+  machineType?: string;
+  status?: string;
+  internalIp?: string;
+  externalIp?: string;
+  createdAt?: string;
+  summary?: string;
+}
+
 export interface AwsS3Object {
   key: string;
   size?: string;
@@ -732,6 +743,15 @@ export interface AzureBlobUploadResult {
   blobUrl: string;
 }
 
+export interface AzureBlobPresignResult {
+  accountName: string;
+  containerName: string;
+  blobName: string;
+  url: string;
+  durationSeconds: number;
+  expiresAt: string;
+}
+
 export interface AzureWebApp {
   name: string;
   resourceGroup?: string;
@@ -1142,6 +1162,10 @@ export interface WorkspaceSnapshot {
   gcpStorageObjects?: GcpStorageObject[];
   gcpStorageObjectsNextToken?: string;
   gcpStorageObjectsHasMore?: boolean;
+  selectedGcpComputeInstance?: string;
+  gcpComputeStatusMessage?: string;
+  /** Present after GCP Compute enrichment; omit in fixtures/mocks. */
+  gcpComputeInstances?: GcpComputeInstance[];
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;

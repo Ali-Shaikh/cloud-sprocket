@@ -518,6 +518,20 @@ func (stubAzureInventory) CreateFolderPrefix(_ context.Context, _ models.Profile
 	}, nil
 }
 
+func (stubAzureInventory) PresignBlob(_ context.Context, _ models.ProfileSummary, accountName string, containerName string, blobName string, durationSeconds int) (models.AzureBlobPresignResult, error) {
+	if durationSeconds <= 0 {
+		durationSeconds = 3600
+	}
+	return models.AzureBlobPresignResult{
+		AccountName:     accountName,
+		ContainerName:   containerName,
+		BlobName:        blobName,
+		URL:             "https://example.invalid/" + containerName + "/" + blobName + "?sig=mock",
+		DurationSeconds: durationSeconds,
+		ExpiresAt:       "2026-08-05T12:00:00Z",
+	}, nil
+}
+
 func (stubAzureInventory) InvokeVirtualMachineAction(context.Context, models.ProfileSummary, string, string, string) error {
 	return nil
 }

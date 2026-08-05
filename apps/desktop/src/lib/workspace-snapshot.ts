@@ -34,6 +34,7 @@ import type {
   AwsS3ExportSnippet,
   AwsS3Object,
   GcpStorageBucket,
+  GcpComputeInstance,
   AwsS3PresignResult,
   AwsS3UploadResult,
   AwsSnsTopic,
@@ -148,6 +149,7 @@ export const emptyWorkspace: WorkspaceSnapshot = {
   azureEntraGroups: [],
   azureEntraApps: [],
   gcpStorageBuckets: [],
+  gcpComputeInstances: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -342,6 +344,10 @@ function normaliseS3Bucket(bucket: AwsS3Bucket): AwsS3Bucket {
 
 function normaliseGcpStorageBucket(bucket: GcpStorageBucket): GcpStorageBucket {
   return { ...bucket };
+}
+
+function normaliseGcpComputeInstance(instance: GcpComputeInstance): GcpComputeInstance {
+  return { ...instance };
 }
 
 function normaliseS3Object(object: AwsS3Object): AwsS3Object {
@@ -1173,6 +1179,9 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     azureEntraGroups: normaliseArray(source.azureEntraGroups),
     azureEntraApps: normaliseArray(source.azureEntraApps),
     gcpStorageBuckets: normaliseArray(source.gcpStorageBuckets).map(normaliseGcpStorageBucket),
+    gcpComputeInstances: normaliseArray(source.gcpComputeInstances).map(normaliseGcpComputeInstance),
+    selectedGcpComputeInstance: source.selectedGcpComputeInstance,
+    gcpComputeStatusMessage: source.gcpComputeStatusMessage,
     s3Buckets: normaliseArray(source.s3Buckets).map(normaliseS3Bucket),
     s3Objects: normaliseArray(source.s3Objects).map(normaliseS3Object),
     s3ObjectsNextToken: source.s3ObjectsNextToken,

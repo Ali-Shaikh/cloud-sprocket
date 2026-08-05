@@ -3792,6 +3792,29 @@ export function handleMockRequest<T>(
       appendLog("success", `Copied blob ${sourceBlobName} to ${destinationBlobName}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     }
+    case "azure.storage.presignBlob": {
+      const blobName = String(params.blobName ?? mockState.session.selectedAzureBlobName ?? "").trim();
+      if (!blobName) {
+        return Promise.reject(new Error("select a blob before generating a signed URL"));
+      }
+      let durationSeconds = Number(params.durationSeconds ?? 3600);
+      if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+        durationSeconds = 3600;
+      }
+      const accountName = String(mockState.session.selectedAzureStorageAccount ?? "devstoreaccount1");
+      const containerName = String(mockState.session.selectedAzureBlobContainer ?? "test-container");
+      const expiresAt = new Date(Date.now() + durationSeconds * 1000).toISOString();
+      return Promise.resolve({
+        result: {
+          accountName,
+          containerName,
+          blobName,
+          url: `https://${accountName}.blob.core.windows.net/${containerName}/${encodeURIComponent(blobName)}?sig=mock&se=${encodeURIComponent(expiresAt)}`,
+          durationSeconds,
+          expiresAt,
+        },
+      } as T);
+    }
     case "azure.storage.createFolderPrefix": {
       if (!mockState.session.azureWriteModeEnabled) {
         return Promise.reject(new Error("folder create requires write mode to be enabled for this Azure workspace"));

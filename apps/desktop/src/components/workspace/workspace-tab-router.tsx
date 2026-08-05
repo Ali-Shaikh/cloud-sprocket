@@ -21,6 +21,7 @@ import {
   PlaceholderView,
   DeveloperToolsView,
   GcpStorageView,
+  GcpComputeView,
 } from "@/views/workspace/lazy-views";
 import SettingsView from "@/views/SettingsView";
 import { AwsWorkspaceTabs, AWS_TAB_IDS } from "./aws-workspace-tabs";
@@ -290,6 +291,17 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
               }),
             },
           );
+        }}
+      />
+    );
+  }
+
+  if (session.isLocked && activeWorkspaceTabId === "gcp-compute") {
+    return (
+      <GcpComputeView
+        workspace={activeWorkspace}
+        onRefresh={() => {
+          void refreshDiscovery();
         }}
       />
     );

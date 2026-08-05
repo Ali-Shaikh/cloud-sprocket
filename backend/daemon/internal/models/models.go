@@ -936,6 +936,16 @@ type AzureBlobCreateFolderPrefixResult struct {
 	FolderPrefix  string `json:"folderPrefix"`
 }
 
+// AzureBlobPresignResult is a short-lived read SAS URL for a selected blob.
+type AzureBlobPresignResult struct {
+	AccountName     string `json:"accountName"`
+	ContainerName   string `json:"containerName"`
+	BlobName        string `json:"blobName"`
+	URL             string `json:"url"`
+	DurationSeconds int    `json:"durationSeconds"`
+	ExpiresAt       string `json:"expiresAt"`
+}
+
 type AzureWebApp struct {
 	Name                        string `json:"name"`
 	ResourceGroup               string `json:"resourceGroup,omitempty"`
@@ -1501,6 +1511,10 @@ type WorkspaceSnapshot struct {
 	GcpStorageObjectsNextToken string `json:"gcpStorageObjectsNextToken,omitempty"`
 	// GcpStorageObjectsHasMore is true when another page is available under the current prefix.
 	GcpStorageObjectsHasMore bool `json:"gcpStorageObjectsHasMore,omitempty"`
+	// GCP Compute Engine inventory (foundation slice).
+	SelectedGcpComputeInstance string               `json:"selectedGcpComputeInstance,omitempty"`
+	GcpComputeStatusMessage    string               `json:"gcpComputeStatusMessage,omitempty"`
+	GcpComputeInstances        []GcpComputeInstance `json:"gcpComputeInstances"`
 }
 
 // GcpStorageBucket is a Cloud Storage bucket from gcloud inventory.
@@ -1528,6 +1542,18 @@ type GcpStorageObjectListPage struct {
 	Entries       []GcpStorageObject `json:"entries"`
 	NextPageToken string             `json:"nextPageToken,omitempty"`
 	IsTruncated   bool               `json:"isTruncated,omitempty"`
+}
+
+// GcpComputeInstance is a Compute Engine VM from gcloud inventory.
+type GcpComputeInstance struct {
+	Name        string `json:"name"`
+	Zone        string `json:"zone,omitempty"`
+	MachineType string `json:"machineType,omitempty"`
+	Status      string `json:"status,omitempty"`
+	InternalIP  string `json:"internalIp,omitempty"`
+	ExternalIP  string `json:"externalIp,omitempty"`
+	CreatedAt   string `json:"createdAt,omitempty"`
+	Summary     string `json:"summary,omitempty"`
 }
 
 type ActivityLogEntry struct {
