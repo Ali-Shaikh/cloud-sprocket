@@ -4,7 +4,7 @@
 import type { ActionCapability, WorkspaceSnapshot } from "@/types/backend";
 
 export type ActionCapabilityMap = Record<string, ActionCapability[]>;
-export type WriteProvider = "aws" | "azure";
+export type WriteProvider = "aws" | "azure" | "gcp";
 
 export const WRITE_MODE_REQUIRED_REASON =
   "Turn on write mode from the top bar to run mutating actions.";
@@ -12,6 +12,8 @@ export const WRITE_MODE_REQUIRED_REASON =
 const AWS_WRITE_MODE_FALLBACK_REASON = "Mutating actions require write mode to be enabled.";
 const AZURE_WRITE_MODE_FALLBACK_REASON =
   "Mutating actions require write mode on a profile that supports Azure writes.";
+const GCP_WRITE_MODE_FALLBACK_REASON =
+  "Mutating actions require write mode to be enabled for this GCP workspace.";
 
 export function isWriteModeCapabilityReason(reason: string | undefined): boolean {
   if (!reason) {
@@ -43,7 +45,7 @@ export function syncActionCapabilitiesForWriteMode(
         return capability;
       }
 
-      if (provider === "aws") {
+      if (provider === "aws" || provider === "gcp") {
         return {
           ...capability,
           enabled: false,
@@ -80,13 +82,17 @@ export function actionCapabilityState(
   provider: WriteProvider = "aws",
 ): { enabled: boolean; reason?: string } {
   const writesEnabled =
-    provider === "azure" ? workspace.azureWritesEnabled : workspace.awsWritesEnabled;
+    provider === "azure"
+      ? workspace.azureWritesEnabled
+      : provider === "gcp"
+        ? Boolean(workspace.gcpWritesEnabled)
+        : workspace.awsWritesEnabled;
   const capability = findActionCapability(workspace.actionCapabilities, service, actionId);
   if (capability) {
     if (writesEnabled && !capability.enabled && isWriteModeCapabilityReason(capability.reason)) {
       return { enabled: true, reason: undefined };
     }
-    if (!writesEnabled && capability.enabled && provider === "aws") {
+    if (!writesEnabled && capability.enabled && (provider === "aws" || provider === "gcp")) {
       return {
         enabled: false,
         reason: capability.reason || WRITE_MODE_REQUIRED_REASON,
@@ -98,7 +104,11 @@ export function actionCapabilityState(
     };
   }
   const defaultReason =
-    provider === "azure" ? AZURE_WRITE_MODE_FALLBACK_REASON : AWS_WRITE_MODE_FALLBACK_REASON;
+    provider === "azure"
+      ? AZURE_WRITE_MODE_FALLBACK_REASON
+      : provider === "gcp"
+        ? GCP_WRITE_MODE_FALLBACK_REASON
+        : AWS_WRITE_MODE_FALLBACK_REASON;
   return {
     enabled: Boolean(writesEnabled),
     reason: writesEnabled ? undefined : defaultReason,

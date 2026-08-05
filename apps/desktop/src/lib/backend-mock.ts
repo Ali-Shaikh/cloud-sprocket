@@ -1544,6 +1544,7 @@ function buildMockWorkspace(): WorkspaceSnapshot {
   const profile = currentProfile();
   const isAWSWorkspace = provider?.providerId === "aws";
   const isAzureWorkspace = provider?.providerId === "azure";
+  const isGcpWorkspace = provider?.providerId === "gcp";
   const selectedS3BucketName = isAWSWorkspace
     ? mockState.session.selectedS3BucketName ?? mockWorkspaceBuckets[0]?.name
     : undefined;
@@ -1740,6 +1741,13 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       isAzureWorkspace &&
       mockState.session.isLocked &&
       Boolean(mockState.session.azureWriteModeEnabled),
+    gcpWriteCapable: isGcpWorkspace && mockState.session.isLocked,
+    gcpWriteModeEnabled:
+      isGcpWorkspace && mockState.session.isLocked && Boolean(mockState.session.gcpWriteModeEnabled),
+    gcpWritesEnabled:
+      isGcpWorkspace &&
+      mockState.session.isLocked &&
+      Boolean(mockState.session.gcpWriteModeEnabled),
     selectedAzureResourceGroup,
     selectedAzureVmId,
     azureStatusMessage: isAzureWorkspace
@@ -3896,8 +3904,15 @@ export function handleMockRequest<T>(
           return Promise.reject(new Error("this Azure profile cannot enable write mode"));
         }
         mockState.session.azureWriteModeEnabled = Boolean(params.enabled);
+      } else if (mockState.session.lockedProviderId === "gcp") {
+        if (params.enabled && !buildMockWorkspace().gcpWriteCapable) {
+          return Promise.reject(new Error("open a locked workspace before changing write mode"));
+        }
+        mockState.session.gcpWriteModeEnabled = Boolean(params.enabled);
       } else {
-        return Promise.reject(new Error("write mode is only available for locked AWS or Azure workspaces"));
+        return Promise.reject(
+          new Error("write mode is only available for locked AWS, Azure, or GCP workspaces"),
+        );
       }
       appendLog(
         params.enabled ? "warning" : "info",
@@ -3909,6 +3924,7 @@ export function handleMockRequest<T>(
       mockState.session.isLocked = true;
       mockState.session.awsWriteModeEnabled = false;
       mockState.session.azureWriteModeEnabled = false;
+      mockState.session.gcpWriteModeEnabled = false;
       mockState.session.lockedProviderId = mockState.session.currentProviderId;
       mockState.session.lockedProfileId = mockState.session.selectedProfileId;
       mockState.session.lockedAuthMethod = mockState.session.selectedAuthMethod;

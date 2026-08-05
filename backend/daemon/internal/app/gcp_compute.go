@@ -5,7 +5,10 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
@@ -68,11 +71,14 @@ func (s *Service) selectedGcpComputeInstance(
 	session models.SessionSnapshot,
 	instances []models.GcpComputeInstance,
 ) string {
-	// Session does not yet persist a selected Compute instance; selection is
-	// deferred until lifecycle actions land. Keep the field wired for status.
-	_ = session
-	if len(instances) == 0 {
+	selected := strings.TrimSpace(session.SelectedGcpComputeInstance)
+	if selected == "" {
 		return ""
+	}
+	for _, instance := range instances {
+		if instance.Name == selected {
+			return selected
+		}
 	}
 	return ""
 }
@@ -110,7 +116,7 @@ func (s *Service) enrichGcpComputeInventory(
 		status = "No Compute Engine instances are currently available for this GCP project."
 	default:
 		status = fmt.Sprintf(
-			"Loaded %d Compute Engine instance(s) via gcloud. Start/stop actions are not available yet.",
+			"Loaded %d Compute Engine instance(s) via gcloud. Enable write mode to start or stop instances.",
 			len(instances),
 		)
 	}
@@ -120,4 +126,103 @@ func (s *Service) enrichGcpComputeInventory(
 		workspace.SelectedGcpComputeInstance = selected
 		workspace.GcpComputeStatusMessage = status
 	})
+}
+
+func (s *Service) handleGcpComputeStartInstance(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	return s.handleGcpComputeLifecycle(ctx, params, notifier, "start")
+}
+
+func (s *Service) handleGcpComputeStopInstance(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	return s.handleGcpComputeLifecycle(ctx, params, notifier, "stop")
+}
+
+func (s *Service) handleGcpComputeLifecycle(
+	ctx context.Context,
+	params json.RawMessage,
+	notifier Notifier,
+	action string,
+) (any, error) {
+	var request struct {
+		InstanceName string `json:"instanceName"`
+		Zone         string `json:"zone"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	name := strings.TrimSpace(request.InstanceName)
+	zone := strings.TrimSpace(request.Zone)
+	if name == "" {
+		return nil, errors.New("instance name is required")
+	}
+	if zone == "" {
+		return nil, errors.New("zone is required")
+	}
+	if s.gcpCompute == nil {
+		return nil, errors.New("GCP Compute Engine inventory is not available")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !session.IsLocked || session.CurrentProviderID != "gcp" {
+		s.mu.Unlock()
+		return nil, errors.New("open a locked GCP workspace before changing Compute Engine instance state")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		s.mu.Unlock()
+		return nil, errors.New("the workspace's GCP profile is not available")
+	}
+	if !effectiveGcpWritesEnabled(session, profile) {
+		s.mu.Unlock()
+		return nil, errors.New("Compute Engine lifecycle actions require write mode to be enabled for this GCP workspace")
+	}
+	s.mu.Unlock()
+
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	var lifecycleErr error
+	switch action {
+	case "start":
+		lifecycleErr = s.gcpCompute.StartInstance(timeoutCtx, profile, name, zone)
+	case "stop":
+		lifecycleErr = s.gcpCompute.StopInstance(timeoutCtx, profile, name, zone)
+	default:
+		cancel()
+		return nil, fmt.Errorf("unsupported Compute Engine action %q", action)
+	}
+	cancel()
+	if lifecycleErr != nil {
+		return nil, lifecycleErr
+	}
+	s.invalidateResourceCacheScope(ctx, "gcp.compute.instances")
+	s.mu.Lock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	session.SelectedGcpComputeInstance = name
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.mu.Unlock()
+	verb := "Started"
+	if action == "stop" {
+		verb = "Stopped"
+	}
+	return s.finishGcpWorkspace(
+		ctx,
+		snapshot,
+		session,
+		notifier,
+		"success",
+		fmt.Sprintf("%s Compute Engine instance %s in zone %s.", verb, name, zone),
+	)
 }

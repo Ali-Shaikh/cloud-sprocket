@@ -353,6 +353,7 @@ func (s *Service) handleSessionLock(ctx context.Context, notifier Notifier) (any
 	session.IsLocked = true
 	session.AWSWriteModeEnabled = false
 	session.AzureWriteModeEnabled = false
+	session.GcpWriteModeEnabled = false
 	session.LockedProviderID = session.CurrentProviderID
 	session.LockedProfileID = session.SelectedProfileID
 	session.LockedAuthMethod = session.SelectedAuthMethod
@@ -399,9 +400,11 @@ func (s *Service) handleSessionSetWriteMode(ctx context.Context, params json.Raw
 			return nil, errors.New("this Azure profile cannot enable write mode: use the floci-az local profile or sign in with the Azure CLI")
 		}
 		session.AzureWriteModeEnabled = request.Enabled
+	case "gcp":
+		session.GcpWriteModeEnabled = request.Enabled
 	default:
 		s.mu.Unlock()
-		return nil, errors.New("write mode is only available for locked AWS or Azure workspaces")
+		return nil, errors.New("write mode is only available for locked AWS, Azure, or GCP workspaces")
 	}
 	if err := s.store.SaveSession(ctx, session); err != nil {
 		s.mu.Unlock()
@@ -420,6 +423,12 @@ func (s *Service) handleSessionSetWriteMode(ctx context.Context, params json.Raw
 					"Write mode enabled for %s (target: %s).",
 					profile.DisplayName,
 					azureWriteTargetSummary(profile, s.settings.FlociAZEndpoint),
+				)
+			case "gcp":
+				message = fmt.Sprintf(
+					"Write mode enabled for %s (live GCP target: %s). Mutating actions will hit the real project.",
+					profile.DisplayName,
+					gcpWriteTargetSummary(profile),
 				)
 			default:
 				if profileIsLocalAWSEndpoint(profile) {

@@ -28,6 +28,14 @@ Installers for every release are published on the
   `gcpGkeClusters` / status, catalogue promotes `gcp-gke` to a live service
   (`inventoryScope: gke`), hidden-resource probes when disabled, and the
   desktop GKE tab shows the inventory. Node pool actions remain deferred.
+- GCP write mutations (gcloud CLI only), gated by per-session `gcpWriteModeEnabled`
+  mirroring AWS/Azure write mode:
+  - Cloud Storage upload/delete via `gcloud storage cp` / `gcloud storage rm`
+    (`gcp.storage.uploadObject`, `gcp.storage.deleteObject`)
+  - Compute Engine start/stop via `gcloud compute instances start|stop`
+    (`gcp.compute.startInstance`, `gcp.compute.stopInstance`)
+  - Desktop Storage upload/delete controls and Compute Start/Stop buttons
+  - Action capabilities for `storage` and `compute` under GCP workspaces
 - GCP Cloud Storage object browser (read-only): `gcpadapter.ListObjects` via
   `gcloud storage ls --json`, session fields for selected bucket and prefix,
   RPCs `gcp.storage.selectBucket` / `setPrefixFilter` / `loadMoreObjects`,
@@ -38,7 +46,7 @@ Installers for every release are published on the
   `gcloud compute instances list`, `WorkspaceSnapshot` carries
   `gcpComputeInstances` / status, catalogue promotes `gcp-compute` to a live
   service (`inventoryScope: gce`), and the desktop Compute Engine tab shows
-  the inventory. Lifecycle actions remain deferred.
+  the inventory.
 - Azure Storage signed read links: `azure.storage.presignBlob` issues a
   short-lived read SAS URL for the selected blob (no write mode required).
   The blob inspector offers a "Signed link (1h)" control with copy support.

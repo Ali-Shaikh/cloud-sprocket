@@ -147,6 +147,10 @@ func clearLockState(session models.SessionSnapshot) models.SessionSnapshot {
 	session.SelectedS3BucketName = ""
 	session.SelectedS3ObjectKey = ""
 	session.S3PrefixFilter = ""
+	session.SelectedGcpStorageBucket = ""
+	session.GcpStoragePrefixFilter = ""
+	session.SelectedGcpComputeInstance = ""
+	session.GcpWriteModeEnabled = false
 	session.SelectedEC2Region = ""
 	session.SelectedEC2InstanceID = ""
 	session.SelectedLambdaRegion = ""

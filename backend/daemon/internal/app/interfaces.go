@@ -216,15 +216,19 @@ type AzureInventory interface {
 	CheckCLIExtensions(ctx context.Context) []models.AzureCLIExtensionStatus
 }
 
-// GcpStorageInventory lists Cloud Storage buckets and objects via the gcloud CLI adapter.
+// GcpStorageInventory lists and mutates Cloud Storage via the gcloud CLI adapter.
 type GcpStorageInventory interface {
 	ListBuckets(ctx context.Context, profile models.ProfileSummary) ([]models.GcpStorageBucket, error)
 	ListObjects(ctx context.Context, profile models.ProfileSummary, bucketName string, prefix string, pageToken string) (models.GcpStorageObjectListPage, error)
+	UploadObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, sourcePath string) (models.GcpStorageUploadResult, error)
+	DeleteObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string) error
 }
 
-// GcpComputeInventory lists Compute Engine VMs via the gcloud CLI adapter.
+// GcpComputeInventory lists and mutates Compute Engine VMs via the gcloud CLI adapter.
 type GcpComputeInventory interface {
 	ListInstances(ctx context.Context, profile models.ProfileSummary) ([]models.GcpComputeInstance, error)
+	StartInstance(ctx context.Context, profile models.ProfileSummary, instanceName string, zone string) error
+	StopInstance(ctx context.Context, profile models.ProfileSummary, instanceName string, zone string) error
 }
 
 // GcpFunctionsInventory lists Cloud Functions via the gcloud CLI adapter.

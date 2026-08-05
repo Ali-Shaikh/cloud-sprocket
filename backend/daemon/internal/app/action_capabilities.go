@@ -3,7 +3,11 @@
 
 package app
 
-import "cloudsprocket/backend/daemon/internal/models"
+import (
+	"strings"
+
+	"cloudsprocket/backend/daemon/internal/models"
+)
 
 func awsActionGate(
 	session models.SessionSnapshot,
@@ -176,4 +180,81 @@ func buildAzureActionCapabilities(
 			cap("purge", "Purge queue"),
 		},
 	}
+}
+
+const gcpWriteModeRequiredMessage = "Turn on write mode from the top bar to run mutating actions."
+
+func gcpActionGate(
+	session models.SessionSnapshot,
+	profile models.ProfileSummary,
+) (enabled bool, reason string) {
+	if !session.GcpWriteModeEnabled {
+		return false, gcpWriteModeRequiredMessage
+	}
+	_ = profile
+	return true, ""
+}
+
+func gcpActionCapability(
+	session models.SessionSnapshot,
+	profile models.ProfileSummary,
+	actionID string,
+	label string,
+) models.ActionCapability {
+	enabled, reason := gcpActionGate(session, profile)
+	return models.ActionCapability{
+		ActionID: actionID,
+		Label:    label,
+		Enabled:  enabled,
+		Reason:   reason,
+	}
+}
+
+func buildGcpActionCapabilities(
+	session models.SessionSnapshot,
+	profile models.ProfileSummary,
+) map[string][]models.ActionCapability {
+	return map[string][]models.ActionCapability{
+		"storage": {
+			gcpActionCapability(session, profile, "uploadObject", "Upload object"),
+			gcpActionCapability(session, profile, "deleteObject", "Delete object"),
+		},
+		"compute": {
+			gcpActionCapability(session, profile, "startInstance", "Start instance"),
+			gcpActionCapability(session, profile, "stopInstance", "Stop instance"),
+		},
+	}
+}
+
+// effectiveGcpWritesEnabled reports whether GCP mutating actions may run.
+func effectiveGcpWritesEnabled(session models.SessionSnapshot, _ models.ProfileSummary) bool {
+	return session.IsLocked && session.GcpWriteModeEnabled
+}
+
+// gcpWriteTargetSummary labels the active gcloud configuration/project for write dialogs.
+func gcpWriteTargetSummary(profile models.ProfileSummary) string {
+	project := ""
+	configName := strings.TrimSpace(profile.ProfileID)
+	for _, field := range profile.Attributes {
+		label := strings.TrimSpace(field.Label)
+		if strings.EqualFold(label, "Project") {
+			project = strings.TrimSpace(field.Value)
+		}
+		if strings.EqualFold(label, "Configuration") && strings.TrimSpace(field.Value) != "" {
+			configName = strings.TrimSpace(field.Value)
+		}
+	}
+	if project != "" && configName != "" {
+		return configName + " · project " + project
+	}
+	if project != "" {
+		return "project " + project
+	}
+	if configName != "" {
+		return configName
+	}
+	if display := strings.TrimSpace(profile.DisplayName); display != "" {
+		return display
+	}
+	return "gcloud"
 }

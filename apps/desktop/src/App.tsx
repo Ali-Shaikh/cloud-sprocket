@@ -1516,14 +1516,20 @@ export default function App() {
             }}
             writeMode={
               session.isLocked &&
-              (session.lockedProviderId === "aws" || session.lockedProviderId === "azure")
+              (session.lockedProviderId === "aws" ||
+                session.lockedProviderId === "azure" ||
+                session.lockedProviderId === "gcp")
                 ? {
                     enabled: writeModeEnabled,
                     capable: writeModeCapable,
                     endpointUrl:
                       session.lockedProviderId === "azure"
                         ? activeWorkspace.azureEndpointUrl
-                        : activeWorkspace.awsEndpointUrl,
+                        : session.lockedProviderId === "gcp"
+                          ? activeWorkspace.profile?.attributes.find(
+                              (field) => field.label.toLowerCase() === "project",
+                            )?.value
+                          : activeWorkspace.awsEndpointUrl,
                     profileLabel: workspace.profile?.displayName ?? lockedProfile?.displayName,
                     onClick: requestWriteModeChange,
                   }

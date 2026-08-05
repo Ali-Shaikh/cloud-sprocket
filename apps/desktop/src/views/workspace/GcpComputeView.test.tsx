@@ -13,6 +13,15 @@ const workspace = {
     displayName: "platform",
     attributes: [{ label: "Project", value: "platform-prod" }],
   },
+  gcpWriteCapable: true,
+  gcpWriteModeEnabled: true,
+  gcpWritesEnabled: true,
+  actionCapabilities: {
+    compute: [
+      { actionId: "startInstance", label: "Start instance", enabled: true },
+      { actionId: "stopInstance", label: "Stop instance", enabled: true },
+    ],
+  },
   gcpComputeInstances: [
     {
       name: "web-1",
@@ -54,5 +63,28 @@ describe("GcpComputeView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
     expect(onRefresh).toHaveBeenCalled();
+  });
+
+  it("starts a stopped instance when write mode is on", () => {
+    const onStart = vi.fn();
+    const onStop = vi.fn();
+    render(
+      <ThemeProvider>
+        <GcpComputeView
+          workspace={workspace}
+          onRefresh={vi.fn()}
+          onStartInstance={onStart}
+          onStopInstance={onStop}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByText("batch-1"));
+    fireEvent.click(screen.getByRole("button", { name: /^start$/i }));
+    expect(onStart).toHaveBeenCalledWith("batch-1", "europe-west1-b");
+
+    fireEvent.click(screen.getByText("web-1"));
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+    expect(onStop).toHaveBeenCalledWith("web-1", "us-central1-a");
   });
 });

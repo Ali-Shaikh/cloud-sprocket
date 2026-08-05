@@ -8,11 +8,24 @@ import {
   FolderOpen,
   HardDrive,
   RefreshCw,
+  Trash2,
+  Upload,
 } from "lucide-react";
+import { open } from "@tauri-apps/plugin-dialog";
 
 import { EmptyState } from "@/components/empty-state";
 import { InlineBanner } from "@/components/inline-banner";
 import { ResourceTable } from "@/components/inventory/resource-table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,7 +35,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { formatTimestamp } from "@/lib/format";
+import { notify } from "@/lib/notify";
 import {
   filterObjectsByKeyQuery,
   s3EntryDisplayName,
@@ -38,6 +53,8 @@ export type GcpStorageViewProps = {
   onSelectBucket: (bucketName: string) => void;
   onSetPrefixFilter: (prefix: string) => void;
   onLoadMoreObjects?: () => void;
+  onUploadObject?: (sourcePath: string, objectKey: string) => void;
+  onDeleteObject?: (objectKey: string) => void;
   loadMoreInFlight?: boolean;
   listingLoading?: boolean;
 };
@@ -53,9 +70,18 @@ function objectDisplayName(key: string, currentPrefix: string): string {
   return s3EntryDisplayName(key, currentPrefix);
 }
 
+function defaultUploadKey(sourcePath: string, prefix?: string): string {
+  const fileName = sourcePath.split(/[\\/]/).filter(Boolean).pop() ?? "";
+  const cleanPrefix = (prefix ?? "").replace(/^\/+/, "");
+  if (!cleanPrefix) {
+    return fileName;
+  }
+  return `${cleanPrefix.replace(/\/?$/, "/")}${fileName}`;
+}
+
 /**
  * Cloud Storage browser: bucket list + prefix navigation + objects table.
- * Read-only first slice (select bucket, open folders, load more when available).
+ * Upload/delete are gated by GCP write mode (top bar).
  */
 export default function GcpStorageView({
   workspace,
@@ -63,12 +89,18 @@ export default function GcpStorageView({
   onSelectBucket,
   onSetPrefixFilter,
   onLoadMoreObjects,
+  onUploadObject,
+  onDeleteObject,
   loadMoreInFlight = false,
   listingLoading = false,
 }: GcpStorageViewProps) {
   const [bucketFilter, setBucketFilter] = useState("");
   const [keySearch, setKeySearch] = useState("");
   const debouncedKeySearch = useDebouncedValue(keySearch, 200);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadSourcePath, setUploadSourcePath] = useState("");
+  const [uploadObjectKey, setUploadObjectKey] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const buckets = workspace.gcpStorageBuckets ?? [];
   const objects = workspace.gcpStorageObjects ?? [];
@@ -77,6 +109,36 @@ export default function GcpStorageView({
   const prefix = workspace.gcpStoragePrefixFilter ?? "";
   const hasMore = Boolean(workspace.gcpStorageObjectsHasMore);
   const nextToken = workspace.gcpStorageObjectsNextToken ?? "";
+
+  const uploadCapability = actionCapabilityState(workspace, "storage", "uploadObject", "gcp");
+  const deleteCapability = actionCapabilityState(workspace, "storage", "deleteObject", "gcp");
+  const canUpload =
+    uploadCapability.enabled &&
+    Boolean(bucketName) &&
+    Boolean(uploadSourcePath.trim()) &&
+    Boolean(uploadObjectKey.trim());
+  const uploadDisabledReason = canUpload
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "storage",
+        "uploadObject",
+        !bucketName
+          ? "Select a bucket first."
+          : !uploadSourcePath.trim()
+            ? "Choose a local file to upload."
+            : !uploadObjectKey.trim()
+              ? "Enter a destination object key."
+              : undefined,
+        "gcp",
+      );
+  const writeDisabledReason = actionDisabledReason(
+    workspace,
+    "storage",
+    "uploadObject",
+    undefined,
+    "gcp",
+  );
 
   const filteredBuckets = useMemo(() => {
     const query = bucketFilter.trim().toLowerCase();
@@ -153,10 +215,28 @@ export default function GcpStorageView({
           </p>
           {bucketName ? breadcrumb : null}
         </div>
-        <Button variant="outline" size="sm" onClick={onRefresh}>
-          <RefreshCw className="size-3.5" />
-          Refresh
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {onUploadObject ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!bucketName || listingLoading}
+              title={writeDisabledReason}
+              onClick={() => {
+                setUploadSourcePath("");
+                setUploadObjectKey("");
+                setUploadOpen(true);
+              }}
+            >
+              <Upload className="size-3.5" />
+              Upload
+            </Button>
+          ) : null}
+          <Button variant="outline" size="sm" onClick={onRefresh}>
+            <RefreshCw className="size-3.5" />
+            Refresh
+          </Button>
+        </div>
       </header>
 
       {status ? (
@@ -315,6 +395,12 @@ export default function GcpStorageView({
                 headerClassName: "w-40",
                 cellClassName: "truncate",
               },
+              {
+                id: "actions",
+                label: "",
+                headerClassName: "w-20",
+                cellClassName: "text-right",
+              },
             ]}
             rows={visibleObjects}
             getRowKey={(object) => object.key}
@@ -357,6 +443,31 @@ export default function GcpStorageView({
               if (columnId === "contentType") {
                 return object.isFolder ? "Folder" : object.contentType || "-";
               }
+              if (columnId === "actions") {
+                if (object.isFolder || !onDeleteObject) {
+                  return null;
+                }
+                return (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2"
+                    disabled={!deleteCapability.enabled}
+                    title={
+                      deleteCapability.enabled
+                        ? `Delete ${object.key}`
+                        : deleteCapability.reason
+                    }
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setDeleteTarget(object.key);
+                    }}
+                  >
+                    <Trash2 className="size-3.5" />
+                    <span className="sr-only">Delete</span>
+                  </Button>
+                );
+              }
               return null;
             }}
             emptyState={
@@ -377,6 +488,101 @@ export default function GcpStorageView({
           />
         </section>
       ) : null}
+
+      <AlertDialog open={uploadOpen} onOpenChange={setUploadOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Upload object</AlertDialogTitle>
+            <AlertDialogDescription>
+              Upload into {bucketName || "bucket"}
+              {prefix ? ` (prefix ${prefix})` : ""}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <div>
+              <div className={cn(fieldLabel, "mb-1")}>Source file</div>
+              <div className="flex gap-2">
+                <Input
+                  value={uploadSourcePath}
+                  onChange={(event) => {
+                    setUploadSourcePath(event.target.value);
+                    if (!uploadObjectKey) {
+                      setUploadObjectKey(defaultUploadKey(event.target.value, prefix));
+                    }
+                  }}
+                  placeholder="Local file path"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    void open({ multiple: false }).then((path) => {
+                      if (typeof path === "string") {
+                        setUploadSourcePath(path);
+                        setUploadObjectKey(defaultUploadKey(path, prefix));
+                      }
+                    });
+                  }}
+                >
+                  Browse
+                </Button>
+              </div>
+            </div>
+            <div>
+              <div className={cn(fieldLabel, "mb-1")}>Object key</div>
+              <Input
+                value={uploadObjectKey}
+                onChange={(event) => setUploadObjectKey(event.target.value)}
+                placeholder="folder/file.txt"
+              />
+            </div>
+            {uploadDisabledReason ? (
+              <p className="text-sm text-muted-foreground">{uploadDisabledReason}</p>
+            ) : null}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!canUpload || !onUploadObject}
+              onClick={() => {
+                if (!onUploadObject) {
+                  return;
+                }
+                onUploadObject(uploadSourcePath.trim(), uploadObjectKey.trim());
+                notify("success", "Object upload started");
+                setUploadOpen(false);
+              }}
+            >
+              Upload
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={() => setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete object?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes <strong>{deleteTarget}</strong> from gs://{bucketName}/. This action
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteTarget && onDeleteObject) {
+                  onDeleteObject(deleteTarget);
+                  setDeleteTarget(null);
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -2,28 +2,96 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { useMemo, useState } from "react";
-import { Cpu, RefreshCw } from "lucide-react";
+import { Cpu, Play, RefreshCw, Square } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
 import { InlineBanner } from "@/components/inline-banner";
 import { ResourceTable } from "@/components/inventory/resource-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import type { GcpComputeInstance, WorkspaceSnapshot } from "@/types/backend";
 
 export type GcpComputeViewProps = {
   workspace: WorkspaceSnapshot;
   onRefresh: () => void;
+  onStartInstance?: (instanceName: string, zone: string) => void;
+  onStopInstance?: (instanceName: string, zone: string) => void;
 };
 
+function isRunning(status: string | undefined): boolean {
+  return (status ?? "").toUpperCase() === "RUNNING";
+}
+
+function isStopped(status: string | undefined): boolean {
+  const normalised = (status ?? "").toUpperCase();
+  return normalised === "TERMINATED" || normalised === "STOPPED";
+}
+
 /**
- * Foundation Compute Engine panel: lists VMs from the workspace snapshot.
- * Lifecycle actions are intentionally deferred to a later release.
+ * Compute Engine panel: lists VMs and offers start/stop when write mode is on.
  */
-export default function GcpComputeView({ workspace, onRefresh }: GcpComputeViewProps) {
+export default function GcpComputeView({
+  workspace,
+  onRefresh,
+  onStartInstance,
+  onStopInstance,
+}: GcpComputeViewProps) {
   const [filterText, setFilterText] = useState("");
+  const [selectedName, setSelectedName] = useState(workspace.selectedGcpComputeInstance ?? "");
   const instances = workspace.gcpComputeInstances ?? [];
   const status = workspace.gcpComputeStatusMessage?.trim() ?? "";
+
+  const startCapability = actionCapabilityState(workspace, "compute", "startInstance", "gcp");
+  const stopCapability = actionCapabilityState(workspace, "compute", "stopInstance", "gcp");
+
+  const selected =
+    instances.find((instance) => instance.name === selectedName) ??
+    instances.find((instance) => instance.name === workspace.selectedGcpComputeInstance);
+
+  const canStart =
+    Boolean(onStartInstance) &&
+    startCapability.enabled &&
+    Boolean(selected?.name) &&
+    Boolean(selected?.zone) &&
+    isStopped(selected?.status);
+  const canStop =
+    Boolean(onStopInstance) &&
+    stopCapability.enabled &&
+    Boolean(selected?.name) &&
+    Boolean(selected?.zone) &&
+    isRunning(selected?.status);
+
+  const startDisabledReason = canStart
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "compute",
+        "startInstance",
+        !selected
+          ? "Select an instance first."
+          : !selected.zone
+            ? "Selected instance is missing a zone."
+            : !isStopped(selected.status)
+              ? "Start is only available when the instance is stopped or terminated."
+              : undefined,
+        "gcp",
+      );
+  const stopDisabledReason = canStop
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "compute",
+        "stopInstance",
+        !selected
+          ? "Select an instance first."
+          : !selected.zone
+            ? "Selected instance is missing a zone."
+            : !isRunning(selected.status)
+              ? "Stop is only available when the instance is running."
+              : undefined,
+        "gcp",
+      );
 
   const filtered = useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -61,10 +129,44 @@ export default function GcpComputeView({ workspace, onRefresh }: GcpComputeViewP
             {projectLabel ? ` · project ${projectLabel}` : ""}.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={onRefresh}>
-          <RefreshCw className="size-3.5" />
-          Refresh
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {onStartInstance ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!canStart}
+              title={startDisabledReason}
+              onClick={() => {
+                if (selected?.name && selected.zone) {
+                  onStartInstance(selected.name, selected.zone);
+                }
+              }}
+            >
+              <Play className="size-3.5" />
+              Start
+            </Button>
+          ) : null}
+          {onStopInstance ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!canStop}
+              title={stopDisabledReason}
+              onClick={() => {
+                if (selected?.name && selected.zone) {
+                  onStopInstance(selected.name, selected.zone);
+                }
+              }}
+            >
+              <Square className="size-3.5" />
+              Stop
+            </Button>
+          ) : null}
+          <Button variant="outline" size="sm" onClick={onRefresh}>
+            <RefreshCw className="size-3.5" />
+            Refresh
+          </Button>
+        </div>
       </header>
 
       {status ? (
@@ -74,7 +176,7 @@ export default function GcpComputeView({ workspace, onRefresh }: GcpComputeViewP
           description={
             status.includes("\n")
               ? status.split("\n").slice(1).join(" ").trim()
-              : "Start, stop, and SSH actions are not available in this foundation release."
+              : "Select an instance, enable write mode, then use Start or Stop."
           }
         />
       ) : null}
@@ -108,7 +210,10 @@ export default function GcpComputeView({ workspace, onRefresh }: GcpComputeViewP
           ]}
           rows={filtered}
           getRowKey={(row) => row.name}
-          selectedKey={workspace.selectedGcpComputeInstance}
+          selectedKey={selected?.name ?? workspace.selectedGcpComputeInstance}
+          onRowClick={(row) => {
+            setSelectedName(row.name);
+          }}
           renderCell={(row, columnId) => {
             switch (columnId) {
               case "name":

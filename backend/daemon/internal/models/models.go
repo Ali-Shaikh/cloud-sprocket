@@ -286,6 +286,8 @@ type SessionSnapshot struct {
 	S3PrefixFilter                    string             `json:"s3PrefixFilter,omitempty"`
 	SelectedGcpStorageBucket          string             `json:"selectedGcpStorageBucket,omitempty"`
 	GcpStoragePrefixFilter            string             `json:"gcpStoragePrefixFilter,omitempty"`
+	SelectedGcpComputeInstance        string             `json:"selectedGcpComputeInstance,omitempty"`
+	GcpWriteModeEnabled               bool               `json:"gcpWriteModeEnabled,omitempty"`
 	SelectedEC2Region                 string             `json:"selectedEc2Region,omitempty"`
 	SelectedEC2InstanceID             string             `json:"selectedEc2InstanceId,omitempty"`
 	SelectedLambdaRegion              string             `json:"selectedLambdaRegion,omitempty"`
@@ -1527,6 +1529,10 @@ type WorkspaceSnapshot struct {
 	GcpStorageObjectsNextToken string `json:"gcpStorageObjectsNextToken,omitempty"`
 	// GcpStorageObjectsHasMore is true when another page is available under the current prefix.
 	GcpStorageObjectsHasMore bool `json:"gcpStorageObjectsHasMore,omitempty"`
+	// GCP write mode (mirrors AWS/Azure per-provider session flags).
+	GcpWriteCapable     bool `json:"gcpWriteCapable"`
+	GcpWriteModeEnabled bool `json:"gcpWriteModeEnabled"`
+	GcpWritesEnabled    bool `json:"gcpWritesEnabled"`
 	// GCP Compute Engine inventory (foundation slice).
 	SelectedGcpComputeInstance string               `json:"selectedGcpComputeInstance,omitempty"`
 	GcpComputeStatusMessage    string               `json:"gcpComputeStatusMessage,omitempty"`
@@ -1566,6 +1572,13 @@ type GcpStorageObjectListPage struct {
 	Entries       []GcpStorageObject `json:"entries"`
 	NextPageToken string             `json:"nextPageToken,omitempty"`
 	IsTruncated   bool               `json:"isTruncated,omitempty"`
+}
+
+// GcpStorageUploadResult is returned after a successful object upload.
+type GcpStorageUploadResult struct {
+	BucketName     string `json:"bucketName"`
+	ObjectKey      string `json:"objectKey"`
+	DestinationURI string `json:"destinationUri"`
 }
 
 // GcpComputeInstance is a Compute Engine VM from gcloud inventory.

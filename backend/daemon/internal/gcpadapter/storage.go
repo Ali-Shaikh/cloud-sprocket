@@ -39,6 +39,65 @@ func (i *Inventory) ListBuckets(
 	return decodeStorageBuckets(payload)
 }
 
+// UploadObject copies a local file to gs://bucket/key via `gcloud storage cp`.
+func (i *Inventory) UploadObject(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+	objectKey string,
+	sourcePath string,
+) (models.GcpStorageUploadResult, error) {
+	bucket := normaliseBucketName(bucketName)
+	key := strings.TrimSpace(objectKey)
+	key = strings.TrimPrefix(key, "/")
+	source := strings.TrimSpace(sourcePath)
+	if bucket == "" || key == "" || source == "" {
+		return models.GcpStorageUploadResult{}, fmt.Errorf("bucket name, object key, and source path are required")
+	}
+	destination := "gs://" + bucket + "/" + key
+	args := []string{
+		"storage", "cp",
+		source,
+		destination,
+	}
+	if project := projectFromProfile(profile); project != "" {
+		args = append(args, "--project", project)
+	}
+	if _, err := i.run(ctx, profile, args...); err != nil {
+		return models.GcpStorageUploadResult{}, err
+	}
+	return models.GcpStorageUploadResult{
+		BucketName:     bucket,
+		ObjectKey:      key,
+		DestinationURI: destination,
+	}, nil
+}
+
+// DeleteObject removes gs://bucket/key via `gcloud storage rm`.
+func (i *Inventory) DeleteObject(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+	objectKey string,
+) error {
+	bucket := normaliseBucketName(bucketName)
+	key := strings.TrimSpace(objectKey)
+	key = strings.TrimPrefix(key, "/")
+	if bucket == "" || key == "" {
+		return fmt.Errorf("bucket name and object key are required")
+	}
+	uri := "gs://" + bucket + "/" + key
+	args := []string{
+		"storage", "rm",
+		uri,
+	}
+	if project := projectFromProfile(profile); project != "" {
+		args = append(args, "--project", project)
+	}
+	_, err := i.run(ctx, profile, args...)
+	return err
+}
+
 func decodeStorageBuckets(payload []byte) ([]models.GcpStorageBucket, error) {
 	trimmed := strings.TrimSpace(string(payload))
 	if trimmed == "" || trimmed == "null" || trimmed == "[]" {
@@ -199,26 +258,26 @@ func decodeStorageObjects(
 }
 
 type objectListJSON struct {
-	Items         []objectJSON `json:"items"`
-	Prefixes      []string     `json:"prefixes"`
-	NextPageToken string       `json:"nextPageToken"`
-	NextPageTokenAlt string    `json:"next_page_token"`
+	Items            []objectJSON `json:"items"`
+	Prefixes         []string     `json:"prefixes"`
+	NextPageToken    string       `json:"nextPageToken"`
+	NextPageTokenAlt string       `json:"next_page_token"`
 }
 
 type objectJSON struct {
 	// Common gcloud storage ls --json shapes.
-	URL         string          `json:"url"`
-	Type        string          `json:"type"`
-	Name        string          `json:"name"`
-	Bucket      string          `json:"bucket"`
-	Size        json.RawMessage `json:"size"`
-	SizeAlt     json.RawMessage `json:"size_bytes"`
-	ContentType string          `json:"contentType"`
-	ContentTypeAlt string       `json:"content_type"`
-	Updated     string          `json:"updated"`
-	TimeCreated string          `json:"timeCreated"`
-	TimeCreatedAlt string       `json:"time_created"`
-	StorageClass string         `json:"storageClass"`
+	URL            string          `json:"url"`
+	Type           string          `json:"type"`
+	Name           string          `json:"name"`
+	Bucket         string          `json:"bucket"`
+	Size           json.RawMessage `json:"size"`
+	SizeAlt        json.RawMessage `json:"size_bytes"`
+	ContentType    string          `json:"contentType"`
+	ContentTypeAlt string          `json:"content_type"`
+	Updated        string          `json:"updated"`
+	TimeCreated    string          `json:"timeCreated"`
+	TimeCreatedAlt string          `json:"time_created"`
+	StorageClass   string          `json:"storageClass"`
 	// Nested metadata blob used by some gcloud versions.
 	Metadata *objectJSON `json:"metadata"`
 }

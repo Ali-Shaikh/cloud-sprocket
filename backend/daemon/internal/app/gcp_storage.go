@@ -344,6 +344,162 @@ func (s *Service) handleGcpStorageSetPrefixFilter(ctx context.Context, params js
 	return s.finishGcpWorkspace(ctx, snapshot, session, notifier, "info", fmt.Sprintf("Opened folder %s.", label))
 }
 
+func (s *Service) handleGcpStorageUploadObject(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		SourcePath string `json:"sourcePath"`
+		ObjectKey  string `json:"objectKey"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	if err := validateS3UploadRequest(request.SourcePath, request.ObjectKey); err != nil {
+		return nil, err
+	}
+	if s.gcpStorage == nil {
+		return nil, errors.New("GCP Cloud Storage inventory is not available")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !session.IsLocked || session.CurrentProviderID != "gcp" {
+		s.mu.Unlock()
+		return nil, errors.New("open a locked GCP workspace before uploading a Cloud Storage object")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		s.mu.Unlock()
+		return nil, errors.New("the workspace's GCP profile is not available")
+	}
+	if !effectiveGcpWritesEnabled(session, profile) {
+		s.mu.Unlock()
+		return nil, errors.New("Cloud Storage upload requires write mode to be enabled for this GCP workspace")
+	}
+	bucket := strings.TrimSpace(session.SelectedGcpStorageBucket)
+	if bucket == "" {
+		s.mu.Unlock()
+		return nil, errors.New("select a Cloud Storage bucket before uploading an object")
+	}
+	prefix := session.GcpStoragePrefixFilter
+	s.mu.Unlock()
+
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	result, err := s.gcpStorage.UploadObject(timeoutCtx, profile, bucket, request.ObjectKey, request.SourcePath)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	s.invalidateResourceCacheScope(ctx, "gcp.storage.objects.page")
+	s.mu.Lock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	session.SelectedGcpStorageBucket = bucket
+	session.GcpStoragePrefixFilter = prefix
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.mu.Unlock()
+	workspace, notifyErr := s.finishGcpWorkspace(
+		ctx,
+		snapshot,
+		session,
+		notifier,
+		"success",
+		fmt.Sprintf("Uploaded object %s to gs://%s/%s.", result.ObjectKey, result.BucketName, result.ObjectKey),
+	)
+	if notifyErr != nil {
+		return nil, notifyErr
+	}
+	return map[string]any{
+		"workspace": workspace,
+		"result":    result,
+	}, nil
+}
+
+func (s *Service) handleGcpStorageDeleteObject(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		ObjectKey string `json:"objectKey"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	objectKey := strings.TrimSpace(request.ObjectKey)
+	objectKey = strings.TrimPrefix(objectKey, "/")
+	if objectKey == "" {
+		return nil, errors.New("object key is required")
+	}
+	if s.gcpStorage == nil {
+		return nil, errors.New("GCP Cloud Storage inventory is not available")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !session.IsLocked || session.CurrentProviderID != "gcp" {
+		s.mu.Unlock()
+		return nil, errors.New("open a locked GCP workspace before deleting a Cloud Storage object")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		s.mu.Unlock()
+		return nil, errors.New("the workspace's GCP profile is not available")
+	}
+	if !effectiveGcpWritesEnabled(session, profile) {
+		s.mu.Unlock()
+		return nil, errors.New("Cloud Storage delete requires write mode to be enabled for this GCP workspace")
+	}
+	bucket := strings.TrimSpace(session.SelectedGcpStorageBucket)
+	if bucket == "" {
+		s.mu.Unlock()
+		return nil, errors.New("select a Cloud Storage bucket before deleting an object")
+	}
+	s.mu.Unlock()
+
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	err = s.gcpStorage.DeleteObject(timeoutCtx, profile, bucket, objectKey)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	s.invalidateResourceCacheScope(ctx, "gcp.storage.objects.page")
+	s.mu.Lock()
+	session, err = s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	session.SelectedGcpStorageBucket = bucket
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.mu.Unlock()
+	return s.finishGcpWorkspace(
+		ctx,
+		snapshot,
+		session,
+		notifier,
+		"success",
+		fmt.Sprintf("Deleted object %s from gs://%s/.", objectKey, bucket),
+	)
+}
+
 func (s *Service) handleGcpStorageLoadMoreObjects(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
 	if s.gcpStorage == nil {
 		return nil, errors.New("GCP Cloud Storage inventory is not available")
