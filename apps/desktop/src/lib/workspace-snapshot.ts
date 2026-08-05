@@ -576,6 +576,7 @@ export function normaliseSessionSnapshot(session: Partial<SessionSnapshot> | nul
     azureBlobPrefixFilter: session?.azureBlobPrefixFilter ?? "",
     azureWriteModeEnabled: session?.azureWriteModeEnabled ?? false,
     gcpWriteModeEnabled: session?.gcpWriteModeEnabled ?? false,
+    selectedGcpFunction: session?.selectedGcpFunction,
   };
 }
 

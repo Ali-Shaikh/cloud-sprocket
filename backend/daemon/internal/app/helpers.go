@@ -150,6 +150,7 @@ func clearLockState(session models.SessionSnapshot) models.SessionSnapshot {
 	session.SelectedGcpStorageBucket = ""
 	session.GcpStoragePrefixFilter = ""
 	session.SelectedGcpComputeInstance = ""
+	session.SelectedGcpFunction = ""
 	session.GcpWriteModeEnabled = false
 	session.SelectedEC2Region = ""
 	session.SelectedEC2InstanceID = ""

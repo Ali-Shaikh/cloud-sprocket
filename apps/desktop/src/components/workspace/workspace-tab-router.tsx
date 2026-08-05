@@ -8,7 +8,11 @@ import { overviewNavigateToParams, resolveOverviewProvider } from "@/lib/navigat
 import { formatBackendError, normaliseWorkspaceSnapshot } from "@/lib/workspace-snapshot";
 import { toActivityEntries } from "@/lib/workspace-shell";
 import { useNavigateToResource } from "@/hooks/use-navigate-to-resource";
-import type { WorkspaceSnapshot } from "@/types/backend";
+import type {
+  GcpCloudFunctionInvokeResult,
+  GcpStorageSignUrlResult,
+  WorkspaceSnapshot,
+} from "@/types/backend";
 import ConnectView from "@/views/ConnectView";
 import OverviewView from "@/views/OverviewView";
 import DeployView from "@/views/deploy/DeployView";
@@ -41,6 +45,8 @@ import type { WorkspaceTabRouterProps } from "./workspace-tab-router-props";
 export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
   const [showOnboarding, setShowOnboarding] = useState(() => !isOnboardingComplete());
   const [deployRecipeId, setDeployRecipeId] = useState<string>();
+  const [gcpSignedUrlResult, setGcpSignedUrlResult] = useState<GcpStorageSignUrlResult | undefined>();
+  const [gcpSignedUrlStatus, setGcpSignedUrlStatus] = useState("");
   const {
     activeWorkspaceTabId,
     setActiveWorkspaceTabId,
@@ -261,16 +267,22 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     return (
       <GcpStorageView
         workspace={activeWorkspace}
+        signedUrlResult={gcpSignedUrlResult}
+        signedUrlStatus={gcpSignedUrlStatus}
         onRefresh={() => {
           void refreshDiscovery();
         }}
         onSelectBucket={(bucketName) => {
+          setGcpSignedUrlResult(undefined);
+          setGcpSignedUrlStatus("");
           void mutateWorkspaceSelection("gcp.storage.selectBucket", { bucketName }, {
             immediate: true,
             errorTitle: "Failed to select Cloud Storage bucket",
           });
         }}
         onSetPrefixFilter={(prefix) => {
+          setGcpSignedUrlResult(undefined);
+          setGcpSignedUrlStatus("");
           void mutateWorkspaceSelection("gcp.storage.setPrefixFilter", { prefix }, {
             immediate: true,
             errorTitle: "Failed to open Cloud Storage folder",
@@ -322,6 +334,23 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
             },
           );
         }}
+        onSignUrl={(objectKey, durationSeconds) => {
+          setGcpSignedUrlStatus(`Generating signed link for ${objectKey}...`);
+          setGcpSignedUrlResult(undefined);
+          void backendRequest<{ result: GcpStorageSignUrlResult }>("gcp.storage.signUrl", {
+            objectKey,
+            durationSeconds,
+          })
+            .then((response) => {
+              setGcpSignedUrlResult(response.result);
+              setGcpSignedUrlStatus(
+                `Signed link ready · expires ${response.result.expiresAt}.`,
+              );
+            })
+            .catch((error: unknown) => {
+              setGcpSignedUrlStatus(error instanceof Error ? error.message : String(error));
+            });
+        }}
       />
     );
   }
@@ -363,6 +392,30 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
         workspace={activeWorkspace}
         onRefresh={() => {
           void refreshDiscovery();
+        }}
+        onSelectFunction={(functionKey, name, region) => {
+          void mutateWorkspaceSelection(
+            "gcp.functions.selectFunction",
+            { functionKey, name, region },
+            {
+              immediate: true,
+              errorTitle: "Failed to select Cloud Function",
+            },
+          );
+        }}
+        onInvoke={async (name, region, generation, data) => {
+          try {
+            const response = await backendRequest<{ result: GcpCloudFunctionInvokeResult }>(
+              "gcp.functions.call",
+              { name, region, generation, data },
+            );
+            notify("success", `Invoked ${name}`);
+            return response.result;
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            notify("error", "Cloud Function invoke", message);
+            throw error instanceof Error ? error : new Error(message);
+          }
         }}
       />
     );

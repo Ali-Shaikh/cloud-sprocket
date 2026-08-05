@@ -214,6 +214,7 @@ export interface SessionSnapshot {
   awsWriteModeEnabled?: boolean;
   azureWriteModeEnabled?: boolean;
   gcpWriteModeEnabled?: boolean;
+  selectedGcpFunction?: string;
   selectedGcpComputeInstance?: string;
   selectedAzureStorageAccount?: string;
   selectedAzureBlobContainer?: string;
@@ -288,6 +289,21 @@ export interface GcpCloudFunction {
   url?: string;
   updatedAt?: string;
   summary?: string;
+}
+
+export interface GcpStorageSignUrlResult {
+  bucketName: string;
+  objectKey: string;
+  url: string;
+  durationSeconds: number;
+  expiresAt: string;
+}
+
+export interface GcpCloudFunctionInvokeResult {
+  name: string;
+  region?: string;
+  generation?: string;
+  body: string;
 }
 
 export interface GcpGkeCluster {

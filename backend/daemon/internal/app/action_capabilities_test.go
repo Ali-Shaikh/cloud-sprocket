@@ -133,6 +133,7 @@ func TestBuildGcpActionCapabilitiesWriteModeOn(t *testing.T) {
 		{"storage", "deleteObject"},
 		{"compute", "startInstance"},
 		{"compute", "stopInstance"},
+		{"functions", "invoke"},
 	} {
 		enabled := false
 		for _, capability := range caps[scope.scope] {
@@ -144,5 +145,20 @@ func TestBuildGcpActionCapabilitiesWriteModeOn(t *testing.T) {
 		if !enabled {
 			t.Fatalf("expected %s.%s to be enabled when write mode is on", scope.scope, scope.actionID)
 		}
+	}
+}
+
+func TestBuildGcpActionCapabilitiesFunctionsRespectsWriteMode(t *testing.T) {
+	profile := models.ProfileSummary{ProviderID: "gcp", ProfileID: "default"}
+	off := buildGcpActionCapabilities(models.SessionSnapshot{GcpWriteModeEnabled: false}, profile)
+	if off["functions"][0].Enabled {
+		t.Fatal("expected invoke disabled when GCP write mode is off")
+	}
+	on := buildGcpActionCapabilities(models.SessionSnapshot{GcpWriteModeEnabled: true}, profile)
+	if !on["functions"][0].Enabled {
+		t.Fatal("expected invoke enabled when GCP write mode is on")
+	}
+	if on["functions"][0].ActionID != "invoke" {
+		t.Fatalf("actionId = %q", on["functions"][0].ActionID)
 	}
 }

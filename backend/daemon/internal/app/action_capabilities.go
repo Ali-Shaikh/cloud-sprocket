@@ -224,6 +224,9 @@ func buildGcpActionCapabilities(
 			gcpActionCapability(session, profile, "startInstance", "Start instance"),
 			gcpActionCapability(session, profile, "stopInstance", "Stop instance"),
 		},
+		"functions": {
+			gcpActionCapability(session, profile, "invoke", "Invoke function"),
+		},
 	}
 }
 
