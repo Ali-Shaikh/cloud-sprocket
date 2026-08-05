@@ -175,6 +175,8 @@ export interface SessionSnapshot {
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;
+  selectedGcpStorageBucket?: string;
+  gcpStoragePrefixFilter?: string;
   selectedEc2Region?: string;
   selectedEc2InstanceId?: string;
   selectedLambdaRegion?: string;
@@ -252,6 +254,15 @@ export interface GcpStorageBucket {
   storageClass?: string;
   createdAt?: string;
   summary?: string;
+}
+
+export interface GcpStorageObject {
+  key: string;
+  size?: string;
+  updated?: string;
+  contentType?: string;
+  /** True for delimiter virtual folders (prefix rows). */
+  isFolder?: boolean;
 }
 
 export interface AwsS3Object {
@@ -1124,9 +1135,13 @@ export interface WorkspaceSnapshot {
   azureEntraGroups: AzureEntraGroup[];
   azureEntraApps: AzureEntraApp[];
   selectedGcpStorageBucket?: string;
+  gcpStoragePrefixFilter?: string;
   gcpStorageStatusMessage?: string;
   /** Present after GCP Storage enrichment; omit in fixtures/mocks. */
   gcpStorageBuckets?: GcpStorageBucket[];
+  gcpStorageObjects?: GcpStorageObject[];
+  gcpStorageObjectsNextToken?: string;
+  gcpStorageObjectsHasMore?: boolean;
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;

@@ -134,3 +134,120 @@ func TestNormaliseBucketName(t *testing.T) {
 		}
 	}
 }
+
+func TestListObjectsDecodesFoldersAndFiles(t *testing.T) {
+	out := []byte(`[
+		{"url": "gs://demo-bucket/logs/", "type": "prefix"},
+		{
+			"url": "gs://demo-bucket/readme.txt",
+			"type": "cloud_object",
+			"name": "readme.txt",
+			"size": 12,
+			"contentType": "text/plain",
+			"updated": "2024-02-01T10:00:00Z"
+		},
+		{
+			"url": "gs://demo-bucket/assets/",
+			"type": "prefix"
+		}
+	]`)
+	fake := &fakeCLI{out: out}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	page, err := inv.ListObjects(context.Background(), gcpProfile(), "demo-bucket", "", "")
+	if err != nil {
+		t.Fatalf("ListObjects: %v", err)
+	}
+	if len(page.Entries) != 3 {
+		t.Fatalf("entries = %+v, want 3", page.Entries)
+	}
+	// Folders first, then files, both sorted.
+	if !page.Entries[0].IsFolder || page.Entries[0].Key != "assets/" {
+		t.Fatalf("first = %+v, want assets/ folder", page.Entries[0])
+	}
+	if !page.Entries[1].IsFolder || page.Entries[1].Key != "logs/" {
+		t.Fatalf("second = %+v, want logs/ folder", page.Entries[1])
+	}
+	if page.Entries[2].IsFolder || page.Entries[2].Key != "readme.txt" {
+		t.Fatalf("third = %+v, want readme.txt", page.Entries[2])
+	}
+	if page.Entries[2].ContentType != "text/plain" {
+		t.Fatalf("contentType = %q", page.Entries[2].ContentType)
+	}
+	if page.Entries[2].Size == "" {
+		t.Fatal("expected humanised size")
+	}
+	joined := strings.Join(fake.args, " ")
+	if !strings.Contains(joined, "storage ls") || !strings.Contains(joined, "--json") {
+		t.Fatalf("args = %v", fake.args)
+	}
+	if !strings.Contains(joined, "gs://demo-bucket") {
+		t.Fatalf("args missing bucket url: %v", fake.args)
+	}
+}
+
+func TestListObjectsUsesPrefixPathAndPageToken(t *testing.T) {
+	fake := &fakeCLI{out: []byte(`[]`)}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	_, err := inv.ListObjects(context.Background(), gcpProfile(), "demo-bucket", "docs", "tok-1")
+	if err != nil {
+		t.Fatalf("ListObjects: %v", err)
+	}
+	joined := strings.Join(fake.args, " ")
+	if !strings.Contains(joined, "gs://demo-bucket/docs/") {
+		t.Fatalf("expected prefixed url with trailing slash, args=%v", fake.args)
+	}
+	if !strings.Contains(joined, "--next-page-token=tok-1") {
+		t.Fatalf("expected page token, args=%v", fake.args)
+	}
+}
+
+func TestListObjectsWrappedPageWithNextToken(t *testing.T) {
+	out := []byte(`{
+		"prefixes": ["logs/"],
+		"items": [
+			{"name": "readme.txt", "size": "100", "contentType": "text/plain", "updated": "2024-01-01T00:00:00Z"}
+		],
+		"nextPageToken": "page-2"
+	}`)
+	inv := NewInventory(config.Settings{})
+	inv.runner = &fakeCLI{out: out}
+
+	page, err := inv.ListObjects(context.Background(), gcpProfile(), "demo-bucket", "", "")
+	if err != nil {
+		t.Fatalf("ListObjects: %v", err)
+	}
+	if page.NextPageToken != "page-2" || !page.IsTruncated {
+		t.Fatalf("page token = %+v", page)
+	}
+	if len(page.Entries) != 2 {
+		t.Fatalf("entries = %+v", page.Entries)
+	}
+	if !page.Entries[0].IsFolder || page.Entries[0].Key != "logs/" {
+		t.Fatalf("folder = %+v", page.Entries[0])
+	}
+}
+
+func TestListObjectsRequiresBucket(t *testing.T) {
+	inv := NewInventory(config.Settings{})
+	inv.runner = &fakeCLI{out: []byte(`[]`)}
+	_, err := inv.ListObjects(context.Background(), gcpProfile(), "", "", "")
+	if err == nil {
+		t.Fatal("expected error for empty bucket")
+	}
+}
+
+func TestObjectListURL(t *testing.T) {
+	if got := objectListURL("b", ""); got != "gs://b" {
+		t.Fatalf("root = %q", got)
+	}
+	if got := objectListURL("b", "docs"); got != "gs://b/docs/" {
+		t.Fatalf("docs = %q", got)
+	}
+	if got := objectListURL("b", "docs/"); got != "gs://b/docs/" {
+		t.Fatalf("docs/ = %q", got)
+	}
+}

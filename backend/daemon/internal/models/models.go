@@ -284,6 +284,8 @@ type SessionSnapshot struct {
 	SelectedS3BucketName              string             `json:"selectedS3BucketName,omitempty"`
 	SelectedS3ObjectKey               string             `json:"selectedS3ObjectKey,omitempty"`
 	S3PrefixFilter                    string             `json:"s3PrefixFilter,omitempty"`
+	SelectedGcpStorageBucket          string             `json:"selectedGcpStorageBucket,omitempty"`
+	GcpStoragePrefixFilter            string             `json:"gcpStoragePrefixFilter,omitempty"`
 	SelectedEC2Region                 string             `json:"selectedEc2Region,omitempty"`
 	SelectedEC2InstanceID             string             `json:"selectedEc2InstanceId,omitempty"`
 	SelectedLambdaRegion              string             `json:"selectedLambdaRegion,omitempty"`
@@ -1489,10 +1491,16 @@ type WorkspaceSnapshot struct {
 	AzureEntraUsers                   []AzureEntraUser             `json:"azureEntraUsers"`
 	AzureEntraGroups                  []AzureEntraGroup            `json:"azureEntraGroups"`
 	AzureEntraApps                    []AzureEntraApp              `json:"azureEntraApps"`
-	// GCP Cloud Storage inventory (foundation slice).
+	// GCP Cloud Storage inventory (bucket list + object browser).
 	SelectedGcpStorageBucket  string             `json:"selectedGcpStorageBucket,omitempty"`
+	GcpStoragePrefixFilter    string             `json:"gcpStoragePrefixFilter,omitempty"`
 	GcpStorageStatusMessage   string             `json:"gcpStorageStatusMessage,omitempty"`
 	GcpStorageBuckets         []GcpStorageBucket `json:"gcpStorageBuckets"`
+	GcpStorageObjects         []GcpStorageObject `json:"gcpStorageObjects"`
+	// GcpStorageObjectsNextToken is the gcloud page token for Load more.
+	GcpStorageObjectsNextToken string `json:"gcpStorageObjectsNextToken,omitempty"`
+	// GcpStorageObjectsHasMore is true when another page is available under the current prefix.
+	GcpStorageObjectsHasMore bool `json:"gcpStorageObjectsHasMore,omitempty"`
 }
 
 // GcpStorageBucket is a Cloud Storage bucket from gcloud inventory.
@@ -1503,6 +1511,23 @@ type GcpStorageBucket struct {
 	StorageClass string `json:"storageClass,omitempty"`
 	CreatedAt    string `json:"createdAt,omitempty"`
 	Summary      string `json:"summary,omitempty"`
+}
+
+// GcpStorageObject is a Cloud Storage object or virtual folder under a prefix.
+type GcpStorageObject struct {
+	Key         string `json:"key"`
+	Size        string `json:"size,omitempty"`
+	Updated     string `json:"updated,omitempty"`
+	ContentType string `json:"contentType,omitempty"`
+	// IsFolder marks a virtual folder (prefix) from delimiter-style listing.
+	IsFolder bool `json:"isFolder,omitempty"`
+}
+
+// GcpStorageObjectListPage is one delimiter-scoped page of folders and objects.
+type GcpStorageObjectListPage struct {
+	Entries       []GcpStorageObject `json:"entries"`
+	NextPageToken string             `json:"nextPageToken,omitempty"`
+	IsTruncated   bool               `json:"isTruncated,omitempty"`
 }
 
 type ActivityLogEntry struct {

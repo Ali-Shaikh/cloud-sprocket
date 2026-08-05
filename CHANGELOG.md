@@ -11,11 +11,17 @@ Installers for every release are published on the
 
 ### Added
 
+- GCP Cloud Storage object browser (read-only): `gcpadapter.ListObjects` via
+  `gcloud storage ls --json`, session fields for selected bucket and prefix,
+  RPCs `gcp.storage.selectBucket` / `setPrefixFilter` / `loadMoreObjects`,
+  enrichment of the first object page when a bucket is selected, and the
+  desktop Storage tab with bucket selection, folder breadcrumbs, and an
+  objects table.
 - GCP Cloud Storage foundation: `gcpadapter` lists buckets via
   `gcloud storage buckets list`, `WorkspaceSnapshot` carries
   `gcpStorageBuckets` / status, catalogue promotes `gcp-storage` to a live
   service (`inventoryScope: gcs`), and the desktop Storage tab shows the
-  inventory. Object browsing remains deferred.
+  inventory.
 - AWS CloudWatch Logs filter/search: `aws.logs.filterEvents` searches recent
   events for the selected log group with an optional CloudWatch filter pattern.
   The Logs workspace panel adds a Search control in the inspector.

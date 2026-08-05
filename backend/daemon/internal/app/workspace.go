@@ -86,6 +86,8 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 		DynamoDBRegions:        []string{},
 		DynamoDBTables:         []models.AwsDynamoDBTable{},
 		GcpStorageBuckets:      []models.GcpStorageBucket{},
+		GcpStorageObjects:      []models.GcpStorageObject{},
+		GcpStoragePrefixFilter: session.GcpStoragePrefixFilter,
 	}
 
 	if provider, ok := findProvider(snapshot.Providers, session.CurrentProviderID); ok {

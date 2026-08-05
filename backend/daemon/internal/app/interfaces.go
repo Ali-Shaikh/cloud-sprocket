@@ -212,9 +212,10 @@ type AzureInventory interface {
 	CheckCLIExtensions(ctx context.Context) []models.AzureCLIExtensionStatus
 }
 
-// GcpStorageInventory lists Cloud Storage buckets via the gcloud CLI adapter.
+// GcpStorageInventory lists Cloud Storage buckets and objects via the gcloud CLI adapter.
 type GcpStorageInventory interface {
 	ListBuckets(ctx context.Context, profile models.ProfileSummary) ([]models.GcpStorageBucket, error)
+	ListObjects(ctx context.Context, profile models.ProfileSummary, bucketName string, prefix string, pageToken string) (models.GcpStorageObjectListPage, error)
 }
 
 // DockerRuntime, LocalStackManager, and AzureRuntimeManager are aliases of the

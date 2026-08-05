@@ -321,8 +321,8 @@ func gcpServiceCatalog() []serviceCatalogEntry {
 		},
 		{
 			ProviderID: "gcp", ServiceID: "gcp-storage", Label: "Cloud Storage",
-			Summary: "GCS bucket inventory via gcloud.",
-			Detail:  "Lists Cloud Storage buckets for the open gcloud configuration and project. Object browsing follows in a later release.",
+			Summary: "GCS buckets and object browser via gcloud.",
+			Detail:  "Lists Cloud Storage buckets for the open gcloud configuration and project, and browses objects under a selected prefix.",
 			Category: workspaceTabCategoryService, Domain: serviceDomainStorage,
 			InventoryScope: "gcs",
 		},

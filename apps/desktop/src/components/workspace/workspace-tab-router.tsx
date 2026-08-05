@@ -257,6 +257,40 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
         onRefresh={() => {
           void refreshDiscovery();
         }}
+        onSelectBucket={(bucketName) => {
+          void mutateWorkspaceSelection("gcp.storage.selectBucket", { bucketName }, {
+            immediate: true,
+            errorTitle: "Failed to select Cloud Storage bucket",
+          });
+        }}
+        onSetPrefixFilter={(prefix) => {
+          void mutateWorkspaceSelection("gcp.storage.setPrefixFilter", { prefix }, {
+            immediate: true,
+            errorTitle: "Failed to open Cloud Storage folder",
+          });
+        }}
+        onLoadMoreObjects={() => {
+          const token = activeWorkspace.gcpStorageObjectsNextToken;
+          if (!token) {
+            return;
+          }
+          void mutateWorkspaceSelection(
+            "gcp.storage.loadMoreObjects",
+            { pageToken: token },
+            {
+              immediate: true,
+              errorTitle: "Failed to load more Cloud Storage objects",
+              merge: (current, incoming) => ({
+                ...current,
+                ...incoming,
+                gcpStorageObjects: [
+                  ...(current.gcpStorageObjects ?? []),
+                  ...(incoming.gcpStorageObjects ?? []),
+                ],
+              }),
+            },
+          );
+        }}
       />
     );
   }
