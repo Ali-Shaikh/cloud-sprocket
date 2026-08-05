@@ -2,46 +2,68 @@
 // Copyright (C) 2026 Ali Shaikh
 
 // Package azure owns Azure-domain RPC handlers that no longer need the full
-// app façade. Phase 5a covers inventory.get; Phase 5b covers selection groups.
-// Write/async actions remain on the façade until later Phase 5 slices (F-029).
+// app façade. Phase 5a covers inventory.get; Phase 5b covers selection groups;
+// Phase 5c covers sync write/mutation handlers (F-029).
 package azure
 
 import (
+	"time"
+
 	"cloudsprocket/backend/daemon/internal/app/sessionport"
 )
 
 // Deps holds collaborators required to construct an Azure domain Service.
 type Deps struct {
-	Discovery   Discovery
-	Session     sessionport.Session
-	Workspace   sessionport.Workspace
-	Activity    sessionport.Activity
-	Invalidator sessionport.Invalidator
-	Gate        ServiceGate
-	Catalog     ScopeCatalog
+	Discovery     Discovery
+	Session       sessionport.Session
+	Workspace     sessionport.Workspace
+	Activity      sessionport.Activity
+	Invalidator   sessionport.Invalidator
+	Gate          ServiceGate
+	Catalog       ScopeCatalog
+	ActionTimeout time.Duration
+	Storage       StorageWriter
+	KeyVault      KeyVaultWriter
+	Postgres      PostgresWriter
+	Functions     FunctionsWriter
+	WebApps       WebAppsWriter
+	Waf           WafWriter
 }
 
-// Service owns the extracted Azure inventory and selection RPC paths (and later
-// write groups).
+// Service owns the extracted Azure inventory, selection, and write RPC paths.
 type Service struct {
-	discovery   Discovery
-	session     sessionport.Session
-	workspace   sessionport.Workspace
-	activity    sessionport.Activity
-	invalidator sessionport.Invalidator
-	gate        ServiceGate
-	catalog     ScopeCatalog
+	discovery     Discovery
+	session       sessionport.Session
+	workspace     sessionport.Workspace
+	activity      sessionport.Activity
+	invalidator   sessionport.Invalidator
+	gate          ServiceGate
+	catalog       ScopeCatalog
+	actionTimeout time.Duration
+	storage       StorageWriter
+	keyVault      KeyVaultWriter
+	postgres      PostgresWriter
+	functions     FunctionsWriter
+	webapps       WebAppsWriter
+	waf           WafWriter
 }
 
 // New constructs an Azure domain Service.
 func New(deps Deps) *Service {
 	return &Service{
-		discovery:   deps.Discovery,
-		session:     deps.Session,
-		workspace:   deps.Workspace,
-		activity:    deps.Activity,
-		invalidator: deps.Invalidator,
-		gate:        deps.Gate,
-		catalog:     deps.Catalog,
+		discovery:     deps.Discovery,
+		session:       deps.Session,
+		workspace:     deps.Workspace,
+		activity:      deps.Activity,
+		invalidator:   deps.Invalidator,
+		gate:          deps.Gate,
+		catalog:       deps.Catalog,
+		actionTimeout: deps.ActionTimeout,
+		storage:       deps.Storage,
+		keyVault:      deps.KeyVault,
+		postgres:      deps.Postgres,
+		functions:     deps.Functions,
+		webapps:       deps.WebApps,
+		waf:           deps.Waf,
 	}
 }

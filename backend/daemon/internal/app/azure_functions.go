@@ -5,10 +5,7 @@ package app
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
@@ -154,49 +151,4 @@ func (s *Service) enrichAzureFunctionsInventory(
 		workspace.SelectedAzureFunction = selectedFunction
 		workspace.AzureFunctionsStatusMessage = status
 	})
-}
-
-func (s *Service) handleAzureFunctionsInvoke(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
-	var request struct {
-		AppName      string `json:"appName"`
-		FunctionName string `json:"functionName"`
-		Payload      string `json:"payload"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	appName := strings.TrimSpace(request.AppName)
-	functionName := strings.TrimSpace(request.FunctionName)
-	if appName == "" || functionName == "" {
-		return nil, errors.New("a function app and function are required")
-	}
-	snapshot, err := s.discovery.Discover()
-	if err != nil {
-		return nil, err
-	}
-	s.mu.Lock()
-	session, err := s.currentState(ctx, snapshot)
-	if err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-	if !session.IsLocked || session.CurrentProviderID != "azure" {
-		s.mu.Unlock()
-		return nil, errors.New("open a locked Azure workspace before invoking a function")
-	}
-	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
-	if !ok {
-		s.mu.Unlock()
-		return nil, errors.New("the workspace's Azure profile is not available")
-	}
-	if !effectiveAzureWritesEnabled(session, profile, s.azureProviderCommandPath(snapshot)) {
-		s.mu.Unlock()
-		return nil, errors.New("invoking a function requires write mode to be enabled for this Azure workspace")
-	}
-	s.mu.Unlock()
-
-	timeoutCtx, cancel := s.withAzureTimeout(ctx)
-	defer cancel()
-	resourceGroup := resourceGroupForApp(s.azureFunctionApps(timeoutCtx, profile), appName)
-	return s.azure.InvokeFunction(ctx, profile, resourceGroup, appName, functionName, request.Payload)
 }

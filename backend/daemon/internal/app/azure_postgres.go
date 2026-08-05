@@ -5,10 +5,7 @@ package app
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
@@ -114,105 +111,4 @@ func (s *Service) enrichAzurePostgresInventory(
 		workspace.AzurePostgresConnection = connection
 		workspace.AzurePostgresStatusMessage = status
 	})
-}
-
-func (s *Service) handleAzurePostgresStartServer(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	return s.handleAzurePostgresLifecycle(ctx, params, notifier, "start")
-}
-
-func (s *Service) handleAzurePostgresStopServer(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
-	return s.handleAzurePostgresLifecycle(ctx, params, notifier, "stop")
-}
-
-func (s *Service) handleAzurePostgresLifecycle(
-	ctx context.Context,
-	params json.RawMessage,
-	notifier Notifier,
-	action string,
-) (any, error) {
-	var request struct {
-		Server        string `json:"server"`
-		ResourceGroup string `json:"resourceGroup"`
-	}
-	if err := json.Unmarshal(params, &request); err != nil {
-		return nil, err
-	}
-	serverName := strings.TrimSpace(request.Server)
-	resourceGroup := strings.TrimSpace(request.ResourceGroup)
-	if serverName == "" {
-		return nil, errors.New("a server name is required")
-	}
-
-	snapshot, err := s.discovery.Discover()
-	if err != nil {
-		return nil, err
-	}
-	s.mu.Lock()
-	session, err := s.currentState(ctx, snapshot)
-	if err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-	if !session.IsLocked || session.CurrentProviderID != "azure" {
-		s.mu.Unlock()
-		return nil, errors.New("open a locked Azure workspace before managing a PostgreSQL server")
-	}
-	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
-	if !ok {
-		s.mu.Unlock()
-		return nil, errors.New("the workspace's Azure profile is not available")
-	}
-	if !effectiveAzureWritesEnabled(session, profile, s.azureProviderCommandPath(snapshot)) {
-		s.mu.Unlock()
-		return nil, errors.New("PostgreSQL server actions require write mode to be enabled for this Azure workspace")
-	}
-	selectedServer := session.SelectedAzurePostgresServer
-	s.mu.Unlock()
-
-	if resourceGroup == "" {
-		servers := s.azurePostgresServers(ctx, profile)
-		resourceGroup = resourceGroupForPostgresServer(servers, serverName)
-		if resourceGroup == "" {
-			resourceGroup = resourceGroupForPostgresServer(servers, selectedServer)
-		}
-	}
-	if resourceGroup == "" {
-		return nil, errors.New("a resource group is required")
-	}
-
-	timeoutCtx, cancel := s.withAzureTimeout(ctx)
-	var result models.AzurePostgresLifecycleResult
-	var actionErr error
-	switch action {
-	case "start":
-		result, actionErr = s.azure.StartPostgresServer(timeoutCtx, profile, resourceGroup, serverName)
-	case "stop":
-		result, actionErr = s.azure.StopPostgresServer(timeoutCtx, profile, resourceGroup, serverName)
-	default:
-		cancel()
-		return nil, fmt.Errorf("unsupported postgres server action %q", action)
-	}
-	cancel()
-	if actionErr != nil {
-		return nil, actionErr
-	}
-
-	s.invalidateResourceCache(ctx, "azure.postgres-servers", profile.ProfileID)
-
-	s.mu.Lock()
-	session, err = s.currentState(ctx, snapshot)
-	if err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-	session.SelectedAzurePostgresServer = serverName
-	if err := s.store.SaveSession(ctx, session); err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-	s.mu.Unlock()
-	return s.finishAzureWorkspaceOpts(ctx, snapshot, session, notifier, workspaceSnapshotOptions{
-		skipAwsInventory: true,
-		azureScope:       "postgres",
-	}, "success", result.Summary)
 }

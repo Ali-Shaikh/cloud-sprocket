@@ -59,10 +59,10 @@ func TestWithLockedAzureWorkspaceRejectsNonAzureProvider(t *testing.T) {
 
 func TestHandleSelectResourceGroupMutatesAndScopes(t *testing.T) {
 	sess := &fakeSession{session: models.SessionSnapshot{
-		IsLocked:                  true,
-		CurrentProviderID:         "azure",
+		IsLocked:                   true,
+		CurrentProviderID:          "azure",
 		SelectedAzureResourceGroup: "old-rg",
-		SelectedAzureVMID:         "vm-1",
+		SelectedAzureVMID:          "vm-1",
 	}}
 	ws := &fakeWorkspace{}
 	act := &fakeActivity{}
@@ -100,11 +100,11 @@ func TestHandleSelectResourceGroupMutatesAndScopes(t *testing.T) {
 
 func TestHandleStorageSelectAccountClearsContainerAndBlob(t *testing.T) {
 	sess := &fakeSession{session: models.SessionSnapshot{
-		IsLocked:                   true,
-		CurrentProviderID:          "azure",
+		IsLocked:                    true,
+		CurrentProviderID:           "azure",
 		SelectedAzureStorageAccount: "old",
-		SelectedAzureBlobContainer: "c",
-		SelectedAzureBlobName:      "b",
+		SelectedAzureBlobContainer:  "c",
+		SelectedAzureBlobName:       "b",
 	}}
 	ws := &fakeWorkspace{}
 	svc := New(Deps{
