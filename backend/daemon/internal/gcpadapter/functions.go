@@ -206,3 +206,57 @@ func functionRegion(resourceName string) string {
 	}
 	return ""
 }
+
+// CallFunction triggers a Cloud Function via `gcloud functions call`.
+// generation should be "1st gen" or "2nd gen" when known so --gen2 can be set.
+// data is a JSON string passed as --data (defaults to {}).
+func (i *Inventory) CallFunction(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	name string,
+	region string,
+	generation string,
+	data string,
+) (models.GcpCloudFunctionInvokeResult, error) {
+	name = strings.TrimSpace(name)
+	region = strings.TrimSpace(region)
+	if name == "" {
+		return models.GcpCloudFunctionInvokeResult{}, fmt.Errorf("function name is required")
+	}
+	payload := strings.TrimSpace(data)
+	if payload == "" {
+		payload = "{}"
+	}
+	args := []string{
+		"functions", "call",
+		name,
+		"--data", payload,
+	}
+	if region != "" {
+		args = append(args, "--region", region)
+	}
+	if isGen2Generation(generation) {
+		args = append(args, "--gen2")
+	}
+	if project := projectFromProfile(profile); project != "" {
+		args = append(args, "--project", project)
+	}
+	out, err := i.run(ctx, profile, args...)
+	if err != nil {
+		return models.GcpCloudFunctionInvokeResult{}, err
+	}
+	return models.GcpCloudFunctionInvokeResult{
+		Name:       name,
+		Region:     region,
+		Generation: strings.TrimSpace(generation),
+		Body:       strings.TrimSpace(string(out)),
+	}, nil
+}
+
+func isGen2Generation(generation string) bool {
+	normalised := strings.ToLower(strings.TrimSpace(generation))
+	return strings.Contains(normalised, "2nd") ||
+		strings.Contains(normalised, "gen2") ||
+		strings.Contains(normalised, "gen_2") ||
+		normalised == "2"
+}

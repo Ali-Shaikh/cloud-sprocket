@@ -18,6 +18,16 @@ Installers for every release are published on the
 - AWS RDS reboot: write-gated `aws.rds.rebootInstance` queues an async
   `RebootDBInstance` job (same local-endpoint write mode rules as start/stop) and
   adds a Reboot instance control on the RDS fleet panel.
+- GCP operator actions (gcloud CLI only):
+  - Cloud Storage signed read URLs via `gcloud storage sign-url`
+    (`gcp.storage.signUrl`, no write mode required). Desktop Storage browser
+    offers "Signed link (1h)" for a selected object with copy support.
+  - Cloud Functions invoke via `gcloud functions call`
+    (`gcp.functions.call`), gated by per-session `gcpWriteModeEnabled`, with
+    `gcp.functions.selectFunction` for selection. Desktop Functions tab shows
+    write-mode status, selection, payload editor, and invoke response.
+  - Action capability for `functions.invoke` under GCP workspaces (alongside
+    existing storage/compute write capabilities from the write-mode foundation).
 - AWS ECS force new deployment: write-gated `aws.ecs.forceNewDeployment` calls
   `UpdateService` with `ForceNewDeployment`, invalidates service/task inventory
   caches, and adds a Force new deployment control on the selected service in the

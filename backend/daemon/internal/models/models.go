@@ -287,6 +287,7 @@ type SessionSnapshot struct {
 	SelectedGcpStorageBucket          string             `json:"selectedGcpStorageBucket,omitempty"`
 	GcpStoragePrefixFilter            string             `json:"gcpStoragePrefixFilter,omitempty"`
 	SelectedGcpComputeInstance        string             `json:"selectedGcpComputeInstance,omitempty"`
+	SelectedGcpFunction               string             `json:"selectedGcpFunction,omitempty"`
 	GcpWriteModeEnabled               bool               `json:"gcpWriteModeEnabled,omitempty"`
 	SelectedEC2Region                 string             `json:"selectedEc2Region,omitempty"`
 	SelectedEC2InstanceID             string             `json:"selectedEc2InstanceId,omitempty"`
@@ -1589,6 +1590,24 @@ type GcpStorageUploadResult struct {
 	BucketName     string `json:"bucketName"`
 	ObjectKey      string `json:"objectKey"`
 	DestinationURI string `json:"destinationUri"`
+}
+
+// GcpStorageSignURLResult is a short-lived read signed URL for a GCS object.
+type GcpStorageSignURLResult struct {
+	BucketName      string `json:"bucketName"`
+	ObjectKey       string `json:"objectKey"`
+	URL             string `json:"url"`
+	DurationSeconds int    `json:"durationSeconds"`
+	ExpiresAt       string `json:"expiresAt"`
+}
+
+// GcpCloudFunctionInvokeResult is the response from gcloud functions call.
+type GcpCloudFunctionInvokeResult struct {
+	Name       string `json:"name"`
+	Region     string `json:"region,omitempty"`
+	Generation string `json:"generation,omitempty"`
+	// Body is the raw stdout from gcloud (usually the function response JSON).
+	Body string `json:"body"`
 }
 
 // GcpComputeInstance is a Compute Engine VM from gcloud inventory.

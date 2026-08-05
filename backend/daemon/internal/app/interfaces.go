@@ -225,6 +225,8 @@ type GcpStorageInventory interface {
 	ListObjects(ctx context.Context, profile models.ProfileSummary, bucketName string, prefix string, pageToken string) (models.GcpStorageObjectListPage, error)
 	UploadObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, sourcePath string) (models.GcpStorageUploadResult, error)
 	DeleteObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string) error
+	// SignURL issues a short-lived read URL via gcloud storage sign-url (no write mode).
+	SignURL(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, durationSeconds int) (models.GcpStorageSignURLResult, error)
 }
 
 // GcpComputeInventory lists and mutates Compute Engine VMs via the gcloud CLI adapter.
@@ -234,9 +236,11 @@ type GcpComputeInventory interface {
 	StopInstance(ctx context.Context, profile models.ProfileSummary, instanceName string, zone string) error
 }
 
-// GcpFunctionsInventory lists Cloud Functions via the gcloud CLI adapter.
+// GcpFunctionsInventory lists and invokes Cloud Functions via the gcloud CLI adapter.
 type GcpFunctionsInventory interface {
 	ListFunctions(ctx context.Context, profile models.ProfileSummary) ([]models.GcpCloudFunction, error)
+	// CallFunction triggers execution via gcloud functions call (write-gated at the handler).
+	CallFunction(ctx context.Context, profile models.ProfileSummary, name string, region string, generation string, data string) (models.GcpCloudFunctionInvokeResult, error)
 }
 
 // GcpGkeInventory lists GKE clusters via the gcloud CLI adapter.

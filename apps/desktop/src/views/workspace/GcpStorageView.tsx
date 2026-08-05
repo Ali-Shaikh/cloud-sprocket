@@ -4,9 +4,11 @@
 import { useMemo, useState } from "react";
 import {
   ChevronRight,
+  Copy,
   File as FileIcon,
   FolderOpen,
   HardDrive,
+  Link2,
   RefreshCw,
   Trash2,
   Upload,
@@ -45,7 +47,12 @@ import {
 } from "@/lib/s3-object-filter";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { cn } from "@/lib/utils";
-import type { GcpStorageBucket, GcpStorageObject, WorkspaceSnapshot } from "@/types/backend";
+import type {
+  GcpStorageBucket,
+  GcpStorageObject,
+  GcpStorageSignUrlResult,
+  WorkspaceSnapshot,
+} from "@/types/backend";
 
 export type GcpStorageViewProps = {
   workspace: WorkspaceSnapshot;
@@ -55,9 +62,19 @@ export type GcpStorageViewProps = {
   onLoadMoreObjects?: () => void;
   onUploadObject?: (sourcePath: string, objectKey: string) => void;
   onDeleteObject?: (objectKey: string) => void;
+  onSignUrl?: (objectKey: string, durationSeconds: number) => void;
+  signedUrlResult?: GcpStorageSignUrlResult;
+  signedUrlStatus?: string;
   loadMoreInFlight?: boolean;
   listingLoading?: boolean;
 };
+
+function copyToClipboard(value: string, label = "Copied to clipboard"): void {
+  if (navigator.clipboard) {
+    void navigator.clipboard.writeText(value);
+    notify("success", label);
+  }
+}
 
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
@@ -81,7 +98,8 @@ function defaultUploadKey(sourcePath: string, prefix?: string): string {
 
 /**
  * Cloud Storage browser: bucket list + prefix navigation + objects table.
- * Upload/delete are gated by GCP write mode (top bar).
+ * Upload/delete are gated by GCP write mode (top bar). Signed read URLs do not
+ * require write mode.
  */
 export default function GcpStorageView({
   workspace,
@@ -91,6 +109,9 @@ export default function GcpStorageView({
   onLoadMoreObjects,
   onUploadObject,
   onDeleteObject,
+  onSignUrl,
+  signedUrlResult,
+  signedUrlStatus,
   loadMoreInFlight = false,
   listingLoading = false,
 }: GcpStorageViewProps) {
@@ -101,6 +122,7 @@ export default function GcpStorageView({
   const [uploadSourcePath, setUploadSourcePath] = useState("");
   const [uploadObjectKey, setUploadObjectKey] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [selectedObjectKey, setSelectedObjectKey] = useState("");
 
   const buckets = workspace.gcpStorageBuckets ?? [];
   const objects = workspace.gcpStorageObjects ?? [];
@@ -109,6 +131,9 @@ export default function GcpStorageView({
   const prefix = workspace.gcpStoragePrefixFilter ?? "";
   const hasMore = Boolean(workspace.gcpStorageObjectsHasMore);
   const nextToken = workspace.gcpStorageObjectsNextToken ?? "";
+  const selectedObject = objects.find(
+    (entry) => !entry.isFolder && entry.key === selectedObjectKey,
+  );
 
   const uploadCapability = actionCapabilityState(workspace, "storage", "uploadObject", "gcp");
   const deleteCapability = actionCapabilityState(workspace, "storage", "deleteObject", "gcp");
@@ -169,6 +194,7 @@ export default function GcpStorageView({
 
   const applyPrefix = (nextPrefix: string) => {
     setKeySearch("");
+    setSelectedObjectKey("");
     onSetPrefixFilter(nextPrefix.replace(/^\/+/, ""));
   };
 
@@ -264,6 +290,7 @@ export default function GcpStorageView({
                   return;
                 }
                 setKeySearch("");
+                setSelectedObjectKey("");
                 onSelectBucket(value);
               }}
               disabled={buckets.length === 0 || listingLoading}
@@ -404,10 +431,13 @@ export default function GcpStorageView({
             ]}
             rows={visibleObjects}
             getRowKey={(object) => object.key}
+            selectedKey={selectedObjectKey || undefined}
             onRowClick={(object) => {
               if (object.isFolder) {
                 applyPrefix(object.key);
+                return;
               }
+              setSelectedObjectKey(object.key);
             }}
             getCellTitle={(object, columnId) =>
               columnId === "key" ? object.key : columnId === "updated" ? object.updated : undefined
@@ -486,6 +516,50 @@ export default function GcpStorageView({
               />
             }
           />
+
+          {selectedObject && onSignUrl ? (
+            <div className="space-y-3 rounded-lg border border-border bg-background/60 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className={cn(fieldLabel, "mb-0.5")}>Selected object</div>
+                  <p className="truncate font-mono text-sm" title={selectedObject.key}>
+                    {selectedObject.key}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onSignUrl(selectedObject.key, 3600)}
+                >
+                  <Link2 className="size-3.5" />
+                  Signed link (1h)
+                </Button>
+              </div>
+              {signedUrlStatus ? (
+                <p className="text-xs text-muted-foreground">{signedUrlStatus}</p>
+              ) : null}
+              {signedUrlResult && signedUrlResult.objectKey === selectedObject.key ? (
+                <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                  <span className={fieldLabel}>
+                    Signed link · expires {formatTimestamp(signedUrlResult.expiresAt)}
+                  </span>
+                  <code
+                    className="block break-all rounded bg-background/60 p-2 font-mono text-xs leading-relaxed"
+                    title={signedUrlResult.url}
+                  >
+                    {signedUrlResult.url}
+                  </code>
+                  <Button
+                    size="sm"
+                    onClick={() => copyToClipboard(signedUrlResult.url, "Signed URL copied")}
+                  >
+                    <Copy className="size-3.5" />
+                    Copy link
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </section>
       ) : null}
 

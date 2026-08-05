@@ -561,3 +561,58 @@ func (s *Service) handleGcpStorageLoadMoreObjects(ctx context.Context, params js
 	workspace.GcpStorageStatusMessage = fmt.Sprintf("Loaded %d more item(s). %s", len(page.Entries), moreNote)
 	return workspace, nil
 }
+
+// handleGcpStorageSignURL implements gcp.storage.signUrl (read-only; no write gate).
+func (s *Service) handleGcpStorageSignURL(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
+	if s.gcpStorage == nil {
+		return nil, errors.New("GCP Cloud Storage inventory is not available")
+	}
+	var request struct {
+		ObjectKey       string `json:"objectKey"`
+		BucketName      string `json:"bucketName"`
+		DurationSeconds int    `json:"durationSeconds"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	session, err := s.Load(ctx, snapshot)
+	if err != nil {
+		return nil, err
+	}
+	if !session.IsLocked || session.CurrentProviderID != "gcp" {
+		return nil, errors.New("open a GCP workspace before generating a signed URL")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		return nil, errors.New("the workspace's GCP profile is not available")
+	}
+	bucketName := strings.TrimSpace(request.BucketName)
+	if bucketName == "" {
+		bucketName = session.SelectedGcpStorageBucket
+	}
+	objectKey := strings.TrimSpace(request.ObjectKey)
+	objectKey = strings.TrimPrefix(objectKey, "/")
+	if bucketName == "" {
+		return nil, errors.New("select a Cloud Storage bucket before generating a signed URL")
+	}
+	if objectKey == "" {
+		return nil, errors.New("select an object before generating a signed URL")
+	}
+	if strings.HasSuffix(objectKey, "/") {
+		return nil, errors.New("signed URLs are not supported for folder prefixes")
+	}
+
+	actionCtx, cancel := s.withAzureTimeout(ctx)
+	result, err := s.gcpStorage.SignURL(actionCtx, profile, bucketName, objectKey, request.DurationSeconds)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"result": result,
+	}, nil
+}

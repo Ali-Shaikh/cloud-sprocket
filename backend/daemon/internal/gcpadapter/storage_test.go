@@ -109,6 +109,68 @@ func TestListBucketsEmptyPayload(t *testing.T) {
 	}
 }
 
+func TestSignURLBuildsGcloudArgsAndParsesJSON(t *testing.T) {
+	out := []byte(`[{
+"resource": "gs://alpha-bucket/docs/readme.txt",
+"signed_url": "https://storage.googleapis.com/alpha-bucket/docs/readme.txt?X-Goog-Signature=abc"
+}]`)
+	fake := &fakeCLI{out: out}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	result, err := inv.SignURL(context.Background(), gcpProfile(), "alpha-bucket", "docs/readme.txt", 1800)
+	if err != nil {
+		t.Fatalf("SignURL: %v", err)
+	}
+	if !strings.Contains(result.URL, "X-Goog-Signature=abc") {
+		t.Fatalf("url = %q", result.URL)
+	}
+	if result.DurationSeconds != 1800 {
+		t.Fatalf("duration = %d", result.DurationSeconds)
+	}
+	joined := strings.Join(fake.args, " ")
+	if !strings.Contains(joined, "storage sign-url") {
+		t.Fatalf("args missing sign-url: %v", fake.args)
+	}
+	if !strings.Contains(joined, "gs://alpha-bucket/docs/readme.txt") {
+		t.Fatalf("args missing uri: %v", fake.args)
+	}
+	if !strings.Contains(joined, "--duration=1800s") {
+		t.Fatalf("args missing duration: %v", fake.args)
+	}
+	if !strings.Contains(joined, "--http-verb=GET") {
+		t.Fatalf("args missing http-verb: %v", fake.args)
+	}
+}
+
+func TestClampGcpSignURLDuration(t *testing.T) {
+	cases := []struct {
+		in   int
+		want int
+	}{
+		{0, 3600},
+		{-1, 3600},
+		{30, 60},
+		{120, 120},
+		{3600, 3600},
+		{13 * 60 * 60, 12 * 60 * 60},
+	}
+	for _, tc := range cases {
+		if got := clampGcpSignURLDuration(tc.in); got != tc.want {
+			t.Fatalf("clampGcpSignURLDuration(%d) = %d, want %d", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestSignURLRejectsFolderPrefix(t *testing.T) {
+	inv := NewInventory(config.Settings{})
+	inv.runner = &fakeCLI{out: []byte(`[]`)}
+	_, err := inv.SignURL(context.Background(), gcpProfile(), "alpha", "docs/", 3600)
+	if err == nil {
+		t.Fatal("expected folder rejection")
+	}
+}
+
 func TestListBucketsCLIError(t *testing.T) {
 	inv := NewInventory(config.Settings{})
 	inv.runner = &fakeCLI{err: errors.New("exit status 1")}

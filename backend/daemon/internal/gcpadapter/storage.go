@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dustin/go-humanize"
 
@@ -37,6 +38,125 @@ func (i *Inventory) ListBuckets(
 		return nil, err
 	}
 	return decodeStorageBuckets(payload)
+}
+
+// SignURL issues a short-lived read URL via `gcloud storage sign-url`.
+// durationSeconds is clamped to [60, 12 hours]; default is one hour (gcloud default).
+// System-managed signing keys cap duration at 12 hours.
+func (i *Inventory) SignURL(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+	objectKey string,
+	durationSeconds int,
+) (models.GcpStorageSignURLResult, error) {
+	bucket := normaliseBucketName(bucketName)
+	key := strings.TrimSpace(objectKey)
+	key = strings.TrimPrefix(key, "/")
+	if bucket == "" || key == "" {
+		return models.GcpStorageSignURLResult{}, fmt.Errorf("bucket name and object key are required")
+	}
+	if strings.HasSuffix(key, "/") {
+		return models.GcpStorageSignURLResult{}, fmt.Errorf("signed URLs are not supported for folder prefixes")
+	}
+	durationSeconds = clampGcpSignURLDuration(durationSeconds)
+	uri := "gs://" + bucket + "/" + key
+	args := []string{
+		"storage", "sign-url",
+		uri,
+		"--duration=" + strconv.Itoa(durationSeconds) + "s",
+		"--http-verb=GET",
+		"--format=json",
+	}
+	if project := projectFromProfile(profile); project != "" {
+		args = append(args, "--project", project)
+	}
+	payload, err := i.run(ctx, profile, args...)
+	if err != nil {
+		return models.GcpStorageSignURLResult{}, err
+	}
+	url, err := decodeSignedURL(payload)
+	if err != nil {
+		return models.GcpStorageSignURLResult{}, err
+	}
+	expiresAt := time.Now().UTC().Add(time.Duration(durationSeconds) * time.Second).Format(time.RFC3339)
+	return models.GcpStorageSignURLResult{
+		BucketName:      bucket,
+		ObjectKey:       key,
+		URL:             url,
+		DurationSeconds: durationSeconds,
+		ExpiresAt:       expiresAt,
+	}, nil
+}
+
+func clampGcpSignURLDuration(durationSeconds int) int {
+	const (
+		defaultSeconds = 3600
+		minSeconds     = 60
+		// gcloud storage sign-url caps system-managed keys at 12 hours.
+		maxSeconds = 12 * 60 * 60
+	)
+	if durationSeconds <= 0 {
+		return defaultSeconds
+	}
+	if durationSeconds < minSeconds {
+		return minSeconds
+	}
+	if durationSeconds > maxSeconds {
+		return maxSeconds
+	}
+	return durationSeconds
+}
+
+func decodeSignedURL(payload []byte) (string, error) {
+	trimmed := strings.TrimSpace(string(payload))
+	if trimmed == "" || trimmed == "null" || trimmed == "[]" {
+		return "", fmt.Errorf("gcloud storage sign-url returned empty output")
+	}
+	// Prefer structured JSON (array or single object).
+	type signedRow struct {
+		SignedURL    string `json:"signed_url"`
+		SignedURLAlt string `json:"signedUrl"`
+		URL          string `json:"url"`
+		ResourceURL  string `json:"resource_url"`
+	}
+	var rows []signedRow
+	if err := json.Unmarshal(payload, &rows); err == nil {
+		for _, row := range rows {
+			if url := firstNonEmpty(row.SignedURL, row.SignedURLAlt, row.URL); url != "" {
+				return url, nil
+			}
+		}
+	}
+	var single signedRow
+	if err := json.Unmarshal(payload, &single); err == nil {
+		if url := firstNonEmpty(single.SignedURL, single.SignedURLAlt, single.URL); url != "" {
+			return url, nil
+		}
+	}
+	// Fallback: first https URL in free-form text (table output).
+	for _, line := range strings.Split(trimmed, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "https://") {
+			// Table rows may include trailing columns; take the first token.
+			fields := strings.Fields(line)
+			if len(fields) > 0 && strings.HasPrefix(fields[0], "https://") {
+				return fields[0], nil
+			}
+			return line, nil
+		}
+		// Scan tokens on non-URL-leading lines for a signed URL column.
+		for _, field := range strings.Fields(line) {
+			if strings.HasPrefix(field, "https://") && strings.Contains(field, "X-Goog-") {
+				return field, nil
+			}
+			if strings.HasPrefix(field, "https://storage.googleapis.com/") ||
+				strings.HasPrefix(field, "https://storage.cloud.google.com/") {
+				return field, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("could not parse signed URL from gcloud output")
 }
 
 // UploadObject copies a local file to gs://bucket/key via `gcloud storage cp`.

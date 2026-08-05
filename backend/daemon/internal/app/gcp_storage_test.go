@@ -24,15 +24,20 @@ type stubGcpStorageInventory struct {
 	objectsErr  error
 	uploadErr   error
 	deleteErr   error
+	signErr     error
+	signResult  models.GcpStorageSignURLResult
 	calls       int
 	objectCalls int
 	uploadCalls int
 	deleteCalls int
+	signCalls   int
 	lastBucket  string
 	lastPrefix  string
 	lastToken   string
 	lastKey     string
 	lastSource  string
+	lastSignKey string
+	lastSignDur int
 }
 
 func (s *stubGcpStorageInventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.GcpStorageBucket, error) {
@@ -95,6 +100,32 @@ func (s *stubGcpStorageInventory) DeleteObject(
 	s.lastBucket = bucketName
 	s.lastKey = objectKey
 	return s.deleteErr
+}
+
+func (s *stubGcpStorageInventory) SignURL(
+	_ context.Context,
+	_ models.ProfileSummary,
+	bucketName string,
+	objectKey string,
+	durationSeconds int,
+) (models.GcpStorageSignURLResult, error) {
+	s.signCalls++
+	s.lastBucket = bucketName
+	s.lastSignKey = objectKey
+	s.lastSignDur = durationSeconds
+	if s.signErr != nil {
+		return models.GcpStorageSignURLResult{}, s.signErr
+	}
+	if s.signResult.URL != "" {
+		return s.signResult, nil
+	}
+	return models.GcpStorageSignURLResult{
+		BucketName:      bucketName,
+		ObjectKey:       objectKey,
+		URL:             "https://storage.googleapis.com/" + bucketName + "/" + objectKey + "?X-Goog-Signature=mock",
+		DurationSeconds: durationSeconds,
+		ExpiresAt:       "2026-08-05T12:00:00Z",
+	}, nil
 }
 
 func TestEnrichGcpStorageInventorySuccess(t *testing.T) {
@@ -457,6 +488,57 @@ func TestHandleGcpStorageSelectBucketRejectsUnlocked(t *testing.T) {
 		t.Fatal("expected error for unlocked workspace")
 	}
 	if !strings.Contains(err.Error(), "GCP workspace") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestHandleGcpStorageSignURLDoesNotRequireWriteMode(t *testing.T) {
+	inv := &stubGcpStorageInventory{
+		buckets: []models.GcpStorageBucket{{Name: "alpha"}},
+	}
+	service := gcpStorageTestService(t, inv)
+	lockGcpWorkspace(t, service)
+	if _, err := service.Handle(context.Background(), "gcp.storage.selectBucket", []byte(`{"bucketName":"alpha"}`), nil); err != nil {
+		t.Fatalf("selectBucket: %v", err)
+	}
+	// Write mode remains off; sign-url must still succeed.
+	result, err := service.Handle(context.Background(), "gcp.storage.signUrl", []byte(`{"objectKey":"docs/readme.txt","durationSeconds":3600}`), nil)
+	if err != nil {
+		t.Fatalf("signUrl: %v", err)
+	}
+	if inv.signCalls != 1 {
+		t.Fatalf("signCalls = %d", inv.signCalls)
+	}
+	if inv.lastSignKey != "docs/readme.txt" || inv.lastBucket != "alpha" {
+		t.Fatalf("sign args bucket=%q key=%q", inv.lastBucket, inv.lastSignKey)
+	}
+	payload, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("result type %T", result)
+	}
+	signed, ok := payload["result"].(models.GcpStorageSignURLResult)
+	if !ok {
+		t.Fatalf("result payload type %T", payload["result"])
+	}
+	if !strings.Contains(signed.URL, "X-Goog-Signature=mock") {
+		t.Fatalf("url = %q", signed.URL)
+	}
+}
+
+func TestHandleGcpStorageSignURLRejectsFolderPrefix(t *testing.T) {
+	inv := &stubGcpStorageInventory{
+		buckets: []models.GcpStorageBucket{{Name: "alpha"}},
+	}
+	service := gcpStorageTestService(t, inv)
+	lockGcpWorkspace(t, service)
+	if _, err := service.Handle(context.Background(), "gcp.storage.selectBucket", []byte(`{"bucketName":"alpha"}`), nil); err != nil {
+		t.Fatalf("selectBucket: %v", err)
+	}
+	_, err := service.Handle(context.Background(), "gcp.storage.signUrl", []byte(`{"objectKey":"docs/"}`), nil)
+	if err == nil {
+		t.Fatal("expected folder prefix rejection")
+	}
+	if !strings.Contains(err.Error(), "folder") {
 		t.Fatalf("error = %v", err)
 	}
 }

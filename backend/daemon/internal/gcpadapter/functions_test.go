@@ -94,6 +94,64 @@ func TestListFunctionsDecodesGen1AndGen2AndSorts(t *testing.T) {
 	}
 }
 
+func TestCallFunctionBuildsGcloudArgs(t *testing.T) {
+	fake := &fakeCLI{out: []byte(`{"result":"hello"}`)}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	result, err := inv.CallFunction(
+		context.Background(),
+		gcpProfile(),
+		"hello-http",
+		"us-central1",
+		"2nd gen",
+		`{"name":"world"}`,
+	)
+	if err != nil {
+		t.Fatalf("CallFunction: %v", err)
+	}
+	if result.Body != `{"result":"hello"}` {
+		t.Fatalf("body = %q", result.Body)
+	}
+	if result.Name != "hello-http" || result.Region != "us-central1" {
+		t.Fatalf("result = %+v", result)
+	}
+	joined := strings.Join(fake.args, " ")
+	if !strings.Contains(joined, "functions call hello-http") {
+		t.Fatalf("args missing call: %v", fake.args)
+	}
+	if !strings.Contains(joined, "--region us-central1") {
+		t.Fatalf("args missing region: %v", fake.args)
+	}
+	if !strings.Contains(joined, "--gen2") {
+		t.Fatalf("args missing --gen2: %v", fake.args)
+	}
+	if !strings.Contains(joined, "--data") || !strings.Contains(joined, `{"name":"world"}`) {
+		t.Fatalf("args missing data: %v", fake.args)
+	}
+	if !strings.Contains(joined, "--project platform-prod") {
+		t.Fatalf("args missing project: %v", fake.args)
+	}
+}
+
+func TestCallFunctionDefaultsEmptyDataAndOmitsGen2(t *testing.T) {
+	fake := &fakeCLI{out: []byte(`ok`)}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	_, err := inv.CallFunction(context.Background(), gcpProfile(), "legacy-fn", "europe-west1", "1st gen", "")
+	if err != nil {
+		t.Fatalf("CallFunction: %v", err)
+	}
+	joined := strings.Join(fake.args, " ")
+	if strings.Contains(joined, "--gen2") {
+		t.Fatalf("unexpected --gen2 for 1st gen: %v", fake.args)
+	}
+	if !strings.Contains(joined, "{}") {
+		t.Fatalf("expected default empty JSON data: %v", fake.args)
+	}
+}
+
 func TestListFunctionsEmptyPayload(t *testing.T) {
 	inv := NewInventory(config.Settings{})
 	inv.runner = &multiResponseCLI{gen1Out: []byte("[]"), gen2Out: []byte("[]")}
