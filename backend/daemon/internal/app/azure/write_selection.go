@@ -159,3 +159,115 @@ func NormaliseWafPolicyMode(mode string) (string, error) {
 		return "", fmt.Errorf("WAF policy mode must be Prevention or Detection, got %q", mode)
 	}
 }
+
+// ActiveVirtualMachineSelection resolves profile/resource group/VM for VM actions.
+func ActiveVirtualMachineSelection(
+	ctx context.Context,
+	resourceGroups ResourceGroupsWriter,
+	vms VirtualMachinesWriter,
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	vmID string,
+) (models.ProfileSummary, string, models.AzureVirtualMachine, error) {
+	profile, err := LockedAzureProfile(snapshot.Profiles, session, "open an Azure workspace before invoking virtual machine actions")
+	if err != nil {
+		return models.ProfileSummary{}, "", models.AzureVirtualMachine{}, err
+	}
+	resourceGroup := strings.TrimSpace(session.SelectedAzureResourceGroup)
+	if resourceGroup == "" && resourceGroups != nil {
+		if groups, listErr := resourceGroups.ListResourceGroups(ctx, profile); listErr == nil && len(groups) > 0 {
+			resourceGroup = selectedResourceGroupName(session, groups)
+		}
+	}
+	if resourceGroup == "" {
+		return models.ProfileSummary{}, "", models.AzureVirtualMachine{}, errors.New("select a resource group before invoking virtual machine actions")
+	}
+	targetID := strings.TrimSpace(vmID)
+	if targetID == "" {
+		targetID = strings.TrimSpace(session.SelectedAzureVMID)
+	}
+	var listed []models.AzureVirtualMachine
+	if vms != nil {
+		if machines, listErr := vms.ListVirtualMachines(ctx, profile, resourceGroup); listErr == nil {
+			listed = machines
+		}
+	}
+	if targetID == "" && len(listed) > 0 {
+		targetID = listed[0].VMID
+	}
+	if targetID == "" {
+		return models.ProfileSummary{}, "", models.AzureVirtualMachine{}, errors.New("select a virtual machine before invoking an action")
+	}
+	for _, vm := range listed {
+		if vm.VMID == targetID || vm.Name == targetID {
+			return profile, resourceGroup, vm, nil
+		}
+	}
+	return models.ProfileSummary{}, "", models.AzureVirtualMachine{}, fmt.Errorf("virtual machine %s was not found in %s", targetID, resourceGroup)
+}
+
+func selectedResourceGroupName(session models.SessionSnapshot, groups []models.AzureResourceGroup) string {
+	if session.SelectedAzureResourceGroup != "" {
+		for _, group := range groups {
+			if group.Name == session.SelectedAzureResourceGroup {
+				return session.SelectedAzureResourceGroup
+			}
+		}
+	}
+	if len(groups) == 0 {
+		return ""
+	}
+	return groups[0].Name
+}
+
+// ActiveFrontDoorSelection resolves profile/resource group/profile name for Front Door actions.
+func ActiveFrontDoorSelection(
+	ctx context.Context,
+	frontDoor FrontDoorWriter,
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	profileName string,
+) (models.ProfileSummary, string, string, error) {
+	profile, err := LockedAzureProfile(snapshot.Profiles, session, "open an Azure workspace before invoking Front Door actions")
+	if err != nil {
+		return models.ProfileSummary{}, "", "", err
+	}
+	var profiles []models.AzureFrontDoorProfile
+	if frontDoor != nil {
+		listed, listErr := frontDoor.ListFrontDoorProfiles(ctx, profile, false)
+		if listErr == nil {
+			profiles = listed
+		}
+	}
+	targetProfile := strings.TrimSpace(profileName)
+	if targetProfile == "" {
+		targetProfile = strings.TrimSpace(session.SelectedAzureFrontDoorProfile)
+	}
+	if targetProfile == "" {
+		targetProfile = firstFrontDoorProfileName(profiles)
+	}
+	if targetProfile == "" {
+		return models.ProfileSummary{}, "", "", errors.New("select a Front Door profile before invoking an action")
+	}
+	resourceGroup := resourceGroupForFrontDoorProfile(profiles, targetProfile)
+	if resourceGroup == "" {
+		return models.ProfileSummary{}, "", "", fmt.Errorf("Front Door profile %s was not found", targetProfile)
+	}
+	return profile, resourceGroup, targetProfile, nil
+}
+
+func firstFrontDoorProfileName(profiles []models.AzureFrontDoorProfile) string {
+	if len(profiles) == 0 {
+		return ""
+	}
+	return profiles[0].Name
+}
+
+func resourceGroupForFrontDoorProfile(profiles []models.AzureFrontDoorProfile, name string) string {
+	for _, item := range profiles {
+		if item.Name == name {
+			return item.ResourceGroup
+		}
+	}
+	return ""
+}

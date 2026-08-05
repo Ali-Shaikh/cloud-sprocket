@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 )
 
-// Thin façade wrappers for Azure write RPCs owned by internal/app/azure (F-029 Phase 5c).
+// Thin façade wrappers for Azure write RPCs owned by internal/app/azure (F-029 Phase 5c/5d).
 
 func (s *Service) handleAzureStorageCreateAccount(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	if err := s.requireAzureDomain(); err != nil {
@@ -162,4 +162,46 @@ func (s *Service) handleAzureWafConfigRemoveExclusion(ctx context.Context, param
 		return nil, err
 	}
 	return s.azureDomain.HandleWafConfigRemoveExclusion(ctx, params, notifier)
+}
+
+func (s *Service) handleAzureResourceGroupsCreate(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAzureDomain(); err != nil {
+		return nil, err
+	}
+	return s.azureDomain.HandleResourceGroupsCreate(ctx, params, notifier)
+}
+
+func (s *Service) handleAzureResourceGroupsDelete(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAzureDomain(); err != nil {
+		return nil, err
+	}
+	return s.azureDomain.HandleResourceGroupsDelete(ctx, params, notifier)
+}
+
+func (s *Service) handleAzureVirtualMachinesInvokeAction(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAzureDomain(); err != nil {
+		return nil, err
+	}
+	return s.azureDomain.HandleVirtualMachinesInvokeAction(ctx, params, notifier)
+}
+
+func (s *Service) handleAzureFrontDoorRefresh(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAzureDomain(); err != nil {
+		return nil, err
+	}
+	return s.azureDomain.HandleFrontDoorRefresh(ctx, params, notifier)
+}
+
+func (s *Service) handleAzureFrontDoorPurgeCache(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAzureDomain(); err != nil {
+		return nil, err
+	}
+	return s.azureDomain.HandleFrontDoorPurgeCache(ctx, params, notifier)
+}
+
+func (s *Service) handleAzureQueuesPurge(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAzureDomain(); err != nil {
+		return nil, err
+	}
+	return s.azureDomain.HandleQueuesPurge(ctx, params, notifier)
 }

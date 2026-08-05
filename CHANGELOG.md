@@ -69,13 +69,17 @@ Installers for every release are published on the
   discovery/session/invalidator, deployment, recipe, runner, and write-executor
   ports (architecture F-029 Phase 6a). AWS invoke-write ops and check-registry
   construction stay on the façade.
+- Daemon Azure remaining sync write RPCs move into `internal/app/azure` with
+  resource group, VM, Front Door, and queue writer ports (architecture F-029
+  Phase 5d): resource group create/delete, VM invoke actions, Front Door cache
+  purge and topology refresh, and storage queue purge. Façade keeps thin wrappers
+  only. Bastion list/connect stay on the façade (local CLI launch, not write-mode
+  cloud mutations).
 - Daemon Azure sync write RPCs move into `internal/app/azure` with writer ports and
   shared authorise/finish helpers (architecture F-029 Phase 5c): storage create
   account/container, blob upload/delete/copy/folder/presign, Key Vault set/reveal,
   PostgreSQL start/stop, Functions invoke, App Service create/settings/actions/slots,
   and WAF policy mode/rule/exclusion mutations. Façade keeps thin wrappers only.
-  Resource group create/delete, VM actions, Front Door purge, and Bastion remain
-  on the façade for a follow-up slice.
 - Daemon Azure selection RPCs (resource group, VM, storage account/container/blob
   and prefix filter, web app/slot, Log Analytics workspace, WAF policy, Front Door
   profile/endpoint/origin group, Function App/function, Key Vault vault/secret,

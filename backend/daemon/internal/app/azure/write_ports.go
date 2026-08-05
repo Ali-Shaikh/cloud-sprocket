@@ -60,3 +60,27 @@ type WafWriter interface {
 	AddWafExclusion(ctx context.Context, profile models.ProfileSummary, resourceGroup string, policyName string, exclusion models.AzureWafExclusion) error
 	RemoveWafExclusion(ctx context.Context, profile models.ProfileSummary, resourceGroup string, policyName string, exclusion models.AzureWafExclusion) error
 }
+
+// ResourceGroupsWriter is the resource group create/delete surface.
+type ResourceGroupsWriter interface {
+	ListResourceGroups(ctx context.Context, profile models.ProfileSummary) ([]models.AzureResourceGroup, error)
+	CreateResourceGroup(ctx context.Context, profile models.ProfileSummary, name string, location string) (models.AzureResourceGroup, error)
+	DeleteResourceGroup(ctx context.Context, profile models.ProfileSummary, name string) error
+}
+
+// VirtualMachinesWriter is the VM lifecycle action surface.
+type VirtualMachinesWriter interface {
+	ListVirtualMachines(ctx context.Context, profile models.ProfileSummary, resourceGroup string) ([]models.AzureVirtualMachine, error)
+	InvokeVirtualMachineAction(ctx context.Context, profile models.ProfileSummary, resourceGroup string, vmName string, action string) error
+}
+
+// FrontDoorWriter is the Front Door topology list and cache purge surface.
+type FrontDoorWriter interface {
+	ListFrontDoorProfiles(ctx context.Context, profile models.ProfileSummary, withWafLink bool) ([]models.AzureFrontDoorProfile, error)
+	PurgeFrontDoorEndpointCache(ctx context.Context, profile models.ProfileSummary, resourceGroup string, profileName string, endpointName string, contentPaths []string, domains []string) error
+}
+
+// QueuesWriter is the storage queue purge surface.
+type QueuesWriter interface {
+	PurgeQueueMessages(ctx context.Context, profile models.ProfileSummary, accountName string, queueName string) (models.AzureQueuePurgeResult, error)
+}
