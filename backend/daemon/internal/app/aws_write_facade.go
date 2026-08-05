@@ -214,3 +214,10 @@ func (s *Service) handleAwsRdsStopInstance(ctx context.Context, params json.RawM
 	}
 	return s.aws.HandleRDSStopInstance(ctx, params, notifier)
 }
+
+func (s *Service) handleAwsEcsForceNewDeployment(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleECSForceNewDeployment(ctx, params, notifier)
+}

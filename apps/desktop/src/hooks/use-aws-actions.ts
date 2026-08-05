@@ -774,6 +774,25 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setEcsActionStatus, setWorkspace]);
 
+  const forceECSNewDeployment = useCallback(
+    (clusterArn: string, serviceArn: string): void => {
+      setEcsActionStatus("Forcing a new ECS deployment.");
+      void requestWorkspaceSnapshot("aws.ecs.forceNewDeployment", { clusterArn, serviceArn })
+        .then((workspaceResult) => {
+          startTransition(() => {
+            setWorkspace(workspaceResult);
+          });
+          setEcsActionStatus(
+            workspaceResult.ecsStatusMessage || "Forced a new ECS deployment.",
+          );
+        })
+        .catch((error: unknown) => {
+          setEcsActionStatus(error instanceof Error ? error.message : String(error));
+        });
+    },
+    [setEcsActionStatus, setWorkspace],
+  );
+
   const selectEKSRegion = useCallback((region: string): void => {
     setEksActionStatus(`Loading EKS clusters for ${region}.`);
     void requestWorkspaceSnapshot("aws.eks.selectRegion", { region })
@@ -1239,6 +1258,7 @@ export function useAwsActions(params: UseAwsActionsParams) {
     selectECSCluster,
     selectECSService,
     selectECSTask,
+    forceECSNewDeployment,
     refreshEKSInventory,
     selectEKSRegion,
     selectEKSCluster,

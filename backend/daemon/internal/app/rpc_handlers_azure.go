@@ -187,6 +187,9 @@ func (s *Service) registerAzureHandlers(m *handlerRegistry) {
 	m.register("azure.queues.selectQueue", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAzureQueuesSelectQueue(ctx, params, notifier)
 	})
+	m.register("azure.queues.purge", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleAzureQueuesPurge(ctx, params, notifier)
+	})
 	m.register("azure.bastion.list", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAzureBastionList(ctx, params, notifier)
 	})

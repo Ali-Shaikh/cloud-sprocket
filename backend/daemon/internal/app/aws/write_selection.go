@@ -244,3 +244,38 @@ func ActiveRDSSelection(
 	}
 	return profile, region, instanceID, nil
 }
+
+// ActiveECSServiceSelection resolves profile/region/cluster/service for ECS write actions.
+func ActiveECSServiceSelection(
+	snapshot discovery.Snapshot,
+	session models.SessionSnapshot,
+	clusterArnOverride string,
+	serviceArnOverride string,
+) (models.ProfileSummary, string, string, string, error) {
+	profile, err := LockedAWSProfile(snapshot.Profiles, session, "open an AWS workspace before using ECS actions")
+	if err != nil {
+		return models.ProfileSummary{}, "", "", "", err
+	}
+	region := strings.TrimSpace(session.SelectedECSRegion)
+	if region == "" {
+		region = ProfileRegionHint(profile)
+	}
+	if region == "" {
+		return models.ProfileSummary{}, "", "", "", errors.New("select an ECS region before using this action")
+	}
+	clusterArn := strings.TrimSpace(clusterArnOverride)
+	if clusterArn == "" {
+		clusterArn = strings.TrimSpace(session.SelectedECSClusterArn)
+	}
+	if clusterArn == "" {
+		return models.ProfileSummary{}, "", "", "", errors.New("select an ECS cluster before using this action")
+	}
+	serviceArn := strings.TrimSpace(serviceArnOverride)
+	if serviceArn == "" {
+		serviceArn = strings.TrimSpace(session.SelectedECSServiceArn)
+	}
+	if serviceArn == "" {
+		return models.ProfileSummary{}, "", "", "", errors.New("select an ECS service before using this action")
+	}
+	return profile, region, clusterArn, serviceArn, nil
+}

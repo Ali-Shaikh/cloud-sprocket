@@ -1,10 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
+import { useState } from "react";
 import { formatTimestamp } from "@/lib/format";
+import { actionCapabilityState } from "@/lib/action-capabilities";
 import { cn } from "@/lib/utils";
 import { Inbox } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -30,6 +43,7 @@ export type AzureQueuesViewProps = {
   inventoryLoading?: boolean;
   onSelectAccount: (account: string) => void;
   onSelectQueue: (queue: string) => void;
+  onPurgeQueue?: (account: string, queue: string) => void;
 };
 
 const fieldLabel =
@@ -41,12 +55,16 @@ export default function AzureQueuesView({
   inventoryLoading = false,
   onSelectAccount,
   onSelectQueue,
+  onPurgeQueue,
 }: AzureQueuesViewProps) {
   const accounts = workspace.azureStorageAccounts ?? [];
   const queues = workspace.azureStorageQueues ?? [];
   const messages = workspace.azureQueueMessages ?? [];
   const account = workspace.selectedAzureStorageAccount ?? accounts[0]?.name ?? "";
   const queue = workspace.selectedAzureQueue ?? "";
+  const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
+  const purgeCapability = actionCapabilityState(workspace, "queues", "purge", "azure");
+  const canPurge = Boolean(onPurgeQueue && account && queue && purgeCapability.enabled);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -126,11 +144,29 @@ export default function AzureQueuesView({
       </section>
 
       <section className={sectionCard}>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-base font-bold">Messages{queue ? ` · ${queue}` : ""}</h2>
-          {messages.length > 0 ? (
-            <span className="text-xs text-muted-foreground">peeked {messages.length}</span>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            {messages.length > 0 ? (
+              <span className="text-xs text-muted-foreground">peeked {messages.length}</span>
+            ) : null}
+            {onPurgeQueue ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!canPurge}
+                title={
+                  canPurge
+                    ? "Delete all messages in this queue"
+                    : purgeCapability.reason || "Select a queue and enable write mode."
+                }
+                onClick={() => setPurgeConfirmOpen(true)}
+              >
+                Purge queue
+              </Button>
+            ) : null}
+          </div>
         </div>
         <div className="overflow-hidden rounded-lg border border-border">
           {messages.length === 0 ? (
@@ -171,6 +207,35 @@ export default function AzureQueuesView({
           )}
         </div>
       </section>
+
+      <AlertDialog open={purgeConfirmOpen} onOpenChange={setPurgeConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Purge queue messages?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes all messages from queue{" "}
+              <span className="font-medium">{queue || "the selected queue"}</span> in{" "}
+              <span className="font-medium">{account || "the selected account"}</span>. This cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!canPurge}
+              onClick={() => {
+                if (!account || !queue) {
+                  return;
+                }
+                onPurgeQueue?.(account, queue);
+                setPurgeConfirmOpen(false);
+              }}
+            >
+              Purge queue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -93,6 +93,7 @@ type ECSInventory interface {
 	ListServices(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string) ([]models.AwsEcsService, error)
 	ListTasks(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, serviceArn string) ([]models.AwsEcsTask, error)
 	DescribeTask(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, taskArn string) (models.AwsEcsTask, error)
+	ForceNewDeployment(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, serviceArn string) (models.AwsEcsForceNewDeploymentResult, error)
 }
 
 type EKSInventory interface {
@@ -207,6 +208,8 @@ type AzureInventory interface {
 	PeekQueueMessages(ctx context.Context, profile models.ProfileSummary, accountName string, queueName string) ([]models.AzureQueueMessage, error)
 	// GetQueueApproximateMessageCount returns the queue's approximate message count.
 	GetQueueApproximateMessageCount(ctx context.Context, profile models.ProfileSummary, accountName string, queueName string) (int64, error)
+	// PurgeQueueMessages clears all messages from a storage queue (write action).
+	PurgeQueueMessages(ctx context.Context, profile models.ProfileSummary, accountName string, queueName string) (models.AzureQueuePurgeResult, error)
 	ListEntraUsers(ctx context.Context, profile models.ProfileSummary) ([]models.AzureEntraUser, error)
 	ListEntraGroups(ctx context.Context, profile models.ProfileSummary) ([]models.AzureEntraGroup, error)
 	ListEntraAppRegistrations(ctx context.Context, profile models.ProfileSummary) ([]models.AzureEntraApp, error)

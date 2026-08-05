@@ -169,6 +169,13 @@ func (stubECSInventory) DescribeTask(context.Context, models.ProfileSummary, str
 	return models.AwsEcsTask{}, nil
 }
 
+func (stubECSInventory) ForceNewDeployment(context.Context, models.ProfileSummary, string, string, string) (models.AwsEcsForceNewDeploymentResult, error) {
+	return models.AwsEcsForceNewDeploymentResult{
+		ServiceName: "web",
+		Summary:     "Forced a new deployment for ECS service web.",
+	}, nil
+}
+
 type stubEKSInventory struct{}
 
 func (stubEKSInventory) ListClusters(context.Context, models.ProfileSummary, string) ([]models.AwsEksCluster, error) {
@@ -775,6 +782,14 @@ func (stubAzureInventory) GetQueueApproximateMessageCount(context.Context, model
 
 func (stubAzureInventory) PeekQueueMessages(context.Context, models.ProfileSummary, string, string) ([]models.AzureQueueMessage, error) {
 	return []models.AzureQueueMessage{{ID: "m1", Text: "hello", DequeueCount: 0}}, nil
+}
+
+func (stubAzureInventory) PurgeQueueMessages(_ context.Context, _ models.ProfileSummary, accountName string, queueName string) (models.AzureQueuePurgeResult, error) {
+	return models.AzureQueuePurgeResult{
+		AccountName: accountName,
+		QueueName:   queueName,
+		Summary:     "Purged all messages from queue " + queueName + " in " + accountName + ".",
+	}, nil
 }
 
 func (stubAzureInventory) ListEntraUsers(context.Context, models.ProfileSummary) ([]models.AzureEntraUser, error) {

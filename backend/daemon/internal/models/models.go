@@ -655,6 +655,15 @@ type AwsEcsService struct {
 	TaskDefinition string `json:"taskDefinition,omitempty"`
 }
 
+// AwsEcsForceNewDeploymentResult reports a successful force-new-deployment action.
+type AwsEcsForceNewDeploymentResult struct {
+	ClusterArn  string `json:"clusterArn"`
+	ServiceArn  string `json:"serviceArn"`
+	ServiceName string `json:"serviceName"`
+	Region      string `json:"region"`
+	Summary     string `json:"summary"`
+}
+
 // AwsEcsContainer models a container within an ECS task.
 type AwsEcsContainer struct {
 	Name       string `json:"name"`
@@ -1276,6 +1285,13 @@ type AzureQueueMessage struct {
 	Text          string `json:"text"`
 	DequeueCount  int64  `json:"dequeueCount"`
 	InsertionTime string `json:"insertionTime,omitempty"`
+}
+
+// AzureQueuePurgeResult reports a successful clear of all messages in a queue.
+type AzureQueuePurgeResult struct {
+	AccountName string `json:"accountName"`
+	QueueName   string `json:"queueName"`
+	Summary     string `json:"summary"`
 }
 
 // AzureEntraUser is a directory user (Microsoft Entra ID / Azure AD).

@@ -4,10 +4,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Boxes, Copy, RefreshCw } from "lucide-react";
 
+import { actionCapabilityState } from "@/lib/action-capabilities";
 import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -52,6 +63,7 @@ export type ECSViewProps = {
   onSelectCluster: (clusterArn: string) => void;
   onSelectService: (serviceArn: string) => void;
   onSelectTask: (taskArn: string) => void;
+  onForceNewDeployment?: (clusterArn: string, serviceArn: string) => void;
 };
 
 const fieldLabel =
@@ -112,10 +124,13 @@ export default function ECSView({
   onSelectCluster,
   onSelectService,
   onSelectTask,
+  onForceNewDeployment,
 }: ECSViewProps) {
   const [clusterFilter, setClusterFilter] = useState("");
   const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedEcsClusterArn));
+  const [forceConfirmOpen, setForceConfirmOpen] = useState(false);
   const lastSelectionRef = useRef(ecsSelectionKey(workspace));
+  const forceCapability = actionCapabilityState(workspace, "ecs", "forceNewDeployment");
 
   const regions =
     workspace.ecsRegions.length > 0
@@ -136,6 +151,10 @@ export default function ECSView({
 
   const selectedTask = workspace.ecsTasks.find(
     (task) => task.taskArn === workspace.selectedEcsTaskArn,
+  );
+
+  const canForceNewDeployment = Boolean(
+    onForceNewDeployment && selectedService && selectedCluster && forceCapability.enabled,
   );
 
   const filteredClusters = useMemo(() => {
@@ -308,6 +327,25 @@ export default function ECSView({
 
       {detailFields.length > 0 ? (
         <DetailFieldList fields={detailFields} emptyText="No ECS selection details are available." />
+      ) : null}
+
+      {selectedService && onForceNewDeployment ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!canForceNewDeployment}
+            title={
+              canForceNewDeployment
+                ? "Start a new deployment using the current task definition"
+                : forceCapability.reason || "Select a service and enable write mode."
+            }
+            onClick={() => setForceConfirmOpen(true)}
+          >
+            Force new deployment
+          </Button>
+        </div>
       ) : null}
 
       {selectedTask?.containers && selectedTask.containers.length > 0 ? (
@@ -572,6 +610,35 @@ export default function ECSView({
           inspectorAriaLabel="ECS cluster details"
         />
       </section>
+
+      <AlertDialog open={forceConfirmOpen} onOpenChange={setForceConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Force a new ECS deployment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This starts a new deployment for service{" "}
+              <span className="font-medium">{selectedService?.serviceName || "the selected service"}</span>{" "}
+              without changing the task definition. Running tasks are replaced according to the
+              service deployment configuration.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!canForceNewDeployment || !selectedCluster || !selectedService}
+              onClick={() => {
+                if (!selectedCluster || !selectedService) {
+                  return;
+                }
+                onForceNewDeployment?.(selectedCluster.clusterArn, selectedService.serviceArn);
+                setForceConfirmOpen(false);
+              }}
+            >
+              Force deployment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -262,6 +262,105 @@ func TestHandleLogsFilterEventsRequiresLogGroup(t *testing.T) {
 	}
 }
 
+type fakeECS struct {
+	forced bool
+	region string
+	cluster string
+	service string
+}
+
+func (f *fakeECS) ForceNewDeployment(_ context.Context, _ models.ProfileSummary, region string, clusterArn string, serviceArn string) (models.AwsEcsForceNewDeploymentResult, error) {
+	f.forced = true
+	f.region = region
+	f.cluster = clusterArn
+	f.service = serviceArn
+	return models.AwsEcsForceNewDeploymentResult{
+		ClusterArn:  clusterArn,
+		ServiceArn:  serviceArn,
+		ServiceName: "web",
+		Region:      region,
+		Summary:     "Forced a new deployment for ECS service web.",
+	}, nil
+}
+
+func TestHandleECSForceNewDeployment(t *testing.T) {
+	ecs := &fakeECS{}
+	inv := &fakeInvalidator{}
+	sess := &fakeSession{session: models.SessionSnapshot{
+		IsLocked:              true,
+		CurrentProviderID:     "aws",
+		SelectedProfileID:     "p1",
+		AWSWriteModeEnabled:   true,
+		SelectedECSRegion:     "eu-west-1",
+		SelectedECSClusterArn: "arn:aws:ecs:eu-west-1:123:cluster/demo",
+		SelectedECSServiceArn: "arn:aws:ecs:eu-west-1:123:service/demo/web",
+	}}
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session:       sess,
+		Workspace:     &fakeWorkspace{},
+		Activity:      &fakeActivity{},
+		Invalidator:   inv,
+		ECS:           ecs,
+		ActionTimeout: 5 * time.Second,
+	})
+	params, _ := json.Marshal(map[string]string{})
+	if _, err := svc.HandleECSForceNewDeployment(context.Background(), params, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !ecs.forced || ecs.region != "eu-west-1" || ecs.service != "arn:aws:ecs:eu-west-1:123:service/demo/web" {
+		t.Fatalf("force call = %+v", ecs)
+	}
+}
+
+func TestHandleECSForceNewDeploymentRequiresWriteMode(t *testing.T) {
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: &fakeSession{session: models.SessionSnapshot{
+			IsLocked:              true,
+			CurrentProviderID:     "aws",
+			SelectedProfileID:     "p1",
+			SelectedECSRegion:     "eu-west-1",
+			SelectedECSClusterArn: "arn:aws:ecs:eu-west-1:123:cluster/demo",
+			SelectedECSServiceArn: "arn:aws:ecs:eu-west-1:123:service/demo/web",
+		}},
+		Workspace: &fakeWorkspace{},
+		ECS:       &fakeECS{},
+	})
+	params, _ := json.Marshal(map[string]string{})
+	if _, err := svc.HandleECSForceNewDeployment(context.Background(), params, nil); err == nil {
+		t.Fatal("expected write mode gate")
+	}
+}
+
+func TestActiveECSServiceSelection(t *testing.T) {
+	profile := models.ProfileSummary{ProfileID: "p1", ProviderID: "aws"}
+	snap := discovery.Snapshot{Profiles: []models.ProfileSummary{profile}}
+	session := models.SessionSnapshot{
+		IsLocked:              true,
+		CurrentProviderID:     "aws",
+		SelectedProfileID:     "p1",
+		SelectedECSRegion:     "us-east-1",
+		SelectedECSClusterArn: "arn:cluster",
+		SelectedECSServiceArn: "arn:service",
+	}
+	got, region, cluster, service, err := ActiveECSServiceSelection(snap, session, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ProfileID != "p1" || region != "us-east-1" || cluster != "arn:cluster" || service != "arn:service" {
+		t.Fatalf("got profile=%s region=%s cluster=%s service=%s", got.ProfileID, region, cluster, service)
+	}
+	_, _, _, _, err = ActiveECSServiceSelection(snap, models.SessionSnapshot{IsLocked: false}, "", "")
+	if err == nil {
+		t.Fatal("expected unlocked error")
+	}
+}
+
 type fakeS3 struct {
 	deleted   bool
 	created   bool

@@ -562,3 +562,55 @@ func (s *Service) HandleEC2RunInstances(ctx context.Context, params json.RawMess
 		},
 	)
 }
+
+// HandleECSForceNewDeployment implements aws.ecs.forceNewDeployment.
+func (s *Service) HandleECSForceNewDeployment(ctx context.Context, params json.RawMessage, notifier sessionport.Notifier) (any, error) {
+	if s == nil || s.ecs == nil {
+		return nil, errors.New("aws write service is not available")
+	}
+	var request struct {
+		ClusterArn string `json:"clusterArn"`
+		ServiceArn string `json:"serviceArn"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	session, err := s.session.Load(ctx, snapshot)
+	if err != nil {
+		return nil, err
+	}
+	profile, region, clusterArn, serviceArn, err := ActiveECSServiceSelection(
+		snapshot, session, request.ClusterArn, request.ServiceArn,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if !WritesEnabled(session, profile) {
+		return nil, errors.New("ECS force new deployment requires write mode to be enabled")
+	}
+
+	actionCtx, cancel := s.WithActionTimeout(ctx)
+	result, err := s.ecs.ForceNewDeployment(actionCtx, profile, region, clusterArn, serviceArn)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	if s.invalidator != nil {
+		s.invalidator.InvalidateResourceCache(ctx, "aws.ecs.services", profile.ProfileID+"|"+region+"|"+clusterArn)
+		s.invalidator.InvalidateResourceCache(ctx, "aws.ecs.tasks", profile.ProfileID+"|"+region+"|"+clusterArn+"|"+serviceArn)
+	}
+
+	return s.FinishWriteAction(
+		ctx, snapshot, notifier, "ecs",
+		result.Summary,
+		func(session *models.SessionSnapshot) {
+			session.SelectedECSRegion = region
+			session.SelectedECSClusterArn = clusterArn
+			session.SelectedECSServiceArn = serviceArn
+		},
+	)
+}

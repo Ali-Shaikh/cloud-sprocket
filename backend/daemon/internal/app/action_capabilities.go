@@ -112,6 +112,9 @@ func buildAWSActionCapabilities(
 		"iam": {
 			awsActionCapability(session, profile, "createRole", "Create role"),
 		},
+		"ecs": {
+			awsActionCapability(session, profile, "forceNewDeployment", "Force new deployment"),
+		},
 	}
 }
 
@@ -168,6 +171,9 @@ func buildAzureActionCapabilities(
 		},
 		"frontDoor": {
 			cap("purgeCache", "Purge cache"),
+		},
+		"queues": {
+			cap("purge", "Purge queue"),
 		},
 	}
 }

@@ -199,6 +199,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     selectECSCluster,
     selectECSService,
     selectECSTask,
+    forceECSNewDeployment,
     refreshEKSInventory,
     selectEKSRegion,
     selectEKSCluster,
@@ -442,6 +443,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onSelectCluster={selectECSCluster}
       onSelectService={selectECSService}
       onSelectTask={selectECSTask}
+      onForceNewDeployment={forceECSNewDeployment}
     />
   ) : session.isLocked && activeWorkspaceTabId === "eks" ? (
     <EKSView
