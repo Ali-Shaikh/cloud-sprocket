@@ -213,6 +213,8 @@ export interface SessionSnapshot {
   selectedIamRoleName?: string;
   awsWriteModeEnabled?: boolean;
   azureWriteModeEnabled?: boolean;
+  gcpWriteModeEnabled?: boolean;
+  selectedGcpComputeInstance?: string;
   selectedAzureStorageAccount?: string;
   selectedAzureBlobContainer?: string;
   selectedAzureBlobName?: string;
@@ -1109,6 +1111,9 @@ export interface WorkspaceSnapshot {
   azureWriteCapable: boolean;
   azureWriteModeEnabled: boolean;
   azureWritesEnabled: boolean;
+  gcpWriteCapable?: boolean;
+  gcpWriteModeEnabled?: boolean;
+  gcpWritesEnabled?: boolean;
   selectedAzureResourceGroup?: string;
   selectedAzureVmId?: string;
   selectedAzureStorageAccount?: string;

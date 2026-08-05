@@ -251,3 +251,67 @@ func TestObjectListURL(t *testing.T) {
 		t.Fatalf("docs/ = %q", got)
 	}
 }
+
+func TestUploadObjectBuildsGcloudCp(t *testing.T) {
+	fake := &fakeCLI{out: []byte("")}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	result, err := inv.UploadObject(context.Background(), gcpProfile(), "demo-bucket", "docs/readme.txt", `C:\tmp\readme.txt`)
+	if err != nil {
+		t.Fatalf("UploadObject: %v", err)
+	}
+	if result.BucketName != "demo-bucket" || result.ObjectKey != "docs/readme.txt" {
+		t.Fatalf("result = %+v", result)
+	}
+	if result.DestinationURI != "gs://demo-bucket/docs/readme.txt" {
+		t.Fatalf("uri = %q", result.DestinationURI)
+	}
+	joined := strings.Join(fake.args, " ")
+	if !strings.Contains(joined, "storage cp") {
+		t.Fatalf("args missing storage cp: %v", fake.args)
+	}
+	if !strings.Contains(joined, `C:\tmp\readme.txt`) {
+		t.Fatalf("args missing source path: %v", fake.args)
+	}
+	if !strings.Contains(joined, "gs://demo-bucket/docs/readme.txt") {
+		t.Fatalf("args missing destination: %v", fake.args)
+	}
+	if !strings.Contains(joined, "--project platform-prod") {
+		t.Fatalf("args missing project: %v", fake.args)
+	}
+}
+
+func TestUploadObjectRequiresFields(t *testing.T) {
+	inv := NewInventory(config.Settings{})
+	inv.runner = &fakeCLI{}
+	_, err := inv.UploadObject(context.Background(), gcpProfile(), "", "key", "/tmp/a")
+	if err == nil {
+		t.Fatal("expected error for empty bucket")
+	}
+}
+
+func TestDeleteObjectBuildsGcloudRm(t *testing.T) {
+	fake := &fakeCLI{out: []byte("")}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	if err := inv.DeleteObject(context.Background(), gcpProfile(), "demo-bucket", "docs/readme.txt"); err != nil {
+		t.Fatalf("DeleteObject: %v", err)
+	}
+	joined := strings.Join(fake.args, " ")
+	if !strings.Contains(joined, "storage rm") {
+		t.Fatalf("args missing storage rm: %v", fake.args)
+	}
+	if !strings.Contains(joined, "gs://demo-bucket/docs/readme.txt") {
+		t.Fatalf("args missing uri: %v", fake.args)
+	}
+}
+
+func TestDeleteObjectRequiresFields(t *testing.T) {
+	inv := NewInventory(config.Settings{})
+	inv.runner = &fakeCLI{}
+	if err := inv.DeleteObject(context.Background(), gcpProfile(), "bucket", ""); err == nil {
+		t.Fatal("expected error for empty key")
+	}
+}

@@ -119,3 +119,56 @@ func TestResourceBasename(t *testing.T) {
 		}
 	}
 }
+
+func TestStartInstanceBuildsGcloudCommand(t *testing.T) {
+	fake := &fakeCLI{out: []byte("")}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	if err := inv.StartInstance(context.Background(), gcpProfile(), "web-1", "us-central1-a"); err != nil {
+		t.Fatalf("StartInstance: %v", err)
+	}
+	joined := strings.Join(fake.args, " ")
+	if !strings.Contains(joined, "compute instances start") {
+		t.Fatalf("args missing start: %v", fake.args)
+	}
+	if !strings.Contains(joined, "web-1") {
+		t.Fatalf("args missing name: %v", fake.args)
+	}
+	if !strings.Contains(joined, "--zone=us-central1-a") {
+		t.Fatalf("args missing zone: %v", fake.args)
+	}
+	if !strings.Contains(joined, "--project platform-prod") {
+		t.Fatalf("args missing project: %v", fake.args)
+	}
+}
+
+func TestStopInstanceBuildsGcloudCommand(t *testing.T) {
+	fake := &fakeCLI{out: []byte("")}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	if err := inv.StopInstance(
+		context.Background(),
+		gcpProfile(),
+		"web-1",
+		"https://www.googleapis.com/compute/v1/projects/p/zones/europe-west1-b",
+	); err != nil {
+		t.Fatalf("StopInstance: %v", err)
+	}
+	joined := strings.Join(fake.args, " ")
+	if !strings.Contains(joined, "compute instances stop") {
+		t.Fatalf("args missing stop: %v", fake.args)
+	}
+	if !strings.Contains(joined, "--zone=europe-west1-b") {
+		t.Fatalf("args missing normalised zone: %v", fake.args)
+	}
+}
+
+func TestStartInstanceRequiresNameAndZone(t *testing.T) {
+	inv := NewInventory(config.Settings{})
+	inv.runner = &fakeCLI{}
+	if err := inv.StartInstance(context.Background(), gcpProfile(), "web-1", ""); err == nil {
+		t.Fatal("expected error for empty zone")
+	}
+}

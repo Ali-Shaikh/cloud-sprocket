@@ -118,6 +118,9 @@ export const emptyWorkspace: WorkspaceSnapshot = {
   azureWriteCapable: false,
   azureWriteModeEnabled: false,
   azureWritesEnabled: false,
+  gcpWriteCapable: false,
+  gcpWriteModeEnabled: false,
+  gcpWritesEnabled: false,
   azureCliExtensions: [],
   azureResourceGroups: [],
   azureVirtualMachines: [],
@@ -570,6 +573,7 @@ export function normaliseSessionSnapshot(session: Partial<SessionSnapshot> | nul
     selectedAzureBlobName: session?.selectedAzureBlobName,
     azureBlobPrefixFilter: session?.azureBlobPrefixFilter ?? "",
     azureWriteModeEnabled: session?.azureWriteModeEnabled ?? false,
+    gcpWriteModeEnabled: session?.gcpWriteModeEnabled ?? false,
   };
 }
 
@@ -1109,6 +1113,20 @@ export function applySessionWriteModeToWorkspace(
       ),
     };
   }
+  if (session.lockedProviderId === "gcp") {
+    const writeMode = Boolean(session.gcpWriteModeEnabled);
+    const gcpWritesEnabled = writeMode && Boolean(workspace.gcpWriteCapable ?? session.isLocked);
+    return {
+      ...workspace,
+      gcpWriteModeEnabled: writeMode,
+      gcpWritesEnabled,
+      actionCapabilities: syncActionCapabilitiesForWriteMode(
+        workspace.actionCapabilities,
+        "gcp",
+        gcpWritesEnabled,
+      ),
+    };
+  }
   return workspace;
 }
 
@@ -1153,6 +1171,9 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     azureWriteCapable: source.azureWriteCapable ?? false,
     azureWriteModeEnabled: source.azureWriteModeEnabled ?? false,
     azureWritesEnabled: source.azureWritesEnabled ?? false,
+    gcpWriteCapable: source.gcpWriteCapable ?? false,
+    gcpWriteModeEnabled: source.gcpWriteModeEnabled ?? false,
+    gcpWritesEnabled: source.gcpWritesEnabled ?? false,
     azureResourceGroups: normaliseArray(source.azureResourceGroups).map(normaliseAzureResourceGroup),
     azureVirtualMachines: normaliseArray(source.azureVirtualMachines).map(normaliseAzureVirtualMachine),
     azureStorageAccounts: normaliseArray(source.azureStorageAccounts).map(normaliseAzureStorageAccount),

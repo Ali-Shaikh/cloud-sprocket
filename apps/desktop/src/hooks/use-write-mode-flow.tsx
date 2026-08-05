@@ -49,11 +49,15 @@ export function useWriteModeFlow(params: UseWriteModeFlowParams) {
   const writeModeEnabled =
     session.lockedProviderId === "azure"
       ? activeWorkspace.azureWriteModeEnabled
-      : activeWorkspace.awsWriteModeEnabled;
+      : session.lockedProviderId === "gcp"
+        ? Boolean(activeWorkspace.gcpWriteModeEnabled)
+        : activeWorkspace.awsWriteModeEnabled;
   const writeModeCapable =
     session.lockedProviderId === "azure"
       ? activeWorkspace.azureWriteCapable
-      : activeWorkspace.awsWriteCapable;
+      : session.lockedProviderId === "gcp"
+        ? Boolean(activeWorkspace.gcpWriteCapable)
+        : activeWorkspace.awsWriteCapable;
 
   const setWriteMode = useCallback(
     (enabled: boolean): void => {
@@ -102,6 +106,10 @@ export function useWriteModeFlow(params: UseWriteModeFlowParams) {
     } else if (session.lockedProviderId === "aws") {
       setWriteModeDialogIntent(awsWriteEnableDialogIntent(activeWorkspace));
       setCloudWriteAcknowledged(false);
+    } else if (session.lockedProviderId === "gcp") {
+      // GCP mutations always target the live project for the active gcloud configuration.
+      setWriteModeDialogIntent("enable-cloud");
+      setCloudWriteAcknowledged(false);
     } else {
       setWriteModeDialogIntent("enable-local");
     }
@@ -117,10 +125,18 @@ export function useWriteModeFlow(params: UseWriteModeFlowParams) {
 
   const profileLabel =
     workspace.profile?.displayName || lockedProfile?.displayName || "Workspace";
+  const gcpProject =
+    activeWorkspace.profile?.attributes.find((field) => field.label.toLowerCase() === "project")
+      ?.value ||
+    lockedProfile?.attributes.find((field) => field.label.toLowerCase() === "project")?.value;
   const targetLabel =
     session.lockedProviderId === "azure"
       ? activeWorkspace.azureEndpointUrl || "Azure CLI"
-      : awsWriteTargetSummary(activeWorkspace);
+      : session.lockedProviderId === "gcp"
+        ? gcpProject
+          ? `gcloud · project ${gcpProject}`
+          : "gcloud (live project)"
+        : awsWriteTargetSummary(activeWorkspace);
 
   const writeModeDialog: ReactNode = (
     <AlertDialog
@@ -138,7 +154,9 @@ export function useWriteModeFlow(params: UseWriteModeFlowParams) {
             {writeModeDialogIntent === "incapable"
               ? "This profile cannot enable write mode"
               : writeModeDialogIntent === "enable-cloud"
-                ? "Enable write mode on live AWS?"
+                ? session.lockedProviderId === "gcp"
+                  ? "Enable write mode on live GCP?"
+                  : "Enable write mode on live AWS?"
                 : "Enable write mode for this session?"}
           </AlertDialogTitle>
           <AlertDialogDescription asChild>
@@ -147,18 +165,29 @@ export function useWriteModeFlow(params: UseWriteModeFlowParams) {
                 <p>
                   {session.lockedProviderId === "azure"
                     ? "Write mode needs the floci-az local profile or an Azure CLI sign-in. Real cloud profiles require the CLI to be available."
-                    : "Open a locked AWS workspace before changing write mode."}
+                    : session.lockedProviderId === "gcp"
+                      ? "Open a locked GCP workspace before changing write mode."
+                      : "Open a locked AWS workspace before changing write mode."}
                 </p>
               ) : writeModeDialogIntent === "enable-cloud" ? (
                 <>
                   <p className="font-medium text-destructive">
-                    Mutating actions will hit your live AWS account for the rest of this locked
-                    session.
+                    {session.lockedProviderId === "gcp"
+                      ? "Mutating actions will hit your live GCP project for the rest of this locked session."
+                      : "Mutating actions will hit your live AWS account for the rest of this locked session."}
                   </p>
                   <ul className="list-disc space-y-1 pl-5">
                     <li>Creates, updates, and deletes are real and may be irreversible.</li>
-                    <li>Billing, quotas, and IAM permissions apply as in the AWS console.</li>
-                    <li>Prefer a local endpoint profile when you are experimenting.</li>
+                    <li>
+                      {session.lockedProviderId === "gcp"
+                        ? "Billing, quotas, and IAM permissions apply as in the Google Cloud console."
+                        : "Billing, quotas, and IAM permissions apply as in the AWS console."}
+                    </li>
+                    <li>
+                      {session.lockedProviderId === "gcp"
+                        ? "Confirm the active gcloud configuration and project before enabling writes."
+                        : "Prefer a local endpoint profile when you are experimenting."}
+                    </li>
                   </ul>
                   <p>
                     <span className="font-semibold text-foreground">Profile:</span> {profileLabel}
@@ -174,8 +203,17 @@ export function useWriteModeFlow(params: UseWriteModeFlowParams) {
                       className="mt-0.5 size-4 shrink-0 accent-destructive"
                     />
                     <span>
-                      I understand write mode will send mutating API calls to the live AWS account
-                      for profile <span className="font-semibold">{profileLabel}</span>.
+                      {session.lockedProviderId === "gcp" ? (
+                        <>
+                          I understand write mode will send mutating gcloud commands to the live GCP
+                          project for profile <span className="font-semibold">{profileLabel}</span>.
+                        </>
+                      ) : (
+                        <>
+                          I understand write mode will send mutating API calls to the live AWS account
+                          for profile <span className="font-semibold">{profileLabel}</span>.
+                        </>
+                      )}
                     </span>
                   </label>
                 </>
@@ -219,7 +257,9 @@ export function useWriteModeFlow(params: UseWriteModeFlowParams) {
               {writeModePending
                 ? "Enabling..."
                 : writeModeDialogIntent === "enable-cloud"
-                  ? "Enable live AWS writes"
+                  ? session.lockedProviderId === "gcp"
+                    ? "Enable live GCP writes"
+                    : "Enable live AWS writes"
                   : "Enable writes"}
             </Button>
           ) : null}

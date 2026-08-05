@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useEffect, useState, type ReactNode } from "react";
+import { startTransition, useEffect, useState, type ReactNode } from "react";
+import { backendRequest } from "@/lib/backend";
+import { notify } from "@/lib/notify";
 import { overviewNavigateToParams, resolveOverviewProvider } from "@/lib/navigate-to-resource";
+import { formatBackendError, normaliseWorkspaceSnapshot } from "@/lib/workspace-snapshot";
 import { toActivityEntries } from "@/lib/workspace-shell";
 import { useNavigateToResource } from "@/hooks/use-navigate-to-resource";
+import type { WorkspaceSnapshot } from "@/types/backend";
 import ConnectView from "@/views/ConnectView";
 import OverviewView from "@/views/OverviewView";
 import DeployView from "@/views/deploy/DeployView";
@@ -294,6 +298,30 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
             },
           );
         }}
+        onUploadObject={(sourcePath, objectKey) => {
+          void backendRequest<{ workspace: WorkspaceSnapshot }>("gcp.storage.uploadObject", {
+            sourcePath,
+            objectKey,
+          })
+            .then((response) => {
+              startTransition(() => {
+                setWorkspace(normaliseWorkspaceSnapshot(response.workspace));
+              });
+            })
+            .catch((error: unknown) => {
+              notify("error", "Failed to upload Cloud Storage object", formatBackendError(error));
+            });
+        }}
+        onDeleteObject={(objectKey) => {
+          void mutateWorkspaceSelection(
+            "gcp.storage.deleteObject",
+            { objectKey },
+            {
+              immediate: true,
+              errorTitle: "Failed to delete Cloud Storage object",
+            },
+          );
+        }}
       />
     );
   }
@@ -304,6 +332,26 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
         workspace={activeWorkspace}
         onRefresh={() => {
           void refreshDiscovery();
+        }}
+        onStartInstance={(instanceName, zone) => {
+          void mutateWorkspaceSelection(
+            "gcp.compute.startInstance",
+            { instanceName, zone },
+            {
+              immediate: true,
+              errorTitle: "Failed to start Compute Engine instance",
+            },
+          );
+        }}
+        onStopInstance={(instanceName, zone) => {
+          void mutateWorkspaceSelection(
+            "gcp.compute.stopInstance",
+            { instanceName, zone },
+            {
+              immediate: true,
+              errorTitle: "Failed to stop Compute Engine instance",
+            },
+          );
         }}
       />
     );

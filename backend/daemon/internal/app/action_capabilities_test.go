@@ -97,3 +97,51 @@ func TestBuildAzureActionCapabilitiesWriteModeOff(t *testing.T) {
 		t.Fatal("expected disabled reason for Azure write mode off")
 	}
 }
+
+func TestBuildGcpActionCapabilitiesWriteModeOff(t *testing.T) {
+	profile := models.ProfileSummary{
+		ProfileID: "default",
+		Attributes: []models.DetailField{
+			{Label: "Project", Value: "platform-prod"},
+		},
+	}
+	session := models.SessionSnapshot{GcpWriteModeEnabled: false}
+	caps := buildGcpActionCapabilities(session, profile)
+	upload := caps["storage"][0]
+	if upload.Enabled {
+		t.Fatal("expected upload disabled when GCP write mode is off")
+	}
+	if upload.Reason == "" {
+		t.Fatal("expected disabled reason for GCP write mode off")
+	}
+	start := caps["compute"][0]
+	if start.Enabled {
+		t.Fatal("expected start disabled when GCP write mode is off")
+	}
+}
+
+func TestBuildGcpActionCapabilitiesWriteModeOn(t *testing.T) {
+	profile := models.ProfileSummary{ProfileID: "default"}
+	session := models.SessionSnapshot{GcpWriteModeEnabled: true}
+	caps := buildGcpActionCapabilities(session, profile)
+	for _, scope := range []struct {
+		scope    string
+		actionID string
+	}{
+		{"storage", "uploadObject"},
+		{"storage", "deleteObject"},
+		{"compute", "startInstance"},
+		{"compute", "stopInstance"},
+	} {
+		enabled := false
+		for _, capability := range caps[scope.scope] {
+			if capability.ActionID == scope.actionID {
+				enabled = capability.Enabled
+				break
+			}
+		}
+		if !enabled {
+			t.Fatalf("expected %s.%s to be enabled when write mode is on", scope.scope, scope.actionID)
+		}
+	}
+}

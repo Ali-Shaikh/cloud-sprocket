@@ -22,11 +22,17 @@ type stubGcpStorageInventory struct {
 	objects     models.GcpStorageObjectListPage
 	err         error
 	objectsErr  error
+	uploadErr   error
+	deleteErr   error
 	calls       int
 	objectCalls int
+	uploadCalls int
+	deleteCalls int
 	lastBucket  string
 	lastPrefix  string
 	lastToken   string
+	lastKey     string
+	lastSource  string
 }
 
 func (s *stubGcpStorageInventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.GcpStorageBucket, error) {
@@ -56,6 +62,39 @@ func (s *stubGcpStorageInventory) ListObjects(
 		NextPageToken: s.objects.NextPageToken,
 		IsTruncated:   s.objects.IsTruncated,
 	}, nil
+}
+
+func (s *stubGcpStorageInventory) UploadObject(
+	_ context.Context,
+	_ models.ProfileSummary,
+	bucketName string,
+	objectKey string,
+	sourcePath string,
+) (models.GcpStorageUploadResult, error) {
+	s.uploadCalls++
+	s.lastBucket = bucketName
+	s.lastKey = objectKey
+	s.lastSource = sourcePath
+	if s.uploadErr != nil {
+		return models.GcpStorageUploadResult{}, s.uploadErr
+	}
+	return models.GcpStorageUploadResult{
+		BucketName:     bucketName,
+		ObjectKey:      objectKey,
+		DestinationURI: "gs://" + bucketName + "/" + objectKey,
+	}, nil
+}
+
+func (s *stubGcpStorageInventory) DeleteObject(
+	_ context.Context,
+	_ models.ProfileSummary,
+	bucketName string,
+	objectKey string,
+) error {
+	s.deleteCalls++
+	s.lastBucket = bucketName
+	s.lastKey = objectKey
+	return s.deleteErr
 }
 
 func TestEnrichGcpStorageInventorySuccess(t *testing.T) {
@@ -245,6 +284,92 @@ func lockGcpWorkspace(t *testing.T, service *Service) {
 	}
 	if _, err := service.Handle(ctx, "session.lock", nil, nil); err != nil {
 		t.Fatalf("session.lock: %v", err)
+	}
+}
+
+func TestHandleGcpStorageUploadRequiresWriteMode(t *testing.T) {
+	// Create a real file so path validation passes; write mode must still gate.
+	source := filepath.Join(t.TempDir(), "payload.txt")
+	mustWriteFile(t, source, "hello")
+
+	inv := &stubGcpStorageInventory{
+		buckets: []models.GcpStorageBucket{{Name: "alpha"}},
+	}
+	service := gcpStorageTestService(t, inv)
+	lockGcpWorkspace(t, service)
+	if _, err := service.Handle(context.Background(), "gcp.storage.selectBucket", []byte(`{"bucketName":"alpha"}`), nil); err != nil {
+		t.Fatalf("selectBucket: %v", err)
+	}
+
+	payload, _ := json.Marshal(map[string]string{
+		"sourcePath": source,
+		"objectKey":  "docs/payload.txt",
+	})
+	_, err := service.Handle(context.Background(), "gcp.storage.uploadObject", payload, nil)
+	if err == nil {
+		t.Fatal("expected write mode gate")
+	}
+	if !strings.Contains(err.Error(), "write mode") {
+		t.Fatalf("error = %v, want write mode", err)
+	}
+	if inv.uploadCalls != 0 {
+		t.Fatalf("uploadCalls = %d, want 0", inv.uploadCalls)
+	}
+
+	if _, err := service.Handle(context.Background(), "session.setWriteMode", []byte(`{"enabled":true}`), nil); err != nil {
+		t.Fatalf("setWriteMode: %v", err)
+	}
+	result, err := service.Handle(context.Background(), "gcp.storage.uploadObject", payload, nil)
+	if err != nil {
+		t.Fatalf("uploadObject: %v", err)
+	}
+	if inv.uploadCalls != 1 {
+		t.Fatalf("uploadCalls = %d, want 1", inv.uploadCalls)
+	}
+	if inv.lastKey != "docs/payload.txt" || inv.lastBucket != "alpha" {
+		t.Fatalf("upload target = %s/%s", inv.lastBucket, inv.lastKey)
+	}
+	response, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("result type %T", result)
+	}
+	if _, hasWorkspace := response["workspace"]; !hasWorkspace {
+		t.Fatalf("response missing workspace: %+v", response)
+	}
+}
+
+func TestHandleGcpStorageDeleteRequiresWriteMode(t *testing.T) {
+	inv := &stubGcpStorageInventory{
+		buckets: []models.GcpStorageBucket{{Name: "alpha"}},
+		objects: models.GcpStorageObjectListPage{
+			Entries: []models.GcpStorageObject{{Key: "docs/readme.txt"}},
+		},
+	}
+	service := gcpStorageTestService(t, inv)
+	lockGcpWorkspace(t, service)
+	if _, err := service.Handle(context.Background(), "gcp.storage.selectBucket", []byte(`{"bucketName":"alpha"}`), nil); err != nil {
+		t.Fatalf("selectBucket: %v", err)
+	}
+
+	_, err := service.Handle(context.Background(), "gcp.storage.deleteObject", []byte(`{"objectKey":"docs/readme.txt"}`), nil)
+	if err == nil {
+		t.Fatal("expected write mode gate")
+	}
+	if !strings.Contains(err.Error(), "write mode") {
+		t.Fatalf("error = %v, want write mode", err)
+	}
+	if inv.deleteCalls != 0 {
+		t.Fatalf("deleteCalls = %d, want 0", inv.deleteCalls)
+	}
+
+	if _, err := service.Handle(context.Background(), "session.setWriteMode", []byte(`{"enabled":true}`), nil); err != nil {
+		t.Fatalf("setWriteMode: %v", err)
+	}
+	if _, err := service.Handle(context.Background(), "gcp.storage.deleteObject", []byte(`{"objectKey":"docs/readme.txt"}`), nil); err != nil {
+		t.Fatalf("deleteObject: %v", err)
+	}
+	if inv.deleteCalls != 1 || inv.lastKey != "docs/readme.txt" {
+		t.Fatalf("deleteCalls=%d lastKey=%q", inv.deleteCalls, inv.lastKey)
 	}
 }
 

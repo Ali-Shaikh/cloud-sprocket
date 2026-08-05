@@ -120,6 +120,12 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 			workspace.AzureWritesEnabled = effectiveAzureWritesEnabled(session, profile, azureCLI)
 			workspace.ActionCapabilities = buildAzureActionCapabilities(session, profile, azureCLI)
 		}
+		if session.CurrentProviderID == "gcp" {
+			workspace.GcpWriteCapable = session.IsLocked
+			workspace.GcpWriteModeEnabled = session.GcpWriteModeEnabled && session.IsLocked
+			workspace.GcpWritesEnabled = effectiveGcpWritesEnabled(session, profile)
+			workspace.ActionCapabilities = buildGcpActionCapabilities(session, profile)
+		}
 	}
 
 	azureOpts := azureEnrichmentOptions{
@@ -276,5 +282,3 @@ func (s *Service) localConfigArtifacts() []models.LocalConfigArtifact {
 	}
 	return artifacts
 }
-
-

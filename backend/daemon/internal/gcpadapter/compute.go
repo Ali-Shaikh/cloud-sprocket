@@ -34,6 +34,52 @@ func (i *Inventory) ListInstances(
 	return decodeComputeInstances(payload)
 }
 
+// StartInstance starts a Compute Engine VM via
+// `gcloud compute instances start NAME --zone=ZONE`.
+func (i *Inventory) StartInstance(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	instanceName string,
+	zone string,
+) error {
+	return i.invokeInstanceLifecycle(ctx, profile, "start", instanceName, zone)
+}
+
+// StopInstance stops a Compute Engine VM via
+// `gcloud compute instances stop NAME --zone=ZONE`.
+func (i *Inventory) StopInstance(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	instanceName string,
+	zone string,
+) error {
+	return i.invokeInstanceLifecycle(ctx, profile, "stop", instanceName, zone)
+}
+
+func (i *Inventory) invokeInstanceLifecycle(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	action string,
+	instanceName string,
+	zone string,
+) error {
+	name := strings.TrimSpace(instanceName)
+	zoneName := resourceBasename(zone)
+	if name == "" || zoneName == "" {
+		return fmt.Errorf("instance name and zone are required")
+	}
+	args := []string{
+		"compute", "instances", action,
+		name,
+		"--zone=" + zoneName,
+	}
+	if project := projectFromProfile(profile); project != "" {
+		args = append(args, "--project", project)
+	}
+	_, err := i.run(ctx, profile, args...)
+	return err
+}
+
 func decodeComputeInstances(payload []byte) ([]models.GcpComputeInstance, error) {
 	trimmed := strings.TrimSpace(string(payload))
 	if trimmed == "" || trimmed == "null" || trimmed == "[]" {
