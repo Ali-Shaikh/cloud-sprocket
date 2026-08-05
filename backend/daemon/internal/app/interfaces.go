@@ -227,6 +227,16 @@ type GcpComputeInventory interface {
 	ListInstances(ctx context.Context, profile models.ProfileSummary) ([]models.GcpComputeInstance, error)
 }
 
+// GcpFunctionsInventory lists Cloud Functions via the gcloud CLI adapter.
+type GcpFunctionsInventory interface {
+	ListFunctions(ctx context.Context, profile models.ProfileSummary) ([]models.GcpCloudFunction, error)
+}
+
+// GcpGkeInventory lists GKE clusters via the gcloud CLI adapter.
+type GcpGkeInventory interface {
+	ListClusters(ctx context.Context, profile models.ProfileSummary) ([]models.GcpGkeCluster, error)
+}
+
 // DockerRuntime, LocalStackManager, and AzureRuntimeManager are aliases of the
 // consumer-owned ports defined in internal/app/runtime (F-029 Phase 1).
 type DockerRuntime = appruntime.Docker

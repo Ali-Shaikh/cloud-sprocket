@@ -24,37 +24,31 @@ func TestAzureWorkspaceTabsIncludePostgres(t *testing.T) {
 	}
 }
 
-func TestGCPWorkspaceTabsMarkFutureServicesAsComingSoon(t *testing.T) {
+func TestGCPWorkspaceTabsPromoteLiveServices(t *testing.T) {
 	tabs := workspaceTabs("gcp")
 	comingSoon := 0
-	var storage *models.WorkspaceTab
-	var compute *models.WorkspaceTab
+	byID := map[string]*models.WorkspaceTab{}
 	for index := range tabs {
 		tab := tabs[index]
 		if tab.Category == workspaceTabCategoryComingSoon {
 			comingSoon++
 		}
-		if tab.TabID == "gcp-storage" {
-			storage = &tabs[index]
+		byID[tab.TabID] = &tabs[index]
+	}
+	// All GCP service tabs are live; overview stays workspace (not coming_soon).
+	if comingSoon != 0 {
+		t.Fatalf("expected 0 GCP coming_soon tabs, got %d", comingSoon)
+	}
+	for _, id := range []string{"gcp-storage", "gcp-compute", "gcp-functions", "gcp-gke"} {
+		tab := byID[id]
+		if tab == nil {
+			t.Fatalf("gcp workspace tabs missing %s", id)
 		}
-		if tab.TabID == "gcp-compute" {
-			compute = &tabs[index]
+		if tab.Category != workspaceTabCategoryService {
+			t.Fatalf("%s category = %q, want %q", id, tab.Category, workspaceTabCategoryService)
 		}
 	}
-	// Cloud Storage and Compute Engine are live; remaining GCP services stay coming_soon.
-	if comingSoon < 2 {
-		t.Fatalf("expected at least 2 GCP coming_soon tabs, got %d", comingSoon)
-	}
-	if storage == nil {
-		t.Fatal("gcp workspace tabs missing gcp-storage")
-	}
-	if storage.Category != workspaceTabCategoryService {
-		t.Fatalf("gcp-storage category = %q, want %q", storage.Category, workspaceTabCategoryService)
-	}
-	if compute == nil {
-		t.Fatal("gcp workspace tabs missing gcp-compute")
-	}
-	if compute.Category != workspaceTabCategoryService {
-		t.Fatalf("gcp-compute category = %q, want %q", compute.Category, workspaceTabCategoryService)
+	if overview := byID["gcp-overview"]; overview != nil && overview.Category == workspaceTabCategoryComingSoon {
+		t.Fatalf("gcp-overview must not be coming_soon")
 	}
 }

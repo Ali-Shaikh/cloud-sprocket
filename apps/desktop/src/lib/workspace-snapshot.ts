@@ -35,6 +35,8 @@ import type {
   AwsS3Object,
   GcpStorageBucket,
   GcpComputeInstance,
+  GcpCloudFunction,
+  GcpGkeCluster,
   AwsS3PresignResult,
   AwsS3UploadResult,
   AwsSnsTopic,
@@ -348,6 +350,14 @@ function normaliseGcpStorageBucket(bucket: GcpStorageBucket): GcpStorageBucket {
 
 function normaliseGcpComputeInstance(instance: GcpComputeInstance): GcpComputeInstance {
   return { ...instance };
+}
+
+function normaliseGcpCloudFunction(fn: GcpCloudFunction): GcpCloudFunction {
+  return { ...fn };
+}
+
+function normaliseGcpGkeCluster(cluster: GcpGkeCluster): GcpGkeCluster {
+  return { ...cluster };
 }
 
 function normaliseS3Object(object: AwsS3Object): AwsS3Object {
@@ -1182,6 +1192,12 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     gcpComputeInstances: normaliseArray(source.gcpComputeInstances).map(normaliseGcpComputeInstance),
     selectedGcpComputeInstance: source.selectedGcpComputeInstance,
     gcpComputeStatusMessage: source.gcpComputeStatusMessage,
+    gcpFunctions: normaliseArray(source.gcpFunctions).map(normaliseGcpCloudFunction),
+    selectedGcpFunction: source.selectedGcpFunction,
+    gcpFunctionsStatusMessage: source.gcpFunctionsStatusMessage,
+    gcpGkeClusters: normaliseArray(source.gcpGkeClusters).map(normaliseGcpGkeCluster),
+    selectedGcpGkeCluster: source.selectedGcpGkeCluster,
+    gcpGkeStatusMessage: source.gcpGkeStatusMessage,
     s3Buckets: normaliseArray(source.s3Buckets).map(normaliseS3Bucket),
     s3Objects: normaliseArray(source.s3Objects).map(normaliseS3Object),
     s3ObjectsNextToken: source.s3ObjectsNextToken,

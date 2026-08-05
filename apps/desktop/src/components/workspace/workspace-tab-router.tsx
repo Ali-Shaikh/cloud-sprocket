@@ -22,6 +22,8 @@ import {
   DeveloperToolsView,
   GcpStorageView,
   GcpComputeView,
+  GcpFunctionsView,
+  GcpGkeView,
 } from "@/views/workspace/lazy-views";
 import SettingsView from "@/views/SettingsView";
 import { AwsWorkspaceTabs, AWS_TAB_IDS } from "./aws-workspace-tabs";
@@ -299,6 +301,28 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
   if (session.isLocked && activeWorkspaceTabId === "gcp-compute") {
     return (
       <GcpComputeView
+        workspace={activeWorkspace}
+        onRefresh={() => {
+          void refreshDiscovery();
+        }}
+      />
+    );
+  }
+
+  if (session.isLocked && activeWorkspaceTabId === "gcp-functions") {
+    return (
+      <GcpFunctionsView
+        workspace={activeWorkspace}
+        onRefresh={() => {
+          void refreshDiscovery();
+        }}
+      />
+    );
+  }
+
+  if (session.isLocked && activeWorkspaceTabId === "gcp-gke") {
+    return (
+      <GcpGkeView
         workspace={activeWorkspace}
         onRefresh={() => {
           void refreshDiscovery();

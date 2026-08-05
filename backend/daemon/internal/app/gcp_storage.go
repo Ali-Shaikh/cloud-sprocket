@@ -144,10 +144,10 @@ func (s *Service) enrichGcpStorageInventory(
 	prefix := session.GcpStoragePrefixFilter
 
 	var (
-		objects  []models.GcpStorageObject
-		nextTok  string
-		hasMore  bool
-		objErr   error
+		objects []models.GcpStorageObject
+		nextTok string
+		hasMore bool
+		objErr  error
 	)
 	if selected != "" {
 		page, err := s.gcpStorageObjectPage(ctx, profile, selected, prefix, "")
@@ -247,6 +247,8 @@ func (s *Service) enrichGcpWorkspace(
 	}
 	s.enrichGcpStorageInventory(workspace, session, nil)
 	s.enrichGcpComputeInventory(workspace, session, nil)
+	s.enrichGcpFunctionsInventory(workspace, session, nil)
+	s.enrichGcpGkeInventory(workspace, session, nil)
 }
 
 func (s *Service) withLockedGcpWorkspace(
