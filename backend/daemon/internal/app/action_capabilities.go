@@ -97,6 +97,7 @@ func buildAWSActionCapabilities(
 		"sns": {
 			awsActionCapability(session, profile, "publish", "Publish message"),
 			awsActionCapability(session, profile, "createTopic", "Create topic"),
+			awsActionCapability(session, profile, "createSubscription", "Create subscription"),
 		},
 		"dynamodb": {
 			awsActionCapability(session, profile, "putItem", "Put item"),
@@ -179,6 +180,9 @@ func buildAzureActionCapabilities(
 		},
 		"queues": {
 			cap("purge", "Purge queue"),
+		},
+		"cosmos": {
+			cap("deleteItem", "Delete item"),
 		},
 	}
 }

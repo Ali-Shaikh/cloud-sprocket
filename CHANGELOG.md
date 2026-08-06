@@ -11,6 +11,14 @@ Installers for every release are published on the
 
 ### Added
 
+- AWS SNS create subscription: write-gated `aws.sns.createSubscription` calls
+  SNS `Subscribe` with protocol and endpoint for the selected topic, refreshes
+  SNS inventory, and adds a Create subscription control on the SNS topic
+  inspector (alongside publish and create topic).
+- Azure Cosmos DB delete item: write-gated `azure.cosmos.deleteItem` deletes a
+  document by id and partition key via the Cosmos data-plane REST API, refreshes
+  the cosmos scope, and adds a Delete control on sampled items in the Cosmos
+  workspace panel (with confirmation).
 - AWS DynamoDB sample scan pagination: table describe returns the first scan page
   with `sampleItemsNextToken` / `sampleItemsHasMore`, and read-only
   `aws.dynamodb.loadMoreItems` loads the next page. The DynamoDB inspector adds a

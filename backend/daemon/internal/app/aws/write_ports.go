@@ -20,6 +20,7 @@ type SQSWriter interface {
 type SNSWriter interface {
 	Publish(ctx context.Context, profile models.ProfileSummary, region string, topicArn string, message string) (models.AwsSnsPublishResult, error)
 	CreateTopic(ctx context.Context, profile models.ProfileSummary, region string, topicName string) (models.AwsSnsCreateTopicResult, error)
+	CreateSubscription(ctx context.Context, profile models.ProfileSummary, region string, topicArn string, protocol string, endpoint string) (models.AwsSnsCreateSubscriptionResult, error)
 }
 
 // DynamoDBWriter is the DynamoDB write and sample-scan surface.

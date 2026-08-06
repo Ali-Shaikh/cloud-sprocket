@@ -483,6 +483,22 @@ export interface AwsSnsCreateTopicResult {
   topicArn: string;
 }
 
+export interface AwsSnsCreateSubscriptionResult {
+  topicArn: string;
+  protocol: string;
+  endpoint: string;
+  subscriptionArn: string;
+  summary: string;
+}
+
+export interface AzureCosmosDeleteItemResult {
+  account: string;
+  database: string;
+  container: string;
+  itemId: string;
+  summary: string;
+}
+
 export interface AwsDynamoDBWriteResult {
   tableName: string;
   summary: string;

@@ -109,6 +109,9 @@ func (s *Service) registerAWSHandlers(m *handlerRegistry) {
 	m.register("aws.sns.createTopic", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsSnsCreateTopic(ctx, params, notifier)
 	})
+	m.register("aws.sns.createSubscription", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleAwsSnsCreateSubscription(ctx, params, notifier)
+	})
 	m.register("aws.rds.selectRegion", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsRdsSelectRegion(ctx, params, notifier)
 	})

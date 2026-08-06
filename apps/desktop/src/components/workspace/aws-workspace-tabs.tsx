@@ -181,6 +181,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     selectSNSTopic,
     publishSNSTopic,
     createSNSTopic,
+    createSNSSubscription,
     refreshRDSInventory,
     selectRDSRegion,
     selectRDSInstance,
@@ -450,6 +451,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onSelectEntity={selectSNSTopic}
       onPublish={publishSNSTopic}
       onCreateTopic={createSNSTopic}
+      onCreateSubscription={createSNSSubscription}
     />
   ) : session.isLocked && activeWorkspaceTabId === "rds" ? (
     <RDSView

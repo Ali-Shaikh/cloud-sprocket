@@ -177,6 +177,63 @@ func (s *SNSInventory) CreateTopic(
 	}, nil
 }
 
+// CreateSubscription subscribes an endpoint to a topic (SNS Subscribe).
+func (s *SNSInventory) CreateSubscription(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	topicArn string,
+	protocol string,
+	endpoint string,
+) (models.AwsSnsCreateSubscriptionResult, error) {
+	topicArn = strings.TrimSpace(topicArn)
+	protocol = strings.ToLower(strings.TrimSpace(protocol))
+	endpoint = strings.TrimSpace(endpoint)
+	if topicArn == "" {
+		return models.AwsSnsCreateSubscriptionResult{}, fmt.Errorf("topic ARN is required")
+	}
+	if protocol == "" {
+		return models.AwsSnsCreateSubscriptionResult{}, fmt.Errorf("protocol is required")
+	}
+	if endpoint == "" {
+		return models.AwsSnsCreateSubscriptionResult{}, fmt.Errorf("endpoint is required")
+	}
+	switch protocol {
+	case "sqs", "email", "email-json", "http", "https", "lambda", "sms", "application", "firehose":
+	default:
+		return models.AwsSnsCreateSubscriptionResult{}, fmt.Errorf("unsupported SNS protocol %q", protocol)
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := s.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsSnsCreateSubscriptionResult{}, err
+	}
+
+	client := snsClient(cfg, profile)
+	res, err := client.Subscribe(ctx, &sns.SubscribeInput{
+		TopicArn: aws.String(topicArn),
+		Protocol: aws.String(protocol),
+		Endpoint: aws.String(endpoint),
+	})
+	if err != nil {
+		return models.AwsSnsCreateSubscriptionResult{}, err
+	}
+	subscriptionArn := awsString(res.SubscriptionArn)
+	summary := fmt.Sprintf("Created SNS subscription (%s) for the topic.", protocol)
+	if subscriptionArn != "" && !strings.EqualFold(subscriptionArn, "pending confirmation") {
+		summary = fmt.Sprintf("Created SNS subscription %s.", subscriptionArn)
+	}
+	return models.AwsSnsCreateSubscriptionResult{
+		TopicArn:        topicArn,
+		Protocol:        protocol,
+		Endpoint:        endpoint,
+		SubscriptionArn: subscriptionArn,
+		Summary:         summary,
+	}, nil
+}
+
 func (s *SNSInventory) loadConfig(
 	ctx context.Context,
 	profile models.ProfileSummary,

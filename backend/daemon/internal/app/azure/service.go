@@ -32,6 +32,7 @@ type Deps struct {
 	VirtualMachines VirtualMachinesWriter
 	FrontDoor       FrontDoorWriter
 	Queues          QueuesWriter
+	Cosmos          CosmosWriter
 }
 
 // Service owns the extracted Azure inventory, selection, and write RPC paths.
@@ -54,6 +55,7 @@ type Service struct {
 	virtualMachines VirtualMachinesWriter
 	frontDoor       FrontDoorWriter
 	queues          QueuesWriter
+	cosmos          CosmosWriter
 }
 
 // New constructs an Azure domain Service.
@@ -77,5 +79,6 @@ func New(deps Deps) *Service {
 		virtualMachines: deps.VirtualMachines,
 		frontDoor:       deps.FrontDoor,
 		queues:          deps.Queues,
+		cosmos:          deps.Cosmos,
 	}
 }

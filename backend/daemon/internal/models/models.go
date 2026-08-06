@@ -517,6 +517,15 @@ type AwsSnsCreateTopicResult struct {
 	TopicArn  string `json:"topicArn"`
 }
 
+// AwsSnsCreateSubscriptionResult is the result of creating an SNS subscription.
+type AwsSnsCreateSubscriptionResult struct {
+	TopicArn        string `json:"topicArn"`
+	Protocol        string `json:"protocol"`
+	Endpoint        string `json:"endpoint"`
+	SubscriptionArn string `json:"subscriptionArn"`
+	Summary         string `json:"summary"`
+}
+
 // AwsDynamoDBWriteResult is the result of a DynamoDB put or delete action.
 type AwsDynamoDBWriteResult struct {
 	TableName string `json:"tableName"`
@@ -1250,6 +1259,15 @@ type AzureCosmosContainer struct {
 type AzureCosmosItem struct {
 	ID   string `json:"id"`
 	JSON string `json:"json"`
+}
+
+// AzureCosmosDeleteItemResult is the result of deleting a Cosmos document.
+type AzureCosmosDeleteItemResult struct {
+	Account   string `json:"account"`
+	Database  string `json:"database"`
+	Container string `json:"container"`
+	ItemID    string `json:"itemId"`
+	Summary   string `json:"summary"`
 }
 
 // AzurePostgresServer is a PostgreSQL Flexible Server.

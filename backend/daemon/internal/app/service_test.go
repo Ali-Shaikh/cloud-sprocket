@@ -133,6 +133,10 @@ func (stubSNSInventory) CreateTopic(context.Context, models.ProfileSummary, stri
 	return models.AwsSnsCreateTopicResult{}, nil
 }
 
+func (stubSNSInventory) CreateSubscription(context.Context, models.ProfileSummary, string, string, string, string) (models.AwsSnsCreateSubscriptionResult, error) {
+	return models.AwsSnsCreateSubscriptionResult{}, nil
+}
+
 type stubRDSInventory struct{}
 
 func (stubRDSInventory) ListInstances(context.Context, models.ProfileSummary, string) ([]models.AwsRdsInstance, error) {
@@ -735,6 +739,10 @@ func (stubAzureInventory) ListCosmosContainers(context.Context, models.ProfileSu
 
 func (stubAzureInventory) ListCosmosItems(context.Context, models.ProfileSummary, string, string, string, string) ([]models.AzureCosmosItem, error) {
 	return []models.AzureCosmosItem{{ID: "doc-1", JSON: `{"id":"doc-1"}`}}, nil
+}
+
+func (stubAzureInventory) DeleteCosmosItem(context.Context, models.ProfileSummary, string, string, string, string, string, string) (models.AzureCosmosDeleteItemResult, error) {
+	return models.AzureCosmosDeleteItemResult{Summary: "deleted"}, nil
 }
 
 func (stubAzureInventory) ListPostgresServers(context.Context, models.ProfileSummary) ([]models.AzurePostgresServer, error) {

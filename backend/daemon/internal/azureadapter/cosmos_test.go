@@ -83,3 +83,50 @@ func TestListCosmosAccountsCloud(t *testing.T) {
 		t.Fatalf("unexpected az args: %v", fake.args)
 	}
 }
+
+func TestDeleteCosmosItemLocalFloci(t *testing.T) {
+	var sawDelete bool
+	var partitionHeader string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete && strings.HasSuffix(r.URL.Path, "/dbs/appdb/colls/orders/docs/doc-1") {
+			sawDelete = true
+			partitionHeader = r.Header.Get("x-ms-documentdb-partitionkey")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(server.Close)
+
+	inv := newLocalInventory(server.URL)
+	result, err := inv.DeleteCosmosItem(
+		context.Background(),
+		localFlociProfile(),
+		"devstoreaccount1",
+		"",
+		"appdb",
+		"orders",
+		"doc-1",
+		"cust-9",
+	)
+	if err != nil {
+		t.Fatalf("DeleteCosmosItem: %v", err)
+	}
+	if !sawDelete {
+		t.Fatal("expected DELETE request")
+	}
+	if partitionHeader != `["cust-9"]` {
+		t.Fatalf("partition header = %q", partitionHeader)
+	}
+	if result.ItemID != "doc-1" || result.Summary == "" {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
+func TestDeleteCosmosItemRequiresFields(t *testing.T) {
+	inv := NewInventory(config.Settings{})
+	_, err := inv.DeleteCosmosItem(context.Background(), localFlociProfile(), "", "", "db", "c", "id", "pk")
+	if err == nil {
+		t.Fatal("expected missing account error")
+	}
+}

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { cn } from "@/lib/utils";
+import { useState } from "react";
 import { Database } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -19,8 +21,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { azureInventoryLoadingLabel } from "@/lib/azure-inventory";
+import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { EmptyState } from "@/components/empty-state";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
@@ -30,11 +43,33 @@ export type AzureCosmosViewProps = {
   onSelectAccount: (account: string) => void;
   onSelectDatabase: (database: string) => void;
   onSelectContainer: (container: string) => void;
+  onDeleteItem: (itemId: string, partitionKey: string, resourceGroup?: string) => void;
 };
 
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
 const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] shadow-sm";
+
+/** Extract a single-level partition key value from document JSON (e.g. /customerId). */
+export function partitionKeyValueFromItem(
+  item: { id: string; json: string },
+  partitionKeyPath?: string,
+): string {
+  const path = (partitionKeyPath || "/id").replace(/^\//, "").trim();
+  if (!path || path === "id") {
+    return item.id;
+  }
+  try {
+    const doc = JSON.parse(item.json) as Record<string, unknown>;
+    const value = doc[path];
+    if (value !== undefined && value !== null) {
+      return String(value);
+    }
+  } catch {
+    // fall through
+  }
+  return item.id;
+}
 
 export default function AzureCosmosView({
   workspace,
@@ -42,6 +77,7 @@ export default function AzureCosmosView({
   onSelectAccount,
   onSelectDatabase,
   onSelectContainer,
+  onDeleteItem,
 }: AzureCosmosViewProps) {
   const accounts = workspace.azureCosmosAccounts ?? [];
   const databases = workspace.azureCosmosDatabases ?? [];
@@ -50,6 +86,27 @@ export default function AzureCosmosView({
   const account = workspace.selectedAzureCosmosAccount ?? accounts[0]?.name ?? "";
   const database = workspace.selectedAzureCosmosDatabase ?? "";
   const container = workspace.selectedAzureCosmosContainer ?? "";
+  const selectedContainer = containers.find((item) => item.name === container);
+  const resourceGroup = accounts.find((item) => item.name === account)?.resourceGroup;
+
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; partitionKey: string } | null>(
+    null,
+  );
+
+  const deleteCapability = actionCapabilityState(workspace, "cosmos", "deleteItem", "azure");
+  const canDelete =
+    deleteCapability.enabled && Boolean(account && database && container);
+  const deleteDisabledReason = canDelete
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "cosmos",
+        "deleteItem",
+        !account || !database || !container
+          ? "Select an account, database, and container first."
+          : undefined,
+        "azure",
+      );
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -130,7 +187,7 @@ export default function AzureCosmosView({
                     onClick={() => onSelectContainer(item.name)}
                   >
                     <TableCell className="font-medium">{item.name}</TableCell>
-                    <TableCell className="font-mono text-xs">{item.partitionKey || "—"}</TableCell>
+                    <TableCell className="font-mono text-xs">{item.partitionKey || "-"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -155,19 +212,80 @@ export default function AzureCosmosView({
           />
         ) : (
           <div className="space-y-2">
-            {items.map((item, index) => (
-              <details key={item.id || index} className="rounded-lg border border-border bg-muted/40">
-                <summary className="cursor-pointer px-3 py-2 font-mono text-xs text-foreground">
-                  {item.id || `(item ${index + 1})`}
-                </summary>
-                <pre className="max-h-64 overflow-auto border-t border-border px-3 py-2 font-mono text-xs text-foreground">
-                  {item.json}
-                </pre>
-              </details>
-            ))}
+            {items.map((item, index) => {
+              const itemId = item.id || `(item ${index + 1})`;
+              const partitionKey = partitionKeyValueFromItem(item, selectedContainer?.partitionKey);
+              return (
+                <details key={item.id || index} className="rounded-lg border border-border bg-muted/40">
+                  <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 font-mono text-xs text-foreground">
+                    <span>{itemId}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 shrink-0"
+                      disabled={!canDelete || !item.id}
+                      title={deleteDisabledReason}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (!item.id) {
+                          return;
+                        }
+                        setDeleteTarget({ id: item.id, partitionKey });
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </summary>
+                  <pre className="max-h-64 overflow-auto border-t border-border px-3 py-2 font-mono text-xs text-foreground">
+                    {item.json}
+                  </pre>
+                </details>
+              );
+            })}
           </div>
         )}
+        {deleteDisabledReason ? (
+          <p className="text-xs text-muted-foreground">{deleteDisabledReason}</p>
+        ) : null}
       </section>
+
+      <AlertDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Cosmos item?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently deletes document{" "}
+              <span className="font-mono">{deleteTarget?.id}</span> from{" "}
+              <span className="font-mono">
+                {account}/{database}/{container}
+              </span>
+              .
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteTarget) {
+                  onDeleteItem(deleteTarget.id, deleteTarget.partitionKey, resourceGroup);
+                }
+                setDeleteTarget(null);
+              }}
+            >
+              Delete item
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

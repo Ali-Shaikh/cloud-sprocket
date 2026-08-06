@@ -498,6 +498,30 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setSnsActionStatus, setWorkspace]);
 
+  const createSNSSubscription = useCallback(
+    (topicArn: string, protocol: string, endpoint: string): void => {
+      setSnsActionStatus(`Creating SNS subscription (${protocol}).`);
+      void requestWorkspaceSnapshot("aws.sns.createSubscription", {
+        topicArn,
+        protocol,
+        endpoint,
+      })
+        .then((workspaceResult) => {
+          startTransition(() => {
+            setWorkspace(workspaceResult);
+          });
+          setSnsActionStatus(
+            workspaceResult.snsStatusMessage ||
+              `Created SNS subscription (${protocol}) for the topic.`,
+          );
+        })
+        .catch((error: unknown) => {
+          setSnsActionStatus(error instanceof Error ? error.message : String(error));
+        });
+    },
+    [setSnsActionStatus, setWorkspace],
+  );
+
   const selectRDSRegion = useCallback((region: string): void => {
     setRdsActionStatus(`Loading RDS instances for ${region}.`);
     void requestWorkspaceSnapshot("aws.rds.selectRegion", { region })
@@ -1241,6 +1265,7 @@ export function useAwsActions(params: UseAwsActionsParams) {
     selectSNSTopic,
     publishSNSTopic,
     createSNSTopic,
+    createSNSSubscription,
     refreshRDSInventory,
     selectRDSRegion,
     selectRDSInstance,

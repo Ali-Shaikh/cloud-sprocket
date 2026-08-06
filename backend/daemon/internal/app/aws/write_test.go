@@ -32,6 +32,88 @@ func (f *fakeSQS) CreateQueue(context.Context, models.ProfileSummary, string, st
 	return models.AwsSqsCreateQueueResult{QueueName: "q", QueueURL: "https://q"}, nil
 }
 
+type fakeSNS struct {
+	subscribed bool
+	protocol   string
+	endpoint   string
+}
+
+func (f *fakeSNS) Publish(context.Context, models.ProfileSummary, string, string, string) (models.AwsSnsPublishResult, error) {
+	return models.AwsSnsPublishResult{Summary: "published"}, nil
+}
+func (f *fakeSNS) CreateTopic(context.Context, models.ProfileSummary, string, string) (models.AwsSnsCreateTopicResult, error) {
+	return models.AwsSnsCreateTopicResult{TopicName: "t", TopicArn: "arn:aws:sns:us-east-1:1:t"}, nil
+}
+func (f *fakeSNS) CreateSubscription(_ context.Context, _ models.ProfileSummary, _ string, topicArn, protocol, endpoint string) (models.AwsSnsCreateSubscriptionResult, error) {
+	f.subscribed = true
+	f.protocol = protocol
+	f.endpoint = endpoint
+	return models.AwsSnsCreateSubscriptionResult{
+		TopicArn:        topicArn,
+		Protocol:        protocol,
+		Endpoint:        endpoint,
+		SubscriptionArn: topicArn + ":sub-1",
+		Summary:         "Created SNS subscription.",
+	}, nil
+}
+
+func TestHandleSNSCreateSubscription(t *testing.T) {
+	sns := &fakeSNS{}
+	sess := &fakeSession{session: models.SessionSnapshot{
+		IsLocked:            true,
+		CurrentProviderID:   "aws",
+		SelectedProfileID:   "p1",
+		AWSWriteModeEnabled: true,
+		SelectedSNSRegion:   "us-east-1",
+		SelectedSNSTopicArn: "arn:aws:sns:us-east-1:1:orders",
+	}}
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session:     sess,
+		Workspace:   &fakeWorkspace{},
+		Activity:    &fakeActivity{},
+		Invalidator: &fakeInvalidator{},
+		SNS:         sns,
+	})
+	params, _ := json.Marshal(map[string]string{
+		"protocol": "sqs",
+		"endpoint": "arn:aws:sqs:us-east-1:1:orders-q",
+	})
+	if _, err := svc.HandleSNSCreateSubscription(context.Background(), params, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !sns.subscribed || sns.protocol != "sqs" || sns.endpoint != "arn:aws:sqs:us-east-1:1:orders-q" {
+		t.Fatalf("subscribe = %+v", sns)
+	}
+}
+
+func TestHandleSNSCreateSubscriptionRequiresWriteMode(t *testing.T) {
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: &fakeSession{session: models.SessionSnapshot{
+			IsLocked:            true,
+			CurrentProviderID:   "aws",
+			SelectedProfileID:   "p1",
+			AWSWriteModeEnabled: false,
+			SelectedSNSRegion:   "us-east-1",
+			SelectedSNSTopicArn: "arn:aws:sns:us-east-1:1:orders",
+		}},
+		Workspace: &fakeWorkspace{},
+		SNS:       &fakeSNS{},
+	})
+	params, _ := json.Marshal(map[string]string{
+		"protocol": "sqs",
+		"endpoint": "arn:aws:sqs:us-east-1:1:orders-q",
+	})
+	if _, err := svc.HandleSNSCreateSubscription(context.Background(), params, nil); err == nil {
+		t.Fatal("expected write mode error")
+	}
+}
+
 func TestActiveSQSSelection(t *testing.T) {
 	profile := models.ProfileSummary{ProfileID: "p1", ProviderID: "aws"}
 	snap := discovery.Snapshot{Profiles: []models.ProfileSummary{profile}}

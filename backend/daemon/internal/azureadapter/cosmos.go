@@ -185,6 +185,47 @@ func (i *Inventory) ListCosmosItems(
 	return items, nil
 }
 
+// DeleteCosmosItem deletes one document by id and partition key value.
+func (i *Inventory) DeleteCosmosItem(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	account string,
+	resourceGroup string,
+	database string,
+	container string,
+	itemID string,
+	partitionKey string,
+) (models.AzureCosmosDeleteItemResult, error) {
+	account = strings.TrimSpace(account)
+	database = strings.TrimSpace(database)
+	container = strings.TrimSpace(container)
+	itemID = strings.TrimSpace(itemID)
+	partitionKey = strings.TrimSpace(partitionKey)
+	if account == "" || database == "" || container == "" || itemID == "" {
+		return models.AzureCosmosDeleteItemResult{}, fmt.Errorf("account, database, container, and item id are required")
+	}
+	if partitionKey == "" {
+		// Common default when the partition key path is /id.
+		partitionKey = itemID
+	}
+	endpoint, key, err := i.cosmosTarget(ctx, profile, account, resourceGroup)
+	if err != nil {
+		return models.AzureCosmosDeleteItemResult{}, err
+	}
+	resLink := "dbs/" + database + "/colls/" + container + "/docs/" + itemID
+	path := resLink
+	if err := i.cosmosDelete(ctx, endpoint, key, "docs", resLink, path, partitionKey); err != nil {
+		return models.AzureCosmosDeleteItemResult{}, err
+	}
+	return models.AzureCosmosDeleteItemResult{
+		Account:   account,
+		Database:  database,
+		Container: container,
+		ItemID:    itemID,
+		Summary:   fmt.Sprintf("Deleted Cosmos item %s from %s/%s/%s.", itemID, account, database, container),
+	}, nil
+}
+
 // cosmosTarget resolves the data-plane endpoint and master key for an account.
 func (i *Inventory) cosmosTarget(
 	ctx context.Context,
@@ -255,6 +296,43 @@ func (i *Inventory) cosmosGet(ctx context.Context, endpoint, key, resType, resLi
 		return nil, fmt.Errorf("cosmos GET %s returned HTTP %d", path, response.StatusCode)
 	}
 	return raw, nil
+}
+
+// cosmosDelete performs a signed Cosmos DB data-plane DELETE for a document.
+func (i *Inventory) cosmosDelete(ctx context.Context, endpoint, key, resType, resLink, path, partitionKey string) error {
+	date := time.Now().UTC().Format(http.TimeFormat)
+	auth, err := cosmosAuthHeader("DELETE", resType, resLink, date, key)
+	if err != nil {
+		return err
+	}
+	url := strings.TrimRight(endpoint, "/") + "/" + path
+	request, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Authorization", auth)
+	request.Header.Set("x-ms-date", date)
+	request.Header.Set("x-ms-version", cosmosVersion)
+	request.Header.Set("Accept", "application/json")
+	// Partition key values are sent as a JSON array string.
+	pkJSON, err := json.Marshal([]string{partitionKey})
+	if err != nil {
+		return fmt.Errorf("encode cosmos partition key: %w", err)
+	}
+	request.Header.Set("x-ms-documentdb-partitionkey", string(pkJSON))
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return fmt.Errorf("cosmos request: %w", err)
+	}
+	defer response.Body.Close()
+	raw, _ := io.ReadAll(response.Body)
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		if len(raw) > 0 {
+			return fmt.Errorf("cosmos DELETE %s returned HTTP %d: %s", path, response.StatusCode, strings.TrimSpace(string(raw)))
+		}
+		return fmt.Errorf("cosmos DELETE %s returned HTTP %d", path, response.StatusCode)
+	}
+	return nil
 }
 
 // cosmosAuthHeader builds the Cosmos DB master-key authorization token.

@@ -2917,6 +2917,33 @@ export function handleMockRequest<T>(
       appendLog("success", `Created SNS topic ${topicName}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     }
+    case "aws.sns.createSubscription": {
+      if (!mockState.session.awsWriteModeEnabled) {
+        return Promise.reject(
+          new Error("SNS create subscription requires write mode to be enabled"),
+        );
+      }
+      const topicArn = String(params.topicArn ?? mockState.session.selectedSnsTopicArn ?? "");
+      const protocol = String(params.protocol ?? "sqs");
+      const endpoint = String(params.endpoint ?? "");
+      const topic = mockWorkspaceSNSTopics.find((item) => item.topicArn === topicArn);
+      if (topic) {
+        topic.subscriptions = [
+          ...(topic.subscriptions ?? []),
+          {
+            subscriptionArn: `${topicArn}:mock-sub`,
+            protocol,
+            endpoint,
+          },
+        ];
+        topic.subscriptionsConfirmed = String(
+          Number(topic.subscriptionsConfirmed ?? "0") + 1,
+        );
+      }
+      mockState.session.selectedSnsTopicArn = topicArn;
+      appendLog("success", `Created SNS subscription (${protocol}) for the topic.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "aws.dynamodb.putItem":
     case "aws.dynamodb.deleteItem":
       appendLog("success", String(params.tableName ?? "table") + " updated.");
@@ -3622,6 +3649,16 @@ export function handleMockRequest<T>(
     case "azure.cosmos.selectContainer":
       mockState.session.selectedAzureCosmosContainer = String(params.container ?? "");
       return Promise.resolve(buildMockWorkspace() as T);
+    case "azure.cosmos.deleteItem": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(
+          new Error("Cosmos delete requires write mode to be enabled for this Azure workspace"),
+        );
+      }
+      const itemId = String(params.itemId ?? "").trim();
+      appendLog("success", `Deleted Cosmos item ${itemId} (mock).`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "azure.postgres.selectServer":
       mockState.session.selectedAzurePostgresServer = String(params.server ?? "");
       return Promise.resolve(buildMockWorkspace() as T);

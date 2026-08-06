@@ -84,3 +84,8 @@ type FrontDoorWriter interface {
 type QueuesWriter interface {
 	PurgeQueueMessages(ctx context.Context, profile models.ProfileSummary, accountName string, queueName string) (models.AzureQueuePurgeResult, error)
 }
+
+// CosmosWriter is the Cosmos DB document mutation surface.
+type CosmosWriter interface {
+	DeleteCosmosItem(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string, database string, container string, itemID string, partitionKey string) (models.AzureCosmosDeleteItemResult, error)
+}

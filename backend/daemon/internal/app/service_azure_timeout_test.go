@@ -217,6 +217,11 @@ func (blockingAzure) ListCosmosContainers(ctx context.Context, _ models.ProfileS
 	return nil, ctx.Err()
 }
 
+func (blockingAzure) DeleteCosmosItem(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ string, _ string, _ string) (models.AzureCosmosDeleteItemResult, error) {
+	<-ctx.Done()
+	return models.AzureCosmosDeleteItemResult{}, ctx.Err()
+}
+
 func (blockingAzure) ListCosmosItems(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ string) ([]models.AzureCosmosItem, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()

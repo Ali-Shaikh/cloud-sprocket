@@ -205,6 +205,59 @@ func (s *Service) HandleSNSCreateTopic(ctx context.Context, params json.RawMessa
 	)
 }
 
+// HandleSNSCreateSubscription implements aws.sns.createSubscription.
+func (s *Service) HandleSNSCreateSubscription(ctx context.Context, params json.RawMessage, notifier sessionport.Notifier) (any, error) {
+	if s == nil || s.sns == nil {
+		return nil, errors.New("aws write service is not available")
+	}
+	var request struct {
+		TopicArn string `json:"topicArn"`
+		Protocol string `json:"protocol"`
+		Endpoint string `json:"endpoint"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	protocol := strings.TrimSpace(request.Protocol)
+	endpoint := strings.TrimSpace(request.Endpoint)
+	if protocol == "" {
+		return nil, errors.New("protocol is required")
+	}
+	if endpoint == "" {
+		return nil, errors.New("endpoint is required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	profile, region, topicArn, err := s.AuthorizeWriteSelection(
+		ctx, snapshot,
+		"SNS create subscription requires write mode to be enabled",
+		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
+			return ActiveSNSSelection(snap, session, request.TopicArn)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	actionCtx, cancel := s.WithActionTimeout(ctx)
+	created, err := s.sns.CreateSubscription(actionCtx, profile, region, topicArn, protocol, endpoint)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	if s.invalidator != nil {
+		s.invalidator.InvalidateResourceCache(ctx, "aws.sns.topics", profile.ProfileID+"|"+region)
+	}
+
+	return s.FinishWriteAction(
+		ctx, snapshot, notifier, "sns",
+		created.Summary,
+		func(session *models.SessionSnapshot) { session.SelectedSNSTopicArn = topicArn },
+	)
+}
+
 // HandleDynamoDBPutItem implements aws.dynamodb.putItem.
 func (s *Service) HandleDynamoDBPutItem(ctx context.Context, params json.RawMessage, notifier sessionport.Notifier) (any, error) {
 	if s == nil || s.dynamodb == nil {

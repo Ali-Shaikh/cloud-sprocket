@@ -45,6 +45,13 @@ func (s *Service) handleAwsSnsCreateTopic(ctx context.Context, params json.RawMe
 	return s.aws.HandleSNSCreateTopic(ctx, params, notifier)
 }
 
+func (s *Service) handleAwsSnsCreateSubscription(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleSNSCreateSubscription(ctx, params, notifier)
+}
+
 func (s *Service) handleAwsDynamodbPutItem(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	if err := s.requireAWS(); err != nil {
 		return nil, err
