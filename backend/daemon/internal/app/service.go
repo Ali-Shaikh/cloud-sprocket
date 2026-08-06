@@ -21,7 +21,6 @@ import (
 	"cloudsprocket/backend/daemon/internal/discovery"
 	"cloudsprocket/backend/daemon/internal/dockerruntime"
 	"cloudsprocket/backend/daemon/internal/flociaz"
-	"cloudsprocket/backend/daemon/internal/labs"
 	"cloudsprocket/backend/daemon/internal/localstack"
 	"cloudsprocket/backend/daemon/internal/models"
 	"cloudsprocket/backend/daemon/internal/recipes"
@@ -75,8 +74,9 @@ type Service struct {
 	// azureDomain owns extracted Azure domain RPCs (inventory first; F-029 Phase 5).
 	// Named azureDomain so it does not collide with the azure AzureInventory field.
 	azureDomain *appazure.Service
-	// labsDomain owns labs.* RPC handlers and startup fault recovery (F-029 Phase 6a).
-	// Named labsDomain so it does not collide with the labs package import.
+	// labsDomain owns labs.* RPC handlers, check registry assembly, and startup
+	// fault recovery (F-029 Phase 6). Named labsDomain so it does not collide
+	// with the labs package import.
 	labsDomain            *applabs.Service
 	cipher                *secrets.Cipher
 	initialisationErr     error
@@ -88,8 +88,6 @@ type Service struct {
 	azureCLIExtProfileID string
 	azureCLIExtStatuses  []models.AzureCLIExtensionStatus
 	azureCLIExtAt        time.Time
-	labRunnerOnce        sync.Once
-	labRunnerValue       *labs.Runner
 	preferences          models.ServicePreferences
 	now                  func() time.Time
 	mu                   sync.Mutex
@@ -252,8 +250,9 @@ func NewFromDeps(deps Deps) *Service {
 		Invalidator: service,
 		Deployments: labsDeploymentsAdapter{s: service},
 		Recipes:     labsRecipesAdapter{s: service},
-		Runner:      labsRunnerAdapter{s: service},
-		Writes:      labsWriteExecutorAdapter{s: service},
+		// Engine built here with app/labs registry (façade only supplies adapters).
+		Runner: service.newLabRunner(),
+		Writes: labsWriteExecutorAdapter{s: service},
 	})
 	service.mu.Lock()
 	if err := service.loadPreferencesLocked(); err != nil {

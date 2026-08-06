@@ -21,29 +21,31 @@ import (
 	"cloudsprocket/backend/daemon/internal/recipes"
 )
 
-// Thin façade wrappers for labs.* RPCs owned by internal/app/labs (F-029 Phase 6a).
-// AWS invoke-write ops and check-registry construction stay on the façade.
+// Thin façade wrappers for labs.* RPCs owned by internal/app/labs (F-029 Phase 6).
+// AWS invoke-write ops stay on the façade; check-registry assembly lives in app/labs.
 
-func (s *Service) labRunner() *labs.Runner {
-	s.labRunnerOnce.Do(func() {
-		store := labs.NewSessionStore(s.store)
-		httpDeps := checks.HTTPDeps{Get: s.labsHTTPGet}
-		registry := labs.NewRegistry(
-			&checks.SQSQueueAttributeCheck{Deps: checks.SQSDeps{DescribeQueue: s.sqs.DescribeQueue}},
-			&checks.HTTPGetCheck{Deps: httpDeps},
-			&checks.HTTPUnreachableCheck{Deps: httpDeps},
-			&checks.S3ObjectCheck{Deps: checks.S3Deps{HeadObject: s.s3.HeadObject, GetObject: s.s3.GetObject}},
-			&checks.DynamoDBItemCheck{Deps: checks.DynamoDeps{GetItem: s.dynamodb.GetItem}},
-			&checks.LambdaInvokeCheck{Deps: checks.LambdaDeps{Invoke: s.lambda.InvokeFunction}},
-			&checks.LogsContainsCheck{Deps: checks.LogsDeps{DescribeLogGroup: s.logs.DescribeLogGroup}},
-			&checks.SecretsValueCheck{Deps: checks.SecretsDeps{GetSecretValue: s.secretsManager.GetSecretValue}},
-			&checks.SNSSubscriptionCheck{Deps: checks.SNSDeps{DescribeTopic: s.sns.DescribeTopic}},
-			&checks.AzureBlobCheck{Deps: checks.AzureBlobDeps{ListBlobs: s.azure.ListBlobs}},
-			&checks.AzureQueueDepthCheck{Deps: checks.AzureQueueDeps{ApproximateCount: s.azure.GetQueueApproximateMessageCount}},
+// newLabRunner returns a lazy production engine. Adapter method values are
+// taken on first use so partial test façades without full inventory stubs stay
+// constructible (same behaviour as the former labRunnerOnce path).
+func (s *Service) newLabRunner() applabs.Runner {
+	return applabs.NewLazyRunner(func() *labs.Runner {
+		return applabs.NewRunnerFromDeps(
+			labs.NewSessionStore(s.store),
+			applabs.CheckDeps{
+				SQS:        checks.SQSDeps{DescribeQueue: s.sqs.DescribeQueue},
+				HTTP:       checks.HTTPDeps{Get: s.labsHTTPGet},
+				S3:         checks.S3Deps{HeadObject: s.s3.HeadObject, GetObject: s.s3.GetObject},
+				Dynamo:     checks.DynamoDeps{GetItem: s.dynamodb.GetItem},
+				Lambda:     checks.LambdaDeps{Invoke: s.lambda.InvokeFunction},
+				Logs:       checks.LogsDeps{DescribeLogGroup: s.logs.DescribeLogGroup},
+				Secrets:    checks.SecretsDeps{GetSecretValue: s.secretsManager.GetSecretValue},
+				SNS:        checks.SNSDeps{DescribeTopic: s.sns.DescribeTopic},
+				AzureBlob:  checks.AzureBlobDeps{ListBlobs: s.azure.ListBlobs},
+				AzureQueue: checks.AzureQueueDeps{ApproximateCount: s.azure.GetQueueApproximateMessageCount},
+			},
+			func() time.Time { return s.now() },
 		)
-		s.labRunnerValue = labs.NewRunner(store, registry, func() time.Time { return s.now() })
 	})
-	return s.labRunnerValue
 }
 
 func (s *Service) recoverLabFaults(ctx context.Context) error {
@@ -124,53 +126,6 @@ func (a labsRecipesAdapter) Load(id string) (recipes.Recipe, error) {
 	return a.s.loadRecipe(id)
 }
 
-// labsRunnerAdapter lazily forwards to the façade-owned labs.Runner (checks
-// registry still depends on AWS/Azure inventory adapters on the façade).
-type labsRunnerAdapter struct {
-	s *Service
-}
-
-func (a labsRunnerAdapter) Start(ctx context.Context, lab *recipes.LabSpec, deployment *deploy.Deployment) (labs.LabSession, error) {
-	return a.s.labRunner().Start(ctx, lab, deployment)
-}
-
-func (a labsRunnerAdapter) Get(ctx context.Context, deploymentID string) (labs.LabSession, bool, error) {
-	return a.s.labRunner().Get(ctx, deploymentID)
-}
-
-func (a labsRunnerAdapter) VerifyStep(
-	ctx context.Context,
-	lab *recipes.LabSpec,
-	deployment *deploy.Deployment,
-	stepID string,
-	profile models.ProfileSummary,
-	region string,
-	opts labs.VerifyOptions,
-) (labs.LabSession, error) {
-	return a.s.labRunner().VerifyStep(ctx, lab, deployment, stepID, profile, region, opts)
-}
-
-func (a labsRunnerAdapter) RunAction(
-	ctx context.Context,
-	lab *recipes.LabSpec,
-	deployment *deploy.Deployment,
-	stepID string,
-	actionIndex int,
-	profile models.ProfileSummary,
-	region string,
-	invoke applabs.WriteInvoker,
-) (any, error) {
-	return a.s.labRunner().RunAction(ctx, lab, deployment, stepID, actionIndex, profile, region, invoke)
-}
-
-func (a labsRunnerAdapter) Reset(ctx context.Context, lab *recipes.LabSpec, deployment *deploy.Deployment) (labs.LabSession, error) {
-	return a.s.labRunner().Reset(ctx, lab, deployment)
-}
-
-func (a labsRunnerAdapter) RecoverActiveFault(ctx context.Context, deployment *deploy.Deployment) error {
-	return a.s.labRunner().RecoverActiveFault(ctx, deployment)
-}
-
 // labsWriteExecutorAdapter keeps invoke-write ops on the façade (AWS inventory
 // ports and write-mode gating).
 type labsWriteExecutorAdapter struct {
@@ -191,10 +146,10 @@ func (a labsWriteExecutorAdapter) InvokeWrite(
 }
 
 // Compile-time proof that façade adapters satisfy labs domain ports.
+// The engine (*labs.Runner) is proven against applabs.Runner in app/labs.
 var (
 	_ applabs.Deployments   = labsDeploymentsAdapter{}
 	_ applabs.Recipes       = labsRecipesAdapter{}
-	_ applabs.Runner        = labsRunnerAdapter{}
 	_ applabs.WriteExecutor = labsWriteExecutorAdapter{}
 )
 
