@@ -74,6 +74,38 @@ describe("actionCapabilityState", () => {
       reason: "Mutating actions require write mode on a profile that supports Azure writes.",
     });
   });
+
+  it("falls back to gcpWritesEnabled for GCP actions", () => {
+    const workspace = {
+      gcpWritesEnabled: false,
+    } as unknown as WorkspaceSnapshot;
+
+    expect(actionCapabilityState(workspace, "functions", "invoke", "gcp")).toEqual({
+      enabled: false,
+      reason: "Mutating actions require write mode to be enabled for this GCP workspace.",
+    });
+  });
+
+  it("enables GCP write-mode capabilities when gcpWritesEnabled is true", () => {
+    const workspace = {
+      actionCapabilities: {
+        storage: [
+          {
+            actionId: "uploadObject",
+            label: "Upload object",
+            enabled: false,
+            reason: WRITE_MODE_REQUIRED_REASON,
+          },
+        ],
+      },
+      gcpWritesEnabled: true,
+    } as unknown as WorkspaceSnapshot;
+
+    expect(actionCapabilityState(workspace, "storage", "uploadObject", "gcp")).toEqual({
+      enabled: true,
+      reason: undefined,
+    });
+  });
 });
 
 describe("syncActionCapabilitiesForWriteMode", () => {
@@ -119,6 +151,30 @@ describe("syncActionCapabilitiesForWriteMode", () => {
           label: "Delete object",
           enabled: false,
           reason: WRITE_MODE_REQUIRED_REASON,
+        },
+      ],
+    });
+  });
+
+  it("re-enables GCP capabilities gated only by write mode", () => {
+    const capabilities = {
+      compute: [
+        {
+          actionId: "startInstance",
+          label: "Start instance",
+          enabled: false,
+          reason: WRITE_MODE_REQUIRED_REASON,
+        },
+      ],
+    };
+
+    expect(syncActionCapabilitiesForWriteMode(capabilities, "gcp", true)).toEqual({
+      compute: [
+        {
+          actionId: "startInstance",
+          label: "Start instance",
+          enabled: true,
+          reason: undefined,
         },
       ],
     });

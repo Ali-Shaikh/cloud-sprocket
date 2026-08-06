@@ -169,4 +169,28 @@ describe("GcpStorageView", () => {
     expect(screen.getByText("No buckets in this project")).toBeTruthy();
     expect(screen.getByText(/Google Cloud console or with gcloud/i)).toBeTruthy();
   });
+
+  it("loads more objects when a continuation token is present", () => {
+    const onLoadMoreObjects = vi.fn();
+    const paged = {
+      ...baseWorkspace,
+      gcpStorageObjectsHasMore: true,
+      gcpStorageObjectsNextToken: "page-2",
+    } as unknown as WorkspaceSnapshot;
+
+    render(
+      <ThemeProvider>
+        <GcpStorageView
+          workspace={paged}
+          onRefresh={() => {}}
+          onSelectBucket={() => {}}
+          onSetPrefixFilter={() => {}}
+          onLoadMoreObjects={onLoadMoreObjects}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /load more/i }));
+    expect(onLoadMoreObjects).toHaveBeenCalled();
+  });
 });

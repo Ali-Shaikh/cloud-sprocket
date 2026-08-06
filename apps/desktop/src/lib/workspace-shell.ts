@@ -121,6 +121,11 @@ export function viewLabelFor(tabId: string, tabs: WorkspaceTab[]): string {
     "azure-postgres": "PostgreSQL",
     "azure-queues": "Queues",
     "azure-entra": "Entra ID",
+    "gcp-overview": "GCP",
+    "gcp-storage": "Cloud Storage",
+    "gcp-compute": "Compute Engine",
+    "gcp-functions": "Cloud Functions",
+    "gcp-gke": "GKE",
     actions: "Activity",
   };
   return labels[tabId] ?? tabs.find((tab) => tab.tabId === tabId)?.label ?? "Workspace";
