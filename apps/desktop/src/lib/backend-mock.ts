@@ -548,7 +548,7 @@ let mockGcpStorageObjects: GcpStorageObject[] = [
 ];
 
 let mockGcpStorageObjectsHasMore = true;
-let mockGcpStorageObjectsNextToken = "mock-gcs-page-2";
+let mockGcpStorageObjectsNextToken: string | undefined = "mock-gcs-page-2";
 
 const mockGcpComputeInstances: GcpComputeInstance[] = [
   {
