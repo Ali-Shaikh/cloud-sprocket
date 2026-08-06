@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-// Package labs owns labs.* JSON-RPC handlers and startup fault recovery.
-// Phase 6a covers start/get/verifyStep/runAction/reset plus recovery.
-// AWS invoke-write ops stay on the façade behind the WriteExecutor port (F-029).
+// Package labs owns labs.* JSON-RPC handlers, verification check-registry
+// assembly, and startup fault recovery (F-029 Phase 6).
+// AWS invoke-write ops stay on the façade behind the WriteExecutor port.
 package labs
 
 import (

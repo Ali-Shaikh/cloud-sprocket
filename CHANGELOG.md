@@ -81,11 +81,15 @@ Installers for every release are published on the
 
 ### Changed
 
+- Daemon lab check-registry construction moves into `internal/app/labs` via
+  `CheckDeps`, `NewRegistry`, `NewRunnerFromDeps`, and `LazyRunner`
+  (architecture F-029 Phase 6b). The façade supplies inventory adapter funcs
+  only and no longer owns `NewRegistry` or a labs runner adapter. AWS
+  invoke-write ops remain on the façade behind `WriteExecutor`.
 - Daemon labs RPCs (`labs.start`, `labs.get`, `labs.verifyStep`, `labs.runAction`,
   `labs.reset`) and startup fault recovery move into `internal/app/labs` with
   discovery/session/invalidator, deployment, recipe, runner, and write-executor
-  ports (architecture F-029 Phase 6a). AWS invoke-write ops and check-registry
-  construction stay on the façade.
+  ports (architecture F-029 Phase 6a).
 - Daemon Azure remaining sync write RPCs move into `internal/app/azure` with
   resource group, VM, Front Door, and queue writer ports (architecture F-029
   Phase 5d): resource group create/delete, VM invoke actions, Front Door cache
