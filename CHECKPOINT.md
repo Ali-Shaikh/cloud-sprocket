@@ -1,18 +1,18 @@
 # Checkpoint
 
 ## Branch
-`feat/aws-azure-operator-features-4` (rebased onto prior SNS/Cosmos commit)
+`refactor/azure-bastion-f029` (from origin/dev)
 
-## PR
-https://github.com/Ali-Shaikh/cloud-sprocket/pull/342
-
-## Features on branch
-1. **AWS SQS purge queue** (`aws.sqs.purgeQueue`) – write-gated, confirmation UI
-2. **AWS ECS update desired count** (`aws.ecs.updateDesiredCount`) – write-gated scale UI
-3. **GCP GKE select cluster + list node pools** (`gcp.gke.selectCluster`) – read-only foundation
-4. **AWS SNS create subscription** (`aws.sns.createSubscription`) – prior commit on branch
-5. **Azure Cosmos delete item** (`azure.cosmos.deleteItem`) – prior commit on branch
+## Goal
+F-029 Phase 5e: extract Azure Bastion list/connect into `internal/app/azure`.
 
 ## Status
-- Pushed; PR #342 updated
-- Go tests + Vitest for SQS/ECS/GKE views passed
+- Domain: `HandleBastionList`, `HandleBastionConnect`, pure helpers
+  (`BastionConnectArgs`, `FormatBastionConnectCommands`, `IsWindowsVM`)
+- Ports: BastionHosts, BastionHostCache, VirtualMachineLookup, InteractiveConsole, PlatformName
+- Façade residual: thin wrappers + store/sysproc adapters in `azure_bastion.go`
+- Tests: pure connect-arg tests in `internal/app/azure`; `go test` green
+- CHANGELOG Unreleased ### Changed note added
+
+## Next
+Commit, push, open PR to dev.

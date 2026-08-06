@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-package app
+package azure
 
 import (
 	"runtime"
@@ -17,9 +17,9 @@ func TestBastionConnectArgsLinuxPassword(t *testing.T) {
 		Name:   "demo-vm",
 		OSType: "Linux",
 	}
-	protocol, args, err := bastionConnectArgs("bastion-hub", "rg-network", vm, "password", "azureuser", "")
+	protocol, args, err := BastionConnectArgs("bastion-hub", "rg-network", vm, "password", "azureuser", "")
 	if err != nil {
-		t.Fatalf("bastionConnectArgs: %v", err)
+		t.Fatalf("BastionConnectArgs: %v", err)
 	}
 	if protocol != "ssh" {
 		t.Fatalf("protocol = %q, want ssh", protocol)
@@ -38,9 +38,9 @@ func TestBastionConnectArgsWindowsRDP(t *testing.T) {
 		Name:   "win-vm",
 		OSType: "Windows",
 	}
-	protocol, args, err := bastionConnectArgs("bastion-hub", "rg-network", vm, "", "", "")
+	protocol, args, err := BastionConnectArgs("bastion-hub", "rg-network", vm, "", "", "")
 	if err != nil {
-		t.Fatalf("bastionConnectArgs: %v", err)
+		t.Fatalf("BastionConnectArgs: %v", err)
 	}
 	if protocol != "rdp" {
 		t.Fatalf("protocol = %q, want rdp", protocol)
@@ -64,7 +64,7 @@ func TestFormatBastionConnectCommandsWindowsQuotesResourceID(t *testing.T) {
 		"--resource-group", "rg-network",
 		"--target-resource-id", resourceID,
 	}
-	cmd, ps := formatBastionConnectCommands("windows", `C:\Program Files\az.cmd`, args)
+	cmd, ps := FormatBastionConnectCommands("windows", `C:\Program Files\az.cmd`, args)
 	if !strings.Contains(cmd, `"`+resourceID+`"`) {
 		t.Fatalf("cmd command should quote resource ID, got %q", cmd)
 	}
@@ -76,5 +76,17 @@ func TestFormatBastionConnectCommandsWindowsQuotesResourceID(t *testing.T) {
 	}
 	if !strings.HasPrefix(ps, `& 'C:\Program Files\az.cmd'`) {
 		t.Fatalf("PowerShell command should use call operator, got %q", ps)
+	}
+}
+
+func TestIsWindowsVM(t *testing.T) {
+	if !IsWindowsVM(models.AzureVirtualMachine{OSType: "Windows"}) {
+		t.Fatal("expected Windows OS type to match")
+	}
+	if !IsWindowsVM(models.AzureVirtualMachine{OSType: " windows "}) {
+		t.Fatal("expected case-insensitive Windows match")
+	}
+	if IsWindowsVM(models.AzureVirtualMachine{OSType: "Linux"}) {
+		t.Fatal("expected Linux OS type not to match")
 	}
 }

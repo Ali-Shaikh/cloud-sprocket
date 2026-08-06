@@ -244,6 +244,11 @@ func NewFromDeps(deps Deps) *Service {
 		FrontDoor:       service.azure,
 		Queues:          service.azure,
 		Cosmos:          service.azure,
+		BastionHosts:    service.azure,
+		BastionCache:    bastionHostCacheAdapter{s: service},
+		VMLookup:        bastionVMLookupAdapter{s: service},
+		Console:         interactiveConsoleAdapter{},
+		PlatformName:    service.settings.PlatformName,
 	})
 	service.labsDomain = applabs.New(applabs.Deps{
 		Discovery:   deps.Discovery,
