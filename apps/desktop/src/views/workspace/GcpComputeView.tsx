@@ -10,6 +10,11 @@ import { ResourceTable } from "@/components/inventory/resource-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
+import {
+  GCP_CREATE_HINTS,
+  gcpFilterEmpty,
+  gcpProjectEmpty,
+} from "@/lib/gcp-empty-copy";
 import type { GcpComputeInstance, WorkspaceSnapshot } from "@/types/backend";
 
 export type GcpComputeViewProps = {
@@ -235,16 +240,9 @@ export default function GcpComputeView({
           emptyState={
             <EmptyState
               icon={<Cpu />}
-              title={
-                instances.length === 0
-                  ? "No instances in this project"
-                  : "No instances match the filter"
-              }
-              description={
-                instances.length === 0
-                  ? "Create a VM in the Google Cloud console or with gcloud, then refresh."
-                  : "Clear the filter to see the full inventory."
-              }
+              {...(instances.length === 0
+                ? gcpProjectEmpty("instances", GCP_CREATE_HINTS.instances)
+                : gcpFilterEmpty("instances"))}
             />
           }
         />

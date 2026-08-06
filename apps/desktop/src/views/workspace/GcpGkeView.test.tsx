@@ -85,4 +85,20 @@ describe("GcpGkeView", () => {
     fireEvent.click(screen.getByText("prod-gke"));
     expect(onSelectCluster).toHaveBeenCalledWith("prod-gke");
   });
+
+  it("shows an empty-state when no clusters are loaded", () => {
+    const empty = {
+      profile: workspace.profile,
+      gcpGkeClusters: [],
+    } as unknown as WorkspaceSnapshot;
+
+    render(
+      <ThemeProvider>
+        <GcpGkeView workspace={empty} onRefresh={vi.fn()} />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByText("No clusters in this project")).toBeTruthy();
+    expect(screen.getByText(/Create a GKE cluster/i)).toBeTruthy();
+  });
 });

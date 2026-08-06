@@ -4,6 +4,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { WRITE_MODE_REQUIRED_REASON } from "@/lib/action-capabilities";
 import { ThemeProvider } from "@/lib/theme";
 import GcpComputeView from "./GcpComputeView";
 import type { WorkspaceSnapshot } from "@/types/backend";
@@ -65,7 +66,7 @@ describe("GcpComputeView", () => {
     expect(onRefresh).toHaveBeenCalled();
   });
 
-  it("starts a stopped instance when write mode is on", () => {
+  it("starts a stopped instance and stops a running instance when write mode is on", () => {
     const onStart = vi.fn();
     const onStop = vi.fn();
     render(
@@ -86,5 +87,67 @@ describe("GcpComputeView", () => {
     fireEvent.click(screen.getByText("web-1"));
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
     expect(onStop).toHaveBeenCalledWith("web-1", "us-central1-a");
+  });
+
+  it("disables start and stop when write mode is off", () => {
+    const readOnly = {
+      ...workspace,
+      gcpWriteModeEnabled: false,
+      gcpWritesEnabled: false,
+      actionCapabilities: {
+        compute: [
+          {
+            actionId: "startInstance",
+            label: "Start instance",
+            enabled: false,
+            reason: WRITE_MODE_REQUIRED_REASON,
+          },
+          {
+            actionId: "stopInstance",
+            label: "Stop instance",
+            enabled: false,
+            reason: WRITE_MODE_REQUIRED_REASON,
+          },
+        ],
+      },
+    } as unknown as WorkspaceSnapshot;
+
+    render(
+      <ThemeProvider>
+        <GcpComputeView
+          workspace={readOnly}
+          onRefresh={vi.fn()}
+          onStartInstance={vi.fn()}
+          onStopInstance={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByText("batch-1"));
+    const start = screen.getByRole("button", { name: /^start$/i });
+    expect(start).toBeDisabled();
+    expect(start.getAttribute("title") ?? "").toMatch(/write mode/i);
+
+    fireEvent.click(screen.getByText("web-1"));
+    const stop = screen.getByRole("button", { name: /^stop$/i });
+    expect(stop).toBeDisabled();
+    expect(stop.getAttribute("title") ?? "").toMatch(/write mode/i);
+  });
+
+  it("shows an empty-state when no instances are loaded", () => {
+    const empty = {
+      profile: workspace.profile,
+      gcpComputeInstances: [],
+      gcpWritesEnabled: false,
+    } as unknown as WorkspaceSnapshot;
+
+    render(
+      <ThemeProvider>
+        <GcpComputeView workspace={empty} onRefresh={vi.fn()} />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByText("No instances in this project")).toBeTruthy();
+    expect(screen.getByText(/Google Cloud console or with gcloud/i)).toBeTruthy();
   });
 });

@@ -9,6 +9,19 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Changed
+
+- Desktop GCP inventory tabs share empty-state copy helpers, and Cloud Storage
+  Upload is disabled (with a write-mode title) when write mode is off.
+
+### Tests
+
+- Vitest smoke coverage for GCP desktop surfaces: Storage upload/delete/signed
+  link and empty state, Compute start/stop with write-mode gating and empty
+  state, Functions invoke gating and empty state, GKE empty state, and
+  workspace-snapshot normalisation of all GCP inventory fields (including
+  storage objects `isFolder` and pagination flags).
+
 ## [0.9.13] - 2026-08-06
 
 ### Added

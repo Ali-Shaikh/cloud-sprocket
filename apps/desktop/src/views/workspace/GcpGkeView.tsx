@@ -9,6 +9,11 @@ import { InlineBanner } from "@/components/inline-banner";
 import { ResourceTable } from "@/components/inventory/resource-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  GCP_CREATE_HINTS,
+  gcpFilterEmpty,
+  gcpProjectEmpty,
+} from "@/lib/gcp-empty-copy";
 import type { GcpGkeCluster, GcpGkeNodePool, WorkspaceSnapshot } from "@/types/backend";
 
 export type GcpGkeViewProps = {
@@ -144,16 +149,9 @@ export default function GcpGkeView({
           emptyState={
             <EmptyState
               icon={<Boxes />}
-              title={
-                clusters.length === 0
-                  ? "No clusters in this project"
-                  : "No clusters match the filter"
-              }
-              description={
-                clusters.length === 0
-                  ? "Create a GKE cluster in the console or with gcloud, then refresh."
-                  : "Clear the filter to see the full inventory."
-              }
+              {...(clusters.length === 0
+                ? gcpProjectEmpty("clusters", GCP_CREATE_HINTS.clusters)
+                : gcpFilterEmpty("clusters"))}
             />
           }
         />

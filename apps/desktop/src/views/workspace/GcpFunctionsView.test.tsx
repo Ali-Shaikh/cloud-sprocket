@@ -114,4 +114,45 @@ describe("GcpFunctionsView", () => {
       expect(screen.getByText(/"ok":true/)).toBeTruthy();
     });
   });
+
+  it("disables invoke when write mode is off", () => {
+    const onInvoke = vi.fn();
+    const selected = {
+      ...baseWorkspace,
+      selectedGcpFunction: "us-central1/hello-http",
+    } as unknown as WorkspaceSnapshot;
+
+    render(
+      <ThemeProvider>
+        <GcpFunctionsView
+          workspace={selected}
+          onRefresh={() => {}}
+          onInvoke={onInvoke}
+        />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByText(/read-only/i)).toBeTruthy();
+    const invoke = screen.getByRole("button", { name: /^invoke$/i });
+    expect(invoke).toBeDisabled();
+    expect(invoke.getAttribute("title") ?? "").toMatch(/write mode/i);
+    expect(screen.getByText(/turn on write mode/i)).toBeTruthy();
+  });
+
+  it("shows an empty-state when no functions are loaded", () => {
+    const empty = {
+      profile: baseWorkspace.profile,
+      gcpFunctions: [],
+      gcpWritesEnabled: false,
+    } as unknown as WorkspaceSnapshot;
+
+    render(
+      <ThemeProvider>
+        <GcpFunctionsView workspace={empty} onRefresh={vi.fn()} />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByText("No functions in this project")).toBeTruthy();
+    expect(screen.getByText(/Deploy a Cloud Function/i)).toBeTruthy();
+  });
 });

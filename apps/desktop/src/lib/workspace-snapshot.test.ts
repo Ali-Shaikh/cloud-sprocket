@@ -22,6 +22,58 @@ describe("normaliseWorkspaceSnapshot", () => {
     expect(workspace.ec2Instances).toEqual([]);
     expect(workspace.actionCapabilities).toEqual({});
     expect(workspace.runtimeSettings).toEqual(emptyWorkspace.runtimeSettings);
+    expect(workspace.gcpStorageBuckets).toEqual([]);
+    expect(workspace.gcpStorageObjects).toEqual([]);
+    expect(workspace.gcpStorageObjectsHasMore).toBe(false);
+    expect(workspace.gcpComputeInstances).toEqual([]);
+    expect(workspace.gcpFunctions).toEqual([]);
+    expect(workspace.gcpGkeClusters).toEqual([]);
+    expect(workspace.gcpWriteCapable).toBe(false);
+    expect(workspace.gcpWriteModeEnabled).toBe(false);
+    expect(workspace.gcpWritesEnabled).toBe(false);
+  });
+
+  it("normalises GCP storage, compute, functions, and GKE fields", () => {
+    const workspace = normaliseWorkspaceSnapshot({
+      selectedGcpStorageBucket: "alpha",
+      gcpStoragePrefixFilter: "docs/",
+      gcpStorageStatusMessage: "Listed objects.",
+      gcpStorageBuckets: [{ name: "alpha", location: "US" }],
+      gcpStorageObjects: [
+        { key: "docs/", isFolder: true },
+        { key: "docs/readme.txt" },
+      ],
+      gcpStorageObjectsNextToken: "page-2",
+      gcpStorageObjectsHasMore: true,
+      selectedGcpComputeInstance: "web-1",
+      gcpComputeStatusMessage: "Loaded instances.",
+      gcpComputeInstances: [{ name: "web-1", zone: "us-central1-a", status: "RUNNING" }],
+      selectedGcpFunction: "us-central1/hello",
+      gcpFunctionsStatusMessage: "Loaded functions.",
+      gcpFunctions: [{ name: "hello", region: "us-central1", generation: "2nd gen" }],
+      selectedGcpGkeCluster: "prod-gke",
+      gcpGkeStatusMessage: "Loaded clusters.",
+      gcpGkeClusters: [{ name: "prod-gke", location: "us-central1", nodeCount: 3 }],
+      gcpWriteCapable: true,
+      gcpWriteModeEnabled: true,
+      gcpWritesEnabled: true,
+    });
+
+    expect(workspace.selectedGcpStorageBucket).toBe("alpha");
+    expect(workspace.gcpStoragePrefixFilter).toBe("docs/");
+    expect(workspace.gcpStorageStatusMessage).toBe("Listed objects.");
+    expect(workspace.gcpStorageBuckets).toEqual([{ name: "alpha", location: "US" }]);
+    expect(workspace.gcpStorageObjects[0]?.isFolder).toBe(true);
+    expect(workspace.gcpStorageObjects[1]?.isFolder).toBe(false);
+    expect(workspace.gcpStorageObjectsNextToken).toBe("page-2");
+    expect(workspace.gcpStorageObjectsHasMore).toBe(true);
+    expect(workspace.selectedGcpComputeInstance).toBe("web-1");
+    expect(workspace.gcpComputeInstances[0]?.name).toBe("web-1");
+    expect(workspace.selectedGcpFunction).toBe("us-central1/hello");
+    expect(workspace.gcpFunctions[0]?.name).toBe("hello");
+    expect(workspace.selectedGcpGkeCluster).toBe("prod-gke");
+    expect(workspace.gcpGkeClusters[0]?.nodeCount).toBe(3);
+    expect(workspace.gcpWritesEnabled).toBe(true);
   });
 });
 
