@@ -11,7 +11,6 @@ import type {
   AwsSqsPeekResult,
   AzureLogAnalyticsHistoryEntry,
   AzureLogAnalyticsSavedQuery,
-  EmulatorLogSnapshot,
   JobLifecycle,
   HiddenResourceHit,
   PreferencesSnapshot,
@@ -86,24 +85,6 @@ export type WorkspaceTabRouterProps = {
   azureLogWorkspaceSelectionLoading: boolean;
   azureWafConfigLoading: boolean;
   azureFrontDoorTopologyLoading: boolean;
-  localStackAuthToken: string;
-  setLocalStackAuthToken: Dispatch<SetStateAction<string>>;
-  localStackPersistence: boolean;
-  setLocalStackPersistence: Dispatch<SetStateAction<boolean>>;
-  localStackEnvironmentText: string;
-  setLocalStackEnvironmentText: Dispatch<SetStateAction<string>>;
-  localStackLogs: EmulatorLogSnapshot;
-  localStackLogsStatus: string;
-  localStackActionStatus: string;
-  localStackActionInFlight: boolean;
-  flociAzPersistence: boolean;
-  setFlociAzPersistence: Dispatch<SetStateAction<boolean>>;
-  flociAzEnvironmentText: string;
-  setFlociAzEnvironmentText: Dispatch<SetStateAction<string>>;
-  flociAzLogs: EmulatorLogSnapshot;
-  flociAzLogsStatus: string;
-  flociAzActionStatus: string;
-  flociAzActionInFlight: boolean;
   mutateWorkspaceSelection: (
     method: string,
     params: Record<string, unknown>,
@@ -111,17 +92,8 @@ export type WorkspaceTabRouterProps = {
   ) => Promise<void>;
   mutateSession: (method: string, params?: Record<string, unknown>) => Promise<boolean>;
   refreshDiscovery: () => Promise<void>;
-  refreshDockerRuntime: () => Promise<void>;
-  refreshLocalStackLogs: () => Promise<void>;
-  refreshFlociAzLogs: () => Promise<void>;
   listLogAnalyticsHistory: (workspace: string) => Promise<AzureLogAnalyticsHistoryEntry[]>;
   listLogAnalyticsSaved: (workspace: string) => Promise<AzureLogAnalyticsSavedQuery[]>;
-  invokeLocalStackAction: (
-    action: "prepareProfile" | "start" | "stop" | "recreate",
-  ) => Promise<void>;
-  invokeFlociAzAction: (
-    action: "prepareProfile" | "start" | "stop" | "recreate",
-  ) => Promise<void>;
   openWorkspace: (providerId: string, profileId: string) => Promise<void>;
   chooseAuthMethod: (authMethod: string) => Promise<void>;
   preferencesSnapshot: PreferencesSnapshot | null;

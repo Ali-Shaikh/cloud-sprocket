@@ -31,6 +31,10 @@ import { useWorkspaceState } from "./hooks/use-workspace-state";
 import { AwsActionsProvider } from "./components/workspace/aws-actions-context";
 import { AzureActionsProvider } from "./components/workspace/azure-actions-context";
 import {
+  RuntimeEmulatorProvider,
+  type RuntimeEmulatorContextValue,
+} from "./components/workspace/runtime-emulator-context";
+import {
   WorkspaceNavigationProvider,
   type WorkspaceNavigationContextValue,
 } from "./components/workspace/workspace-navigation-context";
@@ -1379,34 +1383,11 @@ export default function App() {
     azureLogWorkspaceSelectionLoading,
     azureWafConfigLoading,
     azureFrontDoorTopologyLoading,
-    localStackAuthToken,
-    setLocalStackAuthToken,
-    localStackPersistence,
-    setLocalStackPersistence,
-    localStackEnvironmentText,
-    setLocalStackEnvironmentText,
-    localStackLogs,
-    localStackLogsStatus,
-    localStackActionStatus,
-    localStackActionInFlight,
-    flociAzPersistence,
-    setFlociAzPersistence,
-    flociAzEnvironmentText,
-    setFlociAzEnvironmentText,
-    flociAzLogs,
-    flociAzLogsStatus,
-    flociAzActionStatus,
-    flociAzActionInFlight,
     mutateWorkspaceSelection,
     mutateSession,
     refreshDiscovery,
-    refreshDockerRuntime,
-    refreshLocalStackLogs,
-    refreshFlociAzLogs,
     listLogAnalyticsHistory,
     listLogAnalyticsSaved,
-    invokeLocalStackAction,
-    invokeFlociAzAction,
     openWorkspace,
     chooseAuthMethod,
     preferencesSnapshot,
@@ -1418,12 +1399,66 @@ export default function App() {
     onEnableHiddenService: enableHiddenService,
   };
 
+  const runtimeEmulator = useMemo<RuntimeEmulatorContextValue>(
+    () => ({
+      localStack: {
+        authToken: localStackAuthToken,
+        setAuthToken: setLocalStackAuthToken,
+        persistence: localStackPersistence,
+        setPersistence: setLocalStackPersistence,
+        environmentText: localStackEnvironmentText,
+        setEnvironmentText: setLocalStackEnvironmentText,
+        logs: localStackLogs,
+        logsStatus: localStackLogsStatus,
+        actionStatus: localStackActionStatus,
+        actionInFlight: localStackActionInFlight,
+        refreshLogs: refreshLocalStackLogs,
+        invokeAction: invokeLocalStackAction,
+      },
+      flociAz: {
+        persistence: flociAzPersistence,
+        setPersistence: setFlociAzPersistence,
+        environmentText: flociAzEnvironmentText,
+        setEnvironmentText: setFlociAzEnvironmentText,
+        logs: flociAzLogs,
+        logsStatus: flociAzLogsStatus,
+        actionStatus: flociAzActionStatus,
+        actionInFlight: flociAzActionInFlight,
+        refreshLogs: refreshFlociAzLogs,
+        invokeAction: invokeFlociAzAction,
+      },
+      refreshDockerRuntime,
+    }),
+    [
+      flociAzActionInFlight,
+      flociAzActionStatus,
+      flociAzEnvironmentText,
+      flociAzLogs,
+      flociAzLogsStatus,
+      flociAzPersistence,
+      invokeFlociAzAction,
+      invokeLocalStackAction,
+      localStackActionInFlight,
+      localStackActionStatus,
+      localStackAuthToken,
+      localStackEnvironmentText,
+      localStackLogs,
+      localStackLogsStatus,
+      localStackPersistence,
+      refreshDockerRuntime,
+      refreshFlociAzLogs,
+      refreshLocalStackLogs,
+    ],
+  );
+
   const content = (
     <WorkspaceSessionProvider value={workspaceSession}>
       <WorkspaceNavigationProvider value={workspaceNavigation}>
         <AwsActionsProvider value={awsActions}>
           <AzureActionsProvider value={azureActions}>
-            <WorkspaceTabRouter {...workspaceTabRouterProps} />
+            <RuntimeEmulatorProvider value={runtimeEmulator}>
+              <WorkspaceTabRouter {...workspaceTabRouterProps} />
+            </RuntimeEmulatorProvider>
           </AzureActionsProvider>
         </AwsActionsProvider>
       </WorkspaceNavigationProvider>
