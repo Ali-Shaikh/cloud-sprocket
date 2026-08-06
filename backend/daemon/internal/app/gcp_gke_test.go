@@ -13,8 +13,11 @@ import (
 )
 
 type stubGcpGkeInventory struct {
-	clusters []models.GcpGkeCluster
-	err      error
+	clusters  []models.GcpGkeCluster
+	nodePools []models.GcpGkeNodePool
+	err       error
+	poolsErr  error
+	listPools int
 }
 
 func (s *stubGcpGkeInventory) ListClusters(context.Context, models.ProfileSummary) ([]models.GcpGkeCluster, error) {
@@ -22,6 +25,17 @@ func (s *stubGcpGkeInventory) ListClusters(context.Context, models.ProfileSummar
 		return nil, s.err
 	}
 	return append([]models.GcpGkeCluster(nil), s.clusters...), nil
+}
+
+func (s *stubGcpGkeInventory) ListNodePools(_ context.Context, _ models.ProfileSummary, clusterName string, location string) ([]models.GcpGkeNodePool, error) {
+	s.listPools++
+	if s.poolsErr != nil {
+		return nil, s.poolsErr
+	}
+	if clusterName == "" || location == "" {
+		return nil, errors.New("cluster and location required")
+	}
+	return append([]models.GcpGkeNodePool(nil), s.nodePools...), nil
 }
 
 func TestEnrichGcpGkeInventorySuccess(t *testing.T) {
@@ -46,6 +60,47 @@ func TestEnrichGcpGkeInventorySuccess(t *testing.T) {
 	}
 	if !strings.Contains(workspace.GcpGkeStatusMessage, "Loaded 2") {
 		t.Fatalf("status = %q", workspace.GcpGkeStatusMessage)
+	}
+	if !strings.Contains(workspace.GcpGkeStatusMessage, "Select a cluster") {
+		t.Fatalf("status missing select hint: %q", workspace.GcpGkeStatusMessage)
+	}
+	if inv.listPools != 0 {
+		t.Fatalf("listPools calls = %d, want 0 without selection", inv.listPools)
+	}
+}
+
+func TestEnrichGcpGkeInventoryLoadsNodePoolsForSelection(t *testing.T) {
+	inv := &stubGcpGkeInventory{
+		clusters: []models.GcpGkeCluster{
+			{Name: "alpha", Location: "us-central1", Status: "RUNNING"},
+		},
+		nodePools: []models.GcpGkeNodePool{
+			{Name: "default-pool", MachineType: "e2-medium", InitialNodeCount: 3},
+		},
+	}
+	service := &Service{
+		gcpGke:      inv,
+		preferences: defaultServicePreferences(),
+	}
+	workspace := models.WorkspaceSnapshot{
+		Provider: &models.ProviderSummary{ProviderID: "gcp"},
+		Profile:  &models.ProfileSummary{ProfileID: "default"},
+	}
+	service.enrichGcpGkeInventory(&workspace, models.SessionSnapshot{
+		SelectedGcpGkeCluster: "alpha",
+	}, nil)
+
+	if workspace.SelectedGcpGkeCluster != "alpha" {
+		t.Fatalf("selected = %q", workspace.SelectedGcpGkeCluster)
+	}
+	if len(workspace.GcpGkeNodePools) != 1 || workspace.GcpGkeNodePools[0].Name != "default-pool" {
+		t.Fatalf("node pools = %+v", workspace.GcpGkeNodePools)
+	}
+	if !strings.Contains(workspace.GcpGkeStatusMessage, "Loaded 1 node pool") {
+		t.Fatalf("status = %q", workspace.GcpGkeStatusMessage)
+	}
+	if inv.listPools != 1 {
+		t.Fatalf("listPools calls = %d, want 1", inv.listPools)
 	}
 }
 

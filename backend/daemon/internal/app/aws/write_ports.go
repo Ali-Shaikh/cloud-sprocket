@@ -14,12 +14,14 @@ type SQSWriter interface {
 	PeekMessages(ctx context.Context, profile models.ProfileSummary, region string, queueURL string) (models.AwsSqsPeekResult, error)
 	SendMessage(ctx context.Context, profile models.ProfileSummary, region string, queueURL string, messageBody string) (models.AwsSqsSendResult, error)
 	CreateQueue(ctx context.Context, profile models.ProfileSummary, region string, queueName string) (models.AwsSqsCreateQueueResult, error)
+	PurgeQueue(ctx context.Context, profile models.ProfileSummary, region string, queueURL string) (models.AwsSqsPurgeResult, error)
 }
 
 // SNSWriter is the SNS action surface used by publish/create handlers.
 type SNSWriter interface {
 	Publish(ctx context.Context, profile models.ProfileSummary, region string, topicArn string, message string) (models.AwsSnsPublishResult, error)
 	CreateTopic(ctx context.Context, profile models.ProfileSummary, region string, topicName string) (models.AwsSnsCreateTopicResult, error)
+	CreateSubscription(ctx context.Context, profile models.ProfileSummary, region string, topicArn string, protocol string, endpoint string) (models.AwsSnsCreateSubscriptionResult, error)
 }
 
 // DynamoDBWriter is the DynamoDB write and sample-scan surface.
@@ -88,7 +90,8 @@ type RDSLifecycle interface {
 	ListInstances(ctx context.Context, profile models.ProfileSummary, region string) ([]models.AwsRdsInstance, error)
 }
 
-// ECSWriter is the ECS force-new-deployment surface.
+// ECSWriter is the ECS force-new-deployment and scale surface.
 type ECSWriter interface {
 	ForceNewDeployment(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, serviceArn string) (models.AwsEcsForceNewDeploymentResult, error)
+	UpdateDesiredCount(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, serviceArn string, desiredCount int32) (models.AwsEcsUpdateDesiredCountResult, error)
 }

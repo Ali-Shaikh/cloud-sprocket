@@ -13,6 +13,24 @@ Installers for every release are published on the
 
 ### Added
 
+- AWS SQS purge queue: write-gated `aws.sqs.purgeQueue` clears all messages via
+  `PurgeQueue`, rebuilds the SQS workspace snapshot so depth attributes refresh,
+  and adds a Purge queue control with confirmation on the selected queue.
+- AWS ECS scale service: write-gated `aws.ecs.updateDesiredCount` sets the
+  service desired task count via `UpdateService`, invalidates service/task
+  inventory caches, and adds a Scale service control with desired-count input on
+  the selected service in the ECS inspector.
+- GCP GKE node pools: `gcp.gke.selectCluster` selects a cluster, enrichment loads
+  node pools via `gcloud container node-pools list` for the selected cluster, and
+  the desktop GKE tab shows cluster selection plus a node pools table.
+- AWS SNS create subscription: write-gated `aws.sns.createSubscription` calls
+  SNS `Subscribe` with protocol and endpoint for the selected topic, refreshes
+  SNS inventory, and adds a Create subscription control on the SNS topic
+  inspector (alongside publish and create topic).
+- Azure Cosmos DB delete item: write-gated `azure.cosmos.deleteItem` deletes a
+  document by id and partition key via the Cosmos data-plane REST API, refreshes
+  the cosmos scope, and adds a Delete control on sampled items in the Cosmos
+  workspace panel (with confirmation).
 - AWS DynamoDB sample scan pagination: table describe returns the first scan page
   with `sampleItemsNextToken` / `sampleItemsHasMore`, and read-only
   `aws.dynamodb.loadMoreItems` loads the next page. The DynamoDB inspector adds a

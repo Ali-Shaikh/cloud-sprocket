@@ -17,6 +17,7 @@ type fakeSQS struct {
 	peeked  bool
 	sent    bool
 	created bool
+	purged  bool
 }
 
 func (f *fakeSQS) PeekMessages(context.Context, models.ProfileSummary, string, string) (models.AwsSqsPeekResult, error) {
@@ -30,6 +31,92 @@ func (f *fakeSQS) SendMessage(context.Context, models.ProfileSummary, string, st
 func (f *fakeSQS) CreateQueue(context.Context, models.ProfileSummary, string, string) (models.AwsSqsCreateQueueResult, error) {
 	f.created = true
 	return models.AwsSqsCreateQueueResult{QueueName: "q", QueueURL: "https://q"}, nil
+}
+func (f *fakeSQS) PurgeQueue(context.Context, models.ProfileSummary, string, string) (models.AwsSqsPurgeResult, error) {
+	f.purged = true
+	return models.AwsSqsPurgeResult{QueueURL: "https://q", QueueName: "q", Summary: "purged"}, nil
+}
+
+type fakeSNS struct {
+	subscribed bool
+	protocol   string
+	endpoint   string
+}
+
+func (f *fakeSNS) Publish(context.Context, models.ProfileSummary, string, string, string) (models.AwsSnsPublishResult, error) {
+	return models.AwsSnsPublishResult{Summary: "published"}, nil
+}
+func (f *fakeSNS) CreateTopic(context.Context, models.ProfileSummary, string, string) (models.AwsSnsCreateTopicResult, error) {
+	return models.AwsSnsCreateTopicResult{TopicName: "t", TopicArn: "arn:aws:sns:us-east-1:1:t"}, nil
+}
+func (f *fakeSNS) CreateSubscription(_ context.Context, _ models.ProfileSummary, _ string, topicArn, protocol, endpoint string) (models.AwsSnsCreateSubscriptionResult, error) {
+	f.subscribed = true
+	f.protocol = protocol
+	f.endpoint = endpoint
+	return models.AwsSnsCreateSubscriptionResult{
+		TopicArn:        topicArn,
+		Protocol:        protocol,
+		Endpoint:        endpoint,
+		SubscriptionArn: topicArn + ":sub-1",
+		Summary:         "Created SNS subscription.",
+	}, nil
+}
+
+func TestHandleSNSCreateSubscription(t *testing.T) {
+	sns := &fakeSNS{}
+	sess := &fakeSession{session: models.SessionSnapshot{
+		IsLocked:            true,
+		CurrentProviderID:   "aws",
+		SelectedProfileID:   "p1",
+		AWSWriteModeEnabled: true,
+		SelectedSNSRegion:   "us-east-1",
+		SelectedSNSTopicArn: "arn:aws:sns:us-east-1:1:orders",
+	}}
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session:     sess,
+		Workspace:   &fakeWorkspace{},
+		Activity:    &fakeActivity{},
+		Invalidator: &fakeInvalidator{},
+		SNS:         sns,
+	})
+	params, _ := json.Marshal(map[string]string{
+		"protocol": "sqs",
+		"endpoint": "arn:aws:sqs:us-east-1:1:orders-q",
+	})
+	if _, err := svc.HandleSNSCreateSubscription(context.Background(), params, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !sns.subscribed || sns.protocol != "sqs" || sns.endpoint != "arn:aws:sqs:us-east-1:1:orders-q" {
+		t.Fatalf("subscribe = %+v", sns)
+	}
+}
+
+func TestHandleSNSCreateSubscriptionRequiresWriteMode(t *testing.T) {
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: &fakeSession{session: models.SessionSnapshot{
+			IsLocked:            true,
+			CurrentProviderID:   "aws",
+			SelectedProfileID:   "p1",
+			AWSWriteModeEnabled: false,
+			SelectedSNSRegion:   "us-east-1",
+			SelectedSNSTopicArn: "arn:aws:sns:us-east-1:1:orders",
+		}},
+		Workspace: &fakeWorkspace{},
+		SNS:       &fakeSNS{},
+	})
+	params, _ := json.Marshal(map[string]string{
+		"protocol": "sqs",
+		"endpoint": "arn:aws:sqs:us-east-1:1:orders-q",
+	})
+	if _, err := svc.HandleSNSCreateSubscription(context.Background(), params, nil); err == nil {
+		t.Fatal("expected write mode error")
+	}
 }
 
 func TestActiveSQSSelection(t *testing.T) {
@@ -159,6 +246,55 @@ func TestHandleSQSPeekUsesWriter(t *testing.T) {
 	}
 }
 
+func TestHandleSQSPurgeQueue(t *testing.T) {
+	sqs := &fakeSQS{}
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: &fakeSession{session: models.SessionSnapshot{
+			IsLocked:            true,
+			CurrentProviderID:   "aws",
+			SelectedProfileID:   "p1",
+			AWSWriteModeEnabled: true,
+			SelectedSQSRegion:   "us-east-1",
+			SelectedSQSQueueURL: "https://q",
+		}},
+		Workspace:     &fakeWorkspace{},
+		Activity:      &fakeActivity{},
+		SQS:           sqs,
+		ActionTimeout: 5 * time.Second,
+	})
+	params, _ := json.Marshal(map[string]string{"queueUrl": "https://q"})
+	if _, err := svc.HandleSQSPurgeQueue(context.Background(), params, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !sqs.purged {
+		t.Fatal("expected purge")
+	}
+}
+
+func TestHandleSQSPurgeQueueRequiresWriteMode(t *testing.T) {
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: &fakeSession{session: models.SessionSnapshot{
+			IsLocked:            true,
+			CurrentProviderID:   "aws",
+			SelectedProfileID:   "p1",
+			SelectedSQSRegion:   "us-east-1",
+			SelectedSQSQueueURL: "https://q",
+		}},
+		Workspace: &fakeWorkspace{},
+		SQS:       &fakeSQS{},
+	})
+	params, _ := json.Marshal(map[string]string{"queueUrl": "https://q"})
+	if _, err := svc.HandleSQSPurgeQueue(context.Background(), params, nil); err == nil {
+		t.Fatal("expected write mode gate")
+	}
+}
+
 func TestHandleSecretsRevealGatesWriteMode(t *testing.T) {
 	svc := New(Deps{
 		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
@@ -263,10 +399,12 @@ func TestHandleLogsFilterEventsRequiresLogGroup(t *testing.T) {
 }
 
 type fakeECS struct {
-	forced bool
-	region string
-	cluster string
-	service string
+	forced       bool
+	scaled       bool
+	desiredCount int32
+	region       string
+	cluster      string
+	service      string
 }
 
 func (f *fakeECS) ForceNewDeployment(_ context.Context, _ models.ProfileSummary, region string, clusterArn string, serviceArn string) (models.AwsEcsForceNewDeploymentResult, error) {
@@ -280,6 +418,22 @@ func (f *fakeECS) ForceNewDeployment(_ context.Context, _ models.ProfileSummary,
 		ServiceName: "web",
 		Region:      region,
 		Summary:     "Forced a new deployment for ECS service web.",
+	}, nil
+}
+
+func (f *fakeECS) UpdateDesiredCount(_ context.Context, _ models.ProfileSummary, region string, clusterArn string, serviceArn string, desiredCount int32) (models.AwsEcsUpdateDesiredCountResult, error) {
+	f.scaled = true
+	f.desiredCount = desiredCount
+	f.region = region
+	f.cluster = clusterArn
+	f.service = serviceArn
+	return models.AwsEcsUpdateDesiredCountResult{
+		ClusterArn:   clusterArn,
+		ServiceArn:   serviceArn,
+		ServiceName:  "web",
+		DesiredCount: desiredCount,
+		Region:       region,
+		Summary:      "Set desired count for ECS service web to 2.",
 	}, nil
 }
 
@@ -333,6 +487,59 @@ func TestHandleECSForceNewDeploymentRequiresWriteMode(t *testing.T) {
 	})
 	params, _ := json.Marshal(map[string]string{})
 	if _, err := svc.HandleECSForceNewDeployment(context.Background(), params, nil); err == nil {
+		t.Fatal("expected write mode gate")
+	}
+}
+
+func TestHandleECSUpdateDesiredCount(t *testing.T) {
+	ecs := &fakeECS{}
+	sess := &fakeSession{session: models.SessionSnapshot{
+		IsLocked:              true,
+		CurrentProviderID:     "aws",
+		SelectedProfileID:     "p1",
+		AWSWriteModeEnabled:   true,
+		SelectedECSRegion:     "eu-west-1",
+		SelectedECSClusterArn: "arn:aws:ecs:eu-west-1:123:cluster/demo",
+		SelectedECSServiceArn: "arn:aws:ecs:eu-west-1:123:service/demo/web",
+	}}
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session:       sess,
+		Workspace:     &fakeWorkspace{},
+		Activity:      &fakeActivity{},
+		Invalidator:   &fakeInvalidator{},
+		ECS:           ecs,
+		ActionTimeout: 5 * time.Second,
+	})
+	params, _ := json.Marshal(map[string]any{"desiredCount": 3})
+	if _, err := svc.HandleECSUpdateDesiredCount(context.Background(), params, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !ecs.scaled || ecs.desiredCount != 3 {
+		t.Fatalf("scale call = %+v", ecs)
+	}
+}
+
+func TestHandleECSUpdateDesiredCountRequiresWriteMode(t *testing.T) {
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: &fakeSession{session: models.SessionSnapshot{
+			IsLocked:              true,
+			CurrentProviderID:     "aws",
+			SelectedProfileID:     "p1",
+			SelectedECSRegion:     "eu-west-1",
+			SelectedECSClusterArn: "arn:aws:ecs:eu-west-1:123:cluster/demo",
+			SelectedECSServiceArn: "arn:aws:ecs:eu-west-1:123:service/demo/web",
+		}},
+		Workspace: &fakeWorkspace{},
+		ECS:       &fakeECS{},
+	})
+	params, _ := json.Marshal(map[string]any{"desiredCount": 2})
+	if _, err := svc.HandleECSUpdateDesiredCount(context.Background(), params, nil); err == nil {
 		t.Fatal("expected write mode gate")
 	}
 }

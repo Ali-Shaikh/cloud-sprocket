@@ -243,6 +243,7 @@ func NewFromDeps(deps Deps) *Service {
 		VirtualMachines: service.azure,
 		FrontDoor:       service.azure,
 		Queues:          service.azure,
+		Cosmos:          service.azure,
 	})
 	service.labsDomain = applabs.New(applabs.Deps{
 		Discovery:   deps.Discovery,

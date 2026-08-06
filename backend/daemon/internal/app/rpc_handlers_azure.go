@@ -175,6 +175,9 @@ func (s *Service) registerAzureHandlers(m *handlerRegistry) {
 	m.register("azure.cosmos.selectContainer", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAzureCosmosSelectContainer(ctx, params, notifier)
 	})
+	m.register("azure.cosmos.deleteItem", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleAzureCosmosDeleteItem(ctx, params, notifier)
+	})
 	m.register("azure.postgres.selectServer", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAzurePostgresSelectServer(ctx, params, notifier)
 	})

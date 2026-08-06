@@ -176,11 +176,13 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     peekSQSQueue,
     sendSQSMessage,
     createSQSQueue,
+    purgeSQSQueue,
     refreshSNSInventory,
     selectSNSRegion,
     selectSNSTopic,
     publishSNSTopic,
     createSNSTopic,
+    createSNSSubscription,
     refreshRDSInventory,
     selectRDSRegion,
     selectRDSInstance,
@@ -202,6 +204,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     selectECSService,
     selectECSTask,
     forceECSNewDeployment,
+    updateECSDesiredCount,
     refreshEKSInventory,
     selectEKSRegion,
     selectEKSCluster,
@@ -440,6 +443,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onPeek={peekSQSQueue}
       onSendMessage={sendSQSMessage}
       onCreateQueue={createSQSQueue}
+      onPurgeQueue={purgeSQSQueue}
     />
   ) : session.isLocked && activeWorkspaceTabId === "sns" ? (
     <SNSView
@@ -450,6 +454,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onSelectEntity={selectSNSTopic}
       onPublish={publishSNSTopic}
       onCreateTopic={createSNSTopic}
+      onCreateSubscription={createSNSSubscription}
     />
   ) : session.isLocked && activeWorkspaceTabId === "rds" ? (
     <RDSView
@@ -470,6 +475,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onSelectService={selectECSService}
       onSelectTask={selectECSTask}
       onForceNewDeployment={forceECSNewDeployment}
+      onUpdateDesiredCount={updateECSDesiredCount}
     />
   ) : session.isLocked && activeWorkspaceTabId === "eks" ? (
     <EKSView

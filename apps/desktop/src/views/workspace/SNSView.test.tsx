@@ -201,6 +201,7 @@ function renderSNSView(overrides?: { workspace?: Partial<SnsWorkspaceSnapshot> }
         onSelectEntity={onSelectEntity}
         onPublish={vi.fn()}
         onCreateTopic={vi.fn()}
+        onCreateSubscription={vi.fn()}
       />
     </ThemeProvider>,
   );
@@ -251,6 +252,7 @@ describe("SNSView", () => {
   function renderWritableSNSView() {
     const onPublish = vi.fn();
     const onCreateTopic = vi.fn();
+    const onCreateSubscription = vi.fn();
     render(
       <ThemeProvider>
         <SNSView
@@ -261,10 +263,11 @@ describe("SNSView", () => {
           onSelectEntity={vi.fn()}
           onPublish={onPublish}
           onCreateTopic={onCreateTopic}
+          onCreateSubscription={onCreateSubscription}
         />
       </ThemeProvider>,
     );
-    return { onPublish, onCreateTopic };
+    return { onPublish, onCreateTopic, onCreateSubscription };
   }
 
   it("publishes a message to the selected topic through the publish dialog", () => {
@@ -295,12 +298,32 @@ describe("SNSView", () => {
     expect(onCreateTopic).toHaveBeenCalledWith("new-events");
   });
 
+  it("creates a subscription through the subscribe dialog", () => {
+    mockMatchMedia(true);
+    const { onCreateSubscription } = renderWritableSNSView();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create subscription" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.change(
+      within(dialog).getByPlaceholderText("Queue ARN, email, HTTPS URL, or Lambda ARN"),
+      { target: { value: "arn:aws:sqs:us-east-1:000000000000:process-order" } },
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create subscription" }));
+
+    expect(onCreateSubscription).toHaveBeenCalledWith(
+      "arn:aws:sns:us-east-1:000000000000:order-events",
+      "sqs",
+      "arn:aws:sqs:us-east-1:000000000000:process-order",
+    );
+  });
+
   it("disables write actions when write mode is off", () => {
     mockMatchMedia(true);
     renderSNSView();
 
     expect(screen.getByRole("button", { name: "Publish message" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Create topic" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create subscription" })).toBeDisabled();
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {
@@ -324,6 +347,7 @@ describe("SNSView", () => {
           onSelectEntity={vi.fn()}
           onPublish={vi.fn()}
           onCreateTopic={vi.fn()}
+          onCreateSubscription={vi.fn()}
         />
       </ThemeProvider>,
     );

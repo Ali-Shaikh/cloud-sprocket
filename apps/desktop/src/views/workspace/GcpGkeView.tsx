@@ -9,20 +9,26 @@ import { InlineBanner } from "@/components/inline-banner";
 import { ResourceTable } from "@/components/inventory/resource-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { GcpGkeCluster, WorkspaceSnapshot } from "@/types/backend";
+import type { GcpGkeCluster, GcpGkeNodePool, WorkspaceSnapshot } from "@/types/backend";
 
 export type GcpGkeViewProps = {
   workspace: WorkspaceSnapshot;
   onRefresh: () => void;
+  onSelectCluster?: (clusterName: string) => void;
 };
 
 /**
- * Foundation GKE panel: lists clusters from the workspace snapshot.
- * Node pool and credentials actions are deferred.
+ * GKE panel: cluster inventory with node pools for the selected cluster.
  */
-export default function GcpGkeView({ workspace, onRefresh }: GcpGkeViewProps) {
+export default function GcpGkeView({
+  workspace,
+  onRefresh,
+  onSelectCluster,
+}: GcpGkeViewProps) {
   const [filterText, setFilterText] = useState("");
   const clusters = workspace.gcpGkeClusters ?? [];
+  const nodePools = workspace.gcpGkeNodePools ?? [];
+  const selectedCluster = workspace.selectedGcpGkeCluster ?? "";
   const status = workspace.gcpGkeStatusMessage?.trim() ?? "";
 
   const filtered = useMemo(() => {
@@ -52,6 +58,8 @@ export default function GcpGkeView({ workspace, onRefresh }: GcpGkeViewProps) {
     workspace.profile?.attributes.find((field) => field.label.toLowerCase() === "project")
       ?.value ?? workspace.profile?.displayName;
 
+  const selectedClusterMeta = clusters.find((cluster) => cluster.name === selectedCluster);
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -75,7 +83,9 @@ export default function GcpGkeView({ workspace, onRefresh }: GcpGkeViewProps) {
           description={
             status.includes("\n")
               ? status.split("\n").slice(1).join(" ").trim()
-              : "Node pool and credentials actions are not available in this foundation release."
+              : selectedCluster
+                ? "Node pools load when a cluster is selected."
+                : "Select a cluster to list its node pools."
           }
         />
       ) : null}
@@ -109,7 +119,10 @@ export default function GcpGkeView({ workspace, onRefresh }: GcpGkeViewProps) {
           ]}
           rows={filtered}
           getRowKey={(row) => row.name}
-          selectedKey={workspace.selectedGcpGkeCluster}
+          selectedKey={selectedCluster}
+          onRowClick={(row) => {
+            onSelectCluster?.(row.name);
+          }}
           renderCell={(row, columnId) => {
             switch (columnId) {
               case "name":
@@ -140,6 +153,65 @@ export default function GcpGkeView({ workspace, onRefresh }: GcpGkeViewProps) {
                 clusters.length === 0
                   ? "Create a GKE cluster in the console or with gcloud, then refresh."
                   : "Clear the filter to see the full inventory."
+              }
+            />
+          }
+        />
+      </section>
+
+      <section className="space-y-3 rounded-lg border border-border bg-card p-[18px] shadow-sm">
+        <div>
+          <h2 className="text-base font-bold">
+            Node pools
+            {selectedClusterMeta ? ` · ${selectedClusterMeta.name}` : ""}
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            {selectedCluster
+              ? `${nodePools.length === 1 ? "1 node pool" : `${nodePools.length} node pools`} for ${selectedCluster}${selectedClusterMeta?.location ? ` in ${selectedClusterMeta.location}` : ""}.`
+              : "Select a cluster to list node pools."}
+          </p>
+        </div>
+
+        <ResourceTable<GcpGkeNodePool>
+          columns={[
+            { id: "name", label: "Name" },
+            { id: "status", label: "Status" },
+            { id: "machineType", label: "Machine type" },
+            { id: "version", label: "Version" },
+            { id: "nodes", label: "Nodes" },
+            { id: "locations", label: "Locations" },
+          ]}
+          rows={nodePools}
+          getRowKey={(row) => row.name}
+          renderCell={(row, columnId) => {
+            switch (columnId) {
+              case "name":
+                return row.name;
+              case "status":
+                return row.status || "-";
+              case "machineType":
+                return row.machineType || "-";
+              case "version":
+                return row.version || "-";
+              case "nodes":
+                if (row.autoscalingEnabled) {
+                  return `${row.minNodeCount ?? 0}-${row.maxNodeCount ?? 0} (autoscale)`;
+                }
+                return row.initialNodeCount != null ? String(row.initialNodeCount) : "-";
+              case "locations":
+                return row.locations || "-";
+              default:
+                return null;
+            }
+          }}
+          emptyState={
+            <EmptyState
+              icon={<Boxes />}
+              title={selectedCluster ? "No node pools" : "No cluster selected"}
+              description={
+                selectedCluster
+                  ? "This cluster has no node pools, or node pool listing failed. Autopilot clusters may not expose classic node pools."
+                  : "Choose a cluster from the table above."
               }
             />
           }

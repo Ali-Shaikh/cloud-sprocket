@@ -63,6 +63,7 @@ type SQSInventory interface {
 	PeekMessages(ctx context.Context, profile models.ProfileSummary, region string, queueURL string) (models.AwsSqsPeekResult, error)
 	SendMessage(ctx context.Context, profile models.ProfileSummary, region string, queueURL string, messageBody string) (models.AwsSqsSendResult, error)
 	CreateQueue(ctx context.Context, profile models.ProfileSummary, region string, queueName string) (models.AwsSqsCreateQueueResult, error)
+	PurgeQueue(ctx context.Context, profile models.ProfileSummary, region string, queueURL string) (models.AwsSqsPurgeResult, error)
 }
 
 type SNSInventory interface {
@@ -70,6 +71,7 @@ type SNSInventory interface {
 	DescribeTopic(ctx context.Context, profile models.ProfileSummary, region string, topicArn string) (models.AwsSnsTopic, error)
 	Publish(ctx context.Context, profile models.ProfileSummary, region string, topicArn string, message string) (models.AwsSnsPublishResult, error)
 	CreateTopic(ctx context.Context, profile models.ProfileSummary, region string, topicName string) (models.AwsSnsCreateTopicResult, error)
+	CreateSubscription(ctx context.Context, profile models.ProfileSummary, region string, topicArn string, protocol string, endpoint string) (models.AwsSnsCreateSubscriptionResult, error)
 }
 
 type RDSInventory interface {
@@ -97,6 +99,7 @@ type ECSInventory interface {
 	ListTasks(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, serviceArn string) ([]models.AwsEcsTask, error)
 	DescribeTask(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, taskArn string) (models.AwsEcsTask, error)
 	ForceNewDeployment(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, serviceArn string) (models.AwsEcsForceNewDeploymentResult, error)
+	UpdateDesiredCount(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, serviceArn string, desiredCount int32) (models.AwsEcsUpdateDesiredCountResult, error)
 }
 
 type EKSInventory interface {
@@ -203,6 +206,7 @@ type AzureInventory interface {
 	ListCosmosDatabases(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string) ([]models.AzureCosmosDatabase, error)
 	ListCosmosContainers(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string, database string) ([]models.AzureCosmosContainer, error)
 	ListCosmosItems(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string, database string, container string) ([]models.AzureCosmosItem, error)
+	DeleteCosmosItem(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string, database string, container string, itemID string, partitionKey string) (models.AzureCosmosDeleteItemResult, error)
 	ListPostgresServers(ctx context.Context, profile models.ProfileSummary) ([]models.AzurePostgresServer, error)
 	GetPostgresConnection(ctx context.Context, profile models.ProfileSummary, resourceGroup string, serverName string) (models.AzurePostgresConnection, error)
 	StartPostgresServer(ctx context.Context, profile models.ProfileSummary, resourceGroup string, serverName string) (models.AzurePostgresLifecycleResult, error)
@@ -243,9 +247,10 @@ type GcpFunctionsInventory interface {
 	CallFunction(ctx context.Context, profile models.ProfileSummary, name string, region string, generation string, data string) (models.GcpCloudFunctionInvokeResult, error)
 }
 
-// GcpGkeInventory lists GKE clusters via the gcloud CLI adapter.
+// GcpGkeInventory lists GKE clusters and node pools via the gcloud CLI adapter.
 type GcpGkeInventory interface {
 	ListClusters(ctx context.Context, profile models.ProfileSummary) ([]models.GcpGkeCluster, error)
+	ListNodePools(ctx context.Context, profile models.ProfileSummary, clusterName string, location string) ([]models.GcpGkeNodePool, error)
 }
 
 // DockerRuntime, LocalStackManager, and AzureRuntimeManager are aliases of the

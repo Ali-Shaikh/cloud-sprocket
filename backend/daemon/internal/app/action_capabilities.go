@@ -93,10 +93,12 @@ func buildAWSActionCapabilities(
 			awsActionCapability(session, profile, "peek", "Peek messages"),
 			awsActionCapability(session, profile, "sendMessage", "Send message"),
 			awsActionCapability(session, profile, "createQueue", "Create queue"),
+			awsActionCapability(session, profile, "purgeQueue", "Purge queue"),
 		},
 		"sns": {
 			awsActionCapability(session, profile, "publish", "Publish message"),
 			awsActionCapability(session, profile, "createTopic", "Create topic"),
+			awsActionCapability(session, profile, "createSubscription", "Create subscription"),
 		},
 		"dynamodb": {
 			awsActionCapability(session, profile, "putItem", "Put item"),
@@ -119,6 +121,7 @@ func buildAWSActionCapabilities(
 		},
 		"ecs": {
 			awsActionCapability(session, profile, "forceNewDeployment", "Force new deployment"),
+			awsActionCapability(session, profile, "updateDesiredCount", "Update desired count"),
 		},
 	}
 }
@@ -179,6 +182,9 @@ func buildAzureActionCapabilities(
 		},
 		"queues": {
 			cap("purge", "Purge queue"),
+		},
+		"cosmos": {
+			cap("deleteItem", "Delete item"),
 		},
 	}
 }

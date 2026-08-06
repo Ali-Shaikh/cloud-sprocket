@@ -531,6 +531,76 @@ func TestHandleQueuesPurge(t *testing.T) {
 	}
 }
 
+type fakeCosmos struct {
+	deletedItem string
+	partition   string
+}
+
+func (f *fakeCosmos) DeleteCosmosItem(
+	_ context.Context,
+	_ models.ProfileSummary,
+	_ string,
+	_ string,
+	_ string,
+	_ string,
+	itemID string,
+	partitionKey string,
+) (models.AzureCosmosDeleteItemResult, error) {
+	f.deletedItem = itemID
+	f.partition = partitionKey
+	return models.AzureCosmosDeleteItemResult{
+		ItemID:  itemID,
+		Summary: "Deleted Cosmos item " + itemID + ".",
+	}, nil
+}
+
+func TestHandleCosmosDeleteItem(t *testing.T) {
+	c := &fakeCosmos{}
+	sess := &fakeSession{session: lockedAzureWriteSession()}
+	sess.session.SelectedAzureCosmosAccount = "devstoreaccount1"
+	sess.session.SelectedAzureCosmosDatabase = "appdb"
+	sess.session.SelectedAzureCosmosContainer = "orders"
+	ws := &fakeWorkspace{}
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: azureWriteSnapshot()},
+		Session:   sess,
+		Workspace: ws,
+		Activity:  &fakeActivity{},
+		Cosmos:    c,
+	})
+	params, _ := json.Marshal(map[string]string{
+		"itemId":       "doc-1",
+		"partitionKey": "cust-9",
+	})
+	if _, err := svc.HandleCosmosDeleteItem(context.Background(), params, nil); err != nil {
+		t.Fatal(err)
+	}
+	if c.deletedItem != "doc-1" || c.partition != "cust-9" {
+		t.Fatalf("delete = item %q pk %q", c.deletedItem, c.partition)
+	}
+	if ws.lastOpts.AzureScope != "cosmos" {
+		t.Fatalf("scope = %q", ws.lastOpts.AzureScope)
+	}
+}
+
+func TestHandleCosmosDeleteItemRequiresWriteMode(t *testing.T) {
+	sess := &fakeSession{session: lockedAzureWriteSession()}
+	sess.session.AzureWriteModeEnabled = false
+	sess.session.SelectedAzureCosmosAccount = "acct"
+	sess.session.SelectedAzureCosmosDatabase = "db"
+	sess.session.SelectedAzureCosmosContainer = "c"
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: azureWriteSnapshot()},
+		Session:   sess,
+		Workspace: &fakeWorkspace{},
+		Cosmos:    &fakeCosmos{},
+	})
+	params, _ := json.Marshal(map[string]string{"itemId": "doc-1"})
+	if _, err := svc.HandleCosmosDeleteItem(context.Background(), params, nil); err == nil {
+		t.Fatal("expected write mode error")
+	}
+}
+
 func TestActiveVirtualMachineSelection(t *testing.T) {
 	snap := azureWriteSnapshot()
 	session := lockedAzureWriteSession()

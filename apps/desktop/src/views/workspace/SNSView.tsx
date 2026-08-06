@@ -70,7 +70,18 @@ export type SNSViewProps = {
   onSelectEntity: (topicArn: string) => void;
   onPublish: (topicArn: string, message: string) => void;
   onCreateTopic: (topicName: string) => void;
+  onCreateSubscription: (topicArn: string, protocol: string, endpoint: string) => void;
 };
+
+const SNS_SUBSCRIBE_PROTOCOLS = [
+  "sqs",
+  "email",
+  "email-json",
+  "http",
+  "https",
+  "lambda",
+  "sms",
+] as const;
 
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
@@ -102,12 +113,16 @@ export default function SNSView({
   onSelectEntity,
   onPublish,
   onCreateTopic,
+  onCreateSubscription,
 }: SNSViewProps) {
   const [filterText, setFilterText] = useState("");
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [publishBody, setPublishBody] = useState('{"event":"test"}');
   const [newTopicName, setNewTopicName] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [subscribeDialogOpen, setSubscribeDialogOpen] = useState(false);
+  const [subscribeProtocol, setSubscribeProtocol] = useState<string>("sqs");
+  const [subscribeEndpoint, setSubscribeEndpoint] = useState("");
   const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedSnsTopicArn));
   const lastSelectedTopicRef = useRef(workspace.selectedSnsTopicArn || "");
 
@@ -137,8 +152,15 @@ export default function SNSView({
 
   const publishCapability = actionCapabilityState(workspace, "sns", "publish");
   const createTopicCapability = actionCapabilityState(workspace, "sns", "createTopic");
+  const createSubscriptionCapability = actionCapabilityState(
+    workspace,
+    "sns",
+    "createSubscription",
+  );
   const canPublish = publishCapability.enabled && Boolean(selectedTopic?.topicArn);
   const canCreateTopic = createTopicCapability.enabled && Boolean(workspace.selectedSnsRegion);
+  const canCreateSubscription =
+    createSubscriptionCapability.enabled && Boolean(selectedTopic?.topicArn);
   const publishDisabledReason = canPublish
     ? undefined
     : actionDisabledReason(
@@ -154,6 +176,14 @@ export default function SNSView({
         "sns",
         "createTopic",
         !workspace.selectedSnsRegion ? "Select a region first." : undefined,
+      );
+  const createSubscriptionDisabledReason = canCreateSubscription
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "sns",
+        "createSubscription",
+        !selectedTopic?.topicArn ? "Select a topic first." : undefined,
       );
 
   const statusMessage =
@@ -278,19 +308,33 @@ export default function SNSView({
       )}
 
       <div>
-        <div className={fieldLabel}>Publish message (write action)</div>
-        <Button
-          variant="outline"
-          disabled={!canPublish}
-          title={publishDisabledReason}
-          onClick={() => {
-            setPublishDialogOpen(true);
-          }}
-        >
-          Publish message
-        </Button>
-        {publishDisabledReason ? (
-          <p className="mt-2 text-xs text-muted-foreground">{publishDisabledReason}</p>
+        <div className={fieldLabel}>Write actions</div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            disabled={!canPublish}
+            title={publishDisabledReason}
+            onClick={() => {
+              setPublishDialogOpen(true);
+            }}
+          >
+            Publish message
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!canCreateSubscription}
+            title={createSubscriptionDisabledReason}
+            onClick={() => {
+              setSubscribeDialogOpen(true);
+            }}
+          >
+            Create subscription
+          </Button>
+        </div>
+        {publishDisabledReason || createSubscriptionDisabledReason ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {publishDisabledReason || createSubscriptionDisabledReason}
+          </p>
         ) : null}
       </div>
 
@@ -537,6 +581,61 @@ export default function SNSView({
               }}
             >
               Publish
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={subscribeDialogOpen} onOpenChange={setSubscribeDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create SNS subscription?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Subscribes an endpoint to{" "}
+              <span className="font-mono">{selectedTopic?.topicName}</span>. Some protocols need
+              confirmation before they become active.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <div>
+              <div className={cn(fieldLabel, "mb-1")}>Protocol</div>
+              <Select value={subscribeProtocol} onValueChange={(value) => value && setSubscribeProtocol(value)}>
+                <SelectTrigger aria-label="Select subscription protocol">
+                  <SelectValue placeholder="Select protocol" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SNS_SUBSCRIBE_PROTOCOLS.map((protocol) => (
+                    <SelectItem key={protocol} value={protocol}>
+                      {protocol}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <div className={cn(fieldLabel, "mb-1")}>Endpoint</div>
+              <Input
+                value={subscribeEndpoint}
+                placeholder="Queue ARN, email, HTTPS URL, or Lambda ARN"
+                onChange={(event) => {
+                  setSubscribeEndpoint(event.target.value);
+                }}
+              />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const endpoint = subscribeEndpoint.trim();
+                if (selectedTopic?.topicArn && endpoint) {
+                  onCreateSubscription(selectedTopic.topicArn, subscribeProtocol, endpoint);
+                  setSubscribeEndpoint("");
+                }
+                setSubscribeDialogOpen(false);
+              }}
+            >
+              Create subscription
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

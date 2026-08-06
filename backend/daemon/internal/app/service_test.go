@@ -115,6 +115,10 @@ func (stubSQSInventory) CreateQueue(context.Context, models.ProfileSummary, stri
 	return models.AwsSqsCreateQueueResult{}, nil
 }
 
+func (stubSQSInventory) PurgeQueue(context.Context, models.ProfileSummary, string, string) (models.AwsSqsPurgeResult, error) {
+	return models.AwsSqsPurgeResult{}, nil
+}
+
 type stubSNSInventory struct{}
 
 func (stubSNSInventory) ListTopics(context.Context, models.ProfileSummary, string) ([]models.AwsSnsTopic, error) {
@@ -131,6 +135,10 @@ func (stubSNSInventory) Publish(context.Context, models.ProfileSummary, string, 
 
 func (stubSNSInventory) CreateTopic(context.Context, models.ProfileSummary, string, string) (models.AwsSnsCreateTopicResult, error) {
 	return models.AwsSnsCreateTopicResult{}, nil
+}
+
+func (stubSNSInventory) CreateSubscription(context.Context, models.ProfileSummary, string, string, string, string) (models.AwsSnsCreateSubscriptionResult, error) {
+	return models.AwsSnsCreateSubscriptionResult{}, nil
 }
 
 type stubRDSInventory struct{}
@@ -181,6 +189,14 @@ func (stubECSInventory) ForceNewDeployment(context.Context, models.ProfileSummar
 	return models.AwsEcsForceNewDeploymentResult{
 		ServiceName: "web",
 		Summary:     "Forced a new deployment for ECS service web.",
+	}, nil
+}
+
+func (stubECSInventory) UpdateDesiredCount(context.Context, models.ProfileSummary, string, string, string, int32) (models.AwsEcsUpdateDesiredCountResult, error) {
+	return models.AwsEcsUpdateDesiredCountResult{
+		ServiceName:  "web",
+		DesiredCount: 2,
+		Summary:      "Set desired count for ECS service web to 2.",
 	}, nil
 }
 
@@ -735,6 +751,10 @@ func (stubAzureInventory) ListCosmosContainers(context.Context, models.ProfileSu
 
 func (stubAzureInventory) ListCosmosItems(context.Context, models.ProfileSummary, string, string, string, string) ([]models.AzureCosmosItem, error) {
 	return []models.AzureCosmosItem{{ID: "doc-1", JSON: `{"id":"doc-1"}`}}, nil
+}
+
+func (stubAzureInventory) DeleteCosmosItem(context.Context, models.ProfileSummary, string, string, string, string, string, string) (models.AzureCosmosDeleteItemResult, error) {
+	return models.AzureCosmosDeleteItemResult{Summary: "deleted"}, nil
 }
 
 func (stubAzureInventory) ListPostgresServers(context.Context, models.ProfileSummary) ([]models.AzurePostgresServer, error) {

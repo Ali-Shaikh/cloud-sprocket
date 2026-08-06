@@ -4,9 +4,13 @@
 package awsadapter
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
+
+	"cloudsprocket/backend/daemon/internal/config"
+	"cloudsprocket/backend/daemon/internal/models"
 )
 
 func TestQueueNameFromURLParsesStandardAndLocalEndpoints(t *testing.T) {
@@ -60,6 +64,14 @@ func TestSqsQueueSummaryMapsAttributes(t *testing.T) {
 	}
 }
 
+func TestPurgeQueueRequiresQueueURL(t *testing.T) {
+	inv := NewSQSInventory(config.Settings{})
+	_, err := inv.PurgeQueue(context.Background(), models.ProfileSummary{}, "us-east-1", "")
+	if err == nil {
+		t.Fatal("expected error for empty queue URL")
+	}
+}
+
 func TestSqsMessageSummaryMapsBodyAndAttributes(t *testing.T) {
 	body := `{"orderId":"ord-001"}`
 	messageID := "msg-123"
@@ -67,7 +79,7 @@ func TestSqsMessageSummaryMapsBodyAndAttributes(t *testing.T) {
 		MessageId: &messageID,
 		Body:      &body,
 		Attributes: map[string]string{
-			string(types.MessageSystemAttributeNameSentTimestamp):            "1718452800",
+			string(types.MessageSystemAttributeNameSentTimestamp):           "1718452800",
 			string(types.MessageSystemAttributeNameApproximateReceiveCount): "2",
 		},
 	})

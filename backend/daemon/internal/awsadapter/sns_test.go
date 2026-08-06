@@ -4,9 +4,13 @@
 package awsadapter
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/sns/types"
+
+	"cloudsprocket/backend/daemon/internal/config"
+	"cloudsprocket/backend/daemon/internal/models"
 )
 
 func TestTopicNameFromArn(t *testing.T) {
@@ -39,5 +43,21 @@ func TestSnsSubscriptionSummaryMapsFields(t *testing.T) {
 	})
 	if got.Protocol != protocol || got.Endpoint != endpoint {
 		t.Fatalf("subscription = %+v", got)
+	}
+}
+
+func TestCreateSubscriptionRequiresFields(t *testing.T) {
+	inv := NewSNSInventory(config.Settings{})
+	_, err := inv.CreateSubscription(context.Background(), models.ProfileSummary{}, "us-east-1", "", "sqs", "arn:aws:sqs:us-east-1:1:q")
+	if err == nil {
+		t.Fatal("expected topic ARN required")
+	}
+	_, err = inv.CreateSubscription(context.Background(), models.ProfileSummary{}, "us-east-1", "arn:aws:sns:us-east-1:1:t", "carrier-pigeon", "x")
+	if err == nil {
+		t.Fatal("expected unsupported protocol")
+	}
+	_, err = inv.CreateSubscription(context.Background(), models.ProfileSummary{}, "us-east-1", "arn:aws:sns:us-east-1:1:t", "sqs", "")
+	if err == nil {
+		t.Fatal("expected endpoint required")
 	}
 }

@@ -433,6 +433,22 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setSqsActionStatus, setWorkspace]);
 
+  const purgeSQSQueue = useCallback((queueUrl: string): void => {
+    setSqsActionStatus("Purging all messages from the queue.");
+    void requestWorkspaceSnapshot("aws.sqs.purgeQueue", { queueUrl })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace(workspaceResult);
+        });
+        setSqsActionStatus(
+          workspaceResult.sqsStatusMessage || "Purged all messages from the queue.",
+        );
+      })
+      .catch((error: unknown) => {
+        setSqsActionStatus(error instanceof Error ? error.message : String(error));
+      });
+  }, [setSqsActionStatus, setWorkspace]);
+
   const selectSNSRegion = useCallback((region: string): void => {
     setSnsActionStatus(`Loading SNS topics for ${region}.`);
     void requestWorkspaceSnapshot("aws.sns.selectRegion", { region })
@@ -497,6 +513,30 @@ export function useAwsActions(params: UseAwsActionsParams) {
         setSnsActionStatus(error instanceof Error ? error.message : String(error));
       });
   }, [setSnsActionStatus, setWorkspace]);
+
+  const createSNSSubscription = useCallback(
+    (topicArn: string, protocol: string, endpoint: string): void => {
+      setSnsActionStatus(`Creating SNS subscription (${protocol}).`);
+      void requestWorkspaceSnapshot("aws.sns.createSubscription", {
+        topicArn,
+        protocol,
+        endpoint,
+      })
+        .then((workspaceResult) => {
+          startTransition(() => {
+            setWorkspace(workspaceResult);
+          });
+          setSnsActionStatus(
+            workspaceResult.snsStatusMessage ||
+              `Created SNS subscription (${protocol}) for the topic.`,
+          );
+        })
+        .catch((error: unknown) => {
+          setSnsActionStatus(error instanceof Error ? error.message : String(error));
+        });
+    },
+    [setSnsActionStatus, setWorkspace],
+  );
 
   const selectRDSRegion = useCallback((region: string): void => {
     setRdsActionStatus(`Loading RDS instances for ${region}.`);
@@ -787,6 +827,29 @@ export function useAwsActions(params: UseAwsActionsParams) {
           });
           setEcsActionStatus(
             workspaceResult.ecsStatusMessage || "Forced a new ECS deployment.",
+          );
+        })
+        .catch((error: unknown) => {
+          setEcsActionStatus(error instanceof Error ? error.message : String(error));
+        });
+    },
+    [setEcsActionStatus, setWorkspace],
+  );
+
+  const updateECSDesiredCount = useCallback(
+    (clusterArn: string, serviceArn: string, desiredCount: number): void => {
+      setEcsActionStatus(`Setting ECS desired count to ${desiredCount}.`);
+      void requestWorkspaceSnapshot("aws.ecs.updateDesiredCount", {
+        clusterArn,
+        serviceArn,
+        desiredCount,
+      })
+        .then((workspaceResult) => {
+          startTransition(() => {
+            setWorkspace(workspaceResult);
+          });
+          setEcsActionStatus(
+            workspaceResult.ecsStatusMessage || `Set ECS desired count to ${desiredCount}.`,
           );
         })
         .catch((error: unknown) => {
@@ -1236,11 +1299,13 @@ export function useAwsActions(params: UseAwsActionsParams) {
     peekSQSQueue,
     sendSQSMessage,
     createSQSQueue,
+    purgeSQSQueue,
     refreshSNSInventory,
     selectSNSRegion,
     selectSNSTopic,
     publishSNSTopic,
     createSNSTopic,
+    createSNSSubscription,
     refreshRDSInventory,
     selectRDSRegion,
     selectRDSInstance,
@@ -1262,6 +1327,7 @@ export function useAwsActions(params: UseAwsActionsParams) {
     selectECSService,
     selectECSTask,
     forceECSNewDeployment,
+    updateECSDesiredCount,
     refreshEKSInventory,
     selectEKSRegion,
     selectEKSCluster,

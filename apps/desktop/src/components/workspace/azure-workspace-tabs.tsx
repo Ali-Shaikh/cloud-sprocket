@@ -1043,6 +1043,24 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
           errorTitle: "Could not select Cosmos container",
         });
       }}
+      onDeleteItem={(itemId, partitionKey, resourceGroup) => {
+        void mutateWorkspaceSelection(
+          "azure.cosmos.deleteItem",
+          {
+            itemId,
+            partitionKey,
+            resourceGroup,
+            account: activeWorkspace.selectedAzureCosmosAccount,
+            database: activeWorkspace.selectedAzureCosmosDatabase,
+            container: activeWorkspace.selectedAzureCosmosContainer,
+          },
+          {
+            panelLoading: true,
+            merge: mergeAzureCosmosSelection,
+            errorTitle: "Could not delete Cosmos item",
+          },
+        );
+      }}
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-postgres" ? (
     <AzurePostgresView

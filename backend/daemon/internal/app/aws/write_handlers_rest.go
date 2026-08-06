@@ -614,3 +614,62 @@ func (s *Service) HandleECSForceNewDeployment(ctx context.Context, params json.R
 		},
 	)
 }
+
+// HandleECSUpdateDesiredCount implements aws.ecs.updateDesiredCount.
+func (s *Service) HandleECSUpdateDesiredCount(ctx context.Context, params json.RawMessage, notifier sessionport.Notifier) (any, error) {
+	if s == nil || s.ecs == nil {
+		return nil, errors.New("aws write service is not available")
+	}
+	var request struct {
+		ClusterArn   string `json:"clusterArn"`
+		ServiceArn   string `json:"serviceArn"`
+		DesiredCount *int32 `json:"desiredCount"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	if request.DesiredCount == nil {
+		return nil, errors.New("desired count is required")
+	}
+	if *request.DesiredCount < 0 {
+		return nil, errors.New("desired count must be zero or greater")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	session, err := s.session.Load(ctx, snapshot)
+	if err != nil {
+		return nil, err
+	}
+	profile, region, clusterArn, serviceArn, err := ActiveECSServiceSelection(
+		snapshot, session, request.ClusterArn, request.ServiceArn,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if !WritesEnabled(session, profile) {
+		return nil, errors.New("ECS update desired count requires write mode to be enabled")
+	}
+
+	actionCtx, cancel := s.WithActionTimeout(ctx)
+	result, err := s.ecs.UpdateDesiredCount(actionCtx, profile, region, clusterArn, serviceArn, *request.DesiredCount)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	if s.invalidator != nil {
+		s.invalidator.InvalidateResourceCache(ctx, "aws.ecs.services", profile.ProfileID+"|"+region+"|"+clusterArn)
+		s.invalidator.InvalidateResourceCache(ctx, "aws.ecs.tasks", profile.ProfileID+"|"+region+"|"+clusterArn+"|"+serviceArn)
+	}
+
+	return s.FinishWriteAction(
+		ctx, snapshot, notifier, "ecs",
+		result.Summary,
+		func(session *models.SessionSnapshot) {
+			session.SelectedECSRegion = region
+			session.SelectedECSClusterArn = clusterArn
+			session.SelectedECSServiceArn = serviceArn
+		},
+	)
+}

@@ -101,3 +101,65 @@ func TestListClustersCLIError(t *testing.T) {
 		t.Fatalf("error = %v, want gcloud prefix", err)
 	}
 }
+
+func TestListNodePoolsRequiresClusterAndLocation(t *testing.T) {
+	inv := NewInventory(config.Settings{})
+	if _, err := inv.ListNodePools(context.Background(), gcpProfile(), "", "us-central1"); err == nil {
+		t.Fatal("expected error for empty cluster")
+	}
+	if _, err := inv.ListNodePools(context.Background(), gcpProfile(), "alpha", ""); err == nil {
+		t.Fatal("expected error for empty location")
+	}
+}
+
+func TestListNodePoolsDecodesAndSorts(t *testing.T) {
+	out := []byte(`[
+		{
+			"name": "zeta-pool",
+			"status": "RUNNING",
+			"version": "1.29.4-gke.1043002",
+			"initialNodeCount": 3,
+			"locations": ["us-central1-a"],
+			"config": {"machineType": "e2-medium", "diskSizeGb": 100},
+			"autoscaling": {"enabled": true, "minNodeCount": 1, "maxNodeCount": 5}
+		},
+		{
+			"name": "alpha-pool",
+			"status": "RUNNING",
+			"version": "1.29.4-gke.1043002",
+			"initialNodeCount": 2,
+			"locations": ["us-central1-a", "us-central1-b"],
+			"config": {"machineType": "e2-standard-4", "diskSizeGb": 50}
+		}
+	]`)
+	fake := &fakeCLI{out: out}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	pools, err := inv.ListNodePools(context.Background(), gcpProfile(), "alpha-gke", "us-central1")
+	if err != nil {
+		t.Fatalf("ListNodePools: %v", err)
+	}
+	if len(pools) != 2 {
+		t.Fatalf("len = %d, want 2: %+v", len(pools), pools)
+	}
+	if pools[0].Name != "alpha-pool" {
+		t.Fatalf("first name = %q, want alpha-pool (sorted)", pools[0].Name)
+	}
+	if pools[0].MachineType != "e2-standard-4" || pools[0].InitialNodeCount != 2 {
+		t.Fatalf("alpha pool = %+v", pools[0])
+	}
+	if !pools[1].AutoscalingEnabled || pools[1].MaxNodeCount != 5 {
+		t.Fatalf("zeta pool = %+v", pools[1])
+	}
+	joined := strings.Join(fake.args, " ")
+	if !strings.Contains(joined, "container node-pools list") {
+		t.Fatalf("args missing node-pools list: %v", fake.args)
+	}
+	if !strings.Contains(joined, "--cluster alpha-gke") {
+		t.Fatalf("args missing cluster: %v", fake.args)
+	}
+	if !strings.Contains(joined, "--location us-central1") {
+		t.Fatalf("args missing location: %v", fake.args)
+	}
+}

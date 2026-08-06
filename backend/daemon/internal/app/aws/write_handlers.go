@@ -125,6 +125,50 @@ func (s *Service) HandleSQSCreateQueue(ctx context.Context, params json.RawMessa
 	)
 }
 
+// HandleSQSPurgeQueue implements aws.sqs.purgeQueue.
+func (s *Service) HandleSQSPurgeQueue(ctx context.Context, params json.RawMessage, notifier sessionport.Notifier) (any, error) {
+	if s == nil || s.sqs == nil {
+		return nil, errors.New("aws write service is not available")
+	}
+	var request struct {
+		QueueURL string `json:"queueUrl"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	profile, region, queueURL, err := s.AuthorizeWriteSelection(
+		ctx, snapshot,
+		"SQS purge requires write mode to be enabled",
+		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
+			return ActiveSQSSelection(snap, session, request.QueueURL)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	actionCtx, cancel := s.WithActionTimeout(ctx)
+	result, err := s.sqs.PurgeQueue(actionCtx, profile, region, queueURL)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	// Message depth attributes are re-described on workspace rebuild; list cache is fine.
+
+	return s.FinishWriteAction(
+		ctx, snapshot, notifier, "sqs",
+		result.Summary,
+		func(session *models.SessionSnapshot) {
+			session.SelectedSQSRegion = region
+			session.SelectedSQSQueueURL = queueURL
+		},
+	)
+}
+
 // HandleSNSPublish implements aws.sns.publish.
 func (s *Service) HandleSNSPublish(ctx context.Context, params json.RawMessage, _ sessionport.Notifier) (any, error) {
 	if s == nil || s.sns == nil {
@@ -202,6 +246,59 @@ func (s *Service) HandleSNSCreateTopic(ctx context.Context, params json.RawMessa
 		ctx, snapshot, notifier, "sns",
 		fmt.Sprintf("Created SNS topic %s in %s.", created.TopicName, region),
 		func(session *models.SessionSnapshot) { session.SelectedSNSTopicArn = created.TopicArn },
+	)
+}
+
+// HandleSNSCreateSubscription implements aws.sns.createSubscription.
+func (s *Service) HandleSNSCreateSubscription(ctx context.Context, params json.RawMessage, notifier sessionport.Notifier) (any, error) {
+	if s == nil || s.sns == nil {
+		return nil, errors.New("aws write service is not available")
+	}
+	var request struct {
+		TopicArn string `json:"topicArn"`
+		Protocol string `json:"protocol"`
+		Endpoint string `json:"endpoint"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	protocol := strings.TrimSpace(request.Protocol)
+	endpoint := strings.TrimSpace(request.Endpoint)
+	if protocol == "" {
+		return nil, errors.New("protocol is required")
+	}
+	if endpoint == "" {
+		return nil, errors.New("endpoint is required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	profile, region, topicArn, err := s.AuthorizeWriteSelection(
+		ctx, snapshot,
+		"SNS create subscription requires write mode to be enabled",
+		func(snap discovery.Snapshot, session models.SessionSnapshot) (models.ProfileSummary, string, string, error) {
+			return ActiveSNSSelection(snap, session, request.TopicArn)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	actionCtx, cancel := s.WithActionTimeout(ctx)
+	created, err := s.sns.CreateSubscription(actionCtx, profile, region, topicArn, protocol, endpoint)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	if s.invalidator != nil {
+		s.invalidator.InvalidateResourceCache(ctx, "aws.sns.topics", profile.ProfileID+"|"+region)
+	}
+
+	return s.FinishWriteAction(
+		ctx, snapshot, notifier, "sns",
+		created.Summary,
+		func(session *models.SessionSnapshot) { session.SelectedSNSTopicArn = topicArn },
 	)
 }
 
@@ -299,8 +396,8 @@ func (s *Service) HandleDynamoDBLoadMoreItems(ctx context.Context, params json.R
 		return nil, errors.New("aws write service is not available")
 	}
 	var request struct {
-		TableName          string `json:"tableName"`
-		ContinuationToken  string `json:"continuationToken"`
+		TableName         string `json:"tableName"`
+		ContinuationToken string `json:"continuationToken"`
 	}
 	if err := json.Unmarshal(params, &request); err != nil {
 		return nil, err

@@ -31,6 +31,13 @@ func (s *Service) handleAwsSqsCreateQueue(ctx context.Context, params json.RawMe
 	return s.aws.HandleSQSCreateQueue(ctx, params, notifier)
 }
 
+func (s *Service) handleAwsSqsPurgeQueue(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleSQSPurgeQueue(ctx, params, notifier)
+}
+
 func (s *Service) handleAwsSnsPublish(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	if err := s.requireAWS(); err != nil {
 		return nil, err
@@ -43,6 +50,13 @@ func (s *Service) handleAwsSnsCreateTopic(ctx context.Context, params json.RawMe
 		return nil, err
 	}
 	return s.aws.HandleSNSCreateTopic(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsSnsCreateSubscription(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleSNSCreateSubscription(ctx, params, notifier)
 }
 
 func (s *Service) handleAwsDynamodbPutItem(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
@@ -234,4 +248,11 @@ func (s *Service) handleAwsEcsForceNewDeployment(ctx context.Context, params jso
 		return nil, err
 	}
 	return s.aws.HandleECSForceNewDeployment(ctx, params, notifier)
+}
+
+func (s *Service) handleAwsEcsUpdateDesiredCount(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleECSUpdateDesiredCount(ctx, params, notifier)
 }

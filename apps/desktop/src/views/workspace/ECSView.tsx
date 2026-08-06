@@ -64,6 +64,7 @@ export type ECSViewProps = {
   onSelectService: (serviceArn: string) => void;
   onSelectTask: (taskArn: string) => void;
   onForceNewDeployment?: (clusterArn: string, serviceArn: string) => void;
+  onUpdateDesiredCount?: (clusterArn: string, serviceArn: string, desiredCount: number) => void;
 };
 
 const fieldLabel =
@@ -125,12 +126,16 @@ export default function ECSView({
   onSelectService,
   onSelectTask,
   onForceNewDeployment,
+  onUpdateDesiredCount,
 }: ECSViewProps) {
   const [clusterFilter, setClusterFilter] = useState("");
   const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedEcsClusterArn));
   const [forceConfirmOpen, setForceConfirmOpen] = useState(false);
+  const [scaleDialogOpen, setScaleDialogOpen] = useState(false);
+  const [desiredCountInput, setDesiredCountInput] = useState("1");
   const lastSelectionRef = useRef(ecsSelectionKey(workspace));
   const forceCapability = actionCapabilityState(workspace, "ecs", "forceNewDeployment");
+  const scaleCapability = actionCapabilityState(workspace, "ecs", "updateDesiredCount");
 
   const regions =
     workspace.ecsRegions.length > 0
@@ -156,6 +161,14 @@ export default function ECSView({
   const canForceNewDeployment = Boolean(
     onForceNewDeployment && selectedService && selectedCluster && forceCapability.enabled,
   );
+  const canUpdateDesiredCount = Boolean(
+    onUpdateDesiredCount && selectedService && selectedCluster && scaleCapability.enabled,
+  );
+  const parsedDesiredCount = Number.parseInt(desiredCountInput, 10);
+  const desiredCountValid =
+    Number.isFinite(parsedDesiredCount) &&
+    parsedDesiredCount >= 0 &&
+    String(parsedDesiredCount) === desiredCountInput.trim();
 
   const filteredClusters = useMemo(() => {
     const query = clusterFilter.trim().toLowerCase();
@@ -329,22 +342,43 @@ export default function ECSView({
         <DetailFieldList fields={detailFields} emptyText="No ECS selection details are available." />
       ) : null}
 
-      {selectedService && onForceNewDeployment ? (
+      {selectedService && (onForceNewDeployment || onUpdateDesiredCount) ? (
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={!canForceNewDeployment}
-            title={
-              canForceNewDeployment
-                ? "Start a new deployment using the current task definition"
-                : forceCapability.reason || "Select a service and enable write mode."
-            }
-            onClick={() => setForceConfirmOpen(true)}
-          >
-            Force new deployment
-          </Button>
+          {onForceNewDeployment ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!canForceNewDeployment}
+              title={
+                canForceNewDeployment
+                  ? "Start a new deployment using the current task definition"
+                  : forceCapability.reason || "Select a service and enable write mode."
+              }
+              onClick={() => setForceConfirmOpen(true)}
+            >
+              Force new deployment
+            </Button>
+          ) : null}
+          {onUpdateDesiredCount ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!canUpdateDesiredCount}
+              title={
+                canUpdateDesiredCount
+                  ? "Change the service desired task count"
+                  : scaleCapability.reason || "Select a service and enable write mode."
+              }
+              onClick={() => {
+                setDesiredCountInput(String(selectedService.desiredCount ?? 1));
+                setScaleDialogOpen(true);
+              }}
+            >
+              Scale service
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -635,6 +669,56 @@ export default function ECSView({
               }}
             >
               Force deployment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={scaleDialogOpen} onOpenChange={setScaleDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Scale ECS service?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Updates the desired task count for{" "}
+              <span className="font-medium">{selectedService?.serviceName || "the selected service"}</span>
+              . ECS will start or stop tasks to match the new target.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <label className={fieldLabel} htmlFor="ecs-desired-count">
+              Desired count
+            </label>
+            <Input
+              id="ecs-desired-count"
+              type="number"
+              min={0}
+              step={1}
+              value={desiredCountInput}
+              onChange={(event) => setDesiredCountInput(event.target.value)}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={
+                !canUpdateDesiredCount ||
+                !selectedCluster ||
+                !selectedService ||
+                !desiredCountValid
+              }
+              onClick={() => {
+                if (!selectedCluster || !selectedService || !desiredCountValid) {
+                  return;
+                }
+                onUpdateDesiredCount?.(
+                  selectedCluster.clusterArn,
+                  selectedService.serviceArn,
+                  parsedDesiredCount,
+                );
+                setScaleDialogOpen(false);
+              }}
+            >
+              Update desired count
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

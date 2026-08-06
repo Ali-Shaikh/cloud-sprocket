@@ -270,6 +270,51 @@ func (e *ECSInventory) ForceNewDeployment(
 	}, nil
 }
 
+// UpdateDesiredCount sets the desired task count for the selected ECS service.
+func (e *ECSInventory) UpdateDesiredCount(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	clusterArn string,
+	serviceArn string,
+	desiredCount int32,
+) (models.AwsEcsUpdateDesiredCountResult, error) {
+	clusterArn = strings.TrimSpace(clusterArn)
+	serviceArn = strings.TrimSpace(serviceArn)
+	if clusterArn == "" || serviceArn == "" {
+		return models.AwsEcsUpdateDesiredCountResult{}, fmt.Errorf("cluster ARN and service ARN are required")
+	}
+	if desiredCount < 0 {
+		return models.AwsEcsUpdateDesiredCountResult{}, fmt.Errorf("desired count must be zero or greater")
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := e.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsEcsUpdateDesiredCountResult{}, err
+	}
+
+	serviceName := serviceNameFromArn(serviceArn)
+	client := ecsClient(cfg, profile)
+	_, err = client.UpdateService(ctx, &ecs.UpdateServiceInput{
+		Cluster:      aws.String(clusterArn),
+		Service:      aws.String(serviceName),
+		DesiredCount: aws.Int32(desiredCount),
+	})
+	if err != nil {
+		return models.AwsEcsUpdateDesiredCountResult{}, fmt.Errorf("update desired count for ECS service %s: %w", serviceName, err)
+	}
+	return models.AwsEcsUpdateDesiredCountResult{
+		ClusterArn:   clusterArn,
+		ServiceArn:   serviceArn,
+		ServiceName:  serviceName,
+		DesiredCount: desiredCount,
+		Region:       region,
+		Summary:      fmt.Sprintf("Set desired count for ECS service %s to %d.", serviceName, desiredCount),
+	}, nil
+}
+
 func (e *ECSInventory) DescribeTask(
 	ctx context.Context,
 	profile models.ProfileSummary,

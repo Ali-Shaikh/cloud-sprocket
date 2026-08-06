@@ -253,6 +253,85 @@ func (s *Service) HandleFrontDoorPurgeCache(ctx context.Context, params json.Raw
 	)
 }
 
+// HandleCosmosDeleteItem implements azure.cosmos.deleteItem.
+func (s *Service) HandleCosmosDeleteItem(ctx context.Context, params json.RawMessage, notifier sessionport.Notifier) (any, error) {
+	if s == nil || s.cosmos == nil {
+		return nil, errors.New("azure write service is not available")
+	}
+	var request struct {
+		Account       string `json:"account"`
+		ResourceGroup string `json:"resourceGroup"`
+		Database      string `json:"database"`
+		Container     string `json:"container"`
+		ItemID        string `json:"itemId"`
+		PartitionKey  string `json:"partitionKey"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	itemID := strings.TrimSpace(request.ItemID)
+	if itemID == "" {
+		return nil, errors.New("item id is required")
+	}
+
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	session, profile, err := s.AuthorizeWrite(
+		ctx, snapshot,
+		"open a locked Azure workspace before deleting a Cosmos item",
+		"Cosmos delete requires write mode to be enabled for this Azure workspace",
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	account := strings.TrimSpace(request.Account)
+	if account == "" {
+		account = strings.TrimSpace(session.SelectedAzureCosmosAccount)
+	}
+	database := strings.TrimSpace(request.Database)
+	if database == "" {
+		database = strings.TrimSpace(session.SelectedAzureCosmosDatabase)
+	}
+	container := strings.TrimSpace(request.Container)
+	if container == "" {
+		container = strings.TrimSpace(session.SelectedAzureCosmosContainer)
+	}
+	if account == "" || database == "" || container == "" {
+		return nil, errors.New("select a Cosmos account, database, and container before deleting an item")
+	}
+	// Resource group is required for cloud accounts; local floci accepts empty.
+	resourceGroup := strings.TrimSpace(request.ResourceGroup)
+
+	actionCtx, cancel := s.WithActionTimeout(ctx)
+	result, actionErr := s.cosmos.DeleteCosmosItem(
+		actionCtx,
+		profile,
+		account,
+		resourceGroup,
+		database,
+		container,
+		itemID,
+		strings.TrimSpace(request.PartitionKey),
+	)
+	cancel()
+	if actionErr != nil {
+		return nil, actionErr
+	}
+
+	return s.FinishWriteAction(
+		ctx, snapshot, notifier, sessionport.SnapshotOptions{AzureScope: "cosmos"},
+		result.Summary,
+		func(session *models.SessionSnapshot) {
+			session.SelectedAzureCosmosAccount = account
+			session.SelectedAzureCosmosDatabase = database
+			session.SelectedAzureCosmosContainer = container
+		},
+	)
+}
+
 // HandleQueuesPurge implements azure.queues.purge.
 func (s *Service) HandleQueuesPurge(ctx context.Context, params json.RawMessage, notifier sessionport.Notifier) (any, error) {
 	if s == nil || s.queues == nil {

@@ -205,3 +205,10 @@ func (s *Service) handleAzureQueuesPurge(ctx context.Context, params json.RawMes
 	}
 	return s.azureDomain.HandleQueuesPurge(ctx, params, notifier)
 }
+
+func (s *Service) handleAzureCosmosDeleteItem(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAzureDomain(); err != nil {
+		return nil, err
+	}
+	return s.azureDomain.HandleCosmosDeleteItem(ctx, params, notifier)
+}

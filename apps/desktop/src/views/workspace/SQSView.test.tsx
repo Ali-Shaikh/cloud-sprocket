@@ -180,13 +180,17 @@ const workspaceFixture: WorkspaceSnapshot = {
   ],
 };
 
-function renderSQSView(overrides?: { workspace?: Partial<WorkspaceSnapshot> }) {
+function renderSQSView(overrides?: {
+  workspace?: Partial<WorkspaceSnapshot>;
+  onPurgeQueue?: (queueUrl: string) => void;
+}) {
   const onSelectRegion = vi.fn();
   const onSelectQueue = vi.fn();
   const onRefresh = vi.fn();
   const onPeek = vi.fn();
   const onSendMessage = vi.fn();
   const onCreateQueue = vi.fn();
+  const onPurgeQueue = overrides?.onPurgeQueue ?? vi.fn();
   const workspace = { ...workspaceFixture, ...overrides?.workspace };
   render(
     <ThemeProvider>
@@ -201,10 +205,19 @@ function renderSQSView(overrides?: { workspace?: Partial<WorkspaceSnapshot> }) {
         onPeek={onPeek}
         onSendMessage={onSendMessage}
         onCreateQueue={onCreateQueue}
+        onPurgeQueue={onPurgeQueue}
       />
     </ThemeProvider>,
   );
-  return { onSelectRegion, onSelectQueue, onRefresh, onPeek, onSendMessage, onCreateQueue };
+  return {
+    onSelectRegion,
+    onSelectQueue,
+    onRefresh,
+    onPeek,
+    onSendMessage,
+    onCreateQueue,
+    onPurgeQueue,
+  };
 }
 
 describe("SQSView", () => {
@@ -275,6 +288,20 @@ describe("SQSView", () => {
     expect(onCreateQueue).toHaveBeenCalledWith("new-orders");
   });
 
+  it("purges the selected queue through the confirm dialog", () => {
+    mockMatchMedia(true);
+    const onPurgeQueue = vi.fn();
+    renderSQSView({ onPurgeQueue });
+
+    fireEvent.click(screen.getByRole("button", { name: "Purge queue" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Purge queue" }));
+
+    expect(onPurgeQueue).toHaveBeenCalledWith(
+      "http://localhost:4566/000000000000/process-order",
+    );
+  });
+
   it("disables write actions when write mode is off", () => {
     mockMatchMedia(true);
     render(
@@ -290,12 +317,14 @@ describe("SQSView", () => {
           onPeek={vi.fn()}
           onSendMessage={vi.fn()}
           onCreateQueue={vi.fn()}
+          onPurgeQueue={vi.fn()}
         />
       </ThemeProvider>,
     );
 
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Create queue" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Purge queue" })).toBeDisabled();
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {

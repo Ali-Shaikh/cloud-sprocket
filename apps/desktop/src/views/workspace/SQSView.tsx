@@ -49,6 +49,7 @@ export type SQSViewProps = {
   onPeek: (queueUrl: string) => void;
   onSendMessage: (queueUrl: string, messageBody: string) => void;
   onCreateQueue: (queueName: string) => void;
+  onPurgeQueue?: (queueUrl: string) => void;
 };
 
 const fieldLabel =
@@ -87,10 +88,12 @@ export default function SQSView({
   onPeek,
   onSendMessage,
   onCreateQueue,
+  onPurgeQueue,
 }: SQSViewProps) {
   const [filterText, setFilterText] = useState("");
   const [peekDialogOpen, setPeekDialogOpen] = useState(false);
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
   const [sendBody, setSendBody] = useState('{"event":"test"}');
   const [newQueueName, setNewQueueName] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -129,9 +132,12 @@ export default function SQSView({
   const peekCapability = actionCapabilityState(workspace, "sqs", "peek");
   const sendCapability = actionCapabilityState(workspace, "sqs", "sendMessage");
   const createQueueCapability = actionCapabilityState(workspace, "sqs", "createQueue");
+  const purgeCapability = actionCapabilityState(workspace, "sqs", "purgeQueue");
   const canPeek = peekCapability.enabled && !!selectedQueue?.queueUrl && !peekInFlight;
   const canSend = sendCapability.enabled && !!selectedQueue?.queueUrl && !peekInFlight;
   const canCreateQueue = createQueueCapability.enabled && !!workspace.selectedSqsRegion && !peekInFlight;
+  const canPurge =
+    Boolean(onPurgeQueue) && purgeCapability.enabled && !!selectedQueue?.queueUrl && !peekInFlight;
   const peekDisabledReason = canPeek
     ? undefined
     : actionDisabledReason(
@@ -155,6 +161,14 @@ export default function SQSView({
         "sqs",
         "createQueue",
         !workspace.selectedSqsRegion ? "Select a region first." : undefined,
+      );
+  const purgeDisabledReason = canPurge
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "sqs",
+        "purgeQueue",
+        !selectedQueue?.queueUrl ? "Select a queue first." : undefined,
       );
 
   const copySnippets = selectedQueue
@@ -295,10 +309,24 @@ export default function SQSView({
           >
             Send message
           </Button>
+          {onPurgeQueue ? (
+            <Button
+              variant="outline"
+              disabled={!canPurge}
+              title={
+                canPurge
+                  ? "Delete all messages currently in the queue"
+                  : purgeDisabledReason || "Select a queue and enable write mode."
+              }
+              onClick={() => setPurgeConfirmOpen(true)}
+            >
+              Purge queue
+            </Button>
+          ) : null}
         </div>
-        {peekDisabledReason || sendDisabledReason ? (
+        {peekDisabledReason || sendDisabledReason || purgeDisabledReason ? (
           <p className="mt-2 text-xs text-muted-foreground">
-            {peekDisabledReason || sendDisabledReason}
+            {peekDisabledReason || sendDisabledReason || purgeDisabledReason}
           </p>
         ) : null}
       </div>
@@ -618,6 +646,34 @@ export default function SQSView({
               }}
             >
               Peek messages
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={purgeConfirmOpen} onOpenChange={setPurgeConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Purge SQS queue?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes all messages from{" "}
+              <span className="font-mono">{selectedQueue?.queueName}</span>. AWS allows at most one
+              purge per queue every 60 seconds. In-flight messages may still be processed by
+              consumers that already received them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!canPurge || !selectedQueue?.queueUrl}
+              onClick={() => {
+                if (selectedQueue?.queueUrl) {
+                  onPurgeQueue?.(selectedQueue.queueUrl);
+                }
+                setPurgeConfirmOpen(false);
+              }}
+            >
+              Purge queue
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

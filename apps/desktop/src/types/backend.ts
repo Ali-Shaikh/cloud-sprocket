@@ -215,6 +215,7 @@ export interface SessionSnapshot {
   azureWriteModeEnabled?: boolean;
   gcpWriteModeEnabled?: boolean;
   selectedGcpFunction?: string;
+  selectedGcpGkeCluster?: string;
   selectedGcpComputeInstance?: string;
   selectedAzureStorageAccount?: string;
   selectedAzureBlobContainer?: string;
@@ -315,6 +316,20 @@ export interface GcpGkeCluster {
   endpoint?: string;
   mode?: string;
   createdAt?: string;
+  summary?: string;
+}
+
+export interface GcpGkeNodePool {
+  name: string;
+  status?: string;
+  version?: string;
+  machineType?: string;
+  diskSizeGb?: number;
+  initialNodeCount?: number;
+  autoscalingEnabled?: boolean;
+  minNodeCount?: number;
+  maxNodeCount?: number;
+  locations?: string;
   summary?: string;
 }
 
@@ -472,6 +487,12 @@ export interface AwsSqsCreateQueueResult {
   queueUrl: string;
 }
 
+export interface AwsSqsPurgeResult {
+  queueUrl: string;
+  queueName: string;
+  summary: string;
+}
+
 export interface AwsSnsPublishResult {
   topicArn: string;
   messageId: string;
@@ -481,6 +502,22 @@ export interface AwsSnsPublishResult {
 export interface AwsSnsCreateTopicResult {
   topicName: string;
   topicArn: string;
+}
+
+export interface AwsSnsCreateSubscriptionResult {
+  topicArn: string;
+  protocol: string;
+  endpoint: string;
+  subscriptionArn: string;
+  summary: string;
+}
+
+export interface AzureCosmosDeleteItemResult {
+  account: string;
+  database: string;
+  container: string;
+  itemId: string;
+  summary: string;
 }
 
 export interface AwsDynamoDBWriteResult {
@@ -1221,6 +1258,7 @@ export interface WorkspaceSnapshot {
   gcpGkeStatusMessage?: string;
   /** Present after GCP GKE enrichment; omit in fixtures/mocks. */
   gcpGkeClusters?: GcpGkeCluster[];
+  gcpGkeNodePools?: GcpGkeNodePool[];
   selectedS3BucketName?: string;
   selectedS3ObjectKey?: string;
   s3PrefixFilter?: string;

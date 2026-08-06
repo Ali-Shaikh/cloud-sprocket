@@ -84,3 +84,19 @@ func TestForceNewDeploymentRequiresClusterAndService(t *testing.T) {
 		t.Fatal("expected error for empty service")
 	}
 }
+
+func TestUpdateDesiredCountRequiresClusterServiceAndNonNegativeCount(t *testing.T) {
+	inv := NewECSInventory(config.Settings{})
+	_, err := inv.UpdateDesiredCount(context.Background(), models.ProfileSummary{}, "us-east-1", "", "arn:aws:ecs:us-east-1:123:service/demo/web", 2)
+	if err == nil {
+		t.Fatal("expected error for empty cluster")
+	}
+	_, err = inv.UpdateDesiredCount(context.Background(), models.ProfileSummary{}, "us-east-1", "arn:aws:ecs:us-east-1:123:cluster/demo", "", 2)
+	if err == nil {
+		t.Fatal("expected error for empty service")
+	}
+	_, err = inv.UpdateDesiredCount(context.Background(), models.ProfileSummary{}, "us-east-1", "arn:aws:ecs:us-east-1:123:cluster/demo", "arn:aws:ecs:us-east-1:123:service/demo/web", -1)
+	if err == nil {
+		t.Fatal("expected error for negative desired count")
+	}
+}
