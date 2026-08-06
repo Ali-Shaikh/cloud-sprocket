@@ -9,21 +9,6 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
-### Changed
-
-- Desktop GCP inventory tabs share empty-state copy helpers, and Cloud Storage
-  Upload is disabled (with a write-mode title) when write mode is off.
-
-### Tests
-
-- Vitest smoke coverage for GCP desktop surfaces: Storage upload/delete/signed
-  link and empty state, Compute start/stop with write-mode gating and empty
-  state, Functions invoke gating and empty state, GKE empty state, and
-  workspace-snapshot normalisation of all GCP inventory fields (including
-  storage objects `isFolder` and pagination flags).
-
-## [0.9.13] - 2026-08-06
-
 ### Added
 
 - AWS SQS purge queue: write-gated `aws.sqs.purgeQueue` clears all messages via
@@ -44,6 +29,31 @@ Installers for every release are published on the
   document by id and partition key via the Cosmos data-plane REST API, refreshes
   the cosmos scope, and adds a Delete control on sampled items in the Cosmos
   workspace panel (with confirmation).
+
+### Changed
+
+- Daemon lab check-registry construction moves into `internal/app/labs` via
+  `CheckDeps`, `NewRegistry`, `NewRunnerFromDeps`, and `LazyRunner`
+  (architecture F-029 Phase 6b). The façade supplies inventory adapter funcs
+  only and no longer owns `NewRegistry` or a labs runner adapter. AWS
+  invoke-write ops remain on the façade behind `WriteExecutor`.
+- Desktop GCP inventory tabs share empty-state copy helpers, and Cloud Storage
+  Upload is disabled (with a write-mode title) when write mode is off.
+- Project status documentation refreshed for v0.9.13 multi-cloud state,
+  architecture residual (F-028/F-029), and accurate operator action tables.
+
+### Tests
+
+- Vitest smoke coverage for GCP desktop surfaces: Storage upload/delete/signed
+  link and empty state, Compute start/stop with write-mode gating and empty
+  state, Functions invoke gating and empty state, GKE empty state, and
+  workspace-snapshot normalisation of all GCP inventory fields (including
+  storage objects `isFolder` and pagination flags).
+
+## [0.9.13] - 2026-08-06
+
+### Added
+
 - AWS DynamoDB sample scan pagination: table describe returns the first scan page
   with `sampleItemsNextToken` / `sampleItemsHasMore`, and read-only
   `aws.dynamodb.loadMoreItems` loads the next page. The DynamoDB inspector adds a
@@ -114,15 +124,11 @@ Installers for every release are published on the
 
 ### Changed
 
-- Daemon lab check-registry construction moves into `internal/app/labs` via
-  `CheckDeps`, `NewRegistry`, `NewRunnerFromDeps`, and `LazyRunner`
-  (architecture F-029 Phase 6b). The façade supplies inventory adapter funcs
-  only and no longer owns `NewRegistry` or a labs runner adapter. AWS
-  invoke-write ops remain on the façade behind `WriteExecutor`.
 - Daemon labs RPCs (`labs.start`, `labs.get`, `labs.verifyStep`, `labs.runAction`,
   `labs.reset`) and startup fault recovery move into `internal/app/labs` with
   discovery/session/invalidator, deployment, recipe, runner, and write-executor
-  ports (architecture F-029 Phase 6a).
+  ports (architecture F-029 Phase 6a). AWS invoke-write ops and check-registry
+  construction stay on the façade.
 - Daemon Azure remaining sync write RPCs move into `internal/app/azure` with
   resource group, VM, Front Door, and queue writer ports (architecture F-029
   Phase 5d): resource group create/delete, VM invoke actions, Front Door cache
