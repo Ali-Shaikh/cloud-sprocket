@@ -32,6 +32,9 @@ Installers for every release are published on the
 
 ### Changed
 
+- Dependency consolidation (safe patches): AWS SDK Go service clients (eks,
+  eventbridge, secretsmanager, route53, sqs), desktop Radix UI primitives,
+  `@codemirror/view` 6.43.8, `globals` 17.9.0, and Rust `time` 0.3.55.
 - Daemon lab check-registry construction moves into `internal/app/labs` via
   `CheckDeps`, `NewRegistry`, `NewRunnerFromDeps`, and `LazyRunner`
   (architecture F-029 Phase 6b). The façade supplies inventory adapter funcs
