@@ -1,11 +1,11 @@
 packages:
   - "apps/*"
 overrides:
-  "@codemirror/view": "6.43.6"
+  "@codemirror/view": "6.43.8"
 allowBuilds:
   esbuild: true
 minimumReleaseAgeExclude:
-  - '@codemirror/view@6.43.6'
+  - '@codemirror/view@6.43.8'
   - js-yaml@5.2.2
   - eslint@10.8.0
   - '@vitejs/plugin-react@6.0.5'

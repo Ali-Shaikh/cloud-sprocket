@@ -1618,7 +1618,9 @@ describe("App", () => {
   });
 
   it("offers locked workspace tabs in the palette from a non-workspace area", async () => {
-    const user = userEvent.setup();
+    // Radix Dialog can leave pointer-events:none on the input during open animation;
+    // skip that check so palette typing stays deterministic in jsdom.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     sessionFixture = {
       ...sessionFixture,
       isLocked: true,
@@ -1662,7 +1664,7 @@ describe("App", () => {
   });
 
   it("opens reset confirmation from the command palette", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     sessionFixture = {
       ...sessionFixture,
       isLocked: true,
