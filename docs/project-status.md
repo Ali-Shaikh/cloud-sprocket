@@ -1,9 +1,9 @@
 # CloudSprocket project status
 
-**Last updated:** 1 August 2026
+**Last updated:** 6 August 2026
 
-**Latest release:** [v0.9.12](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.9.12)
-**Recent releases:** v0.8.33 (write mode for all profiles, inventory layout), v0.8.32 (Route 53, ELBv2, KMS), v0.8.31 (CloudFormation, EventBridge, write ops Phases 2–3)
+**Latest release:** [v0.9.13](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.9.13)
+**Recent releases:** v0.9.12 (application domain extraction spine F-029 Phases 0–3), v0.9.11 (F-028 AWS actions provider, F-030 linters), v0.9.10
 
 CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tauri v2 + Go sidecar. The PySide6 legacy app was removed in PR #67. The Tauri rewrite is the active product. The app is labelled **Developer Preview** (not production-ready).
 
@@ -46,22 +46,32 @@ Write operations (LocalStack / local endpoints only; Phases 1–3 shipped, RPC r
 | Lambda | Invoke, create, delete |
 | SQS | Peek, send, create queue |
 | SNS | Publish, create topic |
-| DynamoDB | Put item, delete item |
-| RDS | Start, stop instance |
-| Logs | Create log group, put log events |
+| DynamoDB | Put item, delete item, **sample scan load more** |
+| RDS | Start, stop, **reboot** instance |
+| ECS | **Force new deployment** |
+| Logs | Create log group, put log events, **filter/search events** |
 | IAM | Create role |
 
 ### Azure (live)
 
 Eleven service tabs plus four operational tools (15 Azure nav entries).
 
-Storage depth workflows (Step 6 partial): **blob copy** and **folder prefix create** on Azure Storage (write-gated).
+Storage depth workflows (Step 6 partial): **blob copy**, **folder prefix create**, and **signed read SAS** on Azure Storage (write-gated where applicable).
 
-Recent highlights: WAF workbench, Log Analytics, PostgreSQL Flexible Server, floci-az OpenTofu contract, Docker socket mount for real Postgres containers.
+Recent highlights: WAF workbench, Log Analytics, PostgreSQL Flexible Server start/stop, storage queue purge, Front Door cache purge, floci-az OpenTofu contract, Docker socket mount for real Postgres containers. Azure inventory/selection/writes extracted to `internal/app/azure` (F-029 Phases 5a–5d).
 
-### GCP
+### GCP (live via gcloud CLI)
 
-Profile discovery and overview tab only. Nav entries show explicit Soon badges.
+Four live service tabs (no longer Soon-only):
+
+| Service | Operations |
+|---------|------------|
+| Cloud Storage | List buckets/objects, prefix nav, upload/delete, **signed read URL** |
+| Compute Engine | List VMs, **start/stop** |
+| Cloud Functions | List (1st + 2nd gen), select, **invoke** |
+| GKE | List clusters |
+
+Write mutations gated by per-session `gcpWriteModeEnabled`. Profile discovery and overview remain available.
 
 ---
 
