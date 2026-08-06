@@ -3,7 +3,8 @@
 
 // Package azure owns Azure-domain RPC handlers that no longer need the full
 // app façade. Phase 5a covers inventory.get; Phase 5b covers selection groups;
-// Phase 5c/5d cover sync write/mutation handlers (F-029).
+// Phase 5c/5d cover sync write/mutation handlers; Phase 5e covers Bastion
+// list/connect (F-029).
 package azure
 
 import (
@@ -33,9 +34,15 @@ type Deps struct {
 	FrontDoor       FrontDoorWriter
 	Queues          QueuesWriter
 	Cosmos          CosmosWriter
+	// Bastion list/connect ports (F-029 Phase 5e).
+	BastionHosts BastionHosts
+	BastionCache BastionHostCache
+	VMLookup     VirtualMachineLookup
+	Console      InteractiveConsole
+	PlatformName string
 }
 
-// Service owns the extracted Azure inventory, selection, and write RPC paths.
+// Service owns the extracted Azure inventory, selection, write, and Bastion RPC paths.
 type Service struct {
 	discovery       Discovery
 	session         sessionport.Session
@@ -56,6 +63,11 @@ type Service struct {
 	frontDoor       FrontDoorWriter
 	queues          QueuesWriter
 	cosmos          CosmosWriter
+	bastionHosts    BastionHosts
+	bastionCache    BastionHostCache
+	vmLookup        VirtualMachineLookup
+	console         InteractiveConsole
+	platformName    string
 }
 
 // New constructs an Azure domain Service.
@@ -80,5 +92,10 @@ func New(deps Deps) *Service {
 		frontDoor:       deps.FrontDoor,
 		queues:          deps.Queues,
 		cosmos:          deps.Cosmos,
+		bastionHosts:    deps.BastionHosts,
+		bastionCache:    deps.BastionCache,
+		vmLookup:        deps.VMLookup,
+		console:         deps.Console,
+		platformName:    deps.PlatformName,
 	}
 }
