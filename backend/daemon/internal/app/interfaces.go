@@ -63,6 +63,7 @@ type SQSInventory interface {
 	PeekMessages(ctx context.Context, profile models.ProfileSummary, region string, queueURL string) (models.AwsSqsPeekResult, error)
 	SendMessage(ctx context.Context, profile models.ProfileSummary, region string, queueURL string, messageBody string) (models.AwsSqsSendResult, error)
 	CreateQueue(ctx context.Context, profile models.ProfileSummary, region string, queueName string) (models.AwsSqsCreateQueueResult, error)
+	PurgeQueue(ctx context.Context, profile models.ProfileSummary, region string, queueURL string) (models.AwsSqsPurgeResult, error)
 }
 
 type SNSInventory interface {
@@ -98,6 +99,7 @@ type ECSInventory interface {
 	ListTasks(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, serviceArn string) ([]models.AwsEcsTask, error)
 	DescribeTask(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, taskArn string) (models.AwsEcsTask, error)
 	ForceNewDeployment(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, serviceArn string) (models.AwsEcsForceNewDeploymentResult, error)
+	UpdateDesiredCount(ctx context.Context, profile models.ProfileSummary, region string, clusterArn string, serviceArn string, desiredCount int32) (models.AwsEcsUpdateDesiredCountResult, error)
 }
 
 type EKSInventory interface {
@@ -245,9 +247,10 @@ type GcpFunctionsInventory interface {
 	CallFunction(ctx context.Context, profile models.ProfileSummary, name string, region string, generation string, data string) (models.GcpCloudFunctionInvokeResult, error)
 }
 
-// GcpGkeInventory lists GKE clusters via the gcloud CLI adapter.
+// GcpGkeInventory lists GKE clusters and node pools via the gcloud CLI adapter.
 type GcpGkeInventory interface {
 	ListClusters(ctx context.Context, profile models.ProfileSummary) ([]models.GcpGkeCluster, error)
+	ListNodePools(ctx context.Context, profile models.ProfileSummary, clusterName string, location string) ([]models.GcpGkeNodePool, error)
 }
 
 // DockerRuntime, LocalStackManager, and AzureRuntimeManager are aliases of the

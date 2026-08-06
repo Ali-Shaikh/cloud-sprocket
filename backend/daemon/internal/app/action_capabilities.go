@@ -93,6 +93,7 @@ func buildAWSActionCapabilities(
 			awsActionCapability(session, profile, "peek", "Peek messages"),
 			awsActionCapability(session, profile, "sendMessage", "Send message"),
 			awsActionCapability(session, profile, "createQueue", "Create queue"),
+			awsActionCapability(session, profile, "purgeQueue", "Purge queue"),
 		},
 		"sns": {
 			awsActionCapability(session, profile, "publish", "Publish message"),
@@ -120,6 +121,7 @@ func buildAWSActionCapabilities(
 		},
 		"ecs": {
 			awsActionCapability(session, profile, "forceNewDeployment", "Force new deployment"),
+			awsActionCapability(session, profile, "updateDesiredCount", "Update desired count"),
 		},
 	}
 }

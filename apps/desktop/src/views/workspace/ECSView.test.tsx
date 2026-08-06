@@ -195,6 +195,7 @@ const workspaceFixture: EcsWorkspaceSnapshot = {
 function renderECSView(overrides?: {
   workspace?: EcsWorkspaceSnapshot;
   onForceNewDeployment?: (clusterArn: string, serviceArn: string) => void;
+  onUpdateDesiredCount?: (clusterArn: string, serviceArn: string, desiredCount: number) => void;
 }) {
   const onSelectRegion = vi.fn();
   const onSelectCluster = vi.fn();
@@ -204,6 +205,9 @@ function renderECSView(overrides?: {
   const onForceNewDeployment =
     overrides?.onForceNewDeployment ??
     vi.fn<(clusterArn: string, serviceArn: string) => void>();
+  const onUpdateDesiredCount =
+    overrides?.onUpdateDesiredCount ??
+    vi.fn<(clusterArn: string, serviceArn: string, desiredCount: number) => void>();
   render(
     <ThemeProvider>
       <ECSView
@@ -215,6 +219,7 @@ function renderECSView(overrides?: {
         onSelectService={onSelectService}
         onSelectTask={onSelectTask}
         onForceNewDeployment={onForceNewDeployment}
+        onUpdateDesiredCount={onUpdateDesiredCount}
       />
     </ThemeProvider>,
   );
@@ -225,6 +230,7 @@ function renderECSView(overrides?: {
     onSelectTask,
     onRefresh,
     onForceNewDeployment,
+    onUpdateDesiredCount,
   };
 }
 
@@ -300,6 +306,55 @@ describe("ECSView", () => {
     renderECSView({ workspace });
 
     expect(screen.getByRole("button", { name: "Force new deployment" })).toBeDisabled();
+  });
+
+  it("scales the selected service when write mode allows it", () => {
+    mockMatchMedia(true);
+    const onUpdateDesiredCount = vi.fn();
+    const workspace = {
+      ...workspaceFixture,
+      awsWritesEnabled: true,
+      awsWriteModeEnabled: true,
+      actionCapabilities: {
+        ecs: [
+          { actionId: "forceNewDeployment", label: "Force new deployment", enabled: true },
+          { actionId: "updateDesiredCount", label: "Update desired count", enabled: true },
+        ],
+      },
+    } as EcsWorkspaceSnapshot;
+
+    renderECSView({ workspace, onUpdateDesiredCount });
+
+    fireEvent.click(screen.getByRole("button", { name: "Scale service" }));
+    fireEvent.change(screen.getByLabelText("Desired count"), { target: { value: "4" } });
+    fireEvent.click(screen.getByRole("button", { name: "Update desired count" }));
+
+    expect(onUpdateDesiredCount).toHaveBeenCalledWith(
+      "arn:aws:ecs:us-east-1:123:cluster/demo",
+      "arn:aws:ecs:us-east-1:123:service/demo/web",
+      4,
+    );
+  });
+
+  it("disables scale service when write mode is off", () => {
+    mockMatchMedia(true);
+    const workspace = {
+      ...workspaceFixture,
+      actionCapabilities: {
+        ecs: [
+          {
+            actionId: "updateDesiredCount",
+            label: "Update desired count",
+            enabled: false,
+            reason: "Turn on write mode from the top bar to run mutating actions.",
+          },
+        ],
+      },
+    } as EcsWorkspaceSnapshot;
+
+    renderECSView({ workspace });
+
+    expect(screen.getByRole("button", { name: "Scale service" })).toBeDisabled();
   });
 
   it("shows the AWS workspace empty state for non-AWS providers", () => {

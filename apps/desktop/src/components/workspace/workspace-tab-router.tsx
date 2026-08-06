@@ -428,6 +428,16 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
         onRefresh={() => {
           void refreshDiscovery();
         }}
+        onSelectCluster={(clusterName) => {
+          void mutateWorkspaceSelection(
+            "gcp.gke.selectCluster",
+            { clusterName },
+            {
+              immediate: true,
+              errorTitle: "Failed to select GKE cluster",
+            },
+          );
+        }}
       />
     );
   }

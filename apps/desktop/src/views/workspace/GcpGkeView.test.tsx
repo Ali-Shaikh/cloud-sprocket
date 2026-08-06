@@ -31,7 +31,17 @@ const workspace = {
       mode: "Standard",
     },
   ],
-  gcpGkeStatusMessage: "Loaded 2 GKE cluster(s) via gcloud.",
+  gcpGkeNodePools: [
+    {
+      name: "default-pool",
+      status: "RUNNING",
+      machineType: "e2-medium",
+      initialNodeCount: 2,
+      version: "1.28.11-gke.1019001",
+    },
+  ],
+  selectedGcpGkeCluster: "dev-gke",
+  gcpGkeStatusMessage: "Loaded 1 node pool(s) for cluster dev-gke.",
 } as unknown as WorkspaceSnapshot;
 
 describe("GcpGkeView", () => {
@@ -55,5 +65,24 @@ describe("GcpGkeView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
     expect(onRefresh).toHaveBeenCalled();
+  });
+
+  it("selects a cluster and shows node pools for the selection", () => {
+    const onSelectCluster = vi.fn();
+    render(
+      <ThemeProvider>
+        <GcpGkeView
+          workspace={workspace}
+          onRefresh={vi.fn()}
+          onSelectCluster={onSelectCluster}
+        />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByText("default-pool")).toBeTruthy();
+    expect(screen.getByText("e2-medium")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("prod-gke"));
+    expect(onSelectCluster).toHaveBeenCalledWith("prod-gke");
   });
 });

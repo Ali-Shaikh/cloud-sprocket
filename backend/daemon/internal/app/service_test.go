@@ -115,6 +115,10 @@ func (stubSQSInventory) CreateQueue(context.Context, models.ProfileSummary, stri
 	return models.AwsSqsCreateQueueResult{}, nil
 }
 
+func (stubSQSInventory) PurgeQueue(context.Context, models.ProfileSummary, string, string) (models.AwsSqsPurgeResult, error) {
+	return models.AwsSqsPurgeResult{}, nil
+}
+
 type stubSNSInventory struct{}
 
 func (stubSNSInventory) ListTopics(context.Context, models.ProfileSummary, string) ([]models.AwsSnsTopic, error) {
@@ -185,6 +189,14 @@ func (stubECSInventory) ForceNewDeployment(context.Context, models.ProfileSummar
 	return models.AwsEcsForceNewDeploymentResult{
 		ServiceName: "web",
 		Summary:     "Forced a new deployment for ECS service web.",
+	}, nil
+}
+
+func (stubECSInventory) UpdateDesiredCount(context.Context, models.ProfileSummary, string, string, string, int32) (models.AwsEcsUpdateDesiredCountResult, error) {
+	return models.AwsEcsUpdateDesiredCountResult{
+		ServiceName:  "web",
+		DesiredCount: 2,
+		Summary:      "Set desired count for ECS service web to 2.",
 	}, nil
 }
 

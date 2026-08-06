@@ -97,6 +97,9 @@ func (s *Service) registerAWSHandlers(m *handlerRegistry) {
 	m.register("aws.sqs.createQueue", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsSqsCreateQueue(ctx, params, notifier)
 	})
+	m.register("aws.sqs.purgeQueue", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleAwsSqsPurgeQueue(ctx, params, notifier)
+	})
 	m.register("aws.sns.selectRegion", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsSnsSelectRegion(ctx, params, notifier)
 	})
@@ -132,6 +135,9 @@ func (s *Service) registerAWSHandlers(m *handlerRegistry) {
 	})
 	m.register("aws.ecs.forceNewDeployment", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsEcsForceNewDeployment(ctx, params, notifier)
+	})
+	m.register("aws.ecs.updateDesiredCount", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleAwsEcsUpdateDesiredCount(ctx, params, notifier)
 	})
 	m.register("aws.eks.selectRegion", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsEksSelectRegion(ctx, params, notifier)

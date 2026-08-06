@@ -217,6 +217,41 @@ func (q *SQSInventory) CreateQueue(
 	}, nil
 }
 
+// PurgeQueue deletes all messages from the selected queue (write action).
+// AWS enforces a purge rate limit of one purge per queue every 60 seconds.
+func (q *SQSInventory) PurgeQueue(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	queueURL string,
+) (models.AwsSqsPurgeResult, error) {
+	queueURL = strings.TrimSpace(queueURL)
+	if queueURL == "" {
+		return models.AwsSqsPurgeResult{}, fmt.Errorf("queue URL is required")
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := q.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsSqsPurgeResult{}, err
+	}
+
+	client := sqsClient(cfg, profile)
+	_, err = client.PurgeQueue(ctx, &sqs.PurgeQueueInput{
+		QueueUrl: aws.String(queueURL),
+	})
+	if err != nil {
+		return models.AwsSqsPurgeResult{}, fmt.Errorf("purge SQS queue: %w", err)
+	}
+	queueName := queueNameFromURL(queueURL)
+	return models.AwsSqsPurgeResult{
+		QueueURL:  queueURL,
+		QueueName: queueName,
+		Summary:   fmt.Sprintf("Purged all messages from SQS queue %s.", queueName),
+	}, nil
+}
+
 func (q *SQSInventory) loadConfig(
 	ctx context.Context,
 	profile models.ProfileSummary,

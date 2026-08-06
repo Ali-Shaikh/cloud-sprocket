@@ -2887,6 +2887,21 @@ export function handleMockRequest<T>(
       appendLog("success", `Created SQS queue ${queueName}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     }
+    case "aws.sqs.purgeQueue": {
+      if (!mockState.session.awsWriteModeEnabled) {
+        return Promise.reject(new Error("SQS purge requires write mode to be enabled"));
+      }
+      const queueUrl = String(params.queueUrl ?? mockState.session.selectedSqsQueueUrl ?? "");
+      mockState.session.selectedSqsQueueUrl = queueUrl;
+      const queue = mockWorkspaceSQSQueues.find((candidate) => candidate.queueUrl === queueUrl);
+      if (queue) {
+        queue.approximateNumberOfMessages = 0;
+        queue.approximateNumberOfMessagesNotVisible = 0;
+        queue.approximateNumberOfMessagesDelayed = 0;
+      }
+      appendLog("success", `Purged all messages from SQS queue ${queue?.queueName || queueUrl}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
     case "aws.sns.selectRegion":
       mockState.session.selectedSnsRegion = String(params.region ?? "");
       mockState.session.selectedSnsTopicArn = undefined;
@@ -3014,6 +3029,29 @@ export function handleMockRequest<T>(
       mockState.session.selectedEcsClusterArn = clusterArn;
       mockState.session.selectedEcsServiceArn = serviceArn;
       appendLog("success", `Forced a new deployment for ECS service ${serviceArn}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "aws.ecs.updateDesiredCount": {
+      if (!mockState.session.awsWriteModeEnabled) {
+        return Promise.reject(
+          new Error("ECS update desired count requires write mode to be enabled"),
+        );
+      }
+      const clusterArn = String(params.clusterArn ?? mockState.session.selectedEcsClusterArn ?? "");
+      const serviceArn = String(params.serviceArn ?? mockState.session.selectedEcsServiceArn ?? "");
+      const desiredCount = Number(params.desiredCount ?? 0);
+      mockState.session.selectedEcsClusterArn = clusterArn;
+      mockState.session.selectedEcsServiceArn = serviceArn;
+      const service = mockWorkspaceECSServices.find(
+        (candidate) => candidate.serviceArn === serviceArn,
+      );
+      if (service) {
+        service.desiredCount = desiredCount;
+      }
+      appendLog(
+        "success",
+        `Set desired count for ECS service ${serviceArn} to ${desiredCount}.`,
+      );
       return Promise.resolve(buildMockWorkspace() as T);
     }
     case "aws.eks.selectRegion":
@@ -4222,6 +4260,11 @@ export function handleMockRequest<T>(
       mockLabSessions.set(deployment.id, session);
       mockEmitLabChanged(session);
       return Promise.resolve(session as T);
+    }
+    case "gcp.gke.selectCluster": {
+      mockState.session.selectedGcpGkeCluster = String(params.clusterName ?? "");
+      appendLog("info", `Selected GKE cluster ${params.clusterName ?? "none"}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
     }
     default:
       return Promise.reject(new Error(`Mock backend method not implemented: ${method}`));

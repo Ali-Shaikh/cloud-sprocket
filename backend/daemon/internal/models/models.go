@@ -288,6 +288,7 @@ type SessionSnapshot struct {
 	GcpStoragePrefixFilter            string             `json:"gcpStoragePrefixFilter,omitempty"`
 	SelectedGcpComputeInstance        string             `json:"selectedGcpComputeInstance,omitempty"`
 	SelectedGcpFunction               string             `json:"selectedGcpFunction,omitempty"`
+	SelectedGcpGkeCluster             string             `json:"selectedGcpGkeCluster,omitempty"`
 	GcpWriteModeEnabled               bool               `json:"gcpWriteModeEnabled,omitempty"`
 	SelectedEC2Region                 string             `json:"selectedEc2Region,omitempty"`
 	SelectedEC2InstanceID             string             `json:"selectedEc2InstanceId,omitempty"`
@@ -456,9 +457,9 @@ type AwsDynamoDBTable struct {
 
 // AwsDynamoDBScanPage is one page of sample items from a table scan.
 type AwsDynamoDBScanPage struct {
-	Items                 []string `json:"items"`
-	SampleItemsNextToken  string   `json:"sampleItemsNextToken,omitempty"`
-	SampleItemsHasMore    bool     `json:"sampleItemsHasMore,omitempty"`
+	Items                []string `json:"items"`
+	SampleItemsNextToken string   `json:"sampleItemsNextToken,omitempty"`
+	SampleItemsHasMore   bool     `json:"sampleItemsHasMore,omitempty"`
 }
 
 // AwsSqsQueue models an SQS queue for inventory (list + describe).
@@ -502,6 +503,13 @@ type AwsSqsSendResult struct {
 type AwsSqsCreateQueueResult struct {
 	QueueName string `json:"queueName"`
 	QueueURL  string `json:"queueUrl"`
+}
+
+// AwsSqsPurgeResult is the result of purging all messages from a queue.
+type AwsSqsPurgeResult struct {
+	QueueURL  string `json:"queueUrl"`
+	QueueName string `json:"queueName"`
+	Summary   string `json:"summary"`
 }
 
 // AwsSnsPublishResult is the result of publishing to an SNS topic.
@@ -684,6 +692,16 @@ type AwsEcsForceNewDeploymentResult struct {
 	ServiceName string `json:"serviceName"`
 	Region      string `json:"region"`
 	Summary     string `json:"summary"`
+}
+
+// AwsEcsUpdateDesiredCountResult reports a successful desired-count scale action.
+type AwsEcsUpdateDesiredCountResult struct {
+	ClusterArn   string `json:"clusterArn"`
+	ServiceArn   string `json:"serviceArn"`
+	ServiceName  string `json:"serviceName"`
+	DesiredCount int32  `json:"desiredCount"`
+	Region       string `json:"region"`
+	Summary      string `json:"summary"`
 }
 
 // AwsEcsContainer models a container within an ECS task.
@@ -1571,9 +1589,10 @@ type WorkspaceSnapshot struct {
 	GcpFunctionsStatusMessage string             `json:"gcpFunctionsStatusMessage,omitempty"`
 	GcpFunctions              []GcpCloudFunction `json:"gcpFunctions"`
 	// GCP GKE inventory (foundation slice).
-	SelectedGcpGkeCluster string          `json:"selectedGcpGkeCluster,omitempty"`
-	GcpGkeStatusMessage   string          `json:"gcpGkeStatusMessage,omitempty"`
-	GcpGkeClusters        []GcpGkeCluster `json:"gcpGkeClusters"`
+	SelectedGcpGkeCluster string           `json:"selectedGcpGkeCluster,omitempty"`
+	GcpGkeStatusMessage   string           `json:"gcpGkeStatusMessage,omitempty"`
+	GcpGkeClusters        []GcpGkeCluster  `json:"gcpGkeClusters"`
+	GcpGkeNodePools       []GcpGkeNodePool `json:"gcpGkeNodePools"`
 }
 
 // GcpStorageBucket is a Cloud Storage bucket from gcloud inventory.
@@ -1666,6 +1685,21 @@ type GcpGkeCluster struct {
 	Mode      string `json:"mode,omitempty"`
 	CreatedAt string `json:"createdAt,omitempty"`
 	Summary   string `json:"summary,omitempty"`
+}
+
+// GcpGkeNodePool is a node pool under a selected GKE cluster.
+type GcpGkeNodePool struct {
+	Name               string `json:"name"`
+	Status             string `json:"status,omitempty"`
+	Version            string `json:"version,omitempty"`
+	MachineType        string `json:"machineType,omitempty"`
+	DiskSizeGb         int    `json:"diskSizeGb,omitempty"`
+	InitialNodeCount   int    `json:"initialNodeCount,omitempty"`
+	AutoscalingEnabled bool   `json:"autoscalingEnabled,omitempty"`
+	MinNodeCount       int    `json:"minNodeCount,omitempty"`
+	MaxNodeCount       int    `json:"maxNodeCount,omitempty"`
+	Locations          string `json:"locations,omitempty"`
+	Summary            string `json:"summary,omitempty"`
 }
 
 type ActivityLogEntry struct {

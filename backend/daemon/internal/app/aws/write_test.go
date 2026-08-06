@@ -17,6 +17,7 @@ type fakeSQS struct {
 	peeked  bool
 	sent    bool
 	created bool
+	purged  bool
 }
 
 func (f *fakeSQS) PeekMessages(context.Context, models.ProfileSummary, string, string) (models.AwsSqsPeekResult, error) {
@@ -30,6 +31,10 @@ func (f *fakeSQS) SendMessage(context.Context, models.ProfileSummary, string, st
 func (f *fakeSQS) CreateQueue(context.Context, models.ProfileSummary, string, string) (models.AwsSqsCreateQueueResult, error) {
 	f.created = true
 	return models.AwsSqsCreateQueueResult{QueueName: "q", QueueURL: "https://q"}, nil
+}
+func (f *fakeSQS) PurgeQueue(context.Context, models.ProfileSummary, string, string) (models.AwsSqsPurgeResult, error) {
+	f.purged = true
+	return models.AwsSqsPurgeResult{QueueURL: "https://q", QueueName: "q", Summary: "purged"}, nil
 }
 
 type fakeSNS struct {
@@ -241,6 +246,55 @@ func TestHandleSQSPeekUsesWriter(t *testing.T) {
 	}
 }
 
+func TestHandleSQSPurgeQueue(t *testing.T) {
+	sqs := &fakeSQS{}
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: &fakeSession{session: models.SessionSnapshot{
+			IsLocked:            true,
+			CurrentProviderID:   "aws",
+			SelectedProfileID:   "p1",
+			AWSWriteModeEnabled: true,
+			SelectedSQSRegion:   "us-east-1",
+			SelectedSQSQueueURL: "https://q",
+		}},
+		Workspace:     &fakeWorkspace{},
+		Activity:      &fakeActivity{},
+		SQS:           sqs,
+		ActionTimeout: 5 * time.Second,
+	})
+	params, _ := json.Marshal(map[string]string{"queueUrl": "https://q"})
+	if _, err := svc.HandleSQSPurgeQueue(context.Background(), params, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !sqs.purged {
+		t.Fatal("expected purge")
+	}
+}
+
+func TestHandleSQSPurgeQueueRequiresWriteMode(t *testing.T) {
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: &fakeSession{session: models.SessionSnapshot{
+			IsLocked:            true,
+			CurrentProviderID:   "aws",
+			SelectedProfileID:   "p1",
+			SelectedSQSRegion:   "us-east-1",
+			SelectedSQSQueueURL: "https://q",
+		}},
+		Workspace: &fakeWorkspace{},
+		SQS:       &fakeSQS{},
+	})
+	params, _ := json.Marshal(map[string]string{"queueUrl": "https://q"})
+	if _, err := svc.HandleSQSPurgeQueue(context.Background(), params, nil); err == nil {
+		t.Fatal("expected write mode gate")
+	}
+}
+
 func TestHandleSecretsRevealGatesWriteMode(t *testing.T) {
 	svc := New(Deps{
 		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
@@ -345,10 +399,12 @@ func TestHandleLogsFilterEventsRequiresLogGroup(t *testing.T) {
 }
 
 type fakeECS struct {
-	forced bool
-	region string
-	cluster string
-	service string
+	forced       bool
+	scaled       bool
+	desiredCount int32
+	region       string
+	cluster      string
+	service      string
 }
 
 func (f *fakeECS) ForceNewDeployment(_ context.Context, _ models.ProfileSummary, region string, clusterArn string, serviceArn string) (models.AwsEcsForceNewDeploymentResult, error) {
@@ -362,6 +418,22 @@ func (f *fakeECS) ForceNewDeployment(_ context.Context, _ models.ProfileSummary,
 		ServiceName: "web",
 		Region:      region,
 		Summary:     "Forced a new deployment for ECS service web.",
+	}, nil
+}
+
+func (f *fakeECS) UpdateDesiredCount(_ context.Context, _ models.ProfileSummary, region string, clusterArn string, serviceArn string, desiredCount int32) (models.AwsEcsUpdateDesiredCountResult, error) {
+	f.scaled = true
+	f.desiredCount = desiredCount
+	f.region = region
+	f.cluster = clusterArn
+	f.service = serviceArn
+	return models.AwsEcsUpdateDesiredCountResult{
+		ClusterArn:   clusterArn,
+		ServiceArn:   serviceArn,
+		ServiceName:  "web",
+		DesiredCount: desiredCount,
+		Region:       region,
+		Summary:      "Set desired count for ECS service web to 2.",
 	}, nil
 }
 
@@ -415,6 +487,59 @@ func TestHandleECSForceNewDeploymentRequiresWriteMode(t *testing.T) {
 	})
 	params, _ := json.Marshal(map[string]string{})
 	if _, err := svc.HandleECSForceNewDeployment(context.Background(), params, nil); err == nil {
+		t.Fatal("expected write mode gate")
+	}
+}
+
+func TestHandleECSUpdateDesiredCount(t *testing.T) {
+	ecs := &fakeECS{}
+	sess := &fakeSession{session: models.SessionSnapshot{
+		IsLocked:              true,
+		CurrentProviderID:     "aws",
+		SelectedProfileID:     "p1",
+		AWSWriteModeEnabled:   true,
+		SelectedECSRegion:     "eu-west-1",
+		SelectedECSClusterArn: "arn:aws:ecs:eu-west-1:123:cluster/demo",
+		SelectedECSServiceArn: "arn:aws:ecs:eu-west-1:123:service/demo/web",
+	}}
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session:       sess,
+		Workspace:     &fakeWorkspace{},
+		Activity:      &fakeActivity{},
+		Invalidator:   &fakeInvalidator{},
+		ECS:           ecs,
+		ActionTimeout: 5 * time.Second,
+	})
+	params, _ := json.Marshal(map[string]any{"desiredCount": 3})
+	if _, err := svc.HandleECSUpdateDesiredCount(context.Background(), params, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !ecs.scaled || ecs.desiredCount != 3 {
+		t.Fatalf("scale call = %+v", ecs)
+	}
+}
+
+func TestHandleECSUpdateDesiredCountRequiresWriteMode(t *testing.T) {
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: &fakeSession{session: models.SessionSnapshot{
+			IsLocked:              true,
+			CurrentProviderID:     "aws",
+			SelectedProfileID:     "p1",
+			SelectedECSRegion:     "eu-west-1",
+			SelectedECSClusterArn: "arn:aws:ecs:eu-west-1:123:cluster/demo",
+			SelectedECSServiceArn: "arn:aws:ecs:eu-west-1:123:service/demo/web",
+		}},
+		Workspace: &fakeWorkspace{},
+		ECS:       &fakeECS{},
+	})
+	params, _ := json.Marshal(map[string]any{"desiredCount": 2})
+	if _, err := svc.HandleECSUpdateDesiredCount(context.Background(), params, nil); err == nil {
 		t.Fatal("expected write mode gate")
 	}
 }
