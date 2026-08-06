@@ -38,6 +38,7 @@ import { AwsWorkspaceTabs, AWS_TAB_IDS } from "./aws-workspace-tabs";
 import { AzureWorkspaceTabs } from "./azure-workspace-tabs";
 import { useAwsActionsContext } from "./aws-actions-context";
 import { useAzureActionsContext } from "./azure-actions-context";
+import { useRuntimeEmulatorContext } from "./runtime-emulator-context";
 import { useWorkspaceNavigationContext } from "./workspace-navigation-context";
 import { useWorkspaceSessionContext } from "./workspace-session-context";
 import type { WorkspaceTabRouterProps } from "./workspace-tab-router-props";
@@ -115,37 +116,20 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     azureLogWorkspaceSelectionLoading,
     azureWafConfigLoading,
     azureFrontDoorTopologyLoading,
-    localStackAuthToken,
-    setLocalStackAuthToken,
-    localStackPersistence,
-    setLocalStackPersistence,
-    localStackEnvironmentText,
-    setLocalStackEnvironmentText,
-    localStackLogs,
-    localStackLogsStatus,
-    localStackActionStatus,
-    localStackActionInFlight,
-    flociAzPersistence,
-    setFlociAzPersistence,
-    flociAzEnvironmentText,
-    setFlociAzEnvironmentText,
-    flociAzLogs,
-    flociAzLogsStatus,
-    flociAzActionStatus,
-    flociAzActionInFlight,
     mutateWorkspaceSelection,
     mutateSession,
     refreshDiscovery,
-    refreshDockerRuntime,
-    refreshLocalStackLogs,
-    refreshFlociAzLogs,
     listLogAnalyticsHistory,
     listLogAnalyticsSaved,
-    invokeLocalStackAction,
-    invokeFlociAzAction,
     openWorkspace,
     chooseAuthMethod,
   } = props;
+
+  const {
+    localStack,
+    flociAz,
+    refreshDockerRuntime,
+  } = useRuntimeEmulatorContext();
 
   const {
     selectLambdaFunction,
@@ -229,14 +213,14 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
         }}
         onEmulatorQuickStart={(emulatorId) => {
           if (emulatorId === "localstack") {
-            void invokeLocalStackAction("start");
+            void localStack.invokeAction("start");
             return;
           }
-          void invokeFlociAzAction("start");
+          void flociAz.invokeAction("start");
         }}
         runtimeActionInFlight={{
-          localstack: localStackActionInFlight,
-          "floci-az": flociAzActionInFlight,
+          localstack: localStack.actionInFlight,
+          "floci-az": flociAz.actionInFlight,
         }}
         hiddenResourceHits={props.hiddenResourceHits}
         hiddenResourceEnablingServiceId={props.hiddenResourceEnablingServiceId}
@@ -451,37 +435,37 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
         void refreshDockerRuntime();
       }}
       localStack={{
-        authToken: localStackAuthToken,
-        onAuthTokenChange: setLocalStackAuthToken,
-        persistence: localStackPersistence,
-        onPersistenceChange: setLocalStackPersistence,
-        environmentText: localStackEnvironmentText,
-        onEnvironmentTextChange: setLocalStackEnvironmentText,
-        logs: localStackLogs,
-        logsStatus: localStackLogsStatus,
-        actionStatus: localStackActionStatus,
-        actionInFlight: localStackActionInFlight,
+        authToken: localStack.authToken,
+        onAuthTokenChange: localStack.setAuthToken,
+        persistence: localStack.persistence,
+        onPersistenceChange: localStack.setPersistence,
+        environmentText: localStack.environmentText,
+        onEnvironmentTextChange: localStack.setEnvironmentText,
+        logs: localStack.logs,
+        logsStatus: localStack.logsStatus,
+        actionStatus: localStack.actionStatus,
+        actionInFlight: localStack.actionInFlight,
         onRefreshLogs: () => {
-          void refreshLocalStackLogs();
+          void localStack.refreshLogs();
         },
         onInvokeAction: (action) => {
-          void invokeLocalStackAction(action);
+          void localStack.invokeAction(action);
         },
       }}
       flociAz={{
-        persistence: flociAzPersistence,
-        onPersistenceChange: setFlociAzPersistence,
-        environmentText: flociAzEnvironmentText,
-        onEnvironmentTextChange: setFlociAzEnvironmentText,
-        logs: flociAzLogs,
-        logsStatus: flociAzLogsStatus,
-        actionStatus: flociAzActionStatus,
-        actionInFlight: flociAzActionInFlight,
+        persistence: flociAz.persistence,
+        onPersistenceChange: flociAz.setPersistence,
+        environmentText: flociAz.environmentText,
+        onEnvironmentTextChange: flociAz.setEnvironmentText,
+        logs: flociAz.logs,
+        logsStatus: flociAz.logsStatus,
+        actionStatus: flociAz.actionStatus,
+        actionInFlight: flociAz.actionInFlight,
         onRefreshLogs: () => {
-          void refreshFlociAzLogs();
+          void flociAz.refreshLogs();
         },
         onInvokeAction: (action) => {
-          void invokeFlociAzAction(action);
+          void flociAz.invokeAction(action);
         },
       }}
     />
@@ -517,8 +501,8 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
       onOpenRuntime={() => setActiveWorkspaceTabId("virtualisation")}
       onStartEmulator={(emulatorId) =>
         emulatorId === "localstack"
-          ? invokeLocalStackAction("start")
-          : invokeFlociAzAction("start")
+          ? localStack.invokeAction("start")
+          : flociAz.invokeAction("start")
       }
       onComplete={() => {
         markOnboardingComplete();

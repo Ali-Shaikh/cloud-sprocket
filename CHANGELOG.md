@@ -32,6 +32,9 @@ Installers for every release are published on the
 
 ### Changed
 
+- Desktop F-028 slice 5: LocalStack and floci-az emulator state and callbacks
+  move from the workspace tab router prop bag into `RuntimeEmulatorProvider`,
+  so RuntimeView, overview quick-start, and onboarding read them from context.
 - Daemon Azure Bastion list/connect RPCs move into `internal/app/azure` with
   host inventory, cache, VM lookup, interactive console, and platform ports
   (architecture F-029 Phase 5e). The façade keeps thin wrappers only.
