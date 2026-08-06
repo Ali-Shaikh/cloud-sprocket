@@ -34,6 +34,7 @@ import type {
   AwsS3ExportSnippet,
   AwsS3Object,
   GcpStorageBucket,
+  GcpStorageObject,
   GcpComputeInstance,
   GcpCloudFunction,
   GcpGkeCluster,
@@ -154,7 +155,11 @@ export const emptyWorkspace: WorkspaceSnapshot = {
   azureEntraGroups: [],
   azureEntraApps: [],
   gcpStorageBuckets: [],
+  gcpStorageObjects: [],
+  gcpStorageObjectsHasMore: false,
   gcpComputeInstances: [],
+  gcpFunctions: [],
+  gcpGkeClusters: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -349,6 +354,10 @@ function normaliseS3Bucket(bucket: AwsS3Bucket): AwsS3Bucket {
 
 function normaliseGcpStorageBucket(bucket: GcpStorageBucket): GcpStorageBucket {
   return { ...bucket };
+}
+
+function normaliseGcpStorageObject(object: GcpStorageObject): GcpStorageObject {
+  return { ...object, isFolder: Boolean(object.isFolder) };
 }
 
 function normaliseGcpComputeInstance(instance: GcpComputeInstance): GcpComputeInstance {
@@ -1249,16 +1258,22 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     azureEntraUsers: normaliseArray(source.azureEntraUsers),
     azureEntraGroups: normaliseArray(source.azureEntraGroups),
     azureEntraApps: normaliseArray(source.azureEntraApps),
+    selectedGcpStorageBucket: source.selectedGcpStorageBucket,
+    gcpStoragePrefixFilter: source.gcpStoragePrefixFilter,
+    gcpStorageStatusMessage: source.gcpStorageStatusMessage,
     gcpStorageBuckets: normaliseArray(source.gcpStorageBuckets).map(normaliseGcpStorageBucket),
-    gcpComputeInstances: normaliseArray(source.gcpComputeInstances).map(normaliseGcpComputeInstance),
+    gcpStorageObjects: normaliseArray(source.gcpStorageObjects).map(normaliseGcpStorageObject),
+    gcpStorageObjectsNextToken: source.gcpStorageObjectsNextToken,
+    gcpStorageObjectsHasMore: source.gcpStorageObjectsHasMore ?? false,
     selectedGcpComputeInstance: source.selectedGcpComputeInstance,
     gcpComputeStatusMessage: source.gcpComputeStatusMessage,
-    gcpFunctions: normaliseArray(source.gcpFunctions).map(normaliseGcpCloudFunction),
+    gcpComputeInstances: normaliseArray(source.gcpComputeInstances).map(normaliseGcpComputeInstance),
     selectedGcpFunction: source.selectedGcpFunction,
     gcpFunctionsStatusMessage: source.gcpFunctionsStatusMessage,
-    gcpGkeClusters: normaliseArray(source.gcpGkeClusters).map(normaliseGcpGkeCluster),
+    gcpFunctions: normaliseArray(source.gcpFunctions).map(normaliseGcpCloudFunction),
     selectedGcpGkeCluster: source.selectedGcpGkeCluster,
     gcpGkeStatusMessage: source.gcpGkeStatusMessage,
+    gcpGkeClusters: normaliseArray(source.gcpGkeClusters).map(normaliseGcpGkeCluster),
     s3Buckets: normaliseArray(source.s3Buckets).map(normaliseS3Bucket),
     s3Objects: normaliseArray(source.s3Objects).map(normaliseS3Object),
     s3ObjectsNextToken: source.s3ObjectsNextToken,

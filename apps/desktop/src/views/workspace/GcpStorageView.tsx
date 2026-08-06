@@ -39,6 +39,11 @@ import {
 } from "@/components/ui/select";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { formatTimestamp } from "@/lib/format";
+import {
+  GCP_CREATE_HINTS,
+  gcpFilterEmpty,
+  gcpProjectEmpty,
+} from "@/lib/gcp-empty-copy";
 import { notify } from "@/lib/notify";
 import {
   filterObjectsByKeyQuery,
@@ -246,8 +251,11 @@ export default function GcpStorageView({
             <Button
               variant="outline"
               size="sm"
-              disabled={!bucketName || listingLoading}
-              title={writeDisabledReason}
+              disabled={!bucketName || listingLoading || !uploadCapability.enabled}
+              title={
+                writeDisabledReason ??
+                (!bucketName ? "Select a bucket first." : listingLoading ? "Listing objects…" : undefined)
+              }
               onClick={() => {
                 setUploadSourcePath("");
                 setUploadObjectKey("");
@@ -365,16 +373,9 @@ export default function GcpStorageView({
           emptyState={
             <EmptyState
               icon={<HardDrive />}
-              title={
-                buckets.length === 0
-                  ? "No buckets in this project"
-                  : "No buckets match the filter"
-              }
-              description={
-                buckets.length === 0
-                  ? "Create a bucket in the Google Cloud console or with gcloud, then refresh."
-                  : "Clear the filter to see the full inventory."
-              }
+              {...(buckets.length === 0
+                ? gcpProjectEmpty("buckets", GCP_CREATE_HINTS.buckets)
+                : gcpFilterEmpty("buckets"))}
             />
           }
         />
@@ -504,14 +505,12 @@ export default function GcpStorageView({
               <EmptyState
                 icon={<FolderOpen />}
                 title={
-                  objects.length === 0
-                    ? "This folder is empty"
-                    : "No objects match the filter"
+                  objects.length === 0 ? "This folder is empty" : "No objects match the filter"
                 }
                 description={
                   objects.length === 0
-                    ? "Open another folder from the breadcrumb, or select a different bucket."
-                    : "Clear the name filter to see the full page."
+                    ? GCP_CREATE_HINTS.objects
+                    : GCP_CREATE_HINTS.objectFilter
                 }
               />
             }

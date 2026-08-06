@@ -11,6 +11,7 @@
  */
 
 import type {
+  ActionCapability,
   AppResetResult,
   ActivityLogEntry,
   AppSettingsSnapshot,
@@ -42,6 +43,11 @@ import type {
   WorkspaceTab,
   AwsLambdaInvokeResult,
   DriftReport,
+  GcpCloudFunction,
+  GcpComputeInstance,
+  GcpGkeCluster,
+  GcpStorageBucket,
+  GcpStorageObject,
 } from "../types/backend";
 import { awsInventoryScopeForTab } from "./aws-inventory";
 import {
@@ -285,6 +291,71 @@ const mockAzureWorkspaceTabs: WorkspaceTab[] = [
   },
 ];
 
+/** Live GCP catalogue tabs (not coming_soon). Mirrors backend gcpServiceCatalog. */
+const mockGcpWorkspaceTabs: WorkspaceTab[] = [
+  {
+    tabId: "overview",
+    label: "Overview",
+    summary: "Session-wide provider context and health.",
+    detail: "Shows the locked cloud context and recent operator activity.",
+  },
+  {
+    tabId: "virtualisation",
+    label: "Local Runtime",
+    summary: "Docker and local cloud runtime controls.",
+    detail: "Manage Docker diagnostics, LocalStack, local config artefacts, and app-owned emulator state.",
+  },
+  {
+    tabId: "gcp-overview",
+    label: "GCP",
+    summary: "Project context and readiness.",
+    detail: "Surfaces the open GCP configuration details while provider-specific inventory is ported.",
+    category: "workspace",
+  },
+  {
+    tabId: "gcp-storage",
+    label: "Cloud Storage",
+    summary: "GCS buckets and object browser via gcloud.",
+    detail:
+      "Lists Cloud Storage buckets for the open gcloud configuration and project, and browses objects under a selected prefix.",
+    category: "service",
+    domain: "storage",
+  },
+  {
+    tabId: "gcp-compute",
+    label: "Compute Engine",
+    summary: "VM instance inventory via gcloud.",
+    detail:
+      "Lists Compute Engine instances for the open gcloud configuration and project. Start and stop when write mode is on.",
+    category: "service",
+    domain: "compute",
+  },
+  {
+    tabId: "gcp-functions",
+    label: "Cloud Functions",
+    summary: "Function inventory via gcloud (1st and 2nd gen).",
+    detail:
+      "Lists Cloud Functions for the open gcloud configuration and project. Invoke when write mode is on.",
+    category: "service",
+    domain: "compute",
+  },
+  {
+    tabId: "gcp-gke",
+    label: "GKE",
+    summary: "Kubernetes cluster inventory via gcloud.",
+    detail:
+      "Lists Google Kubernetes Engine clusters for the open gcloud configuration and project.",
+    category: "service",
+    domain: "compute",
+  },
+  {
+    tabId: "actions",
+    label: "Activity",
+    summary: "Recent job, log, and refresh history.",
+    detail: "Shows the latest backend activity while the workspace shell continues to expand.",
+  },
+];
+
 const mockWorkspaceBuckets = [
   {
     name: "cloudsprocket-artifacts",
@@ -427,6 +498,8 @@ const mockWorkspaceDynamoDBTables = [
       '{"orderId":"ord-001","customerId":"cust-42","createdAt":"2026-06-14T10:00:00Z","total":49.99}',
       '{"orderId":"ord-002","customerId":"cust-17","createdAt":"2026-06-14T11:30:00Z","total":12.50}',
     ],
+    sampleItemsNextToken: "mock-ddb-page-2",
+    sampleItemsHasMore: true,
   },
   {
     tableName: "cloudsprocket-sessions",
@@ -436,6 +509,105 @@ const mockWorkspaceDynamoDBTables = [
     billingMode: "PAY_PER_REQUEST",
     hashKey: "sessionId",
     sampleItems: ['{"sessionId":"sess-abc","userId":"user-1","ttl":1718452800}'],
+  },
+];
+
+const mockGcpStorageBuckets: GcpStorageBucket[] = [
+  {
+    name: "platform-artifacts",
+    location: "US",
+    locationType: "multi-region",
+    storageClass: "STANDARD",
+    createdAt: "2026-01-12T09:00:00Z",
+    summary: "Primary artefact bucket.",
+  },
+  {
+    name: "platform-logs",
+    location: "europe-west1",
+    locationType: "region",
+    storageClass: "NEARLINE",
+    createdAt: "2026-02-01T12:00:00Z",
+    summary: "Regional logs bucket.",
+  },
+];
+
+let mockGcpStorageObjects: GcpStorageObject[] = [
+  { key: "docs/", isFolder: true, size: "Folder" },
+  {
+    key: "docs/readme.txt",
+    size: "12 B",
+    updated: "2026-08-01T10:00:00Z",
+    contentType: "text/plain",
+  },
+  {
+    key: "uploads/package.zip",
+    size: "4.2 MB",
+    updated: "2026-08-02T08:15:00Z",
+    contentType: "application/zip",
+  },
+];
+
+let mockGcpStorageObjectsHasMore = true;
+let mockGcpStorageObjectsNextToken: string | undefined = "mock-gcs-page-2";
+
+const mockGcpComputeInstances: GcpComputeInstance[] = [
+  {
+    name: "web-1",
+    zone: "us-central1-a",
+    machineType: "e2-micro",
+    status: "RUNNING",
+    internalIp: "10.0.0.2",
+    externalIp: "203.0.113.5",
+    createdAt: "2026-03-01T10:00:00Z",
+  },
+  {
+    name: "batch-1",
+    zone: "europe-west1-b",
+    machineType: "e2-standard-2",
+    status: "TERMINATED",
+    internalIp: "10.0.0.3",
+    createdAt: "2026-03-02T11:00:00Z",
+  },
+];
+
+const mockGcpFunctions: GcpCloudFunction[] = [
+  {
+    name: "hello-http",
+    region: "us-central1",
+    runtime: "nodejs20",
+    status: "ACTIVE",
+    generation: "2nd gen",
+    trigger: "HTTPS",
+    url: "https://hello-http-xxxxx-uc.a.run.app",
+  },
+  {
+    name: "process-upload",
+    region: "europe-west1",
+    runtime: "python311",
+    status: "ACTIVE",
+    generation: "1st gen",
+    trigger: "google.storage.object.finalize",
+  },
+];
+
+const mockGcpGkeClusters: GcpGkeCluster[] = [
+  {
+    name: "prod-gke",
+    location: "us-central1",
+    status: "RUNNING",
+    masterVersion: "1.29.4-gke.1043002",
+    nodeCount: 3,
+    mode: "Autopilot",
+    endpoint: "203.0.113.20",
+  },
+  {
+    name: "dev-gke",
+    location: "europe-west1-b",
+    status: "RUNNING",
+    masterVersion: "1.28.11-gke.1019001",
+    nodeCount: 2,
+    mode: "Standard",
+    endpoint: "203.0.113.21",
   },
 ];
 
@@ -1291,12 +1463,15 @@ function rebuildSessionDerivedState(): void {
   const providerId = mockState.session.isLocked
     ? mockState.session.lockedProviderId
     : mockState.session.currentProviderId;
+  const tabSource =
+    providerId === "azure"
+      ? mockAzureWorkspaceTabs
+      : providerId === "gcp"
+        ? mockGcpWorkspaceTabs
+        : mockWorkspaceTabs;
   mockState.session.workspaceTabs = !mockState.session.isLocked
     ? []
-    : filterMockWorkspaceTabs(
-        providerId === "azure" ? mockAzureWorkspaceTabs : mockWorkspaceTabs,
-        providerId ?? "aws",
-      );
+    : filterMockWorkspaceTabs(tabSource, providerId ?? "aws");
 }
 
 function emitMockEvent<K extends BackendEventName>(
@@ -1343,6 +1518,66 @@ function clearMockWorkspaceSelections(): void {
   mockState.session.s3PrefixFilter = "";
   mockState.session.selectedEc2Region = undefined;
   mockState.session.selectedEc2InstanceId = undefined;
+  mockState.session.selectedGcpStorageBucket = undefined;
+  mockState.session.gcpStoragePrefixFilter = undefined;
+  mockState.session.selectedGcpFunction = undefined;
+  mockState.session.selectedGcpComputeInstance = undefined;
+}
+
+function mockWriteModeCapability(
+  actionId: string,
+  label: string,
+  writesEnabled: boolean,
+): ActionCapability {
+  return {
+    actionId,
+    label,
+    enabled: writesEnabled,
+    reason: writesEnabled
+      ? undefined
+      : "Turn on write mode from the top bar to run mutating actions.",
+  };
+}
+
+function buildMockActionCapabilities(
+  providerId: string | undefined,
+  writesEnabled: boolean,
+): Record<string, ActionCapability[]> {
+  if (providerId === "gcp") {
+    return {
+      storage: [
+        mockWriteModeCapability("uploadObject", "Upload object", writesEnabled),
+        mockWriteModeCapability("deleteObject", "Delete object", writesEnabled),
+      ],
+      compute: [
+        mockWriteModeCapability("startInstance", "Start instance", writesEnabled),
+        mockWriteModeCapability("stopInstance", "Stop instance", writesEnabled),
+      ],
+      functions: [mockWriteModeCapability("invoke", "Invoke function", writesEnabled)],
+    };
+  }
+  if (providerId === "aws") {
+    return {
+      rds: [
+        mockWriteModeCapability("startInstance", "Start instance", writesEnabled),
+        mockWriteModeCapability("stopInstance", "Stop instance", writesEnabled),
+        mockWriteModeCapability("rebootInstance", "Reboot instance", writesEnabled),
+      ],
+      ecs: [
+        mockWriteModeCapability("forceNewDeployment", "Force new deployment", writesEnabled),
+      ],
+      dynamodb: [
+        mockWriteModeCapability("putItem", "Put item", writesEnabled),
+        mockWriteModeCapability("deleteItem", "Delete item", writesEnabled),
+      ],
+    };
+  }
+  if (providerId === "azure") {
+    return {
+      queues: [mockWriteModeCapability("purge", "Purge queue", writesEnabled)],
+    };
+  }
+  return {};
 }
 
 const sessionLockedForSelectMessage =
@@ -1396,6 +1631,50 @@ const mockServiceCatalogue: ServiceCatalogEntry[] = [
     detail: "Browse storage accounts and blob containers.",
     category: "service",
     inventoryScope: "storage",
+    enabled: true,
+  },
+  {
+    providerId: "gcp",
+    serviceId: "gcp-storage",
+    label: "Cloud Storage",
+    summary: "GCS buckets and object browser via gcloud.",
+    detail: "Lists Cloud Storage buckets and browses objects under a selected prefix.",
+    category: "service",
+    domain: "storage",
+    inventoryScope: "gcs",
+    enabled: true,
+  },
+  {
+    providerId: "gcp",
+    serviceId: "gcp-compute",
+    label: "Compute Engine",
+    summary: "VM instance inventory via gcloud.",
+    detail: "Lists Compute Engine instances for the open gcloud configuration.",
+    category: "service",
+    domain: "compute",
+    inventoryScope: "gce",
+    enabled: true,
+  },
+  {
+    providerId: "gcp",
+    serviceId: "gcp-functions",
+    label: "Cloud Functions",
+    summary: "Function inventory via gcloud (1st and 2nd gen).",
+    detail: "Lists Cloud Functions for the open gcloud configuration.",
+    category: "service",
+    domain: "compute",
+    inventoryScope: "gcf",
+    enabled: true,
+  },
+  {
+    providerId: "gcp",
+    serviceId: "gcp-gke",
+    label: "GKE",
+    summary: "Kubernetes cluster inventory via gcloud.",
+    detail: "Lists Google Kubernetes Engine clusters.",
+    category: "service",
+    domain: "compute",
+    inventoryScope: "gke",
     enabled: true,
   },
 ];
@@ -1460,6 +1739,20 @@ function countMockCatalogueResources(
         return workspace.azureVirtualMachines.length;
       case "azure-storage":
         return workspace.azureStorageAccounts.length;
+      default:
+        return 0;
+    }
+  }
+  if (providerId === "gcp") {
+    switch (serviceId) {
+      case "gcp-storage":
+        return (workspace.gcpStorageBuckets ?? []).length;
+      case "gcp-compute":
+        return (workspace.gcpComputeInstances ?? []).length;
+      case "gcp-functions":
+        return (workspace.gcpFunctions ?? []).length;
+      case "gcp-gke":
+        return (workspace.gcpGkeClusters ?? []).length;
       default:
         return 0;
     }
@@ -1748,6 +2041,51 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       isGcpWorkspace &&
       mockState.session.isLocked &&
       Boolean(mockState.session.gcpWriteModeEnabled),
+    actionCapabilities: buildMockActionCapabilities(
+      provider?.providerId,
+      isGcpWorkspace
+        ? Boolean(
+            isGcpWorkspace &&
+              mockState.session.isLocked &&
+              Boolean(mockState.session.gcpWriteModeEnabled),
+          )
+        : isAzureWorkspace
+          ? Boolean(
+              mockState.session.isLocked && Boolean(mockState.session.azureWriteModeEnabled),
+            )
+          : Boolean(mockState.session.isLocked && Boolean(mockState.session.awsWriteModeEnabled)),
+    ),
+    selectedGcpStorageBucket: isGcpWorkspace
+      ? mockState.session.selectedGcpStorageBucket ?? mockGcpStorageBuckets[0]?.name
+      : undefined,
+    gcpStoragePrefixFilter: isGcpWorkspace ? mockState.session.gcpStoragePrefixFilter ?? "" : undefined,
+    gcpStorageStatusMessage: isGcpWorkspace
+      ? mockState.session.selectedGcpStorageBucket || mockGcpStorageBuckets[0]
+        ? `Loaded ${mockGcpStorageObjects.length} object(s) from ${
+            mockState.session.selectedGcpStorageBucket ?? mockGcpStorageBuckets[0]?.name
+          }.`
+        : `Loaded ${mockGcpStorageBuckets.length} Cloud Storage bucket(s) via gcloud.`
+      : undefined,
+    gcpStorageBuckets: isGcpWorkspace ? mockGcpStorageBuckets : [],
+    gcpStorageObjects: isGcpWorkspace ? mockGcpStorageObjects : [],
+    gcpStorageObjectsNextToken: isGcpWorkspace ? mockGcpStorageObjectsNextToken : undefined,
+    gcpStorageObjectsHasMore: isGcpWorkspace ? mockGcpStorageObjectsHasMore : undefined,
+    selectedGcpComputeInstance: isGcpWorkspace
+      ? mockState.session.selectedGcpComputeInstance ?? mockGcpComputeInstances[0]?.name
+      : undefined,
+    gcpComputeStatusMessage: isGcpWorkspace
+      ? `Loaded ${mockGcpComputeInstances.length} Compute Engine instance(s) via gcloud.`
+      : undefined,
+    gcpComputeInstances: isGcpWorkspace ? mockGcpComputeInstances : [],
+    selectedGcpFunction: isGcpWorkspace ? mockState.session.selectedGcpFunction : undefined,
+    gcpFunctionsStatusMessage: isGcpWorkspace
+      ? `Loaded ${mockGcpFunctions.length} Cloud Function(s) via gcloud.`
+      : undefined,
+    gcpFunctions: isGcpWorkspace ? mockGcpFunctions : [],
+    gcpGkeStatusMessage: isGcpWorkspace
+      ? `Loaded ${mockGcpGkeClusters.length} GKE cluster(s) via gcloud.`
+      : undefined,
+    gcpGkeClusters: isGcpWorkspace ? mockGcpGkeClusters : [],
     selectedAzureResourceGroup,
     selectedAzureVmId,
     azureStatusMessage: isAzureWorkspace
@@ -2963,6 +3301,39 @@ export function handleMockRequest<T>(
     case "aws.dynamodb.deleteItem":
       appendLog("success", String(params.tableName ?? "table") + " updated.");
       return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.dynamodb.loadMoreItems": {
+      const tableName =
+        String(params.tableName ?? "") ||
+        mockState.session.selectedDynamodbTableName ||
+        mockWorkspaceDynamoDBTables[0]?.tableName ||
+        "";
+      const table = mockWorkspaceDynamoDBTables.find((entry) => entry.tableName === tableName);
+      if (!table) {
+        return Promise.reject(new Error(`DynamoDB table ${tableName} was not found in the mock inventory.`));
+      }
+      // Return only the next page on the selected table; UI merge appends client-side.
+      const nextItems = [
+        '{"orderId":"ord-003","customerId":"cust-9","createdAt":"2026-06-14T12:00:00Z","total":8.25}',
+      ];
+      table.sampleItemsNextToken = undefined;
+      table.sampleItemsHasMore = false;
+      mockState.session.selectedDynamodbTableName = tableName;
+      const workspace = buildMockWorkspace();
+      workspace.selectedDynamodbTableName = tableName;
+      workspace.dynamodbTables = workspace.dynamodbTables.map((entry) =>
+        entry.tableName === tableName
+          ? {
+              ...entry,
+              sampleItems: nextItems,
+              sampleItemsNextToken: undefined,
+              sampleItemsHasMore: false,
+            }
+          : entry,
+      );
+      workspace.dynamodbStatusMessage = `Loaded ${nextItems.length} more sample item(s) from ${tableName}. End of scan.`;
+      appendLog("info", `Loaded more sample items for DynamoDB table ${tableName}.`);
+      return Promise.resolve(workspace as T);
+    }
     case "aws.rds.selectRegion":
       mockState.session.selectedRdsRegion = String(params.region ?? "");
       mockState.session.selectedRdsInstanceId = undefined;
@@ -2973,12 +3344,20 @@ export function handleMockRequest<T>(
       appendLog("info", `Selected RDS instance ${params.instanceId}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     case "aws.rds.startInstance":
-    case "aws.rds.stopInstance": {
+    case "aws.rds.stopInstance":
+    case "aws.rds.rebootInstance": {
       const instanceId =
         String(params.instanceId ?? "") ||
         mockState.session.selectedRdsInstanceId ||
         "cloudsprocket-db";
-      const action = method.endsWith("startInstance") ? "start" : "stop";
+      const action = method.endsWith("startInstance")
+        ? "start"
+        : method.endsWith("stopInstance")
+          ? "stop"
+          : "reboot";
+      if (action === "reboot" && !mockState.session.awsWriteModeEnabled) {
+        return Promise.reject(new Error("RDS reboot requires write mode to be enabled"));
+      }
       const job: JobStatus = {
         jobId: `job-${Date.now()}`,
         label: "RDS Action",
@@ -3773,6 +4152,135 @@ export function handleMockRequest<T>(
       appendLog("success", `Purged all messages from queue ${queueName} in ${accountName}.`);
       return Promise.resolve(buildMockWorkspace() as T);
     }
+    case "gcp.storage.selectBucket": {
+      mockState.session.selectedGcpStorageBucket = String(params.bucketName ?? "");
+      mockState.session.gcpStoragePrefixFilter = "";
+      mockGcpStorageObjectsHasMore = true;
+      mockGcpStorageObjectsNextToken = "mock-gcs-page-2";
+      appendLog("info", `Selected Cloud Storage bucket ${params.bucketName}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "gcp.storage.setPrefixFilter": {
+      mockState.session.gcpStoragePrefixFilter = String(params.prefix ?? "");
+      mockGcpStorageObjectsHasMore = true;
+      mockGcpStorageObjectsNextToken = "mock-gcs-page-2";
+      appendLog("info", `Set Cloud Storage prefix filter to ${params.prefix ?? ""}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "gcp.storage.loadMoreObjects": {
+      if (!mockGcpStorageObjectsHasMore) {
+        return Promise.resolve(buildMockWorkspace() as T);
+      }
+      mockGcpStorageObjects = [
+        ...mockGcpStorageObjects,
+        {
+          key: "archive/old.log",
+          size: "2 KB",
+          updated: "2026-07-01T00:00:00Z",
+          contentType: "text/plain",
+        },
+      ];
+      mockGcpStorageObjectsHasMore = false;
+      mockGcpStorageObjectsNextToken = undefined;
+      appendLog("info", "Loaded more Cloud Storage objects.");
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "gcp.storage.uploadObject": {
+      if (!mockState.session.gcpWriteModeEnabled) {
+        return Promise.reject(
+          new Error("Turn on write mode from the top bar to run mutating actions."),
+        );
+      }
+      const objectKey = String(params.objectKey ?? "upload.bin");
+      mockGcpStorageObjects = [
+        ...mockGcpStorageObjects.filter((entry) => entry.key !== objectKey),
+        {
+          key: objectKey,
+          size: "1 KB",
+          updated: new Date().toISOString(),
+          contentType: "application/octet-stream",
+        },
+      ];
+      appendLog("success", `Uploaded Cloud Storage object ${objectKey}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "gcp.storage.deleteObject": {
+      if (!mockState.session.gcpWriteModeEnabled) {
+        return Promise.reject(
+          new Error("Turn on write mode from the top bar to run mutating actions."),
+        );
+      }
+      const objectKey = String(params.objectKey ?? "");
+      mockGcpStorageObjects = mockGcpStorageObjects.filter((entry) => entry.key !== objectKey);
+      appendLog("success", `Deleted Cloud Storage object ${objectKey}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "gcp.storage.signUrl": {
+      const bucketName =
+        String(params.bucketName ?? "") ||
+        mockState.session.selectedGcpStorageBucket ||
+        mockGcpStorageBuckets[0]?.name ||
+        "platform-artifacts";
+      const objectKey = String(params.objectKey ?? "docs/readme.txt");
+      const durationSeconds = Number(params.durationSeconds ?? 3600) || 3600;
+      const expiresAt = new Date(Date.now() + durationSeconds * 1000).toISOString();
+      appendLog("success", `Signed Cloud Storage URL for ${bucketName}/${objectKey}.`);
+      return Promise.resolve({
+        result: {
+          bucketName,
+          objectKey,
+          url: `https://storage.googleapis.com/${bucketName}/${encodeURIComponent(objectKey)}?X-Goog-Signature=mock&X-Goog-Expires=${durationSeconds}`,
+          durationSeconds,
+          expiresAt,
+        },
+      } as T);
+    }
+    case "gcp.compute.startInstance":
+    case "gcp.compute.stopInstance": {
+      if (!mockState.session.gcpWriteModeEnabled) {
+        return Promise.reject(
+          new Error("Turn on write mode from the top bar to run mutating actions."),
+        );
+      }
+      const name = String(params.name ?? "");
+      const zone = String(params.zone ?? "");
+      const instance = mockGcpComputeInstances.find((entry) => entry.name === name);
+      if (instance) {
+        instance.status = method.endsWith("startInstance") ? "RUNNING" : "TERMINATED";
+      }
+      mockState.session.selectedGcpComputeInstance = name;
+      appendLog(
+        "success",
+        method.endsWith("startInstance")
+          ? `Started Compute Engine instance ${name} in ${zone}.`
+          : `Stopped Compute Engine instance ${name} in ${zone}.`,
+      );
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "gcp.functions.selectFunction": {
+      mockState.session.selectedGcpFunction = String(params.functionKey ?? "");
+      appendLog("info", `Selected Cloud Function ${params.functionKey}.`);
+      return Promise.resolve(buildMockWorkspace() as T);
+    }
+    case "gcp.functions.call": {
+      if (!mockState.session.gcpWriteModeEnabled) {
+        return Promise.reject(
+          new Error("Turn on write mode from the top bar to run mutating actions."),
+        );
+      }
+      const name = String(params.name ?? "hello-http");
+      const region = String(params.region ?? "us-central1");
+      const generation = String(params.generation ?? "2nd gen");
+      appendLog("success", `Invoked Cloud Function ${name} in ${region}.`);
+      return Promise.resolve({
+        result: {
+          name,
+          region,
+          generation,
+          body: JSON.stringify({ ok: true, echo: params.data ?? null }),
+        },
+      } as T);
+    }
     case "azure.webApps.create": {
       if (!mockState.session.azureWriteModeEnabled) {
         return Promise.reject(new Error("web app create requires write mode to be enabled for this Azure workspace"));
@@ -4014,6 +4522,7 @@ export function handleMockRequest<T>(
       mockState.session.isLocked = false;
       mockState.session.awsWriteModeEnabled = false;
       mockState.session.azureWriteModeEnabled = false;
+      mockState.session.gcpWriteModeEnabled = false;
       mockState.session.lockedProviderId = undefined;
       mockState.session.lockedProfileId = undefined;
       mockState.session.lockedAuthMethod = undefined;
@@ -4023,6 +4532,10 @@ export function handleMockRequest<T>(
       mockState.session.selectedAzureBlobContainer = undefined;
       mockState.session.selectedAzureBlobName = undefined;
       mockState.session.azureBlobPrefixFilter = undefined;
+      mockState.session.selectedGcpStorageBucket = undefined;
+      mockState.session.gcpStoragePrefixFilter = undefined;
+      mockState.session.selectedGcpFunction = undefined;
+      mockState.session.selectedGcpComputeInstance = undefined;
       rebuildSessionDerivedState();
       emitStateChanged();
       appendLog("info", "Unlocked the active cloud session.");

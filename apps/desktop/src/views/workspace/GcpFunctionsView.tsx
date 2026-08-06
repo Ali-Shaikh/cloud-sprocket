@@ -11,6 +11,11 @@ import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
+import {
+  GCP_CREATE_HINTS,
+  gcpFilterEmpty,
+  gcpProjectEmpty,
+} from "@/lib/gcp-empty-copy";
 import { cn } from "@/lib/utils";
 import type {
   GcpCloudFunction,
@@ -214,16 +219,9 @@ export default function GcpFunctionsView({
           emptyState={
             <EmptyState
               icon={<Zap />}
-              title={
-                functions.length === 0
-                  ? "No functions in this project"
-                  : "No functions match the filter"
-              }
-              description={
-                functions.length === 0
-                  ? "Deploy a Cloud Function with gcloud or the console, then refresh."
-                  : "Clear the filter to see the full inventory."
-              }
+              {...(functions.length === 0
+                ? gcpProjectEmpty("functions", GCP_CREATE_HINTS.functions)
+                : gcpFilterEmpty("functions"))}
             />
           }
         />
