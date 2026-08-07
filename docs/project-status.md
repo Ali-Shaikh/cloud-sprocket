@@ -32,7 +32,7 @@ CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tau
 - Multi-platform CI and release builds (Windows, macOS, Linux) with SBOM + provenance on tags
 - Vendor-neutral chaos labs with Docker pause/unpause, per-step capability
   reasons, automatic cleanup, and daemon restart recovery
-- **F-029** application domain extraction: `runtime`, `deployment`, `sessionport`, `app/aws`, `app/azure`, `app/labs` (Phases 0–6b; check registry in labs domain)
+- **F-029** application domain extraction: `runtime`, `deployment`, `sessionport`, `app/aws`, `app/azure`, `app/labs` (Phases 0–6c; check registry + invoke-write dispatch in labs domain)
 
 ### AWS (live)
 
@@ -91,9 +91,7 @@ Write mutations gated by per-session `gcpWriteModeEnabled`. Profile discovery an
 
 | Item | Notes |
 |------|--------|
-| F-029 Phase 5e Azure Bastion | List/connect still thin façade; extract into `app/azure` with launcher ports |
-| F-029 Labs write-executor | Invoke-write ops still on façade after Phase 6b registry move |
-| F-028 further prop-bag slices | Action-status strings and runtime emulator state still on `WorkspaceTabRouterProps` |
+| F-028 further prop-bag slices | AWS/Azure action-status strings still on `WorkspaceTabRouterProps` (runtime emulators done in slice 5) |
 | Azure Bastion polish | UX only; cloud CLI dependency remains intentional |
 
 ---

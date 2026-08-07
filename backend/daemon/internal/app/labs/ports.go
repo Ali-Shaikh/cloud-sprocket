@@ -33,22 +33,6 @@ type Recipes interface {
 // Matches internal/labs.WriteInvoker so the engine can call it directly.
 type WriteInvoker = labs.WriteInvoker
 
-// WriteExecutor is the façade-owned gate + AWS write dispatch for invoke-write
-// lab actions. Kept out of this package so AWS inventory adapters stay on the
-// façade until a later slice.
-type WriteExecutor interface {
-	InvokeWrite(
-		ctx context.Context,
-		snapshot discovery.Snapshot,
-		session models.SessionSnapshot,
-		deployment *deploy.Deployment,
-		profile models.ProfileSummary,
-		region string,
-		op string,
-		params map[string]string,
-	) (any, error)
-}
-
 // Runner is the lab session lifecycle engine port (internal/labs.Runner).
 type Runner interface {
 	Start(ctx context.Context, lab *recipes.LabSpec, deployment *deploy.Deployment) (labs.LabSession, error)

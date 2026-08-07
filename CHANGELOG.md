@@ -32,6 +32,12 @@ Installers for every release are published on the
 
 ### Changed
 
+- Daemon lab invoke-write dispatch moves into `internal/app/labs` with narrow
+  AWS write ports (SQS, DynamoDB, SNS, Lambda, Logs, S3), write-mode gating,
+  and action timeout (architecture F-029 Phase 6c). The façade supplies
+  inventory adapters and timeout only; closed op set unchanged
+  (`sqs.send`, `dynamodb.put`, `sns.publish`, `lambda.invoke`, `logs.put`,
+  `s3.upload`).
 - Desktop F-028 slice 5: LocalStack and floci-az emulator state and callbacks
   move from the workspace tab router prop bag into `RuntimeEmulatorProvider`,
   so RuntimeView, overview quick-start, and onboarding read them from context.

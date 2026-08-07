@@ -166,10 +166,7 @@ func (s *Service) HandleRunAction(ctx context.Context, params json.RawMessage, n
 		profile,
 		region,
 		func(actionCtx context.Context, op string, actionParams map[string]string) (any, error) {
-			if s.writes == nil {
-				return nil, errors.New("write actions are not available")
-			}
-			return s.writes.InvokeWrite(actionCtx, snapshot, session, deployment, profile, region, op, actionParams)
+			return s.InvokeWrite(actionCtx, snapshot, session, deployment, profile, region, op, actionParams)
 		},
 	)
 	if err != nil {

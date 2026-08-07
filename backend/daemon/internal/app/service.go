@@ -74,9 +74,9 @@ type Service struct {
 	// azureDomain owns extracted Azure domain RPCs (inventory first; F-029 Phase 5).
 	// Named azureDomain so it does not collide with the azure AzureInventory field.
 	azureDomain *appazure.Service
-	// labsDomain owns labs.* RPC handlers, check registry assembly, and startup
-	// fault recovery (F-029 Phase 6). Named labsDomain so it does not collide
-	// with the labs package import.
+	// labsDomain owns labs.* RPC handlers, check registry assembly, invoke-write
+	// dispatch, and startup fault recovery (F-029 Phase 6). Named labsDomain so
+	// it does not collide with the labs package import.
 	labsDomain            *applabs.Service
 	cipher                *secrets.Cipher
 	initialisationErr     error
@@ -257,8 +257,15 @@ func NewFromDeps(deps Deps) *Service {
 		Deployments: labsDeploymentsAdapter{s: service},
 		Recipes:     labsRecipesAdapter{s: service},
 		// Engine built here with app/labs registry (façade only supplies adapters).
-		Runner: service.newLabRunner(),
-		Writes: labsWriteExecutorAdapter{s: service},
+		Runner:        service.newLabRunner(),
+		ActionTimeout: service.azureInventoryTimeout,
+		// Invoke-write ports: inventory method values satisfy narrow write ports.
+		SQS:      service.sqs,
+		DynamoDB: service.dynamodb,
+		SNS:      service.sns,
+		Lambda:   service.lambda,
+		Logs:     service.logs,
+		S3:       service.s3,
 	})
 	service.mu.Lock()
 	if err := service.loadPreferencesLocked(); err != nil {

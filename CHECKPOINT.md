@@ -4,7 +4,7 @@
 `refactor/azure-bastion-f029` (from origin/dev)
 
 ## Goal
-F-029 Phase 5e: extract Azure Bastion list/connect into `internal/app/azure`.
+F-029 Phase 6c: extract labs invoke-write dispatch into `internal/app/labs`.
 
 ## Status
 - Domain: `HandleBastionList`, `HandleBastionConnect`, pure helpers
