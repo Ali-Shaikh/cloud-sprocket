@@ -4,7 +4,7 @@
 `refactor/azure-bastion-f029` (from origin/dev)
 
 ## Goal
-F-029 Phase 6c: extract labs invoke-write dispatch into `internal/app/labs`.
+F-028 slice 6: AWS/Azure action-status via context (off router prop bag).
 
 ## Status
 - Domain: `HandleBastionList`, `HandleBastionConnect`, pure helpers

@@ -31,6 +31,7 @@ import {
   SQSView,
   StorageView,
 } from "@/views/workspace/lazy-views";
+import { useAwsActionStatusContext } from "./aws-action-status-context";
 import { useAwsActionsContext } from "./aws-actions-context";
 import { useWorkspaceNavigationContext } from "./workspace-navigation-context";
 import { useWorkspaceSessionContext } from "./workspace-session-context";
@@ -74,11 +75,11 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     setWorkspace,
   } = useWorkspaceSessionContext();
   const {
-    loading,
-    openingProfileId,
-    logs,
     showSensitiveValues,
-    setShowSensitiveValues,
+    mutateWorkspaceSelection,
+  } = props;
+
+  const {
     s3UploadStatus,
     setS3UploadStatus,
     s3SignedUrlStatus,
@@ -111,26 +112,7 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
     secretsManagerActionStatus,
     logsActionStatus,
     iamActionStatus,
-    azureActionStatus,
-    setAzureActionStatus,
-    azureStorageActionStatus,
-    setAzureStorageActionStatus,
-    azureAppServiceActionStatus,
-    setAzureAppServiceActionStatus,
-    azureFrontDoorActionStatus,
-    setAzureFrontDoorActionStatus,
-    azureServiceInventoryLoading,
-    azureLogWorkspaceSelectionLoading,
-    azureWafConfigLoading,
-    azureFrontDoorTopologyLoading,
-    mutateWorkspaceSelection,
-    mutateSession,
-    refreshDiscovery,
-    listLogAnalyticsHistory,
-    listLogAnalyticsSaved,
-    openWorkspace,
-    chooseAuthMethod,
-  } = props;
+  } = useAwsActionStatusContext();
 
   const {
     refreshEC2Inventory,

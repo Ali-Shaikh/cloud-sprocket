@@ -6,17 +6,11 @@ import type { Dispatch, SetStateAction } from "react";
 import type { NavigateToResourceParams } from "@/lib/navigate-to-resource";
 import type {
   ActivityLogEntry,
-  AwsLambdaInvokeResult,
-  AwsS3PresignResult,
-  AwsSqsPeekResult,
   AzureLogAnalyticsHistoryEntry,
   AzureLogAnalyticsSavedQuery,
-  JobLifecycle,
   HiddenResourceHit,
   PreferencesSnapshot,
   ServicePreferences,
-  UrlInspection,
-  UrlValidationResult,
   WorkspaceSnapshot,
 } from "@/types/backend";
 
@@ -36,51 +30,6 @@ export type WorkspaceTabRouterProps = {
   logs: ActivityLogEntry[];
   showSensitiveValues: boolean;
   setShowSensitiveValues: Dispatch<SetStateAction<boolean>>;
-  s3UploadStatus: string;
-  setS3UploadStatus: Dispatch<SetStateAction<string>>;
-  s3SignedUrlStatus: string;
-  setS3SignedUrlStatus: Dispatch<SetStateAction<string>>;
-  s3SignedUrlResult?: AwsS3PresignResult;
-  s3UrlInspection?: UrlInspection;
-  setS3UrlInspection: Dispatch<SetStateAction<UrlInspection | undefined>>;
-  s3UrlValidation?: UrlValidationResult;
-  ec2ActionStatus: string;
-  ec2ActionInFlight: boolean;
-  ec2ActionHistory: Array<{
-    jobId: string;
-    status: JobLifecycle;
-    message: string;
-    completedAt?: string;
-  }>;
-  lambdaActionStatus: string;
-  lambdaInvokeResult: AwsLambdaInvokeResult | null;
-  lambdaInvokeInFlight: boolean;
-  lambdaCreateInFlight: boolean;
-  dynamodbActionStatus: string;
-  sqsActionStatus: string;
-  sqsPeekResult: AwsSqsPeekResult | null;
-  sqsPeekInFlight: boolean;
-  snsActionStatus: string;
-  rdsActionStatus: string;
-  ecsActionStatus: string;
-  eksActionStatus: string;
-  cloudFormationActionStatus: string;
-  eventBridgeActionStatus: string;
-  route53ActionStatus: string;
-  elbActionStatus: string;
-  kmsActionStatus: string;
-  apiGatewayActionStatus: string;
-  secretsManagerActionStatus: string;
-  logsActionStatus: string;
-  iamActionStatus: string;
-  azureActionStatus: string;
-  setAzureActionStatus: Dispatch<SetStateAction<string>>;
-  azureStorageActionStatus: string;
-  setAzureStorageActionStatus: Dispatch<SetStateAction<string>>;
-  azureAppServiceActionStatus: string;
-  setAzureAppServiceActionStatus: Dispatch<SetStateAction<string>>;
-  azureFrontDoorActionStatus: string;
-  setAzureFrontDoorActionStatus: Dispatch<SetStateAction<string>>;
   azureServiceInventoryLoading: boolean;
   azureLogWorkspaceSelectionLoading: boolean;
   azureWafConfigLoading: boolean;

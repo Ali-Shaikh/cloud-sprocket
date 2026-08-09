@@ -28,7 +28,15 @@ import { useProviderSwitchFlow } from "./hooks/use-provider-switch-flow";
 import { useWriteModeFlow } from "./hooks/use-write-mode-flow";
 import { useWorkspaceLoading } from "./hooks/use-workspace-loading";
 import { useWorkspaceState } from "./hooks/use-workspace-state";
+import {
+  AwsActionStatusProvider,
+  type AwsActionStatusContextValue,
+} from "./components/workspace/aws-action-status-context";
 import { AwsActionsProvider } from "./components/workspace/aws-actions-context";
+import {
+  AzureActionStatusProvider,
+  type AzureActionStatusContextValue,
+} from "./components/workspace/azure-action-status-context";
 import { AzureActionsProvider } from "./components/workspace/azure-actions-context";
 import {
   RuntimeEmulatorProvider,
@@ -1339,46 +1347,6 @@ export default function App() {
     logs,
     showSensitiveValues,
     setShowSensitiveValues,
-    s3UploadStatus,
-    setS3UploadStatus,
-    s3SignedUrlStatus,
-    setS3SignedUrlStatus,
-    s3SignedUrlResult,
-    s3UrlInspection,
-    setS3UrlInspection,
-    s3UrlValidation,
-    ec2ActionStatus,
-    ec2ActionInFlight,
-    ec2ActionHistory,
-    lambdaActionStatus,
-    lambdaInvokeResult,
-    lambdaInvokeInFlight,
-    lambdaCreateInFlight,
-    dynamodbActionStatus,
-    sqsActionStatus,
-    sqsPeekResult,
-    sqsPeekInFlight,
-    snsActionStatus,
-    rdsActionStatus,
-    ecsActionStatus,
-    eksActionStatus,
-    cloudFormationActionStatus,
-    eventBridgeActionStatus,
-    route53ActionStatus,
-    elbActionStatus,
-    kmsActionStatus,
-    apiGatewayActionStatus,
-    secretsManagerActionStatus,
-    logsActionStatus,
-    iamActionStatus,
-    azureActionStatus,
-    setAzureActionStatus,
-    azureStorageActionStatus,
-    setAzureStorageActionStatus,
-    azureAppServiceActionStatus,
-    setAzureAppServiceActionStatus,
-    azureFrontDoorActionStatus,
-    setAzureFrontDoorActionStatus,
     azureServiceInventoryLoading,
     azureLogWorkspaceSelectionLoading,
     azureWafConfigLoading,
@@ -1398,6 +1366,93 @@ export default function App() {
     hiddenResourceEnablingServiceId,
     onEnableHiddenService: enableHiddenService,
   };
+
+  const awsActionStatus = useMemo<AwsActionStatusContextValue>(
+    () => ({
+      s3UploadStatus,
+      setS3UploadStatus,
+      s3SignedUrlStatus,
+      setS3SignedUrlStatus,
+      s3SignedUrlResult,
+      s3UrlInspection,
+      setS3UrlInspection,
+      s3UrlValidation,
+      ec2ActionStatus,
+      ec2ActionInFlight,
+      ec2ActionHistory,
+      lambdaActionStatus,
+      lambdaInvokeResult,
+      lambdaInvokeInFlight,
+      lambdaCreateInFlight,
+      dynamodbActionStatus,
+      sqsActionStatus,
+      sqsPeekResult,
+      sqsPeekInFlight,
+      snsActionStatus,
+      rdsActionStatus,
+      ecsActionStatus,
+      eksActionStatus,
+      cloudFormationActionStatus,
+      eventBridgeActionStatus,
+      route53ActionStatus,
+      elbActionStatus,
+      kmsActionStatus,
+      apiGatewayActionStatus,
+      secretsManagerActionStatus,
+      logsActionStatus,
+      iamActionStatus,
+    }),
+    [
+      apiGatewayActionStatus,
+      cloudFormationActionStatus,
+      dynamodbActionStatus,
+      ec2ActionHistory,
+      ec2ActionInFlight,
+      ec2ActionStatus,
+      ecsActionStatus,
+      eksActionStatus,
+      elbActionStatus,
+      eventBridgeActionStatus,
+      iamActionStatus,
+      kmsActionStatus,
+      lambdaActionStatus,
+      lambdaCreateInFlight,
+      lambdaInvokeInFlight,
+      lambdaInvokeResult,
+      logsActionStatus,
+      rdsActionStatus,
+      route53ActionStatus,
+      s3SignedUrlResult,
+      s3SignedUrlStatus,
+      s3UploadStatus,
+      s3UrlInspection,
+      s3UrlValidation,
+      secretsManagerActionStatus,
+      snsActionStatus,
+      sqsActionStatus,
+      sqsPeekInFlight,
+      sqsPeekResult,
+    ],
+  );
+
+  const azureActionStatusValue = useMemo<AzureActionStatusContextValue>(
+    () => ({
+      azureActionStatus,
+      setAzureActionStatus,
+      azureStorageActionStatus,
+      setAzureStorageActionStatus,
+      azureAppServiceActionStatus,
+      setAzureAppServiceActionStatus,
+      azureFrontDoorActionStatus,
+      setAzureFrontDoorActionStatus,
+    }),
+    [
+      azureActionStatus,
+      azureAppServiceActionStatus,
+      azureFrontDoorActionStatus,
+      azureStorageActionStatus,
+    ],
+  );
 
   const runtimeEmulator = useMemo<RuntimeEmulatorContextValue>(
     () => ({
@@ -1456,9 +1511,13 @@ export default function App() {
       <WorkspaceNavigationProvider value={workspaceNavigation}>
         <AwsActionsProvider value={awsActions}>
           <AzureActionsProvider value={azureActions}>
-            <RuntimeEmulatorProvider value={runtimeEmulator}>
-              <WorkspaceTabRouter {...workspaceTabRouterProps} />
-            </RuntimeEmulatorProvider>
+            <AwsActionStatusProvider value={awsActionStatus}>
+              <AzureActionStatusProvider value={azureActionStatusValue}>
+                <RuntimeEmulatorProvider value={runtimeEmulator}>
+                  <WorkspaceTabRouter {...workspaceTabRouterProps} />
+                </RuntimeEmulatorProvider>
+              </AzureActionStatusProvider>
+            </AwsActionStatusProvider>
           </AzureActionsProvider>
         </AwsActionsProvider>
       </WorkspaceNavigationProvider>
