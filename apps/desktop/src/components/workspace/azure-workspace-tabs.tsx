@@ -92,10 +92,6 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
   } = useWorkspaceSessionContext();
   const {
     showSensitiveValues,
-    azureServiceInventoryLoading,
-    azureLogWorkspaceSelectionLoading,
-    azureWafConfigLoading,
-    azureFrontDoorTopologyLoading,
     mutateWorkspaceSelection,
     listLogAnalyticsHistory,
     listLogAnalyticsSaved,
@@ -110,6 +106,10 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
     setAzureAppServiceActionStatus,
     azureFrontDoorActionStatus,
     setAzureFrontDoorActionStatus,
+    azureServiceInventoryLoading,
+    azureLogWorkspaceSelectionLoading,
+    azureWafConfigLoading,
+    azureFrontDoorTopologyLoading,
   } = useAzureActionStatusContext();
 
   const {

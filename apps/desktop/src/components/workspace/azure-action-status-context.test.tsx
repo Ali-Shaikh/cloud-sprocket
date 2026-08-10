@@ -21,6 +21,10 @@ function createAzureActionStatus(): AzureActionStatusContextValue {
     setAzureAppServiceActionStatus: vi.fn(),
     azureFrontDoorActionStatus: "",
     setAzureFrontDoorActionStatus: vi.fn(),
+    azureServiceInventoryLoading: false,
+    azureLogWorkspaceSelectionLoading: false,
+    azureWafConfigLoading: false,
+    azureFrontDoorTopologyLoading: false,
   };
 }
 
@@ -54,7 +58,7 @@ describe("AzureActionStatusProvider", () => {
     );
   });
 
-  it("keeps Azure action-status fields out of the router prop contract", () => {
+  it("keeps Azure action-status and loading fields out of the router prop contract", () => {
     type LegacyAzureStatusProp =
       | "azureActionStatus"
       | "setAzureActionStatus"
@@ -63,7 +67,11 @@ describe("AzureActionStatusProvider", () => {
       | "azureAppServiceActionStatus"
       | "setAzureAppServiceActionStatus"
       | "azureFrontDoorActionStatus"
-      | "setAzureFrontDoorActionStatus";
+      | "setAzureFrontDoorActionStatus"
+      | "azureServiceInventoryLoading"
+      | "azureLogWorkspaceSelectionLoading"
+      | "azureWafConfigLoading"
+      | "azureFrontDoorTopologyLoading";
 
     type ThreadedAzureStatusProp = Extract<keyof WorkspaceTabRouterProps, LegacyAzureStatusProp>;
     expectTypeOf<ThreadedAzureStatusProp>().toEqualTypeOf<never>();

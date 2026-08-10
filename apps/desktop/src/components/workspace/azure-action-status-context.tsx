@@ -9,7 +9,10 @@ import {
   type SetStateAction,
 } from "react";
 
-/** Azure inventory action feedback: status strings and setters used by write handlers. */
+/**
+ * Azure inventory UI feedback: action status strings/setters and panel loading
+ * flags used by Azure workspace tabs (F-028).
+ */
 export type AzureActionStatusContextValue = {
   azureActionStatus: string;
   setAzureActionStatus: Dispatch<SetStateAction<string>>;
@@ -19,6 +22,10 @@ export type AzureActionStatusContextValue = {
   setAzureAppServiceActionStatus: Dispatch<SetStateAction<string>>;
   azureFrontDoorActionStatus: string;
   setAzureFrontDoorActionStatus: Dispatch<SetStateAction<string>>;
+  azureServiceInventoryLoading: boolean;
+  azureLogWorkspaceSelectionLoading: boolean;
+  azureWafConfigLoading: boolean;
+  azureFrontDoorTopologyLoading: boolean;
 };
 
 const AzureActionStatusContext = createContext<AzureActionStatusContextValue | null>(null);

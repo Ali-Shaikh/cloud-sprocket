@@ -4,7 +4,7 @@
 `refactor/azure-bastion-f029` (from origin/dev)
 
 ## Goal
-F-028 slice 6: AWS/Azure action-status via context (off router prop bag).
+F-028 slice 7: Azure inventory loading flags via AzureActionStatusProvider.
 
 ## Status
 - Domain: `HandleBastionList`, `HandleBastionConnect`, pure helpers
