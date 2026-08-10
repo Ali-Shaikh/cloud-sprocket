@@ -32,6 +32,11 @@ Installers for every release are published on the
 
 ### Changed
 
+- Desktop F-028 slice 6: AWS and Azure action-status strings (plus related
+  in-flight flags and results) move from the workspace tab router prop bag into
+  `AwsActionStatusProvider` and `AzureActionStatusProvider`. Inventory tabs read
+  them from context; the façade no longer threads ~40 status fields through
+  `WorkspaceTabRouterProps`.
 - Daemon lab invoke-write dispatch moves into `internal/app/labs` with narrow
   AWS write ports (SQS, DynamoDB, SNS, Lambda, Logs, S3), write-mode gating,
   and action timeout (architecture F-029 Phase 6c). The façade supplies

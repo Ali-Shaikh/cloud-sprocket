@@ -43,6 +43,7 @@ import type {
   AzureWafLogSchemaProfile,
   WorkspaceSnapshot,
 } from "@/types/backend";
+import { useAzureActionStatusContext } from "./azure-action-status-context";
 import { useAzureActionsContext } from "./azure-actions-context";
 import { useWorkspaceNavigationContext } from "./workspace-navigation-context";
 import { useWorkspaceSessionContext } from "./workspace-session-context";
@@ -90,34 +91,17 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
     setSession,
   } = useWorkspaceSessionContext();
   const {
-    loading,
-    openingProfileId,
-    logs,
     showSensitiveValues,
-    setShowSensitiveValues,
-    s3UploadStatus,
-    setS3UploadStatus,
-    s3SignedUrlStatus,
-    setS3SignedUrlStatus,
-    s3SignedUrlResult,
-    s3UrlInspection,
-    setS3UrlInspection,
-    s3UrlValidation,
-    ec2ActionStatus,
-    ec2ActionInFlight,
-    ec2ActionHistory,
-    lambdaActionStatus,
-    lambdaInvokeResult,
-    lambdaInvokeInFlight,
-    lambdaCreateInFlight,
-    dynamodbActionStatus,
-    sqsActionStatus,
-    sqsPeekResult,
-    sqsPeekInFlight,
-    snsActionStatus,
-    rdsActionStatus,
-    logsActionStatus,
-    iamActionStatus,
+    azureServiceInventoryLoading,
+    azureLogWorkspaceSelectionLoading,
+    azureWafConfigLoading,
+    azureFrontDoorTopologyLoading,
+    mutateWorkspaceSelection,
+    listLogAnalyticsHistory,
+    listLogAnalyticsSaved,
+  } = props;
+
+  const {
     azureActionStatus,
     setAzureActionStatus,
     azureStorageActionStatus,
@@ -126,18 +110,7 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
     setAzureAppServiceActionStatus,
     azureFrontDoorActionStatus,
     setAzureFrontDoorActionStatus,
-    azureServiceInventoryLoading,
-    azureLogWorkspaceSelectionLoading,
-    azureWafConfigLoading,
-    azureFrontDoorTopologyLoading,
-    mutateWorkspaceSelection,
-    mutateSession,
-    refreshDiscovery,
-    listLogAnalyticsHistory,
-    listLogAnalyticsSaved,
-    openWorkspace,
-    chooseAuthMethod,
-  } = props;
+  } = useAzureActionStatusContext();
 
   const {
     selectAzureResourceGroup,
