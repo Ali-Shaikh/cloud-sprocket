@@ -84,11 +84,28 @@ export function ResourceTable<TRow>({
       <TableRow
         key={rowKey}
         data-state={active ? "selected" : undefined}
-        className={cn(onRowClick ? "cursor-pointer" : undefined, rowClassName)}
+        aria-selected={onRowClick ? active : undefined}
+        tabIndex={onRowClick ? 0 : undefined}
+        className={cn(
+          onRowClick
+            ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            : undefined,
+          rowClassName,
+        )}
         onClick={
           onRowClick
             ? () => {
                 onRowClick(row);
+              }
+            : undefined
+        }
+        onKeyDown={
+          onRowClick
+            ? (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onRowClick(row);
+                }
               }
             : undefined
         }

@@ -26,6 +26,16 @@ import {
   ResourceInventoryShell,
 } from "@/components/inventory/resource-inspector";
 import { ResourceTable } from "@/components/inventory/resource-table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { DetailFieldList } from "./detail-fields";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
@@ -124,6 +134,9 @@ export default function RDSView({
 }: RDSViewProps) {
   const [filterText, setFilterText] = useState("");
   const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedRdsInstanceId));
+  const [pendingLifecycle, setPendingLifecycle] = useState<"start" | "stop" | "reboot" | null>(
+    null,
+  );
   const lastSelectedInstanceRef = useRef(workspace.selectedRdsInstanceId || "");
   const startCapability = actionCapabilityState(workspace, "rds", "startInstance");
   const stopCapability = actionCapabilityState(workspace, "rds", "stopInstance");
@@ -393,7 +406,7 @@ export default function RDSView({
                 variant="outline"
                 disabled={!startCapability.enabled}
                 title={startCapability.enabled ? undefined : startCapability.reason}
-                onClick={() => onInvokeLifecycleAction("start", selectedInstance.dbInstanceIdentifier)}
+                onClick={() => setPendingLifecycle("start")}
               >
                 Start instance
               </Button>
@@ -401,7 +414,7 @@ export default function RDSView({
                 variant="outline"
                 disabled={!stopCapability.enabled}
                 title={stopCapability.enabled ? undefined : stopCapability.reason}
-                onClick={() => onInvokeLifecycleAction("stop", selectedInstance.dbInstanceIdentifier)}
+                onClick={() => setPendingLifecycle("stop")}
               >
                 Stop instance
               </Button>
@@ -409,9 +422,7 @@ export default function RDSView({
                 variant="outline"
                 disabled={!rebootCapability.enabled}
                 title={rebootCapability.enabled ? undefined : rebootCapability.reason}
-                onClick={() =>
-                  onInvokeLifecycleAction("reboot", selectedInstance.dbInstanceIdentifier)
-                }
+                onClick={() => setPendingLifecycle("reboot")}
               >
                 Reboot instance
               </Button>
@@ -481,6 +492,64 @@ export default function RDSView({
           inspectorAriaLabel="RDS instance details"
         />
       </section>
+
+      <AlertDialog
+        open={pendingLifecycle !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingLifecycle(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingLifecycle === "stop"
+                ? "Stop RDS instance?"
+                : pendingLifecycle === "reboot"
+                  ? "Reboot RDS instance?"
+                  : "Start RDS instance?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingLifecycle === "stop"
+                ? "Stop"
+                : pendingLifecycle === "reboot"
+                  ? "Reboot"
+                  : "Start"}{" "}
+              <span className="font-mono font-medium text-foreground">
+                {selectedInstance?.dbInstanceIdentifier}
+              </span>
+              {workspace.selectedRdsRegion ? (
+                <>
+                  {" "}
+                  in <span className="font-mono">{workspace.selectedRdsRegion}</span>
+                </>
+              ) : null}
+              . Lifecycle actions can take several minutes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingLifecycle && selectedInstance && onInvokeLifecycleAction) {
+                  onInvokeLifecycleAction(
+                    pendingLifecycle,
+                    selectedInstance.dbInstanceIdentifier,
+                  );
+                }
+                setPendingLifecycle(null);
+              }}
+            >
+              {pendingLifecycle === "stop"
+                ? "Stop instance"
+                : pendingLifecycle === "reboot"
+                  ? "Reboot instance"
+                  : "Start instance"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
