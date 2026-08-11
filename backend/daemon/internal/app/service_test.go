@@ -1813,7 +1813,9 @@ func TestResetManagedDirectorySkipsExternalCloudConfigPath(t *testing.T) {
 
 func waitForJobStatus(t *testing.T, events <-chan models.JobStatus, status string) models.JobStatus {
 	t.Helper()
-	timeout := time.After(2 * time.Second)
+	// Windows CI can be slower under load; 2s has timed out flakily on
+	// TestAWSLifecycleJobUpdatedResultRemainsFullWorkspaceSnapshot.
+	timeout := time.After(8 * time.Second)
 	for {
 		select {
 		case job := <-events:
