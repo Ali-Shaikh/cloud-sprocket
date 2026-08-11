@@ -73,6 +73,11 @@ export interface NavItem {
   count?: string | number;
   /** When true, the badge shows a spinner instead of a count (data still loading). */
   countLoading?: boolean;
+  /**
+   * When true, inventory for this service has not been fetched yet (deferred
+   * load). Show a refresh affordance instead of a misleading "0".
+   */
+  countRefreshable?: boolean;
   /** Disabled nav entry with an explicit Soon badge (GCP placeholders). */
   comingSoon?: boolean;
 }
