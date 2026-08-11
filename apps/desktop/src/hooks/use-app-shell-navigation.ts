@@ -318,7 +318,11 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
       }
       return "service";
     };
-    const entries = session.workspaceTabs.map((tab) => {
+    const entries = session.workspaceTabs
+      // Local Runtime lives on the left rail (and command palette), not inside
+      // the AWS/Azure/GCP service sidebar — that double entry felt awkward.
+      .filter((tab) => tab.tabId !== "virtualisation")
+      .map((tab) => {
       let item = navItemForTab(tab, workspace);
       if (countsPending && item.count != null) {
         item = { ...item, count: undefined, countLoading: true };

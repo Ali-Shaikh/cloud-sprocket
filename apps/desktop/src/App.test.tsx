@@ -1263,7 +1263,8 @@ describe("App", () => {
     expect(screen.getByText("cloudsprocket-lambda-role")).toBeInTheDocument();
     const nav = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
     expect(nav.getByText("Overview")).toBeInTheDocument();
-    expect(nav.getByText("Local Runtime")).toBeInTheDocument();
+    // Local Runtime is a left-rail destination, not a cloud workspace nav item.
+    expect(nav.queryByText("Local Runtime")).not.toBeInTheDocument();
     expect(nav.getByText("S3")).toBeInTheDocument();
     expect(nav.getByText("EC2")).toBeInTheDocument();
     expect(nav.getByText("Lambda")).toBeInTheDocument();
@@ -1275,7 +1276,8 @@ describe("App", () => {
     expect(nav.getByText("IAM")).toBeInTheDocument();
     expect(nav.getByRole("button", { name: /S3/ }).querySelector("img")).not.toBeNull();
     expect(nav.getByRole("button", { name: /EC2/ }).querySelector("img")).not.toBeNull();
-    fireEvent.click(nav.getByText("Local Runtime"));
+    const rail = within(document.querySelector('[data-slot="connection-rail"]') as HTMLElement);
+    fireEvent.click(rail.getByRole("button", { name: /Local Runtime/i }));
     expect(await screen.findByText("Docker Runtime")).toBeInTheDocument();
     expect(await screen.findByText("Local Runtimes")).toBeInTheDocument();
     expect(await screen.findByText("Managed Docker Resources")).toBeInTheDocument();
@@ -1287,6 +1289,7 @@ describe("App", () => {
     expect(
       await screen.findByText(/cloudsprocket-workspace\.db/i),
     ).toBeInTheDocument();
+    // Locked session still offers switch-connection while on Local Runtime.
     expect(screen.getByRole("button", { name: "Switch connection" })).toBeInTheDocument();
   });
 
