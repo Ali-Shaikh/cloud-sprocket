@@ -472,7 +472,7 @@ func TestLoadMagentoComposeRecipe(t *testing.T) {
 	}
 	for _, want := range []string{
 		"mariadb:12.3",
-		"redis:8.8-alpine",
+		"redis:8.10-alpine",
 		"shinsenter/magento:${MAGENTO_IMAGE_TAG",
 		"127.0.0.1:8080:80",
 	} {
