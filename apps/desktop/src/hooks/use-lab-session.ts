@@ -45,6 +45,9 @@ export function useLabSession(deploymentId: string, labSpec?: LabSpec) {
     const unsub = subscribeToBackendEvent("lab.changed", (payload) => {
       if (payload.deploymentId === deploymentId) {
         setSession(payload);
+        if (payload.currentStepId) {
+          setActiveStepId(payload.currentStepId);
+        }
       }
     });
     return () => {
@@ -57,7 +60,12 @@ export function useLabSession(deploymentId: string, labSpec?: LabSpec) {
     try {
       const next = await startLabSession(deploymentId);
       setSession(next);
-      setActiveStepId(next.steps.find((step) => step.status === "in_progress")?.stepId ?? next.steps[0]?.stepId ?? null);
+      setActiveStepId(
+        next.currentStepId ??
+          next.steps.find((step) => step.status === "in_progress")?.stepId ??
+          next.steps[0]?.stepId ??
+          null,
+      );
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -72,6 +80,13 @@ export function useLabSession(deploymentId: string, labSpec?: LabSpec) {
       try {
         const next = await verifyLabStep(deploymentId, stepId);
         setSession(next);
+        // Advance the panel to the session's current step after a pass (or stay on
+        // the same step when verification failed and current did not move).
+        setActiveStepId(
+          next.currentStepId ??
+            next.steps.find((step) => step.status === "in_progress")?.stepId ??
+            stepId,
+        );
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));

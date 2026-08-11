@@ -451,6 +451,14 @@ export default function App() {
   const isInitialLoad = useRef(true);
   const isTablet = viewportWidth < 1180;
 
+  // Narrow viewports start collapsed; the top-bar toggle can still expand nav.
+  // Do not OR isTablet into navCollapsed forever (that made the toggle a no-op).
+  useEffect(() => {
+    if (isTablet) {
+      setSidebarCollapsed(true);
+    }
+  }, [isTablet]);
+
   useEffect(() => {
     // Intercept console
     const originals = {
@@ -1539,7 +1547,7 @@ export default function App() {
         visibleToasts={4}
       />
       <AppShell
-        navCollapsed={sidebarCollapsed || isTablet || isDeveloperToolsActive}
+        navCollapsed={sidebarCollapsed || isDeveloperToolsActive}
         rail={
           <ConnectionRail
             connections={railConnections}

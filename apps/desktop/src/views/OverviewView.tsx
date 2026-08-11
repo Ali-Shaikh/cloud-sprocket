@@ -381,8 +381,37 @@ export default function OverviewView({
     );
   }
 
-  const writesEnabled = workspace.awsWritesEnabled;
-  const writeCapable = workspace.awsWriteCapable;
+  const isGcp = providerId === "gcp";
+  const writesEnabled = isAzure
+    ? Boolean(workspace.azureWritesEnabled)
+    : isGcp
+      ? Boolean(workspace.gcpWritesEnabled)
+      : Boolean(workspace.awsWritesEnabled);
+  const writeCapable = isAzure
+    ? Boolean(workspace.azureWriteCapable)
+    : isGcp
+      ? Boolean(workspace.gcpWriteCapable)
+      : Boolean(workspace.awsWriteCapable);
+  const writeTargetIsLocal = isAzure
+    ? Boolean(
+        workspace.azureEndpointUrl &&
+          /localhost|127\.0\.0\.1|\[::1\]/i.test(workspace.azureEndpointUrl),
+      ) ||
+      Boolean(
+        workspace.profile?.attributes.some(
+          (field) => field.label === "Tenant ID" && field.value === "cloudsprocket-local",
+        ),
+      )
+    : isGcp
+      ? false
+      : workspace.awsWriteTargetIsLocal === true;
+  const writeTargetLabel = isAzure
+    ? workspace.azureEndpointUrl ||
+      (writeTargetIsLocal ? "the local Azure emulator" : "your live Azure subscription")
+    : isGcp
+      ? "your live GCP project (gcloud)"
+      : workspace.awsEndpointUrl ||
+        (writeTargetIsLocal ? "the local endpoint" : "the live AWS account");
   const showLambdaCreateCta =
     isAws && workspace.lambdaFunctions.length === 0 && writesEnabled && Boolean(workspace.selectedLambdaRegion);
 
@@ -397,7 +426,9 @@ export default function OverviewView({
             ) : null}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Local-first, read-only access to your workspace. No console, no context-switching.
+            {writesEnabled
+              ? "Local-first workspace with write mode enabled for this session."
+              : "Local-first workspace. Inventory is read-only until you enable write mode from the top bar."}
           </p>
         </div>
         <Button variant="outline" size="sm" className="ml-auto" onClick={onRefresh}>
@@ -410,11 +441,7 @@ export default function OverviewView({
         <InlineBanner
           tone="warning"
           icon={ShieldAlert}
-          title={
-            workspace.awsWriteTargetIsLocal === true
-              ? `Write mode is on. Mutating actions target ${workspace.awsEndpointUrl || "the local endpoint"}.`
-              : `Write mode is on. Mutating actions target the live AWS account${workspace.awsEndpointUrl ? ` (${workspace.awsEndpointUrl})` : ""}.`
-          }
+          title={`Write mode is on. Mutating actions target ${writeTargetLabel}.`}
         />
       ) : (
         <InlineBanner
@@ -422,9 +449,9 @@ export default function OverviewView({
           icon={ShieldCheck}
           title={
             writeCapable
-              ? workspace.awsWriteTargetIsLocal
+              ? writeTargetIsLocal
                 ? "Write mode is off. Enable it from the top bar when you need mutating actions against the local endpoint."
-                : "Write mode is off. Enable it from the top bar when you need mutating actions; live AWS accounts require an extra confirmation."
+                : "Write mode is off. Enable it from the top bar when you need mutating actions; live cloud targets require an extra confirmation."
               : "Read-only mode keeps you safe until you open a locked workspace."
           }
         />
@@ -500,7 +527,7 @@ export default function OverviewView({
 
       {recents.length > 0 ? (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold tracking-tight">Jump back in</h2>
+          <h2 className="text-sm font-semibold tracking-tight">In this workspace</h2>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
             {recents.map((item) => (
               <button
