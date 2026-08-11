@@ -13,6 +13,8 @@ import { orderItemsByPins, type RecentNavigationEntry } from "@/lib/navigation-r
 import type { CliSnippet } from "@/lib/resource-cli";
 import { filterResourceHits, type ResourceSearchHit } from "@/lib/resource-search";
 import { groupByServiceDomain } from "@/lib/service-domains";
+import { awsInventoryLoaded, awsInventoryScopeForTab } from "@/lib/aws-inventory";
+import { azureInventoryLoaded, azureInventoryScopeForTab } from "@/lib/azure-inventory";
 import {
   authLabel,
   navItemForTab,
@@ -29,6 +31,7 @@ import type {
   WorkspaceSnapshot,
   WorkspaceTab,
 } from "@/types/backend";
+import type { NavItem } from "@/components/shell/types";
 
 export type UseAppShellNavigationParams = {
   session: SessionSnapshot;
@@ -46,6 +49,10 @@ export type UseAppShellNavigationParams = {
   workspaceFetching: boolean;
   workspaceLoading: boolean;
   workspaceLoaded: boolean;
+  /** True while a deferred Azure inventory.get for the active tab is in flight. */
+  azureServiceInventoryLoading?: boolean;
+  /** True while a deferred AWS inventory slice for the active tab is in flight. */
+  awsServiceInventoryLoading?: boolean;
   logs: ActivityLogEntry[];
   requestProviderSwitch: (providerId: string) => void;
   refreshDiscovery: () => Promise<void>;
@@ -64,6 +71,24 @@ export type UseAppShellNavigationParams = {
   onOpenShortcuts?: () => void;
 };
 
+/** Adjust counts for deferred inventory: refresh icon instead of a fake 0. */
+export function applyDeferredNavCount(
+  item: NavItem,
+  options: {
+    loaded: boolean;
+    active: boolean;
+    loading: boolean;
+  },
+): NavItem {
+  if (options.loaded) {
+    return item;
+  }
+  if (options.active && options.loading) {
+    return { ...item, count: undefined, countLoading: true, countRefreshable: false };
+  }
+  return { ...item, count: undefined, countLoading: false, countRefreshable: true };
+}
+
 export function useAppShellNavigation(params: UseAppShellNavigationParams) {
   const {
     session,
@@ -80,6 +105,8 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     workspaceFetching,
     workspaceLoading,
     workspaceLoaded,
+    azureServiceInventoryLoading = false,
+    awsServiceInventoryLoading = false,
     logs,
     requestProviderSwitch,
     refreshDiscovery,
@@ -292,12 +319,29 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
       return "service";
     };
     const entries = session.workspaceTabs.map((tab) => {
-      const item = navItemForTab(tab, workspace);
-      const navItem =
-        countsPending && item.count != null
-          ? { ...item, count: undefined, countLoading: true }
-          : item;
-      return { item: navItem, category: tabCategory(tab), domain: tab.domain };
+      let item = navItemForTab(tab, workspace);
+      if (countsPending && item.count != null) {
+        item = { ...item, count: undefined, countLoading: true };
+      } else if (session.lockedProviderId === "azure") {
+        const scope = azureInventoryScopeForTab(tab.tabId);
+        if (scope) {
+          item = applyDeferredNavCount(item, {
+            loaded: azureInventoryLoaded(workspace, scope),
+            active: tab.tabId === activeWorkspaceTabId,
+            loading: azureServiceInventoryLoading,
+          });
+        }
+      } else if (session.lockedProviderId === "aws") {
+        const scope = awsInventoryScopeForTab(tab.tabId);
+        if (scope) {
+          item = applyDeferredNavCount(item, {
+            loaded: awsInventoryLoaded(workspace, scope),
+            active: tab.tabId === activeWorkspaceTabId,
+            loading: awsServiceInventoryLoading,
+          });
+        }
+      }
+      return { item, category: tabCategory(tab), domain: tab.domain };
     });
     const workspaceItems = entries.filter((entry) => entry.category === "workspace").map((entry) => entry.item);
     const toolItems = entries.filter((entry) => entry.category === "tool").map((entry) => entry.item);
@@ -333,8 +377,12 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     }
     return groups;
   }, [
+    activeWorkspaceTabId,
+    awsServiceInventoryLoading,
+    azureServiceInventoryLoading,
     pins,
     session.isLocked,
+    session.lockedProviderId,
     session.workspaceTabs,
     workspace,
     workspaceFetching,

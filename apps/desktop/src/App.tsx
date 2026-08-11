@@ -986,6 +986,9 @@ export default function App() {
   const azureServiceInventoryLoading =
     session.lockedProviderId === "azure" &&
     (azureInventoryLoading || workspaceFetching || !workspaceLoaded);
+  const awsServiceInventoryLoading =
+    session.lockedProviderId === "aws" &&
+    (awsInventoryLoading || workspaceFetching || !workspaceLoaded);
 
   async function loadState(
     options: { refreshWorkspace?: boolean } = {},
@@ -1200,6 +1203,8 @@ export default function App() {
     workspaceFetching,
     workspaceLoading,
     workspaceLoaded,
+    azureServiceInventoryLoading,
+    awsServiceInventoryLoading,
     logs,
     requestProviderSwitch,
     refreshDiscovery,

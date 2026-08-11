@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { ChevronDown, Clock, Loader2, Server } from "lucide-react";
+import { ChevronDown, Clock, Loader2, RefreshCw, Server } from "lucide-react";
 
 import { useCollapsedNavGroups } from "@/hooks/use-collapsed-nav-groups";
 import { cn } from "@/lib/utils";
@@ -121,7 +121,16 @@ function ContextNav({
                 <button
                   key={item.id}
                   type="button"
-                  aria-label={item.label}
+                  aria-label={
+                    item.countRefreshable
+                      ? `${item.label} (open to load inventory)`
+                      : item.label
+                  }
+                  title={
+                    item.countRefreshable
+                      ? "Inventory not loaded yet. Open this service to load counts."
+                      : undefined
+                  }
                   disabled={item.comingSoon}
                   onClick={() => onSelectItem(item.id)}
                   className={cn(
@@ -151,6 +160,11 @@ function ContextNav({
                     </span>
                   ) : item.countLoading ? (
                     <Loader2 className="ml-auto size-3.5 shrink-0 animate-spin text-muted-foreground" />
+                  ) : item.countRefreshable ? (
+                    <RefreshCw
+                      className="ml-auto size-3.5 shrink-0 text-muted-foreground"
+                      aria-hidden
+                    />
                   ) : item.count != null ? (
                     <span
                       className={cn(

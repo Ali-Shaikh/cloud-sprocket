@@ -16,6 +16,9 @@ Installers for every release are published on the
 
 ### Fixed
 
+- Azure/AWS deferred service nav no longer shows a misleading **0** before
+  inventory is loaded; a refresh icon indicates “open to load”, with a spinner
+  while that service’s inventory request is in flight.
 - Deploy **Destroy** requires a confirmation dialog (name + target) before
   OpenTofu teardown; one-click destroy was a real mis-click risk on applied
   stacks.
