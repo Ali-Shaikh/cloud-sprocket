@@ -230,6 +230,7 @@ export default function LambdaView({
   const [createError, setCreateError] = useState<string | undefined>(undefined);
   const [payloadText, setPayloadText] = useState(defaultPayload);
   const [payloadError, setPayloadError] = useState<string | undefined>(undefined);
+  const [deleteTarget, setDeleteTarget] = useState<string | undefined>(undefined);
   const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedLambdaFunctionName));
   const lastSelectedFunctionRef = useRef(workspace.selectedLambdaFunctionName || "");
 
@@ -588,7 +589,7 @@ export default function LambdaView({
               variant="destructive"
               disabled={!deleteCapability.enabled || invokeInFlight || createInFlight}
               title={deleteCapability.enabled ? undefined : deleteCapability.reason}
-              onClick={() => onDeleteFunction(selectedFunction.functionName)}
+              onClick={() => setDeleteTarget(selectedFunction.functionName)}
             >
               Delete function
             </Button>
@@ -1069,6 +1070,43 @@ export default function LambdaView({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmCreate}>Create function</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={deleteTarget !== undefined}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(undefined);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Lambda function?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete{" "}
+              <span className="font-mono font-medium text-foreground">{deleteTarget}</span>
+              {workspace.selectedLambdaRegion
+                ? ` in ${workspace.selectedLambdaRegion}`
+                : ""}
+              . This cannot be undone from the app.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteTarget && onDeleteFunction) {
+                  onDeleteFunction(deleteTarget);
+                }
+                setDeleteTarget(undefined);
+              }}
+            >
+              Delete function
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

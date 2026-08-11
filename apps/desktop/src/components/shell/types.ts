@@ -55,7 +55,10 @@ export interface AppMenuProps {
   onOpenSettings?: () => void;
   onCopyConfigPaths?: () => void;
   onReset?: () => void;
+  /** Opens the command palette (search), not the shortcut cheatsheet. */
   onOpenCommandPalette?: () => void;
+  /** Opens the keyboard shortcut cheatsheet. */
+  onOpenShortcuts?: () => void;
 }
 
 /** A single navigation entry in the contextual sidebar. */

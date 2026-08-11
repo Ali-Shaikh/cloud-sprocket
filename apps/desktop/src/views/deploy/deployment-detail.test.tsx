@@ -102,6 +102,39 @@ describe("DeploymentDetail failure honesty", () => {
   });
 });
 
+describe("DeploymentDetail destroy confirmation", () => {
+  it("requires confirmation before calling onDestroy", () => {
+    const onDestroy = vi.fn();
+    render(
+      <DeploymentDetail
+        deployment={blockedDeployment({
+          status: "applied",
+          plan: undefined,
+          policy: undefined,
+        })}
+        recipeManifest={null}
+        logs={[]}
+        busy={false}
+        onBack={vi.fn()}
+        onApply={vi.fn()}
+        onDestroy={onDestroy}
+        onCancel={vi.fn()}
+        onDelete={vi.fn()}
+        onRetryPostApply={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Destroy" }));
+    expect(onDestroy).not.toHaveBeenCalled();
+
+    const dialog = screen.getByRole("alertdialog", {
+      name: "Destroy this deployment?",
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Destroy" }));
+    expect(onDestroy).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("DeploymentDetail policy guardrails", () => {
   it("requires the exact typed override for a blocked live plan", () => {
     const onApply = renderDetail(blockedDeployment());

@@ -50,6 +50,7 @@ function AppMenu({
   onCopyConfigPaths,
   onReset,
   onOpenCommandPalette,
+  onOpenShortcuts,
 }: AppMenuProps) {
   const { theme, resolvedTheme, setTheme } = useTheme();
   const themeLabel =
@@ -116,6 +117,12 @@ function AppMenu({
         </DropdownMenuSub>
         {onOpenCommandPalette ? (
           <DropdownMenuItem onClick={onOpenCommandPalette}>
+            <Keyboard />
+            Command palette
+          </DropdownMenuItem>
+        ) : null}
+        {onOpenShortcuts ? (
+          <DropdownMenuItem onClick={onOpenShortcuts}>
             <Keyboard />
             Keyboard shortcuts
           </DropdownMenuItem>

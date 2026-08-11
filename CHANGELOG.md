@@ -14,6 +14,22 @@ Installers for every release are published on the
 - Desktop Cargo lock: transitive `event-listener` 5.4.1 → 5.4.2 (RUSTSEC-2026-0221
   unsound `Send`/`Sync` on `StackSlot`). Reached via zbus / tauri-plugin-opener.
 
+### Fixed
+
+- Deploy **Destroy** requires a confirmation dialog (name + target) before
+  OpenTofu teardown; one-click destroy was a real mis-click risk on applied
+  stacks.
+- Lambda **Delete function** requires confirmation (function name + region),
+  matching create/invoke dialogs.
+- App menu no longer labels the command palette as "Keyboard shortcuts"; the
+  palette and shortcut cheatsheet are separate menu items.
+
+### Changed
+
+- Daemon: remove unused AWS write/session façade helpers left after F-029 Phase 4
+  domain extract (`authorizeAWSWrite*`, `finishAWSWrite*`); live paths remain in
+  `internal/app/aws`.
+
 ### Added
 
 - AWS SQS purge queue: write-gated `aws.sqs.purgeQueue` clears all messages via
