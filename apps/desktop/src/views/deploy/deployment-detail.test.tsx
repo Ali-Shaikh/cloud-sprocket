@@ -102,6 +102,37 @@ describe("DeploymentDetail failure honesty", () => {
   });
 });
 
+describe("DeploymentDetail failed recovery", () => {
+  it("offers Plan again when status is failed", () => {
+    const onUpdate = vi.fn();
+    render(
+      <DeploymentDetail
+        deployment={blockedDeployment({
+          status: "failed",
+          plan: undefined,
+          policy: undefined,
+          error: "OpenTofu apply failed: exit status 1",
+        })}
+        recipeManifest={null}
+        logs={[]}
+        busy={false}
+        onBack={vi.fn()}
+        onApply={vi.fn()}
+        onDestroy={vi.fn()}
+        onCancel={vi.fn()}
+        onDelete={vi.fn()}
+        onRetryPostApply={vi.fn()}
+        onUpdate={onUpdate}
+      />,
+    );
+
+    const buttons = screen.getAllByRole("button", { name: "Plan again" });
+    expect(buttons.length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(buttons[0]!);
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("DeploymentDetail destroy confirmation", () => {
   it("requires confirmation before calling onDestroy", () => {
     const onDestroy = vi.fn();

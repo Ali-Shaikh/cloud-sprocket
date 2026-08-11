@@ -139,9 +139,13 @@ export function DeploymentDetail({
               Check drift
             </Button>
           )}
-          {deployment.status === "applied" && onUpdate && (
+          {(deployment.status === "applied" ||
+            deployment.status === "failed" ||
+            deployment.status === "cancelled") &&
+            onUpdate && (
             <Button variant="outline" onClick={onUpdate} disabled={busy}>
-              <RefreshCw className="size-4" /> Update
+              <RefreshCw className="size-4" />{" "}
+              {deployment.status === "applied" ? "Update" : "Plan again"}
             </Button>
           )}
           {canRemove && (
@@ -177,9 +181,26 @@ export function DeploymentDetail({
             {deployment.error}
           </pre>
           <p className="mt-2 text-xs text-muted-foreground">
-            The message above includes the last OpenTofu output when available. Retry after fixing
-            network, runtime, or lock issues, or stop a stuck run first.
+            The message above includes the last OpenTofu output when available. Fix network, runtime,
+            or lock issues, then plan again. Stop a stuck run first if OpenTofu is still holding the
+            state lock.
           </p>
+          {onUpdate &&
+            (deployment.status === "failed" || deployment.status === "cancelled") && (
+              <div className="mt-3">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => {
+                    onUpdate();
+                  }}
+                >
+                  <RefreshCw className="size-4" />
+                  Plan again
+                </Button>
+              </div>
+            )}
         </Card>
       )}
 

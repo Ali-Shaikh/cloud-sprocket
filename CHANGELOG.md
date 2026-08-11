@@ -16,6 +16,11 @@ Installers for every release are published on the
 
 ### Fixed
 
+- Failed and cancelled deployments expose a real **Plan again** action (header and
+  error card) so recovery is not “Retry…” copy without a control.
+- Shell chrome (top bar, connection rail, context nav) uses visible focus rings
+  for keyboard navigation; write-mode chip no longer depends on a missing
+  `text-warning-foreground` token.
 - Azure/AWS deferred service nav no longer shows a misleading **0** before
   inventory is loaded; a refresh icon indicates “open to load”, with a spinner
   while that service’s inventory request is in flight.

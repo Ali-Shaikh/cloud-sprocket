@@ -19,7 +19,7 @@ import {
 import type { TopBarProps } from "./types";
 
 const iconBtn =
-  "grid size-9 place-items-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
+  "grid size-9 place-items-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 /**
  * The 56px header bar: nav toggle, breadcrumb, visual-only search, and the
@@ -73,9 +73,9 @@ function TopBar({
           onClick={writeMode.onClick}
           aria-label={writeMode.enabled ? "Write mode on" : "Read-only mode"}
           className={cn(
-            "ml-auto flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-colors",
+            "ml-auto flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
             writeMode.enabled
-              ? "border-warning/40 bg-warning/10 text-warning-foreground hover:bg-warning/15"
+              ? "border-warning/40 bg-warning/10 text-foreground hover:bg-warning/15"
               : "border-border bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground",
           )}
         >
@@ -89,7 +89,7 @@ function TopBar({
         onClick={onOpenCommandPalette}
         aria-label={searchPlaceholder ?? "Search commands"}
         className={cn(
-          "flex w-60 items-center gap-2 rounded-full border border-border bg-muted px-3.5 py-1.5 text-left text-muted-foreground transition-colors hover:text-foreground",
+          "flex w-60 items-center gap-2 rounded-full border border-border bg-muted px-3.5 py-1.5 text-left text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           writeMode ? null : "ml-auto",
         )}
       >
