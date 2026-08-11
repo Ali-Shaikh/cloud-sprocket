@@ -35,7 +35,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/hashicorp/terraform-config-inspect v0.0.0-20260709150029-2fb54c236733
 	github.com/moby/moby/api v1.55.0
-	github.com/moby/moby/client v0.5.0
+	github.com/moby/moby/client v0.5.1
 	golang.org/x/mod v0.38.0
 	golang.org/x/sys v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
