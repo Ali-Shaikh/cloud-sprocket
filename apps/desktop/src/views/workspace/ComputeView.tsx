@@ -188,6 +188,7 @@ export default function ComputeView({
   const runCapability = actionCapabilityState(workspace, "ec2", "runInstances");
   const terminateCapability = actionCapabilityState(workspace, "ec2", "terminateInstances");
   const [pendingTerminate, setPendingTerminate] = useState(false);
+  const [pendingLaunch, setPendingLaunch] = useState(false);
   const canStart =
     startCapability.enabled &&
     Boolean(selectedInstance) &&
@@ -499,7 +500,7 @@ export default function ComputeView({
               variant="outline"
               disabled={!runCapability.enabled || !workspace.selectedEc2Region || actionInFlight}
               title={runCapability.enabled ? undefined : runCapability.reason}
-              onClick={() => onRunInstances("t3.micro")}
+              onClick={() => setPendingLaunch(true)}
             >
               Launch instance
             </Button>
@@ -669,6 +670,35 @@ export default function ComputeView({
               }}
             >
               Confirm {pendingLabel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={pendingLaunch} onOpenChange={setPendingLaunch}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Launch EC2 instance?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Run a new instance of type <span className="font-mono">t3.micro</span> in{" "}
+              <span className="font-mono">
+                {workspace.selectedEc2Region || "the selected region"}
+              </span>
+              {workspace.awsEndpointUrl
+                ? ` via ${workspace.awsEndpointUrl}`
+                : " on the active AWS endpoint"}
+              .
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                onRunInstances?.("t3.micro");
+                setPendingLaunch(false);
+              }}
+            >
+              Launch instance
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

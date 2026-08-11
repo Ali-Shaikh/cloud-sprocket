@@ -82,10 +82,12 @@ describe("GcpComputeView", () => {
 
     fireEvent.click(screen.getByText("batch-1"));
     fireEvent.click(screen.getByRole("button", { name: /^start$/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Start instance" }));
     expect(onStart).toHaveBeenCalledWith("batch-1", "europe-west1-b");
 
     fireEvent.click(screen.getByText("web-1"));
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop instance" }));
     expect(onStop).toHaveBeenCalledWith("web-1", "us-central1-a");
   });
 

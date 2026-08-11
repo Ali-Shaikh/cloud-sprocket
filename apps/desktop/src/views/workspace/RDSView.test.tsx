@@ -310,6 +310,8 @@ describe("RDSView", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Reboot instance" }));
+    // Confirm dialog (header button + dialog action share the label).
+    fireEvent.click(screen.getAllByRole("button", { name: "Reboot instance" }).at(-1)!);
 
     expect(onInvokeLifecycleAction).toHaveBeenCalledWith("reboot", "cloudsprocket-app-db");
   });

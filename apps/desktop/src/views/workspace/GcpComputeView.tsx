@@ -7,6 +7,16 @@ import { Cpu, Play, RefreshCw, Square } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { InlineBanner } from "@/components/inline-banner";
 import { ResourceTable } from "@/components/inventory/resource-table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
@@ -44,6 +54,7 @@ export default function GcpComputeView({
 }: GcpComputeViewProps) {
   const [filterText, setFilterText] = useState("");
   const [selectedName, setSelectedName] = useState(workspace.selectedGcpComputeInstance ?? "");
+  const [pendingAction, setPendingAction] = useState<"start" | "stop" | null>(null);
   const instances = workspace.gcpComputeInstances ?? [];
   const status = workspace.gcpComputeStatusMessage?.trim() ?? "";
 
@@ -141,11 +152,7 @@ export default function GcpComputeView({
               size="sm"
               disabled={!canStart}
               title={startDisabledReason}
-              onClick={() => {
-                if (selected?.name && selected.zone) {
-                  onStartInstance(selected.name, selected.zone);
-                }
-              }}
+              onClick={() => setPendingAction("start")}
             >
               <Play className="size-3.5" />
               Start
@@ -157,11 +164,7 @@ export default function GcpComputeView({
               size="sm"
               disabled={!canStop}
               title={stopDisabledReason}
-              onClick={() => {
-                if (selected?.name && selected.zone) {
-                  onStopInstance(selected.name, selected.zone);
-                }
-              }}
+              onClick={() => setPendingAction("stop")}
             >
               <Square className="size-3.5" />
               Stop
@@ -247,6 +250,53 @@ export default function GcpComputeView({
           }
         />
       </section>
+
+      <AlertDialog
+        open={pendingAction !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingAction(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingAction === "stop" ? "Stop Compute Engine VM?" : "Start Compute Engine VM?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingAction === "stop" ? "Stop" : "Start"}{" "}
+              <span className="font-mono font-medium text-foreground">{selected?.name}</span>
+              {selected?.zone ? (
+                <>
+                  {" "}
+                  in zone <span className="font-mono">{selected.zone}</span>
+                </>
+              ) : null}
+              . This runs against the active gcloud configuration.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!selected?.name || !selected.zone || !pendingAction) {
+                  setPendingAction(null);
+                  return;
+                }
+                if (pendingAction === "start") {
+                  onStartInstance?.(selected.name, selected.zone);
+                } else {
+                  onStopInstance?.(selected.name, selected.zone);
+                }
+                setPendingAction(null);
+              }}
+            >
+              {pendingAction === "stop" ? "Stop instance" : "Start instance"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -35,6 +35,10 @@ Installers for every release are published on the
   instead of Deploy without a workspace.
 - Overview "Jump back in" renamed to **In this workspace** (it is inventory, not
   navigation history).
+- Inventory `ResourceTable` rows are keyboard-selectable (Enter/Space, focus ring,
+  `aria-selected`).
+- EC2 **Launch instance**, GCP Compute start/stop, and RDS start/stop/reboot
+  require confirmation dialogs (aligned with EC2 terminate/start/stop).
 
 ### Changed
 

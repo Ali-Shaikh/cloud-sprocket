@@ -275,6 +275,7 @@ describe("ComputeView", () => {
     renderComputeView({ onRunInstances });
 
     fireEvent.click(screen.getByRole("button", { name: "Launch instance" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Launch instance" }).at(-1)!);
 
     expect(onRunInstances).toHaveBeenCalledWith("t3.micro");
   });
