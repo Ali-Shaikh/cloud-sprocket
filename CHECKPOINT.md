@@ -4,7 +4,7 @@
 `refactor/azure-bastion-f029` (from origin/dev)
 
 ## Goal
-F-028 slice 7: Azure inventory loading flags via AzureActionStatusProvider.
+Security: event-listener 5.4.2 (RUSTSEC-2026-0221); project-status accuracy.
 
 ## Status
 - Domain: `HandleBastionList`, `HandleBastionConnect`, pure helpers

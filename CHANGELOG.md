@@ -9,6 +9,11 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Security
+
+- Desktop Cargo lock: transitive `event-listener` 5.4.1 → 5.4.2 (RUSTSEC-2026-0221
+  unsound `Send`/`Sync` on `StackSlot`). Reached via zbus / tauri-plugin-opener.
+
 ### Added
 
 - AWS SQS purge queue: write-gated `aws.sqs.purgeQueue` clears all messages via

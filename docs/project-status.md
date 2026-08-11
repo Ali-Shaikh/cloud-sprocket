@@ -1,9 +1,11 @@
 # CloudSprocket project status
 
-**Last updated:** 6 August 2026
+**Last updated:** 11 August 2026
 
 **Latest release:** [v0.9.13](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.9.13)
 **Recent releases:** v0.9.13 (GCP multi-cloud foundation, F-029 cloud domains, operator actions), v0.9.12 (application domain extraction spine F-029 Phases 0–3), v0.9.11 (F-028 AWS actions provider, F-030 linters)
+
+**Post-v0.9.13 on `dev` (not yet released):** F-028 slices 5–7 (runtime emulator + action-status + Azure loading contexts), F-029 Phase 5e Bastion domain extract, F-029 Phase 6b/6c labs registry + invoke-write extract, AWS SDK Go patch bumps (#348).
 
 CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tauri v2 + Go sidecar. The PySide6 legacy app was removed in PR #67. The Tauri rewrite is the active product. The app is labelled **Developer Preview** (not production-ready).
 
@@ -59,7 +61,7 @@ Eleven service tabs plus four operational tools (15 Azure nav entries).
 
 Storage depth workflows: **blob copy**, **folder prefix create**, and **signed read SAS** (write-gated where applicable).
 
-Recent highlights: WAF workbench, Log Analytics, PostgreSQL Flexible Server start/stop, storage queue purge, Front Door cache purge, Cosmos delete item, Bastion list/connect (cloud CLI), floci-az OpenTofu contract. Azure inventory/selection/writes extracted to `internal/app/azure` (F-029 Phases 5a–5d; Bastion extract in flight as 5e).
+Recent highlights: WAF workbench, Log Analytics, PostgreSQL Flexible Server start/stop, storage queue purge, Front Door cache purge, Cosmos delete item, Bastion list/connect (cloud CLI), floci-az OpenTofu contract. Azure inventory/selection/writes/Bastion extracted to `internal/app/azure` (F-029 Phases 5a–5e).
 
 ### GCP (live via gcloud CLI)
 
@@ -87,11 +89,14 @@ Write mutations gated by per-session `gcpWriteModeEnabled`. Profile discovery an
 
 ---
 
-## Architecture residual (in progress / next)
+## Architecture residual
+
+F-028 desktop providers and F-029 daemon domain extraction for the planned phases are **complete** on `dev` (through F-028 slice 7 and F-029 Phase 6c). Remaining items are product polish, not blocked architecture:
 
 | Item | Notes |
 |------|--------|
-| Azure Bastion polish | UX only; cloud CLI dependency remains intentional |
+| Azure Bastion UX | Optional polish only; cloud CLI `az network bastion` dependency is intentional |
+| Live multi-cloud smoke | Manual against real AWS/Azure/GCP profiles after installers |
 
 ---
 
