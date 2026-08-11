@@ -65,6 +65,7 @@ export function DeploymentDetail({
 }) {
   const [policyOverrideOpen, setPolicyOverrideOpen] = useState(false);
   const [policyConfirmation, setPolicyConfirmation] = useState("");
+  const [destroyOpen, setDestroyOpen] = useState(false);
   const canApply = deployment.status === "planned";
   const canDestroy = deployment.status === "applied";
   const isRunning =
@@ -125,7 +126,11 @@ export function DeploymentDetail({
             </Button>
           )}
           {canDestroy && (
-            <Button variant="destructive" onClick={onDestroy} disabled={busy}>
+            <Button
+              variant="destructive"
+              onClick={() => setDestroyOpen(true)}
+              disabled={busy}
+            >
               <Trash2 className="size-4" /> Destroy
             </Button>
           )}
@@ -377,6 +382,45 @@ export function DeploymentDetail({
         <p className="mb-2 text-sm font-medium text-foreground">Logs</p>
         <VirtualizedLogPane lines={logs} scrollRef={logRef} />
       </div>
+
+      <AlertDialog
+        open={destroyOpen}
+        onOpenChange={(open) => {
+          if (!busy) {
+            setDestroyOpen(open);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Destroy this deployment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              OpenTofu will destroy resources for{" "}
+              <span className="font-medium text-foreground">{deployment.name}</span>
+              {" "}({targetLabel}). This cannot be undone from the app.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => setDestroyOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={busy}
+              onClick={() => {
+                setDestroyOpen(false);
+                onDestroy();
+              }}
+            >
+              Destroy
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={policyOverrideOpen}

@@ -1577,6 +1577,7 @@ export default function App() {
               },
               onReset: openResetModal,
               onOpenCommandPalette: () => setCommandPaletteOpen(true),
+              onOpenShortcuts: () => setShortcutCheatsheetOpen(true),
             }}
           />
         }
