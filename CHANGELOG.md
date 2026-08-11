@@ -16,6 +16,9 @@ Installers for every release are published on the
 
 ### Fixed
 
+- **Local Runtime** no longer appears inside the AWS/Azure/GCP service sidebar
+  (awkward next to Overview). Use the left rail or command palette instead;
+  Overview still deep-links via the runtime health strip when relevant.
 - Failed and cancelled deployments expose a real **Plan again** action (header and
   error card) so recovery is not “Retry…” copy without a control.
 - Shell chrome (top bar, connection rail, context nav) uses visible focus rings
