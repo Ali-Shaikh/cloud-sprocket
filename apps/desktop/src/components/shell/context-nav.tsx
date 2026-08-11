@@ -11,7 +11,7 @@ import { StatusDot } from "@/components/status-dot";
 import type { ContextNavProps, NavGroup } from "./types";
 
 const navItemBase =
-  "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13.5px] font-medium";
+  "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13.5px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar";
 
 const groupHeaderBase =
   "px-2 pb-1.5 pt-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground";

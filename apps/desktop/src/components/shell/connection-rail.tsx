@@ -57,7 +57,7 @@ function ConnectionRail({
                   aria-current={active ? "page" : undefined}
                   onClick={() => onSelect(c.id)}
                   className={cn(
-                    "relative grid size-11 place-items-center rounded-[13px] transition-all",
+                    "relative grid size-11 place-items-center rounded-[13px] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-rail",
                     active ? "rounded-[15px]" : "hover:rounded-[15px] hover:bg-white/[0.06]",
                   )}
                 >
