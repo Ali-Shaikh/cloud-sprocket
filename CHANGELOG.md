@@ -23,6 +23,18 @@ Installers for every release are published on the
   matching create/invoke dialogs.
 - App menu no longer labels the command palette as "Keyboard shortcuts"; the
   palette and shortcut cheatsheet are separate menu items.
+- **Azure write mode** on live CLI subscriptions uses the same live-cloud
+  acknowledgement dialog as AWS/GCP (not the weak local-only path).
+- Overview write-mode banner is **provider-aware** (AWS, Azure, GCP), not AWS-only.
+- Narrow viewports: context nav can open via the top-bar toggle (tablet collapse
+  no longer permanently disables the control).
+- Lab verify advances the active step to `currentStepId` after a pass.
+- Deploy detail **survives tab switches** (sessionStorage restore) so lab open-tab
+  deep links do not abandon the guided deployment UI.
+- First-lab onboarding sends unlocked users to Local Runtime with clear guidance
+  instead of Deploy without a workspace.
+- Overview "Jump back in" renamed to **In this workspace** (it is inventory, not
+  navigation history).
 
 ### Changed
 

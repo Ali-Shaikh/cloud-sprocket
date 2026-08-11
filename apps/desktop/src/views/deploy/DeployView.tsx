@@ -54,6 +54,34 @@ function reportDeployError(title: string, error: unknown): void {
   notify("error", title, formatBackendError(error));
 }
 
+/** Survive tab switches that unmount DeployView (e.g. lab open-tab deep links). */
+const DEPLOY_RETURN_KEY = "cloudsprocket.deploy.return";
+
+type DeployReturnState = {
+  mode: "list" | "configure" | "deployment";
+  deploymentId?: string;
+};
+
+function readDeployReturn(): DeployReturnState | null {
+  try {
+    const raw = sessionStorage.getItem(DEPLOY_RETURN_KEY);
+    if (!raw) {
+      return null;
+    }
+    return JSON.parse(raw) as DeployReturnState;
+  } catch {
+    return null;
+  }
+}
+
+function writeDeployReturn(state: DeployReturnState): void {
+  try {
+    sessionStorage.setItem(DEPLOY_RETURN_KEY, JSON.stringify(state));
+  } catch {
+    // Ignore quota / private mode.
+  }
+}
+
 export default function DeployView({
   profiles,
   navigateToResource,
@@ -65,7 +93,10 @@ export default function DeployView({
   initialRecipeId?: string;
   onInitialRecipeOpened?: () => void;
 }) {
-  const [mode, setMode] = useState<"list" | "configure" | "deployment">("list");
+  const restored = useRef(readDeployReturn());
+  const [mode, setMode] = useState<"list" | "configure" | "deployment">(
+    () => restored.current?.mode ?? "list",
+  );
   const [recipes, setRecipes] = useState<RecipeManifest[]>([]);
   const [tofu, setTofu] = useState<TofuStatus | null>(null);
   const [installing, setInstalling] = useState(false);
@@ -83,6 +114,7 @@ export default function DeployView({
   const { active, setActive, logs, resetLogsForDeployment } = useDeploymentEvents();
   const logRef = useRef<HTMLDivElement | null>(null);
   const initialRecipeRequestRef = useRef<string | null>(null);
+  const restoreAttemptedRef = useRef(false);
 
   useEffect(() => {
     void listRecipes()
@@ -95,6 +127,33 @@ export default function DeployView({
       .then(setTofu)
       .catch(() => setTofu(null));
   }, []);
+
+  // Re-open the last deployment detail after leaving Deploy (lab open-tab, rail switch).
+  useEffect(() => {
+    if (restoreAttemptedRef.current || deploymentsQuery.isLoading) {
+      return;
+    }
+    restoreAttemptedRef.current = true;
+    const saved = restored.current;
+    if (!saved || saved.mode !== "deployment" || !saved.deploymentId) {
+      return;
+    }
+    const match = deployments.find((item) => item.id === saved.deploymentId);
+    if (match) {
+      setActive(match);
+      setMode("deployment");
+    } else {
+      setMode("list");
+      writeDeployReturn({ mode: "list" });
+    }
+  }, [deployments, deploymentsQuery.isLoading, setActive]);
+
+  useEffect(() => {
+    writeDeployReturn({
+      mode,
+      deploymentId: mode === "deployment" ? active?.id : undefined,
+    });
+  }, [mode, active?.id]);
 
   const targetOptions = useMemo<TargetOption[]>(() => {
     const providers = new Set(recipe?.manifest.providers ?? ["aws"]);

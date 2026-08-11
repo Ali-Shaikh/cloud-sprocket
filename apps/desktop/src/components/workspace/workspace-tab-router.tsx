@@ -467,8 +467,26 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
       onRunFirstLab={() => {
         markOnboardingComplete();
         setShowOnboarding(false);
+        // First lab needs a locked LocalStack workspace + write mode. Do not
+        // deep-link Deploy alone when the user has not opened a profile yet.
+        if (!session.isLocked || session.lockedProviderId !== "aws") {
+          notify(
+            "info",
+            "Open a local AWS workspace first",
+            "Start LocalStack from Local Runtime, open a LocalStack profile, then return to Deploy for the first lab. Enable write mode from the top bar before put-item steps.",
+          );
+          setActiveWorkspaceTabId("virtualisation");
+          return;
+        }
         setDeployRecipeId(FIRST_LAB_RECIPE_ID);
         setActiveWorkspaceTabId("deploy");
+        if (!session.awsWriteModeEnabled) {
+          notify(
+            "info",
+            "Enable write mode for lab steps",
+            "The first lab includes a DynamoDB put. Turn on write mode from the top bar after the stack applies.",
+          );
+        }
       }}
     />
   ) : (
