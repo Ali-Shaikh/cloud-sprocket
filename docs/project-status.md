@@ -24,7 +24,7 @@ CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tau
 - AWS deferred inventory (v0.8.23, PR #69): `aws.inventory.get` RPC
 - Per-action capabilities (v0.8.23, PRs #71–#73)
 - App.tsx decomposition Steps 4a–4d (v0.8.23–v0.8.24, PRs #74–#77); action hooks (v0.8.25, PR #78); further shell trim (~1,548 lines)
-- **F-028** desktop providers: `AwsActionsProvider`, `AzureActionsProvider`, `WorkspaceNavigationProvider`, `WorkspaceSessionProvider`, `RuntimeEmulatorProvider`, `AwsActionStatusProvider`, `AzureActionStatusProvider` (slices 1–6)
+- **F-028** desktop providers: `AwsActionsProvider`, `AzureActionsProvider`, `WorkspaceNavigationProvider`, `WorkspaceSessionProvider`, `RuntimeEmulatorProvider`, `AwsActionStatusProvider`, `AzureActionStatusProvider` (slices 1–7; Azure loading flags on action-status context)
 - TanStack Query narrow pilot (v0.8.28, PR #84): `runtime.get` poll + `deployments.list`
 - Developer Toolbox (v0.8.28, PR #83)
 - Service enablement Phases 1–3 (v0.8.27, PR #82)

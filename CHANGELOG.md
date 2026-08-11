@@ -32,6 +32,11 @@ Installers for every release are published on the
 
 ### Changed
 
+- Desktop F-028 slice 7: Azure panel loading flags
+  (`azureServiceInventoryLoading`, log workspace selection, WAF config, Front
+  Door topology) move into `AzureActionStatusProvider` with the action-status
+  strings, so `WorkspaceTabRouterProps` no longer carries Azure inventory
+  loading state.
 - Desktop F-028 slice 6: AWS and Azure action-status strings (plus related
   in-flight flags and results) move from the workspace tab router prop bag into
   `AwsActionStatusProvider` and `AzureActionStatusProvider`. Inventory tabs read

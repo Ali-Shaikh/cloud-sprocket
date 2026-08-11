@@ -30,10 +30,6 @@ export type WorkspaceTabRouterProps = {
   logs: ActivityLogEntry[];
   showSensitiveValues: boolean;
   setShowSensitiveValues: Dispatch<SetStateAction<boolean>>;
-  azureServiceInventoryLoading: boolean;
-  azureLogWorkspaceSelectionLoading: boolean;
-  azureWafConfigLoading: boolean;
-  azureFrontDoorTopologyLoading: boolean;
   mutateWorkspaceSelection: (
     method: string,
     params: Record<string, unknown>,
