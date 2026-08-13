@@ -90,10 +90,12 @@ func (f *fakeStorage) PresignBlob(context.Context, models.ProfileSummary, string
 }
 
 type fakeKeyVault struct {
+	got bool
 	set bool
 }
 
 func (f *fakeKeyVault) GetKeyVaultSecret(context.Context, models.ProfileSummary, string, string) (string, error) {
+	f.got = true
 	return "secret-value", nil
 }
 func (f *fakeKeyVault) SetKeyVaultSecret(context.Context, models.ProfileSummary, string, string, string) (models.AzureKeyVaultSecret, error) {
@@ -185,6 +187,53 @@ func TestHandleStorageDeleteBlob(t *testing.T) {
 	}
 	if sess.session.SelectedAzureBlobName != "" {
 		t.Fatalf("expected selection cleared, got %q", sess.session.SelectedAzureBlobName)
+	}
+}
+
+func TestHandleKeyVaultRevealSecretRequiresWriteMode(t *testing.T) {
+	kv := &fakeKeyVault{}
+	sess := &fakeSession{session: lockedAzureWriteSession()}
+	sess.session.AzureWriteModeEnabled = false
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: azureWriteSnapshot()},
+		Session:   sess,
+		Workspace: &fakeWorkspace{},
+		KeyVault:  kv,
+	})
+	params, _ := json.Marshal(map[string]string{"vaultName": "kv1", "secretName": "s1"})
+	_, err := svc.HandleKeyVaultRevealSecret(context.Background(), params, nil)
+	if err == nil {
+		t.Fatal("expected write mode error")
+	}
+	if err.Error() != "Reveal requires write mode to be enabled for this Azure workspace." {
+		t.Fatalf("err = %v", err)
+	}
+	if kv.got {
+		t.Fatal("must not reveal when write mode is off")
+	}
+}
+
+func TestHandleKeyVaultRevealSecret(t *testing.T) {
+	kv := &fakeKeyVault{}
+	sess := &fakeSession{session: lockedAzureWriteSession()}
+	svc := New(Deps{
+		Discovery:     fakeDiscovery{snapshot: azureWriteSnapshot()},
+		Session:       sess,
+		Workspace:     &fakeWorkspace{},
+		KeyVault:      kv,
+		ActionTimeout: 5 * time.Second,
+	})
+	params, _ := json.Marshal(map[string]string{"vaultName": "kv1", "secretName": "s1"})
+	got, err := svc.HandleKeyVaultRevealSecret(context.Background(), params, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !kv.got {
+		t.Fatal("expected GetKeyVaultSecret")
+	}
+	result, ok := got.(map[string]string)
+	if !ok || result["value"] != "secret-value" {
+		t.Fatalf("got %#v", got)
 	}
 }
 

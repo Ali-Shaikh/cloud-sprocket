@@ -16,7 +16,7 @@ import (
 
 // HandleKeyVaultRevealSecret implements azure.keyVault.revealSecret.
 func (s *Service) HandleKeyVaultRevealSecret(ctx context.Context, params json.RawMessage, _ sessionport.Notifier) (any, error) {
-	if s == nil || s.keyVault == nil || s.session == nil || s.discovery == nil {
+	if s == nil || s.keyVault == nil {
 		return nil, errors.New("azure write service is not available")
 	}
 	var request struct {
@@ -33,11 +33,11 @@ func (s *Service) HandleKeyVaultRevealSecret(ctx context.Context, params json.Ra
 	if err != nil {
 		return nil, err
 	}
-	session, err := s.session.Load(ctx, snapshot)
-	if err != nil {
-		return nil, err
-	}
-	profile, err := LockedAzureProfile(snapshot.Profiles, session, "open a locked Azure workspace first")
+	_, profile, err := s.AuthorizeWrite(
+		ctx, snapshot,
+		"open a locked Azure workspace first",
+		"Reveal requires write mode to be enabled for this Azure workspace.",
+	)
 	if err != nil {
 		return nil, err
 	}

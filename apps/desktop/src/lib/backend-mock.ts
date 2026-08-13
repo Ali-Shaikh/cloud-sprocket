@@ -1583,6 +1583,10 @@ function buildMockActionCapabilities(
   if (providerId === "azure") {
     return {
       queues: [mockWriteModeCapability("purge", "Purge queue", writesEnabled)],
+      keyvault: [
+        mockWriteModeCapability("setSecret", "Set secret", writesEnabled),
+        mockWriteModeCapability("revealSecret", "Reveal secret", writesEnabled),
+      ],
     };
   }
   return {};
@@ -4082,6 +4086,11 @@ export function handleMockRequest<T>(
       mockState.session.selectedAzureSecret = String(params.secretName ?? "");
       return Promise.resolve(buildMockWorkspace() as T);
     case "azure.keyVault.revealSecret": {
+      if (!mockState.session.azureWriteModeEnabled) {
+        return Promise.reject(
+          new Error("Reveal requires write mode to be enabled for this Azure workspace."),
+        );
+      }
       const name = String(params.secretName ?? "");
       return Promise.resolve({ value: mockSecretValues[name] ?? "(no value)" } as T);
     }
