@@ -99,6 +99,38 @@ func TestBuildAzureActionCapabilitiesWriteModeOff(t *testing.T) {
 	}
 }
 
+func TestBuildAzureActionCapabilitiesKeyVaultReveal(t *testing.T) {
+	profile := models.ProfileSummary{
+		Attributes: []models.DetailField{
+			{Label: "Tenant ID", Value: "cloudsprocket-local"},
+		},
+	}
+	off := buildAzureActionCapabilities(models.SessionSnapshot{AzureWriteModeEnabled: false}, profile, "")
+	on := buildAzureActionCapabilities(models.SessionSnapshot{AzureWriteModeEnabled: true}, profile, "")
+	var offReveal, onReveal *models.ActionCapability
+	for i, capability := range off["keyvault"] {
+		if capability.ActionID == "revealSecret" {
+			offReveal = &off["keyvault"][i]
+			break
+		}
+	}
+	for i, capability := range on["keyvault"] {
+		if capability.ActionID == "revealSecret" {
+			onReveal = &on["keyvault"][i]
+			break
+		}
+	}
+	if offReveal == nil || onReveal == nil {
+		t.Fatal("expected keyvault.revealSecret capability")
+	}
+	if offReveal.Enabled {
+		t.Fatal("expected reveal disabled when Azure write mode is off")
+	}
+	if !onReveal.Enabled {
+		t.Fatal("expected reveal enabled when Azure write mode is on")
+	}
+}
+
 func TestBuildGcpActionCapabilitiesWriteModeOff(t *testing.T) {
 	profile := models.ProfileSummary{
 		ProfileID: "default",

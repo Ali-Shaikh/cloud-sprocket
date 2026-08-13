@@ -16,6 +16,7 @@ Installers for every release are published on the
 
 ### Fixed
 
+- Azure Key Vault **Reveal** now requires write mode, matching AWS Secrets Manager.
 - Deploy **Stop** no longer marks a run cancelled when the cancel RPC fails.
 - Browser mock now follows the daemon for deploy update/apply/delete/drift
   and AWS write mode, and implements S3 load-more plus Log Analytics table

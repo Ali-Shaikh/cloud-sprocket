@@ -62,7 +62,9 @@ export default function AzureKeyVaultView({
   const secrets = workspace.azureKeyVaultSecrets ?? [];
   const selectedVault = workspace.selectedAzureKeyVault ?? vaults[0]?.name ?? "";
   const writeCapability = actionCapabilityState(workspace, "keyvault", "setSecret", "azure");
+  const revealCapability = actionCapabilityState(workspace, "keyvault", "revealSecret", "azure");
   const canWrite = writeCapability.enabled;
+  const canReveal = revealCapability.enabled;
 
   const [revealed, setRevealed] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +73,10 @@ export default function AzureKeyVaultView({
   const [newValue, setNewValue] = useState("");
 
   async function reveal(secretName: string) {
+    if (!canReveal) {
+      setError(revealCapability.reason || "Reveal requires write mode to be enabled for this Azure workspace.");
+      return;
+    }
     setError(null);
     try {
       const value = await onReveal(selectedVault, secretName);
@@ -183,8 +189,15 @@ export default function AzureKeyVaultView({
                       <TableCell>
                         <button
                           type="button"
+                          disabled={shown === undefined && !canReveal}
+                          title={
+                            shown === undefined && !canReveal
+                              ? revealCapability.reason ||
+                                "Reveal requires write mode to be enabled for this Azure workspace."
+                              : undefined
+                          }
                           onClick={() => (shown === undefined ? void reveal(secret.name) : hide(secret.name))}
-                          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
                         >
                           {shown === undefined ? <Eye className="size-3" /> : <EyeOff className="size-3" />}
                           {shown === undefined ? "Reveal" : "Hide"}

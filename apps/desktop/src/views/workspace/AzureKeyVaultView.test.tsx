@@ -52,4 +52,22 @@ describe("AzureKeyVaultView", () => {
     );
     expect(screen.queryByRole("button", { name: /set secret/i })).toBeNull();
   });
+
+  it("disables reveal when write mode is off", () => {
+    const onReveal = vi.fn();
+    render(
+      <ThemeProvider>
+        <AzureKeyVaultView
+          workspace={makeWorkspace(false)}
+          onSelectVault={() => {}}
+          onReveal={onReveal}
+          onSetSecret={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+    const reveal = screen.getByRole("button", { name: /reveal/i });
+    expect(reveal).toHaveProperty("disabled", true);
+    fireEvent.click(reveal);
+    expect(onReveal).not.toHaveBeenCalled();
+  });
 });
