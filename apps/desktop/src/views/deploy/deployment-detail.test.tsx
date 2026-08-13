@@ -131,6 +131,38 @@ describe("DeploymentDetail failed recovery", () => {
     fireEvent.click(buttons[0]!);
     expect(onUpdate).toHaveBeenCalledTimes(1);
   });
+
+  it("offers Destroy and hides Remove when failed with leftover outputs", () => {
+    render(
+      <DeploymentDetail
+        deployment={blockedDeployment({
+          status: "failed",
+          plan: undefined,
+          policy: undefined,
+          error: "OpenTofu apply failed: exit status 1",
+          outputs: [{ name: "bucket", value: "leftover" }],
+        })}
+        recipeManifest={null}
+        logs={[]}
+        busy={false}
+        onBack={vi.fn()}
+        onApply={vi.fn()}
+        onDestroy={vi.fn()}
+        onCancel={vi.fn()}
+        onDelete={vi.fn()}
+        onRetryPostApply={vi.fn()}
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Destroy" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This run failed after resources were created. Destroy the leftover infrastructure, then Remove the record.",
+      ),
+    ).toBeInTheDocument();
+  });
 });
 
 describe("DeploymentDetail cancelled leftover resources", () => {

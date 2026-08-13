@@ -16,6 +16,8 @@ Installers for every release are published on the
 
 ### Fixed
 
+- Failed deployments that still have outputs expose **Destroy** and refuse
+  Remove, matching leftover-resource protection for applied stacks.
 - Azure Key Vault **Reveal** now requires write mode, matching AWS Secrets Manager.
 - Deploy **Stop** no longer marks a run cancelled when the cancel RPC fails.
 - Browser mock now follows the daemon for deploy update/apply/delete/drift

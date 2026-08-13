@@ -158,7 +158,8 @@ func (s *Service) deleteDeployment(ctx context.Context, id string) error {
 	if hasActiveOperation || deployment.Status == deploy.StatusPlanning || deployment.Status == deploy.StatusApplying || deployment.Status == deploy.StatusDestroying {
 		return fmt.Errorf("this deployment is still running or stopping; wait for the current operation (or stop) to fully complete before removing it")
 	}
-	if deployment.Status == deploy.StatusApplied || (deployment.Status == deploy.StatusCancelled && len(deployment.Outputs) > 0) {
+	if deployment.Status == deploy.StatusApplied ||
+		((deployment.Status == deploy.StatusCancelled || deployment.Status == deploy.StatusFailed) && len(deployment.Outputs) > 0) {
 		return fmt.Errorf("this deployment still has (or had) live resources; destroy it before removing the record")
 	}
 	// Remove workspace first. If it fails (e.g. files still in use by a just-stopped operation),

@@ -157,11 +157,14 @@ export function DeploymentDetail({
         </div>
       </div>
 
-      {deployment.status === "cancelled" && hasLiveResources && (
+      {hasLiveResources &&
+        (deployment.status === "cancelled" || deployment.status === "failed") && (
         <Card className="p-4">
           <p className="text-sm text-muted-foreground">
-            This run was stopped after resources were created. Destroy the leftover
-            infrastructure, then Remove the record.
+            {deployment.status === "cancelled"
+              ? "This run was stopped after resources were created."
+              : "This run failed after resources were created."}{" "}
+            Destroy the leftover infrastructure, then Remove the record.
           </p>
         </Card>
       )}
