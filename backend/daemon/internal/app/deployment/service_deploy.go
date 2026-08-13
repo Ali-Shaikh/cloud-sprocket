@@ -195,7 +195,10 @@ func (s *Service) startDeploymentPlan(ctx context.Context, request deploymentPla
 		if getErr != nil {
 			return DeploymentJob{}, fmt.Errorf("update target deployment not found: %w", getErr)
 		}
-		if existing.Status != deploy.StatusApplied && existing.Status != deploy.StatusPlanned && existing.Status != deploy.StatusFailed && existing.Status != deploy.StatusCancelled {
+		switch existing.Status {
+		case deploy.StatusApplied, deploy.StatusPlanned, deploy.StatusFailed, deploy.StatusCancelled:
+			// Re-plan against the existing workspace.
+		default:
 			return DeploymentJob{}, fmt.Errorf("update is only supported for applied, planned, failed, or cancelled deployments")
 		}
 		// Snapshot prior state into revisions for history (values at time of update initiation).
