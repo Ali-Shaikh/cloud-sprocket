@@ -1691,6 +1691,33 @@ describe("App", () => {
     expect(await screen.findByRole("alertdialog", { name: "Reset app data" })).toBeInTheDocument();
   });
 
+  it("closes the shortcuts overlay when the command palette opens", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      isLocked: true,
+      lockedProviderId: "aws",
+      lockedProfileId: "sandbox",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        { tabId: "overview", label: "Overview", summary: "Summary", detail: "Overview panel" },
+      ],
+    };
+
+    render(
+      <AppProviders>
+        <App />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByText(/Write mode is off/)).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "?" });
+    expect(await screen.findByRole("dialog", { name: "Keyboard shortcuts" })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    expect(await screen.findByRole("dialog", { name: "Command palette" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).not.toBeInTheDocument();
+  });
+
   it("starts and stops LocalStack from the local runtime workspace", async () => {
     sessionFixture = {
       ...sessionFixture,

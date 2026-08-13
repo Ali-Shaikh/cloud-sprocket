@@ -16,6 +16,9 @@ Installers for every release are published on the
 
 ### Fixed
 
+- Command palette and keyboard-shortcuts overlay trap Tab, expose `aria-modal`,
+  restore focus on close, and cannot both be open (`Ctrl+K` closes shortcuts
+  first so the two traps cannot compete).
 - **Local Runtime** no longer appears inside the AWS/Azure/GCP service sidebar
   (awkward next to Overview). Use the left rail or command palette instead;
   Overview still deep-links via the runtime health strip when relevant.
