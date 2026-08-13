@@ -503,6 +503,67 @@ func TestDeploymentDeleteRefusesAppliedRecord(t *testing.T) {
 	}
 }
 
+func TestDeploymentDeleteRefusesCancelledWithOutputs(t *testing.T) {
+	deployer := &fakeDeployer{available: true}
+	s := newDeployTestService(t, deployer)
+	now := s.timestamp()
+	cancelled := &deploy.Deployment{
+		ID:        deploy.NewID(),
+		RecipeID:  "serverless-fullstack-aws",
+		Status:    deploy.StatusCancelled,
+		Outputs:   []deploy.Output{{Name: "bucket", Value: "leftover"}},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := s.store.SaveDeployment(context.Background(), cancelled.ID, cancelled, now); err != nil {
+		t.Fatalf("SaveDeployment: %v", err)
+	}
+	delParams := json.RawMessage(`{"deploymentId":"` + cancelled.ID + `"}`)
+	_, err := s.Handle(context.Background(), "deployments.delete", delParams, nil)
+	if err == nil {
+		t.Fatal("expected delete of a cancelled deployment with outputs to be refused")
+	}
+	if !strings.Contains(err.Error(), "destroy it before") {
+		t.Fatalf("expected destroy-first error, got %v", err)
+	}
+}
+
+func TestDeploymentPlanAllowsCancelledUpdate(t *testing.T) {
+	deployer := &fakeDeployer{available: true, plan: deploy.PlanSummary{Add: 0, Change: 1, Destroy: 0}}
+	s := newDeployTestService(t, deployer)
+	notifier := &captureNotifier{}
+	now := s.timestamp()
+	cancelled := &deploy.Deployment{
+		ID:         deploy.NewID(),
+		RecipeID:   "serverless-fullstack-aws",
+		Name:       "leftover",
+		ProviderID: "aws",
+		Local:      true,
+		Status:     deploy.StatusCancelled,
+		Outputs:    []deploy.Output{{Name: "bucket", Value: "leftover"}},
+		Variables:  map[string]any{"app_name": "leftover"},
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+	if err := s.saveDeployment(context.Background(), cancelled, now); err != nil {
+		t.Fatalf("seed cancelled: %v", err)
+	}
+
+	updateParams := json.RawMessage(`{"recipeId":"serverless-fullstack-aws","name":"leftover","providerId":"aws","local":true,"variables":{"app_name":"leftover"},"updateDeploymentId":"` + cancelled.ID + `"}`)
+	upRes, err := s.Handle(context.Background(), "deployments.plan", updateParams, notifier)
+	if err != nil {
+		t.Fatalf("plan cancelled update: %v", err)
+	}
+	upJob := upRes.(deploymentJob)
+	if upJob.Deployment.ID != cancelled.ID {
+		t.Fatalf("update must reuse id, got %s", upJob.Deployment.ID)
+	}
+	updated := waitForStatus(t, s, notifier, cancelled.ID, deploy.StatusPlanned)
+	if updated.Plan == nil || updated.Plan.Change != 1 {
+		t.Fatalf("expected re-plan on cancelled update, got %+v", updated.Plan)
+	}
+}
+
 func TestDeploymentPlanRejectsUnknownRecipe(t *testing.T) {
 	s := newDeployTestService(t, &fakeDeployer{available: true})
 	params := json.RawMessage(`{"recipeId":"does-not-exist","providerId":"aws"}`)
