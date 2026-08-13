@@ -51,6 +51,14 @@ import type {
 } from "../types/backend";
 import { awsInventoryScopeForTab } from "./aws-inventory";
 import {
+  applyDeploymentRejectedReason,
+  deleteDeploymentRejectedReason,
+  driftCheckRejectedReason,
+  mockAwsWriteRejectedReason,
+  retryPostApplyRejectedReason,
+  updateDeploymentRejectedReason,
+} from "./mock-rpc-policy";
+import {
   isProviderEnabled,
   isServiceEnabled,
 } from "./service-preferences";
@@ -2675,6 +2683,13 @@ export function handleMockRequest<T>(
   method: string,
   params: Record<string, unknown>,
 ): Promise<T> {
+  const writeDenied = mockAwsWriteRejectedReason(
+    method,
+    Boolean(mockState.session.awsWriteModeEnabled),
+  );
+  if (writeDenied) {
+    return Promise.reject(new Error(writeDenied));
+  }
   switch (method) {
     case "providers.list":
       return Promise.resolve(
@@ -2930,6 +2945,20 @@ export function handleMockRequest<T>(
       mockState.session.selectedS3ObjectKey = undefined;
       appendLog("info", `Updated S3 prefix filter to ${params.prefix ?? ""}.`);
       return Promise.resolve(buildMockWorkspace() as T);
+    case "aws.s3.loadMoreObjects": {
+      mockWorkspaceObjects.push({
+        key: "archive/older.json",
+        size: "1 KB",
+        modifiedAt: "2026-03-01T00:00:00Z",
+        storageClass: "STANDARD",
+      });
+      const workspace = buildMockWorkspace();
+      workspace.s3ObjectsHasMore = false;
+      workspace.s3ObjectsNextToken = undefined;
+      workspace.s3StatusMessage = `Loaded 1 more item(s). End of list.`;
+      appendLog("info", "Loaded more S3 objects.");
+      return Promise.resolve(workspace as T);
+    }
     case "aws.s3.uploadObject": {
       const objectKey = String(params.objectKey ?? "");
       const bucketName = mockState.session.selectedS3BucketName ?? mockWorkspaceBuckets[0]?.name;
@@ -3948,6 +3977,21 @@ export function handleMockRequest<T>(
         { name: "AppEvents", columns: ["TimeGenerated", "Level", "Message"] },
         { name: "Heartbeat", columns: ["TimeGenerated", "Category"] },
       ] as T);
+    case "azure.logAnalytics.table.schema": {
+      const tableName = String(params.tableName ?? "").trim();
+      if (!tableName) {
+        return Promise.reject(new Error("a table name is required"));
+      }
+      const tables: { name: string; columns: string[] }[] = [
+        { name: "AzureDiagnostics", columns: ["TimeGenerated", "Category", "action_s"] },
+        { name: "AppEvents", columns: ["TimeGenerated", "Level", "Message"] },
+        { name: "Heartbeat", columns: ["TimeGenerated", "Category"] },
+      ];
+      const found = tables.find((table) => table.name === tableName);
+      return Promise.resolve(
+        { name: tableName, columns: found?.columns ?? ["TimeGenerated"] } as T,
+      );
+    }
     case "azure.waf.logs.schema":
       return Promise.resolve(mockAzureWafLogSchema as T);
     case "azure.waf.refresh":
@@ -5034,19 +5078,43 @@ function mockSetStatus(deployment: Deployment, status: Deployment["status"]): vo
 
 function mockPlanDeployment(params: Record<string, unknown>): Promise<DeploymentJob> {
   const now = new Date().toISOString();
-  const deployment: Deployment = {
-    id: `dep-${Date.now()}`,
-    recipeId: String(params.recipeId ?? ""),
-    name: String(params.name || params.recipeId || "deployment"),
-    providerId: String(params.providerId ?? ""),
-    profileId: String(params.profileId ?? ""),
-    local: Boolean(params.local),
-    variables: (params.variables as Record<string, unknown>) ?? {},
-    status: "pending",
-    createdAt: now,
-    updatedAt: now,
-  };
-  mockDeployments.unshift(deployment);
+  const updateId = String(params.updateDeploymentId ?? "").trim();
+  let deployment: Deployment;
+  if (updateId) {
+    const existing = mockDeployments.find((entry) => entry.id === updateId);
+    if (!existing) {
+      return Promise.reject(new Error("update target deployment not found"));
+    }
+    const updateDenied = updateDeploymentRejectedReason(existing.status);
+    if (updateDenied) {
+      return Promise.reject(new Error(updateDenied));
+    }
+    existing.recipeId = String(params.recipeId ?? existing.recipeId);
+    existing.name = String(params.name || existing.name);
+    existing.providerId = String(params.providerId ?? existing.providerId);
+    existing.profileId = String(params.profileId ?? existing.profileId);
+    existing.local = Boolean(params.local);
+    existing.variables = (params.variables as Record<string, unknown>) ?? existing.variables;
+    existing.plan = undefined;
+    existing.policy = undefined;
+    existing.error = undefined;
+    existing.updatedAt = now;
+    deployment = existing;
+  } else {
+    deployment = {
+      id: `dep-${Date.now()}`,
+      recipeId: String(params.recipeId ?? ""),
+      name: String(params.name || params.recipeId || "deployment"),
+      providerId: String(params.providerId ?? ""),
+      profileId: String(params.profileId ?? ""),
+      local: Boolean(params.local),
+      variables: (params.variables as Record<string, unknown>) ?? {},
+      status: "pending",
+      createdAt: now,
+      updatedAt: now,
+    };
+    mockDeployments.unshift(deployment);
+  }
   const job: JobStatus = { jobId: `job-${Date.now()}`, label: `Plan ${deployment.name}`, status: "queued", message: "Planning." };
   const log = (line: string) => emitMockEvent("deployment.log", { deploymentId: deployment.id, jobId: job.jobId, line });
 
@@ -5086,6 +5154,12 @@ function mockRunDeployment(deploymentId: string, action: "apply" | "destroy", po
   const deployment = mockDeployments.find((entry) => entry.id === deploymentId);
   if (!deployment) {
     return Promise.reject(new Error(`deployment ${deploymentId} not found`));
+  }
+  if (action === "apply") {
+    const applyDenied = applyDeploymentRejectedReason(deployment.status);
+    if (applyDenied) {
+      return Promise.reject(new Error(applyDenied));
+    }
   }
   if (action === "apply" && deployment.policy?.status === "blocked" && deployment.policy.override?.decisionDigest !== deployment.policy.decisionDigest) {
     if (policyOverride !== `APPLY ${deployment.id}`) {
@@ -5163,6 +5237,10 @@ function mockRetryPostApply(deploymentId: string): Promise<DeploymentJob> {
   if (!deployment) {
     return Promise.reject(new Error(`deployment ${deploymentId} not found`));
   }
+  const retryDenied = retryPostApplyRejectedReason(deployment.status);
+  if (retryDenied) {
+    return Promise.reject(new Error(retryDenied));
+  }
   const job: JobStatus = {
     jobId: `job-${Date.now()}`,
     label: `Retry post-apply ${deployment.name}`,
@@ -5199,12 +5277,13 @@ function mockDeleteDeployment(deploymentId: string): Promise<{ deleted: boolean 
   if (index < 0) {
     return Promise.reject(new Error(`deployment ${deploymentId} not found`));
   }
-  const status = mockDeployments[index].status;
-  if (status === "planning" || status === "applying" || status === "destroying") {
-    return Promise.reject(new Error("this deployment is still running; stop it before removing it"));
-  }
-  if (status === "applied") {
-    return Promise.reject(new Error("this deployment still has live resources; destroy it before removing it"));
+  const target = mockDeployments[index];
+  const deleteDenied = deleteDeploymentRejectedReason(
+    target.status,
+    target.outputs?.length ?? 0,
+  );
+  if (deleteDenied) {
+    return Promise.reject(new Error(deleteDenied));
   }
   mockDeployments.splice(index, 1);
   return Promise.resolve({ deleted: true });
@@ -5214,6 +5293,10 @@ function mockCheckDrift(deploymentId: string): Promise<CheckDriftResult> {
   const deployment = mockDeployments.find((entry) => entry.id === deploymentId);
   if (!deployment) {
     return Promise.reject(new Error(`deployment ${deploymentId} not found`));
+  }
+  const driftDenied = driftCheckRejectedReason(deployment.status);
+  if (driftDenied) {
+    return Promise.reject(new Error(driftDenied));
   }
   // For mock/dev: report no drift. Real impl populates from tofu plan.
   const report: DriftReport = { hasDrift: false };

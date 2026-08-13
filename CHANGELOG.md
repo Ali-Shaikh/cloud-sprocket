@@ -16,6 +16,9 @@ Installers for every release are published on the
 
 ### Fixed
 
+- Browser mock now follows the daemon for deploy update/apply/delete/drift
+  and AWS write mode, and implements S3 load-more plus Log Analytics table
+  schema (those two methods previously threw "not implemented").
 - Cancelled deployments that still have outputs expose **Destroy** (same confirm
   as applied) so leftover resources can be torn down before Remove; Plan again
   can re-plan a cancelled record.
