@@ -15,6 +15,7 @@ import {
   inferRecipeKind,
   type GalleryFilters,
 } from "@/lib/deploy-gallery-filter";
+import { deploymentHasLiveResources } from "@/lib/deployment-lifecycle";
 import { formatLocalTargetLabel } from "@/lib/local-runtime-labels";
 import { notify } from "@/lib/notify";
 import { queryKeys } from "@/lib/query-keys";
@@ -526,13 +527,11 @@ export default function DeployView({
         ) : (
           <div className="flex flex-col gap-2">
             {deployments.map((deployment) => {
-              const hasOutputs = (deployment.outputs?.length ?? 0) > 0;
               const removable =
-                deployment.status !== "applied" &&
                 deployment.status !== "planning" &&
                 deployment.status !== "applying" &&
                 deployment.status !== "destroying" &&
-                !(deployment.status === "cancelled" && hasOutputs);
+                !deploymentHasLiveResources(deployment);
               return (
                 <div
                   key={deployment.id}

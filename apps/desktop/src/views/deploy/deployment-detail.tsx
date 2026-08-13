@@ -19,6 +19,7 @@ import { openExternalUrl } from "@/lib/backend";
 import type { NavigateToResourceParams } from "@/lib/navigate-to-resource";
 import type { Deployment, DeploymentOutput, RecipeManifest } from "@/types/backend";
 
+import { deploymentHasLiveResources } from "@/lib/deployment-lifecycle";
 import { formatDeploymentTargetLabel } from "@/lib/local-runtime-labels";
 
 import { AppHandoffCard, LogCommandsCard, PostApplyWarningCard, SuperpowersCard } from "./cards";
@@ -67,12 +68,12 @@ export function DeploymentDetail({
   const [policyConfirmation, setPolicyConfirmation] = useState("");
   const [destroyOpen, setDestroyOpen] = useState(false);
   const canApply = deployment.status === "planned";
-  const canDestroy = deployment.status === "applied";
+  const hasLiveResources = deploymentHasLiveResources(deployment);
+  const canDestroy = hasLiveResources;
   const isRunning =
     deployment.status === "planning" ||
     deployment.status === "applying" ||
     deployment.status === "destroying";
-  const hasLiveResources = deployment.status === "applied" || (deployment.status === "cancelled" && (deployment.outputs?.length ?? 0) > 0);
   const canRemove = !isRunning && !hasLiveResources;
   const targetLabel = formatDeploymentTargetLabel(deployment);
   const isUpdateReplan = canApply && ((deployment.outputs?.length ?? 0) > 0 || (deployment.revisions?.length ?? 0) > 0);
@@ -155,6 +156,15 @@ export function DeploymentDetail({
           )}
         </div>
       </div>
+
+      {deployment.status === "cancelled" && hasLiveResources && (
+        <Card className="p-4">
+          <p className="text-sm text-muted-foreground">
+            This run was stopped after resources were created. Destroy the leftover
+            infrastructure, then Remove the record.
+          </p>
+        </Card>
+      )}
 
       {isRunning && (
         <Card className="border-sky-500/30 bg-sky-500/5 p-4 text-sm text-sky-950 dark:text-sky-100">

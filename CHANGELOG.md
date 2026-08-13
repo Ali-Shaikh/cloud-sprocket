@@ -16,6 +16,9 @@ Installers for every release are published on the
 
 ### Fixed
 
+- Cancelled deployments that still have outputs expose **Destroy** (same confirm
+  as applied) so leftover resources can be torn down before Remove; Plan again
+  can re-plan a cancelled record.
 - Command palette and keyboard-shortcuts overlay trap Tab, expose `aria-modal`,
   restore focus on close, and cannot both be open (`Ctrl+K` closes shortcuts
   first so the two traps cannot compete).

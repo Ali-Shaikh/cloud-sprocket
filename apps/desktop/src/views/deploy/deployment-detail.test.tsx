@@ -133,6 +133,103 @@ describe("DeploymentDetail failed recovery", () => {
   });
 });
 
+describe("DeploymentDetail cancelled leftover resources", () => {
+  it("shows Destroy and Plan again, and hides Remove, when cancelled with outputs", () => {
+    const onUpdate = vi.fn();
+    render(
+      <DeploymentDetail
+        deployment={blockedDeployment({
+          status: "cancelled",
+          plan: undefined,
+          policy: undefined,
+          outputs: [{ name: "bucket", value: "leftover" }],
+        })}
+        recipeManifest={null}
+        logs={[]}
+        busy={false}
+        onBack={vi.fn()}
+        onApply={vi.fn()}
+        onDestroy={vi.fn()}
+        onCancel={vi.fn()}
+        onDelete={vi.fn()}
+        onRetryPostApply={vi.fn()}
+        onUpdate={onUpdate}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Destroy" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Plan again" })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This run was stopped after resources were created. Destroy the leftover infrastructure, then Remove the record.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("requires confirmation before calling onDestroy for cancelled leftovers", () => {
+    const onDestroy = vi.fn();
+    render(
+      <DeploymentDetail
+        deployment={blockedDeployment({
+          status: "cancelled",
+          plan: undefined,
+          policy: undefined,
+          outputs: [{ name: "bucket", value: "leftover" }],
+        })}
+        recipeManifest={null}
+        logs={[]}
+        busy={false}
+        onBack={vi.fn()}
+        onApply={vi.fn()}
+        onDestroy={onDestroy}
+        onCancel={vi.fn()}
+        onDelete={vi.fn()}
+        onRetryPostApply={vi.fn()}
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Destroy" }));
+    expect(onDestroy).not.toHaveBeenCalled();
+
+    const dialog = screen.getByRole("alertdialog", {
+      name: "Destroy this deployment?",
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Destroy" }));
+    expect(onDestroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows Remove and hides Destroy when cancelled without outputs", () => {
+    render(
+      <DeploymentDetail
+        deployment={blockedDeployment({
+          status: "cancelled",
+          plan: undefined,
+          policy: undefined,
+          outputs: [],
+        })}
+        recipeManifest={null}
+        logs={[]}
+        busy={false}
+        onBack={vi.fn()}
+        onApply={vi.fn()}
+        onDestroy={vi.fn()}
+        onCancel={vi.fn()}
+        onDelete={vi.fn()}
+        onRetryPostApply={vi.fn()}
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Remove" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Destroy" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/stopped after resources were created/i),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("DeploymentDetail destroy confirmation", () => {
   it("requires confirmation before calling onDestroy", () => {
     const onDestroy = vi.fn();
