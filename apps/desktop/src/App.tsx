@@ -63,6 +63,11 @@ import { awsInventoryLoaded, awsInventoryScopeForTab } from "./lib/aws-inventory
 import { azureInventoryLoaded, azureInventoryScopeForTab } from "./lib/azure-inventory";
 import { deployRailBadge } from "./lib/deploy-activity";
 import { cycleTabId, isTypingTarget } from "./lib/keyboard-shortcuts";
+import {
+  reduceShellOverlay,
+  type ShellOverlay,
+  type ShellOverlayAction,
+} from "./lib/shell-overlay";
 import type { NavigationLocation } from "./lib/navigation-location";
 import type { NavigateToResourceParams } from "./lib/navigate-to-resource";
 import { notify, notifyJob, useNotifications, type NotificationTone } from "./lib/notify";
@@ -433,8 +438,12 @@ export default function App() {
   const [openingProfileId, setOpeningProfileId] = useState<string>();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [splitPanelOpen, setSplitPanelOpen] = useState(false);
-  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [shortcutCheatsheetOpen, setShortcutCheatsheetOpen] = useState(false);
+  const [shellOverlay, setShellOverlay] = useState<ShellOverlay>("none");
+  const commandPaletteOpen = shellOverlay === "palette";
+  const shortcutCheatsheetOpen = shellOverlay === "shortcuts";
+  const setOverlay = useCallback((action: ShellOverlayAction) => {
+    setShellOverlay((current) => reduceShellOverlay(current, action));
+  }, []);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const navigateToResourceRef = useRef<
     ((params: NavigateToResourceParams, options?: { record?: boolean }) => void) | null
@@ -1225,20 +1234,20 @@ export default function App() {
         () => notify("error", "Copy failed", "Could not write to the clipboard."),
       );
     },
-    onOpenShortcuts: () => setShortcutCheatsheetOpen(true),
+    onOpenShortcuts: () => setOverlay({ type: "open-shortcuts" }),
   });
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setCommandPaletteOpen((open) => !open);
+        setOverlay({ type: "toggle-palette" });
         return;
       }
 
       if (event.key === "Escape" && shortcutCheatsheetOpen) {
         event.preventDefault();
-        setShortcutCheatsheetOpen(false);
+        setOverlay({ type: "close-shortcuts" });
         return;
       }
 
@@ -1260,7 +1269,7 @@ export default function App() {
 
       if (event.key === "?" || (event.shiftKey && event.key === "/")) {
         event.preventDefault();
-        setShortcutCheatsheetOpen(true);
+        setOverlay({ type: "open-shortcuts" });
         return;
       }
 
@@ -1589,8 +1598,8 @@ export default function App() {
                 );
               },
               onReset: openResetModal,
-              onOpenCommandPalette: () => setCommandPaletteOpen(true),
-              onOpenShortcuts: () => setShortcutCheatsheetOpen(true),
+              onOpenCommandPalette: () => setOverlay({ type: "open-palette" }),
+              onOpenShortcuts: () => setOverlay({ type: "open-shortcuts" }),
             }}
           />
         }
@@ -1658,7 +1667,7 @@ export default function App() {
               }
             }}
             notificationCount={notifications.unreadCount}
-            onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+            onOpenCommandPalette={() => setOverlay({ type: "open-palette" })}
             loading={loading || workspaceLoading || workspaceFetching}
           />
         }
@@ -1732,11 +1741,11 @@ export default function App() {
       <CommandPalette
         open={commandPaletteOpen}
         commands={paletteCommands}
-        onClose={() => setCommandPaletteOpen(false)}
+        onClose={() => setOverlay({ type: "close-palette" })}
       />
       <ShortcutCheatsheet
         open={shortcutCheatsheetOpen}
-        onClose={() => setShortcutCheatsheetOpen(false)}
+        onClose={() => setOverlay({ type: "close-shortcuts" })}
       />
     </>
   );

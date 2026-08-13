@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { KEYBOARD_SHORTCUTS } from "@/lib/keyboard-shortcuts";
 
 /**
  * Lightweight overlay listing keyboard shortcuts. Opened with `?` when focus
- * is not in a text field.
+ * is not in a text field. Focus is trapped while open and restored on close.
  */
 export function ShortcutCheatsheet({
   open,
@@ -16,6 +18,28 @@ export function ShortcutCheatsheet({
   open: boolean;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+
+  useFocusTrap(open, dialogRef);
+
+  useEffect(() => {
+    if (!open) return;
+    requestAnimationFrame(() => closeRef.current?.focus());
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const groups = new Map<string, typeof KEYBOARD_SHORTCUTS>();
@@ -32,7 +56,9 @@ export function ShortcutCheatsheet({
       role="presentation"
     >
       <div
+        ref={dialogRef}
         role="dialog"
+        aria-modal="true"
         aria-label="Keyboard shortcuts"
         className="w-full max-w-md overflow-hidden rounded-xl border border-border bg-popover shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
@@ -40,9 +66,10 @@ export function ShortcutCheatsheet({
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold text-foreground">Keyboard shortcuts</h2>
           <button
+            ref={closeRef}
             type="button"
             onClick={onClose}
-            className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="rounded-md px-2 py-1 text-xs text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-popover"
           >
             Esc
           </button>
