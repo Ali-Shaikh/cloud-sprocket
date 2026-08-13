@@ -39,9 +39,15 @@ describe("deploymentHasLiveResources", () => {
       expected: false,
     },
     {
-      name: "failed",
+      name: "failed with outputs",
       status: "failed" as DeploymentStatus,
       outputs: [{ name: "bucket", value: "demo" }] satisfies DeploymentOutput[],
+      expected: true,
+    },
+    {
+      name: "failed without outputs",
+      status: "failed" as DeploymentStatus,
+      outputs: [] satisfies DeploymentOutput[],
       expected: false,
     },
     {

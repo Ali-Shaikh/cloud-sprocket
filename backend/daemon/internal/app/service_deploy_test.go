@@ -528,6 +528,31 @@ func TestDeploymentDeleteRefusesCancelledWithOutputs(t *testing.T) {
 	}
 }
 
+func TestDeploymentDeleteRefusesFailedWithOutputs(t *testing.T) {
+	deployer := &fakeDeployer{available: true}
+	s := newDeployTestService(t, deployer)
+	now := s.timestamp()
+	failed := &deploy.Deployment{
+		ID:        deploy.NewID(),
+		RecipeID:  "serverless-fullstack-aws",
+		Status:    deploy.StatusFailed,
+		Outputs:   []deploy.Output{{Name: "bucket", Value: "leftover"}},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := s.store.SaveDeployment(context.Background(), failed.ID, failed, now); err != nil {
+		t.Fatalf("SaveDeployment: %v", err)
+	}
+	delParams := json.RawMessage(`{"deploymentId":"` + failed.ID + `"}`)
+	_, err := s.Handle(context.Background(), "deployments.delete", delParams, nil)
+	if err == nil {
+		t.Fatal("expected delete of a failed deployment with outputs to be refused")
+	}
+	if !strings.Contains(err.Error(), "destroy it before") {
+		t.Fatalf("expected destroy-first error, got %v", err)
+	}
+}
+
 func TestDeploymentPlanAllowsCancelledUpdate(t *testing.T) {
 	deployer := &fakeDeployer{available: true, plan: deploy.PlanSummary{Add: 0, Change: 1, Destroy: 0}}
 	s := newDeployTestService(t, deployer)

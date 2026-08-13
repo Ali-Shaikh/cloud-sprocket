@@ -60,7 +60,10 @@ export function deleteDeploymentRejectedReason(
   if (IN_FLIGHT_DEPLOYMENT_STATUSES.has(status)) {
     return "this deployment is still running or stopping; wait for the current operation (or stop) to fully complete before removing it";
   }
-  if (status === "applied" || (status === "cancelled" && outputCount > 0)) {
+  if (
+    status === "applied" ||
+    ((status === "cancelled" || status === "failed") && outputCount > 0)
+  ) {
     return "this deployment still has (or had) live resources; destroy it before removing the record";
   }
   return null;

@@ -40,8 +40,12 @@ describe("deleteDeploymentRejectedReason", () => {
     expect(deleteDeploymentRejectedReason("cancelled", 0)).toBeNull();
   });
 
-  it("allows failed records (daemon still treats these as removable)", () => {
-    expect(deleteDeploymentRejectedReason("failed", 3)).toBeNull();
+  it("refuses failed records that still have outputs", () => {
+    expect(deleteDeploymentRejectedReason("failed", 3)).toMatch(/live resources/);
+  });
+
+  it("allows failed records with no outputs", () => {
+    expect(deleteDeploymentRejectedReason("failed", 0)).toBeNull();
   });
 
   it("refuses in-flight statuses", () => {

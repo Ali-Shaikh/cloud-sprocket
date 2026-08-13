@@ -5,7 +5,7 @@ import type { Deployment } from "@/types/backend";
 
 /**
  * True when the record still owns (or likely owns) live infrastructure.
- * Applied runs always do; cancelled runs only when outputs were recorded.
+ * Applied runs always do. Cancelled or failed runs only when outputs were recorded.
  */
 export function deploymentHasLiveResources(
   deployment: Pick<Deployment, "status" | "outputs">,
@@ -13,7 +13,10 @@ export function deploymentHasLiveResources(
   if (deployment.status === "applied") {
     return true;
   }
-  if (deployment.status === "cancelled" && (deployment.outputs?.length ?? 0) > 0) {
+  if (
+    (deployment.status === "cancelled" || deployment.status === "failed") &&
+    (deployment.outputs?.length ?? 0) > 0
+  ) {
     return true;
   }
   return false;
