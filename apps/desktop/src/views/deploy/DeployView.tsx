@@ -37,6 +37,7 @@ import type { NavigateToResourceParams } from "@/lib/navigate-to-resource";
 import type { Deployment, ProfileSummary, Recipe, RecipeManifest, TofuStatus } from "@/types/backend";
 import { Download, Loader2, Rocket, Trash2 } from "lucide-react";
 
+import { cancelUiEffect } from "./cancel-ui-effect";
 import { ConfigureRecipe } from "./configure-recipe";
 import { defaultGalleryFilters, RecipeGallery } from "./components/recipe-gallery";
 import { DeploymentDetail } from "./deployment-detail";
@@ -407,17 +408,18 @@ export default function DeployView({
           : current,
       );
     };
+    let rpcSucceeded = false;
     try {
       await cancelDeployment(deploymentId);
-      settleCancelled();
-      notify("success", "Stopped", "Deployment was cancelled.");
+      rpcSucceeded = true;
     } catch (error) {
-      // Force local settle so a hung preflight / lost cancel handle never leaves
-      // the Stop button looking dead.
-      settleCancelled();
       reportDeployError("Could not stop deployment", error);
     } finally {
       setBusy(false);
+    }
+    if (cancelUiEffect(rpcSucceeded) === "settle-cancelled") {
+      settleCancelled();
+      notify("success", "Stopped", "Deployment was cancelled.");
     }
   }
 
