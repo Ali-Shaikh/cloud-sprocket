@@ -75,5 +75,10 @@ func (s *Service) enrichAzureQueuesInventory(
 		workspace.SelectedAzureQueue = queue
 		workspace.AzureQueueMessages = messages
 		workspace.AzureQueuesStatusMessage = status
+		reason := models.InventoryEmptyNoneFound
+		if account == "" {
+			reason = models.InventoryEmptyNotSelected
+		}
+		markAzureInventory(workspace, "queues", len(queues), reason)
 	})
 }

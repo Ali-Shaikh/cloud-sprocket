@@ -70,6 +70,9 @@ Installers for every release are published on the
 
 ### Changed
 
+- Azure inventory snapshots mark each scope `loaded` (with `emptyReason` when
+  the list is empty). Desktop no longer treats English “No App Service” copy as
+  the loaded signal.
 - Action capabilities include a `reasonCode` (`write_mode_required`,
   `profile_writes_unsupported`). Desktop write-mode gating matches the code, not
   English reason strings.

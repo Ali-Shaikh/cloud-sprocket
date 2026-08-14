@@ -217,3 +217,25 @@ func lockWorkspace(mu *sync.Mutex, fn func()) {
 	defer mu.Unlock()
 	fn()
 }
+
+func markAzureInventory(
+	workspace *models.WorkspaceSnapshot,
+	scope string,
+	itemCount int,
+	emptyReason models.InventoryEmptyReason,
+) {
+	if workspace == nil || strings.TrimSpace(scope) == "" {
+		return
+	}
+	if workspace.AzureInventory == nil {
+		workspace.AzureInventory = make(models.AzureInventoryStates)
+	}
+	state := models.InventoryScopeState{Loaded: true}
+	if itemCount == 0 {
+		if emptyReason == "" {
+			emptyReason = models.InventoryEmptyNoneFound
+		}
+		state.EmptyReason = emptyReason
+	}
+	workspace.AzureInventory[scope] = state
+}

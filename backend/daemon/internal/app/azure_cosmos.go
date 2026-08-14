@@ -122,12 +122,12 @@ func (s *Service) enrichAzureCosmosInventory(
 	rg := resourceGroupForCosmosAccount(accounts, account)
 
 	var (
-		databases        []models.AzureCosmosDatabase
-		database         string
-		containers       []models.AzureCosmosContainer
-		container        string
-		items            []models.AzureCosmosItem
-		status           string
+		databases  []models.AzureCosmosDatabase
+		database   string
+		containers []models.AzureCosmosContainer
+		container  string
+		items      []models.AzureCosmosItem
+		status     string
 	)
 
 	if opts.lightweight {
@@ -145,6 +145,7 @@ func (s *Service) enrichAzureCosmosInventory(
 			workspace.SelectedAzureCosmosContainer = ""
 			workspace.AzureCosmosItems = []models.AzureCosmosItem{}
 			workspace.AzureCosmosStatusMessage = status
+			markAzureInventory(workspace, "cosmos", len(accounts), models.InventoryEmptyNoneFound)
 		})
 		return
 	}
@@ -178,7 +179,6 @@ func (s *Service) enrichAzureCosmosInventory(
 		workspace.SelectedAzureCosmosContainer = container
 		workspace.AzureCosmosItems = items
 		workspace.AzureCosmosStatusMessage = status
+		markAzureInventory(workspace, "cosmos", len(accounts), models.InventoryEmptyNoneFound)
 	})
 }
-
-

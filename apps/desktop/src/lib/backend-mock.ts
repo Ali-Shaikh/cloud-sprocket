@@ -2245,6 +2245,21 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     azureEntraUsers: isAzureWorkspace ? mockAzureEntraUsers : [],
     azureEntraGroups: isAzureWorkspace ? mockAzureEntraGroups : [],
     azureEntraApps: isAzureWorkspace ? mockAzureEntraApps : [],
+    azureInventory: isAzureWorkspace
+      ? {
+          storage: { loaded: true },
+          webapps: { loaded: true },
+          loganalytics: { loaded: true },
+          waf: { loaded: true },
+          frontdoor: { loaded: true },
+          functions: { loaded: true },
+          keyvault: { loaded: true },
+          cosmos: { loaded: true },
+          postgres: { loaded: true },
+          queues: { loaded: true },
+          entra: { loaded: true },
+        }
+      : undefined,
     selectedS3BucketName,
     selectedS3ObjectKey,
     s3PrefixFilter: mockState.session.s3PrefixFilter,

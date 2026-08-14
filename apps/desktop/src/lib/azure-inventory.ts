@@ -95,38 +95,50 @@ export function azureInventoryLoaded(
   workspace: WorkspaceSnapshot,
   scope: AzureInventoryScope,
 ): boolean {
+  const state = workspace.azureInventory?.[scope];
+  if (state) {
+    return state.loaded;
+  }
+  return azureInventoryLoadedFallback(workspace, scope);
+}
+
+/** Historical snapshots without azureInventory: any rows or any status means fetched. */
+function azureInventoryLoadedFallback(
+  workspace: WorkspaceSnapshot,
+  scope: AzureInventoryScope,
+): boolean {
   switch (scope) {
     case "storage":
       return (workspace.azureStorageAccounts?.length ?? 0) > 0 ||
-        (workspace.azureStorageStatusMessage ?? "").length > 0;
+        Boolean(workspace.azureStorageStatusMessage);
     case "webapps":
       return (workspace.azureWebApps?.length ?? 0) > 0 ||
-        (workspace.azureAppServiceStatusMessage ?? "").includes("No App Service");
+        Boolean(workspace.azureAppServiceStatusMessage);
     case "loganalytics":
       return (workspace.azureLogAnalyticsWorkspaces?.length ?? 0) > 0 ||
-        (workspace.azureLogAnalyticsStatusMessage ?? "").length > 0;
+        Boolean(workspace.azureLogAnalyticsStatusMessage);
     case "waf":
       return (workspace.azureWafPolicies?.length ?? 0) > 0 ||
-        (workspace.azureWafStatusMessage ?? "").length > 0;
+        Boolean(workspace.azureWafStatusMessage);
     case "frontdoor":
       return (workspace.azureFrontDoorProfiles?.length ?? 0) > 0 ||
-        (workspace.azureFrontDoorStatusMessage ?? "").includes("No Azure Front Door");
+        Boolean(workspace.azureFrontDoorStatusMessage);
     case "functions":
       return (workspace.azureFunctionApps?.length ?? 0) > 0 ||
-        (workspace.azureFunctionsStatusMessage ?? "").includes("No Function Apps");
+        Boolean(workspace.azureFunctionsStatusMessage);
     case "keyvault":
       return (workspace.azureKeyVaults?.length ?? 0) > 0 ||
-        (workspace.azureKeyVaultStatusMessage ?? "").includes("No Key Vaults");
+        Boolean(workspace.azureKeyVaultStatusMessage);
     case "cosmos":
       return (workspace.azureCosmosAccounts?.length ?? 0) > 0 ||
-        (workspace.azureCosmosStatusMessage ?? "").includes("No Cosmos");
+        Boolean(workspace.azureCosmosStatusMessage);
     case "postgres":
       return (workspace.azurePostgresServers?.length ?? 0) > 0 ||
-        (workspace.azurePostgresStatusMessage ?? "").includes("No PostgreSQL");
+        Boolean(workspace.azurePostgresStatusMessage);
     case "queues":
-      return (workspace.azureQueuesStatusMessage ?? "").length > 0;
+      return Boolean(workspace.azureQueuesStatusMessage);
     case "entra":
-      return (workspace.azureEntraStatusMessage ?? "").length > 0;
+      return Boolean(workspace.azureEntraStatusMessage);
     default:
       return false;
   }

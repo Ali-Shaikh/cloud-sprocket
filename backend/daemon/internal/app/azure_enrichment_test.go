@@ -804,6 +804,32 @@ func TestAzureInventoryGetScopedStorage(t *testing.T) {
 	if len(workspace.AzureBlobContainers) == 0 {
 		t.Fatal("expected blob containers from scoped storage inventory")
 	}
+	if !workspace.AzureInventory["storage"].Loaded {
+		t.Fatalf("expected storage scope marked loaded, got %+v", workspace.AzureInventory)
+	}
+}
+
+func TestMarkAzureInventory(t *testing.T) {
+	var workspace models.WorkspaceSnapshot
+	markAzureInventory(&workspace, "webapps", 0, models.InventoryEmptyNoneFound)
+	state := workspace.AzureInventory["webapps"]
+	if !state.Loaded {
+		t.Fatal("expected loaded")
+	}
+	if state.EmptyReason != models.InventoryEmptyNoneFound {
+		t.Fatalf("emptyReason = %q", state.EmptyReason)
+	}
+
+	markAzureInventory(&workspace, "webapps", 2, models.InventoryEmptyNoneFound)
+	state = workspace.AzureInventory["webapps"]
+	if !state.Loaded || state.EmptyReason != "" {
+		t.Fatalf("expected loaded with no empty reason, got %+v", state)
+	}
+
+	markAzureInventory(&workspace, "frontdoor", 0, models.InventoryEmptyUnavailable)
+	if workspace.AzureInventory["frontdoor"].EmptyReason != models.InventoryEmptyUnavailable {
+		t.Fatalf("frontdoor = %+v", workspace.AzureInventory["frontdoor"])
+	}
 }
 
 type failingStorageAccountsAzure struct {

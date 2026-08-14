@@ -127,6 +127,7 @@ func (s *Service) enrichAzureLogAnalyticsInventory(workspace *models.WorkspaceSn
 		workspace.AzureLogAnalyticsWorkspaces = workspaces
 		workspace.SelectedAzureLogWorkspace = selected
 		workspace.AzureLogAnalyticsStatusMessage = status
+		markAzureInventory(workspace, "loganalytics", len(workspaces), models.InventoryEmptyNoneFound)
 	})
 }
 

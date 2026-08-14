@@ -132,6 +132,7 @@ func (s *Service) enrichAzureFunctionsInventory(
 			workspace.AzureFunctions = []models.AzureFunction{}
 			workspace.SelectedAzureFunction = ""
 			workspace.AzureFunctionsStatusMessage = status
+			markAzureInventory(workspace, "functions", len(apps), models.InventoryEmptyNoneFound)
 		})
 		return
 	}
@@ -150,5 +151,6 @@ func (s *Service) enrichAzureFunctionsInventory(
 		workspace.AzureFunctions = functions
 		workspace.SelectedAzureFunction = selectedFunction
 		workspace.AzureFunctionsStatusMessage = status
+		markAzureInventory(workspace, "functions", len(apps), models.InventoryEmptyNoneFound)
 	})
 }

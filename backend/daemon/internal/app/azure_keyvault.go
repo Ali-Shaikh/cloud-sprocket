@@ -123,6 +123,7 @@ func (s *Service) enrichAzureKeyVaultInventory(
 			workspace.AzureKeyVaultSecrets = []models.AzureKeyVaultSecret{}
 			workspace.SelectedAzureSecret = ""
 			workspace.AzureKeyVaultStatusMessage = status
+			markAzureInventory(workspace, "keyvault", len(vaults), models.InventoryEmptyNoneFound)
 		})
 		return
 	}
@@ -140,6 +141,7 @@ func (s *Service) enrichAzureKeyVaultInventory(
 		workspace.AzureKeyVaultSecrets = secrets
 		workspace.SelectedAzureSecret = selectedSecret
 		workspace.AzureKeyVaultStatusMessage = status
+		markAzureInventory(workspace, "keyvault", len(vaults), models.InventoryEmptyNoneFound)
 	})
 }
 

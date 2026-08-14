@@ -80,5 +80,12 @@ func (s *Service) enrichAzureAppServiceInventory(workspace *models.WorkspaceSnap
 		workspace.AzureWebApps = apps
 		workspace.SelectedAzureWebAppName = selectedApp
 		workspace.AzureAppServiceStatusMessage = status
+		reason := models.InventoryEmptyNoneFound
+		if isLocalFlociProfile(profile) {
+			reason = models.InventoryEmptyUnavailable
+		} else if resourceGroup == "" {
+			reason = models.InventoryEmptyNotSelected
+		}
+		markAzureInventory(workspace, "webapps", len(apps), reason)
 	})
 }

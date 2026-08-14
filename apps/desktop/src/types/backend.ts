@@ -55,6 +55,13 @@ export interface ActionCapability {
   reasonCode?: string;
 }
 
+export type InventoryEmptyReason = "none_found" | "not_selected" | "unavailable" | "error";
+
+export interface InventoryScopeState {
+  loaded: boolean;
+  emptyReason?: InventoryEmptyReason;
+}
+
 export interface WorkspaceTab {
   tabId: string;
   label: string;
@@ -1167,6 +1174,7 @@ export interface WorkspaceSnapshot {
   azureWriteCapable: boolean;
   azureWriteModeEnabled: boolean;
   azureWritesEnabled: boolean;
+  azureInventory?: Record<string, InventoryScopeState>;
   gcpWriteCapable?: boolean;
   gcpWriteModeEnabled?: boolean;
   gcpWritesEnabled?: boolean;

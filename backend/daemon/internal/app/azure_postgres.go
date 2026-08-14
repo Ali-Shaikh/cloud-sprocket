@@ -110,5 +110,6 @@ func (s *Service) enrichAzurePostgresInventory(
 		workspace.SelectedAzurePostgresServer = server
 		workspace.AzurePostgresConnection = connection
 		workspace.AzurePostgresStatusMessage = status
+		markAzureInventory(workspace, "postgres", len(servers), models.InventoryEmptyNoneFound)
 	})
 }
