@@ -25,6 +25,9 @@ func TestBuildAWSActionCapabilitiesWriteModeOff(t *testing.T) {
 	if invoke.Reason == "" {
 		t.Fatal("expected disabled reason for write mode off")
 	}
+	if invoke.ReasonCode != models.CapabilityReasonWriteModeRequired {
+		t.Fatalf("reasonCode = %q", invoke.ReasonCode)
+	}
 }
 
 func TestBuildAWSActionCapabilitiesRealCloudProfile(t *testing.T) {
@@ -38,6 +41,9 @@ func TestBuildAWSActionCapabilitiesRealCloudProfile(t *testing.T) {
 	create := caps["lambda"][1]
 	if !create.Enabled {
 		t.Fatal("expected create enabled for real-cloud profile when write mode is on")
+	}
+	if create.ReasonCode != "" {
+		t.Fatalf("expected empty reasonCode when enabled, got %q", create.ReasonCode)
 	}
 }
 
@@ -97,6 +103,26 @@ func TestBuildAzureActionCapabilitiesWriteModeOff(t *testing.T) {
 	if invoke.Reason == "" {
 		t.Fatal("expected disabled reason for Azure write mode off")
 	}
+	if invoke.ReasonCode != models.CapabilityReasonWriteModeRequired {
+		t.Fatalf("reasonCode = %q", invoke.ReasonCode)
+	}
+}
+
+func TestBuildAzureActionCapabilitiesUnsupportedProfile(t *testing.T) {
+	profile := models.ProfileSummary{
+		DisplayName: "prod-sub",
+		Attributes: []models.DetailField{
+			{Label: "Tenant ID", Value: "real-tenant-guid"},
+		},
+	}
+	caps := buildAzureActionCapabilities(models.SessionSnapshot{AzureWriteModeEnabled: true}, profile, "")
+	start := caps["compute"][0]
+	if start.Enabled {
+		t.Fatal("expected start disabled when the profile cannot write")
+	}
+	if start.ReasonCode != models.CapabilityReasonProfileWritesUnsupported {
+		t.Fatalf("reasonCode = %q", start.ReasonCode)
+	}
 }
 
 func TestBuildAzureActionCapabilitiesKeyVaultReveal(t *testing.T) {
@@ -146,6 +172,9 @@ func TestBuildGcpActionCapabilitiesWriteModeOff(t *testing.T) {
 	}
 	if upload.Reason == "" {
 		t.Fatal("expected disabled reason for GCP write mode off")
+	}
+	if upload.ReasonCode != models.CapabilityReasonWriteModeRequired {
+		t.Fatalf("reasonCode = %q", upload.ReasonCode)
 	}
 	start := caps["compute"][0]
 	if start.Enabled {

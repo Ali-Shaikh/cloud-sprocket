@@ -9,11 +9,16 @@ export type WriteProvider = "aws" | "azure" | "gcp";
 export const WRITE_MODE_REQUIRED_REASON =
   "Turn on write mode from the top bar to run mutating actions.";
 
+export const CAPABILITY_REASON_WRITE_MODE_REQUIRED = "write_mode_required";
+export const CAPABILITY_REASON_PROFILE_WRITES_UNSUPPORTED = "profile_writes_unsupported";
+
 const AWS_WRITE_MODE_FALLBACK_REASON = "Mutating actions require write mode to be enabled.";
 const AZURE_WRITE_MODE_FALLBACK_REASON =
   "Mutating actions require write mode on a profile that supports Azure writes.";
 const GCP_WRITE_MODE_FALLBACK_REASON =
   "Mutating actions require write mode to be enabled for this GCP workspace.";
+
+type CapabilityReasonRef = Pick<ActionCapability, "reason" | "reasonCode">;
 
 export function isWriteModeCapabilityReason(reason: string | undefined): boolean {
   if (!reason) {
@@ -28,6 +33,17 @@ export function isWriteModeCapabilityReason(reason: string | undefined): boolean
   );
 }
 
+/** True when this capability is gated only by write mode (code first, then prose). */
+export function isWriteModeCapability(capability: CapabilityReasonRef | undefined): boolean {
+  if (!capability) {
+    return false;
+  }
+  if (capability.reasonCode) {
+    return capability.reasonCode === CAPABILITY_REASON_WRITE_MODE_REQUIRED;
+  }
+  return isWriteModeCapabilityReason(capability.reason);
+}
+
 export function syncActionCapabilitiesForWriteMode(
   capabilities: ActionCapabilityMap | undefined,
   provider: WriteProvider,
@@ -39,8 +55,8 @@ export function syncActionCapabilitiesForWriteMode(
   for (const [service, caps] of Object.entries(source)) {
     synced[service] = caps.map((capability) => {
       if (writesEnabled) {
-        if (!capability.enabled && isWriteModeCapabilityReason(capability.reason)) {
-          return { ...capability, enabled: true, reason: undefined };
+        if (!capability.enabled && isWriteModeCapability(capability)) {
+          return { ...capability, enabled: true, reason: undefined, reasonCode: undefined };
         }
         return capability;
       }
@@ -50,14 +66,16 @@ export function syncActionCapabilitiesForWriteMode(
           ...capability,
           enabled: false,
           reason: capability.reason || WRITE_MODE_REQUIRED_REASON,
+          reasonCode: capability.reasonCode || CAPABILITY_REASON_WRITE_MODE_REQUIRED,
         };
       }
 
-      if (capability.enabled || isWriteModeCapabilityReason(capability.reason)) {
+      if (capability.enabled || isWriteModeCapability(capability)) {
         return {
           ...capability,
           enabled: false,
           reason: WRITE_MODE_REQUIRED_REASON,
+          reasonCode: CAPABILITY_REASON_WRITE_MODE_REQUIRED,
         };
       }
       return capability;
@@ -89,7 +107,7 @@ export function actionCapabilityState(
         : workspace.awsWritesEnabled;
   const capability = findActionCapability(workspace.actionCapabilities, service, actionId);
   if (capability) {
-    if (writesEnabled && !capability.enabled && isWriteModeCapabilityReason(capability.reason)) {
+    if (writesEnabled && !capability.enabled && isWriteModeCapability(capability)) {
       return { enabled: true, reason: undefined };
     }
     if (!writesEnabled && capability.enabled && (provider === "aws" || provider === "gcp")) {

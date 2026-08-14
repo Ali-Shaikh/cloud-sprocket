@@ -50,13 +50,23 @@ type DetailField struct {
 	Sensitive bool   `json:"sensitive,omitempty"`
 }
 
+// CapabilityReasonCode is a stable machine identifier for ActionCapability.
+// Reason stays human-readable; the desktop must match ReasonCode, not English copy.
+type CapabilityReasonCode string
+
+const (
+	CapabilityReasonWriteModeRequired        CapabilityReasonCode = "write_mode_required"
+	CapabilityReasonProfileWritesUnsupported CapabilityReasonCode = "profile_writes_unsupported"
+)
+
 // ActionCapability describes whether a single mutating UI action is available
 // and why it may be disabled (write mode, profile, runtime reachability).
 type ActionCapability struct {
-	ActionID string `json:"actionId"`
-	Label    string `json:"label"`
-	Enabled  bool   `json:"enabled"`
-	Reason   string `json:"reason,omitempty"`
+	ActionID   string               `json:"actionId"`
+	Label      string               `json:"label"`
+	Enabled    bool                 `json:"enabled"`
+	Reason     string               `json:"reason,omitempty"`
+	ReasonCode CapabilityReasonCode `json:"reasonCode,omitempty"`
 }
 
 // AzureCLIExtensionStatus reports whether a required Azure CLI extension is
