@@ -1544,6 +1544,7 @@ function mockWriteModeCapability(
     reason: writesEnabled
       ? undefined
       : "Turn on write mode from the top bar to run mutating actions.",
+    reasonCode: writesEnabled ? undefined : "write_mode_required",
   };
 }
 

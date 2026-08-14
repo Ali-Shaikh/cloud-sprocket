@@ -52,6 +52,7 @@ export interface ActionCapability {
   label: string;
   enabled: boolean;
   reason?: string;
+  reasonCode?: string;
 }
 
 export interface WorkspaceTab {

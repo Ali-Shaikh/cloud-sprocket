@@ -5,6 +5,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   actionCapabilityState,
+  CAPABILITY_REASON_PROFILE_WRITES_UNSUPPORTED,
+  CAPABILITY_REASON_WRITE_MODE_REQUIRED,
+  isWriteModeCapability,
   syncActionCapabilitiesForWriteMode,
   WRITE_MODE_REQUIRED_REASON,
 } from "./action-capabilities";
@@ -128,6 +131,7 @@ describe("syncActionCapabilitiesForWriteMode", () => {
           label: "Delete object",
           enabled: true,
           reason: undefined,
+          reasonCode: undefined,
         },
       ],
     });
@@ -151,6 +155,7 @@ describe("syncActionCapabilitiesForWriteMode", () => {
           label: "Delete object",
           enabled: false,
           reason: WRITE_MODE_REQUIRED_REASON,
+          reasonCode: CAPABILITY_REASON_WRITE_MODE_REQUIRED,
         },
       ],
     });
@@ -175,8 +180,55 @@ describe("syncActionCapabilitiesForWriteMode", () => {
           label: "Start instance",
           enabled: true,
           reason: undefined,
+          reasonCode: undefined,
         },
       ],
     });
+  });
+
+  it("leaves profile-unsupported Azure capabilities disabled when write mode turns on", () => {
+    const capabilities = {
+      compute: [
+        {
+          actionId: "startVm",
+          label: "Start VM",
+          enabled: false,
+          reason: "This profile does not support write mode.",
+          reasonCode: CAPABILITY_REASON_PROFILE_WRITES_UNSUPPORTED,
+        },
+      ],
+    };
+
+    expect(syncActionCapabilitiesForWriteMode(capabilities, "azure", true)).toEqual(capabilities);
+  });
+});
+
+describe("isWriteModeCapability", () => {
+  it("matches reasonCode even when the prose changes", () => {
+    expect(
+      isWriteModeCapability({
+        reason: "Enable writes first",
+        reasonCode: CAPABILITY_REASON_WRITE_MODE_REQUIRED,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not treat a different reasonCode as write mode", () => {
+    expect(
+      isWriteModeCapability({
+        reason: "Turn on write mode from the top bar to run mutating actions.",
+        reasonCode: CAPABILITY_REASON_PROFILE_WRITES_UNSUPPORTED,
+      }),
+    ).toBe(false);
+  });
+
+  it("falls back to historical English reasons when reasonCode is absent", () => {
+    expect(isWriteModeCapability({ reason: WRITE_MODE_REQUIRED_REASON })).toBe(true);
+    expect(
+      isWriteModeCapability({
+        reason: "Mutating actions require write mode to be enabled.",
+      }),
+    ).toBe(true);
+    expect(isWriteModeCapability({ reason: "Select a profile first." })).toBe(false);
   });
 });

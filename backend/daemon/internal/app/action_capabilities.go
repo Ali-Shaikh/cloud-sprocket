@@ -12,12 +12,12 @@ import (
 func awsActionGate(
 	session models.SessionSnapshot,
 	profile models.ProfileSummary,
-) (enabled bool, reason string) {
+) (enabled bool, reason string, code models.CapabilityReasonCode) {
 	if !session.AWSWriteModeEnabled {
-		return false, awsWriteModeRequiredMessage
+		return false, awsWriteModeRequiredMessage, models.CapabilityReasonWriteModeRequired
 	}
 	_ = profile
-	return true, ""
+	return true, "", ""
 }
 
 func awsActionCapability(
@@ -26,27 +26,30 @@ func awsActionCapability(
 	actionID string,
 	label string,
 ) models.ActionCapability {
-	enabled, reason := awsActionGate(session, profile)
+	enabled, reason, code := awsActionGate(session, profile)
 	return models.ActionCapability{
-		ActionID: actionID,
-		Label:    label,
-		Enabled:  enabled,
-		Reason:   reason,
+		ActionID:   actionID,
+		Label:      label,
+		Enabled:    enabled,
+		Reason:     reason,
+		ReasonCode: code,
 	}
 }
+
+const azureProfileWritesUnsupportedMessage = "This profile does not support write mode. Use a local floci-az profile or an Azure CLI profile with write access."
 
 func azureActionGate(
 	session models.SessionSnapshot,
 	profile models.ProfileSummary,
 	providerCommandPath string,
-) (enabled bool, reason string) {
+) (enabled bool, reason string, code models.CapabilityReasonCode) {
 	if !profileAllowsAzureWrites(profile, providerCommandPath) {
-		return false, "This profile does not support write mode. Use a local floci-az profile or an Azure CLI profile with write access."
+		return false, azureProfileWritesUnsupportedMessage, models.CapabilityReasonProfileWritesUnsupported
 	}
 	if !session.AzureWriteModeEnabled {
-		return false, "Turn on write mode from the top bar to run mutating actions."
+		return false, "Turn on write mode from the top bar to run mutating actions.", models.CapabilityReasonWriteModeRequired
 	}
-	return true, ""
+	return true, "", ""
 }
 
 func azureActionCapability(
@@ -56,12 +59,13 @@ func azureActionCapability(
 	actionID string,
 	label string,
 ) models.ActionCapability {
-	enabled, reason := azureActionGate(session, profile, providerCommandPath)
+	enabled, reason, code := azureActionGate(session, profile, providerCommandPath)
 	return models.ActionCapability{
-		ActionID: actionID,
-		Label:    label,
-		Enabled:  enabled,
-		Reason:   reason,
+		ActionID:   actionID,
+		Label:      label,
+		Enabled:    enabled,
+		Reason:     reason,
+		ReasonCode: code,
 	}
 }
 
@@ -195,12 +199,12 @@ const gcpWriteModeRequiredMessage = "Turn on write mode from the top bar to run 
 func gcpActionGate(
 	session models.SessionSnapshot,
 	profile models.ProfileSummary,
-) (enabled bool, reason string) {
+) (enabled bool, reason string, code models.CapabilityReasonCode) {
 	if !session.GcpWriteModeEnabled {
-		return false, gcpWriteModeRequiredMessage
+		return false, gcpWriteModeRequiredMessage, models.CapabilityReasonWriteModeRequired
 	}
 	_ = profile
-	return true, ""
+	return true, "", ""
 }
 
 func gcpActionCapability(
@@ -209,12 +213,13 @@ func gcpActionCapability(
 	actionID string,
 	label string,
 ) models.ActionCapability {
-	enabled, reason := gcpActionGate(session, profile)
+	enabled, reason, code := gcpActionGate(session, profile)
 	return models.ActionCapability{
-		ActionID: actionID,
-		Label:    label,
-		Enabled:  enabled,
-		Reason:   reason,
+		ActionID:   actionID,
+		Label:      label,
+		Enabled:    enabled,
+		Reason:     reason,
+		ReasonCode: code,
 	}
 }
 
