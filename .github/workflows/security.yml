@@ -61,7 +61,7 @@ jobs:
         with:
           repo-checkout: false
           work-dir: backend/daemon
-          go-version-input: 1.26.5
+          go-version-input: 1.26.6
           go-package: ./...
           cache-dependency-path: backend/daemon/go.sum
 
