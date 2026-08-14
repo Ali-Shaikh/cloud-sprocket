@@ -66,6 +66,8 @@ Installers for every release are published on the
 
 ### Changed
 
+- Browser mock RPC dispatch is a method registry (duplicate names throw) instead
+  of a 194-method switch, with a contract test against the daemon method list.
 - Daemon: remove unused AWS write/session façade helpers left after F-029 Phase 4
   domain extract (`authorizeAWSWrite*`, `finishAWSWrite*`); live paths remain in
   `internal/app/aws`.
