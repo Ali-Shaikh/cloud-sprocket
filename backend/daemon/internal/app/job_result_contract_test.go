@@ -94,8 +94,15 @@ func TestAWSLifecycleJobUpdatedResultRemainsFullWorkspaceSnapshot(t *testing.T) 
 			if err != nil {
 				t.Fatalf("expected %s to queue a job, got %v", test.method, err)
 			}
-			if queued, ok := result.(models.JobStatus); !ok || queued.Status != "queued" {
+			queued, ok := result.(models.JobStatus)
+			if !ok || queued.Status != "queued" {
 				t.Fatalf("expected queued job status, got %#v", result)
+			}
+			if test.method == "aws.ec2.invokeAction" && queued.Kind != models.JobKindEC2Action {
+				t.Fatalf("expected EC2 job kind, got %q", queued.Kind)
+			}
+			if test.method == "aws.rds.startInstance" && queued.Kind != "" {
+				t.Fatalf("expected RDS jobs to stay untyped, got %q", queued.Kind)
 			}
 
 			completed := waitForJobStatus(t, notifier.events, "completed")

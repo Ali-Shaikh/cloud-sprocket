@@ -1722,13 +1722,24 @@ type AppSettingsSnapshot struct {
 	FlociAZImage     string      `json:"flociAzImage"`
 }
 
+// JobKind is a stable machine identifier for async job.updated events.
+// Labels stay human-readable; the desktop must match Kind, not English copy.
+type JobKind string
+
+const (
+	JobKindDiscoveryRefresh JobKind = "discovery.refresh"
+	JobKindEC2Action        JobKind = "aws.ec2.action"
+	JobKindS3Presign        JobKind = "aws.s3.presign"
+)
+
 type JobStatus struct {
-	JobID       string `json:"jobId"`
-	Label       string `json:"label"`
-	Status      string `json:"status"`
-	Message     string `json:"message"`
-	CompletedAt string `json:"completedAt,omitempty"`
-	Result      any    `json:"result,omitempty"`
+	JobID       string  `json:"jobId"`
+	Label       string  `json:"label"`
+	Kind        JobKind `json:"kind,omitempty"`
+	Status      string  `json:"status"`
+	Message     string  `json:"message"`
+	CompletedAt string  `json:"completedAt,omitempty"`
+	Result      any     `json:"result,omitempty"`
 }
 
 type StateChangedPayload struct {

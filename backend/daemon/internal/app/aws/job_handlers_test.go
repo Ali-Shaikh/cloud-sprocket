@@ -125,6 +125,15 @@ func (a *recordingActivity) lastStatus() string {
 	return a.jobs[len(a.jobs)-1].Status
 }
 
+func (a *recordingActivity) lastKind() models.JobKind {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.jobs) == 0 {
+		return ""
+	}
+	return a.jobs[len(a.jobs)-1].Kind
+}
+
 type fakeEC2Lifecycle struct {
 	started    bool
 	stopped    bool
@@ -179,6 +188,9 @@ func TestHandleEC2InvokeActionQueuesJob(t *testing.T) {
 	if !ok || job.Status != "queued" {
 		t.Fatalf("result = %+v", result)
 	}
+	if job.Kind != models.JobKindEC2Action {
+		t.Fatalf("kind = %q", job.Kind)
+	}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		if act.lastStatus() == "completed" {
@@ -188,6 +200,9 @@ func TestHandleEC2InvokeActionQueuesJob(t *testing.T) {
 	}
 	if act.lastStatus() != "completed" {
 		t.Fatalf("last status = %q jobs=%+v", act.lastStatus(), act.jobs)
+	}
+	if act.lastKind() != models.JobKindEC2Action {
+		t.Fatalf("completed kind = %q", act.lastKind())
 	}
 	if !ec2.rebooted {
 		t.Fatal("expected reboot")
@@ -241,8 +256,12 @@ func TestHandleS3PresignObjectQueuesJob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.(models.JobStatus).Status != "queued" {
+	job, ok := result.(models.JobStatus)
+	if !ok || job.Status != "queued" {
 		t.Fatalf("result = %+v", result)
+	}
+	if job.Kind != models.JobKindS3Presign {
+		t.Fatalf("kind = %q", job.Kind)
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
@@ -253,6 +272,9 @@ func TestHandleS3PresignObjectQueuesJob(t *testing.T) {
 	}
 	if !s3.presigned || act.lastStatus() != "completed" {
 		t.Fatalf("presigned=%v status=%q", s3.presigned, act.lastStatus())
+	}
+	if got := act.lastKind(); got != models.JobKindS3Presign {
+		t.Fatalf("completed kind = %q", got)
 	}
 }
 

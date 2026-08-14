@@ -2094,7 +2094,8 @@ describe("App", () => {
     await act(async () => {
       backendEventHandlers["job.updated"]?.({
         jobId: "job-ec2",
-        label: "EC2 Action",
+        kind: "aws.ec2.action",
+        label: "Instance lifecycle",
         status: "completed",
         message: "EC2 stop completed for i-0123456789abcdef0 in us-east-1. Desired state reached: stopped.",
         result: {
@@ -2620,7 +2621,8 @@ describe("App", () => {
     await act(async () => {
       backendEventHandlers["job.updated"]?.({
         jobId: "job-1",
-        label: "Refresh Discovery",
+        kind: "discovery.refresh",
+        label: "Discovery refresh",
         status: "completed",
         message: "Refresh completed.",
         result: {

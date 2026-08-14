@@ -47,6 +47,7 @@ func (s *Service) HandleEC2InvokeAction(ctx context.Context, params json.RawMess
 	job := models.JobStatus{
 		JobID:   s.newJobID(),
 		Label:   "EC2 Action",
+		Kind:    models.JobKindEC2Action,
 		Status:  "queued",
 		Message: fmt.Sprintf("Queueing EC2 %s for %s in %s.", request.Action, instanceID, region),
 	}
@@ -89,6 +90,7 @@ func (s *Service) HandleEC2TerminateInstances(ctx context.Context, params json.R
 	job := models.JobStatus{
 		JobID:   s.newJobID(),
 		Label:   "EC2 Terminate",
+		Kind:    models.JobKindEC2Action,
 		Status:  "queued",
 		Message: fmt.Sprintf("Queueing EC2 terminate for %s in %s.", instanceID, region),
 	}
@@ -121,6 +123,7 @@ func (s *Service) RunEC2Action(
 	s.notifyJob(notifier, models.JobStatus{
 		JobID:   job.JobID,
 		Label:   job.Label,
+		Kind:    job.Kind,
 		Status:  "running",
 		Message: runningMessage,
 	})
@@ -146,6 +149,7 @@ func (s *Service) RunEC2Action(
 		s.notifyJob(notifier, models.JobStatus{
 			JobID:   job.JobID,
 			Label:   job.Label,
+			Kind:    job.Kind,
 			Status:  "failed",
 			Message: failureMessage,
 		})
@@ -165,6 +169,7 @@ func (s *Service) RunEC2Action(
 		s.notifyJob(notifier, models.JobStatus{
 			JobID:   job.JobID,
 			Label:   job.Label,
+			Kind:    job.Kind,
 			Status:  "failed",
 			Message: fmt.Sprintf("EC2 %s completed, but session state could not be saved: %v", normalisedAction, saveErr),
 		})
@@ -200,6 +205,7 @@ func (s *Service) RunEC2Action(
 			s.notifyJob(notifier, models.JobStatus{
 				JobID:   job.JobID,
 				Label:   job.Label,
+				Kind:    job.Kind,
 				Status:  "failed",
 				Message: err.Error(),
 			})
@@ -210,6 +216,7 @@ func (s *Service) RunEC2Action(
 	s.notifyJob(notifier, models.JobStatus{
 		JobID:       job.JobID,
 		Label:       job.Label,
+		Kind:        job.Kind,
 		Status:      "completed",
 		Message:     successMessage,
 		CompletedAt: s.jobTimestamp(),
@@ -243,6 +250,7 @@ func (s *Service) waitForEC2ActionState(
 		s.notifyJob(notifier, models.JobStatus{
 			JobID:   job.JobID,
 			Label:   job.Label,
+			Kind:    job.Kind,
 			Status:  "running",
 			Message: fmt.Sprintf("Waiting for EC2 %s to reach %s. Current state: %s.", instanceID, desiredState, firstNonEmpty(currentState, "unknown")),
 		})
@@ -329,6 +337,7 @@ func (s *Service) RunRDSAction(
 	s.notifyJob(notifier, models.JobStatus{
 		JobID:   job.JobID,
 		Label:   job.Label,
+		Kind:    job.Kind,
 		Status:  "running",
 		Message: runningMessage,
 	})
@@ -352,6 +361,7 @@ func (s *Service) RunRDSAction(
 		s.notifyJob(notifier, models.JobStatus{
 			JobID:   job.JobID,
 			Label:   job.Label,
+			Kind:    job.Kind,
 			Status:  "failed",
 			Message: failureMessage,
 		})
@@ -371,6 +381,7 @@ func (s *Service) RunRDSAction(
 		s.notifyJob(notifier, models.JobStatus{
 			JobID:   job.JobID,
 			Label:   job.Label,
+			Kind:    job.Kind,
 			Status:  "failed",
 			Message: fmt.Sprintf("RDS %s completed, but session state could not be saved: %v", normalisedAction, saveErr),
 		})
@@ -397,6 +408,7 @@ func (s *Service) RunRDSAction(
 			s.notifyJob(notifier, models.JobStatus{
 				JobID:   job.JobID,
 				Label:   job.Label,
+				Kind:    job.Kind,
 				Status:  "failed",
 				Message: notifyErr.Error(),
 			})
@@ -407,6 +419,7 @@ func (s *Service) RunRDSAction(
 	s.notifyJob(notifier, models.JobStatus{
 		JobID:       job.JobID,
 		Label:       job.Label,
+		Kind:        job.Kind,
 		Status:      "completed",
 		Message:     successMessage,
 		CompletedAt: s.jobTimestamp(),

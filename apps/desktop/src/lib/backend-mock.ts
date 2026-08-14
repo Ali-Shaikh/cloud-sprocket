@@ -3107,6 +3107,7 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
     const job: JobStatus = {
       jobId: `job-${Date.now()}`,
       label: "S3 Signed URL",
+      kind: "aws.s3.presign",
       status: "queued",
       message: `Generating a signed URL for ${objectKey}.`,
     };
@@ -3205,6 +3206,7 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
     const job: JobStatus = {
       jobId: `job-${Date.now()}`,
       label: "EC2 Action",
+      kind: "aws.ec2.action",
       status: "queued",
       message: `Queueing EC2 ${action} for ${instanceId} in ${region}.`,
     };
@@ -3255,6 +3257,7 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
     const job: JobStatus = {
       jobId: `job-${Date.now()}`,
       label: "EC2 Terminate",
+      kind: "aws.ec2.action",
       status: "queued",
       message: `Queueing EC2 terminate for ${instanceId} in ${region}.`,
     };
@@ -5069,6 +5072,7 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
     const job: JobStatus = {
       jobId: `job-${Date.now()}`,
       label: "Refresh Discovery",
+      kind: "discovery.refresh",
       status: "queued",
       message: "Refreshing provider discovery and session state.",
     };

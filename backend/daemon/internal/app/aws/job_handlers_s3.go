@@ -135,6 +135,7 @@ func (s *Service) RunS3Upload(
 	s.notifyJob(notifier, models.JobStatus{
 		JobID:   job.JobID,
 		Label:   job.Label,
+		Kind:    job.Kind,
 		Status:  "running",
 		Message: fmt.Sprintf("Uploading %s to s3://%s/%s.", sourcePath, bucketName, objectKey),
 	})
@@ -144,6 +145,7 @@ func (s *Service) RunS3Upload(
 		s.notifyJob(notifier, models.JobStatus{
 			JobID:   job.JobID,
 			Label:   job.Label,
+			Kind:    job.Kind,
 			Status:  "failed",
 			Message: fmt.Sprintf("S3 upload failed: %v", err),
 		})
@@ -164,6 +166,7 @@ func (s *Service) RunS3Upload(
 			s.notifyJob(notifier, models.JobStatus{
 				JobID:   job.JobID,
 				Label:   job.Label,
+				Kind:    job.Kind,
 				Status:  "failed",
 				Message: fmt.Sprintf("S3 upload completed, but session state could not be saved: %v", saveErr),
 			})
@@ -184,6 +187,7 @@ func (s *Service) RunS3Upload(
 			s.notifyJob(notifier, models.JobStatus{
 				JobID:   job.JobID,
 				Label:   job.Label,
+				Kind:    job.Kind,
 				Status:  "failed",
 				Message: err.Error(),
 			})
@@ -198,6 +202,7 @@ func (s *Service) RunS3Upload(
 	s.notifyJob(notifier, models.JobStatus{
 		JobID:       job.JobID,
 		Label:       job.Label,
+		Kind:        job.Kind,
 		Status:      "completed",
 		Message:     message,
 		CompletedAt: s.jobTimestamp(),
@@ -233,6 +238,7 @@ func (s *Service) HandleS3PresignObject(ctx context.Context, params json.RawMess
 	job := models.JobStatus{
 		JobID:   s.newJobID(),
 		Label:   "S3 Signed URL",
+		Kind:    models.JobKindS3Presign,
 		Status:  "queued",
 		Message: fmt.Sprintf("Generating a signed URL for %s.", objectKey),
 	}
@@ -253,6 +259,7 @@ func (s *Service) RunS3Presign(
 	s.notifyJob(notifier, models.JobStatus{
 		JobID:   job.JobID,
 		Label:   job.Label,
+		Kind:    job.Kind,
 		Status:  "running",
 		Message: fmt.Sprintf("Generating a signed URL for %s.", objectKey),
 	})
@@ -262,6 +269,7 @@ func (s *Service) RunS3Presign(
 		s.notifyJob(notifier, models.JobStatus{
 			JobID:   job.JobID,
 			Label:   job.Label,
+			Kind:    job.Kind,
 			Status:  "failed",
 			Message: fmt.Sprintf("Signed URL generation failed: %v", err),
 		})
@@ -271,6 +279,7 @@ func (s *Service) RunS3Presign(
 	s.notifyJob(notifier, models.JobStatus{
 		JobID:       job.JobID,
 		Label:       job.Label,
+		Kind:        job.Kind,
 		Status:      "completed",
 		Message:     fmt.Sprintf("Generated a signed URL for %s.", objectKey),
 		CompletedAt: s.jobTimestamp(),
@@ -307,6 +316,7 @@ func (s *Service) RunURLValidation(job models.JobStatus, notifier sessionport.No
 	s.notifyJob(notifier, models.JobStatus{
 		JobID:   job.JobID,
 		Label:   job.Label,
+		Kind:    job.Kind,
 		Status:  "running",
 		Message: "Validating the pasted URL.",
 	})
@@ -319,6 +329,7 @@ func (s *Service) RunURLValidation(job models.JobStatus, notifier sessionport.No
 	s.notifyJob(notifier, models.JobStatus{
 		JobID:       job.JobID,
 		Label:       job.Label,
+		Kind:        job.Kind,
 		Status:      status,
 		Message:     result.Summary,
 		CompletedAt: s.jobTimestamp(),
