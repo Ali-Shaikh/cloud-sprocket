@@ -62,6 +62,7 @@ import {
 import { awsInventoryLoaded, awsInventoryScopeForTab } from "./lib/aws-inventory";
 import { azureInventoryLoaded, azureInventoryScopeForTab } from "./lib/azure-inventory";
 import { deployRailBadge } from "./lib/deploy-activity";
+import { isDiscoveryRefreshJob, isEC2ActionJob, isS3PresignJob } from "./lib/job-kind";
 import { cycleTabId, isTypingTarget } from "./lib/keyboard-shortcuts";
 import {
   reduceShellOverlay,
@@ -547,9 +548,10 @@ export default function App() {
       );
       unsubs.push(
         await subscribeToBackendEvent("job.updated", (job: JobStatus) => {
-          const isDiscoveryRefresh =
-            job.label === "Refresh Discovery" ||
-            job.jobId === discoveryRefreshJobIdRef.current;
+          const isDiscoveryRefresh = isDiscoveryRefreshJob(
+            job,
+            discoveryRefreshJobIdRef.current,
+          );
 
           const workspaceResult = normaliseWorkspaceFromUnknown(job.result);
           if (workspaceResult) {
@@ -583,7 +585,7 @@ export default function App() {
               resetWorkspaceFetch();
             }
           }
-          if (job.label.toLowerCase().includes("ec2")) {
+          if (isEC2ActionJob(job)) {
             setEC2ActionStatus(job.message);
             setEC2ActionInFlight(job.status === "queued" || job.status === "running");
             setEC2ActionHistory((current) => [
@@ -599,7 +601,7 @@ export default function App() {
           if (isS3PresignResult(job.result)) {
             setS3SignedUrlResult(job.result);
           }
-          if (job.label.toLowerCase().includes("signed url")) {
+          if (isS3PresignJob(job)) {
             setS3SignedUrlStatus(job.message);
           }
           notifyJob(job);

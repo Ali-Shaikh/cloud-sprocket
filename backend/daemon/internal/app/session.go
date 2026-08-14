@@ -519,6 +519,7 @@ func (s *Service) handleActionsInvoke(params json.RawMessage, notifier Notifier)
 	job := models.JobStatus{
 		JobID:   fmt.Sprintf("job-%d", s.now().UnixNano()),
 		Label:   "Refresh Discovery",
+		Kind:    models.JobKindDiscoveryRefresh,
 		Status:  "queued",
 		Message: "Refreshing provider discovery and session state.",
 	}

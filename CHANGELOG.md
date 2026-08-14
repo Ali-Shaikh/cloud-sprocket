@@ -68,6 +68,9 @@ Installers for every release are published on the
 
 ### Changed
 
+- Job updates carry an optional `kind` (`discovery.refresh`, `aws.ec2.action`,
+  `aws.s3.presign`). Desktop chrome for those jobs matches `kind`, not English
+  labels.
 - Browser mock RPC dispatch is a method registry (duplicate names throw) instead
   of a 194-method switch, with a contract test against the daemon method list.
 - Daemon: remove unused AWS write/session façade helpers left after F-029 Phase 4

@@ -1540,6 +1540,7 @@ export type AwsInventorySlice<S extends AwsInventoryScope = AwsInventoryScope> =
 export interface JobStatus {
   jobId: string;
   label: string;
+  kind?: string;
   status: JobLifecycle;
   message: string;
   completedAt?: string;

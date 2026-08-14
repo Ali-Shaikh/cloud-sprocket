@@ -15,6 +15,7 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 		_ = notifier.Notify("job.updated", models.JobStatus{
 			JobID:   job.JobID,
 			Label:   job.Label,
+			Kind:    job.Kind,
 			Status:  "running",
 			Message: "Refreshing provider discovery.",
 		})
@@ -32,6 +33,7 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 			_ = notifier.Notify("job.updated", models.JobStatus{
 				JobID:   job.JobID,
 				Label:   job.Label,
+				Kind:    job.Kind,
 				Status:  "failed",
 				Message: err.Error(),
 			})
@@ -47,6 +49,7 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 			_ = notifier.Notify("job.updated", models.JobStatus{
 				JobID:   job.JobID,
 				Label:   job.Label,
+				Kind:    job.Kind,
 				Status:  "failed",
 				Message: err.Error(),
 			})
@@ -62,6 +65,7 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 			_ = notifier.Notify("job.updated", models.JobStatus{
 				JobID:   job.JobID,
 				Label:   job.Label,
+				Kind:    job.Kind,
 				Status:  "failed",
 				Message: err.Error(),
 			})
@@ -87,6 +91,7 @@ func (s *Service) runRefresh(job models.JobStatus, notifier Notifier) {
 		_ = notifier.Notify("job.updated", models.JobStatus{
 			JobID:       job.JobID,
 			Label:       job.Label,
+			Kind:        job.Kind,
 			Status:      "completed",
 			Message:     "Refresh completed.",
 			CompletedAt: s.timestamp(),
