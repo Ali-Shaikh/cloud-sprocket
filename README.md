@@ -108,7 +108,7 @@ in [Policy guardrails](docs/policy-guardrails.md).
 |------|---------|
 | Node.js | 24 (Active LTS) |
 | pnpm | 11.9+ |
-| Go | 1.26.5 |
+| Go | 1.26.6 |
 | Rust | latest stable |
 
 Linux builds also need Tauri's system packages. See the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).

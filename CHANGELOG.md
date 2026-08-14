@@ -11,6 +11,8 @@ Installers for every release are published on the
 
 ### Security
 
+- Go 1.26.5 → 1.26.6 (GO-2026-6090 crypto/tls handshake DoS, plus encoding/xml,
+  encoding/asn1, and net/http stdlib fixes).
 - Desktop Cargo lock: transitive `event-listener` 5.4.1 → 5.4.2 (RUSTSEC-2026-0221
   unsound `Send`/`Sync` on `StackSlot`). Reached via zbus / tauri-plugin-opener.
 
