@@ -98,4 +98,7 @@ func TestHandleAzureFrontDoorRefreshReturnsTopology(t *testing.T) {
 	if workspace.AzureFrontDoorProfiles[0].Name != "demo-afd" {
 		t.Fatalf("profile = %+v", workspace.AzureFrontDoorProfiles[0])
 	}
+	if !workspace.AzureInventory["frontdoor"].DetailLoaded {
+		t.Fatalf("expected Front Door topology detailLoaded, got %+v", workspace.AzureInventory["frontdoor"])
+	}
 }

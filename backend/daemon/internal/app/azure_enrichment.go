@@ -248,3 +248,21 @@ func markAzureInventory(
 	}
 	workspace.AzureInventory[scope] = state
 }
+
+// markAzureInventoryDetail is markAzureInventory plus DetailLoaded for
+// non-lightweight drill-down (Front Door topology, and similar later scopes).
+func markAzureInventoryDetail(
+	workspace *models.WorkspaceSnapshot,
+	scope string,
+	itemCount int,
+	emptyReason models.InventoryEmptyReason,
+	detailLoaded bool,
+) {
+	markAzureInventory(workspace, scope, itemCount, emptyReason)
+	if workspace == nil || workspace.AzureInventory == nil || !detailLoaded {
+		return
+	}
+	state := workspace.AzureInventory[scope]
+	state.DetailLoaded = true
+	workspace.AzureInventory[scope] = state
+}

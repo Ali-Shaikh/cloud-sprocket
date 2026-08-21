@@ -2251,7 +2251,7 @@ function buildMockWorkspace(): WorkspaceSnapshot {
           webapps: { loaded: true },
           loganalytics: { loaded: true },
           waf: { loaded: true },
-          frontdoor: { loaded: true },
+          frontdoor: { loaded: true, detailLoaded: true },
           functions: { loaded: true },
           keyvault: { loaded: true },
           cosmos: { loaded: true },

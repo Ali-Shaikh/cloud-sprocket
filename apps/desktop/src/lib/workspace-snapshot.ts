@@ -697,7 +697,7 @@ export function mergeAzureFrontDoorSelection(
   incoming: WorkspaceSnapshot,
 ): WorkspaceSnapshot {
   const normalised = normaliseWorkspaceSnapshot(incoming);
-  return normaliseWorkspaceSnapshot({
+  const merged = normaliseWorkspaceSnapshot({
     ...current,
     selectedAzureFrontDoorProfile: normalised.selectedAzureFrontDoorProfile,
     selectedAzureFrontDoorEndpoint: normalised.selectedAzureFrontDoorEndpoint,
@@ -708,6 +708,13 @@ export function mergeAzureFrontDoorSelection(
     azureFrontDoorOrigins: normalised.azureFrontDoorOrigins,
     azureFrontDoorStatusMessage: normalised.azureFrontDoorStatusMessage,
   });
+  if (!normalised.azureInventory) {
+    return merged;
+  }
+  return {
+    ...merged,
+    azureInventory: mergeAzureInventoryStates(merged.azureInventory, normalised.azureInventory),
+  };
 }
 
 export function formatBackendError(error: unknown): string {
@@ -743,24 +750,44 @@ export function frontDoorTopologyLoaded(
   if (!sessionProfileId || workspace.profile?.profileId !== sessionProfileId) {
     return false;
   }
+  const state = workspace.azureInventory?.frontdoor;
+  if (state?.detailLoaded) {
+    return true;
+  }
   const profileName =
     workspace.selectedAzureFrontDoorProfile?.trim() ||
     workspace.azureFrontDoorProfiles?.[0]?.name?.trim() ||
     "";
   if (!profileName || (workspace.azureFrontDoorProfiles?.length ?? 0) === 0) {
-    return false;
-  }
-  const endpoints = workspace.azureFrontDoorEndpoints ?? [];
-  if (endpoints.length > 0) {
-    return endpoints.some(
-      (endpoint) => !endpoint.profileName || endpoint.profileName === profileName,
+    return Boolean(
+      state?.loaded && state.emptyReason && state.emptyReason !== "not_selected",
     );
   }
-  const status = workspace.azureFrontDoorStatusMessage ?? "";
-  return (
-    status.includes("Loaded") ||
-    status.includes("No Azure Front Door profiles found")
+  const endpoints = workspace.azureFrontDoorEndpoints ?? [];
+  if (endpoints.length === 0) {
+    return false;
+  }
+  return endpoints.some(
+    (endpoint) => !endpoint.profileName || endpoint.profileName === profileName,
   );
+}
+
+function mergeAzureInventoryStates(
+  current: WorkspaceSnapshot["azureInventory"],
+  incoming: NonNullable<WorkspaceSnapshot["azureInventory"]>,
+): NonNullable<WorkspaceSnapshot["azureInventory"]> {
+  const next: NonNullable<WorkspaceSnapshot["azureInventory"]> = { ...(current ?? {}) };
+  for (const [scope, state] of Object.entries(incoming)) {
+    const previous = next[scope];
+    const merged = { ...state };
+    if (state.detailLoaded || previous?.detailLoaded) {
+      merged.detailLoaded = true;
+    } else {
+      delete merged.detailLoaded;
+    }
+    next[scope] = merged;
+  }
+  return next;
 }
 
 export function mergeAzureWafSelection(
@@ -857,10 +884,7 @@ export function mergeAzureInventoryScope(
   }
   return {
     ...merged,
-    azureInventory: {
-      ...(merged.azureInventory ?? {}),
-      ...incomingInventory,
-    },
+    azureInventory: mergeAzureInventoryStates(merged.azureInventory, incomingInventory),
   };
 }
 
