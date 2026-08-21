@@ -831,6 +831,14 @@ func TestMarkAzureInventory(t *testing.T) {
 	if workspace.AzureInventory["frontdoor"].EmptyReason != models.InventoryEmptyUnavailable {
 		t.Fatalf("frontdoor = %+v", workspace.AzureInventory["frontdoor"])
 	}
+	if workspace.AzureInventory["frontdoor"].DetailLoaded {
+		t.Fatal("list marker should not set detailLoaded")
+	}
+
+	markAzureInventoryDetail(&workspace, "frontdoor", 1, models.InventoryEmptyNoneFound, true)
+	if !workspace.AzureInventory["frontdoor"].Loaded || !workspace.AzureInventory["frontdoor"].DetailLoaded {
+		t.Fatalf("expected detail loaded, got %+v", workspace.AzureInventory["frontdoor"])
+	}
 
 	markAzureInventory(&workspace, "cosmos", 0, models.InventoryEmptyError)
 	if workspace.AzureInventory["cosmos"].EmptyReason != models.InventoryEmptyError {

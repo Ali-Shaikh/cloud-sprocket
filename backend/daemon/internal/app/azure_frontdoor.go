@@ -156,7 +156,7 @@ func (s *Service) enrichAzureFrontDoorInventory(
 			workspace.AzureFrontDoorEndpoints = []models.AzureFrontDoorEndpoint{}
 			workspace.AzureFrontDoorOriginGroups = []models.AzureFrontDoorOriginGroup{}
 			workspace.AzureFrontDoorOrigins = []models.AzureFrontDoorOrigin{}
-			markAzureInventory(workspace, "frontdoor", 0, models.InventoryEmptyUnavailable)
+			markAzureInventoryDetail(workspace, "frontdoor", 0, models.InventoryEmptyUnavailable, true)
 		})
 		return
 	}
@@ -209,6 +209,12 @@ func (s *Service) enrichAzureFrontDoorInventory(
 		workspace.SelectedAzureFrontDoorOriginGroup = originGroup
 		workspace.AzureFrontDoorOrigins = origins
 		workspace.AzureFrontDoorStatusMessage = status
-		markAzureInventory(workspace, "frontdoor", len(profiles), azureInventoryListEmptyReason(len(profiles), listErr))
+		markAzureInventoryDetail(
+			workspace,
+			"frontdoor",
+			len(profiles),
+			azureInventoryListEmptyReason(len(profiles), listErr),
+			!opts.lightweight,
+		)
 	})
 }

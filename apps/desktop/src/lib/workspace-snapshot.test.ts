@@ -8,9 +8,11 @@ import type { AwsInventorySlice } from "@/types/backend";
 import {
   emptyWorkspace,
   formatBackendError,
+  frontDoorTopologyLoaded,
   mergeAwsDynamoDBLoadMore,
   mergeAwsInventoryScope,
   mergeAwsS3ObjectSelection,
+  mergeAzureFrontDoorSelection,
   mergeAzureInventoryScope,
   normaliseWorkspaceSnapshot,
 } from "./workspace-snapshot";
@@ -250,6 +252,93 @@ describe("mergeAzureInventoryScope", () => {
       storage: { loaded: true },
       webapps: { loaded: true, emptyReason: "none_found" },
     });
+  });
+
+  it("keeps Front Door detailLoaded when a later lightweight list arrives", () => {
+    const current = normaliseWorkspaceSnapshot({
+      azureInventory: { frontdoor: { loaded: true, detailLoaded: true } },
+    });
+    const incoming = normaliseWorkspaceSnapshot({
+      azureInventory: { frontdoor: { loaded: true } },
+    });
+
+    const merged = mergeAzureInventoryScope(current, incoming, "frontdoor");
+
+    expect(merged.azureInventory?.frontdoor).toEqual({ loaded: true, detailLoaded: true });
+  });
+
+  it("records detailLoaded from a Front Door topology refresh", () => {
+    const current = normaliseWorkspaceSnapshot({
+      azureInventory: { frontdoor: { loaded: true } },
+    });
+    const incoming = normaliseWorkspaceSnapshot({
+      azureFrontDoorProfiles: [{ name: "demo-afd" }],
+      azureFrontDoorEndpoints: [{ name: "api", profileName: "demo-afd" }],
+      azureInventory: { frontdoor: { loaded: true, detailLoaded: true } },
+    });
+
+    const merged = mergeAzureFrontDoorSelection(current, incoming);
+
+    expect(merged.azureInventory?.frontdoor).toEqual({ loaded: true, detailLoaded: true });
+    expect(merged.azureFrontDoorEndpoints).toEqual([{ name: "api", profileName: "demo-afd" }]);
+  });
+});
+
+describe("frontDoorTopologyLoaded", () => {
+  const profileId = "sub-001";
+
+  it("matches the detailLoaded flag even when the status copy changes", () => {
+    expect(
+      frontDoorTopologyLoaded(
+        {
+          profile: { profileId },
+          azureFrontDoorStatusMessage: "Front Door profiles are ready.",
+          azureInventory: { frontdoor: { loaded: true, detailLoaded: true } },
+        } as never,
+        profileId,
+      ),
+    ).toBe(true);
+  });
+
+  it("does not treat a lightweight list as topology", () => {
+    expect(
+      frontDoorTopologyLoaded(
+        {
+          profile: { profileId },
+          selectedAzureFrontDoorProfile: "demo-afd",
+          azureFrontDoorProfiles: [{ name: "demo-afd" }],
+          azureFrontDoorStatusMessage: "Loaded 1 Front Door profile(s). Open topology refresh for endpoints and origins.",
+          azureInventory: { frontdoor: { loaded: true } },
+        } as never,
+        profileId,
+      ),
+    ).toBe(false);
+  });
+
+  it("treats an empty completed list as topology finished", () => {
+    expect(
+      frontDoorTopologyLoaded(
+        {
+          profile: { profileId },
+          azureInventory: { frontdoor: { loaded: true, emptyReason: "none_found" } },
+        } as never,
+        profileId,
+      ),
+    ).toBe(true);
+  });
+
+  it("falls back to matching endpoints when the flag is absent", () => {
+    expect(
+      frontDoorTopologyLoaded(
+        {
+          profile: { profileId },
+          selectedAzureFrontDoorProfile: "demo-afd",
+          azureFrontDoorProfiles: [{ name: "demo-afd" }],
+          azureFrontDoorEndpoints: [{ name: "api", profileName: "demo-afd" }],
+        } as never,
+        profileId,
+      ),
+    ).toBe(true);
   });
 });
 

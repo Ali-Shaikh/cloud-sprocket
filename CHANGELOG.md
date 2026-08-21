@@ -14,6 +14,9 @@ Installers for every release are published on the
 - Azure inventory snapshots mark each scope `loaded` (with `emptyReason` when
   the list is empty). Failed lists without cache use `error`, not `none_found`.
   Desktop no longer treats English “No App Service” copy as the loaded signal.
+- Front Door topology skip uses `azureInventory.frontdoor.detailLoaded` (and
+  matching endpoints as a historical fallback). Desktop no longer parses
+  “Loaded” / “No Azure Front Door profiles found” copy.
 
 ## [0.9.14] - 2026-08-21
 

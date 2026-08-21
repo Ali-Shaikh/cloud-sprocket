@@ -71,9 +71,11 @@ const (
 
 // InventoryScopeState reports whether a deferred inventory scope has been fetched.
 // Loaded is set by the daemon; the desktop must not infer it from English status copy.
+// DetailLoaded is true after a non-lightweight fetch (for example Front Door topology).
 type InventoryScopeState struct {
-	Loaded      bool                 `json:"loaded"`
-	EmptyReason InventoryEmptyReason `json:"emptyReason,omitempty"`
+	Loaded       bool                 `json:"loaded"`
+	EmptyReason  InventoryEmptyReason `json:"emptyReason,omitempty"`
+	DetailLoaded bool                 `json:"detailLoaded,omitempty"`
 }
 
 // AzureInventoryStates is per-scope loaded state for deferred Azure inventory.

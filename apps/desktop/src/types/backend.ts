@@ -60,6 +60,7 @@ export type InventoryEmptyReason = "none_found" | "not_selected" | "unavailable"
 export interface InventoryScopeState {
   loaded: boolean;
   emptyReason?: InventoryEmptyReason;
+  detailLoaded?: boolean;
 }
 
 export interface WorkspaceTab {
