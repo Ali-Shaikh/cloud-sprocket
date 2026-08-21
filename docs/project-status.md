@@ -1,11 +1,11 @@
 # CloudSprocket project status
 
-**Last updated:** 11 August 2026
+**Last updated:** 21 August 2026
 
-**Latest release:** [v0.9.13](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.9.13)
-**Recent releases:** v0.9.13 (GCP multi-cloud foundation, F-029 cloud domains, operator actions), v0.9.12 (application domain extraction spine F-029 Phases 0–3), v0.9.11 (F-028 AWS actions provider, F-030 linters)
+**Latest release:** [v0.9.14](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.9.14)
+**Recent releases:** v0.9.14 (operator actions, capability codes, deploy honesty), v0.9.13 (GCP multi-cloud foundation, F-029 cloud domains), v0.9.12 (application domain extraction spine F-029 Phases 0–3)
 
-**Post-v0.9.13 on `dev` (not yet released):** F-028 slices 5–7 (runtime emulator + action-status + Azure loading contexts), F-029 Phase 5e Bastion domain extract, F-029 Phase 6b/6c labs registry + invoke-write extract, AWS SDK Go patch bumps (#348).
+**Post-v0.9.14 on `dev` (not yet released):** none at cut. Azure inventory `loaded` / `emptyReason` is open as PR #387.
 
 CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tauri v2 + Go sidecar. The PySide6 legacy app was removed in PR #67. The Tauri rewrite is the active product. The app is labelled **Developer Preview** (not production-ready).
 

@@ -8,7 +8,7 @@ deploying against AWS, Azure, and GCP from one workspace. The app pairs a **Taur
 shell (`React`, `TypeScript`) with a **Go** sidecar daemon that handles discovery,
 inventory, JSON-RPC, and SQLite-backed session state.
 
-**Latest release:** [v0.9.13](https://github.com/Ali-Shaikh/cloud-sprocket/releases/latest)
+**Latest release:** [v0.9.14](https://github.com/Ali-Shaikh/cloud-sprocket/releases/latest)
 
 ## Developer Preview
 
@@ -89,7 +89,7 @@ Legend: **Browse** = inventory and detail views · **Write** = mutating actions 
 
 | Provider | Status |
 |----------|--------|
-| GCP | Overview shell plus Storage, Compute, Functions, and GKE tabs marked coming soon |
+| GCP | Live via gcloud CLI (Storage, Compute, Functions, GKE). Deeper IAM and SDK path is a v0.10 decision |
 
 ## Repository layout
 
