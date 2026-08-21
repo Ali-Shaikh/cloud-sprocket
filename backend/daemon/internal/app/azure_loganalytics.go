@@ -18,19 +18,27 @@ func (s *Service) azureLogAnalyticsWorkspaces(
 	ctx context.Context,
 	profile models.ProfileSummary,
 ) []models.AzureLogAnalyticsWorkspace {
+	workspaces, _ := s.azureLogAnalyticsWorkspacesResult(ctx, profile)
+	return workspaces
+}
+
+func (s *Service) azureLogAnalyticsWorkspacesResult(
+	ctx context.Context,
+	profile models.ProfileSummary,
+) ([]models.AzureLogAnalyticsWorkspace, error) {
 	const scope = "azure.log-analytics-workspaces"
 	queryHash := profile.ProfileID
 	workspaces, err := s.azure.ListLogAnalyticsWorkspaces(ctx, profile)
 	if err == nil {
 		_ = s.store.SaveResourceCache(ctx, scope, queryHash, workspaces, s.timestamp())
-		return workspaces
+		return workspaces, nil
 	}
 	var cached []models.AzureLogAnalyticsWorkspace
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
-		return cached
+		return cached, nil
 	}
-	return []models.AzureLogAnalyticsWorkspace{}
+	return []models.AzureLogAnalyticsWorkspace{}, err
 }
 
 func (s *Service) selectedAzureLogWorkspace(
@@ -111,7 +119,7 @@ func (s *Service) enrichAzureLogAnalyticsInventory(workspace *models.WorkspaceSn
 	}
 	ctx, cancel := s.withAzureTimeout(context.Background())
 	defer cancel()
-	workspaces := s.azureLogAnalyticsWorkspaces(ctx, *workspace.Profile)
+	workspaces, listErr := s.azureLogAnalyticsWorkspacesResult(ctx, *workspace.Profile)
 	selected := s.selectedAzureLogWorkspace(session, workspaces)
 
 	var status string
@@ -127,7 +135,7 @@ func (s *Service) enrichAzureLogAnalyticsInventory(workspace *models.WorkspaceSn
 		workspace.AzureLogAnalyticsWorkspaces = workspaces
 		workspace.SelectedAzureLogWorkspace = selected
 		workspace.AzureLogAnalyticsStatusMessage = status
-		markAzureInventory(workspace, "loganalytics", len(workspaces), models.InventoryEmptyNoneFound)
+		markAzureInventory(workspace, "loganalytics", len(workspaces), azureInventoryListEmptyReason(len(workspaces), listErr))
 	})
 }
 

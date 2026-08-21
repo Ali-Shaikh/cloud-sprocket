@@ -12,17 +12,22 @@ import (
 )
 
 func (s *Service) azureFrontDoorProfiles(ctx context.Context, profile models.ProfileSummary, withWafLink bool) []models.AzureFrontDoorProfile {
+	profiles, _ := s.azureFrontDoorProfilesResult(ctx, profile, withWafLink)
+	return profiles
+}
+
+func (s *Service) azureFrontDoorProfilesResult(ctx context.Context, profile models.ProfileSummary, withWafLink bool) ([]models.AzureFrontDoorProfile, error) {
 	const scope = "azure.frontdoor-profiles"
 	profiles, err := s.azure.ListFrontDoorProfiles(ctx, profile, withWafLink)
 	if err == nil {
 		_ = s.store.SaveResourceCache(ctx, scope, profile.ProfileID, profiles, s.timestamp())
-		return profiles
+		return profiles, nil
 	}
 	var cached []models.AzureFrontDoorProfile
 	if _, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, profile.ProfileID, &cached); cacheErr == nil && ok {
-		return cached
+		return cached, nil
 	}
-	return []models.AzureFrontDoorProfile{}
+	return []models.AzureFrontDoorProfile{}, err
 }
 
 func (s *Service) azureFrontDoorEndpoints(
@@ -156,7 +161,7 @@ func (s *Service) enrichAzureFrontDoorInventory(
 		return
 	}
 
-	profiles := s.azureFrontDoorProfiles(ctx, profile, !opts.lightweight)
+	profiles, listErr := s.azureFrontDoorProfilesResult(ctx, profile, !opts.lightweight)
 	profileName := selectedName(session.SelectedAzureFrontDoorProfile, frontDoorProfileNames(profiles))
 	resourceGroup := resourceGroupForFrontDoorProfile(profiles, profileName)
 
@@ -204,6 +209,6 @@ func (s *Service) enrichAzureFrontDoorInventory(
 		workspace.SelectedAzureFrontDoorOriginGroup = originGroup
 		workspace.AzureFrontDoorOrigins = origins
 		workspace.AzureFrontDoorStatusMessage = status
-		markAzureInventory(workspace, "frontdoor", len(profiles), models.InventoryEmptyNoneFound)
+		markAzureInventory(workspace, "frontdoor", len(profiles), azureInventoryListEmptyReason(len(profiles), listErr))
 	})
 }

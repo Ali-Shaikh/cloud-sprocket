@@ -16,19 +16,28 @@ func (s *Service) azureWebApps(
 	profile models.ProfileSummary,
 	resourceGroup string,
 ) []models.AzureWebApp {
+	apps, _ := s.azureWebAppsResult(ctx, profile, resourceGroup)
+	return apps
+}
+
+func (s *Service) azureWebAppsResult(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	resourceGroup string,
+) ([]models.AzureWebApp, error) {
 	const scope = "azure.web-apps"
 	queryHash := profile.ProfileID + "|" + resourceGroup
 	apps, err := s.azure.ListWebApps(ctx, profile, resourceGroup)
 	if err == nil {
 		_ = s.store.SaveResourceCache(ctx, scope, queryHash, apps, s.timestamp())
-		return apps
+		return apps, nil
 	}
 	var cached []models.AzureWebApp
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
 	if cacheErr == nil && ok {
-		return cached
+		return cached, nil
 	}
-	return []models.AzureWebApp{}
+	return []models.AzureWebApp{}, err
 }
 
 func (s *Service) selectedAzureWebAppName(
@@ -62,7 +71,7 @@ func (s *Service) enrichAzureAppServiceInventory(workspace *models.WorkspaceSnap
 	if resourceGroup == "" {
 		resourceGroup = s.selectedAzureResourceGroup(session, workspace.AzureResourceGroups)
 	}
-	apps := s.azureWebApps(ctx, profile, resourceGroup)
+	apps, listErr := s.azureWebAppsResult(ctx, profile, resourceGroup)
 	selectedApp := s.selectedAzureWebAppName(session, apps)
 
 	var status string
@@ -80,7 +89,7 @@ func (s *Service) enrichAzureAppServiceInventory(workspace *models.WorkspaceSnap
 		workspace.AzureWebApps = apps
 		workspace.SelectedAzureWebAppName = selectedApp
 		workspace.AzureAppServiceStatusMessage = status
-		reason := models.InventoryEmptyNoneFound
+		reason := azureInventoryListEmptyReason(len(apps), listErr)
 		if isLocalFlociProfile(profile) {
 			reason = models.InventoryEmptyUnavailable
 		} else if resourceGroup == "" {

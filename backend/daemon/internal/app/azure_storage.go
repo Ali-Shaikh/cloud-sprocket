@@ -283,11 +283,7 @@ func (s *Service) enrichAzureStorageInventory(
 			workspace.SelectedAzureBlobName = ""
 			workspace.AzureBlobMetadata = nil
 			workspace.AzureStorageStatusMessage = status
-			reason := models.InventoryEmptyNoneFound
-			if listErr != nil && len(accounts) == 0 {
-				reason = models.InventoryEmptyError
-			}
-			markAzureInventory(workspace, "storage", len(accounts), reason)
+			markAzureInventory(workspace, "storage", len(accounts), azureInventoryListEmptyReason(len(accounts), listErr))
 		})
 		return
 	}
@@ -359,10 +355,6 @@ func (s *Service) enrichAzureStorageInventory(
 		workspace.SelectedAzureBlobName = selectedBlob
 		workspace.AzureBlobMetadata = metadata
 		workspace.AzureStorageStatusMessage = status
-		reason := models.InventoryEmptyNoneFound
-		if listErr != nil && len(accounts) == 0 {
-			reason = models.InventoryEmptyError
-		}
-		markAzureInventory(workspace, "storage", len(accounts), reason)
+		markAzureInventory(workspace, "storage", len(accounts), azureInventoryListEmptyReason(len(accounts), listErr))
 	})
 }

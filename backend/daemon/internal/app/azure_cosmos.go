@@ -12,17 +12,22 @@ import (
 )
 
 func (s *Service) azureCosmosAccounts(ctx context.Context, profile models.ProfileSummary) []models.AzureCosmosAccount {
+	accounts, _ := s.azureCosmosAccountsResult(ctx, profile)
+	return accounts
+}
+
+func (s *Service) azureCosmosAccountsResult(ctx context.Context, profile models.ProfileSummary) ([]models.AzureCosmosAccount, error) {
 	const scope = "azure.cosmos-accounts"
 	accounts, err := s.azure.ListCosmosAccounts(ctx, profile)
 	if err == nil {
 		_ = s.store.SaveResourceCache(ctx, scope, profile.ProfileID, accounts, s.timestamp())
-		return accounts
+		return accounts, nil
 	}
 	var cached []models.AzureCosmosAccount
 	if _, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, profile.ProfileID, &cached); cacheErr == nil && ok {
-		return cached
+		return cached, nil
 	}
-	return []models.AzureCosmosAccount{}
+	return []models.AzureCosmosAccount{}, err
 }
 
 func (s *Service) azureCosmosDatabases(ctx context.Context, profile models.ProfileSummary, account, rg string) []models.AzureCosmosDatabase {
@@ -117,7 +122,7 @@ func (s *Service) enrichAzureCosmosInventory(
 	defer cancel()
 	profile := *workspace.Profile
 
-	accounts := s.azureCosmosAccounts(ctx, profile)
+	accounts, listErr := s.azureCosmosAccountsResult(ctx, profile)
 	account := selectedName(session.SelectedAzureCosmosAccount, cosmosAccountNames(accounts))
 	rg := resourceGroupForCosmosAccount(accounts, account)
 
@@ -145,7 +150,7 @@ func (s *Service) enrichAzureCosmosInventory(
 			workspace.SelectedAzureCosmosContainer = ""
 			workspace.AzureCosmosItems = []models.AzureCosmosItem{}
 			workspace.AzureCosmosStatusMessage = status
-			markAzureInventory(workspace, "cosmos", len(accounts), models.InventoryEmptyNoneFound)
+			markAzureInventory(workspace, "cosmos", len(accounts), azureInventoryListEmptyReason(len(accounts), listErr))
 		})
 		return
 	}
@@ -179,6 +184,6 @@ func (s *Service) enrichAzureCosmosInventory(
 		workspace.SelectedAzureCosmosContainer = container
 		workspace.AzureCosmosItems = items
 		workspace.AzureCosmosStatusMessage = status
-		markAzureInventory(workspace, "cosmos", len(accounts), models.InventoryEmptyNoneFound)
+		markAzureInventory(workspace, "cosmos", len(accounts), azureInventoryListEmptyReason(len(accounts), listErr))
 	})
 }

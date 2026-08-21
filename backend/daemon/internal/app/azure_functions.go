@@ -15,18 +15,26 @@ func (s *Service) azureFunctionApps(
 	ctx context.Context,
 	profile models.ProfileSummary,
 ) []models.AzureFunctionApp {
+	apps, _ := s.azureFunctionAppsResult(ctx, profile)
+	return apps
+}
+
+func (s *Service) azureFunctionAppsResult(
+	ctx context.Context,
+	profile models.ProfileSummary,
+) ([]models.AzureFunctionApp, error) {
 	const scope = "azure.function-apps"
 	apps, err := s.azure.ListFunctionApps(ctx, profile)
 	if err == nil {
 		_ = s.store.SaveResourceCache(ctx, scope, profile.ProfileID, apps, s.timestamp())
-		return apps
+		return apps, nil
 	}
 	var cached []models.AzureFunctionApp
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, profile.ProfileID, &cached)
 	if cacheErr == nil && ok {
-		return cached
+		return cached, nil
 	}
-	return []models.AzureFunctionApp{}
+	return []models.AzureFunctionApp{}, err
 }
 
 func (s *Service) azureFunctions(
@@ -112,7 +120,7 @@ func (s *Service) enrichAzureFunctionsInventory(
 	defer cancel()
 	profile := *workspace.Profile
 
-	apps := s.azureFunctionApps(ctx, profile)
+	apps, listErr := s.azureFunctionAppsResult(ctx, profile)
 	selectedApp := s.selectedAzureFunctionApp(session, apps)
 
 	var (
@@ -132,7 +140,7 @@ func (s *Service) enrichAzureFunctionsInventory(
 			workspace.AzureFunctions = []models.AzureFunction{}
 			workspace.SelectedAzureFunction = ""
 			workspace.AzureFunctionsStatusMessage = status
-			markAzureInventory(workspace, "functions", len(apps), models.InventoryEmptyNoneFound)
+			markAzureInventory(workspace, "functions", len(apps), azureInventoryListEmptyReason(len(apps), listErr))
 		})
 		return
 	}
@@ -151,6 +159,6 @@ func (s *Service) enrichAzureFunctionsInventory(
 		workspace.AzureFunctions = functions
 		workspace.SelectedAzureFunction = selectedFunction
 		workspace.AzureFunctionsStatusMessage = status
-		markAzureInventory(workspace, "functions", len(apps), models.InventoryEmptyNoneFound)
+		markAzureInventory(workspace, "functions", len(apps), azureInventoryListEmptyReason(len(apps), listErr))
 	})
 }
