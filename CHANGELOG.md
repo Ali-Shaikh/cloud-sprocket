@@ -9,6 +9,12 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Changed
+
+- Azure inventory snapshots mark each scope `loaded` (with `emptyReason` when
+  the list is empty). Failed lists without cache use `error`, not `none_found`.
+  Desktop no longer treats English “No App Service” copy as the loaded signal.
+
 ## [0.9.14] - 2026-08-21
 
 ### Security

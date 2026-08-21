@@ -813,32 +813,55 @@ export function mergeAzureInventoryScope(
   incoming: WorkspaceSnapshot,
   scope: string,
 ): WorkspaceSnapshot {
+  let merged: WorkspaceSnapshot;
   switch (scope) {
     case "storage":
-      return mergeAzureStorageSelection(current, incoming);
+      merged = mergeAzureStorageSelection(current, incoming);
+      break;
     case "webapps":
-      return mergeAzureResourceGroupSelection(current, incoming);
+      merged = mergeAzureResourceGroupSelection(current, incoming);
+      break;
     case "functions":
-      return mergeAzureFunctionsSelection(current, incoming);
+      merged = mergeAzureFunctionsSelection(current, incoming);
+      break;
     case "keyvault":
-      return mergeAzureKeyVaultSelection(current, incoming);
+      merged = mergeAzureKeyVaultSelection(current, incoming);
+      break;
     case "cosmos":
-      return mergeAzureCosmosSelection(current, incoming);
+      merged = mergeAzureCosmosSelection(current, incoming);
+      break;
     case "postgres":
-      return mergeAzurePostgresSelection(current, incoming);
+      merged = mergeAzurePostgresSelection(current, incoming);
+      break;
     case "waf":
-      return mergeAzureWafSelection(current, incoming);
+      merged = mergeAzureWafSelection(current, incoming);
+      break;
     case "frontdoor":
-      return mergeAzureFrontDoorSelection(current, incoming);
+      merged = mergeAzureFrontDoorSelection(current, incoming);
+      break;
     case "queues":
-      return mergeAzureQueuesSelection(current, incoming);
+      merged = mergeAzureQueuesSelection(current, incoming);
+      break;
     case "loganalytics":
-      return mergeAzureLogAnalyticsInventory(current, incoming);
+      merged = mergeAzureLogAnalyticsInventory(current, incoming);
+      break;
     case "entra":
-      return mergeAzureEntraInventory(current, incoming);
+      merged = mergeAzureEntraInventory(current, incoming);
+      break;
     default:
-      return normaliseWorkspaceSnapshot(incoming);
+      merged = normaliseWorkspaceSnapshot(incoming);
   }
+  const incomingInventory = incoming.azureInventory;
+  if (!incomingInventory) {
+    return merged;
+  }
+  return {
+    ...merged,
+    azureInventory: {
+      ...(merged.azureInventory ?? {}),
+      ...incomingInventory,
+    },
+  };
 }
 
 export function mergeAzureQueuesSelection(

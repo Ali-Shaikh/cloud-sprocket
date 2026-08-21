@@ -11,6 +11,7 @@ import {
   mergeAwsDynamoDBLoadMore,
   mergeAwsInventoryScope,
   mergeAwsS3ObjectSelection,
+  mergeAzureInventoryScope,
   normaliseWorkspaceSnapshot,
 } from "./workspace-snapshot";
 
@@ -229,6 +230,26 @@ describe("mergeAwsDynamoDBLoadMore", () => {
       '{"sid":"a"}',
     ]);
     expect(merged.dynamodbStatusMessage).toContain("Loaded 1 more");
+  });
+});
+
+describe("mergeAzureInventoryScope", () => {
+  it("keeps previously loaded scopes and records the incoming scope flag", () => {
+    const current = normaliseWorkspaceSnapshot({
+      azureInventory: { storage: { loaded: true } },
+    });
+    const incoming = normaliseWorkspaceSnapshot({
+      azureWebApps: [],
+      azureAppServiceStatusMessage: "No web apps in this subscription.",
+      azureInventory: { webapps: { loaded: true, emptyReason: "none_found" } },
+    });
+
+    const merged = mergeAzureInventoryScope(current, incoming, "webapps");
+
+    expect(merged.azureInventory).toEqual({
+      storage: { loaded: true },
+      webapps: { loaded: true, emptyReason: "none_found" },
+    });
   });
 });
 

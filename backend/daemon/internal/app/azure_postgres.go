@@ -12,17 +12,22 @@ import (
 )
 
 func (s *Service) azurePostgresServers(ctx context.Context, profile models.ProfileSummary) []models.AzurePostgresServer {
+	servers, _ := s.azurePostgresServersResult(ctx, profile)
+	return servers
+}
+
+func (s *Service) azurePostgresServersResult(ctx context.Context, profile models.ProfileSummary) ([]models.AzurePostgresServer, error) {
 	const scope = "azure.postgres-servers"
 	servers, err := s.azure.ListPostgresServers(ctx, profile)
 	if err == nil {
 		_ = s.store.SaveResourceCache(ctx, scope, profile.ProfileID, servers, s.timestamp())
-		return servers
+		return servers, nil
 	}
 	var cached []models.AzurePostgresServer
 	if _, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, profile.ProfileID, &cached); cacheErr == nil && ok {
-		return cached
+		return cached, nil
 	}
-	return []models.AzurePostgresServer{}
+	return []models.AzurePostgresServer{}, err
 }
 
 func (s *Service) azurePostgresConnection(
@@ -77,7 +82,7 @@ func (s *Service) enrichAzurePostgresInventory(
 	defer cancel()
 	profile := *workspace.Profile
 
-	servers := s.azurePostgresServers(ctx, profile)
+	servers, listErr := s.azurePostgresServersResult(ctx, profile)
 	server := selectedName(session.SelectedAzurePostgresServer, postgresServerNames(servers))
 	rg := resourceGroupForPostgresServer(servers, server)
 
@@ -110,5 +115,6 @@ func (s *Service) enrichAzurePostgresInventory(
 		workspace.SelectedAzurePostgresServer = server
 		workspace.AzurePostgresConnection = connection
 		workspace.AzurePostgresStatusMessage = status
+		markAzureInventory(workspace, "postgres", len(servers), azureInventoryListEmptyReason(len(servers), listErr))
 	})
 }

@@ -55,6 +55,7 @@ func (s *Service) enrichAzureWafInventory(
 		lockWorkspace(mu, func() {
 			workspace.AzureWafStatusMessage = "WAF policy config is cloud-only. Local KQL may still surface WAF rows when logging is configured."
 			workspace.AzureWafPolicies = []models.AzureWafPolicySummary{}
+			markAzureInventory(workspace, "waf", 0, models.InventoryEmptyUnavailable)
 		})
 		return
 	}
@@ -64,6 +65,7 @@ func (s *Service) enrichAzureWafInventory(
 		lockWorkspace(mu, func() {
 			workspace.AzureWafStatusMessage = friendlyAzureError(err)
 			workspace.AzureWafPolicies = []models.AzureWafPolicySummary{}
+			markAzureInventory(workspace, "waf", 0, models.InventoryEmptyError)
 		})
 		return
 	}
@@ -126,6 +128,7 @@ func (s *Service) enrichAzureWafInventory(
 			workspace.AzureWafPolicyDetail = nil
 			workspace.AzureWafRuleFireCounts = nil
 		}
+		markAzureInventory(workspace, "waf", len(policies), models.InventoryEmptyNoneFound)
 	})
 }
 

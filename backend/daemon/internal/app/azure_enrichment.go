@@ -217,3 +217,34 @@ func lockWorkspace(mu *sync.Mutex, fn func()) {
 	defer mu.Unlock()
 	fn()
 }
+
+// azureInventoryListEmptyReason is none_found for a genuine empty list, and
+// error when the list call failed and no rows (including cache) were returned.
+func azureInventoryListEmptyReason(itemCount int, listErr error) models.InventoryEmptyReason {
+	if listErr != nil && itemCount == 0 {
+		return models.InventoryEmptyError
+	}
+	return models.InventoryEmptyNoneFound
+}
+
+func markAzureInventory(
+	workspace *models.WorkspaceSnapshot,
+	scope string,
+	itemCount int,
+	emptyReason models.InventoryEmptyReason,
+) {
+	if workspace == nil || strings.TrimSpace(scope) == "" {
+		return
+	}
+	if workspace.AzureInventory == nil {
+		workspace.AzureInventory = make(models.AzureInventoryStates)
+	}
+	state := models.InventoryScopeState{Loaded: true}
+	if itemCount == 0 {
+		if emptyReason == "" {
+			emptyReason = models.InventoryEmptyNoneFound
+		}
+		state.EmptyReason = emptyReason
+	}
+	workspace.AzureInventory[scope] = state
+}

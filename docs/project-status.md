@@ -5,7 +5,7 @@
 **Latest release:** [v0.9.14](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.9.14)
 **Recent releases:** v0.9.14 (operator actions, capability codes, deploy honesty), v0.9.13 (GCP multi-cloud foundation, F-029 cloud domains), v0.9.12 (application domain extraction spine F-029 Phases 0–3)
 
-**Post-v0.9.14 on `dev` (not yet released):** none at cut. Azure inventory `loaded` / `emptyReason` is open as PR #387.
+**Post-v0.9.14 on `dev` (not yet released):** Azure inventory scopes report `loaded` / `emptyReason` (including `error` for failed lists).
 
 CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tauri v2 + Go sidecar. The PySide6 legacy app was removed in PR #67. The Tauri rewrite is the active product. The app is labelled **Developer Preview** (not production-ready).
 

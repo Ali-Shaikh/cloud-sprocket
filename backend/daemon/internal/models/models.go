@@ -59,6 +59,26 @@ const (
 	CapabilityReasonProfileWritesUnsupported CapabilityReasonCode = "profile_writes_unsupported"
 )
 
+// InventoryEmptyReason explains why a loaded inventory scope has no rows.
+type InventoryEmptyReason string
+
+const (
+	InventoryEmptyNoneFound   InventoryEmptyReason = "none_found"
+	InventoryEmptyNotSelected InventoryEmptyReason = "not_selected"
+	InventoryEmptyUnavailable InventoryEmptyReason = "unavailable"
+	InventoryEmptyError       InventoryEmptyReason = "error"
+)
+
+// InventoryScopeState reports whether a deferred inventory scope has been fetched.
+// Loaded is set by the daemon; the desktop must not infer it from English status copy.
+type InventoryScopeState struct {
+	Loaded      bool                 `json:"loaded"`
+	EmptyReason InventoryEmptyReason `json:"emptyReason,omitempty"`
+}
+
+// AzureInventoryStates is per-scope loaded state for deferred Azure inventory.
+type AzureInventoryStates map[string]InventoryScopeState
+
 // ActionCapability describes whether a single mutating UI action is available
 // and why it may be disabled (write mode, profile, runtime reachability).
 type ActionCapability struct {
@@ -1507,6 +1527,7 @@ type WorkspaceSnapshot struct {
 	AzureWriteCapable                 bool                          `json:"azureWriteCapable"`
 	AzureWriteModeEnabled             bool                          `json:"azureWriteModeEnabled"`
 	AzureWritesEnabled                bool                          `json:"azureWritesEnabled"`
+	AzureInventory                    AzureInventoryStates          `json:"azureInventory,omitempty"`
 	SelectedAzureResourceGroup        string                        `json:"selectedAzureResourceGroup,omitempty"`
 	SelectedAzureVMID                 string                        `json:"selectedAzureVmId,omitempty"`
 	SelectedAzureStorageAccount       string                        `json:"selectedAzureStorageAccount,omitempty"`

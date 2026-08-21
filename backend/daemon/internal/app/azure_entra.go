@@ -64,6 +64,7 @@ func (s *Service) enrichAzureEntraInventory(workspace *models.WorkspaceSnapshot,
 		lockWorkspace(mu, func() {
 			workspace.AzureEntraStatusMessage =
 				"floci-az emulates the Entra token/OIDC plane only, not the directory. Use a cloud Azure profile to browse users, groups, and app registrations."
+			markAzureInventory(workspace, "entra", 0, models.InventoryEmptyUnavailable)
 		})
 		return
 	}
@@ -101,5 +102,6 @@ func (s *Service) enrichAzureEntraInventory(workspace *models.WorkspaceSnapshot,
 		workspace.AzureEntraGroups = groups
 		workspace.AzureEntraApps = apps
 		workspace.AzureEntraStatusMessage = status
+		markAzureInventory(workspace, "entra", len(users)+len(groups)+len(apps), models.InventoryEmptyNoneFound)
 	})
 }

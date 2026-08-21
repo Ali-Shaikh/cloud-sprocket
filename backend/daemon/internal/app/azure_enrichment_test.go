@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -804,6 +805,196 @@ func TestAzureInventoryGetScopedStorage(t *testing.T) {
 	if len(workspace.AzureBlobContainers) == 0 {
 		t.Fatal("expected blob containers from scoped storage inventory")
 	}
+	if !workspace.AzureInventory["storage"].Loaded {
+		t.Fatalf("expected storage scope marked loaded, got %+v", workspace.AzureInventory)
+	}
+}
+
+func TestMarkAzureInventory(t *testing.T) {
+	var workspace models.WorkspaceSnapshot
+	markAzureInventory(&workspace, "webapps", 0, models.InventoryEmptyNoneFound)
+	state := workspace.AzureInventory["webapps"]
+	if !state.Loaded {
+		t.Fatal("expected loaded")
+	}
+	if state.EmptyReason != models.InventoryEmptyNoneFound {
+		t.Fatalf("emptyReason = %q", state.EmptyReason)
+	}
+
+	markAzureInventory(&workspace, "webapps", 2, models.InventoryEmptyNoneFound)
+	state = workspace.AzureInventory["webapps"]
+	if !state.Loaded || state.EmptyReason != "" {
+		t.Fatalf("expected loaded with no empty reason, got %+v", state)
+	}
+
+	markAzureInventory(&workspace, "frontdoor", 0, models.InventoryEmptyUnavailable)
+	if workspace.AzureInventory["frontdoor"].EmptyReason != models.InventoryEmptyUnavailable {
+		t.Fatalf("frontdoor = %+v", workspace.AzureInventory["frontdoor"])
+	}
+
+	markAzureInventory(&workspace, "cosmos", 0, models.InventoryEmptyError)
+	if workspace.AzureInventory["cosmos"].EmptyReason != models.InventoryEmptyError {
+		t.Fatalf("cosmos = %+v", workspace.AzureInventory["cosmos"])
+	}
+}
+
+func TestAzureInventoryListEmptyReason(t *testing.T) {
+	errBoom := errors.New("list failed")
+	cases := []struct {
+		name  string
+		count int
+		err   error
+		want  models.InventoryEmptyReason
+	}{
+		{name: "genuine empty list", count: 0, err: nil, want: models.InventoryEmptyNoneFound},
+		{name: "list failure with no rows", count: 0, err: errBoom, want: models.InventoryEmptyError},
+		{name: "rows present ignore list error", count: 2, err: errBoom, want: models.InventoryEmptyNoneFound},
+		{name: "rows present no error", count: 3, err: nil, want: models.InventoryEmptyNoneFound},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := azureInventoryListEmptyReason(tc.count, tc.err)
+			if got != tc.want {
+				t.Fatalf("got %q want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+type failingAzureScopeLists struct {
+	stubAzureInventory
+}
+
+func (failingAzureScopeLists) ListStorageAccounts(context.Context, models.ProfileSummary) ([]models.AzureStorageAccount, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func (failingAzureScopeLists) ListCosmosAccounts(context.Context, models.ProfileSummary) ([]models.AzureCosmosAccount, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func (failingAzureScopeLists) ListFunctionApps(context.Context, models.ProfileSummary) ([]models.AzureFunctionApp, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func (failingAzureScopeLists) ListKeyVaults(context.Context, models.ProfileSummary) ([]models.AzureKeyVault, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func (failingAzureScopeLists) ListLogAnalyticsWorkspaces(context.Context, models.ProfileSummary) ([]models.AzureLogAnalyticsWorkspace, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func (failingAzureScopeLists) ListPostgresServers(context.Context, models.ProfileSummary) ([]models.AzurePostgresServer, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func (failingAzureScopeLists) ListFrontDoorProfiles(context.Context, models.ProfileSummary, bool) ([]models.AzureFrontDoorProfile, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func (failingAzureScopeLists) ListWebApps(context.Context, models.ProfileSummary, string) ([]models.AzureWebApp, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func TestAzureInventoryGetFailedListsMarkError(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+	mustWriteFile(
+		t,
+		filepath.Join(home, ".azure", "azureProfile.json"),
+		`{"subscriptions":[{"id":"sub-001","name":"Marketing","tenantId":"tenant-123","user":{"name":"ali@example.com"}}]}`,
+	)
+
+	settings := config.FromEnv(map[string]string{}, "linux", home)
+	if err := settings.EnsureRuntimeDirs(); err != nil {
+		t.Fatalf("EnsureRuntimeDirs: %v", err)
+	}
+
+	dataStore, err := store.Open(settings.DatabasePath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer dataStore.Close()
+
+	service := New(
+		settings,
+		dataStore,
+		discovery.New(settings, func(command string) (string, error) {
+			if command == "az" {
+				return "/usr/bin/az", nil
+			}
+			return "", nil
+		}),
+		&stubS3Inventory{},
+		&stubEC2Inventory{},
+		stubLambdaInventory{},
+		stubDynamoDBInventory{},
+		stubSQSInventory{},
+		stubSNSInventory{},
+		stubRDSInventory{},
+		stubECSInventory{},
+		stubEKSInventory{},
+		stubCloudFormationInventory{},
+		stubEventBridgeInventory{},
+		stubRoute53Inventory{},
+		stubElbv2Inventory{},
+		stubKmsInventory{},
+		stubApiGatewayInventory{},
+		stubSecretsManagerInventory{},
+		&stubLogsInventory{},
+		&stubIAMInventory{},
+		failingAzureScopeLists{stubAzureInventory: stubAzureInventory{
+			resourceGroups: []models.AzureResourceGroup{{Name: "demo-rg", Location: "westeurope"}},
+		}},
+		stubDockerRuntime{},
+	)
+
+	ctx := context.Background()
+	for _, step := range []struct {
+		method string
+		params []byte
+	}{
+		{"session.selectProvider", []byte(`{"providerId":"azure"}`)},
+		{"session.selectProfile", []byte(`{"providerId":"azure","profileId":"sub-001"}`)},
+		{"session.selectAuthMethod", []byte(`{"authMethod":"cli"}`)},
+		{"session.lock", nil},
+	} {
+		if _, err := service.Handle(ctx, step.method, step.params, nil); err != nil {
+			t.Fatalf("%s: %v", step.method, err)
+		}
+	}
+
+	for _, tc := range []struct {
+		scope string
+	}{
+		{scope: "storage"},
+		{scope: "cosmos"},
+		{scope: "functions"},
+		{scope: "keyvault"},
+		{scope: "loganalytics"},
+		{scope: "postgres"},
+		{scope: "frontdoor"},
+		{scope: "webapps"},
+	} {
+		t.Run(tc.scope, func(t *testing.T) {
+			result, err := service.Handle(ctx, "azure.inventory.get", []byte(`{"scope":"`+tc.scope+`"}`), nil)
+			if err != nil {
+				t.Fatalf("azure.inventory.get: %v", err)
+			}
+			workspace, ok := result.(models.WorkspaceSnapshot)
+			if !ok {
+				t.Fatalf("expected WorkspaceSnapshot, got %T", result)
+			}
+			state := workspace.AzureInventory[tc.scope]
+			if !state.Loaded {
+				t.Fatalf("expected loaded, got %+v", state)
+			}
+			if state.EmptyReason != models.InventoryEmptyError {
+				t.Fatalf("emptyReason = %q, want %q", state.EmptyReason, models.InventoryEmptyError)
+			}
+		})
+	}
 }
 
 type failingStorageAccountsAzure struct {
@@ -893,6 +1084,9 @@ func TestAzureInventoryGetStorageSurfacesListError(t *testing.T) {
 	}
 	if !strings.Contains(workspace.AzureStorageStatusMessage, "Could not list storage accounts") {
 		t.Fatalf("status = %q, want list error surface", workspace.AzureStorageStatusMessage)
+	}
+	if workspace.AzureInventory["storage"].EmptyReason != models.InventoryEmptyError {
+		t.Fatalf("storage emptyReason = %+v, want error", workspace.AzureInventory["storage"])
 	}
 	// Multi-line: title, guidance, optional detail for the banner UI.
 	if lines := strings.Split(workspace.AzureStorageStatusMessage, "\n"); len(lines) < 2 {

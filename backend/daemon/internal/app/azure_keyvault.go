@@ -16,18 +16,26 @@ func (s *Service) azureKeyVaults(
 	ctx context.Context,
 	profile models.ProfileSummary,
 ) []models.AzureKeyVault {
+	vaults, _ := s.azureKeyVaultsResult(ctx, profile)
+	return vaults
+}
+
+func (s *Service) azureKeyVaultsResult(
+	ctx context.Context,
+	profile models.ProfileSummary,
+) ([]models.AzureKeyVault, error) {
 	const scope = "azure.key-vaults"
 	vaults, err := s.azure.ListKeyVaults(ctx, profile)
 	if err == nil {
 		_ = s.store.SaveResourceCache(ctx, scope, profile.ProfileID, vaults, s.timestamp())
-		return vaults
+		return vaults, nil
 	}
 	var cached []models.AzureKeyVault
 	_, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, profile.ProfileID, &cached)
 	if cacheErr == nil && ok {
-		return cached
+		return cached, nil
 	}
-	return []models.AzureKeyVault{}
+	return []models.AzureKeyVault{}, err
 }
 
 func (s *Service) azureKeyVaultSecrets(
@@ -103,7 +111,7 @@ func (s *Service) enrichAzureKeyVaultInventory(
 	defer cancel()
 	profile := *workspace.Profile
 
-	vaults := s.azureKeyVaults(ctx, profile)
+	vaults, listErr := s.azureKeyVaultsResult(ctx, profile)
 	selectedVault := s.selectedAzureKeyVault(session, vaults)
 
 	var (
@@ -123,6 +131,7 @@ func (s *Service) enrichAzureKeyVaultInventory(
 			workspace.AzureKeyVaultSecrets = []models.AzureKeyVaultSecret{}
 			workspace.SelectedAzureSecret = ""
 			workspace.AzureKeyVaultStatusMessage = status
+			markAzureInventory(workspace, "keyvault", len(vaults), azureInventoryListEmptyReason(len(vaults), listErr))
 		})
 		return
 	}
@@ -140,6 +149,7 @@ func (s *Service) enrichAzureKeyVaultInventory(
 		workspace.AzureKeyVaultSecrets = secrets
 		workspace.SelectedAzureSecret = selectedSecret
 		workspace.AzureKeyVaultStatusMessage = status
+		markAzureInventory(workspace, "keyvault", len(vaults), azureInventoryListEmptyReason(len(vaults), listErr))
 	})
 }
 
