@@ -232,7 +232,36 @@ func TestQueryCosmosItemsHTTPError(t *testing.T) {
 	}
 }
 
-func TestQueryCosmosItemsMarksTruncation(t *testing.T) {
+func TestQueryCosmosItemsTruncatesOnContinuation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("x-ms-continuation", "token-2")
+		_, _ = io.WriteString(w, `{"Documents":[{"id":"doc-1"}]}`)
+	}))
+	t.Cleanup(server.Close)
+
+	inv := newLocalInventory(server.URL)
+	result, err := inv.QueryCosmosItems(
+		context.Background(),
+		localFlociProfile(),
+		"devstoreaccount1",
+		"",
+		"appdb",
+		"orders",
+		"SELECT * FROM c",
+	)
+	if err != nil {
+		t.Fatalf("QueryCosmosItems: %v", err)
+	}
+	if !result.Truncated || len(result.Items) != 1 {
+		t.Fatalf("truncated=%v items=%d", result.Truncated, len(result.Items))
+	}
+	if !strings.Contains(result.Summary, "capped") {
+		t.Fatalf("summary = %q", result.Summary)
+	}
+}
+
+func TestQueryCosmosItemsDoesNotTruncateCompletePage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		docs := make([]string, cosmosQueryMaxItems)
 		for i := range docs {
@@ -256,11 +285,8 @@ func TestQueryCosmosItemsMarksTruncation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QueryCosmosItems: %v", err)
 	}
-	if !result.Truncated || len(result.Items) != cosmosQueryMaxItems {
+	if result.Truncated || len(result.Items) != cosmosQueryMaxItems {
 		t.Fatalf("truncated=%v items=%d", result.Truncated, len(result.Items))
-	}
-	if !strings.Contains(result.Summary, "capped") {
-		t.Fatalf("summary = %q", result.Summary)
 	}
 }
 

@@ -212,7 +212,7 @@ func (i *Inventory) QueryCosmosItems(
 		return models.AzureCosmosQueryResult{}, err
 	}
 	resLink := "dbs/" + database + "/colls/" + container
-	raw, err := i.cosmosQuery(ctx, endpoint, key, resLink, normalised, cosmosQueryMaxItems)
+	raw, continuation, err := i.cosmosQuery(ctx, endpoint, key, resLink, normalised, cosmosQueryMaxItems)
 	if err != nil {
 		return models.AzureCosmosQueryResult{}, err
 	}
@@ -220,7 +220,7 @@ func (i *Inventory) QueryCosmosItems(
 	if err != nil {
 		return models.AzureCosmosQueryResult{}, err
 	}
-	truncated := len(items) >= cosmosQueryMaxItems
+	truncated := strings.TrimSpace(continuation) != ""
 	summary := fmt.Sprintf("Returned %d document(s) from %s/%s/%s.", len(items), account, database, container)
 	if truncated {
 		summary += fmt.Sprintf(" Results capped at %d.", cosmosQueryMaxItems)
@@ -367,24 +367,25 @@ func decodeCosmosDocuments(raw []byte) ([]models.AzureCosmosItem, error) {
 	return items, nil
 }
 
-// cosmosQuery performs a signed Cosmos DB SQL API query POST and returns the body.
-func (i *Inventory) cosmosQuery(ctx context.Context, endpoint, key, resLink, query string, maxItems int) ([]byte, error) {
+// cosmosQuery performs a signed Cosmos DB SQL API query POST and returns the
+// body plus the continuation token (empty when the page is complete).
+func (i *Inventory) cosmosQuery(ctx context.Context, endpoint, key, resLink, query string, maxItems int) ([]byte, string, error) {
 	date := time.Now().UTC().Format(http.TimeFormat)
 	auth, err := cosmosAuthHeader("POST", "docs", resLink, date, key)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	body, err := json.Marshal(map[string]any{
 		"query":      query,
 		"parameters": []any{},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("encode cosmos query: %w", err)
+		return nil, "", fmt.Errorf("encode cosmos query: %w", err)
 	}
 	url := strings.TrimRight(endpoint, "/") + "/" + resLink + "/docs"
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	request.Header.Set("Authorization", auth)
 	request.Header.Set("x-ms-date", date)
@@ -398,17 +399,17 @@ func (i *Inventory) cosmosQuery(ctx context.Context, endpoint, key, resLink, que
 	}
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("cosmos request: %w", err)
+		return nil, "", fmt.Errorf("cosmos request: %w", err)
 	}
 	defer response.Body.Close()
 	raw, _ := io.ReadAll(response.Body)
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		if len(raw) > 0 {
-			return nil, fmt.Errorf("cosmos QUERY %s returned HTTP %d: %s", resLink, response.StatusCode, strings.TrimSpace(string(raw)))
+			return nil, "", fmt.Errorf("cosmos QUERY %s returned HTTP %d: %s", resLink, response.StatusCode, strings.TrimSpace(string(raw)))
 		}
-		return nil, fmt.Errorf("cosmos QUERY %s returned HTTP %d", resLink, response.StatusCode)
+		return nil, "", fmt.Errorf("cosmos QUERY %s returned HTTP %d", resLink, response.StatusCode)
 	}
-	return raw, nil
+	return raw, strings.TrimSpace(response.Header.Get("x-ms-continuation")), nil
 }
 
 // cosmosDelete performs a signed Cosmos DB data-plane DELETE for a document.

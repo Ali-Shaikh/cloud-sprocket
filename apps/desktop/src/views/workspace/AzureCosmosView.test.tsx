@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
@@ -232,6 +232,56 @@ describe("AzureCosmosView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Run query" }));
     expect(await screen.findByText(/Results were capped/)).toBeTruthy();
+  });
+
+  it("drops a late query result after the container changes", async () => {
+    let resolveQuery: (value: {
+      account: string;
+      database: string;
+      container: string;
+      query: string;
+      items: { id: string; json: string }[];
+      summary: string;
+    }) => void = () => {};
+    const onRunQuery = vi.fn(
+      () =>
+        new Promise<{
+          account: string;
+          database: string;
+          container: string;
+          query: string;
+          items: { id: string; json: string }[];
+          summary: string;
+        }>((resolve) => {
+          resolveQuery = resolve;
+        }),
+    );
+    const view = (selectedContainer: string) => (
+      <ThemeProvider>
+        <AzureCosmosView
+          workspace={{ ...workspace, selectedAzureCosmosContainer: selectedContainer }}
+          onSelectAccount={() => {}}
+          onSelectDatabase={() => {}}
+          onSelectContainer={() => {}}
+          onDeleteItem={() => {}}
+          onRunQuery={onRunQuery}
+        />
+      </ThemeProvider>
+    );
+    const { rerender } = render(view("orders"));
+    fireEvent.click(screen.getByRole("button", { name: "Run query" }));
+    rerender(view("users"));
+    await act(async () => {
+      resolveQuery({
+        account: "devstoreaccount1",
+        database: "appdb",
+        container: "orders",
+        query: "SELECT * FROM c",
+        items: [{ id: "stale-1", json: '{"id":"stale-1"}' }],
+        summary: "Returned 1 document(s) from devstoreaccount1/appdb/orders.",
+      });
+    });
+    expect(screen.queryByText("stale-1")).toBeNull();
   });
 });
 

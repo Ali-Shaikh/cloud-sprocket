@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Database } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -101,10 +101,13 @@ export default function AzureCosmosView({
   const [queryResult, setQueryResult] = useState<AzureCosmosQueryResult | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [queryRunning, setQueryRunning] = useState(false);
+  const queryGeneration = useRef(0);
 
   useEffect(() => {
+    queryGeneration.current += 1;
     setQueryResult(null);
     setQueryError(null);
+    setQueryRunning(false);
   }, [account, database, container]);
 
   const canQuery = Boolean(account && database && container);
@@ -114,16 +117,25 @@ export default function AzureCosmosView({
     if (!canQuery || queryRunning || !queryText.trim()) {
       return;
     }
+    const generation = queryGeneration.current;
     setQueryRunning(true);
     setQueryError(null);
     try {
       const result = await onRunQuery(queryText);
+      if (generation !== queryGeneration.current) {
+        return;
+      }
       setQueryResult(result);
     } catch (error) {
+      if (generation !== queryGeneration.current) {
+        return;
+      }
       setQueryResult(null);
       setQueryError(error instanceof Error ? error.message : String(error));
     } finally {
-      setQueryRunning(false);
+      if (generation === queryGeneration.current) {
+        setQueryRunning(false);
+      }
     }
   };
 
