@@ -123,6 +123,135 @@ func (d *DynamoDBInventory) ScanSampleItems(
 	return d.scanSampleItems(ctx, client, tableName, limit, exclusiveStartToken)
 }
 
+// QueryItems runs a DynamoDB Query for a partition key (optional sort-key equality).
+// Results are capped at maxDynamoDBSampleItems and are not paginated in v1.
+func (d *DynamoDBInventory) QueryItems(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	region string,
+	tableName string,
+	hashKey string,
+	hashValue string,
+	rangeKey string,
+	rangeValue string,
+) (models.AwsDynamoDBQueryResult, error) {
+	tableName = strings.TrimSpace(tableName)
+	if tableName == "" {
+		return models.AwsDynamoDBQueryResult{}, fmt.Errorf("table name is required")
+	}
+	expr, names, values, err := dynamoQueryKeyCondition(hashKey, hashValue, rangeKey, rangeValue)
+	if err != nil {
+		return models.AwsDynamoDBQueryResult{}, err
+	}
+	if region == "" {
+		region = awsRegionHint(profile)
+	}
+	cfg, err := d.loadConfig(ctx, profile, region)
+	if err != nil {
+		return models.AwsDynamoDBQueryResult{}, err
+	}
+	client := dynamodbClient(cfg, profile)
+	res, err := client.Query(ctx, &dynamodb.QueryInput{
+		TableName:                 aws.String(tableName),
+		KeyConditionExpression:    aws.String(expr),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+		Limit:                     aws.Int32(maxDynamoDBSampleItems),
+	})
+	if err != nil {
+		return models.AwsDynamoDBQueryResult{}, err
+	}
+	items := encodeDynamoItems(res.Items)
+	truncated := len(items) >= maxDynamoDBSampleItems || len(res.LastEvaluatedKey) > 0
+	summary := fmt.Sprintf("Queried %d item(s) from %s.", len(items), tableName)
+	if truncated {
+		summary = fmt.Sprintf(
+			"Queried %d item(s) from %s. Results capped at %d items.",
+			len(items),
+			tableName,
+			maxDynamoDBSampleItems,
+		)
+	}
+	result := models.AwsDynamoDBQueryResult{
+		TableName: tableName,
+		HashKey:   strings.TrimSpace(hashKey),
+		HashValue: strings.TrimSpace(hashValue),
+		Items:     items,
+		Truncated: truncated,
+		Summary:   summary,
+	}
+	if strings.TrimSpace(rangeKey) != "" {
+		result.RangeKey = strings.TrimSpace(rangeKey)
+		result.RangeValue = strings.TrimSpace(rangeValue)
+	}
+	return result, nil
+}
+
+// parseDynamoScalar maps a trimmed operator value to a DynamoDB scalar.
+// JSON numbers become N; everything else (including booleans) becomes S.
+func parseDynamoScalar(value string) (types.AttributeValue, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil, fmt.Errorf("value is required")
+	}
+	var number json.Number
+	if err := json.Unmarshal([]byte(trimmed), &number); err == nil && string(number) == trimmed {
+		return &types.AttributeValueMemberN{Value: string(number)}, nil
+	}
+	return &types.AttributeValueMemberS{Value: trimmed}, nil
+}
+
+func dynamoQueryKeyCondition(
+	hashKey string,
+	hashValue string,
+	rangeKey string,
+	rangeValue string,
+) (string, map[string]string, map[string]types.AttributeValue, error) {
+	hashKey = strings.TrimSpace(hashKey)
+	hashValue = strings.TrimSpace(hashValue)
+	rangeKey = strings.TrimSpace(rangeKey)
+	rangeValue = strings.TrimSpace(rangeValue)
+	if hashKey == "" || hashValue == "" {
+		return "", nil, nil, fmt.Errorf("hash key name and value are required")
+	}
+	hashAttr, err := parseDynamoScalar(hashValue)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	names := map[string]string{"#hk": hashKey}
+	values := map[string]types.AttributeValue{":hv": hashAttr}
+	expr := "#hk = :hv"
+	if rangeKey != "" {
+		if rangeValue == "" {
+			return "", nil, nil, fmt.Errorf("range key value is required")
+		}
+		rangeAttr, err := parseDynamoScalar(rangeValue)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		names["#rk"] = rangeKey
+		values[":rv"] = rangeAttr
+		expr = "#hk = :hv AND #rk = :rv"
+	}
+	return expr, names, values, nil
+}
+
+func encodeDynamoItems(items []map[string]types.AttributeValue) []string {
+	encoded := make([]string, 0, len(items))
+	for _, item := range items {
+		var native map[string]any
+		if err := attributevalue.UnmarshalMap(item, &native); err != nil {
+			continue
+		}
+		body, err := json.MarshalIndent(native, "", "  ")
+		if err != nil {
+			continue
+		}
+		encoded = append(encoded, string(body))
+	}
+	return encoded
+}
+
 func (d *DynamoDBInventory) scanSampleItems(
 	ctx context.Context,
 	client *dynamodb.Client,
@@ -148,18 +277,7 @@ func (d *DynamoDBInventory) scanSampleItems(
 	if err != nil {
 		return models.AwsDynamoDBScanPage{}, err
 	}
-	items := make([]string, 0, len(res.Items))
-	for _, item := range res.Items {
-		var native map[string]any
-		if err := attributevalue.UnmarshalMap(item, &native); err != nil {
-			continue
-		}
-		encoded, err := json.MarshalIndent(native, "", "  ")
-		if err != nil {
-			continue
-		}
-		items = append(items, string(encoded))
-	}
+	items := encodeDynamoItems(res.Items)
 	nextToken, err := encodeDynamoExclusiveStartKey(res.LastEvaluatedKey)
 	if err != nil {
 		return models.AwsDynamoDBScanPage{}, err

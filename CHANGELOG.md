@@ -15,6 +15,8 @@ Installers for every release are published on the
   SQL API query against the selected container (cross-partition, capped at 50
   documents). The Cosmos tab adds a query editor and results panel; write mode
   is not required.
+- DynamoDB Query-by-key: read-only `aws.dynamodb.queryItems` runs a bounded
+  partition Query against the selected table. Write mode is not required.
 
 ### Changed
 

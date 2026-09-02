@@ -209,6 +209,7 @@ function renderDynamoDBView() {
         onSelectTable={onSelectTable}
         onPutItem={vi.fn()}
         onDeleteItem={vi.fn()}
+        onRunQuery={vi.fn()}
       />
     </ThemeProvider>,
   );
@@ -250,6 +251,7 @@ describe("DynamoDBView", () => {
           onSelectTable={vi.fn()}
           onPutItem={vi.fn()}
           onDeleteItem={vi.fn()}
+          onRunQuery={vi.fn()}
           onLoadMoreItems={onLoadMoreItems}
         />
       </ThemeProvider>,
@@ -281,6 +283,7 @@ describe("DynamoDBView", () => {
           onSelectTable={vi.fn()}
           onPutItem={onPutItem}
           onDeleteItem={onDeleteItem}
+          onRunQuery={vi.fn()}
         />
       </ThemeProvider>,
     );
@@ -344,10 +347,113 @@ describe("DynamoDBView", () => {
           onSelectTable={vi.fn()}
           onPutItem={vi.fn()}
           onDeleteItem={vi.fn()}
+          onRunQuery={vi.fn()}
         />
       </ThemeProvider>,
     );
 
     expect(screen.getByText("DynamoDB requires an AWS workspace")).toBeInTheDocument();
+  });
+
+  it("runs a query and shows a result item", async () => {
+    mockMatchMedia(true);
+    const onRunQuery = vi.fn().mockResolvedValue({
+      tableName: "cloudsprocket-orders",
+      hashKey: "orderId",
+      hashValue: "ord-001",
+      items: ['{"orderId":"ord-query-hit","customerId":"cust-9"}'],
+      summary: "Queried 1 item(s) from cloudsprocket-orders.",
+    });
+    render(
+      <ThemeProvider>
+        <DynamoDBView
+          workspace={workspaceFixture}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectTable={vi.fn()}
+          onPutItem={vi.fn()}
+          onDeleteItem={vi.fn()}
+          onRunQuery={onRunQuery}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText("orderId"), { target: { value: "ord-001" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run query" }));
+
+    expect(onRunQuery).toHaveBeenCalledWith({
+      tableName: "cloudsprocket-orders",
+      hashKey: "orderId",
+      hashValue: "ord-001",
+      rangeKey: undefined,
+      rangeValue: undefined,
+    });
+    expect(await screen.findByText(/ord-query-hit/)).toBeInTheDocument();
+    expect(screen.getByText(/Queried 1 item\(s\) from cloudsprocket-orders/)).toBeInTheDocument();
+  });
+
+  it("disables Run query without a hash value or without a table", () => {
+    mockMatchMedia(true);
+    const { rerender } = render(
+      <ThemeProvider>
+        <DynamoDBView
+          workspace={workspaceFixture}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectTable={vi.fn()}
+          onPutItem={vi.fn()}
+          onDeleteItem={vi.fn()}
+          onRunQuery={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Run query" })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("orderId"), { target: { value: "ord-001" } });
+    expect(screen.getByRole("button", { name: "Run query" })).toBeEnabled();
+
+    rerender(
+      <ThemeProvider>
+        <DynamoDBView
+          workspace={{ ...workspaceFixture, selectedDynamodbTableName: "" }}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectTable={vi.fn()}
+          onPutItem={vi.fn()}
+          onDeleteItem={vi.fn()}
+          onRunQuery={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Run query" })).toBeDisabled();
+  });
+
+  it("shows a backend error", async () => {
+    mockMatchMedia(true);
+    const onRunQuery = vi.fn().mockRejectedValue(new Error("DynamoDB query failed"));
+    render(
+      <ThemeProvider>
+        <DynamoDBView
+          workspace={workspaceFixture}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectTable={vi.fn()}
+          onPutItem={vi.fn()}
+          onDeleteItem={vi.fn()}
+          onRunQuery={onRunQuery}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText("orderId"), { target: { value: "ord-001" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run query" }));
+
+    expect(await screen.findByText("DynamoDB query failed")).toBeInTheDocument();
   });
 });

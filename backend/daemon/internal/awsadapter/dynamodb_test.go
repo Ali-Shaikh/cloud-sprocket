@@ -12,9 +12,9 @@ import (
 
 func TestDynamoTableSummaryMapsKeysAndGSIs(t *testing.T) {
 	table := &types.TableDescription{
-		TableName: aws.String("app-data"),
-		TableStatus: types.TableStatusActive,
-		ItemCount: aws.Int64(42),
+		TableName:      aws.String("app-data"),
+		TableStatus:    types.TableStatusActive,
+		ItemCount:      aws.Int64(42),
 		TableSizeBytes: aws.Int64(8192),
 		BillingModeSummary: &types.BillingModeSummary{
 			BillingMode: types.BillingModePayPerRequest,
@@ -30,7 +30,7 @@ func TestDynamoTableSummaryMapsKeysAndGSIs(t *testing.T) {
 		},
 		GlobalSecondaryIndexes: []types.GlobalSecondaryIndexDescription{
 			{
-				IndexName: aws.String("by-status"),
+				IndexName:   aws.String("by-status"),
 				IndexStatus: types.IndexStatusActive,
 				KeySchema: []types.KeySchemaElement{
 					{AttributeName: aws.String("gsi_pk"), KeyType: types.KeyTypeHash},
@@ -101,5 +101,167 @@ func TestDynamoExclusiveStartKeyEmpty(t *testing.T) {
 	decoded, err := decodeDynamoExclusiveStartKey("")
 	if err != nil || decoded != nil {
 		t.Fatalf("decode empty = %#v err=%v", decoded, err)
+	}
+}
+
+func TestParseDynamoScalar(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		in      string
+		wantN   string
+		wantS   string
+		wantErr bool
+	}{
+		{name: "empty", in: "", wantErr: true},
+		{name: "whitespace", in: "   ", wantErr: true},
+		{name: "integer", in: "42", wantN: "42"},
+		{name: "trimmed number", in: "  3.14  ", wantN: "3.14"},
+		{name: "negative", in: "-7", wantN: "-7"},
+		{name: "scientific", in: "1e10", wantN: "1e10"},
+		{name: "string", in: "cust-9", wantS: "cust-9"},
+		{name: "trimmed string", in: "  order-1  ", wantS: "order-1"},
+		{name: "boolean true is string", in: "true", wantS: "true"},
+		{name: "boolean false is string", in: "false", wantS: "false"},
+		{name: "null is string", in: "null", wantS: "null"},
+		{name: "quoted number is string", in: `"42"`, wantS: `"42"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := parseDynamoScalar(tt.in)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got %#v", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseDynamoScalar(%q): %v", tt.in, err)
+			}
+			if tt.wantN != "" {
+				n, ok := got.(*types.AttributeValueMemberN)
+				if !ok || n.Value != tt.wantN {
+					t.Fatalf("got %#v, want N %q", got, tt.wantN)
+				}
+				return
+			}
+			s, ok := got.(*types.AttributeValueMemberS)
+			if !ok || s.Value != tt.wantS {
+				t.Fatalf("got %#v, want S %q", got, tt.wantS)
+			}
+		})
+	}
+}
+
+func TestDynamoQueryKeyCondition(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		hashKey    string
+		hashValue  string
+		rangeKey   string
+		rangeValue string
+		wantExpr   string
+		wantNames  map[string]string
+		wantN      map[string]string
+		wantS      map[string]string
+		wantErr    string
+	}{
+		{
+			name:      "hash only string",
+			hashKey:   "pk",
+			hashValue: "cust-9",
+			wantExpr:  "#hk = :hv",
+			wantNames: map[string]string{"#hk": "pk"},
+			wantS:     map[string]string{":hv": "cust-9"},
+		},
+		{
+			name:       "hash and range equality",
+			hashKey:    " pk ",
+			hashValue:  "cust-9",
+			rangeKey:   " sk ",
+			rangeValue: "order-1",
+			wantExpr:   "#hk = :hv AND #rk = :rv",
+			wantNames:  map[string]string{"#hk": "pk", "#rk": "sk"},
+			wantS:      map[string]string{":hv": "cust-9", ":rv": "order-1"},
+		},
+		{
+			name:       "numeric scalars",
+			hashKey:    "id",
+			hashValue:  "10",
+			rangeKey:   "ts",
+			rangeValue: "3.5",
+			wantExpr:   "#hk = :hv AND #rk = :rv",
+			wantNames:  map[string]string{"#hk": "id", "#rk": "ts"},
+			wantN:      map[string]string{":hv": "10", ":rv": "3.5"},
+		},
+		{
+			name:       "range value ignored without range key",
+			hashKey:    "pk",
+			hashValue:  "cust-9",
+			rangeValue: "order-1",
+			wantExpr:   "#hk = :hv",
+			wantNames:  map[string]string{"#hk": "pk"},
+			wantS:      map[string]string{":hv": "cust-9"},
+		},
+		{
+			name:      "empty hash key",
+			hashValue: "cust-9",
+			wantErr:   "hash key name and value are required",
+		},
+		{
+			name:    "empty hash value",
+			hashKey: "pk",
+			wantErr: "hash key name and value are required",
+		},
+		{
+			name:      "range key without value",
+			hashKey:   "pk",
+			hashValue: "cust-9",
+			rangeKey:  "sk",
+			wantErr:   "range key value is required",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			expr, names, values, err := dynamoQueryKeyCondition(tt.hashKey, tt.hashValue, tt.rangeKey, tt.rangeValue)
+			if tt.wantErr != "" {
+				if err == nil || err.Error() != tt.wantErr {
+					t.Fatalf("err = %v, want %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("dynamoQueryKeyCondition: %v", err)
+			}
+			if expr != tt.wantExpr {
+				t.Fatalf("expr = %q, want %q", expr, tt.wantExpr)
+			}
+			if len(names) != len(tt.wantNames) {
+				t.Fatalf("names = %#v, want %#v", names, tt.wantNames)
+			}
+			for key, want := range tt.wantNames {
+				if names[key] != want {
+					t.Fatalf("names[%q] = %q, want %q", key, names[key], want)
+				}
+			}
+			if len(values) != len(tt.wantN)+len(tt.wantS) {
+				t.Fatalf("values = %#v", values)
+			}
+			for key, want := range tt.wantS {
+				s, ok := values[key].(*types.AttributeValueMemberS)
+				if !ok || s.Value != want {
+					t.Fatalf("values[%q] = %#v, want S %q", key, values[key], want)
+				}
+			}
+			for key, want := range tt.wantN {
+				n, ok := values[key].(*types.AttributeValueMemberN)
+				if !ok || n.Value != want {
+					t.Fatalf("values[%q] = %#v, want N %q", key, values[key], want)
+				}
+			}
+		})
 	}
 }

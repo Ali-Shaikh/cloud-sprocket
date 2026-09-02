@@ -10,7 +10,7 @@ import {
   mergeAwsS3Selection,
   normaliseWorkspaceSnapshot,
 } from "@/lib/workspace-snapshot";
-import type { UrlInspection } from "@/types/backend";
+import type { AwsDynamoDBQueryResult, UrlInspection } from "@/types/backend";
 import {
   ComputeView,
   DynamoDBView,
@@ -365,6 +365,15 @@ export function AwsWorkspaceTabs(props: AwsWorkspaceTabsProps): ReactNode {
       onSelectTable={selectDynamoDBTable}
       onPutItem={putDynamoDBItem}
       onDeleteItem={deleteDynamoDBItem}
+      onRunQuery={(args) =>
+        backendRequest<AwsDynamoDBQueryResult>("aws.dynamodb.queryItems", {
+          tableName: args.tableName,
+          hashKey: args.hashKey,
+          hashValue: args.hashValue,
+          rangeKey: args.rangeKey,
+          rangeValue: args.rangeValue,
+        })
+      }
       loadMoreInFlight={dynamodbLoadMoreInFlight}
       onLoadMoreItems={() => {
         const selectedTable = activeWorkspace.dynamodbTables.find(

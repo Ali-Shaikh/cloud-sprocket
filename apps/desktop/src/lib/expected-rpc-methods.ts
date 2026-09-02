@@ -17,6 +17,7 @@ export const EXPECTED_RPC_METHODS = [
   "aws.dynamodb.deleteItem",
   "aws.dynamodb.loadMoreItems",
   "aws.dynamodb.putItem",
+  "aws.dynamodb.queryItems",
   "aws.dynamodb.selectRegion",
   "aws.dynamodb.selectTable",
   "aws.ec2.invokeAction",

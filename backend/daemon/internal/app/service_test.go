@@ -93,6 +93,10 @@ func (stubDynamoDBInventory) ScanSampleItems(context.Context, models.ProfileSumm
 	return models.AwsDynamoDBScanPage{}, nil
 }
 
+func (stubDynamoDBInventory) QueryItems(context.Context, models.ProfileSummary, string, string, string, string, string, string) (models.AwsDynamoDBQueryResult, error) {
+	return models.AwsDynamoDBQueryResult{}, nil
+}
+
 type stubSQSInventory struct{}
 
 func (stubSQSInventory) ListQueues(context.Context, models.ProfileSummary, string) ([]models.AwsSqsQueue, error) {

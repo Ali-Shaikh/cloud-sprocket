@@ -494,6 +494,18 @@ type AwsDynamoDBScanPage struct {
 	SampleItemsHasMore   bool     `json:"sampleItemsHasMore,omitempty"`
 }
 
+// AwsDynamoDBQueryResult is a bounded DynamoDB Query (by key) response.
+type AwsDynamoDBQueryResult struct {
+	TableName  string   `json:"tableName"`
+	HashKey    string   `json:"hashKey"`
+	HashValue  string   `json:"hashValue"`
+	RangeKey   string   `json:"rangeKey,omitempty"`
+	RangeValue string   `json:"rangeValue,omitempty"`
+	Items      []string `json:"items"`
+	Truncated  bool     `json:"truncated,omitempty"`
+	Summary    string   `json:"summary"`
+}
+
 // AwsSqsQueue models an SQS queue for inventory (list + describe).
 type AwsSqsQueue struct {
 	QueueName                             string `json:"queueName"`

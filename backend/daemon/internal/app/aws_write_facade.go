@@ -80,6 +80,13 @@ func (s *Service) handleAwsDynamodbLoadMoreItems(ctx context.Context, params jso
 	return s.aws.HandleDynamoDBLoadMoreItems(ctx, params, notifier)
 }
 
+func (s *Service) handleAwsDynamodbQueryItems(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAWS(); err != nil {
+		return nil, err
+	}
+	return s.aws.HandleDynamoDBQueryItems(ctx, params, notifier)
+}
+
 func (s *Service) handleAwsIamCreateRole(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	if err := s.requireAWS(); err != nil {
 		return nil, err

@@ -22,6 +22,7 @@ var expectedRPCMethods = []string{
 	"aws.dynamodb.deleteItem",
 	"aws.dynamodb.loadMoreItems",
 	"aws.dynamodb.putItem",
+	"aws.dynamodb.queryItems",
 	"aws.dynamodb.selectRegion",
 	"aws.dynamodb.selectTable",
 	"aws.ec2.invokeAction",
