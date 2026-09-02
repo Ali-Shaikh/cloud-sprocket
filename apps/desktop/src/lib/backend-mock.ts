@@ -4466,6 +4466,29 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
   };
   register("azure.cosmos.deleteItem", handle_azure_cosmos_deleteItem);
 
+  const handle_azure_cosmos_query : MockRpcHandler = async (params, method) => {
+    const query = String(params.query ?? "").trim();
+    if (!query) {
+      return Promise.reject(new Error("a SQL query is required"));
+    }
+    const account = String(params.account ?? mockState.session.selectedAzureCosmosAccount ?? "");
+    const database = String(params.database ?? mockState.session.selectedAzureCosmosDatabase ?? "");
+    const container = String(params.container ?? mockState.session.selectedAzureCosmosContainer ?? "");
+    if (!account || !database || !container) {
+      return Promise.reject(new Error("account, database, and container are required"));
+    }
+    return Promise.resolve({
+      account,
+      database,
+      container,
+      query,
+      items: mockAzureCosmosItems,
+      truncated: false,
+      summary: `Returned ${mockAzureCosmosItems.length} document(s) from ${account}/${database}/${container}.`,
+    });
+  };
+  register("azure.cosmos.query", handle_azure_cosmos_query);
+
   const handle_azure_postgres_selectServer : MockRpcHandler = async (params, method) => {
     mockState.session.selectedAzurePostgresServer = String(params.server ?? "");
     return Promise.resolve(buildMockWorkspace());

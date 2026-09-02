@@ -206,6 +206,7 @@ type AzureInventory interface {
 	ListCosmosDatabases(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string) ([]models.AzureCosmosDatabase, error)
 	ListCosmosContainers(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string, database string) ([]models.AzureCosmosContainer, error)
 	ListCosmosItems(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string, database string, container string) ([]models.AzureCosmosItem, error)
+	QueryCosmosItems(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string, database string, container string, query string) (models.AzureCosmosQueryResult, error)
 	DeleteCosmosItem(ctx context.Context, profile models.ProfileSummary, account string, resourceGroup string, database string, container string, itemID string, partitionKey string) (models.AzureCosmosDeleteItemResult, error)
 	ListPostgresServers(ctx context.Context, profile models.ProfileSummary) ([]models.AzurePostgresServer, error)
 	GetPostgresConnection(ctx context.Context, profile models.ProfileSummary, resourceGroup string, serverName string) (models.AzurePostgresConnection, error)

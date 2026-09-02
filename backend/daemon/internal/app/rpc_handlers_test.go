@@ -92,6 +92,7 @@ var expectedRPCMethods = []string{
 	"azure.bastion.connect",
 	"azure.bastion.list",
 	"azure.cosmos.deleteItem",
+	"azure.cosmos.query",
 	"azure.cosmos.selectAccount",
 	"azure.cosmos.selectContainer",
 	"azure.cosmos.selectDatabase",

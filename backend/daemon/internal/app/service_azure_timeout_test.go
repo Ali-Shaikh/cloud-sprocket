@@ -227,6 +227,11 @@ func (blockingAzure) ListCosmosItems(ctx context.Context, _ models.ProfileSummar
 	return nil, ctx.Err()
 }
 
+func (blockingAzure) QueryCosmosItems(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string, _ string, _ string) (models.AzureCosmosQueryResult, error) {
+	<-ctx.Done()
+	return models.AzureCosmosQueryResult{}, ctx.Err()
+}
+
 func (blockingAzure) ListPostgresServers(ctx context.Context, _ models.ProfileSummary) ([]models.AzurePostgresServer, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()

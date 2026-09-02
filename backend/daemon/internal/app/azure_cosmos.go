@@ -5,7 +5,10 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"cloudsprocket/backend/daemon/internal/models"
@@ -186,4 +189,61 @@ func (s *Service) enrichAzureCosmosInventory(
 		workspace.AzureCosmosStatusMessage = status
 		markAzureInventory(workspace, "cosmos", len(accounts), azureInventoryListEmptyReason(len(accounts), listErr))
 	})
+}
+
+func (s *Service) handleAzureCosmosQuery(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
+	if s.azure == nil {
+		return nil, errors.New("azure inventory is not available")
+	}
+	var request struct {
+		Account       string `json:"account"`
+		Database      string `json:"database"`
+		Container     string `json:"container"`
+		Query         string `json:"query"`
+		ResourceGroup string `json:"resourceGroup"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	if !session.IsLocked || session.CurrentProviderID != "azure" {
+		s.mu.Unlock()
+		return nil, errors.New("open a locked Azure workspace before running a Cosmos query")
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		s.mu.Unlock()
+		return nil, errors.New("the workspace's Azure profile is not available")
+	}
+	s.mu.Unlock()
+
+	account := strings.TrimSpace(request.Account)
+	if account == "" {
+		account = session.SelectedAzureCosmosAccount
+	}
+	database := strings.TrimSpace(request.Database)
+	if database == "" {
+		database = session.SelectedAzureCosmosDatabase
+	}
+	container := strings.TrimSpace(request.Container)
+	if container == "" {
+		container = session.SelectedAzureCosmosContainer
+	}
+	resourceGroup := strings.TrimSpace(request.ResourceGroup)
+	queryCtx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+	if resourceGroup == "" {
+		accounts := s.azureCosmosAccounts(queryCtx, profile)
+		resourceGroup = resourceGroupForCosmosAccount(accounts, account)
+	}
+	return s.azure.QueryCosmosItems(queryCtx, profile, account, resourceGroup, database, container, request.Query)
 }

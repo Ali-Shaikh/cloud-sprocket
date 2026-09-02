@@ -753,6 +753,17 @@ func (stubAzureInventory) ListCosmosItems(context.Context, models.ProfileSummary
 	return []models.AzureCosmosItem{{ID: "doc-1", JSON: `{"id":"doc-1"}`}}, nil
 }
 
+func (stubAzureInventory) QueryCosmosItems(_ context.Context, _ models.ProfileSummary, account string, _ string, database string, container string, query string) (models.AzureCosmosQueryResult, error) {
+	return models.AzureCosmosQueryResult{
+		Account:   account,
+		Database:  database,
+		Container: container,
+		Query:     query,
+		Items:     []models.AzureCosmosItem{{ID: "doc-1", JSON: `{"id":"doc-1","total":42}`}},
+		Summary:   "Returned 1 document.",
+	}, nil
+}
+
 func (stubAzureInventory) DeleteCosmosItem(context.Context, models.ProfileSummary, string, string, string, string, string, string) (models.AzureCosmosDeleteItemResult, error) {
 	return models.AzureCosmosDeleteItemResult{Summary: "deleted"}, nil
 }

@@ -9,6 +9,13 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Added
+
+- Azure Cosmos DB SQL query: read-only `azure.cosmos.query` runs a bounded
+  SQL API query against the selected container (cross-partition, capped at 50
+  documents). The Cosmos tab adds a query editor and results panel; write mode
+  is not required.
+
 ### Changed
 
 - Azure inventory snapshots mark each scope `loaded` (with `emptyReason` when
