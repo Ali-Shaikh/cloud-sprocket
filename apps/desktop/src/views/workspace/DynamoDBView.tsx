@@ -135,6 +135,7 @@ export default function DynamoDBView({
   const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedDynamodbTableName));
   const lastSelectedTableRef = useRef(workspace.selectedDynamodbTableName || "");
   const lastSelectedRegionRef = useRef(workspace.selectedDynamodbRegion || "");
+  const queryGeneration = useRef(0);
 
   const regions =
     workspace.dynamodbRegions.length > 0
@@ -215,6 +216,7 @@ export default function DynamoDBView({
     }
     const rangeKey = selectedTable.rangeKey?.trim();
     const trimmedRange = rangeValue.trim();
+    const generation = queryGeneration.current;
     setQueryInFlight(true);
     setQueryError("");
     void onRunQuery({
@@ -225,14 +227,22 @@ export default function DynamoDBView({
       rangeValue: rangeKey && trimmedRange ? trimmedRange : undefined,
     })
       .then((result) => {
+        if (generation !== queryGeneration.current) {
+          return;
+        }
         setQueryResult(result);
       })
       .catch((error: unknown) => {
+        if (generation !== queryGeneration.current) {
+          return;
+        }
         setQueryResult(null);
         setQueryError(error instanceof Error ? error.message : String(error));
       })
       .finally(() => {
-        setQueryInFlight(false);
+        if (generation === queryGeneration.current) {
+          setQueryInFlight(false);
+        }
       });
   };
 
@@ -249,8 +259,10 @@ export default function DynamoDBView({
       lastSelectedRegionRef.current = nextRegion;
     }
     if (tableChanged || regionChanged) {
+      queryGeneration.current += 1;
       setQueryResult(null);
       setQueryError("");
+      setQueryInFlight(false);
       setHashValue("");
       setRangeValue("");
     }
@@ -644,7 +656,7 @@ export default function DynamoDBView({
               runQuery();
             }}
           >
-            {queryInFlight ? "Querying…" : "Run query"}
+            {queryInFlight ? "Querying..." : "Run query"}
           </Button>
         </div>
         {queryError ? <p className="text-sm text-destructive">{queryError}</p> : null}

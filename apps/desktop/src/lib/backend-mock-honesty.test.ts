@@ -65,6 +65,21 @@ describe("browser mock RPC honesty", () => {
     );
   });
 
+  it("returns no DynamoDB query items for a missing key", async () => {
+    await expect(
+      handleMockRequest("aws.dynamodb.queryItems", {
+        tableName: "cloudsprocket-orders",
+        hashKey: "orderId",
+        hashValue: "missing-order",
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        hashValue: "missing-order",
+        items: [],
+      }),
+    );
+  });
+
   it("reuses updateDeploymentId on a cancelled record", async () => {
     const planned = await handleMockRequest<DeploymentJob>("deployments.plan", {
       recipeId: "lab-dynamodb-aws",

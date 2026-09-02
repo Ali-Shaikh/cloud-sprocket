@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
@@ -455,5 +455,56 @@ describe("DynamoDBView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run query" }));
 
     expect(await screen.findByText("DynamoDB query failed")).toBeInTheDocument();
+  });
+
+  it("drops a late query result after the table changes", async () => {
+    mockMatchMedia(true);
+    let resolveQuery: (value: {
+      tableName: string;
+      hashKey: string;
+      hashValue: string;
+      items: string[];
+      summary: string;
+    }) => void = () => {};
+    const onRunQuery = vi.fn(
+      () =>
+        new Promise<{
+          tableName: string;
+          hashKey: string;
+          hashValue: string;
+          items: string[];
+          summary: string;
+        }>((resolve) => {
+          resolveQuery = resolve;
+        }),
+    );
+    const view = (tableName: string) => (
+      <ThemeProvider>
+        <DynamoDBView
+          workspace={{ ...workspaceFixture, selectedDynamodbTableName: tableName }}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectTable={vi.fn()}
+          onPutItem={vi.fn()}
+          onDeleteItem={vi.fn()}
+          onRunQuery={onRunQuery}
+        />
+      </ThemeProvider>
+    );
+    const { rerender } = render(view("cloudsprocket-orders"));
+    fireEvent.change(screen.getByLabelText("orderId"), { target: { value: "ord-001" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run query" }));
+    rerender(view("cloudsprocket-sessions"));
+    await act(async () => {
+      resolveQuery({
+        tableName: "cloudsprocket-orders",
+        hashKey: "orderId",
+        hashValue: "ord-001",
+        items: ['{"orderId":"stale-hit"}'],
+        summary: "Queried 1 item(s) from cloudsprocket-orders.",
+      });
+    });
+    expect(screen.queryByText(/stale-hit/)).toBeNull();
   });
 });

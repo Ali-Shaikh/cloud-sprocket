@@ -139,10 +139,6 @@ func (d *DynamoDBInventory) QueryItems(
 	if tableName == "" {
 		return models.AwsDynamoDBQueryResult{}, fmt.Errorf("table name is required")
 	}
-	expr, names, values, err := dynamoQueryKeyCondition(hashKey, hashValue, rangeKey, rangeValue)
-	if err != nil {
-		return models.AwsDynamoDBQueryResult{}, err
-	}
 	if region == "" {
 		region = awsRegionHint(profile)
 	}
@@ -151,6 +147,18 @@ func (d *DynamoDBInventory) QueryItems(
 		return models.AwsDynamoDBQueryResult{}, err
 	}
 	client := dynamodbClient(cfg, profile)
+	described, err := client.DescribeTable(ctx, &dynamodb.DescribeTableInput{
+		TableName: aws.String(tableName),
+	})
+	if err != nil {
+		return models.AwsDynamoDBQueryResult{}, err
+	}
+	hashType := dynamoAttributeType(described.Table, hashKey)
+	rangeType := dynamoAttributeType(described.Table, rangeKey)
+	expr, names, values, err := dynamoQueryKeyCondition(hashKey, hashValue, hashType, rangeKey, rangeValue, rangeType)
+	if err != nil {
+		return models.AwsDynamoDBQueryResult{}, err
+	}
 	res, err := client.Query(ctx, &dynamodb.QueryInput{
 		TableName:                 aws.String(tableName),
 		KeyConditionExpression:    aws.String(expr),
@@ -162,7 +170,7 @@ func (d *DynamoDBInventory) QueryItems(
 		return models.AwsDynamoDBQueryResult{}, err
 	}
 	items := encodeDynamoItems(res.Items)
-	truncated := len(items) >= maxDynamoDBSampleItems || len(res.LastEvaluatedKey) > 0
+	truncated := len(res.LastEvaluatedKey) > 0
 	summary := fmt.Sprintf("Queried %d item(s) from %s.", len(items), tableName)
 	if truncated {
 		summary = fmt.Sprintf(
@@ -187,25 +195,47 @@ func (d *DynamoDBInventory) QueryItems(
 	return result, nil
 }
 
-// parseDynamoScalar maps a trimmed operator value to a DynamoDB scalar.
-// JSON numbers become N; everything else (including booleans) becomes S.
-func parseDynamoScalar(value string) (types.AttributeValue, error) {
+// parseDynamoScalar maps a trimmed operator value to the table's declared key type.
+// Unknown or string types stay as S so numeric-looking partition keys still match.
+func parseDynamoScalar(value, attrType string) (types.AttributeValue, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
 		return nil, fmt.Errorf("value is required")
 	}
-	var number json.Number
-	if err := json.Unmarshal([]byte(trimmed), &number); err == nil && string(number) == trimmed {
+	switch strings.ToUpper(strings.TrimSpace(attrType)) {
+	case "N":
+		var number json.Number
+		if err := json.Unmarshal([]byte(trimmed), &number); err != nil || string(number) != trimmed {
+			return nil, fmt.Errorf("value %q is not a number", trimmed)
+		}
 		return &types.AttributeValueMemberN{Value: string(number)}, nil
+	case "B":
+		return nil, fmt.Errorf("binary key attributes are not supported")
+	default:
+		return &types.AttributeValueMemberS{Value: trimmed}, nil
 	}
-	return &types.AttributeValueMemberS{Value: trimmed}, nil
+}
+
+func dynamoAttributeType(table *types.TableDescription, name string) string {
+	name = strings.TrimSpace(name)
+	if table == nil || name == "" {
+		return "S"
+	}
+	for _, def := range table.AttributeDefinitions {
+		if awsString(def.AttributeName) == name {
+			return string(def.AttributeType)
+		}
+	}
+	return "S"
 }
 
 func dynamoQueryKeyCondition(
 	hashKey string,
 	hashValue string,
+	hashType string,
 	rangeKey string,
 	rangeValue string,
+	rangeType string,
 ) (string, map[string]string, map[string]types.AttributeValue, error) {
 	hashKey = strings.TrimSpace(hashKey)
 	hashValue = strings.TrimSpace(hashValue)
@@ -214,7 +244,7 @@ func dynamoQueryKeyCondition(
 	if hashKey == "" || hashValue == "" {
 		return "", nil, nil, fmt.Errorf("hash key name and value are required")
 	}
-	hashAttr, err := parseDynamoScalar(hashValue)
+	hashAttr, err := parseDynamoScalar(hashValue, hashType)
 	if err != nil {
 		return "", nil, nil, err
 	}
@@ -225,7 +255,7 @@ func dynamoQueryKeyCondition(
 		if rangeValue == "" {
 			return "", nil, nil, fmt.Errorf("range key value is required")
 		}
-		rangeAttr, err := parseDynamoScalar(rangeValue)
+		rangeAttr, err := parseDynamoScalar(rangeValue, rangeType)
 		if err != nil {
 			return "", nil, nil, err
 		}

@@ -55,6 +55,9 @@ func TestDynamoTableSummaryMapsKeysAndGSIs(t *testing.T) {
 	if len(got.GlobalSecondaryIndexes) != 1 || got.GlobalSecondaryIndexes[0].IndexName != "by-status" {
 		t.Fatalf("GSIs = %+v", got.GlobalSecondaryIndexes)
 	}
+	if dynamoAttributeType(table, "pk") != "S" || dynamoAttributeType(table, "missing") != "S" {
+		t.Fatalf("attribute types pk=%q missing=%q", dynamoAttributeType(table, "pk"), dynamoAttributeType(table, "missing"))
+	}
 }
 
 func TestDynamoTableSummaryNilTable(t *testing.T) {
@@ -107,29 +110,30 @@ func TestDynamoExclusiveStartKeyEmpty(t *testing.T) {
 func TestParseDynamoScalar(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name    string
-		in      string
-		wantN   string
-		wantS   string
-		wantErr bool
+		name     string
+		in       string
+		attrType string
+		wantN    string
+		wantS    string
+		wantErr  bool
 	}{
 		{name: "empty", in: "", wantErr: true},
 		{name: "whitespace", in: "   ", wantErr: true},
-		{name: "integer", in: "42", wantN: "42"},
-		{name: "trimmed number", in: "  3.14  ", wantN: "3.14"},
-		{name: "negative", in: "-7", wantN: "-7"},
-		{name: "scientific", in: "1e10", wantN: "1e10"},
-		{name: "string", in: "cust-9", wantS: "cust-9"},
+		{name: "numeric looking string key stays S", in: "42", attrType: "S", wantS: "42"},
+		{name: "unknown type stays S", in: "42", wantS: "42"},
+		{name: "number type", in: "42", attrType: "N", wantN: "42"},
+		{name: "trimmed number type", in: "  3.14  ", attrType: "N", wantN: "3.14"},
+		{name: "negative number type", in: "-7", attrType: "N", wantN: "-7"},
+		{name: "non-number for N", in: "cust-9", attrType: "N", wantErr: true},
+		{name: "string", in: "cust-9", attrType: "S", wantS: "cust-9"},
 		{name: "trimmed string", in: "  order-1  ", wantS: "order-1"},
-		{name: "boolean true is string", in: "true", wantS: "true"},
-		{name: "boolean false is string", in: "false", wantS: "false"},
-		{name: "null is string", in: "null", wantS: "null"},
-		{name: "quoted number is string", in: `"42"`, wantS: `"42"`},
+		{name: "boolean is string", in: "true", wantS: "true"},
+		{name: "binary rejected", in: "QQ==", attrType: "B", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := parseDynamoScalar(tt.in)
+			got, err := parseDynamoScalar(tt.in, tt.attrType)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error, got %#v", got)
@@ -137,7 +141,7 @@ func TestParseDynamoScalar(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Fatalf("parseDynamoScalar(%q): %v", tt.in, err)
+				t.Fatalf("parseDynamoScalar(%q, %q): %v", tt.in, tt.attrType, err)
 			}
 			if tt.wantN != "" {
 				n, ok := got.(*types.AttributeValueMemberN)
@@ -160,8 +164,10 @@ func TestDynamoQueryKeyCondition(t *testing.T) {
 		name       string
 		hashKey    string
 		hashValue  string
+		hashType   string
 		rangeKey   string
 		rangeValue string
+		rangeType  string
 		wantExpr   string
 		wantNames  map[string]string
 		wantN      map[string]string
@@ -187,14 +193,25 @@ func TestDynamoQueryKeyCondition(t *testing.T) {
 			wantS:      map[string]string{":hv": "cust-9", ":rv": "order-1"},
 		},
 		{
-			name:       "numeric scalars",
+			name:       "numeric scalars use declared N type",
 			hashKey:    "id",
 			hashValue:  "10",
+			hashType:   "N",
 			rangeKey:   "ts",
 			rangeValue: "3.5",
+			rangeType:  "N",
 			wantExpr:   "#hk = :hv AND #rk = :rv",
 			wantNames:  map[string]string{"#hk": "id", "#rk": "ts"},
 			wantN:      map[string]string{":hv": "10", ":rv": "3.5"},
+		},
+		{
+			name:      "numeric looking string key stays S",
+			hashKey:   "id",
+			hashValue: "10",
+			hashType:  "S",
+			wantExpr:  "#hk = :hv",
+			wantNames: map[string]string{"#hk": "id"},
+			wantS:     map[string]string{":hv": "10"},
 		},
 		{
 			name:       "range value ignored without range key",
@@ -226,7 +243,7 @@ func TestDynamoQueryKeyCondition(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			expr, names, values, err := dynamoQueryKeyCondition(tt.hashKey, tt.hashValue, tt.rangeKey, tt.rangeValue)
+			expr, names, values, err := dynamoQueryKeyCondition(tt.hashKey, tt.hashValue, tt.hashType, tt.rangeKey, tt.rangeValue, tt.rangeType)
 			if tt.wantErr != "" {
 				if err == nil || err.Error() != tt.wantErr {
 					t.Fatalf("err = %v, want %q", err, tt.wantErr)

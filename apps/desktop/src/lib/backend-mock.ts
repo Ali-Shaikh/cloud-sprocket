@@ -3520,10 +3520,26 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
     const table =
       mockWorkspaceDynamoDBTables.find((entry) => entry.tableName === tableName) ??
       mockWorkspaceDynamoDBTables[0];
-    const items = (table?.sampleItems ?? []).slice(0, 2);
+    const hashKey = String(params.hashKey ?? table?.hashKey ?? "");
+    const rangeKey = String(params.rangeKey ?? "").trim();
+    const rangeValue = String(params.rangeValue ?? "").trim();
+    const items = (table?.sampleItems ?? []).filter((raw) => {
+      try {
+        const doc = JSON.parse(raw) as Record<string, unknown>;
+        if (String(doc[hashKey] ?? "") !== hashValue) {
+          return false;
+        }
+        if (rangeKey && String(doc[rangeKey] ?? "") !== rangeValue) {
+          return false;
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    });
     const result: AwsDynamoDBQueryResult = {
       tableName: table?.tableName ?? tableName,
-      hashKey: String(params.hashKey ?? table?.hashKey ?? ""),
+      hashKey,
       hashValue,
       items,
       summary: `Queried ${items.length} item(s) from ${table?.tableName ?? tableName}.`,
