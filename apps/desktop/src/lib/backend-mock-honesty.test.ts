@@ -25,6 +25,24 @@ describe("browser mock RPC honesty", () => {
     });
   });
 
+  it("runs a Cosmos SQL query without write mode", async () => {
+    await expect(
+      handleMockRequest("azure.cosmos.query", {
+        account: "devstoreaccount1",
+        database: "appdb",
+        container: "orders",
+        query: "SELECT * FROM c",
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        account: "devstoreaccount1",
+        database: "appdb",
+        container: "orders",
+        items: expect.arrayContaining([expect.objectContaining({ id: expect.any(String) })]),
+      }),
+    );
+  });
+
   it("refuses AWS writes when write mode is off", async () => {
     await expect(
       handleMockRequest("aws.s3.deleteObject", { objectKey: "reports/weekly-summary.json" }),

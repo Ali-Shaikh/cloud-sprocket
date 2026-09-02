@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Database } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -35,7 +35,8 @@ import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { azureInventoryLoadingLabel } from "@/lib/azure-inventory";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { EmptyState } from "@/components/empty-state";
-import type { WorkspaceSnapshot } from "@/types/backend";
+import { Textarea } from "@/components/ui/textarea";
+import type { AzureCosmosQueryResult, WorkspaceSnapshot } from "@/types/backend";
 
 export type AzureCosmosViewProps = {
   workspace: WorkspaceSnapshot;
@@ -44,7 +45,10 @@ export type AzureCosmosViewProps = {
   onSelectDatabase: (database: string) => void;
   onSelectContainer: (container: string) => void;
   onDeleteItem: (itemId: string, partitionKey: string, resourceGroup?: string) => void;
+  onRunQuery: (query: string) => Promise<AzureCosmosQueryResult>;
 };
+
+export const DEFAULT_COSMOS_SQL_QUERY = "SELECT * FROM c";
 
 const fieldLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
@@ -78,6 +82,7 @@ export default function AzureCosmosView({
   onSelectDatabase,
   onSelectContainer,
   onDeleteItem,
+  onRunQuery,
 }: AzureCosmosViewProps) {
   const accounts = workspace.azureCosmosAccounts ?? [];
   const databases = workspace.azureCosmosDatabases ?? [];
@@ -92,6 +97,35 @@ export default function AzureCosmosView({
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; partitionKey: string } | null>(
     null,
   );
+  const [queryText, setQueryText] = useState(DEFAULT_COSMOS_SQL_QUERY);
+  const [queryResult, setQueryResult] = useState<AzureCosmosQueryResult | null>(null);
+  const [queryError, setQueryError] = useState<string | null>(null);
+  const [queryRunning, setQueryRunning] = useState(false);
+
+  useEffect(() => {
+    setQueryResult(null);
+    setQueryError(null);
+  }, [account, database, container]);
+
+  const canQuery = Boolean(account && database && container);
+  const canRunQuery = canQuery && queryText.trim().length > 0 && !queryRunning;
+
+  const runQuery = async () => {
+    if (!canQuery || queryRunning || !queryText.trim()) {
+      return;
+    }
+    setQueryRunning(true);
+    setQueryError(null);
+    try {
+      const result = await onRunQuery(queryText);
+      setQueryResult(result);
+    } catch (error) {
+      setQueryResult(null);
+      setQueryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setQueryRunning(false);
+    }
+  };
 
   const deleteCapability = actionCapabilityState(workspace, "cosmos", "deleteItem", "azure");
   const canDelete =
@@ -113,7 +147,7 @@ export default function AzureCosmosView({
       <header>
         <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">Cosmos DB</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {workspace.profile?.displayName || "Subscription"} · SQL API browse
+          {workspace.profile?.displayName || "Subscription"} · SQL API browse and query
         </p>
       </header>
 
@@ -248,6 +282,76 @@ export default function AzureCosmosView({
         )}
         {deleteDisabledReason ? (
           <p className="text-xs text-muted-foreground">{deleteDisabledReason}</p>
+        ) : null}
+      </section>
+
+      <section className={sectionCard}>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-base font-bold">SQL query</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Read-only SQL API against the selected container. Results capped at 50
+              documents. Ctrl+Enter to run.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!canRunQuery}
+            title={
+              canQuery
+                ? undefined
+                : "Select an account, database, and container first."
+            }
+            onClick={() => {
+              void runQuery();
+            }}
+          >
+            {queryRunning ? "Running..." : "Run query"}
+          </Button>
+        </div>
+        <Textarea
+          aria-label="Cosmos SQL query"
+          className="min-h-28 font-mono text-xs"
+          value={queryText}
+          onChange={(event) => setQueryText(event.target.value)}
+          onKeyDown={(event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+              event.preventDefault();
+              void runQuery();
+            }
+          }}
+          spellCheck={false}
+        />
+        {queryError ? <p className="text-sm text-destructive">{queryError}</p> : null}
+        {queryResult ? (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">{queryResult.summary}</p>
+            {queryResult.truncated ? (
+              <p className="text-xs text-muted-foreground">
+                Results were capped. Narrow the WHERE clause to inspect a smaller set.
+              </p>
+            ) : null}
+            {queryResult.items.length === 0 ? (
+              <EmptyState
+                icon={<Database />}
+                title="No documents"
+                description="The query returned no items."
+                className="border-0"
+              />
+            ) : (
+              queryResult.items.map((item, index) => (
+                <details key={item.id || index} className="rounded-lg border border-border bg-muted/40">
+                  <summary className="cursor-pointer px-3 py-2 font-mono text-xs text-foreground">
+                    {item.id || `(item ${index + 1})`}
+                  </summary>
+                  <pre className="max-h-64 overflow-auto border-t border-border px-3 py-2 font-mono text-xs text-foreground">
+                    {item.json}
+                  </pre>
+                </details>
+              ))
+            )}
+          </div>
         ) : null}
       </section>
 

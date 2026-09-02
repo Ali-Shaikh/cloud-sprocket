@@ -1094,6 +1094,16 @@ export interface AzureCosmosItem {
   json: string;
 }
 
+export interface AzureCosmosQueryResult {
+  account: string;
+  database: string;
+  container: string;
+  query: string;
+  items: AzureCosmosItem[];
+  truncated?: boolean;
+  summary: string;
+}
+
 export interface AzurePostgresServer {
   name: string;
   resourceGroup?: string;

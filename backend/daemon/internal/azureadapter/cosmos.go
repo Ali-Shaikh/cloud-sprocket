@@ -4,6 +4,7 @@
 package azureadapter
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -17,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
@@ -28,6 +30,20 @@ const wellKnownCosmosKey = "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTq
 
 const cosmosVersion = "2018-12-31"
 const cosmosSampleLimit = 20
+const cosmosQueryMaxItems = 50
+const cosmosQueryMaxRunes = 4000
+
+// NormaliseCosmosQuery trims a SQL API query and rejects empty or oversized text.
+func NormaliseCosmosQuery(query string) (string, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return "", fmt.Errorf("a SQL query is required")
+	}
+	if utf8.RuneCountInString(query) > cosmosQueryMaxRunes {
+		return "", fmt.Errorf("query exceeds %d characters", cosmosQueryMaxRunes)
+	}
+	return query, nil
+}
 
 // ListCosmosAccounts returns the Cosmos accounts. floci-az exposes a single local
 // account (devstoreaccount1); cloud uses the az CLI.
@@ -168,21 +184,56 @@ func (i *Inventory) ListCosmosItems(
 	if err != nil {
 		return nil, err
 	}
-	var decoded struct {
-		Documents []json.RawMessage `json:"Documents"`
+	return decodeCosmosDocuments(raw)
+}
+
+// QueryCosmosItems runs a bounded SQL API query against one container.
+func (i *Inventory) QueryCosmosItems(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	account string,
+	resourceGroup string,
+	database string,
+	container string,
+	query string,
+) (models.AzureCosmosQueryResult, error) {
+	account = strings.TrimSpace(account)
+	database = strings.TrimSpace(database)
+	container = strings.TrimSpace(container)
+	normalised, err := NormaliseCosmosQuery(query)
+	if err != nil {
+		return models.AzureCosmosQueryResult{}, err
 	}
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		return nil, fmt.Errorf("decode cosmos documents: %w", err)
+	if account == "" || database == "" || container == "" {
+		return models.AzureCosmosQueryResult{}, fmt.Errorf("account, database, and container are required")
 	}
-	items := make([]models.AzureCosmosItem, 0, len(decoded.Documents))
-	for _, doc := range decoded.Documents {
-		var idHolder struct {
-			ID string `json:"id"`
-		}
-		_ = json.Unmarshal(doc, &idHolder)
-		items = append(items, models.AzureCosmosItem{ID: idHolder.ID, JSON: string(doc)})
+	endpoint, key, err := i.cosmosTarget(ctx, profile, account, resourceGroup)
+	if err != nil {
+		return models.AzureCosmosQueryResult{}, err
 	}
-	return items, nil
+	resLink := "dbs/" + database + "/colls/" + container
+	raw, err := i.cosmosQuery(ctx, endpoint, key, resLink, normalised, cosmosQueryMaxItems)
+	if err != nil {
+		return models.AzureCosmosQueryResult{}, err
+	}
+	items, err := decodeCosmosDocuments(raw)
+	if err != nil {
+		return models.AzureCosmosQueryResult{}, err
+	}
+	truncated := len(items) >= cosmosQueryMaxItems
+	summary := fmt.Sprintf("Returned %d document(s) from %s/%s/%s.", len(items), account, database, container)
+	if truncated {
+		summary += fmt.Sprintf(" Results capped at %d.", cosmosQueryMaxItems)
+	}
+	return models.AzureCosmosQueryResult{
+		Account:   account,
+		Database:  database,
+		Container: container,
+		Query:     normalised,
+		Items:     items,
+		Truncated: truncated,
+		Summary:   summary,
+	}, nil
 }
 
 // DeleteCosmosItem deletes one document by id and partition key value.
@@ -294,6 +345,68 @@ func (i *Inventory) cosmosGet(ctx context.Context, endpoint, key, resType, resLi
 	raw, _ := io.ReadAll(response.Body)
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return nil, fmt.Errorf("cosmos GET %s returned HTTP %d", path, response.StatusCode)
+	}
+	return raw, nil
+}
+
+func decodeCosmosDocuments(raw []byte) ([]models.AzureCosmosItem, error) {
+	var decoded struct {
+		Documents []json.RawMessage `json:"Documents"`
+	}
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return nil, fmt.Errorf("decode cosmos documents: %w", err)
+	}
+	items := make([]models.AzureCosmosItem, 0, len(decoded.Documents))
+	for _, doc := range decoded.Documents {
+		var idHolder struct {
+			ID string `json:"id"`
+		}
+		_ = json.Unmarshal(doc, &idHolder)
+		items = append(items, models.AzureCosmosItem{ID: idHolder.ID, JSON: string(doc)})
+	}
+	return items, nil
+}
+
+// cosmosQuery performs a signed Cosmos DB SQL API query POST and returns the body.
+func (i *Inventory) cosmosQuery(ctx context.Context, endpoint, key, resLink, query string, maxItems int) ([]byte, error) {
+	date := time.Now().UTC().Format(http.TimeFormat)
+	auth, err := cosmosAuthHeader("POST", "docs", resLink, date, key)
+	if err != nil {
+		return nil, err
+	}
+	body, err := json.Marshal(map[string]any{
+		"query":      query,
+		"parameters": []any{},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("encode cosmos query: %w", err)
+	}
+	url := strings.TrimRight(endpoint, "/") + "/" + resLink + "/docs"
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Authorization", auth)
+	request.Header.Set("x-ms-date", date)
+	request.Header.Set("x-ms-version", cosmosVersion)
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Content-Type", "application/query+json")
+	request.Header.Set("x-ms-documentdb-isquery", "True")
+	request.Header.Set("x-ms-documentdb-query-enablecrosspartition", "True")
+	if maxItems > 0 {
+		request.Header.Set("x-ms-max-item-count", strconv.Itoa(maxItems))
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("cosmos request: %w", err)
+	}
+	defer response.Body.Close()
+	raw, _ := io.ReadAll(response.Body)
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		if len(raw) > 0 {
+			return nil, fmt.Errorf("cosmos QUERY %s returned HTTP %d: %s", resLink, response.StatusCode, strings.TrimSpace(string(raw)))
+		}
+		return nil, fmt.Errorf("cosmos QUERY %s returned HTTP %d", resLink, response.StatusCode)
 	}
 	return raw, nil
 }

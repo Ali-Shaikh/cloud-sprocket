@@ -5,6 +5,8 @@ package azureadapter
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -120,6 +122,153 @@ func TestDeleteCosmosItemLocalFloci(t *testing.T) {
 	}
 	if result.ItemID != "doc-1" || result.Summary == "" {
 		t.Fatalf("result = %+v", result)
+	}
+}
+
+func TestNormaliseCosmosQuery(t *testing.T) {
+	if _, err := NormaliseCosmosQuery("  "); err == nil {
+		t.Fatal("expected empty query error")
+	}
+	got, err := NormaliseCosmosQuery("  SELECT * FROM c  ")
+	if err != nil || got != "SELECT * FROM c" {
+		t.Fatalf("got %q err %v", got, err)
+	}
+	tooLong := strings.Repeat("x", cosmosQueryMaxRunes+1)
+	if _, err := NormaliseCosmosQuery(tooLong); err == nil {
+		t.Fatal("expected oversized query error")
+	}
+}
+
+func TestQueryCosmosItemsLocalFloci(t *testing.T) {
+	var sawQuery bool
+	var contentType string
+	var isQuery string
+	var crossPartition string
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/dbs/appdb/colls/orders/docs") {
+			sawQuery = true
+			contentType = r.Header.Get("Content-Type")
+			isQuery = r.Header.Get("x-ms-documentdb-isquery")
+			crossPartition = r.Header.Get("x-ms-documentdb-query-enablecrosspartition")
+			raw, _ := io.ReadAll(r.Body)
+			body = string(raw)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"Documents":[{"id":"match-1","customerId":"c-9","total":99}],"_count":1}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(server.Close)
+
+	inv := newLocalInventory(server.URL)
+	result, err := inv.QueryCosmosItems(
+		context.Background(),
+		localFlociProfile(),
+		"devstoreaccount1",
+		"",
+		"appdb",
+		"orders",
+		"SELECT * FROM c WHERE c.total > 10",
+	)
+	if err != nil {
+		t.Fatalf("QueryCosmosItems: %v", err)
+	}
+	if !sawQuery {
+		t.Fatal("expected query POST")
+	}
+	if contentType != "application/query+json" || isQuery != "True" {
+		t.Fatalf("headers content-type=%q isquery=%q", contentType, isQuery)
+	}
+	if crossPartition != "True" {
+		t.Fatalf("cross-partition = %q", crossPartition)
+	}
+	var posted struct {
+		Query string `json:"query"`
+	}
+	if err := json.Unmarshal([]byte(body), &posted); err != nil {
+		t.Fatalf("decode query body: %v (%q)", err, body)
+	}
+	if posted.Query != "SELECT * FROM c WHERE c.total > 10" {
+		t.Fatalf("posted query = %q", posted.Query)
+	}
+	if result.Query != "SELECT * FROM c WHERE c.total > 10" {
+		t.Fatalf("query = %q", result.Query)
+	}
+	if len(result.Items) != 1 || result.Items[0].ID != "match-1" {
+		t.Fatalf("items = %+v", result.Items)
+	}
+	if !strings.Contains(result.Items[0].JSON, `"total":99`) {
+		t.Fatalf("json = %q", result.Items[0].JSON)
+	}
+	if result.Truncated {
+		t.Fatal("expected a short result not to be truncated")
+	}
+}
+
+func TestQueryCosmosItemsHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"message":"syntax error near WHERE"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(server.Close)
+
+	inv := newLocalInventory(server.URL)
+	_, err := inv.QueryCosmosItems(
+		context.Background(),
+		localFlociProfile(),
+		"devstoreaccount1",
+		"",
+		"appdb",
+		"orders",
+		"SELECT * FROM c WHERE",
+	)
+	if err == nil || !strings.Contains(err.Error(), "syntax error") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestQueryCosmosItemsMarksTruncation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		docs := make([]string, cosmosQueryMaxItems)
+		for i := range docs {
+			docs[i] = fmt.Sprintf(`{"id":"doc-%d"}`, i)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"Documents":[`+strings.Join(docs, ",")+`]}`)
+	}))
+	t.Cleanup(server.Close)
+
+	inv := newLocalInventory(server.URL)
+	result, err := inv.QueryCosmosItems(
+		context.Background(),
+		localFlociProfile(),
+		"devstoreaccount1",
+		"",
+		"appdb",
+		"orders",
+		"SELECT * FROM c",
+	)
+	if err != nil {
+		t.Fatalf("QueryCosmosItems: %v", err)
+	}
+	if !result.Truncated || len(result.Items) != cosmosQueryMaxItems {
+		t.Fatalf("truncated=%v items=%d", result.Truncated, len(result.Items))
+	}
+	if !strings.Contains(result.Summary, "capped") {
+		t.Fatalf("summary = %q", result.Summary)
+	}
+}
+
+func TestQueryCosmosItemsRequiresFields(t *testing.T) {
+	inv := NewInventory(config.Settings{})
+	_, err := inv.QueryCosmosItems(context.Background(), localFlociProfile(), "", "", "db", "c", "SELECT * FROM c")
+	if err == nil {
+		t.Fatal("expected missing account error")
 	}
 }
 

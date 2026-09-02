@@ -204,12 +204,12 @@ Matches `docs/aws-services-expansion-plan.md` Phase 1. File-level scope:
 
 ### Step 6 — Depth workflows
 
-**Status:** Partial — S3 copy + folder prefix and Azure blob copy + folder prefix shipped pre-v0.9. Cosmos SQL and VPC wizard remain.
+**Status:** Partial — S3 copy + folder prefix, Azure blob copy + folder prefix, and Cosmos SQL query shipped. VPC wizard remains.
 
 Pick high-impact Floci flows to port:
 
 - S3/Azure object copy + folder-prefix create — **shipped pre-v0.9**
-- Cosmos SQL query panel (CloudSprocket's Cosmos tab is read-only browse today)
+- Cosmos SQL query panel — **shipped on `dev` (Unreleased)**
 - VPC wizard: only after AWS networking tabs exist (see expansion plan P2/P3)
 - GCP storage tab (when floci-gcp support is wired)
 

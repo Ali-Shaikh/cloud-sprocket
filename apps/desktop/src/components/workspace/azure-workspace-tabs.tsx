@@ -36,6 +36,7 @@ import type {
   AzureBastionConnectResult,
   AzureBastionHost,
   AzureBlobPresignResult,
+  AzureCosmosQueryResult,
   AzureFunctionInvokeResult,
   AzureLogAnalyticsSavedQuery,
   AzureLogAnalyticsTableInfo,
@@ -1011,6 +1012,17 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
           },
         );
       }}
+      onRunQuery={(query) =>
+        backendRequest<AzureCosmosQueryResult>("azure.cosmos.query", {
+          query,
+          account: activeWorkspace.selectedAzureCosmosAccount,
+          database: activeWorkspace.selectedAzureCosmosDatabase,
+          container: activeWorkspace.selectedAzureCosmosContainer,
+          resourceGroup: activeWorkspace.azureCosmosAccounts?.find(
+            (item) => item.name === activeWorkspace.selectedAzureCosmosAccount,
+          )?.resourceGroup,
+        })
+      }
     />
   ) : session.isLocked && activeWorkspaceTabId === "azure-postgres" ? (
     <AzurePostgresView

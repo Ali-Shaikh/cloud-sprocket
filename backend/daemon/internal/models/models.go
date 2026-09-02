@@ -1320,6 +1320,17 @@ type AzureCosmosDeleteItemResult struct {
 	Summary   string `json:"summary"`
 }
 
+// AzureCosmosQueryResult is a bounded SQL API query against one container.
+type AzureCosmosQueryResult struct {
+	Account   string            `json:"account"`
+	Database  string            `json:"database"`
+	Container string            `json:"container"`
+	Query     string            `json:"query"`
+	Items     []AzureCosmosItem `json:"items"`
+	Truncated bool              `json:"truncated,omitempty"`
+	Summary   string            `json:"summary"`
+}
+
 // AzurePostgresServer is a PostgreSQL Flexible Server.
 type AzurePostgresServer struct {
 	Name               string        `json:"name"`

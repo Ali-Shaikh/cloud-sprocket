@@ -1,11 +1,11 @@
 # CloudSprocket project status
 
-**Last updated:** 21 August 2026
+**Last updated:** 2 September 2026
 
 **Latest release:** [v0.9.14](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.9.14)
 **Recent releases:** v0.9.14 (operator actions, capability codes, deploy honesty), v0.9.13 (GCP multi-cloud foundation, F-029 cloud domains), v0.9.12 (application domain extraction spine F-029 Phases 0–3)
 
-**Post-v0.9.14 on `dev` (not yet released):** Azure inventory scopes report `loaded` / `emptyReason` (including `error` for failed lists). Front Door topology skip uses `detailLoaded`, not English status copy.
+**Post-v0.9.14 on `dev` (not yet released):** Azure inventory scopes report `loaded` / `emptyReason` (including `error` for failed lists). Front Door topology skip uses `detailLoaded`, not English status copy. Cosmos SQL query panel (`azure.cosmos.query`).
 
 CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tauri v2 + Go sidecar. The PySide6 legacy app was removed in PR #67. The Tauri rewrite is the active product. The app is labelled **Developer Preview** (not production-ready).
 
@@ -104,7 +104,7 @@ F-028 desktop providers and F-029 daemon domain extraction for the planned phase
 
 | Item | Target |
 |------|--------|
-| Cosmos SQL query panel (Step 6 remainder) | Post-v0.9 polish |
+| Cosmos SQL query panel (Step 6 remainder) | Done on `dev` (Unreleased) |
 | Broader AWS write ops on inventory-only tabs (API GW, CFN, etc.) | Low priority; inventory-first by design |
 | Service enablement Phase 4 onboarding wizard | v0.9.x polish |
 | Deeper GCP workspace (IAM, more mutations, SDK path) | v0.10 decision |
