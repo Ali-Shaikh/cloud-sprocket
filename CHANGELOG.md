@@ -9,6 +9,8 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.15] - 2026-09-03
+
 ### Added
 
 - Azure Cosmos DB SQL query: read-only `azure.cosmos.query` runs a bounded
@@ -1424,7 +1426,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.14...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.15...HEAD
+[0.9.15]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.14...v0.9.15
 [0.9.14]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.13...v0.9.14
 [0.9.13]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.12...v0.9.13
 [0.9.12]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.11...v0.9.12
