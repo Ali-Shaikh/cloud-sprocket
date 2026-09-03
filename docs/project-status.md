@@ -1,11 +1,11 @@
 # CloudSprocket project status
 
-**Last updated:** 2 September 2026
+**Last updated:** 3 September 2026
 
-**Latest release:** [v0.9.14](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.9.14)
-**Recent releases:** v0.9.14 (operator actions, capability codes, deploy honesty), v0.9.13 (GCP multi-cloud foundation, F-029 cloud domains), v0.9.12 (application domain extraction spine F-029 Phases 0–3)
+**Latest release:** [v0.9.15](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.9.15)
+**Recent releases:** v0.9.15 (Cosmos SQL query, DynamoDB Query-by-key, inventory loaded flags), v0.9.14 (operator actions, capability codes, deploy honesty), v0.9.13 (GCP multi-cloud foundation, F-029 cloud domains)
 
-**Post-v0.9.14 on `dev` (not yet released):** Azure inventory scopes report `loaded` / `emptyReason` (including `error` for failed lists). Front Door topology skip uses `detailLoaded`, not English status copy. Cosmos SQL query panel (`azure.cosmos.query`). DynamoDB Query-by-key (`aws.dynamodb.queryItems`) runs a bounded partition Query without write mode.
+**Post-v0.9.15 on `dev` (not yet released):** none.
 
 CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tauri v2 + Go sidecar. The PySide6 legacy app was removed in PR #67. The Tauri rewrite is the active product. The app is labelled **Developer Preview** (not production-ready).
 
@@ -61,7 +61,7 @@ Eleven service tabs plus four operational tools (15 Azure nav entries).
 
 Storage depth workflows: **blob copy**, **folder prefix create**, and **signed read SAS** (write-gated where applicable).
 
-Recent highlights: WAF workbench, Log Analytics, PostgreSQL Flexible Server start/stop, storage queue purge, Front Door cache purge, Cosmos delete item, Bastion list/connect (cloud CLI), floci-az OpenTofu contract. Azure inventory/selection/writes/Bastion extracted to `internal/app/azure` (F-029 Phases 5a–5e).
+Recent highlights: WAF workbench, Log Analytics, PostgreSQL Flexible Server start/stop, storage queue purge, Front Door cache purge, Cosmos SQL query and delete item, Bastion list/connect (cloud CLI), floci-az OpenTofu contract. Azure inventory/selection/writes/Bastion extracted to `internal/app/azure` (F-029 Phases 5a–5e).
 
 ### GCP (live via gcloud CLI)
 
@@ -104,7 +104,7 @@ F-028 desktop providers and F-029 daemon domain extraction for the planned phase
 
 | Item | Target |
 |------|--------|
-| Cosmos SQL query panel (Step 6 remainder) | Done on `dev` (Unreleased) |
+| Cosmos SQL query panel (Step 6 remainder) | Done in v0.9.15 |
 | Broader AWS write ops on inventory-only tabs (API GW, CFN, etc.) | Low priority; inventory-first by design |
 | Service enablement Phase 4 onboarding wizard | v0.9.x polish |
 | Deeper GCP workspace (IAM, more mutations, SDK path) | v0.10 decision |

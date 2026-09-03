@@ -209,7 +209,7 @@ Matches `docs/aws-services-expansion-plan.md` Phase 1. File-level scope:
 Pick high-impact Floci flows to port:
 
 - S3/Azure object copy + folder-prefix create — **shipped pre-v0.9**
-- Cosmos SQL query panel — **shipped on `dev` (Unreleased)**
+- Cosmos SQL query panel — **shipped in v0.9.15**
 - VPC wizard: only after AWS networking tabs exist (see expansion plan P2/P3)
 - GCP storage tab (when floci-gcp support is wired)
 
