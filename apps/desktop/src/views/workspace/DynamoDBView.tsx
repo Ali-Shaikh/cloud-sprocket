@@ -37,7 +37,15 @@ import { StatusPill } from "@/components/status-pill";
 import type { Status } from "@/components/status-dot";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { DetailFieldList } from "./detail-fields";
-import type { WorkspaceSnapshot } from "@/types/backend";
+import type { AwsDynamoDBQueryResult, WorkspaceSnapshot } from "@/types/backend";
+
+export type DynamoDBQueryArgs = {
+  tableName: string;
+  hashKey: string;
+  hashValue: string;
+  rangeKey?: string;
+  rangeValue?: string;
+};
 
 export type DynamoDBViewProps = {
   workspace: WorkspaceSnapshot;
@@ -47,6 +55,7 @@ export type DynamoDBViewProps = {
   onSelectTable: (tableName: string) => void;
   onPutItem: (tableName: string, itemJson: string) => void;
   onDeleteItem: (tableName: string, keyJson: string) => void;
+  onRunQuery: (args: DynamoDBQueryArgs) => Promise<AwsDynamoDBQueryResult>;
   onLoadMoreItems?: () => void;
   loadMoreInFlight?: boolean;
 };
@@ -99,7 +108,7 @@ function copyToClipboard(value: string, label = "Copied to clipboard"): void {
 
 /**
  * DynamoDB panel: regional table inventory, describe keys/GSIs, sample scan,
- * and write-gated put/delete on local endpoints.
+ * read-only Query-by-key, and write-gated put/delete on local endpoints.
  */
 export default function DynamoDBView({
   workspace,
@@ -109,6 +118,7 @@ export default function DynamoDBView({
   onSelectTable,
   onPutItem,
   onDeleteItem,
+  onRunQuery,
   onLoadMoreItems,
   loadMoreInFlight = false,
 }: DynamoDBViewProps) {
@@ -117,8 +127,15 @@ export default function DynamoDBView({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemJson, setItemJson] = useState('{\n  "id": "item-001",\n  "payload": "hello"\n}');
   const [keyJson, setKeyJson] = useState('{\n  "id": "item-001"\n}');
+  const [hashValue, setHashValue] = useState("");
+  const [rangeValue, setRangeValue] = useState("");
+  const [queryResult, setQueryResult] = useState<AwsDynamoDBQueryResult | null>(null);
+  const [queryError, setQueryError] = useState("");
+  const [queryInFlight, setQueryInFlight] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedDynamodbTableName));
   const lastSelectedTableRef = useRef(workspace.selectedDynamodbTableName || "");
+  const lastSelectedRegionRef = useRef(workspace.selectedDynamodbRegion || "");
+  const queryGeneration = useRef(0);
 
   const regions =
     workspace.dynamodbRegions.length > 0
@@ -191,13 +208,65 @@ export default function DynamoDBView({
       ]
     : [];
 
+  const canRunQuery = Boolean(selectedTable?.tableName && hashValue.trim());
+
+  const runQuery = () => {
+    if (!selectedTable?.tableName || !hashValue.trim() || queryInFlight) {
+      return;
+    }
+    const rangeKey = selectedTable.rangeKey?.trim();
+    const trimmedRange = rangeValue.trim();
+    const generation = queryGeneration.current;
+    setQueryInFlight(true);
+    setQueryError("");
+    void onRunQuery({
+      tableName: selectedTable.tableName,
+      hashKey: selectedTable.hashKey || "",
+      hashValue: hashValue.trim(),
+      rangeKey: rangeKey && trimmedRange ? rangeKey : undefined,
+      rangeValue: rangeKey && trimmedRange ? trimmedRange : undefined,
+    })
+      .then((result) => {
+        if (generation !== queryGeneration.current) {
+          return;
+        }
+        setQueryResult(result);
+      })
+      .catch((error: unknown) => {
+        if (generation !== queryGeneration.current) {
+          return;
+        }
+        setQueryResult(null);
+        setQueryError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (generation === queryGeneration.current) {
+          setQueryInFlight(false);
+        }
+      });
+  };
+
   useEffect(() => {
     const nextTableName = workspace.selectedDynamodbTableName || "";
-    if (nextTableName !== lastSelectedTableRef.current) {
+    const nextRegion = workspace.selectedDynamodbRegion || "";
+    const tableChanged = nextTableName !== lastSelectedTableRef.current;
+    const regionChanged = nextRegion !== lastSelectedRegionRef.current;
+    if (tableChanged) {
       lastSelectedTableRef.current = nextTableName;
       setInspectorOpen(Boolean(nextTableName));
     }
-  }, [workspace.selectedDynamodbTableName]);
+    if (regionChanged) {
+      lastSelectedRegionRef.current = nextRegion;
+    }
+    if (tableChanged || regionChanged) {
+      queryGeneration.current += 1;
+      setQueryResult(null);
+      setQueryError("");
+      setQueryInFlight(false);
+      setHashValue("");
+      setRangeValue("");
+    }
+  }, [workspace.selectedDynamodbTableName, workspace.selectedDynamodbRegion]);
 
   if (workspace.provider?.providerId && workspace.provider.providerId !== "aws") {
     return (
@@ -534,6 +603,95 @@ export default function DynamoDBView({
           onInspectorOpenChange={setInspectorOpen}
           inspectorAriaLabel="DynamoDB table details"
         />
+      </section>
+
+      <section className={sectionCard}>
+        <div>
+          <h2 className="text-base font-bold">Query by key</h2>
+          <p className="text-sm text-muted-foreground">
+            Read-only Query against the selected table. Results capped at 25 items.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-48 flex-1">
+            <div className={cn(fieldLabel, "mb-1")}>{selectedTable?.hashKey || "Hash key"}</div>
+            <Input
+              aria-label={selectedTable?.hashKey || "Hash key"}
+              value={hashValue}
+              placeholder="Partition key value"
+              onChange={(event) => {
+                setHashValue(event.target.value);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                  event.preventDefault();
+                  runQuery();
+                }
+              }}
+            />
+          </div>
+          {selectedTable?.rangeKey ? (
+            <div className="min-w-48 flex-1">
+              <div className={cn(fieldLabel, "mb-1")}>{selectedTable.rangeKey}</div>
+              <Input
+                aria-label={selectedTable.rangeKey}
+                value={rangeValue}
+                placeholder="Sort key value (optional)"
+                onChange={(event) => {
+                  setRangeValue(event.target.value);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                    event.preventDefault();
+                    runQuery();
+                  }
+                }}
+              />
+            </div>
+          ) : null}
+          <Button
+            variant="outline"
+            disabled={!canRunQuery || queryInFlight}
+            onClick={() => {
+              runQuery();
+            }}
+          >
+            {queryInFlight ? "Querying..." : "Run query"}
+          </Button>
+        </div>
+        {queryError ? <p className="text-sm text-destructive">{queryError}</p> : null}
+        {queryResult ? (
+          <div>
+            <div className={fieldLabel}>{queryResult.summary || "Query results"}</div>
+            {queryResult.items.length > 0 ? (
+              <div className="mt-2 space-y-2">
+                {queryResult.items.map((item, index) => (
+                  <div key={`query-item-${index}`} className={snippetCard}>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted-foreground">Item {index + 1}</span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-1 text-[10px]"
+                        onClick={() => {
+                          copyToClipboard(item, "Item copied");
+                        }}
+                      >
+                        <Copy className="mr-1 h-3 w-3" />
+                        Copy
+                      </Button>
+                    </div>
+                    <pre className="max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[10px]">
+                      {item}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">No items matched this key.</p>
+            )}
+          </div>
+        ) : null}
       </section>
 
       <AlertDialog open={putDialogOpen} onOpenChange={setPutDialogOpen}>

@@ -458,6 +458,17 @@ export interface AwsDynamoDBTable {
   sampleItemsHasMore?: boolean;
 }
 
+export interface AwsDynamoDBQueryResult {
+  tableName: string;
+  hashKey: string;
+  hashValue: string;
+  rangeKey?: string;
+  rangeValue?: string;
+  items: string[];
+  truncated?: boolean;
+  summary: string;
+}
+
 export interface AwsSqsQueue {
   queueName: string;
   queueUrl: string;

@@ -51,6 +51,8 @@ type DynamoDBInventory interface {
 	DescribeTable(ctx context.Context, profile models.ProfileSummary, region string, tableName string) (models.AwsDynamoDBTable, error)
 	// ScanSampleItems returns one page of sample items. exclusiveStartToken empty means the first page.
 	ScanSampleItems(ctx context.Context, profile models.ProfileSummary, region string, tableName string, exclusiveStartToken string, limit int32) (models.AwsDynamoDBScanPage, error)
+	// QueryItems runs a bounded DynamoDB Query against the table primary key.
+	QueryItems(ctx context.Context, profile models.ProfileSummary, region string, tableName string, hashKey string, hashValue string, rangeKey string, rangeValue string) (models.AwsDynamoDBQueryResult, error)
 	// GetItem loads one item by key JSON object. found is false when the key misses.
 	GetItem(ctx context.Context, profile models.ProfileSummary, region string, tableName string, keyJSON string) (item map[string]any, found bool, err error)
 	PutItem(ctx context.Context, profile models.ProfileSummary, region string, tableName string, itemJSON string) (models.AwsDynamoDBWriteResult, error)

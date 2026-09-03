@@ -42,6 +42,7 @@ import type {
   WorkspaceSnapshot,
   WorkspaceTab,
   AwsLambdaInvokeResult,
+  AwsDynamoDBQueryResult,
   DriftReport,
   GcpCloudFunction,
   GcpComputeInstance,
@@ -3505,6 +3506,52 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
     return Promise.resolve(workspace);
   };
   register("aws.dynamodb.loadMoreItems", handle_aws_dynamodb_loadMoreItems);
+
+  const handle_aws_dynamodb_queryItems: MockRpcHandler = async (params) => {
+    const hashValue = String(params.hashValue ?? "").trim();
+    if (!hashValue) {
+      return Promise.reject(new Error("hash key name and value are required"));
+    }
+    const tableName =
+      String(params.tableName ?? "") ||
+      mockState.session.selectedDynamodbTableName ||
+      mockWorkspaceDynamoDBTables[0]?.tableName ||
+      "";
+    const table =
+      mockWorkspaceDynamoDBTables.find((entry) => entry.tableName === tableName) ??
+      mockWorkspaceDynamoDBTables[0];
+    const hashKey = String(params.hashKey ?? table?.hashKey ?? "");
+    const rangeKey = String(params.rangeKey ?? "").trim();
+    const rangeValue = String(params.rangeValue ?? "").trim();
+    const items = (table?.sampleItems ?? []).filter((raw) => {
+      try {
+        const doc = JSON.parse(raw) as Record<string, unknown>;
+        if (String(doc[hashKey] ?? "") !== hashValue) {
+          return false;
+        }
+        if (rangeKey && String(doc[rangeKey] ?? "") !== rangeValue) {
+          return false;
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    const result: AwsDynamoDBQueryResult = {
+      tableName: table?.tableName ?? tableName,
+      hashKey,
+      hashValue,
+      items,
+      summary: `Queried ${items.length} item(s) from ${table?.tableName ?? tableName}.`,
+    };
+    if (params.rangeKey) {
+      result.rangeKey = String(params.rangeKey);
+      result.rangeValue = String(params.rangeValue ?? "");
+    }
+    appendLog("info", result.summary);
+    return Promise.resolve(result);
+  };
+  register("aws.dynamodb.queryItems", handle_aws_dynamodb_queryItems);
 
   const handle_aws_rds_selectRegion : MockRpcHandler = async (params, method) => {
     mockState.session.selectedRdsRegion = String(params.region ?? "");

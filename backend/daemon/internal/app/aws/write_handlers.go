@@ -469,6 +469,57 @@ func (s *Service) HandleDynamoDBLoadMoreItems(ctx context.Context, params json.R
 	return workspace, nil
 }
 
+// HandleDynamoDBQueryItems implements aws.dynamodb.queryItems (read-only Query).
+func (s *Service) HandleDynamoDBQueryItems(ctx context.Context, params json.RawMessage, _ sessionport.Notifier) (any, error) {
+	if s == nil || s.dynamodb == nil || s.session == nil || s.discovery == nil {
+		return nil, errors.New("aws write service is not available")
+	}
+	var request struct {
+		TableName  string `json:"tableName"`
+		HashKey    string `json:"hashKey"`
+		HashValue  string `json:"hashValue"`
+		RangeKey   string `json:"rangeKey"`
+		RangeValue string `json:"rangeValue"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	hashKey := strings.TrimSpace(request.HashKey)
+	hashValue := strings.TrimSpace(request.HashValue)
+	if hashKey == "" || hashValue == "" {
+		return nil, errors.New("hash key name and value are required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	session, err := s.session.Load(ctx, snapshot)
+	if err != nil {
+		return nil, err
+	}
+	profile, region, tableName, err := ActiveDynamoDBSelection(snapshot, session, request.TableName)
+	if err != nil {
+		return nil, err
+	}
+
+	actionCtx, cancel := s.WithActionTimeout(ctx)
+	result, queryErr := s.dynamodb.QueryItems(
+		actionCtx,
+		profile,
+		region,
+		tableName,
+		hashKey,
+		hashValue,
+		request.RangeKey,
+		request.RangeValue,
+	)
+	cancel()
+	if queryErr != nil {
+		return nil, fmt.Errorf("could not query DynamoDB items: %w", queryErr)
+	}
+	return result, nil
+}
+
 // HandleIAMCreateRole implements aws.iam.createRole.
 func (s *Service) HandleIAMCreateRole(ctx context.Context, params json.RawMessage, notifier sessionport.Notifier) (any, error) {
 	if s == nil || s.iam == nil {

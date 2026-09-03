@@ -24,12 +24,14 @@ type SNSWriter interface {
 	CreateSubscription(ctx context.Context, profile models.ProfileSummary, region string, topicArn string, protocol string, endpoint string) (models.AwsSnsCreateSubscriptionResult, error)
 }
 
-// DynamoDBWriter is the DynamoDB write and sample-scan surface.
+// DynamoDBWriter is the DynamoDB write, sample-scan, and query surface.
 type DynamoDBWriter interface {
 	PutItem(ctx context.Context, profile models.ProfileSummary, region string, tableName string, itemJSON string) (models.AwsDynamoDBWriteResult, error)
 	DeleteItem(ctx context.Context, profile models.ProfileSummary, region string, tableName string, keyJSON string) (models.AwsDynamoDBWriteResult, error)
 	// ScanSampleItems returns one page of sample items. exclusiveStartToken empty means the first page.
 	ScanSampleItems(ctx context.Context, profile models.ProfileSummary, region string, tableName string, exclusiveStartToken string, limit int32) (models.AwsDynamoDBScanPage, error)
+	// QueryItems runs a bounded DynamoDB Query against the table primary key.
+	QueryItems(ctx context.Context, profile models.ProfileSummary, region string, tableName string, hashKey string, hashValue string, rangeKey string, rangeValue string) (models.AwsDynamoDBQueryResult, error)
 }
 
 // IAMWriter is the IAM create-role surface.

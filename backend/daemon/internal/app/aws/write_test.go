@@ -674,8 +674,13 @@ func TestHandleLambdaDescribe(t *testing.T) {
 type fakeLambda struct{ described bool }
 
 type fakeDynamoDB struct {
-	scanned bool
-	token   string
+	scanned  bool
+	token    string
+	queried  bool
+	hashKey  string
+	hashVal  string
+	rangeKey string
+	rangeVal string
 }
 
 func (f *fakeDynamoDB) PutItem(context.Context, models.ProfileSummary, string, string, string) (models.AwsDynamoDBWriteResult, error) {
@@ -691,6 +696,22 @@ func (f *fakeDynamoDB) ScanSampleItems(_ context.Context, _ models.ProfileSummar
 		Items:                []string{`{"id":"page-2"}`},
 		SampleItemsNextToken: "next-token",
 		SampleItemsHasMore:   true,
+	}, nil
+}
+func (f *fakeDynamoDB) QueryItems(_ context.Context, _ models.ProfileSummary, _ string, tableName string, hashKey string, hashValue string, rangeKey string, rangeValue string) (models.AwsDynamoDBQueryResult, error) {
+	f.queried = true
+	f.hashKey = hashKey
+	f.hashVal = hashValue
+	f.rangeKey = rangeKey
+	f.rangeVal = rangeValue
+	return models.AwsDynamoDBQueryResult{
+		TableName:  tableName,
+		HashKey:    hashKey,
+		HashValue:  hashValue,
+		RangeKey:   rangeKey,
+		RangeValue: rangeValue,
+		Items:      []string{`{"id":"q1"}`},
+		Summary:    "Queried 1 item(s) from " + tableName + ".",
 	}, nil
 }
 
@@ -762,6 +783,63 @@ func TestHandleDynamoDBLoadMoreItemsRequiresToken(t *testing.T) {
 	})
 	if _, err := svc.HandleDynamoDBLoadMoreItems(context.Background(), []byte(`{"tableName":"orders"}`), nil); err == nil {
 		t.Fatal("expected continuation token error")
+	}
+}
+
+func TestHandleDynamoDBQueryItems(t *testing.T) {
+	ddb := &fakeDynamoDB{}
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: &fakeSession{session: models.SessionSnapshot{
+			IsLocked:                  true,
+			CurrentProviderID:         "aws",
+			SelectedProfileID:         "p1",
+			SelectedDynamoDBRegion:    "us-east-1",
+			SelectedDynamoDBTableName: "orders",
+		}},
+		Workspace:     &fakeWorkspace{},
+		DynamoDB:      ddb,
+		ActionTimeout: 5 * time.Second,
+	})
+	params, _ := json.Marshal(map[string]string{
+		"tableName":  "orders",
+		"hashKey":    "pk",
+		"hashValue":  "cust-9",
+		"rangeKey":   "sk",
+		"rangeValue": "order-1",
+	})
+	result, err := svc.HandleDynamoDBQueryItems(context.Background(), params, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ddb.queried || ddb.hashKey != "pk" || ddb.hashVal != "cust-9" || ddb.rangeKey != "sk" || ddb.rangeVal != "order-1" {
+		t.Fatalf("query call = %+v", ddb)
+	}
+	got, ok := result.(models.AwsDynamoDBQueryResult)
+	if !ok || len(got.Items) != 1 || got.TableName != "orders" {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestHandleDynamoDBQueryItemsRequiresHash(t *testing.T) {
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: discovery.Snapshot{
+			Profiles: []models.ProfileSummary{{ProfileID: "p1", ProviderID: "aws"}},
+		}},
+		Session: &fakeSession{session: models.SessionSnapshot{
+			IsLocked: true, CurrentProviderID: "aws", SelectedProfileID: "p1",
+			SelectedDynamoDBTableName: "orders",
+		}},
+		Workspace: &fakeWorkspace{},
+		DynamoDB:  &fakeDynamoDB{},
+	})
+	if _, err := svc.HandleDynamoDBQueryItems(context.Background(), []byte(`{"tableName":"orders","hashKey":"pk"}`), nil); err == nil {
+		t.Fatal("expected hash key value error")
+	}
+	if _, err := svc.HandleDynamoDBQueryItems(context.Background(), []byte(`{"tableName":"orders","hashValue":"cust-9"}`), nil); err == nil {
+		t.Fatal("expected hash key name error")
 	}
 }
 

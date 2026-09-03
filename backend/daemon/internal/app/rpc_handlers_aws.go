@@ -82,6 +82,9 @@ func (s *Service) registerAWSHandlers(m *handlerRegistry) {
 	m.register("aws.dynamodb.loadMoreItems", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsDynamodbLoadMoreItems(ctx, params, notifier)
 	})
+	m.register("aws.dynamodb.queryItems", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleAwsDynamodbQueryItems(ctx, params, notifier)
+	})
 	m.register("aws.sqs.selectRegion", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleAwsSqsSelectRegion(ctx, params, notifier)
 	})
