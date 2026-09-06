@@ -67,7 +67,7 @@ describe("browser mock RPC honesty", () => {
       profileId: "sub-001",
     });
     await handleMockRequest("session.selectAuthMethod", { authMethod: "cli" });
-    await handleMockRequest("session.lock");
+    await handleMockRequest("session.lock", {});
     await handleMockRequest("session.setWriteMode", { enabled: true });
     await expect(
       handleMockRequest("azure.queues.sendMessage", {
