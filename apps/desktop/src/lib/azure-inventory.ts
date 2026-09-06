@@ -157,9 +157,13 @@ export function shouldFetchAzureInventory(
   workspace: WorkspaceSnapshot,
   scope: AzureInventoryScope,
   inFlight: boolean,
+  tabBecameActive = false,
 ): boolean {
   if (inFlight) {
     return false;
+  }
+  if (workspace.azureInventory?.[scope]?.emptyReason === "error") {
+    return tabBecameActive;
   }
   return !azureInventoryLoaded(workspace, scope);
 }

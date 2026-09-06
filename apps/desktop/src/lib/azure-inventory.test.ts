@@ -77,6 +77,17 @@ describe("azure inventory fetch gating", () => {
     expect(shouldFetchAzureInventory(workspace, "functions", true)).toBe(false);
   });
 
+  it("retries a failed scope when the tab becomes active again", () => {
+    const workspace = markAzureInventoryFetchError(
+      { azureStorageAccounts: [] } as unknown as WorkspaceSnapshot,
+      "storage",
+      "timed out",
+    );
+
+    expect(shouldFetchAzureInventory(workspace, "storage", false)).toBe(false);
+    expect(shouldFetchAzureInventory(workspace, "storage", false, true)).toBe(true);
+  });
+
   it("rebuilds the loaded-scopes key after a deferred snapshot wipe", () => {
     const loaded = {
       azureInventory: { storage: { loaded: true }, waf: { loaded: true } },

@@ -437,6 +437,7 @@ export default function App() {
   useVirtualisationPoll(activeWorkspaceTabId, refreshVirtualisationState, refreshEmulatorLogsOnEnter);
   const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
   const azureInventoryFetchedScopesRef = useRef(new Set<string>());
+  const azureInventoryTabRef = useRef(activeWorkspaceTabId);
   const awsInventoryFetchedScopesRef = useRef(new Set<string>());
   const [azureInventoryRefreshToken, setAzureInventoryRefreshToken] = useState(0);
   const [awsInventoryRefreshToken, setAwsInventoryRefreshToken] = useState(0);
@@ -876,11 +877,13 @@ export default function App() {
       return;
     }
     const scope = azureInventoryScopeForTab(activeWorkspaceTabId);
+    const tabBecameActive = azureInventoryTabRef.current !== activeWorkspaceTabId;
+    azureInventoryTabRef.current = activeWorkspaceTabId;
     if (!scope) {
       return;
     }
     const inFlight = azureInventoryFetchedScopesRef.current.has(scope);
-    if (!shouldFetchAzureInventory(workspace, scope, inFlight)) {
+    if (!shouldFetchAzureInventory(workspace, scope, inFlight, tabBecameActive)) {
       return;
     }
     azureInventoryFetchedScopesRef.current.add(scope);
@@ -983,7 +986,6 @@ export default function App() {
     session.isLocked,
     session.selectedProfileId,
     workspace.azureInventory?.frontdoor?.loaded,
-    workspace.azureInventory?.frontdoor?.detailLoaded,
     refreshAzureFrontDoorTopology,
   ]);
 
@@ -1001,7 +1003,6 @@ export default function App() {
     session.isLocked,
     session.selectedProfileId,
     workspace.azureInventory?.waf?.loaded,
-    workspace.selectedAzureWafPolicy,
     refreshAzureWafPolicyConfig,
   ]);
 
