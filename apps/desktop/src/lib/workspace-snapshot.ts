@@ -707,6 +707,7 @@ export function mergeAzureFrontDoorSelection(
     azureFrontDoorOriginGroups: normalised.azureFrontDoorOriginGroups,
     azureFrontDoorOrigins: normalised.azureFrontDoorOrigins,
     azureFrontDoorStatusMessage: normalised.azureFrontDoorStatusMessage,
+    ...mergeLogAnalyticsWorkspaceFields(current, normalised),
   });
   if (!normalised.azureInventory) {
     return merged;
@@ -772,6 +773,29 @@ export function frontDoorTopologyLoaded(
   );
 }
 
+function mergeLogAnalyticsWorkspaceFields(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+): {
+  azureLogAnalyticsWorkspaces: WorkspaceSnapshot["azureLogAnalyticsWorkspaces"];
+  selectedAzureLogWorkspace: WorkspaceSnapshot["selectedAzureLogWorkspace"];
+} {
+  const incomingLoaded = Boolean(incoming.azureInventory?.loganalytics?.loaded);
+  const incomingList = incoming.azureLogAnalyticsWorkspaces ?? [];
+  const useIncoming = incomingLoaded || incomingList.length > 0;
+  if (useIncoming) {
+    return {
+      azureLogAnalyticsWorkspaces: incomingList,
+      selectedAzureLogWorkspace: incoming.selectedAzureLogWorkspace,
+    };
+  }
+  return {
+    azureLogAnalyticsWorkspaces: current.azureLogAnalyticsWorkspaces,
+    selectedAzureLogWorkspace:
+      incoming.selectedAzureLogWorkspace || current.selectedAzureLogWorkspace,
+  };
+}
+
 function mergeAzureInventoryStates(
   current: WorkspaceSnapshot["azureInventory"],
   incoming: NonNullable<WorkspaceSnapshot["azureInventory"]>,
@@ -798,8 +822,7 @@ export function mergeAzureWafSelection(
   return normaliseWorkspaceSnapshot({
     ...current,
     selectedAzureWafPolicy: normalised.selectedAzureWafPolicy,
-    selectedAzureLogWorkspace: normalised.selectedAzureLogWorkspace ?? current.selectedAzureLogWorkspace,
-    azureLogAnalyticsWorkspaces: normalised.azureLogAnalyticsWorkspaces,
+    ...mergeLogAnalyticsWorkspaceFields(current, normalised),
     azureWafLogSchema: normalised.azureWafLogSchema,
     azureWafPolicies: normalised.azureWafPolicies,
     azureWafPolicyDetail: normalised.azureWafPolicyDetail,

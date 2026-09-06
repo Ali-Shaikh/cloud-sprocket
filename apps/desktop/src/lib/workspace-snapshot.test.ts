@@ -282,6 +282,42 @@ describe("mergeAzureInventoryScope", () => {
     expect(merged.azureInventory?.frontdoor).toEqual({ loaded: true, detailLoaded: true });
     expect(merged.azureFrontDoorEndpoints).toEqual([{ name: "api", profileName: "demo-afd" }]);
   });
+
+  it("keeps Log Analytics workspaces when a Front Door merge omits them", () => {
+    const current = normaliseWorkspaceSnapshot({
+      azureLogAnalyticsWorkspaces: [{ name: "law-platform", customerId: "g1" }],
+      selectedAzureLogWorkspace: "law-platform",
+    });
+    const incoming = normaliseWorkspaceSnapshot({
+      azureFrontDoorProfiles: [{ name: "demo-afd" }],
+      azureInventory: { frontdoor: { loaded: true } },
+    });
+
+    const merged = mergeAzureFrontDoorSelection(current, incoming);
+
+    expect(merged.azureLogAnalyticsWorkspaces).toEqual([
+      { name: "law-platform", customerId: "g1" },
+    ]);
+    expect(merged.selectedAzureLogWorkspace).toBe("law-platform");
+    expect(merged.azureFrontDoorProfiles).toEqual([{ name: "demo-afd" }]);
+  });
+
+  it("replaces Log Analytics workspaces when the incoming list is a completed empty fetch", () => {
+    const current = normaliseWorkspaceSnapshot({
+      azureLogAnalyticsWorkspaces: [{ name: "law-old", customerId: "g-old" }],
+      selectedAzureLogWorkspace: "law-old",
+    });
+    const incoming = normaliseWorkspaceSnapshot({
+      azureLogAnalyticsWorkspaces: [],
+      selectedAzureLogWorkspace: "",
+      azureInventory: { loganalytics: { loaded: true, emptyReason: "none_found" } },
+    });
+
+    const merged = mergeAzureFrontDoorSelection(current, incoming);
+
+    expect(merged.azureLogAnalyticsWorkspaces).toEqual([]);
+    expect(merged.selectedAzureLogWorkspace).toBe("");
+  });
 });
 
 describe("frontDoorTopologyLoaded", () => {

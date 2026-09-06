@@ -132,6 +132,17 @@ export default function AzureFrontDoorView({
   const [logWorkspace, setLogWorkspace] = useState(
     workspace.selectedAzureLogWorkspace ?? logWorkspaces[0]?.name ?? "",
   );
+  const resolvedLogWorkspace =
+    logWorkspace.trim() ||
+    workspace.selectedAzureLogWorkspace?.trim() ||
+    logWorkspaces[0]?.name ||
+    "";
+
+  useEffect(() => {
+    if (resolvedLogWorkspace && resolvedLogWorkspace !== logWorkspace) {
+      setLogWorkspace(resolvedLogWorkspace);
+    }
+  }, [logWorkspace, resolvedLogWorkspace]);
   const [logMode, setLogMode] = useState<AfdAccessLogMode>("azureDiagnostics");
   const [logTable, setLogTable] = useState("AzureDiagnostics");
   const [timespan, setTimespan] = useState("P1D");
@@ -167,7 +178,7 @@ export default function AzureFrontDoorView({
     setFilters(nextFilters);
     const nextQuery = buildAfdTrackingReferenceSearchQuery(logMode, logTable, trackingReference);
     setQuery(nextQuery);
-    const workspaceName = (initialLogWorkspace?.trim() || logWorkspace).trim();
+    const workspaceName = (initialLogWorkspace?.trim() || resolvedLogWorkspace).trim();
     if (!workspaceName) {
       return;
     }
@@ -196,7 +207,7 @@ export default function AzureFrontDoorView({
     inventoryLoading && endpoints.length === 0 && originGroups.length === 0;
 
   async function runQuery(nextQuery = query): Promise<void> {
-    const workspaceName = logWorkspace.trim();
+    const workspaceName = resolvedLogWorkspace.trim();
     if (!workspaceName) {
       setQueryError("Select a Log Analytics workspace first.");
       return;
@@ -246,7 +257,7 @@ export default function AzureFrontDoorView({
               <div className="w-72">
                 <div className={cn(fieldLabel, "mb-1")}>Profile</div>
                 <Select
-                  value={profileName}
+                  value={profileName || undefined}
                   disabled={inventoryLoading}
                   onValueChange={(value) => value && onSelectProfile(value)}
                 >
@@ -454,7 +465,10 @@ export default function AzureFrontDoorView({
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
               <div>
                 <div className={cn(fieldLabel, "mb-1")}>Log Analytics workspace</div>
-                <Select value={logWorkspace} onValueChange={(value) => value && setLogWorkspace(value)}>
+                <Select
+                  value={resolvedLogWorkspace || undefined}
+                  onValueChange={(value) => value && setLogWorkspace(value)}
+                >
                   <SelectTrigger aria-label="Select Log Analytics workspace">
                     <SelectValue placeholder="Workspace" />
                   </SelectTrigger>
@@ -550,7 +564,7 @@ export default function AzureFrontDoorView({
                 variant="outline"
                 size="sm"
                 className="gap-2"
-                onClick={() => onEditInLogAnalytics(logWorkspace, query, timespan)}
+                onClick={() => onEditInLogAnalytics(resolvedLogWorkspace, query, timespan)}
               >
                 <ExternalLink className="h-4 w-4" />
                 Edit in Log Analytics

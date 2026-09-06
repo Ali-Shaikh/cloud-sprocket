@@ -9,6 +9,12 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Fixed
+
+- Front Door access logs and WAF workspace/policy dropdowns no longer stay empty
+  after the tab loads. Front Door inventory now includes Log Analytics
+  workspaces, and the selects no longer bind an unmatched empty value.
+
 ## [0.9.15] - 2026-09-03
 
 ### Added

@@ -65,4 +65,43 @@ describe("AzureFrontDoorView access logs", () => {
     expect(executedQuery).toContain("summarize count() by httpStatusCode_d");
     expect(executedQuery).not.toContain("should-not-appear.example.com");
   });
+
+  it("fills the access-log workspace dropdown when workspaces arrive after first render", async () => {
+    const { rerender } = render(
+      <ThemeProvider>
+        <AzureFrontDoorView
+          workspace={{ ...workspace, azureLogAnalyticsWorkspaces: [], selectedAzureLogWorkspace: "" }}
+          onRefresh={noop}
+          onSelectProfile={noop}
+          onSelectEndpoint={noop}
+          onSelectOriginGroup={noop}
+          onPurgeCache={noop}
+          onOpenWafPolicy={noop}
+          onEditInLogAnalytics={noop}
+          onRunQuery={async () => ({ columns: [], rows: [], durationMs: 0 })}
+        />
+      </ThemeProvider>,
+    );
+
+    await userEvent.setup().click(screen.getByRole("tab", { name: /access logs/i }));
+    expect(screen.getByRole("combobox", { name: "Select Log Analytics workspace" })).toBeTruthy();
+
+    rerender(
+      <ThemeProvider>
+        <AzureFrontDoorView
+          workspace={workspace}
+          onRefresh={noop}
+          onSelectProfile={noop}
+          onSelectEndpoint={noop}
+          onSelectOriginGroup={noop}
+          onPurgeCache={noop}
+          onOpenWafPolicy={noop}
+          onEditInLogAnalytics={noop}
+          onRunQuery={async () => ({ columns: [], rows: [], durationMs: 0 })}
+        />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByText("law-platform")).toBeTruthy();
+  });
 });

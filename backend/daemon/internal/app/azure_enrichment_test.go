@@ -189,6 +189,21 @@ func TestWorkspaceGetSkipsHeavyAzureDrillDown(t *testing.T) {
 	if azure.getPolicyCalls.Load() != 0 {
 		t.Fatalf("GetWafPolicy calls = %d, want 0", azure.getPolicyCalls.Load())
 	}
+	if len(wafWorkspace.AzureLogAnalyticsWorkspaces) == 0 {
+		t.Fatal("expected Log Analytics workspaces on scoped waf inventory")
+	}
+
+	frontDoorResult, err := service.Handle(ctx, "azure.inventory.get", []byte(`{"scope":"frontdoor"}`), nil)
+	if err != nil {
+		t.Fatalf("azure.inventory.get frontdoor: %v", err)
+	}
+	frontDoorWorkspace, ok := frontDoorResult.(models.WorkspaceSnapshot)
+	if !ok {
+		t.Fatalf("expected WorkspaceSnapshot, got %T", frontDoorResult)
+	}
+	if len(frontDoorWorkspace.AzureLogAnalyticsWorkspaces) == 0 {
+		t.Fatal("expected Log Analytics workspaces on scoped Front Door inventory")
+	}
 }
 
 func TestSelectResourceGroupRefreshesVirtualMachinesOnly(t *testing.T) {

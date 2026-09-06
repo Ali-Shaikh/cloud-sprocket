@@ -1,11 +1,11 @@
 # CloudSprocket project status
 
-**Last updated:** 3 September 2026
+**Last updated:** 6 September 2026
 
 **Latest release:** [v0.9.15](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.9.15)
 **Recent releases:** v0.9.15 (Cosmos SQL query, DynamoDB Query-by-key, inventory loaded flags), v0.9.14 (operator actions, capability codes, deploy honesty), v0.9.13 (GCP multi-cloud foundation, F-029 cloud domains)
 
-**Post-v0.9.15 on `dev` (not yet released):** none.
+**Post-v0.9.15 on `dev` (not yet released):** Front Door/WAF workspace and policy dropdowns populate after tab load.
 
 CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tauri v2 + Go sidecar. The PySide6 legacy app was removed in PR #67. The Tauri rewrite is the active product. The app is labelled **Developer Preview** (not production-ready).
 

@@ -714,7 +714,7 @@ export default function AzureWafView({
               <div className="w-72">
                 <div className={cn(fieldLabel, "mb-1")}>Workspace</div>
                 <Select
-                  value={selectedWorkspace}
+                  value={selectedWorkspace || undefined}
                   disabled={inventoryControlsBusy}
                   onValueChange={(value) => {
                     if (!value) {
@@ -774,7 +774,11 @@ export default function AzureWafView({
               <div className="w-72">
                 <div className={cn(fieldLabel, "mb-1")}>WAF policy</div>
                 <Select
-                  value={queryPolicyValue}
+                  value={
+                    policies.length === 0
+                      ? undefined
+                      : queryPolicyValue
+                  }
                   disabled={inventoryControlsBusy || policies.length === 0}
                   onValueChange={(value) => {
                     if (!value) {
@@ -1101,7 +1105,7 @@ export default function AzureWafView({
               <div className="w-72">
                 <div className={cn(fieldLabel, "mb-1")}>Policy</div>
                 <Select
-                  value={configPolicy}
+                  value={configPolicy || undefined}
                   disabled={inventoryLoading || configLoading || policies.length === 0}
                   onValueChange={(value) => {
                     if (!value) {
