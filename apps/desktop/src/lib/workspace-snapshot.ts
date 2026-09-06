@@ -707,6 +707,12 @@ export function mergeAzureFrontDoorSelection(
     azureFrontDoorOriginGroups: normalised.azureFrontDoorOriginGroups,
     azureFrontDoorOrigins: normalised.azureFrontDoorOrigins,
     azureFrontDoorStatusMessage: normalised.azureFrontDoorStatusMessage,
+    selectedAzureLogWorkspace:
+      normalised.selectedAzureLogWorkspace || current.selectedAzureLogWorkspace,
+    azureLogAnalyticsWorkspaces:
+      (normalised.azureLogAnalyticsWorkspaces?.length ?? 0) > 0
+        ? normalised.azureLogAnalyticsWorkspaces
+        : current.azureLogAnalyticsWorkspaces,
   });
   if (!normalised.azureInventory) {
     return merged;
@@ -798,8 +804,12 @@ export function mergeAzureWafSelection(
   return normaliseWorkspaceSnapshot({
     ...current,
     selectedAzureWafPolicy: normalised.selectedAzureWafPolicy,
-    selectedAzureLogWorkspace: normalised.selectedAzureLogWorkspace ?? current.selectedAzureLogWorkspace,
-    azureLogAnalyticsWorkspaces: normalised.azureLogAnalyticsWorkspaces,
+    selectedAzureLogWorkspace:
+      normalised.selectedAzureLogWorkspace || current.selectedAzureLogWorkspace,
+    azureLogAnalyticsWorkspaces:
+      (normalised.azureLogAnalyticsWorkspaces?.length ?? 0) > 0
+        ? normalised.azureLogAnalyticsWorkspaces
+        : current.azureLogAnalyticsWorkspaces,
     azureWafLogSchema: normalised.azureWafLogSchema,
     azureWafPolicies: normalised.azureWafPolicies,
     azureWafPolicyDetail: normalised.azureWafPolicyDetail,

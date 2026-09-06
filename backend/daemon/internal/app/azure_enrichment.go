@@ -204,6 +204,7 @@ func (s *Service) enrichAzureScoped(
 			s.enrichAzureWebAppDetail(workspace, session, nil)
 		}
 	case "frontdoor":
+		s.enrichAzureLogAnalyticsInventory(workspace, session, nil)
 		s.enrichAzureFrontDoorInventory(workspace, session, scopeOpts, nil)
 	}
 }

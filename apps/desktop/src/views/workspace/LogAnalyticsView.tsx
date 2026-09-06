@@ -378,7 +378,7 @@ export default function LogAnalyticsView({
           <div className="w-72">
             <div className={cn(fieldLabel, "mb-1")}>Workspace</div>
             <Select
-              value={selected}
+              value={selected || undefined}
               disabled={workspaceControlsBusy}
               onValueChange={(value) => {
                 if (value) onSelectWorkspace(value);
