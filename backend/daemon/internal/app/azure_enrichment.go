@@ -207,13 +207,14 @@ func (s *Service) enrichAzureScoped(
 		}
 	case "frontdoor":
 		if s.anyServiceEnabled("azure", azureEnricherServiceIDs("log-analytics")) {
+			var mu sync.Mutex
 			var wg sync.WaitGroup
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				s.enrichAzureLogAnalyticsInventory(workspace, session, nil)
+				s.enrichAzureLogAnalyticsInventory(workspace, session, &mu)
 			}()
-			s.enrichAzureFrontDoorInventory(workspace, session, scopeOpts, nil)
+			s.enrichAzureFrontDoorInventory(workspace, session, scopeOpts, &mu)
 			wg.Wait()
 			return
 		}
