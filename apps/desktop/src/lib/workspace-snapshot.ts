@@ -869,7 +869,10 @@ export function mergeAzureInventoryScope(
       merged = mergeAzureStorageSelection(current, incoming);
       break;
     case "webapps":
-      merged = mergeAzureResourceGroupSelection(current, incoming);
+      merged = {
+        ...mergeAzureResourceGroupSelection(current, incoming),
+        ...mergeLogAnalyticsWorkspaceFields(current, normaliseWorkspaceSnapshot(incoming)),
+      };
       break;
     case "functions":
       merged = mergeAzureFunctionsSelection(current, incoming);

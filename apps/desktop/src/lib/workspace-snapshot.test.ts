@@ -302,6 +302,29 @@ describe("mergeAzureInventoryScope", () => {
     expect(merged.azureFrontDoorProfiles).toEqual([{ name: "demo-afd" }]);
   });
 
+  it("copies Log Analytics workspaces onto an App Service inventory merge", () => {
+    const current = normaliseWorkspaceSnapshot({
+      azureWebApps: [],
+    });
+    const incoming = normaliseWorkspaceSnapshot({
+      azureWebApps: [{ name: "app-api" }],
+      azureLogAnalyticsWorkspaces: [{ name: "law-platform", customerId: "g1" }],
+      selectedAzureLogWorkspace: "law-platform",
+      azureInventory: {
+        webapps: { loaded: true },
+        loganalytics: { loaded: true },
+      },
+    });
+
+    const merged = mergeAzureInventoryScope(current, incoming, "webapps");
+
+    expect(merged.azureWebApps).toEqual([{ name: "app-api" }]);
+    expect(merged.azureLogAnalyticsWorkspaces).toEqual([
+      { name: "law-platform", customerId: "g1" },
+    ]);
+    expect(merged.selectedAzureLogWorkspace).toBe("law-platform");
+  });
+
   it("replaces Log Analytics workspaces when the incoming list is a completed empty fetch", () => {
     const current = normaliseWorkspaceSnapshot({
       azureLogAnalyticsWorkspaces: [{ name: "law-old", customerId: "g-old" }],
