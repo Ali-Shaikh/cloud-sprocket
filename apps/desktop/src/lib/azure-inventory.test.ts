@@ -3,7 +3,13 @@
 
 import { describe, expect, it } from "vitest";
 
-import { azureInventoryLoaded } from "./azure-inventory";
+import {
+  azureInventoryLoaded,
+  azureInventoryLoadedScopesKey,
+  azureInventoryViewLoading,
+  markAzureInventoryFetchError,
+  shouldFetchAzureInventory,
+} from "./azure-inventory";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
 describe("azureInventoryLoaded", () => {
@@ -25,20 +31,72 @@ describe("azureInventoryLoaded", () => {
     expect(azureInventoryLoaded(workspace, "webapps")).toBe(false);
   });
 
-  it("falls back to any status when the flag is absent", () => {
+  it("does not treat status copy as loaded when the flag is absent", () => {
     const workspace = {
       azureFunctionsStatusMessage: "No Function Apps found.",
+      azureStorageStatusMessage: "Loading storage accounts...",
     } as unknown as WorkspaceSnapshot;
 
-    expect(azureInventoryLoaded(workspace, "functions")).toBe(true);
+    expect(azureInventoryLoaded(workspace, "functions")).toBe(false);
+    expect(azureInventoryLoaded(workspace, "storage")).toBe(false);
     expect(azureInventoryLoaded(workspace, "webapps")).toBe(false);
   });
 
-  it("falls back to rows when the flag and status are both absent", () => {
+  it("falls back to rows when the flag is absent", () => {
     const workspace = {
       azureKeyVaults: [{ name: "kv-demo" }],
     } as unknown as WorkspaceSnapshot;
 
     expect(azureInventoryLoaded(workspace, "keyvault")).toBe(true);
+  });
+});
+
+describe("azure inventory fetch gating", () => {
+  it("fetches a deferred empty scope even when status copy is present", () => {
+    const workspace = {
+      azureStorageAccounts: [],
+      azureStorageStatusMessage: "Loading storage accounts...",
+    } as unknown as WorkspaceSnapshot;
+
+    expect(shouldFetchAzureInventory(workspace, "storage", false)).toBe(true);
+    expect(azureInventoryViewLoading(workspace, "storage", false)).toBe(true);
+  });
+
+  it("does not refetch a loaded empty scope", () => {
+    const workspace = {
+      azureStorageAccounts: [],
+      azureInventory: { storage: { loaded: true, emptyReason: "none_found" } },
+    } as unknown as WorkspaceSnapshot;
+
+    expect(shouldFetchAzureInventory(workspace, "storage", false)).toBe(false);
+    expect(azureInventoryViewLoading(workspace, "storage", false)).toBe(false);
+  });
+
+  it("skips while a fetch is already in flight", () => {
+    const workspace = {} as unknown as WorkspaceSnapshot;
+    expect(shouldFetchAzureInventory(workspace, "functions", true)).toBe(false);
+  });
+
+  it("rebuilds the loaded-scopes key after a deferred snapshot wipe", () => {
+    const loaded = {
+      azureInventory: { storage: { loaded: true }, waf: { loaded: true } },
+    } as unknown as WorkspaceSnapshot;
+    expect(azureInventoryLoadedScopesKey(loaded)).toBe("storage,waf");
+    expect(azureInventoryLoadedScopesKey({} as WorkspaceSnapshot)).toBe("");
+  });
+
+  it("records a fetch error so the tab can stop spinning", () => {
+    const workspace = markAzureInventoryFetchError(
+      { azureStorageAccounts: [] } as unknown as WorkspaceSnapshot,
+      "storage",
+      "open an Azure workspace before loading service inventory",
+    );
+
+    expect(workspace.azureInventory?.storage).toEqual({ loaded: true, emptyReason: "error" });
+    expect(workspace.azureStorageStatusMessage).toBe(
+      "open an Azure workspace before loading service inventory",
+    );
+    expect(azureInventoryLoaded(workspace, "storage")).toBe(true);
+    expect(azureInventoryViewLoading(workspace, "storage", false)).toBe(false);
   });
 });

@@ -2647,4 +2647,81 @@ describe("App", () => {
       expect(inventoryCalls.at(-1)?.[1]).toEqual({ scope: "storage" });
     });
   }, 15000);
+
+  it("loads Azure scoped inventory when deferred workspace.get only has status copy", async () => {
+    sessionFixture = {
+      ...sessionFixture,
+      currentProviderId: "azure",
+      selectedProfileId: "sub-001",
+      selectedAuthMethod: "cli",
+      isLocked: true,
+      lockedProviderId: "azure",
+      lockedProfileId: "sub-001",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+        {
+          tabId: "azure-overview",
+          label: "Azure",
+          summary: "Azure summary",
+          detail: "Azure panel",
+        },
+        {
+          tabId: "azure-storage",
+          label: "Storage",
+          summary: "Azure storage",
+          detail: "Storage panel",
+        },
+      ],
+    };
+    workspaceFixture = {
+      ...workspaceFixture,
+      provider: providerFixtures[1],
+      profile: profileFixtures[1],
+      authMethod: "cli",
+      azureEndpointUrl: "http://localhost:4577",
+      azureResourceGroups: [
+        {
+          name: "rg-marketing-prod",
+          location: "uaenorth",
+          provisioningState: "Succeeded",
+          tags: [{ label: "Environment", value: "prod" }],
+        },
+      ],
+      azureStorageAccounts: [],
+      azureBlobContainers: [],
+      azureBlobs: [],
+      azureStorageStatusMessage: "Loading storage accounts...",
+      azureInventory: undefined,
+    };
+
+    render(
+      <AppProviders>
+        <App />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByText("Resource groups")).toBeInTheDocument();
+    const azureNav = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
+    await act(async () => {
+      fireEvent.click(azureNav.getByRole("button", { name: /Storage/ }));
+    });
+    expect(await screen.findByRole("heading", { name: "Azure Storage" })).toBeInTheDocument();
+
+    await waitFor(() => {
+      const inventoryCalls = vi
+        .mocked(backendRequest)
+        .mock.calls.filter(([method]) => method === "azure.inventory.get");
+      expect(inventoryCalls.length).toBeGreaterThan(0);
+      expect(inventoryCalls.at(-1)?.[1]).toEqual({ scope: "storage" });
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText("Select storage account")).not.toBeDisabled();
+    });
+  }, 15000);
 });

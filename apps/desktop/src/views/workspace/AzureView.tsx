@@ -605,7 +605,7 @@ export default function AzureView({
           <div className="w-64">
             <div className={cn(fieldLabel, "mb-1")}>Resource group</div>
             <Select
-              value={workspace.selectedAzureResourceGroup ?? ""}
+              value={workspace.selectedAzureResourceGroup || undefined}
               disabled={inventoryLoading}
               onValueChange={(value) => {
                 if (value) {
