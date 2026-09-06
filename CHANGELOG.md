@@ -14,6 +14,12 @@ Installers for every release are published on the
 - Azure Storage Queues send: write-gated `azure.queues.sendMessage` enqueues one
   message onto the selected queue (capped at 64 KB).
 
+### Fixed
+
+- App Service diagnostic-log workspace dropdown populates from scoped inventory,
+  matching WAF and Front Door. Remaining Azure create/Bastion selects no longer
+  bind an unmatched empty value.
+
 ## [0.9.16] - 2026-09-06
 
 ### Fixed

@@ -204,6 +204,18 @@ func TestWorkspaceGetSkipsHeavyAzureDrillDown(t *testing.T) {
 	if len(frontDoorWorkspace.AzureLogAnalyticsWorkspaces) == 0 {
 		t.Fatal("expected Log Analytics workspaces on scoped Front Door inventory")
 	}
+
+	webAppsResult, err := service.Handle(ctx, "azure.inventory.get", []byte(`{"scope":"webapps"}`), nil)
+	if err != nil {
+		t.Fatalf("azure.inventory.get webapps: %v", err)
+	}
+	webAppsWorkspace, ok := webAppsResult.(models.WorkspaceSnapshot)
+	if !ok {
+		t.Fatalf("expected WorkspaceSnapshot, got %T", webAppsResult)
+	}
+	if len(webAppsWorkspace.AzureLogAnalyticsWorkspaces) == 0 {
+		t.Fatal("expected Log Analytics workspaces on scoped App Service inventory")
+	}
 }
 
 func TestSelectResourceGroupRefreshesVirtualMachinesOnly(t *testing.T) {

@@ -846,7 +846,7 @@ export default function AzureView({
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="sm:col-span-2">
                 <div className={cn(fieldLabel, "mb-1")}>Bastion host</div>
-                <Select value={selectedBastionKey} onValueChange={setSelectedBastionKey}>
+                <Select value={selectedBastionKey || undefined} onValueChange={setSelectedBastionKey}>
                   <SelectTrigger aria-label="Select Bastion host">
                     <SelectValue placeholder="Select Bastion host" />
                   </SelectTrigger>

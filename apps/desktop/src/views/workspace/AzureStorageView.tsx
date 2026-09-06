@@ -616,7 +616,7 @@ export default function AzureStorageView({
                 <div>
                   <div className={cn(fieldLabel, "mb-1")}>Resource group</div>
                   <Select
-                    value={newAccountResourceGroup}
+                    value={newAccountResourceGroup || undefined}
                     onValueChange={setNewAccountResourceGroup}
                   >
                     <SelectTrigger aria-label="Resource group for new storage account">

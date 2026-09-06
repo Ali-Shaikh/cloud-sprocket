@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeftRight,
   Copy,
@@ -283,9 +283,20 @@ export default function AzureAppServiceView({
   const [existingPlanName, setExistingPlanName] = useState("");
   const [newPlanName, setNewPlanName] = useState("");
   const [planSku, setPlanSku] = useState("F1");
+  const logWorkspaces = workspace.azureLogAnalyticsWorkspaces ?? [];
   const [logWorkspace, setLogWorkspace] = useState(
-    workspace.selectedAzureLogWorkspace ?? workspace.azureLogAnalyticsWorkspaces[0]?.name ?? "",
+    workspace.selectedAzureLogWorkspace ?? logWorkspaces[0]?.name ?? "",
   );
+  const resolvedLogWorkspace =
+    logWorkspace.trim() ||
+    workspace.selectedAzureLogWorkspace?.trim() ||
+    logWorkspaces[0]?.name ||
+    "";
+  useEffect(() => {
+    if (resolvedLogWorkspace && resolvedLogWorkspace !== logWorkspace) {
+      setLogWorkspace(resolvedLogWorkspace);
+    }
+  }, [logWorkspace, resolvedLogWorkspace]);
   const [showSensitiveSettings, setShowSensitiveSettings] = useState(false);
 
   const selectedApp = workspace.azureWebApps.find(
@@ -654,12 +665,12 @@ export default function AzureAppServiceView({
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-72">
             <div className={cn(fieldLabel, "mb-1")}>Workspace</div>
-            <Select value={logWorkspace || undefined} onValueChange={(value) => value && setLogWorkspace(value)}>
+            <Select value={resolvedLogWorkspace || undefined} onValueChange={(value) => value && setLogWorkspace(value)}>
               <SelectTrigger aria-label="Select Log Analytics workspace">
                 <SelectValue placeholder="Workspace" />
               </SelectTrigger>
               <SelectContent>
-                {workspace.azureLogAnalyticsWorkspaces.map((item) => (
+                {logWorkspaces.map((item) => (
                   <SelectItem key={item.name} value={item.name}>
                     {item.name}
                   </SelectItem>
@@ -672,10 +683,10 @@ export default function AzureAppServiceView({
           <Button
             variant="outline"
             size="sm"
-            disabled={!logWorkspace}
+            disabled={!resolvedLogWorkspace}
             onClick={() =>
               onEditInLogAnalytics(
-                logWorkspace,
+                resolvedLogWorkspace,
                 buildAppServiceRecentHttpQuery(selectedApp?.name),
                 "P1D",
               )
@@ -687,10 +698,10 @@ export default function AzureAppServiceView({
           <Button
             variant="outline"
             size="sm"
-            disabled={!logWorkspace}
+            disabled={!resolvedLogWorkspace}
             onClick={() =>
               onEditInLogAnalytics(
-                logWorkspace,
+                resolvedLogWorkspace,
                 buildAppServiceHttpStatusQuery("AppServiceHTTPLogs", selectedApp?.name),
                 "P1D",
               )
@@ -701,10 +712,10 @@ export default function AzureAppServiceView({
           <Button
             variant="outline"
             size="sm"
-            disabled={!logWorkspace}
+            disabled={!resolvedLogWorkspace}
             onClick={() =>
               onEditInLogAnalytics(
-                logWorkspace,
+                resolvedLogWorkspace,
                 buildAppServiceConsoleErrorsQuery(selectedApp?.name),
                 "P1D",
               )
@@ -715,10 +726,10 @@ export default function AzureAppServiceView({
           <Button
             variant="outline"
             size="sm"
-            disabled={!logWorkspace}
+            disabled={!resolvedLogWorkspace}
             onClick={() =>
               onEditInLogAnalytics(
-                logWorkspace,
+                resolvedLogWorkspace,
                 buildAppServiceAppLogsQuery(selectedApp?.name),
                 "P1D",
               )
@@ -858,7 +869,7 @@ export default function AzureAppServiceView({
               <div className="space-y-3">
                 <div>
                   <div className={fieldLabel}>Resource group</div>
-                  <Select value={createResourceGroup} onValueChange={setCreateResourceGroup}>
+                  <Select value={createResourceGroup || undefined} onValueChange={setCreateResourceGroup}>
                     <SelectTrigger aria-label="Resource group for new web app">
                       <SelectValue placeholder="Select resource group" />
                     </SelectTrigger>
@@ -910,7 +921,7 @@ export default function AzureAppServiceView({
                 {planMode === "existing" ? (
                   <div>
                     <div className={fieldLabel}>Existing plan</div>
-                    <Select value={existingPlanName} onValueChange={setExistingPlanName}>
+                    <Select value={existingPlanName || undefined} onValueChange={setExistingPlanName}>
                       <SelectTrigger aria-label="Existing App Service plan">
                         <SelectValue placeholder="Select plan" />
                       </SelectTrigger>

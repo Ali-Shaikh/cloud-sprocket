@@ -200,6 +200,9 @@ func (s *Service) enrichAzureScoped(
 		s.enrichAzureStorageInventory(workspace, session, azureEnrichmentOptions{lightweight: true}, nil)
 		s.enrichAzureQueuesInventory(workspace, session, scopeOpts, nil)
 	case "webapps":
+		if s.anyServiceEnabled("azure", azureEnricherServiceIDs("log-analytics")) {
+			s.enrichAzureLogAnalyticsInventory(workspace, session, nil)
+		}
 		s.enrichAzureInventory(workspace, session, nil)
 		s.enrichAzureAppServiceInventory(workspace, session, nil)
 		if !opts.lightweight {
