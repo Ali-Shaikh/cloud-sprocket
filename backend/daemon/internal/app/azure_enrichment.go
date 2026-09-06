@@ -192,7 +192,9 @@ func (s *Service) enrichAzureScoped(
 	case "entra":
 		s.enrichAzureEntraInventory(workspace, session, nil)
 	case "waf":
-		s.enrichAzureLogAnalyticsInventory(workspace, session, nil)
+		if s.anyServiceEnabled("azure", azureEnricherServiceIDs("log-analytics")) {
+			s.enrichAzureLogAnalyticsInventory(workspace, session, nil)
+		}
 		s.enrichAzureWafInventory(workspace, session, scopeOpts, nil)
 	case "queues":
 		s.enrichAzureStorageInventory(workspace, session, azureEnrichmentOptions{lightweight: true}, nil)
@@ -204,7 +206,17 @@ func (s *Service) enrichAzureScoped(
 			s.enrichAzureWebAppDetail(workspace, session, nil)
 		}
 	case "frontdoor":
-		s.enrichAzureLogAnalyticsInventory(workspace, session, nil)
+		if s.anyServiceEnabled("azure", azureEnricherServiceIDs("log-analytics")) {
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				s.enrichAzureLogAnalyticsInventory(workspace, session, nil)
+			}()
+			s.enrichAzureFrontDoorInventory(workspace, session, scopeOpts, nil)
+			wg.Wait()
+			return
+		}
 		s.enrichAzureFrontDoorInventory(workspace, session, scopeOpts, nil)
 	}
 }

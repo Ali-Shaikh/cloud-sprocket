@@ -301,6 +301,23 @@ describe("mergeAzureInventoryScope", () => {
     expect(merged.selectedAzureLogWorkspace).toBe("law-platform");
     expect(merged.azureFrontDoorProfiles).toEqual([{ name: "demo-afd" }]);
   });
+
+  it("replaces Log Analytics workspaces when the incoming list is a completed empty fetch", () => {
+    const current = normaliseWorkspaceSnapshot({
+      azureLogAnalyticsWorkspaces: [{ name: "law-old", customerId: "g-old" }],
+      selectedAzureLogWorkspace: "law-old",
+    });
+    const incoming = normaliseWorkspaceSnapshot({
+      azureLogAnalyticsWorkspaces: [],
+      selectedAzureLogWorkspace: "",
+      azureInventory: { loganalytics: { loaded: true, emptyReason: "none_found" } },
+    });
+
+    const merged = mergeAzureFrontDoorSelection(current, incoming);
+
+    expect(merged.azureLogAnalyticsWorkspaces).toEqual([]);
+    expect(merged.selectedAzureLogWorkspace).toBe("");
+  });
 });
 
 describe("frontDoorTopologyLoaded", () => {
