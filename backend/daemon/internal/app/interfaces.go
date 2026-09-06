@@ -218,6 +218,8 @@ type AzureInventory interface {
 	PeekQueueMessages(ctx context.Context, profile models.ProfileSummary, accountName string, queueName string) ([]models.AzureQueueMessage, error)
 	// GetQueueApproximateMessageCount returns the queue's approximate message count.
 	GetQueueApproximateMessageCount(ctx context.Context, profile models.ProfileSummary, accountName string, queueName string) (int64, error)
+	// SendQueueMessage enqueues one message onto a storage queue (write action).
+	SendQueueMessage(ctx context.Context, profile models.ProfileSummary, accountName string, queueName string, text string) (models.AzureQueueSendResult, error)
 	// PurgeQueueMessages clears all messages from a storage queue (write action).
 	PurgeQueueMessages(ctx context.Context, profile models.ProfileSummary, accountName string, queueName string) (models.AzureQueuePurgeResult, error)
 	ListEntraUsers(ctx context.Context, profile models.ProfileSummary) ([]models.AzureEntraUser, error)

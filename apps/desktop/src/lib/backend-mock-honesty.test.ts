@@ -49,6 +49,16 @@ describe("browser mock RPC honesty", () => {
     ).rejects.toThrow(/write mode/);
   });
 
+  it("refuses Azure queue send when write mode is off", async () => {
+    await expect(
+      handleMockRequest("azure.queues.sendMessage", {
+        account: "devstoreaccount1",
+        queue: "jobs",
+        text: "hello",
+      }),
+    ).rejects.toThrow(/write mode/);
+  });
+
   it("runs DynamoDB queryItems without write mode", async () => {
     await expect(
       handleMockRequest("aws.dynamodb.queryItems", {

@@ -15,6 +15,19 @@ import (
 )
 
 const queuePeekCount = 10
+const azureQueueMessageMaxBytes = 64 * 1024
+
+// NormaliseQueueMessage trims queue text and rejects empty or oversized payloads.
+func NormaliseQueueMessage(text string) (string, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "", fmt.Errorf("message text is required")
+	}
+	if len(text) > azureQueueMessageMaxBytes {
+		return "", fmt.Errorf("message exceeds %d bytes", azureQueueMessageMaxBytes)
+	}
+	return text, nil
+}
 
 // queueServiceClient builds an azqueue service client for a storage account,
 // pointing at floci-az locally or real Azure storage in the cloud (mirrors the
@@ -143,6 +156,48 @@ func (i *Inventory) PeekQueueMessages(
 		messages = append(messages, entry)
 	}
 	return messages, nil
+}
+
+// SendQueueMessage enqueues one message onto a storage queue (write action).
+func (i *Inventory) SendQueueMessage(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	accountName string,
+	queueName string,
+	text string,
+) (models.AzureQueueSendResult, error) {
+	accountName = strings.TrimSpace(accountName)
+	queueName = strings.TrimSpace(queueName)
+	normalised, err := NormaliseQueueMessage(text)
+	if err != nil {
+		return models.AzureQueueSendResult{}, err
+	}
+	if accountName == "" || queueName == "" {
+		return models.AzureQueueSendResult{}, fmt.Errorf("a storage account and queue are required")
+	}
+	client, err := i.queueServiceClient(ctx, profile, accountName)
+	if err != nil {
+		return models.AzureQueueSendResult{}, err
+	}
+	queueClient := client.NewQueueClient(queueName)
+	resp, err := queueClient.EnqueueMessage(ctx, normalised, nil)
+	if err != nil {
+		return models.AzureQueueSendResult{}, fmt.Errorf("send azure queue message: %w", err)
+	}
+	messageID := ""
+	if len(resp.Messages) > 0 && resp.Messages[0] != nil && resp.Messages[0].MessageID != nil {
+		messageID = *resp.Messages[0].MessageID
+	}
+	summary := fmt.Sprintf("Sent a message to queue %s in %s.", queueName, accountName)
+	if messageID != "" {
+		summary = fmt.Sprintf("Sent message %s to queue %s in %s.", messageID, queueName, accountName)
+	}
+	return models.AzureQueueSendResult{
+		AccountName: accountName,
+		QueueName:   queueName,
+		MessageID:   messageID,
+		Summary:     summary,
+	}, nil
 }
 
 // PurgeQueueMessages deletes all messages from the selected storage queue (write action).

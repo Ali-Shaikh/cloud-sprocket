@@ -186,6 +186,7 @@ func buildAzureActionCapabilities(
 			cap("purgeCache", "Purge cache"),
 		},
 		"queues": {
+			cap("sendMessage", "Send message"),
 			cap("purge", "Purge queue"),
 		},
 		"cosmos": {

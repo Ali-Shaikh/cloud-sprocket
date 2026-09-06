@@ -827,6 +827,14 @@ func (stubAzureInventory) PeekQueueMessages(context.Context, models.ProfileSumma
 	return []models.AzureQueueMessage{{ID: "m1", Text: "hello", DequeueCount: 0}}, nil
 }
 
+func (stubAzureInventory) SendQueueMessage(_ context.Context, _ models.ProfileSummary, accountName string, queueName string, text string) (models.AzureQueueSendResult, error) {
+	return models.AzureQueueSendResult{
+		AccountName: accountName,
+		QueueName:   queueName,
+		Summary:     "Sent a message to queue " + queueName + " in " + accountName + ".",
+	}, nil
+}
+
 func (stubAzureInventory) PurgeQueueMessages(_ context.Context, _ models.ProfileSummary, accountName string, queueName string) (models.AzureQueuePurgeResult, error) {
 	return models.AzureQueuePurgeResult{
 		AccountName: accountName,

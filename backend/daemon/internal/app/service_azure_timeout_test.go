@@ -262,6 +262,11 @@ func (blockingAzure) PeekQueueMessages(ctx context.Context, _ models.ProfileSumm
 	return nil, ctx.Err()
 }
 
+func (blockingAzure) SendQueueMessage(ctx context.Context, _ models.ProfileSummary, _ string, _ string, _ string) (models.AzureQueueSendResult, error) {
+	<-ctx.Done()
+	return models.AzureQueueSendResult{}, ctx.Err()
+}
+
 func (blockingAzure) PurgeQueueMessages(ctx context.Context, _ models.ProfileSummary, _ string, _ string) (models.AzureQueuePurgeResult, error) {
 	<-ctx.Done()
 	return models.AzureQueuePurgeResult{}, ctx.Err()

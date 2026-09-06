@@ -1398,6 +1398,14 @@ type AzureQueuePurgeResult struct {
 	Summary     string `json:"summary"`
 }
 
+// AzureQueueSendResult reports a successful enqueue onto a storage queue.
+type AzureQueueSendResult struct {
+	AccountName string `json:"accountName"`
+	QueueName   string `json:"queueName"`
+	MessageID   string `json:"messageId,omitempty"`
+	Summary     string `json:"summary"`
+}
+
 // AzureEntraUser is a directory user (Microsoft Entra ID / Azure AD).
 type AzureEntraUser struct {
 	DisplayName       string `json:"displayName"`

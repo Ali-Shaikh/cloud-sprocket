@@ -332,6 +332,67 @@ func (s *Service) HandleCosmosDeleteItem(ctx context.Context, params json.RawMes
 	)
 }
 
+// HandleQueuesSendMessage implements azure.queues.sendMessage.
+func (s *Service) HandleQueuesSendMessage(ctx context.Context, params json.RawMessage, notifier sessionport.Notifier) (any, error) {
+	if s == nil || s.queues == nil {
+		return nil, errors.New("azure write service is not available")
+	}
+	var request struct {
+		Account string `json:"account"`
+		Queue   string `json:"queue"`
+		Text    string `json:"text"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	accountName := strings.TrimSpace(request.Account)
+	queueName := strings.TrimSpace(request.Queue)
+
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	session, profile, err := s.AuthorizeWrite(
+		ctx, snapshot,
+		"open a locked Azure workspace before sending a queue message",
+		"queue send requires write mode to be enabled for this Azure workspace",
+	)
+	if err != nil {
+		return nil, err
+	}
+	if accountName == "" {
+		accountName = strings.TrimSpace(session.SelectedAzureStorageAccount)
+	}
+	if queueName == "" {
+		queueName = strings.TrimSpace(session.SelectedAzureQueue)
+	}
+	if accountName == "" {
+		return nil, errors.New("select a storage account before sending a queue message")
+	}
+	if queueName == "" {
+		return nil, errors.New("select a queue before sending a message")
+	}
+
+	actionCtx, cancel := s.WithActionTimeout(ctx)
+	result, actionErr := s.queues.SendQueueMessage(actionCtx, profile, accountName, queueName, request.Text)
+	cancel()
+	if actionErr != nil {
+		return nil, actionErr
+	}
+	if s.invalidator != nil {
+		s.invalidator.InvalidateResourceCache(ctx, "azure.storage-queues", profile.ProfileID+"|"+accountName)
+	}
+
+	return s.FinishWriteAction(
+		ctx, snapshot, notifier, sessionport.SnapshotOptions{AzureScope: "queues"},
+		result.Summary,
+		func(session *models.SessionSnapshot) {
+			session.SelectedAzureStorageAccount = accountName
+			session.SelectedAzureQueue = queueName
+		},
+	)
+}
+
 // HandleQueuesPurge implements azure.queues.purge.
 func (s *Service) HandleQueuesPurge(ctx context.Context, params json.RawMessage, notifier sessionport.Notifier) (any, error) {
 	if s == nil || s.queues == nil {

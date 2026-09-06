@@ -78,7 +78,7 @@ Legend: **Browse** = inventory and detail views · **Write** = mutating actions 
 | Key Vault | Secrets | Yes | Set secret, reveal value | floci-az |
 | Cosmos DB | NoSQL | Yes | — | floci-az |
 | PostgreSQL | Flexible Server | Yes | — | floci-az |
-| Queues | Storage queues | Yes | Peek messages | floci-az |
+| Queues | Storage queues | Yes | Peek, send, purge | floci-az |
 | Entra ID | Directory | Yes | — | Cloud only |
 | WAF Security | Front Door WAF | Yes | Mode, rules, exclusions | Cloud |
 | Log Analytics | KQL workbench | Yes | Run queries | floci-az / cloud |

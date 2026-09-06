@@ -3,11 +3,12 @@
 
 import { useState } from "react";
 import { formatTimestamp } from "@/lib/format";
-import { actionCapabilityState } from "@/lib/action-capabilities";
+import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { cn } from "@/lib/utils";
 import { Inbox } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,6 +44,7 @@ export type AzureQueuesViewProps = {
   inventoryLoading?: boolean;
   onSelectAccount: (account: string) => void;
   onSelectQueue: (queue: string) => void;
+  onSendMessage?: (account: string, queue: string, text: string) => void;
   onPurgeQueue?: (account: string, queue: string) => void;
 };
 
@@ -55,6 +57,7 @@ export default function AzureQueuesView({
   inventoryLoading = false,
   onSelectAccount,
   onSelectQueue,
+  onSendMessage,
   onPurgeQueue,
 }: AzureQueuesViewProps) {
   const accounts = workspace.azureStorageAccounts ?? [];
@@ -63,8 +66,21 @@ export default function AzureQueuesView({
   const account = workspace.selectedAzureStorageAccount ?? accounts[0]?.name ?? "";
   const queue = workspace.selectedAzureQueue ?? "";
   const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [sendBody, setSendBody] = useState("");
+  const sendCapability = actionCapabilityState(workspace, "queues", "sendMessage", "azure");
   const purgeCapability = actionCapabilityState(workspace, "queues", "purge", "azure");
+  const canSend = Boolean(onSendMessage && account && queue && sendCapability.enabled);
   const canPurge = Boolean(onPurgeQueue && account && queue && purgeCapability.enabled);
+  const sendDisabledReason = canSend
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "queues",
+        "sendMessage",
+        !account || !queue ? "Select a storage account and queue first." : undefined,
+        "azure",
+      );
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -150,6 +166,21 @@ export default function AzureQueuesView({
             {messages.length > 0 ? (
               <span className="text-xs text-muted-foreground">peeked {messages.length}</span>
             ) : null}
+            {onSendMessage ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={!canSend}
+                title={
+                  canSend
+                    ? "Send a message to this queue"
+                    : sendDisabledReason || "Select a queue and enable write mode."
+                }
+                onClick={() => setSendDialogOpen(true)}
+              >
+                Send message
+              </Button>
+            ) : null}
             {onPurgeQueue ? (
               <Button
                 type="button"
@@ -207,6 +238,54 @@ export default function AzureQueuesView({
           )}
         </div>
       </section>
+
+      <AlertDialog
+        open={sendDialogOpen}
+        onOpenChange={(open) => {
+          setSendDialogOpen(open);
+          if (!open) {
+            setSendBody("");
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send message?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Enqueues one message onto{" "}
+              <span className="font-mono">
+                {account}/{queue}
+              </span>
+              . The message stays on the queue for consumers.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            aria-label="Queue message text"
+            value={sendBody}
+            rows={5}
+            className="font-mono text-xs"
+            onChange={(event) => {
+              setSendBody(event.target.value);
+            }}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!canSend || !sendBody.trim()}
+              onClick={() => {
+                if (!account || !queue || !sendBody.trim()) {
+                  return;
+                }
+                onSendMessage?.(account, queue, sendBody);
+                setSendDialogOpen(false);
+                setSendBody("");
+              }}
+            >
+              Send message
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={purgeConfirmOpen} onOpenChange={setPurgeConfirmOpen}>
         <AlertDialogContent>

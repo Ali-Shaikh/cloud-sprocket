@@ -5,7 +5,7 @@
 **Latest release:** [v0.9.16](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.9.16)
 **Recent releases:** v0.9.16 (Azure inventory and WAF/Front Door dropdowns), v0.9.15 (Cosmos SQL query, DynamoDB Query-by-key, inventory loaded flags), v0.9.14 (operator actions, capability codes, deploy honesty)
 
-**Post-v0.9.16 on `dev` (not yet released):** none.
+**Post-v0.9.16 on `dev` (not yet released):** Azure Storage Queue send (`azure.queues.sendMessage`).
 
 CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tauri v2 + Go sidecar. The PySide6 legacy app was removed in PR #67. The Tauri rewrite is the active product. The app is labelled **Developer Preview** (not production-ready).
 
@@ -59,7 +59,7 @@ Write operations (LocalStack / local endpoints only unless noted; Phases 1–3 s
 
 Eleven service tabs plus four operational tools (15 Azure nav entries).
 
-Storage depth workflows: **blob copy**, **folder prefix create**, and **signed read SAS** (write-gated where applicable).
+Storage depth workflows: **blob copy**, **folder prefix create**, **signed read SAS**, and **queue send** (write-gated where applicable).
 
 Recent highlights: WAF workbench, Log Analytics, PostgreSQL Flexible Server start/stop, storage queue purge, Front Door cache purge, Cosmos SQL query and delete item, Bastion list/connect (cloud CLI), floci-az OpenTofu contract. Azure inventory/selection/writes/Bastion extracted to `internal/app/azure` (F-029 Phases 5a–5e).
 

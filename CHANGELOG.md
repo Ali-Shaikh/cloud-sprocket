@@ -9,6 +9,11 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Added
+
+- Azure Storage Queues send: write-gated `azure.queues.sendMessage` enqueues one
+  message onto the selected queue (capped at 64 KB).
+
 ## [0.9.16] - 2026-09-06
 
 ### Fixed

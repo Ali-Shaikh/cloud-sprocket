@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
@@ -57,6 +57,64 @@ describe("AzureQueuesView", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Purge queue" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Purge queue" }));
     expect(onPurgeQueue).toHaveBeenCalledWith("devstoreaccount1", "jobs");
+  });
+
+  it("sends a message when write mode allows it", () => {
+    const onSendMessage = vi.fn();
+    const writeWorkspace = {
+      ...workspace,
+      actionCapabilities: {
+        queues: [{ actionId: "sendMessage", label: "Send message", enabled: true }],
+      },
+    } as unknown as WorkspaceSnapshot;
+
+    render(
+      <ThemeProvider>
+        <AzureQueuesView
+          workspace={writeWorkspace}
+          onSelectAccount={() => {}}
+          onSelectQueue={() => {}}
+          onSendMessage={onSendMessage}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText("Queue message text"), {
+      target: { value: "process order 42" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Send message" }));
+    expect(onSendMessage).toHaveBeenCalledWith("devstoreaccount1", "jobs", "process order 42");
+  });
+
+  it("disables send when write mode is off", () => {
+    const writeWorkspace = {
+      ...workspace,
+      actionCapabilities: {
+        queues: [
+          {
+            actionId: "sendMessage",
+            label: "Send message",
+            enabled: false,
+            reason: "Turn on write mode from the top bar to run mutating actions.",
+          },
+        ],
+      },
+    } as unknown as WorkspaceSnapshot;
+
+    render(
+      <ThemeProvider>
+        <AzureQueuesView
+          workspace={writeWorkspace}
+          onSelectAccount={() => {}}
+          onSelectQueue={() => {}}
+          onSendMessage={() => {}}
+        />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
   });
 
   it("disables purge when write mode is off", () => {
