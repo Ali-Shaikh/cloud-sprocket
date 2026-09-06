@@ -60,7 +60,14 @@ import {
 } from "./lib/workspace-request";
 
 import { awsInventoryLoaded, awsInventoryScopeForTab } from "./lib/aws-inventory";
-import { azureInventoryLoaded, azureInventoryScopeForTab } from "./lib/azure-inventory";
+import {
+  azureInventoryLoaded,
+  azureInventoryLoadedScopesKey,
+  azureInventoryScopeForTab,
+  azureInventoryViewLoading,
+  markAzureInventoryFetchError,
+  shouldFetchAzureInventory,
+} from "./lib/azure-inventory";
 import { deployRailBadge } from "./lib/deploy-activity";
 import { isDiscoveryRefreshJob, isEC2ActionJob, isS3PresignJob } from "./lib/job-kind";
 import { cycleTabId, isTypingTarget } from "./lib/keyboard-shortcuts";
@@ -430,6 +437,7 @@ export default function App() {
   useVirtualisationPoll(activeWorkspaceTabId, refreshVirtualisationState, refreshEmulatorLogsOnEnter);
   const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
   const azureInventoryFetchedScopesRef = useRef(new Set<string>());
+  const azureInventoryTabRef = useRef(activeWorkspaceTabId);
   const awsInventoryFetchedScopesRef = useRef(new Set<string>());
   const [azureInventoryRefreshToken, setAzureInventoryRefreshToken] = useState(0);
   const [awsInventoryRefreshToken, setAwsInventoryRefreshToken] = useState(0);
@@ -853,6 +861,7 @@ export default function App() {
     setAzureFrontDoorActionStatus,
   });
   const { refreshAzureFrontDoorTopology, refreshAzureWafPolicyConfig } = azureActions;
+  const azureLoadedScopesKey = azureInventoryLoadedScopesKey(workspace);
 
   useEffect(() => {
     azureInventoryFetchedScopesRef.current.clear();
@@ -868,13 +877,13 @@ export default function App() {
       return;
     }
     const scope = azureInventoryScopeForTab(activeWorkspaceTabId);
+    const tabBecameActive = azureInventoryTabRef.current !== activeWorkspaceTabId;
+    azureInventoryTabRef.current = activeWorkspaceTabId;
     if (!scope) {
       return;
     }
-    if (
-      azureInventoryFetchedScopesRef.current.has(scope) ||
-      azureInventoryLoaded(workspace, scope)
-    ) {
+    const inFlight = azureInventoryFetchedScopesRef.current.has(scope);
+    if (!shouldFetchAzureInventory(workspace, scope, inFlight, tabBecameActive)) {
       return;
     }
     azureInventoryFetchedScopesRef.current.add(scope);
@@ -888,19 +897,20 @@ export default function App() {
         });
       })
       .catch((error: unknown) => {
-        azureInventoryFetchedScopesRef.current.delete(scope);
+        const message = formatBackendError(error);
+        startTransition(() => {
+          setWorkspace((current) => markAzureInventoryFetchError(current, scope, message));
+        });
         pushNotification(
           "error",
           "Could not load Azure service inventory",
-          formatBackendError(error),
+          message,
         );
       })
       .finally(() => {
+        azureInventoryFetchedScopesRef.current.delete(scope);
         endAzureInventoryFetch();
       });
-    // workspace is read for azureInventoryLoaded only; azureInventoryFetchedScopesRef
-    // is the primary guard against duplicate fetches (exhaustive-deps).
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- scope ref + tab id drive fetches
   }, [
     activeWorkspaceTabId,
     session.isLocked,
@@ -908,6 +918,7 @@ export default function App() {
     session.selectedProfileId,
     workspaceLoaded,
     azureInventoryRefreshToken,
+    azureLoadedScopesKey,
   ]);
 
   useEffect(() => {
@@ -966,16 +977,34 @@ export default function App() {
       setAzureFrontDoorTopologyLoading(false);
       return;
     }
+    if (!azureInventoryLoaded(workspace, "frontdoor")) {
+      return;
+    }
     void refreshAzureFrontDoorTopology(workspace, session.selectedProfileId ?? "");
-  }, [activeWorkspaceTabId, session.isLocked, session.selectedProfileId]);
+  }, [
+    activeWorkspaceTabId,
+    session.isLocked,
+    session.selectedProfileId,
+    workspace.azureInventory?.frontdoor?.loaded,
+    refreshAzureFrontDoorTopology,
+  ]);
 
   useEffect(() => {
     if (!session.isLocked || activeWorkspaceTabId !== "azure-waf") {
       setAzureWafConfigLoading(false);
       return;
     }
+    if (!azureInventoryLoaded(workspace, "waf")) {
+      return;
+    }
     void refreshAzureWafPolicyConfig(workspace, session.selectedProfileId ?? "");
-  }, [activeWorkspaceTabId, session.isLocked, session.selectedProfileId]);
+  }, [
+    activeWorkspaceTabId,
+    session.isLocked,
+    session.selectedProfileId,
+    workspace.azureInventory?.waf?.loaded,
+    refreshAzureWafPolicyConfig,
+  ]);
 
   async function refreshDiscovery(): Promise<void> {
     // The refresh runs as a backend job; the deferred workspace snapshot arrives
@@ -994,9 +1023,14 @@ export default function App() {
     }
   }
 
+  const azureActiveInventoryScope = azureInventoryScopeForTab(activeWorkspaceTabId);
   const azureServiceInventoryLoading =
     session.lockedProviderId === "azure" &&
-    (azureInventoryLoading || workspaceFetching || !workspaceLoaded);
+    (workspaceFetching ||
+      !workspaceLoaded ||
+      (azureActiveInventoryScope
+        ? azureInventoryViewLoading(workspace, azureActiveInventoryScope, azureInventoryLoading)
+        : azureInventoryLoading));
   const awsServiceInventoryLoading =
     session.lockedProviderId === "aws" &&
     (awsInventoryLoading || workspaceFetching || !workspaceLoaded);

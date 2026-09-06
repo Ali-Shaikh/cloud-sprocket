@@ -859,7 +859,7 @@ function RecipeAuthoring() {
   }
 
   return (
-    <ToolSection title="Recipe Authoring (C1-C3)" icon={Wand2}>
+    <ToolSection title="Recipe Authoring" icon={Wand2}>
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => void runImportPreview("folder")} disabled={busy}>
           Import folder

@@ -115,7 +115,7 @@ export default function AzureKeyVaultView({
           <div className="w-72">
             <div className={cn(fieldLabel, "mb-1")}>Vault</div>
             <Select
-              value={selectedVault}
+              value={selectedVault || undefined}
               onValueChange={(value) => {
                 if (value) onSelectVault(value);
               }}

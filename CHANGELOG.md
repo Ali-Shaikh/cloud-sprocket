@@ -14,6 +14,10 @@ Installers for every release are published on the
 - Front Door access logs and WAF workspace/policy dropdowns no longer stay empty
   after the tab loads. Front Door inventory now includes Log Analytics
   workspaces, and the selects no longer bind an unmatched empty value.
+- Azure service tabs no longer stay empty after lock. Deferred `workspace.get`
+  does not count status copy as inventory, so opening a tab still calls
+  `azure.inventory.get`. Tabs show loading until that scope is fetched, and
+  remaining Azure selects no longer bind an unmatched empty value.
 
 ## [0.9.15] - 2026-09-03
 

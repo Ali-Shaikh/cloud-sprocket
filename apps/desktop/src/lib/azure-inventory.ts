@@ -102,44 +102,131 @@ export function azureInventoryLoaded(
   return azureInventoryLoadedFallback(workspace, scope);
 }
 
-/** Historical snapshots without azureInventory: any rows or any status means fetched. */
+/**
+ * Historical snapshots without azureInventory: rows mean the scope was fetched.
+ * Status copy alone is not a loaded signal (deferred workspace.get must still
+ * call azure.inventory.get).
+ */
 function azureInventoryLoadedFallback(
   workspace: WorkspaceSnapshot,
   scope: AzureInventoryScope,
 ): boolean {
   switch (scope) {
     case "storage":
-      return (workspace.azureStorageAccounts?.length ?? 0) > 0 ||
-        Boolean(workspace.azureStorageStatusMessage);
+      return (workspace.azureStorageAccounts?.length ?? 0) > 0;
     case "webapps":
-      return (workspace.azureWebApps?.length ?? 0) > 0 ||
-        Boolean(workspace.azureAppServiceStatusMessage);
+      return (workspace.azureWebApps?.length ?? 0) > 0;
     case "loganalytics":
-      return (workspace.azureLogAnalyticsWorkspaces?.length ?? 0) > 0 ||
-        Boolean(workspace.azureLogAnalyticsStatusMessage);
+      return (workspace.azureLogAnalyticsWorkspaces?.length ?? 0) > 0;
     case "waf":
-      return (workspace.azureWafPolicies?.length ?? 0) > 0 ||
-        Boolean(workspace.azureWafStatusMessage);
+      return (workspace.azureWafPolicies?.length ?? 0) > 0;
     case "frontdoor":
-      return (workspace.azureFrontDoorProfiles?.length ?? 0) > 0 ||
-        Boolean(workspace.azureFrontDoorStatusMessage);
+      return (workspace.azureFrontDoorProfiles?.length ?? 0) > 0;
     case "functions":
-      return (workspace.azureFunctionApps?.length ?? 0) > 0 ||
-        Boolean(workspace.azureFunctionsStatusMessage);
+      return (workspace.azureFunctionApps?.length ?? 0) > 0;
     case "keyvault":
-      return (workspace.azureKeyVaults?.length ?? 0) > 0 ||
-        Boolean(workspace.azureKeyVaultStatusMessage);
+      return (workspace.azureKeyVaults?.length ?? 0) > 0;
     case "cosmos":
-      return (workspace.azureCosmosAccounts?.length ?? 0) > 0 ||
-        Boolean(workspace.azureCosmosStatusMessage);
+      return (workspace.azureCosmosAccounts?.length ?? 0) > 0;
     case "postgres":
-      return (workspace.azurePostgresServers?.length ?? 0) > 0 ||
-        Boolean(workspace.azurePostgresStatusMessage);
+      return (workspace.azurePostgresServers?.length ?? 0) > 0;
     case "queues":
-      return Boolean(workspace.azureQueuesStatusMessage);
+      return (workspace.azureStorageQueues?.length ?? 0) > 0;
     case "entra":
-      return Boolean(workspace.azureEntraStatusMessage);
+      return (workspace.azureEntraUsers?.length ?? 0) > 0 ||
+        (workspace.azureEntraGroups?.length ?? 0) > 0 ||
+        (workspace.azureEntraApps?.length ?? 0) > 0;
     default:
       return false;
   }
+}
+
+/** Sorted loaded-scope key so a deferred snapshot wipe retriggers tab fetches. */
+export function azureInventoryLoadedScopesKey(workspace: WorkspaceSnapshot): string {
+  const inventory = workspace.azureInventory;
+  if (!inventory) {
+    return "";
+  }
+  return Object.keys(inventory)
+    .filter((scope) => inventory[scope]?.loaded)
+    .sort()
+    .join(",");
+}
+
+export function shouldFetchAzureInventory(
+  workspace: WorkspaceSnapshot,
+  scope: AzureInventoryScope,
+  inFlight: boolean,
+  tabBecameActive = false,
+): boolean {
+  if (inFlight) {
+    return false;
+  }
+  if (workspace.azureInventory?.[scope]?.emptyReason === "error") {
+    return tabBecameActive;
+  }
+  return !azureInventoryLoaded(workspace, scope);
+}
+
+/** True while the tab should show a loading state instead of an empty list. */
+export function azureInventoryViewLoading(
+  workspace: WorkspaceSnapshot,
+  scope: AzureInventoryScope,
+  fetchInFlight: boolean,
+): boolean {
+  return fetchInFlight || !azureInventoryLoaded(workspace, scope);
+}
+
+/** Record a failed azure.inventory.get so the tab stops spinning. */
+export function markAzureInventoryFetchError(
+  workspace: WorkspaceSnapshot,
+  scope: AzureInventoryScope,
+  message: string,
+): WorkspaceSnapshot {
+  const status = message.trim() || "Could not load Azure service inventory.";
+  const next: WorkspaceSnapshot = {
+    ...workspace,
+    azureInventory: {
+      ...workspace.azureInventory,
+      [scope]: { loaded: true, emptyReason: "error" },
+    },
+  };
+  switch (scope) {
+    case "storage":
+      next.azureStorageStatusMessage = status;
+      break;
+    case "webapps":
+      next.azureAppServiceStatusMessage = status;
+      break;
+    case "loganalytics":
+      next.azureLogAnalyticsStatusMessage = status;
+      break;
+    case "waf":
+      next.azureWafStatusMessage = status;
+      break;
+    case "frontdoor":
+      next.azureFrontDoorStatusMessage = status;
+      break;
+    case "functions":
+      next.azureFunctionsStatusMessage = status;
+      break;
+    case "keyvault":
+      next.azureKeyVaultStatusMessage = status;
+      break;
+    case "cosmos":
+      next.azureCosmosStatusMessage = status;
+      break;
+    case "postgres":
+      next.azurePostgresStatusMessage = status;
+      break;
+    case "queues":
+      next.azureQueuesStatusMessage = status;
+      break;
+    case "entra":
+      next.azureEntraStatusMessage = status;
+      break;
+    default:
+      break;
+  }
+  return next;
 }

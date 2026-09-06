@@ -174,7 +174,7 @@ export default function AzureCosmosView({
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-60">
             <div className={cn(fieldLabel, "mb-1")}>Account</div>
-            <Select value={account} onValueChange={(value) => value && onSelectAccount(value)}>
+            <Select value={account || undefined} onValueChange={(value) => value && onSelectAccount(value)}>
               <SelectTrigger aria-label="Select cosmos account">
                 <SelectValue placeholder="Select account" />
               </SelectTrigger>
@@ -189,7 +189,7 @@ export default function AzureCosmosView({
           </div>
           <div className="w-60">
             <div className={cn(fieldLabel, "mb-1")}>Database</div>
-            <Select value={database} onValueChange={(value) => value && onSelectDatabase(value)}>
+            <Select value={database || undefined} onValueChange={(value) => value && onSelectDatabase(value)}>
               <SelectTrigger aria-label="Select cosmos database">
                 <SelectValue placeholder="Select database" />
               </SelectTrigger>

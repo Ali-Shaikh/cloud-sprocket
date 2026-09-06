@@ -401,7 +401,7 @@ export default function AzureAppServiceView({
           <div className="w-64">
             <div className={cn(fieldLabel, "mb-1")}>Resource group</div>
             <Select
-              value={workspace.selectedAzureResourceGroup ?? ""}
+              value={workspace.selectedAzureResourceGroup || undefined}
               disabled={inventoryLoading}
               onValueChange={(value) => {
                 if (value) {
@@ -654,7 +654,7 @@ export default function AzureAppServiceView({
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-72">
             <div className={cn(fieldLabel, "mb-1")}>Workspace</div>
-            <Select value={logWorkspace} onValueChange={(value) => value && setLogWorkspace(value)}>
+            <Select value={logWorkspace || undefined} onValueChange={(value) => value && setLogWorkspace(value)}>
               <SelectTrigger aria-label="Select Log Analytics workspace">
                 <SelectValue placeholder="Workspace" />
               </SelectTrigger>

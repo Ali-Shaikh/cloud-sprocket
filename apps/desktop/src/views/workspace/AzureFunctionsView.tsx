@@ -110,7 +110,7 @@ export default function AzureFunctionsView({
           <div className="w-72">
             <div className={cn(fieldLabel, "mb-1")}>Function app</div>
             <Select
-              value={selectedApp}
+              value={selectedApp || undefined}
               onValueChange={(value) => {
                 if (value) onSelectApp(value);
               }}
