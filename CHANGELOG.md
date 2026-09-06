@@ -9,6 +9,8 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.16] - 2026-09-06
+
 ### Fixed
 
 - Front Door access logs and WAF workspace/policy dropdowns no longer stay empty
@@ -18,6 +20,11 @@ Installers for every release are published on the
   does not count status copy as inventory, so opening a tab still calls
   `azure.inventory.get`. Tabs show loading until that scope is fetched, and
   remaining Azure selects no longer bind an unmatched empty value.
+
+### Changed
+
+- Developer Tools Recipe Authoring heading no longer includes internal C1-C3
+  planning codes.
 
 ## [0.9.15] - 2026-09-03
 
@@ -1436,7 +1443,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.15...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.16...HEAD
+[0.9.16]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.15...v0.9.16
 [0.9.15]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.14...v0.9.15
 [0.9.14]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.13...v0.9.14
 [0.9.13]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.12...v0.9.13
