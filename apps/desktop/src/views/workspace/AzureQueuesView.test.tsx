@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
+import { AZURE_QUEUE_MESSAGE_MAX_BYTES } from "@/lib/azure-queue-message";
 
 import { ThemeProvider } from "@/lib/theme";
 import AzureQueuesView from "./AzureQueuesView";
@@ -59,7 +61,7 @@ describe("AzureQueuesView", () => {
     expect(onPurgeQueue).toHaveBeenCalledWith("devstoreaccount1", "jobs");
   });
 
-  it("sends a message when write mode allows it", () => {
+  it("sends a message when write mode allows it", async () => {
     const onSendMessage = vi.fn();
     const writeWorkspace = {
       ...workspace,
@@ -86,6 +88,71 @@ describe("AzureQueuesView", () => {
     });
     fireEvent.click(within(dialog).getByRole("button", { name: "Send message" }));
     expect(onSendMessage).toHaveBeenCalledWith("devstoreaccount1", "jobs", "process order 42");
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("keeps the draft when send fails", async () => {
+    const onSendMessage = vi.fn(async () => false);
+    const writeWorkspace = {
+      ...workspace,
+      actionCapabilities: {
+        queues: [{ actionId: "sendMessage", label: "Send message", enabled: true }],
+      },
+    } as unknown as WorkspaceSnapshot;
+
+    render(
+      <ThemeProvider>
+        <AzureQueuesView
+          workspace={writeWorkspace}
+          onSelectAccount={() => {}}
+          onSelectQueue={() => {}}
+          onSendMessage={onSendMessage}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText("Queue message text"), {
+      target: { value: "process order 42" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Send message" }));
+    await waitFor(() => {
+      expect(onSendMessage).toHaveBeenCalledWith("devstoreaccount1", "jobs", "process order 42");
+    });
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Queue message text")).toHaveValue("process order 42");
+  });
+
+  it("does not send an oversized message", () => {
+    const onSendMessage = vi.fn();
+    const writeWorkspace = {
+      ...workspace,
+      actionCapabilities: {
+        queues: [{ actionId: "sendMessage", label: "Send message", enabled: true }],
+      },
+    } as unknown as WorkspaceSnapshot;
+
+    render(
+      <ThemeProvider>
+        <AzureQueuesView
+          workspace={writeWorkspace}
+          onSelectAccount={() => {}}
+          onSelectQueue={() => {}}
+          onSendMessage={onSendMessage}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText("Queue message text"), {
+      target: { value: "x".repeat(AZURE_QUEUE_MESSAGE_MAX_BYTES + 1) },
+    });
+    expect(within(dialog).getByRole("button", { name: "Send message" })).toBeDisabled();
+    expect(onSendMessage).not.toHaveBeenCalled();
   });
 
   it("disables send when write mode is off", () => {

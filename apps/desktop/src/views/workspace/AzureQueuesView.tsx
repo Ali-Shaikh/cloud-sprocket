@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/table";
 import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { azureInventoryLoadingLabel } from "@/lib/azure-inventory";
+import { azureQueueMessageOversizeReason } from "@/lib/azure-queue-message";
 import { EmptyState } from "@/components/empty-state";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
@@ -44,7 +45,11 @@ export type AzureQueuesViewProps = {
   inventoryLoading?: boolean;
   onSelectAccount: (account: string) => void;
   onSelectQueue: (queue: string) => void;
-  onSendMessage?: (account: string, queue: string, text: string) => void;
+  onSendMessage?: (
+    account: string,
+    queue: string,
+    text: string,
+  ) => void | Promise<boolean | void>;
   onPurgeQueue?: (account: string, queue: string) => void;
 };
 
@@ -68,6 +73,8 @@ export default function AzureQueuesView({
   const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
   const [sendBody, setSendBody] = useState("");
+  const [sendInFlight, setSendInFlight] = useState(false);
+  const sendOversizeReason = azureQueueMessageOversizeReason(sendBody);
   const sendCapability = actionCapabilityState(workspace, "queues", "sendMessage", "azure");
   const purgeCapability = actionCapabilityState(workspace, "queues", "purge", "azure");
   const canSend = Boolean(onSendMessage && account && queue && sendCapability.enabled);
@@ -239,15 +246,7 @@ export default function AzureQueuesView({
         </div>
       </section>
 
-      <AlertDialog
-        open={sendDialogOpen}
-        onOpenChange={(open) => {
-          setSendDialogOpen(open);
-          if (!open) {
-            setSendBody("");
-          }
-        }}
-      >
+      <AlertDialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Send message?</AlertDialogTitle>
@@ -268,17 +267,30 @@ export default function AzureQueuesView({
               setSendBody(event.target.value);
             }}
           />
+          {sendOversizeReason ? (
+            <p className="text-sm text-destructive">{sendOversizeReason}</p>
+          ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={!canSend || !sendBody.trim()}
-              onClick={() => {
-                if (!account || !queue || !sendBody.trim()) {
+              disabled={!canSend || !sendBody.trim() || Boolean(sendOversizeReason) || sendInFlight}
+              onClick={(event) => {
+                event.preventDefault();
+                if (!account || !queue || !sendBody.trim() || sendOversizeReason || sendInFlight) {
                   return;
                 }
-                onSendMessage?.(account, queue, sendBody);
-                setSendDialogOpen(false);
-                setSendBody("");
+                const body = sendBody;
+                setSendInFlight(true);
+                void Promise.resolve(onSendMessage?.(account, queue, body)).then((ok) => {
+                  setSendInFlight(false);
+                  if (ok === false) {
+                    return;
+                  }
+                  setSendDialogOpen(false);
+                  setSendBody("");
+                }, () => {
+                  setSendInFlight(false);
+                });
               }}
             >
               Send message

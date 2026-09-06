@@ -51,6 +51,7 @@ import type {
   GcpStorageObject,
 } from "../types/backend";
 import { awsInventoryScopeForTab } from "./aws-inventory";
+import { normaliseAzureQueueMessage } from "./azure-queue-message";
 import {
   applyDeploymentRejectedReason,
   deleteDeploymentRejectedReason,
@@ -4629,9 +4630,11 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
         new Error("queue send requires write mode to be enabled for this Azure workspace"),
       );
     }
-    const text = String(params.text ?? "").trim();
-    if (!text) {
-      return Promise.reject(new Error("message text is required"));
+    let text: string;
+    try {
+      text = normaliseAzureQueueMessage(String(params.text ?? ""));
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
     }
     const accountName = String(params.account ?? mockState.session.selectedAzureStorageAccount ?? "");
     const queueName = String(params.queue ?? mockState.session.selectedAzureQueue ?? "");

@@ -1102,8 +1102,8 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
           errorTitle: "Could not select storage account",
         });
       }}
-      onSendMessage={(account, queue, text) => {
-        void mutateWorkspaceSelection(
+      onSendMessage={(account, queue, text) =>
+        mutateWorkspaceSelection(
           "azure.queues.sendMessage",
           { account, queue, text },
           {
@@ -1111,8 +1111,8 @@ export function AzureWorkspaceTabs(props: AzureWorkspaceTabsProps): ReactNode {
             merge: mergeAzureQueuesSelection,
             errorTitle: "Could not send queue message",
           },
-        );
-      }}
+        )
+      }
       onSelectQueue={(queue) => {
         void mutateWorkspaceSelection("azure.queues.selectQueue", { queue }, {
           panelLoading: true,

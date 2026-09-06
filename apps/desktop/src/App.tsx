@@ -801,7 +801,7 @@ export default function App() {
     method: string,
     params: Record<string, unknown> = {},
     options: WorkspaceSelectionOptions = {},
-  ): Promise<void> {
+  ): Promise<boolean> {
     const {
       panelLoading = false,
       persistOnly = false,
@@ -832,12 +832,14 @@ export default function App() {
           );
         });
       }
+      return true;
     } catch (error) {
       pushNotification(
         "error",
         errorTitle ?? `Failed to execute ${method}`,
         formatBackendError(error),
       );
+      return false;
     } finally {
       if (panelLoading) {
         endAzureInventoryFetch();

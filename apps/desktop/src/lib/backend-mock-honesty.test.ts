@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { AZURE_QUEUE_MESSAGE_MAX_BYTES } from "./azure-queue-message";
 import { handleMockRequest } from "./backend-mock";
 import type { Deployment, DeploymentJob, WorkspaceSnapshot } from "@/types/backend";
 
@@ -57,6 +58,24 @@ describe("browser mock RPC honesty", () => {
         text: "hello",
       }),
     ).rejects.toThrow(/write mode/);
+  });
+
+  it("refuses Azure queue send over 64 KiB", async () => {
+    await handleMockRequest("session.selectProvider", { providerId: "azure" });
+    await handleMockRequest("session.selectProfile", {
+      providerId: "azure",
+      profileId: "sub-001",
+    });
+    await handleMockRequest("session.selectAuthMethod", { authMethod: "cli" });
+    await handleMockRequest("session.lock");
+    await handleMockRequest("session.setWriteMode", { enabled: true });
+    await expect(
+      handleMockRequest("azure.queues.sendMessage", {
+        account: "devstoreaccount1",
+        queue: "jobs",
+        text: "x".repeat(AZURE_QUEUE_MESSAGE_MAX_BYTES + 1),
+      }),
+    ).rejects.toThrow(/exceeds/);
   });
 
   it("runs DynamoDB queryItems without write mode", async () => {
