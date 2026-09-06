@@ -80,8 +80,9 @@ type FrontDoorWriter interface {
 	PurgeFrontDoorEndpointCache(ctx context.Context, profile models.ProfileSummary, resourceGroup string, profileName string, endpointName string, contentPaths []string, domains []string) error
 }
 
-// QueuesWriter is the storage queue purge surface.
+// QueuesWriter is the storage queue send and purge surface.
 type QueuesWriter interface {
+	SendQueueMessage(ctx context.Context, profile models.ProfileSummary, accountName string, queueName string, text string) (models.AzureQueueSendResult, error)
 	PurgeQueueMessages(ctx context.Context, profile models.ProfileSummary, accountName string, queueName string) (models.AzureQueuePurgeResult, error)
 }
 

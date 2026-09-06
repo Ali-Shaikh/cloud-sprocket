@@ -427,6 +427,21 @@ func (f *fakeFrontDoor) PurgeFrontDoorEndpointCache(_ context.Context, _ models.
 type fakeQueues struct {
 	purgedAccount string
 	purgedQueue   string
+	sentAccount   string
+	sentQueue     string
+	sentText      string
+}
+
+func (f *fakeQueues) SendQueueMessage(_ context.Context, _ models.ProfileSummary, accountName string, queueName string, text string) (models.AzureQueueSendResult, error) {
+	f.sentAccount = accountName
+	f.sentQueue = queueName
+	f.sentText = text
+	return models.AzureQueueSendResult{
+		AccountName: accountName,
+		QueueName:   queueName,
+		MessageID:   "msg-1",
+		Summary:     "Sent a message to queue " + queueName + " in " + accountName + ".",
+	}, nil
 }
 
 func (f *fakeQueues) PurgeQueueMessages(_ context.Context, _ models.ProfileSummary, accountName string, queueName string) (models.AzureQueuePurgeResult, error) {
@@ -552,6 +567,50 @@ func TestHandleFrontDoorRefresh(t *testing.T) {
 	}
 	if !ws.lastOpts.SkipAwsInventory {
 		t.Fatal("expected SkipAwsInventory")
+	}
+}
+
+func TestHandleQueuesSendMessage(t *testing.T) {
+	q := &fakeQueues{}
+	sess := &fakeSession{session: lockedAzureWriteSession()}
+	sess.session.SelectedAzureStorageAccount = "acct1"
+	sess.session.SelectedAzureQueue = "jobs"
+	inv := &fakeInvalidator{}
+	svc := New(Deps{
+		Discovery:   fakeDiscovery{snapshot: azureWriteSnapshot()},
+		Session:     sess,
+		Workspace:   &fakeWorkspace{},
+		Activity:    &fakeActivity{},
+		Invalidator: inv,
+		Queues:      q,
+	})
+	params, _ := json.Marshal(map[string]string{"text": "process order 42"})
+	if _, err := svc.HandleQueuesSendMessage(context.Background(), params, nil); err != nil {
+		t.Fatal(err)
+	}
+	if q.sentAccount != "acct1" || q.sentQueue != "jobs" || q.sentText != "process order 42" {
+		t.Fatalf("send = %q/%q %q", q.sentAccount, q.sentQueue, q.sentText)
+	}
+	if len(inv.scopes) != 1 || inv.scopes[0] != "azure.storage-queues" {
+		t.Fatalf("invalidator scopes = %v", inv.scopes)
+	}
+}
+
+func TestHandleQueuesSendMessageRequiresWriteMode(t *testing.T) {
+	sess := &fakeSession{session: lockedAzureWriteSession()}
+	sess.session.AzureWriteModeEnabled = false
+	sess.session.SelectedAzureStorageAccount = "acct1"
+	sess.session.SelectedAzureQueue = "jobs"
+	svc := New(Deps{
+		Discovery: fakeDiscovery{snapshot: azureWriteSnapshot()},
+		Session:   sess,
+		Workspace: &fakeWorkspace{},
+		Activity:  &fakeActivity{},
+		Queues:    &fakeQueues{},
+	})
+	params, _ := json.Marshal(map[string]string{"text": "hello"})
+	if _, err := svc.HandleQueuesSendMessage(context.Background(), params, nil); err == nil {
+		t.Fatal("expected write mode error")
 	}
 }
 

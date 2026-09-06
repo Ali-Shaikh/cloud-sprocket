@@ -34,7 +34,7 @@ export type WorkspaceTabRouterProps = {
     method: string,
     params: Record<string, unknown>,
     options?: MutateWorkspaceSelectionOptions,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   mutateSession: (method: string, params?: Record<string, unknown>) => Promise<boolean>;
   refreshDiscovery: () => Promise<void>;
   listLogAnalyticsHistory: (workspace: string) => Promise<AzureLogAnalyticsHistoryEntry[]>;

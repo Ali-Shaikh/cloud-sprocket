@@ -51,6 +51,7 @@ import type {
   GcpStorageObject,
 } from "../types/backend";
 import { awsInventoryScopeForTab } from "./aws-inventory";
+import { normaliseAzureQueueMessage } from "./azure-queue-message";
 import {
   applyDeploymentRejectedReason,
   deleteDeploymentRejectedReason,
@@ -4622,6 +4623,30 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
     return Promise.resolve(buildMockWorkspace());
   };
   register("azure.queues.selectQueue", handle_azure_queues_selectQueue);
+
+  const handle_azure_queues_sendMessage : MockRpcHandler = async (params, method) => {
+    if (!mockState.session.azureWriteModeEnabled) {
+      return Promise.reject(
+        new Error("queue send requires write mode to be enabled for this Azure workspace"),
+      );
+    }
+    let text: string;
+    try {
+      text = normaliseAzureQueueMessage(String(params.text ?? ""));
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+    }
+    const accountName = String(params.account ?? mockState.session.selectedAzureStorageAccount ?? "");
+    const queueName = String(params.queue ?? mockState.session.selectedAzureQueue ?? "");
+    if (!accountName || !queueName) {
+      return Promise.reject(new Error("a storage account and queue are required"));
+    }
+    mockState.session.selectedAzureStorageAccount = accountName;
+    mockState.session.selectedAzureQueue = queueName;
+    appendLog("success", `Sent a message to queue ${queueName} in ${accountName}.`);
+    return Promise.resolve(buildMockWorkspace());
+  };
+  register("azure.queues.sendMessage", handle_azure_queues_sendMessage);
 
   const handle_azure_queues_purge : MockRpcHandler = async (params, method) => {
     if (!mockState.session.azureWriteModeEnabled) {

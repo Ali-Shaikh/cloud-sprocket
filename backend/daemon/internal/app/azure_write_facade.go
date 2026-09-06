@@ -199,6 +199,13 @@ func (s *Service) handleAzureFrontDoorPurgeCache(ctx context.Context, params jso
 	return s.azureDomain.HandleFrontDoorPurgeCache(ctx, params, notifier)
 }
 
+func (s *Service) handleAzureQueuesSendMessage(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if err := s.requireAzureDomain(); err != nil {
+		return nil, err
+	}
+	return s.azureDomain.HandleQueuesSendMessage(ctx, params, notifier)
+}
+
 func (s *Service) handleAzureQueuesPurge(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	if err := s.requireAzureDomain(); err != nil {
 		return nil, err

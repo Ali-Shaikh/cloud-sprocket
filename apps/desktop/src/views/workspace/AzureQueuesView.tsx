@@ -3,11 +3,12 @@
 
 import { useState } from "react";
 import { formatTimestamp } from "@/lib/format";
-import { actionCapabilityState } from "@/lib/action-capabilities";
+import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { cn } from "@/lib/utils";
 import { Inbox } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +36,7 @@ import {
 } from "@/components/ui/table";
 import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { azureInventoryLoadingLabel } from "@/lib/azure-inventory";
+import { azureQueueMessageOversizeReason } from "@/lib/azure-queue-message";
 import { EmptyState } from "@/components/empty-state";
 import type { WorkspaceSnapshot } from "@/types/backend";
 
@@ -43,6 +45,11 @@ export type AzureQueuesViewProps = {
   inventoryLoading?: boolean;
   onSelectAccount: (account: string) => void;
   onSelectQueue: (queue: string) => void;
+  onSendMessage?: (
+    account: string,
+    queue: string,
+    text: string,
+  ) => void | Promise<boolean | void>;
   onPurgeQueue?: (account: string, queue: string) => void;
 };
 
@@ -55,6 +62,7 @@ export default function AzureQueuesView({
   inventoryLoading = false,
   onSelectAccount,
   onSelectQueue,
+  onSendMessage,
   onPurgeQueue,
 }: AzureQueuesViewProps) {
   const accounts = workspace.azureStorageAccounts ?? [];
@@ -63,8 +71,23 @@ export default function AzureQueuesView({
   const account = workspace.selectedAzureStorageAccount ?? accounts[0]?.name ?? "";
   const queue = workspace.selectedAzureQueue ?? "";
   const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [sendBody, setSendBody] = useState("");
+  const [sendInFlight, setSendInFlight] = useState(false);
+  const sendOversizeReason = azureQueueMessageOversizeReason(sendBody);
+  const sendCapability = actionCapabilityState(workspace, "queues", "sendMessage", "azure");
   const purgeCapability = actionCapabilityState(workspace, "queues", "purge", "azure");
+  const canSend = Boolean(onSendMessage && account && queue && sendCapability.enabled);
   const canPurge = Boolean(onPurgeQueue && account && queue && purgeCapability.enabled);
+  const sendDisabledReason = canSend
+    ? undefined
+    : actionDisabledReason(
+        workspace,
+        "queues",
+        "sendMessage",
+        !account || !queue ? "Select a storage account and queue first." : undefined,
+        "azure",
+      );
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -150,6 +173,21 @@ export default function AzureQueuesView({
             {messages.length > 0 ? (
               <span className="text-xs text-muted-foreground">peeked {messages.length}</span>
             ) : null}
+            {onSendMessage ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={!canSend}
+                title={
+                  canSend
+                    ? "Send a message to this queue"
+                    : sendDisabledReason || "Select a queue and enable write mode."
+                }
+                onClick={() => setSendDialogOpen(true)}
+              >
+                Send message
+              </Button>
+            ) : null}
             {onPurgeQueue ? (
               <Button
                 type="button"
@@ -207,6 +245,59 @@ export default function AzureQueuesView({
           )}
         </div>
       </section>
+
+      <AlertDialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send message?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Enqueues one message onto{" "}
+              <span className="font-mono">
+                {account}/{queue}
+              </span>
+              . The message stays on the queue for consumers.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            aria-label="Queue message text"
+            value={sendBody}
+            rows={5}
+            className="font-mono text-xs"
+            onChange={(event) => {
+              setSendBody(event.target.value);
+            }}
+          />
+          {sendOversizeReason ? (
+            <p className="text-sm text-destructive">{sendOversizeReason}</p>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!canSend || !sendBody.trim() || Boolean(sendOversizeReason) || sendInFlight}
+              onClick={(event) => {
+                event.preventDefault();
+                if (!account || !queue || !sendBody.trim() || sendOversizeReason || sendInFlight) {
+                  return;
+                }
+                const body = sendBody;
+                setSendInFlight(true);
+                void Promise.resolve(onSendMessage?.(account, queue, body)).then((ok) => {
+                  setSendInFlight(false);
+                  if (ok === false) {
+                    return;
+                  }
+                  setSendDialogOpen(false);
+                  setSendBody("");
+                }, () => {
+                  setSendInFlight(false);
+                });
+              }}
+            >
+              Send message
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={purgeConfirmOpen} onOpenChange={setPurgeConfirmOpen}>
         <AlertDialogContent>

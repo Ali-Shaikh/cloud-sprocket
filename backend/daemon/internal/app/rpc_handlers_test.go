@@ -123,6 +123,7 @@ var expectedRPCMethods = []string{
 	"azure.postgres.stopServer",
 	"azure.queues.purge",
 	"azure.queues.selectQueue",
+	"azure.queues.sendMessage",
 	"azure.resourceGroups.create",
 	"azure.resourceGroups.delete",
 	"azure.selectResourceGroup",
