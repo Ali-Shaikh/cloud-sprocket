@@ -19,6 +19,8 @@ Installers for every release are published on the
 - App Service diagnostic-log workspace dropdown populates from scoped inventory,
   matching WAF and Front Door. Remaining Azure create/Bastion selects no longer
   bind an unmatched empty value.
+- SQS send keeps the dialog and draft when the request fails, matching Azure
+  Storage Queue send.
 
 ## [0.9.16] - 2026-09-06
 

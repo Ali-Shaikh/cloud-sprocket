@@ -404,18 +404,26 @@ export function useAwsActions(params: UseAwsActionsParams) {
       .finally(() => setSqsPeekInFlight(false));
   }, [setSqsActionStatus, setSqsPeekInFlight, setSqsPeekResult]);
 
-  const sendSQSMessage = useCallback((queueUrl: string, messageBody: string): void => {
-    setSqsPeekInFlight(true);
-    setSqsActionStatus("Sending message to the queue.");
-    void backendRequest<{ summary: string }>("aws.sqs.sendMessage", { queueUrl, messageBody })
-      .then((result) => {
+  const sendSQSMessage = useCallback(
+    async (queueUrl: string, messageBody: string): Promise<boolean> => {
+      setSqsPeekInFlight(true);
+      setSqsActionStatus("Sending message to the queue.");
+      try {
+        const result = await backendRequest<{ summary: string }>("aws.sqs.sendMessage", {
+          queueUrl,
+          messageBody,
+        });
         setSqsActionStatus(result.summary || "Message sent.");
-      })
-      .catch((error: unknown) => {
+        return true;
+      } catch (error: unknown) {
         setSqsActionStatus(error instanceof Error ? error.message : String(error));
-      })
-      .finally(() => setSqsPeekInFlight(false));
-  }, [setSqsActionStatus, setSqsPeekInFlight]);
+        return false;
+      } finally {
+        setSqsPeekInFlight(false);
+      }
+    },
+    [setSqsActionStatus, setSqsPeekInFlight],
+  );
 
   const createSQSQueue = useCallback((queueName: string): void => {
     setSqsActionStatus(`Creating SQS queue ${queueName}.`);
