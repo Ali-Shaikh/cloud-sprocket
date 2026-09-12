@@ -314,6 +314,43 @@ describe("SQSView", () => {
     expect(within(dialog).getByLabelText("Queue message text")).toHaveValue("retry me");
   });
 
+  it("disables the message field while send is in flight", async () => {
+    mockMatchMedia(true);
+    let finishSend: (ok: boolean) => void = () => undefined;
+    const onSendMessage = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishSend = resolve;
+        }),
+    );
+    render(
+      <ThemeProvider>
+        <SQSView
+          workspace={workspaceFixture}
+          actionStatus="Ready to browse queues."
+          peekResult={null}
+          peekInFlight={false}
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectQueue={vi.fn()}
+          onPeek={vi.fn()}
+          onSendMessage={onSendMessage}
+          onCreateQueue={vi.fn()}
+          onPurgeQueue={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Send message" }));
+    expect(within(dialog).getByLabelText("Queue message text")).toBeDisabled();
+    finishSend(true);
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+  });
+
   it("creates a queue through the create dialog", () => {
     mockMatchMedia(true);
     const { onCreateQueue } = renderSQSView();

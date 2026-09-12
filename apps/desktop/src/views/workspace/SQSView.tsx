@@ -612,6 +612,7 @@ export default function SQSView({
             value={sendBody}
             rows={5}
             className="font-mono text-xs"
+            disabled={sendInFlight}
             onChange={(event) => {
               setSendBody(event.target.value);
             }}
@@ -634,7 +635,9 @@ export default function SQSView({
                       return;
                     }
                     setSendDialogOpen(false);
-                    setSendBody(defaultSqsSendBody);
+                    setSendBody((current) =>
+                      current === body ? defaultSqsSendBody : current,
+                    );
                   },
                   () => {
                     setSendInFlight(false);
