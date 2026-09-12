@@ -47,7 +47,10 @@ export type SQSViewProps = {
   onSelectRegion: (region: string) => void;
   onSelectQueue: (queueUrl: string) => void;
   onPeek: (queueUrl: string) => void;
-  onSendMessage: (queueUrl: string, messageBody: string) => void;
+  onSendMessage: (
+    queueUrl: string,
+    messageBody: string,
+  ) => void | Promise<boolean | void>;
   onCreateQueue: (queueName: string) => void;
   onPurgeQueue?: (queueUrl: string) => void;
 };
@@ -58,6 +61,8 @@ const fieldLabel =
 const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] shadow-sm";
 
 const snippetCard = "rounded-lg border border-border bg-muted/40 p-3";
+
+const defaultSqsSendBody = '{"event":"test"}';
 
 function countLabel(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -94,7 +99,8 @@ export default function SQSView({
   const [peekDialogOpen, setPeekDialogOpen] = useState(false);
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
   const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
-  const [sendBody, setSendBody] = useState('{"event":"test"}');
+  const [sendBody, setSendBody] = useState(defaultSqsSendBody);
+  const [sendInFlight, setSendInFlight] = useState(false);
   const [newQueueName, setNewQueueName] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(Boolean(workspace.selectedSqsQueueUrl));
@@ -602,6 +608,7 @@ export default function SQSView({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <Textarea
+            aria-label="Queue message text"
             value={sendBody}
             rows={5}
             className="font-mono text-xs"
@@ -612,11 +619,27 @@ export default function SQSView({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
-                if (selectedQueue?.queueUrl && sendBody.trim()) {
-                  onSendMessage(selectedQueue.queueUrl, sendBody);
+              disabled={!canSend || !sendBody.trim() || sendInFlight}
+              onClick={(event) => {
+                event.preventDefault();
+                if (!selectedQueue?.queueUrl || !sendBody.trim() || sendInFlight) {
+                  return;
                 }
-                setSendDialogOpen(false);
+                const body = sendBody;
+                setSendInFlight(true);
+                void Promise.resolve(onSendMessage(selectedQueue.queueUrl, body)).then(
+                  (ok) => {
+                    setSendInFlight(false);
+                    if (ok === false) {
+                      return;
+                    }
+                    setSendDialogOpen(false);
+                    setSendBody(defaultSqsSendBody);
+                  },
+                  () => {
+                    setSendInFlight(false);
+                  },
+                );
               }}
             >
               Send message

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
@@ -260,7 +260,7 @@ describe("SQSView", () => {
     expect(screen.getByText("Copy actions")).toBeInTheDocument();
   });
 
-  it("sends a message to the selected queue through the send dialog", () => {
+  it("sends a message to the selected queue through the send dialog", async () => {
     mockMatchMedia(true);
     const { onSendMessage } = renderSQSView();
 
@@ -272,6 +272,46 @@ describe("SQSView", () => {
       "http://localhost:4566/000000000000/process-order",
       expect.stringContaining("event"),
     );
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("keeps the draft when send fails", async () => {
+    mockMatchMedia(true);
+    const onSendMessage = vi.fn(async () => false);
+    render(
+      <ThemeProvider>
+        <SQSView
+          workspace={workspaceFixture}
+          actionStatus="Ready to browse queues."
+          peekResult={null}
+          peekInFlight={false}
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectQueue={vi.fn()}
+          onPeek={vi.fn()}
+          onSendMessage={onSendMessage}
+          onCreateQueue={vi.fn()}
+          onPurgeQueue={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText("Queue message text"), {
+      target: { value: "retry me" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Send message" }));
+    await waitFor(() => {
+      expect(onSendMessage).toHaveBeenCalledWith(
+        "http://localhost:4566/000000000000/process-order",
+        "retry me",
+      );
+    });
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Queue message text")).toHaveValue("retry me");
   });
 
   it("creates a queue through the create dialog", () => {
