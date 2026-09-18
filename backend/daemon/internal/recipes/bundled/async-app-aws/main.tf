@@ -150,6 +150,11 @@ resource "aws_iam_role" "api" {
   tags = local.tags
 }
 
+resource "aws_iam_role_policy_attachment" "api_logs" {
+  role       = aws_iam_role.api.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
 resource "aws_iam_role_policy" "api_sqs" {
   name = "${local.name}-sqs-send"
   role = aws_iam_role.api.id
@@ -238,6 +243,11 @@ resource "aws_iam_role" "worker" {
   })
 
   tags = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "worker_logs" {
+  role       = aws_iam_role.worker.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
 resource "aws_iam_role_policy" "worker_sqs" {

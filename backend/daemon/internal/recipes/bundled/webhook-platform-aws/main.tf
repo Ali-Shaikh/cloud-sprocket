@@ -78,6 +78,11 @@ resource "aws_iam_role" "ingest" {
   tags = local.tags
 }
 
+resource "aws_iam_role_policy_attachment" "ingest_logs" {
+  role       = aws_iam_role.ingest.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
 resource "aws_iam_role_policy" "ingest_sqs" {
   name = "${local.name}-sqs-send"
   role = aws_iam_role.ingest.id
@@ -166,6 +171,11 @@ resource "aws_iam_role" "processor" {
   })
 
   tags = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "processor_logs" {
+  role       = aws_iam_role.processor.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
 resource "aws_iam_role_policy" "processor_sqs" {
