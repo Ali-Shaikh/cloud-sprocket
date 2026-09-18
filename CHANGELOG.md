@@ -21,6 +21,8 @@ Installers for every release are published on the
   bind an unmatched empty value.
 - SQS send keeps the dialog and draft when the request fails, matching Azure
   Storage Queue send.
+- AWS region dropdowns show the official location name with the region code
+  (for example Europe (Ireland) · eu-west-1).
 
 ## [0.9.16] - 2026-09-06
 

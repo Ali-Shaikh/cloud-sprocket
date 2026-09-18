@@ -6,6 +6,7 @@ import { RefreshCw, Scale } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { formatTimestamp } from "@/lib/format";
+import { formatAwsRegionLabel } from "@/lib/aws-region-names";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -274,7 +275,7 @@ export default function ELBView({
         </div>
 
         <div className="flex flex-wrap items-end gap-3">
-          <div className="w-56">
+          <div className="w-72">
             <div className={cn(fieldLabel, "mb-1")}>Region</div>
             <Select
               value={workspace.selectedElbRegion ?? ""}
@@ -286,7 +287,7 @@ export default function ELBView({
               <SelectContent>
                 {regions.map((region) => (
                   <SelectItem key={region} value={region}>
-                    {region}
+                    {formatAwsRegionLabel(region)}
                   </SelectItem>
                 ))}
               </SelectContent>
