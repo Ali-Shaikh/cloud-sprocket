@@ -86,6 +86,8 @@ func checkLocalStackHealth(ctx context.Context, endpoint string) error {
 
 // localStackOverride returns a Terraform override file that points the aws
 // provider at the LocalStack endpoint with dummy credentials and path-style S3.
+// Account id is requested (LocalStack STS returns 000000000000) so SQS queue
+// URLs include the account segment instead of a truncated amazonaws.com path.
 func localStackOverride(endpoint string) string {
 	services := append([]string(nil), localStackServices...)
 	sort.Strings(services)
@@ -104,7 +106,6 @@ provider "aws" {
   s3_use_path_style           = true
   skip_credentials_validation = true
   skip_metadata_api_check     = true
-  skip_requesting_account_id  = true
 
   endpoints {
 %s  }

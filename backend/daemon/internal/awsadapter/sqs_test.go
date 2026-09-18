@@ -26,6 +26,10 @@ func TestQueueNameFromURLParsesStandardAndLocalEndpoints(t *testing.T) {
 			queueURL: "http://localhost:4566/000000000000/cloudsprocket-events",
 			want:     "cloudsprocket-events",
 		},
+		{
+			queueURL: "https://sqs.us-east-1.amazonaws.com/process-order",
+			want:     "process-order",
+		},
 	}
 
 	for _, test := range tests {

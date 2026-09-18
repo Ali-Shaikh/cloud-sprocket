@@ -35,6 +35,7 @@ import {
 } from "@/components/inventory/resource-inspector";
 import { ResourceTable } from "@/components/inventory/resource-table";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
+import { findSqsQueueByUrl } from "@/lib/sqs-queue-url";
 import { DetailFieldList } from "./detail-fields";
 import type { AwsSqsPeekResult, WorkspaceSnapshot } from "@/types/backend";
 
@@ -115,9 +116,7 @@ export default function SQSView({
           ? workspace.lambdaRegions
           : workspace.ec2Regions;
 
-  const selectedQueue = workspace.sqsQueues.find(
-    (queue) => queue.queueUrl === workspace.selectedSqsQueueUrl,
-  );
+  const selectedQueue = findSqsQueueByUrl(workspace.sqsQueues, workspace.selectedSqsQueueUrl);
 
   const filteredQueues = useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -532,7 +531,7 @@ export default function SQSView({
                 { id: "delayed", label: "Delayed" },
               ]}
               rows={filteredQueues}
-              selectedKey={workspace.selectedSqsQueueUrl}
+              selectedKey={selectedQueue?.queueUrl ?? workspace.selectedSqsQueueUrl}
               getRowKey={(queue) => queue.queueUrl}
               onRowClick={(queue) => {
                 onSelectQueue(queue.queueUrl);

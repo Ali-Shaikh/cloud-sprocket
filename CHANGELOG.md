@@ -21,6 +21,11 @@ Installers for every release are published on the
   bind an unmatched empty value.
 - SQS send keeps the dialog and draft when the request fails, matching Azure
   Storage Queue send.
+- SQS and EventBridge lab `queue_url` outputs include the account id, open the
+  SQS tab instead of a browser, and send looks up truncated URLs. Cloud apply
+  removes a leftover LocalStack override.
+- Lambda recipes attach CloudWatch Logs permissions
+  (`AWSLambdaBasicExecutionRole`) so functions can write logs on real AWS.
 
 ## [0.9.16] - 2026-09-06
 
