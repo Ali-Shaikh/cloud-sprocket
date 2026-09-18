@@ -34,6 +34,7 @@ import {
 } from "@/components/inventory/resource-inspector";
 import { ResourceTable } from "@/components/inventory/resource-table";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
+import { formatAwsRegionLabel } from "@/lib/aws-region-names";
 import { DetailFieldList } from "./detail-fields";
 import type {
   AwsEc2Instance,
@@ -465,7 +466,7 @@ export default function ComputeView({
         </div>
 
         <div className="flex flex-wrap items-end gap-3">
-          <div className="w-56">
+          <div className="w-72">
             <div className={cn(fieldLabel, "mb-1")}>Region</div>
             <Select
               value={workspace.selectedEc2Region ?? ""}
@@ -481,7 +482,7 @@ export default function ComputeView({
               <SelectContent>
                 {workspace.ec2Regions.map((region) => (
                   <SelectItem key={region} value={region}>
-                    {region}
+                    {formatAwsRegionLabel(region)}
                   </SelectItem>
                 ))}
               </SelectContent>
