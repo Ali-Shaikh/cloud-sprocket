@@ -6,7 +6,8 @@ import type { Deployment, DeploymentOutput } from "@/types/backend";
 
 /**
  * Map a known deployment output name to an inventory deep-link when the value
- * is a resource identifier (not a URL). URL outputs keep using open-external.
+ * is a resource identifier. SQS queue URLs are inventory keys, not browser
+ * endpoints. Other URL-shaped outputs keep using open-external.
  */
 export function deploymentOutputNavigateParams(
   deployment: Pick<Deployment, "providerId">,
@@ -15,13 +16,18 @@ export function deploymentOutputNavigateParams(
   if (output.sensitive) return null;
   const value = String(output.value ?? "").trim();
   if (!value) return null;
+
+  const provider: "aws" | "azure" = deployment.providerId === "azure" ? "azure" : "aws";
+  const name = output.name.toLowerCase();
+
+  if (provider === "aws" && (name.includes("queue_url") || name.endsWith("queueurl"))) {
+    return { provider: "aws", tab: "sqs", resourceKey: value };
+  }
+
   // Prefer external URL open for URL-shaped values.
   if (/^https?:\/\//i.test(value) || value.includes("://")) {
     return null;
   }
-
-  const provider: "aws" | "azure" = deployment.providerId === "azure" ? "azure" : "aws";
-  const name = output.name.toLowerCase();
 
   if (provider === "aws") {
     if (name.includes("bucket") || name === "website_bucket" || name === "s3_bucket") {
@@ -34,9 +40,6 @@ export function deploymentOutputNavigateParams(
       return { provider: "aws", tab: "dynamodb", resourceKey: value };
     }
     if (name.includes("queue") && !name.includes("url")) {
-      return { provider: "aws", tab: "sqs", resourceKey: value };
-    }
-    if (name.includes("queue_url") || name.endsWith("queueurl")) {
       return { provider: "aws", tab: "sqs", resourceKey: value };
     }
     if (name.includes("topic") || name.includes("sns")) {

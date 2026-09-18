@@ -46,6 +46,11 @@ resource "aws_iam_role" "lambda" {
   tags = local.tags
 }
 
+resource "aws_iam_role_policy_attachment" "lambda_logs" {
+  role       = aws_iam_role.lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
 resource "aws_secretsmanager_secret" "app" {
   name        = var.secret_name != "" ? var.secret_name : "${local.name}-secret"
   description = "Secret for ${local.name}"

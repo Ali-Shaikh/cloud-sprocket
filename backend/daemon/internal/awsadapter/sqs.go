@@ -6,7 +6,6 @@ package awsadapter
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -170,6 +169,18 @@ func (q *SQSInventory) SendMessage(
 	}
 
 	client := sqsClient(cfg, profile)
+	queueURL, err = resolveSQSQueueURL(queueURL, func(queueName string) (string, error) {
+		res, lookupErr := client.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{
+			QueueName: aws.String(queueName),
+		})
+		if lookupErr != nil {
+			return "", lookupErr
+		}
+		return awsString(res.QueueUrl), nil
+	})
+	if err != nil {
+		return models.AwsSqsSendResult{}, err
+	}
 	res, err := client.SendMessage(ctx, &sqs.SendMessageInput{
 		QueueUrl:    aws.String(queueURL),
 		MessageBody: aws.String(messageBody),
@@ -266,18 +277,6 @@ func sqsClient(cfg aws.Config, profile models.ProfileSummary) *sqs.Client {
 			options.BaseEndpoint = aws.String(endpointURL)
 		}
 	})
-}
-
-func queueNameFromURL(queueURL string) string {
-	parsed, err := url.Parse(queueURL)
-	if err != nil {
-		return queueURL
-	}
-	segments := strings.Split(strings.Trim(parsed.Path, "/"), "/")
-	if len(segments) == 0 {
-		return queueURL
-	}
-	return segments[len(segments)-1]
 }
 
 func sqsQueueSummary(queueURL string, attributes map[string]string) models.AwsSqsQueue {

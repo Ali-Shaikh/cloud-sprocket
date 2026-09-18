@@ -6,6 +6,7 @@ package deploy
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
@@ -21,8 +22,17 @@ type Target interface {
 	Env(deployment *Deployment, settings config.Settings) []string
 	Preflight(ctx context.Context, deployment *Deployment, settings config.Settings, opts TargetOptions) error
 	// WriteOverrides drops any provider override files into the workspace dir
-	// (e.g. the LocalStack endpoints block). No-op for cloud targets.
+	// (e.g. the LocalStack endpoints block). Cloud targets must remove leftover
+	// emulator override files so a local-then-cloud switch cannot keep dummy URLs.
 	WriteOverrides(dir string, deployment *Deployment, opts TargetOptions) error
+}
+
+func removeFileIfExists(path string) error {
+	err := os.Remove(path)
+	if err == nil || os.IsNotExist(err) {
+		return nil
+	}
+	return err
 }
 
 // TargetOptions carries per-run overrides (mainly for tests).

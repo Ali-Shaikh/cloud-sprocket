@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"cloudsprocket/backend/daemon/internal/config"
@@ -41,8 +42,8 @@ func (t *awsCloudTarget) Preflight(_ context.Context, deployment *Deployment, se
 	return checkAWSProfile(settings, deployment.ProfileID)
 }
 
-func (t *awsCloudTarget) WriteOverrides(_ string, _ *Deployment, _ TargetOptions) error {
-	return nil
+func (t *awsCloudTarget) WriteOverrides(dir string, _ *Deployment, _ TargetOptions) error {
+	return removeFileIfExists(filepath.Join(dir, overrideFile))
 }
 
 func checkAWSProfile(settings config.Settings, profileID string) error {

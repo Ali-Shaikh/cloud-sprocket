@@ -52,6 +52,37 @@ func TestLocalStackOverrideContent(t *testing.T) {
 			t.Fatalf("override missing %q in:\n%s", want, out)
 		}
 	}
+	if strings.Contains(out, "skip_requesting_account_id") {
+		t.Fatal("LocalStack override must request the account id so SQS URLs include it")
+	}
+}
+
+func TestPrepareCloudRemovesLocalStackOverride(t *testing.T) {
+	settings := config.Settings{DeploymentsDir: t.TempDir()}
+	e := NewEngine(tofu.NewRunner("tofu"), settings, recipes.Bundled())
+	dir := e.WorkspaceDir("dep-cloud-sqs")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	stale := filepath.Join(dir, overrideFile)
+	if err := os.WriteFile(stale, []byte("stale localstack override"), 0o644); err != nil {
+		t.Fatalf("write stale override: %v", err)
+	}
+	deployment := &Deployment{
+		ID:         "dep-cloud-sqs",
+		RecipeID:   "lab-eventbridge-aws",
+		ProviderID: "aws",
+		ProfileID:  "prod",
+		Local:      false,
+		RuntimeID:  "aws-cloud",
+		Variables:  map[string]any{"app_name": "lab"},
+	}
+	if err := e.Prepare(deployment); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Fatalf("expected leftover LocalStack override to be removed, stat err=%v", err)
+	}
 }
 
 func TestParsePlan(t *testing.T) {

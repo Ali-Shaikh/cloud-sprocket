@@ -24,6 +24,22 @@ describe("deploymentOutputNavigateParams", () => {
     ).toBeNull();
   });
 
+  it("maps SQS queue_url outputs to the SQS tab even when the value is a URL", () => {
+    expect(
+      deploymentOutputNavigateParams(
+        { providerId: "aws" },
+        {
+          name: "queue_url",
+          value: "https://sqs.us-east-1.amazonaws.com/123456789012/lab-events",
+        },
+      ),
+    ).toEqual({
+      provider: "aws",
+      tab: "sqs",
+      resourceKey: "https://sqs.us-east-1.amazonaws.com/123456789012/lab-events",
+    });
+  });
+
   it("maps azure storage account outputs", () => {
     expect(
       deploymentOutputNavigateParams(
