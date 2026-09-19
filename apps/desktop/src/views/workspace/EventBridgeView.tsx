@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { GitBranch, RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { formatAwsRegionLabel } from "@/lib/aws-region-names";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -226,7 +227,7 @@ export default function EventBridgeView({
         </div>
 
         <div className="flex flex-wrap items-end gap-3">
-          <div className="w-56">
+          <div className="w-72">
             <div className={cn(fieldLabel, "mb-1")}>Region</div>
             <Select
               value={workspace.selectedEventBridgeRegion ?? ""}
@@ -238,7 +239,7 @@ export default function EventBridgeView({
               <SelectContent>
                 {regions.map((region) => (
                   <SelectItem key={region} value={region}>
-                    {region}
+                    {formatAwsRegionLabel(region)}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -42,6 +42,7 @@ import { DetailFieldList } from "./detail-fields";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import type { NavigateToResourceParams } from "@/lib/navigate-to-resource";
 import { lambdaCrossLinks } from "@/lib/resource-cross-links";
+import { formatAwsRegionLabel } from "@/lib/aws-region-names";
 import type {
   AwsLambdaCreateInput,
   AwsLambdaInvokeResult,
@@ -746,7 +747,7 @@ export default function LambdaView({
         </div>
 
         <div className="flex flex-wrap items-end gap-3">
-          <div className="w-56">
+          <div className="w-72">
             <div className={cn(fieldLabel, "mb-1")}>Region</div>
             <Select
               value={workspace.selectedLambdaRegion ?? ""}
@@ -762,7 +763,7 @@ export default function LambdaView({
               <SelectContent>
                 {regions.map((region) => (
                   <SelectItem key={region} value={region}>
-                    {region}
+                    {formatAwsRegionLabel(region)}
                   </SelectItem>
                 ))}
               </SelectContent>
