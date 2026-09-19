@@ -9,6 +9,8 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.17] - 2026-09-20
+
 ### Added
 
 - Azure Storage Queues send: write-gated `azure.queues.sendMessage` enqueues one
@@ -1464,7 +1466,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.16...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.17...HEAD
+[0.9.17]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.16...v0.9.17
 [0.9.16]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.15...v0.9.16
 [0.9.15]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.14...v0.9.15
 [0.9.14]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.13...v0.9.14
