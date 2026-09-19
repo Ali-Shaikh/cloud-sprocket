@@ -14,6 +14,12 @@ Installers for every release are published on the
 - Azure Storage Queues send: write-gated `azure.queues.sendMessage` enqueues one
   message onto the selected queue (capped at 64 KB).
 
+### Changed
+
+- Dependabot version-update PRs are off. Dependency bumps are manual.
+  Renovate is disabled in-repo so it does not keep opening the same class of
+  PRs.
+
 ### Fixed
 
 - App Service diagnostic-log workspace dropdown populates from scoped inventory,
