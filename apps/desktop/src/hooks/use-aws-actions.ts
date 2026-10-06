@@ -4,6 +4,7 @@
 import { startTransition, useCallback, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 
 import { backendRequest } from "@/lib/backend";
+import { applySnsPublishStatus } from "@/lib/sns-publish-status";
 import {
   requestAwsInventorySlice,
   requestWorkspaceSnapshot,
@@ -496,23 +497,33 @@ export function useAwsActions(params: UseAwsActionsParams) {
   }, [setSnsActionStatus, setWorkspace]);
 
   const snsPublishSerialRef = useRef(0);
+  const snsPublishFailuresRef = useRef<Map<number, string>>(new Map());
   const publishSNSTopic = useCallback(
     async (topicArn: string, message: string): Promise<boolean> => {
       const serial = ++snsPublishSerialRef.current;
       setSnsActionStatus("Publishing message to the topic.");
+      const record = (text: string, failed: boolean) => {
+        const event = {
+          serial,
+          latestSerial: snsPublishSerialRef.current,
+          text,
+          failed,
+        };
+        const previous = snsPublishFailuresRef.current;
+        snsPublishFailuresRef.current = applySnsPublishStatus("", previous, event).failures;
+        setSnsActionStatus(
+          (current) => applySnsPublishStatus(current, previous, event).status,
+        );
+      };
       try {
         const result = await backendRequest<{ summary: string }>("aws.sns.publish", {
           topicArn,
           message,
         });
-        if (serial === snsPublishSerialRef.current) {
-          setSnsActionStatus(result.summary || "Message published.");
-        }
+        record(result.summary || "Message published.", false);
         return true;
       } catch (error: unknown) {
-        if (serial === snsPublishSerialRef.current) {
-          setSnsActionStatus(error instanceof Error ? error.message : String(error));
-        }
+        record(error instanceof Error ? error.message : String(error), true);
         return false;
       }
     },

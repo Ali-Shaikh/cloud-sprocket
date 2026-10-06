@@ -18,6 +18,8 @@ Installers for every release are published on the
   (`AWSLambdaBasicExecutionRole`) so functions can write logs on real AWS.
 - SNS publish keeps the dialog and draft when the request fails, matching SQS
   send.
+- An earlier SNS publish failure stays on the status line when a later publish
+  finishes.
 
 ## [0.9.17] - 2026-09-20
 
