@@ -56,7 +56,7 @@ func gcpInventoryListEmptyReason(itemCount int, listErr error) models.InventoryE
 
 func gcpCachedInventoryStatus(resource string, count int, listErr error) string {
 	return fmt.Sprintf(
-		"Showing %d cached %s because the live list failed.\nDetail: %v",
+		"Could not refresh the live list. Showing %d cached %s.\nDetail: %v",
 		count,
 		resource,
 		listErr,

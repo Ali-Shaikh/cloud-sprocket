@@ -275,6 +275,16 @@ func TestMarkGcpInventory(t *testing.T) {
 	}
 }
 
+func TestGcpCachedInventoryStatusUsesWarningPrefix(t *testing.T) {
+	got := gcpCachedInventoryStatus("Cloud Storage bucket(s)", 2, errors.New("timeout"))
+	if !strings.HasPrefix(got, "Could not") {
+		t.Fatalf("status = %q, want a Could not prefix so the view uses the warning style", got)
+	}
+	if !strings.Contains(got, "2 cached Cloud Storage bucket(s)") {
+		t.Fatalf("status = %q", got)
+	}
+}
+
 func TestGcpInventoryListEmptyReason(t *testing.T) {
 	errBoom := errors.New("list failed")
 	cases := []struct {
