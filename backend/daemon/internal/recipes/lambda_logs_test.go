@@ -65,14 +65,24 @@ resource "aws_iam_role_policy" "api_logs" {
 			want: true,
 		},
 		{
-			name: "PutLogEvents with create log stream grants the function role",
+			name: "create group alone cannot write log events",
+			tf: functionWithRole + `
+resource "aws_iam_role_policy" "api_logs" {
+  role = aws_iam_role.api.id
+  policy = jsonencode({ Action = ["logs:CreateLogGroup"] })
+}
+`,
+			want: false,
+		},
+		{
+			name: "stream and put without create group cannot write log events",
 			tf: functionWithRole + `
 resource "aws_iam_role_policy" "api_logs" {
   role = aws_iam_role.api.id
   policy = jsonencode({ Action = ["logs:CreateLogStream", "logs:PutLogEvents"] })
 }
 `,
-			want: true,
+			want: false,
 		},
 		{
 			name: "PutLogEvents alone is not enough",

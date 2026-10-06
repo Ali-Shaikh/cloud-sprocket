@@ -18,10 +18,10 @@ func LambdaSourceDefinesFunction(tf string) bool {
 // in tf uses a role whose attachments in the same file can write CloudWatch
 // Logs. A role is granted when one of its policy attachments or inline
 // policies contains AWSLambdaBasicExecutionRole, AWSLambdaVPCAccessExecutionRole,
-// logs:CreateLogGroup, logs:*, or logs:PutLogEvents together with a create
-// action (logs:CreateLogGroup or logs:CreateLogStream). PutLogEvents on its
-// own is not enough. Logs on a different role do not count. A file with no
-// Lambda function has nothing to grant and returns true.
+// logs:*, or all three of logs:CreateLogGroup, logs:CreateLogStream, and
+// logs:PutLogEvents. One of those actions on its own is not enough. Logs on a
+// different role do not count. A file with no Lambda function has nothing to
+// grant and returns true.
 func LambdaSourceGrantsCloudWatchLogs(tf string) bool {
 	functions := terraformResources(tf, "aws_lambda_function")
 	if len(functions) == 0 {
@@ -89,11 +89,12 @@ func referencedPolicyBody(blocks []tfResource, attachment string) string {
 func policyBodyGrantsCloudWatchLogs(body string) bool {
 	if strings.Contains(body, "AWSLambdaBasicExecutionRole") ||
 		strings.Contains(body, "AWSLambdaVPCAccessExecutionRole") ||
-		strings.Contains(body, "logs:*") ||
-		strings.Contains(body, "logs:CreateLogGroup") {
+		strings.Contains(body, "logs:*") {
 		return true
 	}
-	return strings.Contains(body, "logs:PutLogEvents") && strings.Contains(body, "logs:CreateLogStream")
+	return strings.Contains(body, "logs:CreateLogGroup") &&
+		strings.Contains(body, "logs:CreateLogStream") &&
+		strings.Contains(body, "logs:PutLogEvents")
 }
 
 type tfResource struct {
