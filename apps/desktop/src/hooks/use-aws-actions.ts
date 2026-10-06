@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { startTransition, useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
+import { startTransition, useCallback, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 
 import { backendRequest } from "@/lib/backend";
+import {
+  applySnsPublishStatus,
+  dropFinishedSnsPublishFailures,
+} from "@/lib/sns-publish-status";
 import {
   requestAwsInventorySlice,
   requestWorkspaceSnapshot,
@@ -457,7 +461,18 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setSqsActionStatus, setWorkspace]);
 
+  const snsPublishSerialRef = useRef(0);
+  const snsPublishFailuresRef = useRef<Map<number, string>>(new Map());
+  const snsPublishInFlightSerialsRef = useRef<Set<number>>(new Set());
+  const forgetFinishedSnsFailures = useCallback((): void => {
+    snsPublishFailuresRef.current = dropFinishedSnsPublishFailures(
+      snsPublishFailuresRef.current,
+      snsPublishInFlightSerialsRef.current,
+    );
+  }, []);
+
   const selectSNSRegion = useCallback((region: string): void => {
+    forgetFinishedSnsFailures();
     setSnsActionStatus(`Loading SNS topics for ${region}.`);
     void requestWorkspaceSnapshot("aws.sns.selectRegion", { region })
       .then((workspaceResult) => {
@@ -471,7 +486,7 @@ export function useAwsActions(params: UseAwsActionsParams) {
       .catch((error: unknown) => {
         setSnsActionStatus(error instanceof Error ? error.message : String(error));
       });
-  }, [setSnsActionStatus, setWorkspace]);
+  }, [forgetFinishedSnsFailures, setSnsActionStatus, setWorkspace]);
 
   const refreshSNSInventory = useCallback((): void => {
     const region = workspace.selectedSnsRegion;
@@ -483,6 +498,7 @@ export function useAwsActions(params: UseAwsActionsParams) {
   }, [selectSNSRegion, setSnsActionStatus, workspace.selectedSnsRegion]);
 
   const selectSNSTopic = useCallback((topicArn: string): void => {
+    forgetFinishedSnsFailures();
     void requestWorkspaceSnapshot("aws.sns.selectTopic", { topicArn })
       .then((workspaceResult) => {
         startTransition(() => {
@@ -493,18 +509,42 @@ export function useAwsActions(params: UseAwsActionsParams) {
       .catch((error: unknown) => {
         setSnsActionStatus(error instanceof Error ? error.message : String(error));
       });
-  }, [setSnsActionStatus, setWorkspace]);
+  }, [forgetFinishedSnsFailures, setSnsActionStatus, setWorkspace]);
 
-  const publishSNSTopic = useCallback((topicArn: string, message: string): void => {
-    setSnsActionStatus("Publishing message to the topic.");
-    void backendRequest<{ summary: string }>("aws.sns.publish", { topicArn, message })
-      .then((result) => {
-        setSnsActionStatus(result.summary || "Message published.");
-      })
-      .catch((error: unknown) => {
-        setSnsActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }, [setSnsActionStatus]);
+  const publishSNSTopic = useCallback(
+    async (topicArn: string, message: string): Promise<boolean> => {
+      const serial = ++snsPublishSerialRef.current;
+      snsPublishInFlightSerialsRef.current.add(serial);
+      setSnsActionStatus("Publishing message to the topic.");
+      const record = (text: string, failed: boolean) => {
+        const event = {
+          serial,
+          latestSerial: snsPublishSerialRef.current,
+          text,
+          failed,
+        };
+        const previous = snsPublishFailuresRef.current;
+        snsPublishFailuresRef.current = applySnsPublishStatus("", previous, event).failures;
+        setSnsActionStatus(
+          (current) => applySnsPublishStatus(current, previous, event).status,
+        );
+      };
+      try {
+        const result = await backendRequest<{ summary: string }>("aws.sns.publish", {
+          topicArn,
+          message,
+        });
+        record(result.summary || "Message published.", false);
+        return true;
+      } catch (error: unknown) {
+        record(error instanceof Error ? error.message : String(error), true);
+        return false;
+      } finally {
+        snsPublishInFlightSerialsRef.current.delete(serial);
+      }
+    },
+    [setSnsActionStatus],
+  );
 
   const createSNSTopic = useCallback((topicName: string): void => {
     setSnsActionStatus(`Creating SNS topic ${topicName}.`);

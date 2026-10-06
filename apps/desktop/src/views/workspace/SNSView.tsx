@@ -69,7 +69,10 @@ export type SNSViewProps = {
   onRefresh: () => void;
   onSelectRegion: (region: string) => void;
   onSelectEntity: (topicArn: string) => void;
-  onPublish: (topicArn: string, message: string) => void;
+  onPublish: (
+    topicArn: string,
+    message: string,
+  ) => void | Promise<boolean | void>;
   onCreateTopic: (topicName: string) => void;
   onCreateSubscription: (topicArn: string, protocol: string, endpoint: string) => void;
 };
@@ -90,6 +93,8 @@ const fieldLabel =
 const sectionCard = "space-y-4 rounded-lg border border-border bg-card p-[18px] shadow-sm";
 
 const snippetCard = "rounded-lg border border-border bg-muted/40 p-3";
+
+const defaultSnsPublishBody = '{"event":"test"}';
 
 function countLabel(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -118,7 +123,13 @@ export default function SNSView({
 }: SNSViewProps) {
   const [filterText, setFilterText] = useState("");
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
-  const [publishBody, setPublishBody] = useState('{"event":"test"}');
+  const [publishBody, setPublishBody] = useState(defaultSnsPublishBody);
+  const [publishInFlightArns, setPublishInFlightArns] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  // Bumped when the dialog closes so a late response cannot close or reset a later draft.
+  // Each topic keeps its own lock until that request finishes.
+  const publishAttemptRef = useRef(0);
   const [newTopicName, setNewTopicName] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [subscribeDialogOpen, setSubscribeDialogOpen] = useState(false);
@@ -138,6 +149,9 @@ export default function SNSView({
 
   const selectedTopic = workspace.snsTopics.find(
     (topic) => topic.topicArn === workspace.selectedSnsTopicArn,
+  );
+  const selectedPublishInFlight = Boolean(
+    selectedTopic?.topicArn && publishInFlightArns.has(selectedTopic.topicArn),
   );
 
   const filteredTopics = useMemo(() => {
@@ -554,7 +568,15 @@ export default function SNSView({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
+      <AlertDialog
+        open={publishDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            publishAttemptRef.current += 1;
+          }
+          setPublishDialogOpen(open);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Publish message?</AlertDialogTitle>
@@ -564,9 +586,11 @@ export default function SNSView({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <Textarea
+            aria-label="Topic message text"
             value={publishBody}
             rows={5}
             className="font-mono text-xs"
+            disabled={selectedPublishInFlight}
             onChange={(event) => {
               setPublishBody(event.target.value);
             }}
@@ -574,11 +598,48 @@ export default function SNSView({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
-                if (selectedTopic?.topicArn && publishBody.trim()) {
-                  onPublish(selectedTopic.topicArn, publishBody);
+              disabled={!canPublish || !publishBody.trim() || selectedPublishInFlight}
+              onClick={(event) => {
+                event.preventDefault();
+                if (!selectedTopic?.topicArn || !publishBody.trim() || selectedPublishInFlight) {
+                  return;
                 }
-                setPublishDialogOpen(false);
+                const body = publishBody;
+                const topicArn = selectedTopic.topicArn;
+                const attempt = publishAttemptRef.current;
+                setPublishInFlightArns((current) => {
+                  const next = new Set(current);
+                  next.add(topicArn);
+                  return next;
+                });
+                const releaseTopic = () => {
+                  setPublishInFlightArns((current) => {
+                    if (!current.has(topicArn)) {
+                      return current;
+                    }
+                    const next = new Set(current);
+                    next.delete(topicArn);
+                    return next;
+                  });
+                };
+                void Promise.resolve(onPublish(topicArn, body)).then(
+                  (ok) => {
+                    releaseTopic();
+                    if (publishAttemptRef.current !== attempt) {
+                      return;
+                    }
+                    if (ok === false) {
+                      return;
+                    }
+                    setPublishDialogOpen(false);
+                    setPublishBody((current) =>
+                      current === body ? defaultSnsPublishBody : current,
+                    );
+                  },
+                  () => {
+                    releaseTopic();
+                  },
+                );
               }}
             >
               Publish

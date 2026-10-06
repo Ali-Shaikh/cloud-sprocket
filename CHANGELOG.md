@@ -16,6 +16,13 @@ Installers for every release are published on the
   removes a leftover LocalStack override.
 - Lambda recipes attach CloudWatch Logs permissions
   (`AWSLambdaBasicExecutionRole`) so functions can write logs on real AWS.
+- SNS publish keeps the dialog and draft when the request fails, matching SQS
+  send.
+- An earlier SNS publish failure stays on the status line when a later publish
+  finishes.
+- Switching SNS topic or region clears a finished publish failure, so a later
+  success does not repeat it. A publish that is still running can still report
+  its own error.
 
 ## [0.9.17] - 2026-09-20
 

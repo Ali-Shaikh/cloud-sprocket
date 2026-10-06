@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
@@ -270,7 +270,7 @@ describe("SNSView", () => {
     return { onPublish, onCreateTopic, onCreateSubscription };
   }
 
-  it("publishes a message to the selected topic through the publish dialog", () => {
+  it("publishes a message to the selected topic through the publish dialog", async () => {
     mockMatchMedia(true);
     const { onPublish } = renderWritableSNSView();
 
@@ -282,6 +282,201 @@ describe("SNSView", () => {
       "arn:aws:sns:us-east-1:000000000000:order-events",
       expect.stringContaining("event"),
     );
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("keeps the draft when publish fails", async () => {
+    mockMatchMedia(true);
+    const onPublish = vi.fn(async () => false);
+    render(
+      <ThemeProvider>
+        <SNSView
+          workspace={{ ...workspaceFixture, awsWritesEnabled: true }}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectEntity={vi.fn()}
+          onPublish={onPublish}
+          onCreateTopic={vi.fn()}
+          onCreateSubscription={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish message" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText("Topic message text"), {
+      target: { value: "retry me" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Publish" }));
+    await waitFor(() => {
+      expect(onPublish).toHaveBeenCalledWith(
+        "arn:aws:sns:us-east-1:000000000000:order-events",
+        "retry me",
+      );
+      expect(within(dialog).getByLabelText("Topic message text")).toBeEnabled();
+    });
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Topic message text")).toHaveValue("retry me");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Publish" }));
+    await waitFor(() => {
+      expect(onPublish).toHaveBeenCalledTimes(2);
+      expect(within(dialog).getByLabelText("Topic message text")).toBeEnabled();
+    });
+    expect(within(dialog).getByLabelText("Topic message text")).toHaveValue("retry me");
+  });
+
+  it("does not close a reopened dialog when an earlier publish succeeds", async () => {
+    mockMatchMedia(true);
+    let finishPublish: (ok: boolean) => void = () => undefined;
+    const onPublish = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishPublish = resolve;
+        }),
+    );
+    render(
+      <ThemeProvider>
+        <SNSView
+          workspace={{ ...workspaceFixture, awsWritesEnabled: true }}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectEntity={vi.fn()}
+          onPublish={onPublish}
+          onCreateTopic={vi.fn()}
+          onCreateSubscription={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish message" }));
+    fireEvent.change(screen.getByLabelText("Topic message text"), {
+      target: { value: "first draft" },
+    });
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Publish" }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish message" }));
+    expect(screen.getByLabelText("Topic message text")).toBeDisabled();
+    expect(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Publish" })).toBeDisabled();
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Publish" }));
+    expect(onPublish).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      finishPublish(true);
+    });
+
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.getByLabelText("Topic message text")).toHaveValue("first draft");
+    expect(screen.getByLabelText("Topic message text")).toBeEnabled();
+    expect(onPublish).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets another topic publish while the first request is still running", async () => {
+    mockMatchMedia(true);
+    const pending: Array<(ok: boolean) => void> = [];
+    const onPublish = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          pending.push(resolve);
+        }),
+    );
+    const view = (topicArn: string) => (
+      <ThemeProvider>
+        <SNSView
+          workspace={{
+            ...workspaceFixture,
+            awsWritesEnabled: true,
+            selectedSnsTopicArn: topicArn,
+          }}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectEntity={vi.fn()}
+          onPublish={onPublish}
+          onCreateTopic={vi.fn()}
+          onCreateSubscription={vi.fn()}
+        />
+      </ThemeProvider>
+    );
+    const { rerender } = render(
+      view("arn:aws:sns:us-east-1:000000000000:order-events"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish message" }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Publish" }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+
+    rerender(view("arn:aws:sns:us-east-1:000000000000:cloudsprocket-alerts"));
+    fireEvent.click(screen.getByRole("button", { name: "Publish message" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(within(dialog).getByLabelText("Topic message text")).toBeEnabled();
+    fireEvent.change(within(dialog).getByLabelText("Topic message text"), {
+      target: { value: "alert draft" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Publish" }));
+    expect(onPublish).toHaveBeenCalledTimes(2);
+    expect(onPublish).toHaveBeenLastCalledWith(
+      "arn:aws:sns:us-east-1:000000000000:cloudsprocket-alerts",
+      "alert draft",
+    );
+
+    rerender(view("arn:aws:sns:us-east-1:000000000000:order-events"));
+    expect(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Publish" })).toBeDisabled();
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Publish" }));
+    expect(onPublish).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      pending[0]?.(true);
+    });
+
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.getByLabelText("Topic message text")).toHaveValue("alert draft");
+  });
+
+  it("disables the message field while publish is in flight", async () => {
+    mockMatchMedia(true);
+    let finishPublish: (ok: boolean) => void = () => undefined;
+    const onPublish = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishPublish = resolve;
+        }),
+    );
+    render(
+      <ThemeProvider>
+        <SNSView
+          workspace={{ ...workspaceFixture, awsWritesEnabled: true }}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectEntity={vi.fn()}
+          onPublish={onPublish}
+          onCreateTopic={vi.fn()}
+          onCreateSubscription={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish message" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Publish" }));
+    expect(within(dialog).getByLabelText("Topic message text")).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Publish" })).toBeDisabled();
+    finishPublish(true);
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
   });
 
   it("creates a topic through the create dialog", () => {
