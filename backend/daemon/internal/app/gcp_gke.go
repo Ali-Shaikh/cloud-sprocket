@@ -187,6 +187,8 @@ func (s *Service) enrichGcpGkeInventory(
 			"Could not list GKE clusters.\nCheck that gcloud is installed, authenticated, and the Kubernetes Engine API is enabled for the project.\nDetail: %v",
 			listErr,
 		)
+	case listErr != nil:
+		status = gcpCachedInventoryStatus("GKE cluster(s)", len(clusters), listErr)
 	case len(clusters) == 0:
 		status = "No GKE clusters are currently available for this GCP project."
 	case selectedCluster == "":

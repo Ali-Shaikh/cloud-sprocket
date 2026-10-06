@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   gcpInventoryLoaded,
   gcpInventoryLoadedScopesKey,
+  gcpInventoryResultStillCurrent,
   gcpInventoryViewLoading,
   markGcpInventoryFetchError,
   shouldFetchGcpInventory,
@@ -104,5 +105,31 @@ describe("gcp inventory fetch gating", () => {
     );
     expect(gcpInventoryLoaded(workspace, "gce")).toBe(true);
     expect(gcpInventoryViewLoading(workspace, "gce", false)).toBe(false);
+  });
+
+  it("keeps a loaded tab idle while another scope is the one in flight", () => {
+    const workspace = {
+      gcpInventory: { gcs: { loaded: true, emptyReason: "none_found" } },
+    } as unknown as WorkspaceSnapshot;
+
+    expect(gcpInventoryViewLoading(workspace, "gcs", false)).toBe(false);
+    expect(gcpInventoryViewLoading(workspace, "gce", true)).toBe(true);
+  });
+});
+
+describe("gcpInventoryResultStillCurrent", () => {
+  const started = { profileId: "proj-a", lockedProfileId: "proj-a", refreshToken: 1 };
+
+  it("accepts a result from the same project and refresh", () => {
+    expect(gcpInventoryResultStillCurrent(started, { ...started })).toBe(true);
+  });
+
+  it("rejects a result after the project or a discovery refresh changes", () => {
+    expect(
+      gcpInventoryResultStillCurrent(started, { ...started, profileId: "proj-b" }),
+    ).toBe(false);
+    expect(
+      gcpInventoryResultStillCurrent(started, { ...started, refreshToken: 2 }),
+    ).toBe(false);
   });
 });

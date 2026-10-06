@@ -88,6 +88,24 @@ export function shouldFetchGcpInventory(
   return !gcpInventoryLoaded(workspace, scope);
 }
 
+export type GcpInventoryRequestStamp = {
+  profileId: string;
+  lockedProfileId: string;
+  refreshToken: number;
+};
+
+/** A late inventory result belongs to the workspace only when the stamp still matches. */
+export function gcpInventoryResultStillCurrent(
+  started: GcpInventoryRequestStamp,
+  current: GcpInventoryRequestStamp,
+): boolean {
+  return (
+    started.profileId === current.profileId &&
+    started.lockedProfileId === current.lockedProfileId &&
+    started.refreshToken === current.refreshToken
+  );
+}
+
 /** True while the tab should show a loading state instead of an empty list. */
 export function gcpInventoryViewLoading(
   workspace: WorkspaceSnapshot,

@@ -268,6 +268,11 @@ func TestMarkGcpInventory(t *testing.T) {
 	if workspace.GcpInventory["gce"].EmptyReason != models.InventoryEmptyError || !workspace.GcpInventory["gce"].Loaded {
 		t.Fatalf("error = %+v", workspace.GcpInventory["gce"])
 	}
+
+	markGcpInventory(&workspace, "gke", 3, models.InventoryEmptyError)
+	if workspace.GcpInventory["gke"].EmptyReason != models.InventoryEmptyError || !workspace.GcpInventory["gke"].Loaded {
+		t.Fatalf("cached rows = %+v, want loaded error", workspace.GcpInventory["gke"])
+	}
 }
 
 func TestGcpInventoryListEmptyReason(t *testing.T) {
@@ -280,7 +285,7 @@ func TestGcpInventoryListEmptyReason(t *testing.T) {
 	}{
 		{name: "genuine empty list", count: 0, err: nil, want: models.InventoryEmptyNoneFound},
 		{name: "list failure with no rows", count: 0, err: errBoom, want: models.InventoryEmptyError},
-		{name: "rows present ignore list error", count: 2, err: errBoom, want: models.InventoryEmptyNoneFound},
+		{name: "cached rows keep the list error", count: 2, err: errBoom, want: models.InventoryEmptyError},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

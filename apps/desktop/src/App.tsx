@@ -71,9 +71,11 @@ import {
 import {
   gcpInventoryLoadedScopesKey,
   gcpInventoryScopeForTab,
+  gcpInventoryResultStillCurrent,
   gcpInventoryViewLoading,
   markGcpInventoryFetchError,
   shouldFetchGcpInventory,
+  type GcpInventoryRequestStamp,
 } from "./lib/gcp-inventory";
 import { deployRailBadge } from "./lib/deploy-activity";
 import { isDiscoveryRefreshJob, isEC2ActionJob, isS3PresignJob } from "./lib/job-kind";
@@ -256,7 +258,6 @@ export default function App() {
     endAwsInventoryFetch,
     beginGcpInventoryFetch,
     endGcpInventoryFetch,
-    gcpInventoryLoading,
   } = useWorkspaceLoading();
   const {
     workspace,
@@ -455,6 +456,8 @@ export default function App() {
   const [azureInventoryRefreshToken, setAzureInventoryRefreshToken] = useState(0);
   const [awsInventoryRefreshToken, setAwsInventoryRefreshToken] = useState(0);
   const [gcpInventoryRefreshToken, setGcpInventoryRefreshToken] = useState(0);
+  const gcpInventoryRefreshTokenRef = useRef(gcpInventoryRefreshToken);
+  gcpInventoryRefreshTokenRef.current = gcpInventoryRefreshToken;
   const discoveryRefreshJobIdRef = useRef<string | undefined>(undefined);
   const loadWorkspaceRef = useRef<(snapshot: SessionSnapshot) => Promise<void>>(async () => undefined);
   const [loading, setLoading] = useState(true);
@@ -964,18 +967,41 @@ export default function App() {
     }
     gcpInventoryFetchedScopesRef.current.add(scope);
     beginGcpInventoryFetch();
+    const startedStamp: GcpInventoryRequestStamp = {
+      profileId: session.selectedProfileId ?? "",
+      lockedProfileId: session.lockedProfileId ?? "",
+      refreshToken: gcpInventoryRefreshToken,
+    };
+    const stampStillCurrent = () =>
+      gcpInventoryResultStillCurrent(startedStamp, {
+        profileId: sessionSnapshotRef.current.selectedProfileId ?? "",
+        lockedProfileId: sessionSnapshotRef.current.lockedProfileId ?? "",
+        refreshToken: gcpInventoryRefreshTokenRef.current,
+      });
     void requestWorkspaceSnapshot("gcp.inventory.get", { scope })
       .then((workspaceResult) => {
+        if (!stampStillCurrent()) {
+          return;
+        }
         startTransition(() => {
           setWorkspace((current) =>
-            mergeGcpInventoryScope(current, workspaceResult, scope),
+            stampStillCurrent()
+              ? mergeGcpInventoryScope(current, workspaceResult, scope)
+              : current,
           );
         });
       })
       .catch((error: unknown) => {
+        if (!stampStillCurrent()) {
+          return;
+        }
         const message = formatBackendError(error);
         startTransition(() => {
-          setWorkspace((current) => markGcpInventoryFetchError(current, scope, message));
+          setWorkspace((current) =>
+            stampStillCurrent()
+              ? markGcpInventoryFetchError(current, scope, message)
+              : current,
+          );
         });
         pushNotification(
           "error",
@@ -984,7 +1010,9 @@ export default function App() {
         );
       })
       .finally(() => {
-        gcpInventoryFetchedScopesRef.current.delete(scope);
+        if (stampStillCurrent()) {
+          gcpInventoryFetchedScopesRef.current.delete(scope);
+        }
         endGcpInventoryFetch();
       });
   }, [
@@ -1116,8 +1144,12 @@ export default function App() {
     (workspaceFetching ||
       !workspaceLoaded ||
       (gcpActiveInventoryScope
-        ? gcpInventoryViewLoading(workspace, gcpActiveInventoryScope, gcpInventoryLoading)
-        : gcpInventoryLoading));
+        ? gcpInventoryViewLoading(
+            workspace,
+            gcpActiveInventoryScope,
+            gcpInventoryFetchedScopesRef.current.has(gcpActiveInventoryScope),
+          )
+        : false));
 
   async function loadState(
     options: { refreshWorkspace?: boolean } = {},

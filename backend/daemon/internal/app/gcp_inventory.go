@@ -43,12 +43,24 @@ func gcpServiceIDForInventoryScope(scope string) string {
 }
 
 // gcpInventoryListEmptyReason is none_found for a genuine empty list, and
-// error when the list call failed and no rows (including cache) were returned.
+// error when the live list failed. Cached rows do not hide that failure.
 func gcpInventoryListEmptyReason(itemCount int, listErr error) models.InventoryEmptyReason {
-	if listErr != nil && itemCount == 0 {
+	if listErr != nil {
 		return models.InventoryEmptyError
 	}
-	return models.InventoryEmptyNoneFound
+	if itemCount == 0 {
+		return models.InventoryEmptyNoneFound
+	}
+	return ""
+}
+
+func gcpCachedInventoryStatus(resource string, count int, listErr error) string {
+	return fmt.Sprintf(
+		"Showing %d cached %s because the live list failed.\nDetail: %v",
+		count,
+		resource,
+		listErr,
+	)
 }
 
 func markGcpInventory(
@@ -64,7 +76,9 @@ func markGcpInventory(
 		workspace.GcpInventory = make(models.GcpInventoryStates)
 	}
 	state := models.InventoryScopeState{Loaded: true}
-	if itemCount == 0 {
+	if emptyReason == models.InventoryEmptyError {
+		state.EmptyReason = models.InventoryEmptyError
+	} else if itemCount == 0 {
 		if emptyReason == "" {
 			emptyReason = models.InventoryEmptyNoneFound
 		}

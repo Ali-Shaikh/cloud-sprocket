@@ -96,6 +96,8 @@ func (s *Service) enrichGcpFunctionsInventory(
 			"Could not list Cloud Functions.\nCheck that gcloud is installed, authenticated, and the Cloud Functions API is enabled for the project.\nDetail: %v",
 			listErr,
 		)
+	case listErr != nil:
+		status = gcpCachedInventoryStatus("Cloud Function(s)", len(functions), listErr)
 	case len(functions) == 0:
 		status = "No Cloud Functions are currently available for this GCP project."
 	default:

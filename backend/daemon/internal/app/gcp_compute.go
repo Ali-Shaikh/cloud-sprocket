@@ -112,6 +112,8 @@ func (s *Service) enrichGcpComputeInventory(
 			"Could not list Compute Engine instances.\nCheck that gcloud is installed, authenticated, and the active configuration has a project.\nDetail: %v",
 			listErr,
 		)
+	case listErr != nil:
+		status = gcpCachedInventoryStatus("Compute Engine instance(s)", len(instances), listErr)
 	case len(instances) == 0:
 		status = "No Compute Engine instances are currently available for this GCP project."
 	default:
