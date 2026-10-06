@@ -104,6 +104,8 @@ func TestSnapshotOptionsRoundTrip(t *testing.T) {
 		AzureResourceGroupSelection: true,
 		AzureDeferredInventory:      true,
 		AWSDeferredInventory:        true,
+		GcpDeferredInventory:        true,
+		GcpScope:                    "gcs",
 	}
 	internal := snapshotOptionsFromPort(in)
 	out := snapshotOptionsToPort(internal)

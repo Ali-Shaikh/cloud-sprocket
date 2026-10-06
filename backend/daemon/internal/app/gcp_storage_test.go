@@ -156,6 +156,10 @@ func TestEnrichGcpStorageInventorySuccess(t *testing.T) {
 	if !strings.Contains(workspace.GcpStorageStatusMessage, "Select one") {
 		t.Fatalf("status = %q", workspace.GcpStorageStatusMessage)
 	}
+	state := workspace.GcpInventory["gcs"]
+	if !state.Loaded || state.EmptyReason != "" {
+		t.Fatalf("inventory = %+v, want loaded with rows", state)
+	}
 }
 
 func TestEnrichGcpStorageInventoryListsObjectsWhenBucketSelected(t *testing.T) {
@@ -229,6 +233,10 @@ func TestEnrichGcpStorageInventorySurfacesListError(t *testing.T) {
 	if !strings.Contains(workspace.GcpStorageStatusMessage, "gcloud not authenticated") {
 		t.Fatalf("status missing detail: %q", workspace.GcpStorageStatusMessage)
 	}
+	state := workspace.GcpInventory["gcs"]
+	if !state.Loaded || state.EmptyReason != models.InventoryEmptyError {
+		t.Fatalf("inventory = %+v, want loaded error", state)
+	}
 }
 
 func TestEnrichGcpStorageInventorySkipsWhenDisabled(t *testing.T) {
@@ -250,6 +258,9 @@ func TestEnrichGcpStorageInventorySkipsWhenDisabled(t *testing.T) {
 	service.enrichGcpStorageInventory(&workspace, models.SessionSnapshot{}, nil)
 	if inv.calls != 0 {
 		t.Fatalf("ListBuckets calls = %d, want 0 when service disabled", inv.calls)
+	}
+	if workspace.GcpInventory["gcs"].Loaded {
+		t.Fatal("disabled service must not mark inventory loaded")
 	}
 }
 

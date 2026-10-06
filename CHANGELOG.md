@@ -9,6 +9,14 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Changed
+
+- GCP Cloud Storage, Compute Engine, Cloud Functions, and GKE inventories load
+  when the matching tab opens. `workspace.get` and discovery refresh no longer
+  run the four gcloud lists. An empty project is marked loaded, and a failed
+  list is an error so the tab does not keep spinning. A result from an earlier
+  project or refresh is ignored. Cached rows still show the live list failure.
+
 ## [0.9.18] - 2026-10-06
 
 ### Fixed

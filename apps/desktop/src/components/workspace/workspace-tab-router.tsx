@@ -207,6 +207,7 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     return (
       <GcpStorageView
         workspace={activeWorkspace}
+        inventoryLoading={props.gcpInventoryLoading}
         signedUrlResult={gcpSignedUrlResult}
         signedUrlStatus={gcpSignedUrlStatus}
         onRefresh={() => {
@@ -299,6 +300,7 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     return (
       <GcpComputeView
         workspace={activeWorkspace}
+        inventoryLoading={props.gcpInventoryLoading}
         onRefresh={() => {
           void refreshDiscovery();
         }}
@@ -330,6 +332,7 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     return (
       <GcpFunctionsView
         workspace={activeWorkspace}
+        inventoryLoading={props.gcpInventoryLoading}
         onRefresh={() => {
           void refreshDiscovery();
         }}
@@ -365,6 +368,7 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
     return (
       <GcpGkeView
         workspace={activeWorkspace}
+        inventoryLoading={props.gcpInventoryLoading}
         onRefresh={() => {
           void refreshDiscovery();
         }}

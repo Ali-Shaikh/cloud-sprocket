@@ -172,6 +172,7 @@ func (s *Service) enrichGcpStorageInventory(
 		workspace.GcpStorageObjectsNextToken = nextTok
 		workspace.GcpStorageObjectsHasMore = hasMore
 		workspace.GcpStorageStatusMessage = status
+		markGcpInventory(workspace, "gcs", len(buckets), gcpInventoryListEmptyReason(len(buckets), listErr))
 	})
 }
 
@@ -190,6 +191,8 @@ func gcpStorageStatusMessage(
 			"Could not list Cloud Storage buckets.\nCheck that gcloud is installed, authenticated, and the active configuration has a project.\nDetail: %v",
 			listErr,
 		)
+	case listErr != nil:
+		return gcpCachedInventoryStatus("Cloud Storage bucket(s)", len(buckets), listErr)
 	case len(buckets) == 0:
 		return "No Cloud Storage buckets are currently available for this GCP project."
 	case selected == "":

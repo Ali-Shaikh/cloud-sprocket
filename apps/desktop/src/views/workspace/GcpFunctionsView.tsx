@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Play, RefreshCw, Zap } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
+import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { InlineBanner } from "@/components/inline-banner";
 import { ResourceTable } from "@/components/inventory/resource-table";
 import { StatusPill } from "@/components/status-pill";
@@ -16,6 +17,7 @@ import {
   gcpFilterEmpty,
   gcpProjectEmpty,
 } from "@/lib/gcp-empty-copy";
+import { gcpInventoryLoadingLabel } from "@/lib/gcp-inventory";
 import { cn } from "@/lib/utils";
 import type {
   GcpCloudFunction,
@@ -33,6 +35,7 @@ export type GcpFunctionsViewProps = {
     generation: string,
     data: string,
   ) => Promise<GcpCloudFunctionInvokeResult>;
+  inventoryLoading?: boolean;
 };
 
 const fieldLabel =
@@ -53,6 +56,7 @@ export default function GcpFunctionsView({
   onRefresh,
   onSelectFunction,
   onInvoke,
+  inventoryLoading = false,
 }: GcpFunctionsViewProps) {
   const [filterText, setFilterText] = useState("");
   const [payload, setPayload] = useState('{\n  "name": "world"\n}');
@@ -151,7 +155,12 @@ export default function GcpFunctionsView({
         </div>
       </header>
 
-      {status ? (
+      {inventoryLoading && functions.length === 0 ? (
+        <InventoryLoadingState
+          variant="banner"
+          label={gcpInventoryLoadingLabel("gcf")}
+        />
+      ) : status ? (
         <InlineBanner
           tone={status.startsWith("Could not") ? "warning" : "info"}
           title={status.split("\n")[0] ?? status}
@@ -217,12 +226,19 @@ export default function GcpFunctionsView({
             }
           }}
           emptyState={
-            <EmptyState
-              icon={<Zap />}
-              {...(functions.length === 0
-                ? gcpProjectEmpty("functions", GCP_CREATE_HINTS.functions)
-                : gcpFilterEmpty("functions"))}
-            />
+            inventoryLoading && functions.length === 0 ? (
+              <InventoryLoadingState
+                label={gcpInventoryLoadingLabel("gcf")}
+                className="border-0 bg-transparent"
+              />
+            ) : (
+              <EmptyState
+                icon={<Zap />}
+                {...(functions.length === 0
+                  ? gcpProjectEmpty("functions", GCP_CREATE_HINTS.functions)
+                  : gcpFilterEmpty("functions"))}
+              />
+            )
           }
         />
       </section>

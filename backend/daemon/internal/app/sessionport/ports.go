@@ -45,6 +45,11 @@ type SnapshotOptions struct {
 	AzureDeferredInventory bool
 	// AWSDeferredInventory loads only S3 buckets and EC2 regions on workspace.get.
 	AWSDeferredInventory bool
+	// GcpDeferredInventory skips the four gcloud lists on workspace.get.
+	// Tabs load one scope via gcp.inventory.get.
+	GcpDeferredInventory bool
+	// GcpScope limits GCP enrichment to one inventory scope (gcs, gce, gcf, gke).
+	GcpScope string
 }
 
 // Session is the locked session read/update port. Implementations must hold a

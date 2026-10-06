@@ -15,6 +15,7 @@ import { filterResourceHits, type ResourceSearchHit } from "@/lib/resource-searc
 import { groupByServiceDomain } from "@/lib/service-domains";
 import { awsInventoryLoaded, awsInventoryScopeForTab } from "@/lib/aws-inventory";
 import { azureInventoryLoaded, azureInventoryScopeForTab } from "@/lib/azure-inventory";
+import { gcpInventoryLoaded, gcpInventoryScopeForTab } from "@/lib/gcp-inventory";
 import {
   authLabel,
   navItemForTab,
@@ -53,6 +54,8 @@ export type UseAppShellNavigationParams = {
   azureServiceInventoryLoading?: boolean;
   /** True while a deferred AWS inventory slice for the active tab is in flight. */
   awsServiceInventoryLoading?: boolean;
+  /** True while a deferred GCP inventory.get for the active tab is in flight. */
+  gcpServiceInventoryLoading?: boolean;
   logs: ActivityLogEntry[];
   requestProviderSwitch: (providerId: string) => void;
   refreshDiscovery: () => Promise<void>;
@@ -107,6 +110,7 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     workspaceLoaded,
     azureServiceInventoryLoading = false,
     awsServiceInventoryLoading = false,
+    gcpServiceInventoryLoading = false,
     logs,
     requestProviderSwitch,
     refreshDiscovery,
@@ -344,6 +348,15 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
             loading: awsServiceInventoryLoading,
           });
         }
+      } else if (session.lockedProviderId === "gcp") {
+        const scope = gcpInventoryScopeForTab(tab.tabId);
+        if (scope) {
+          item = applyDeferredNavCount(item, {
+            loaded: gcpInventoryLoaded(workspace, scope),
+            active: tab.tabId === activeWorkspaceTabId,
+            loading: gcpServiceInventoryLoading,
+          });
+        }
       }
       return { item, category: tabCategory(tab), domain: tab.domain };
     });
@@ -384,6 +397,7 @@ export function useAppShellNavigation(params: UseAppShellNavigationParams) {
     activeWorkspaceTabId,
     awsServiceInventoryLoading,
     azureServiceInventoryLoading,
+    gcpServiceInventoryLoading,
     pins,
     session.isLocked,
     session.lockedProviderId,

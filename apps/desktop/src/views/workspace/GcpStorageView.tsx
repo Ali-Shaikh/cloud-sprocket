@@ -16,6 +16,7 @@ import {
 import { open } from "@tauri-apps/plugin-dialog";
 
 import { EmptyState } from "@/components/empty-state";
+import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { InlineBanner } from "@/components/inline-banner";
 import { ResourceTable } from "@/components/inventory/resource-table";
 import {
@@ -44,6 +45,7 @@ import {
   gcpFilterEmpty,
   gcpProjectEmpty,
 } from "@/lib/gcp-empty-copy";
+import { gcpInventoryLoadingLabel } from "@/lib/gcp-inventory";
 import { notify } from "@/lib/notify";
 import {
   filterObjectsByKeyQuery,
@@ -72,6 +74,7 @@ export type GcpStorageViewProps = {
   signedUrlStatus?: string;
   loadMoreInFlight?: boolean;
   listingLoading?: boolean;
+  inventoryLoading?: boolean;
 };
 
 function copyToClipboard(value: string, label = "Copied to clipboard"): void {
@@ -119,6 +122,7 @@ export default function GcpStorageView({
   signedUrlStatus,
   loadMoreInFlight = false,
   listingLoading = false,
+  inventoryLoading = false,
 }: GcpStorageViewProps) {
   const [bucketFilter, setBucketFilter] = useState("");
   const [keySearch, setKeySearch] = useState("");
@@ -273,7 +277,12 @@ export default function GcpStorageView({
         </div>
       </header>
 
-      {status ? (
+      {inventoryLoading && buckets.length === 0 ? (
+        <InventoryLoadingState
+          variant="banner"
+          label={gcpInventoryLoadingLabel("gcs")}
+        />
+      ) : status ? (
         <InlineBanner
           tone={status.startsWith("Could not") ? "warning" : "info"}
           title={status.split("\n")[0] ?? status}
@@ -371,12 +380,19 @@ export default function GcpStorageView({
             }
           }}
           emptyState={
-            <EmptyState
-              icon={<HardDrive />}
-              {...(buckets.length === 0
-                ? gcpProjectEmpty("buckets", GCP_CREATE_HINTS.buckets)
-                : gcpFilterEmpty("buckets"))}
-            />
+            inventoryLoading && buckets.length === 0 ? (
+              <InventoryLoadingState
+                label={gcpInventoryLoadingLabel("gcs")}
+                className="border-0 bg-transparent"
+              />
+            ) : (
+              <EmptyState
+                icon={<HardDrive />}
+                {...(buckets.length === 0
+                  ? gcpProjectEmpty("buckets", GCP_CREATE_HINTS.buckets)
+                  : gcpFilterEmpty("buckets"))}
+              />
+            )
           }
         />
       </section>

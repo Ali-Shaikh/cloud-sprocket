@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Boxes, RefreshCw } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
+import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { InlineBanner } from "@/components/inline-banner";
 import { ResourceTable } from "@/components/inventory/resource-table";
 import { Button } from "@/components/ui/button";
@@ -14,12 +15,14 @@ import {
   gcpFilterEmpty,
   gcpProjectEmpty,
 } from "@/lib/gcp-empty-copy";
+import { gcpInventoryLoadingLabel } from "@/lib/gcp-inventory";
 import type { GcpGkeCluster, GcpGkeNodePool, WorkspaceSnapshot } from "@/types/backend";
 
 export type GcpGkeViewProps = {
   workspace: WorkspaceSnapshot;
   onRefresh: () => void;
   onSelectCluster?: (clusterName: string) => void;
+  inventoryLoading?: boolean;
 };
 
 /**
@@ -29,6 +32,7 @@ export default function GcpGkeView({
   workspace,
   onRefresh,
   onSelectCluster,
+  inventoryLoading = false,
 }: GcpGkeViewProps) {
   const [filterText, setFilterText] = useState("");
   const clusters = workspace.gcpGkeClusters ?? [];
@@ -81,7 +85,12 @@ export default function GcpGkeView({
         </Button>
       </header>
 
-      {status ? (
+      {inventoryLoading && clusters.length === 0 ? (
+        <InventoryLoadingState
+          variant="banner"
+          label={gcpInventoryLoadingLabel("gke")}
+        />
+      ) : status ? (
         <InlineBanner
           tone={status.startsWith("Could not") ? "warning" : "info"}
           title={status.split("\n")[0] ?? status}
@@ -147,12 +156,19 @@ export default function GcpGkeView({
             }
           }}
           emptyState={
-            <EmptyState
-              icon={<Boxes />}
-              {...(clusters.length === 0
-                ? gcpProjectEmpty("clusters", GCP_CREATE_HINTS.clusters)
-                : gcpFilterEmpty("clusters"))}
-            />
+            inventoryLoading && clusters.length === 0 ? (
+              <InventoryLoadingState
+                label={gcpInventoryLoadingLabel("gke")}
+                className="border-0 bg-transparent"
+              />
+            ) : (
+              <EmptyState
+                icon={<Boxes />}
+                {...(clusters.length === 0
+                  ? gcpProjectEmpty("clusters", GCP_CREATE_HINTS.clusters)
+                  : gcpFilterEmpty("clusters"))}
+              />
+            )
           }
         />
       </section>

@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Cpu, Play, RefreshCw, Square } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
+import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { InlineBanner } from "@/components/inline-banner";
 import { ResourceTable } from "@/components/inventory/resource-table";
 import {
@@ -25,6 +26,7 @@ import {
   gcpFilterEmpty,
   gcpProjectEmpty,
 } from "@/lib/gcp-empty-copy";
+import { gcpInventoryLoadingLabel } from "@/lib/gcp-inventory";
 import type { GcpComputeInstance, WorkspaceSnapshot } from "@/types/backend";
 
 export type GcpComputeViewProps = {
@@ -32,6 +34,7 @@ export type GcpComputeViewProps = {
   onRefresh: () => void;
   onStartInstance?: (instanceName: string, zone: string) => void;
   onStopInstance?: (instanceName: string, zone: string) => void;
+  inventoryLoading?: boolean;
 };
 
 function isRunning(status: string | undefined): boolean {
@@ -51,6 +54,7 @@ export default function GcpComputeView({
   onRefresh,
   onStartInstance,
   onStopInstance,
+  inventoryLoading = false,
 }: GcpComputeViewProps) {
   const [filterText, setFilterText] = useState("");
   const [selectedName, setSelectedName] = useState(workspace.selectedGcpComputeInstance ?? "");
@@ -177,7 +181,12 @@ export default function GcpComputeView({
         </div>
       </header>
 
-      {status ? (
+      {inventoryLoading && instances.length === 0 ? (
+        <InventoryLoadingState
+          variant="banner"
+          label={gcpInventoryLoadingLabel("gce")}
+        />
+      ) : status ? (
         <InlineBanner
           tone={status.startsWith("Could not") ? "warning" : "info"}
           title={status.split("\n")[0] ?? status}
@@ -241,12 +250,19 @@ export default function GcpComputeView({
             }
           }}
           emptyState={
-            <EmptyState
-              icon={<Cpu />}
-              {...(instances.length === 0
-                ? gcpProjectEmpty("instances", GCP_CREATE_HINTS.instances)
-                : gcpFilterEmpty("instances"))}
-            />
+            inventoryLoading && instances.length === 0 ? (
+              <InventoryLoadingState
+                label={gcpInventoryLoadingLabel("gce")}
+                className="border-0 bg-transparent"
+              />
+            ) : (
+              <EmptyState
+                icon={<Cpu />}
+                {...(instances.length === 0
+                  ? gcpProjectEmpty("instances", GCP_CREATE_HINTS.instances)
+                  : gcpFilterEmpty("instances"))}
+              />
+            )
           }
         />
       </section>

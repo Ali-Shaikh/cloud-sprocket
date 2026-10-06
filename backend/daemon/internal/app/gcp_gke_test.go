@@ -17,10 +17,12 @@ type stubGcpGkeInventory struct {
 	nodePools []models.GcpGkeNodePool
 	err       error
 	poolsErr  error
+	listCalls int
 	listPools int
 }
 
 func (s *stubGcpGkeInventory) ListClusters(context.Context, models.ProfileSummary) ([]models.GcpGkeCluster, error) {
+	s.listCalls++
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -66,6 +68,10 @@ func TestEnrichGcpGkeInventorySuccess(t *testing.T) {
 	}
 	if inv.listPools != 0 {
 		t.Fatalf("listPools calls = %d, want 0 without selection", inv.listPools)
+	}
+	state := workspace.GcpInventory["gke"]
+	if !state.Loaded || state.EmptyReason != "" {
+		t.Fatalf("inventory = %+v, want loaded with rows", state)
 	}
 }
 
@@ -126,6 +132,10 @@ func TestEnrichGcpGkeInventorySurfacesListError(t *testing.T) {
 	if !strings.Contains(workspace.GcpGkeStatusMessage, "gcloud not authenticated") {
 		t.Fatalf("status missing detail: %q", workspace.GcpGkeStatusMessage)
 	}
+	state := workspace.GcpInventory["gke"]
+	if !state.Loaded || state.EmptyReason != models.InventoryEmptyError {
+		t.Fatalf("inventory = %+v, want loaded error", state)
+	}
 }
 
 func TestEnrichGcpGkeInventorySkipsWhenDisabled(t *testing.T) {
@@ -147,5 +157,11 @@ func TestEnrichGcpGkeInventorySkipsWhenDisabled(t *testing.T) {
 	service.enrichGcpGkeInventory(&workspace, models.SessionSnapshot{}, nil)
 	if len(workspace.GcpGkeClusters) != 0 {
 		t.Fatalf("clusters = %+v, want empty when disabled", workspace.GcpGkeClusters)
+	}
+	if workspace.GcpInventory["gke"].Loaded {
+		t.Fatal("disabled service must not mark inventory loaded")
+	}
+	if inv.listCalls != 0 {
+		t.Fatalf("listCalls = %d, want 0 when disabled", inv.listCalls)
 	}
 }

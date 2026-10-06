@@ -5434,7 +5434,79 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
   };
   register("gcp.gke.selectCluster", handle_gcp_gke_selectCluster);
 
+  const handle_gcp_inventory_get : MockRpcHandler = async (params, method) => {
+    rebuildSessionDerivedState();
+    const scope = String(params.scope ?? "").trim().toLowerCase();
+    return Promise.resolve(buildMockGcpInventory(scope));
+  };
+  register("gcp.inventory.get", handle_gcp_inventory_get);
+
   return handlers;
+}
+
+function buildMockGcpInventory(scope: string): WorkspaceSnapshot {
+  const workspace = buildMockWorkspace();
+  const cleared: Partial<WorkspaceSnapshot> = {
+    selectedGcpStorageBucket: undefined,
+    gcpStoragePrefixFilter: undefined,
+    gcpStorageStatusMessage: undefined,
+    gcpStorageBuckets: [],
+    gcpStorageObjects: [],
+    gcpStorageObjectsNextToken: undefined,
+    gcpStorageObjectsHasMore: false,
+    selectedGcpComputeInstance: undefined,
+    gcpComputeStatusMessage: undefined,
+    gcpComputeInstances: [],
+    selectedGcpFunction: undefined,
+    gcpFunctionsStatusMessage: undefined,
+    gcpFunctions: [],
+    selectedGcpGkeCluster: undefined,
+    gcpGkeStatusMessage: undefined,
+    gcpGkeClusters: [],
+    gcpGkeNodePools: [],
+    gcpInventory: { [scope]: { loaded: true } },
+  };
+  switch (scope) {
+    case "gcs":
+      return {
+        ...workspace,
+        ...cleared,
+        selectedGcpStorageBucket: workspace.selectedGcpStorageBucket,
+        gcpStoragePrefixFilter: workspace.gcpStoragePrefixFilter,
+        gcpStorageStatusMessage: workspace.gcpStorageStatusMessage,
+        gcpStorageBuckets: workspace.gcpStorageBuckets,
+        gcpStorageObjects: workspace.gcpStorageObjects,
+        gcpStorageObjectsNextToken: workspace.gcpStorageObjectsNextToken,
+        gcpStorageObjectsHasMore: workspace.gcpStorageObjectsHasMore,
+      };
+    case "gce":
+      return {
+        ...workspace,
+        ...cleared,
+        selectedGcpComputeInstance: workspace.selectedGcpComputeInstance,
+        gcpComputeStatusMessage: workspace.gcpComputeStatusMessage,
+        gcpComputeInstances: workspace.gcpComputeInstances,
+      };
+    case "gcf":
+      return {
+        ...workspace,
+        ...cleared,
+        selectedGcpFunction: workspace.selectedGcpFunction,
+        gcpFunctionsStatusMessage: workspace.gcpFunctionsStatusMessage,
+        gcpFunctions: workspace.gcpFunctions,
+      };
+    case "gke":
+      return {
+        ...workspace,
+        ...cleared,
+        selectedGcpGkeCluster: workspace.selectedGcpGkeCluster,
+        gcpGkeStatusMessage: workspace.gcpGkeStatusMessage,
+        gcpGkeClusters: workspace.gcpGkeClusters,
+        gcpGkeNodePools: workspace.gcpGkeNodePools,
+      };
+    default:
+      throw new Error(`unknown GCP inventory scope ${scope}`);
+  }
 }
 
 const mockRpcHandlers = registerMockHandlers();

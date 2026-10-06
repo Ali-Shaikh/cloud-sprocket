@@ -38,6 +38,7 @@ import type {
   GcpComputeInstance,
   GcpCloudFunction,
   GcpGkeCluster,
+  GcpGkeNodePool,
   AwsS3PresignResult,
   AwsS3UploadResult,
   AwsSnsTopic,
@@ -160,6 +161,7 @@ export const emptyWorkspace: WorkspaceSnapshot = {
   gcpComputeInstances: [],
   gcpFunctions: [],
   gcpGkeClusters: [],
+  gcpGkeNodePools: [],
   s3Buckets: [],
   s3Objects: [],
   s3ObjectMetadata: [],
@@ -370,6 +372,10 @@ function normaliseGcpCloudFunction(fn: GcpCloudFunction): GcpCloudFunction {
 
 function normaliseGcpGkeCluster(cluster: GcpGkeCluster): GcpGkeCluster {
   return { ...cluster };
+}
+
+function normaliseGcpGkeNodePool(pool: GcpGkeNodePool): GcpGkeNodePool {
+  return { ...pool };
 }
 
 function normaliseS3Object(object: AwsS3Object): AwsS3Object {
@@ -856,6 +862,86 @@ function mergeAzureEntraInventory(
     azureEntraApps: normalised.azureEntraApps,
     azureEntraStatusMessage: normalised.azureEntraStatusMessage,
   });
+}
+
+function mergeGcpInventoryStates(
+  current: WorkspaceSnapshot["gcpInventory"],
+  incoming: NonNullable<WorkspaceSnapshot["gcpInventory"]>,
+): NonNullable<WorkspaceSnapshot["gcpInventory"]> {
+  const next: NonNullable<WorkspaceSnapshot["gcpInventory"]> = { ...(current ?? {}) };
+  for (const [scope, state] of Object.entries(incoming)) {
+    const previous = next[scope];
+    const merged = { ...state };
+    if (state.detailLoaded || previous?.detailLoaded) {
+      merged.detailLoaded = true;
+    } else {
+      delete merged.detailLoaded;
+    }
+    next[scope] = merged;
+  }
+  return next;
+}
+
+/**
+ * Overlay one gcp.inventory.get snapshot onto the open workspace.
+ * Replacing the whole snapshot would blank the other three GCP tabs.
+ */
+export function mergeGcpInventoryScope(
+  current: WorkspaceSnapshot,
+  incoming: WorkspaceSnapshot,
+  scope: string,
+): WorkspaceSnapshot {
+  const normalised = normaliseWorkspaceSnapshot(incoming);
+  let merged: WorkspaceSnapshot;
+  switch (scope) {
+    case "gcs":
+      merged = normaliseWorkspaceSnapshot({
+        ...current,
+        selectedGcpStorageBucket: normalised.selectedGcpStorageBucket,
+        gcpStoragePrefixFilter: normalised.gcpStoragePrefixFilter,
+        gcpStorageStatusMessage: normalised.gcpStorageStatusMessage,
+        gcpStorageBuckets: normalised.gcpStorageBuckets,
+        gcpStorageObjects: normalised.gcpStorageObjects,
+        gcpStorageObjectsNextToken: normalised.gcpStorageObjectsNextToken,
+        gcpStorageObjectsHasMore: normalised.gcpStorageObjectsHasMore,
+      });
+      break;
+    case "gce":
+      merged = normaliseWorkspaceSnapshot({
+        ...current,
+        selectedGcpComputeInstance: normalised.selectedGcpComputeInstance,
+        gcpComputeStatusMessage: normalised.gcpComputeStatusMessage,
+        gcpComputeInstances: normalised.gcpComputeInstances,
+      });
+      break;
+    case "gcf":
+      merged = normaliseWorkspaceSnapshot({
+        ...current,
+        selectedGcpFunction: normalised.selectedGcpFunction,
+        gcpFunctionsStatusMessage: normalised.gcpFunctionsStatusMessage,
+        gcpFunctions: normalised.gcpFunctions,
+      });
+      break;
+    case "gke":
+      merged = normaliseWorkspaceSnapshot({
+        ...current,
+        selectedGcpGkeCluster: normalised.selectedGcpGkeCluster,
+        gcpGkeStatusMessage: normalised.gcpGkeStatusMessage,
+        gcpGkeClusters: normalised.gcpGkeClusters,
+        gcpGkeNodePools: normalised.gcpGkeNodePools,
+      });
+      break;
+    default:
+      merged = normalised;
+  }
+  const incomingInventory = incoming.gcpInventory;
+  if (!incomingInventory) {
+    return merged;
+  }
+  return {
+    ...merged,
+    gcpInventory: mergeGcpInventoryStates(merged.gcpInventory, incomingInventory),
+  };
 }
 
 export function mergeAzureInventoryScope(
@@ -1347,6 +1433,7 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     selectedGcpGkeCluster: source.selectedGcpGkeCluster,
     gcpGkeStatusMessage: source.gcpGkeStatusMessage,
     gcpGkeClusters: normaliseArray(source.gcpGkeClusters).map(normaliseGcpGkeCluster),
+    gcpGkeNodePools: normaliseArray(source.gcpGkeNodePools).map(normaliseGcpGkeNodePool),
     s3Buckets: normaliseArray(source.s3Buckets).map(normaliseS3Bucket),
     s3Objects: normaliseArray(source.s3Objects).map(normaliseS3Object),
     s3ObjectsNextToken: source.s3ObjectsNextToken,
