@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { startTransition, useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
+import { startTransition, useCallback, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 
 import { backendRequest } from "@/lib/backend";
 import {
@@ -495,18 +495,24 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setSnsActionStatus, setWorkspace]);
 
+  const snsPublishSerialRef = useRef(0);
   const publishSNSTopic = useCallback(
     async (topicArn: string, message: string): Promise<boolean> => {
+      const serial = ++snsPublishSerialRef.current;
       setSnsActionStatus("Publishing message to the topic.");
       try {
         const result = await backendRequest<{ summary: string }>("aws.sns.publish", {
           topicArn,
           message,
         });
-        setSnsActionStatus(result.summary || "Message published.");
+        if (serial === snsPublishSerialRef.current) {
+          setSnsActionStatus(result.summary || "Message published.");
+        }
         return true;
       } catch (error: unknown) {
-        setSnsActionStatus(error instanceof Error ? error.message : String(error));
+        if (serial === snsPublishSerialRef.current) {
+          setSnsActionStatus(error instanceof Error ? error.message : String(error));
+        }
         return false;
       }
     },

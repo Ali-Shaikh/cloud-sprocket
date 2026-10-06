@@ -431,6 +431,11 @@ describe("SNSView", () => {
       "alert draft",
     );
 
+    rerender(view("arn:aws:sns:us-east-1:000000000000:order-events"));
+    expect(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Publish" })).toBeDisabled();
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Publish" }));
+    expect(onPublish).toHaveBeenCalledTimes(2);
+
     await act(async () => {
       pending[0]?.(true);
     });

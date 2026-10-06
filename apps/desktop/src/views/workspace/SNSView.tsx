@@ -124,9 +124,11 @@ export default function SNSView({
   const [filterText, setFilterText] = useState("");
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [publishBody, setPublishBody] = useState(defaultSnsPublishBody);
-  const [publishInFlightArn, setPublishInFlightArn] = useState("");
+  const [publishInFlightArns, setPublishInFlightArns] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   // Bumped when the dialog closes so a late response cannot close or reset a later draft.
-  // The in-flight lock is the topic that was sent, so another topic can still be published.
+  // Each topic keeps its own lock until that request finishes.
   const publishAttemptRef = useRef(0);
   const [newTopicName, setNewTopicName] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -148,8 +150,9 @@ export default function SNSView({
   const selectedTopic = workspace.snsTopics.find(
     (topic) => topic.topicArn === workspace.selectedSnsTopicArn,
   );
-  const selectedPublishInFlight =
-    publishInFlightArn !== "" && publishInFlightArn === selectedTopic?.topicArn;
+  const selectedPublishInFlight = Boolean(
+    selectedTopic?.topicArn && publishInFlightArns.has(selectedTopic.topicArn),
+  );
 
   const filteredTopics = useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -604,9 +607,20 @@ export default function SNSView({
                 const body = publishBody;
                 const topicArn = selectedTopic.topicArn;
                 const attempt = publishAttemptRef.current;
-                setPublishInFlightArn(topicArn);
+                setPublishInFlightArns((current) => {
+                  const next = new Set(current);
+                  next.add(topicArn);
+                  return next;
+                });
                 const releaseTopic = () => {
-                  setPublishInFlightArn((current) => (current === topicArn ? "" : current));
+                  setPublishInFlightArns((current) => {
+                    if (!current.has(topicArn)) {
+                      return current;
+                    }
+                    const next = new Set(current);
+                    next.delete(topicArn);
+                    return next;
+                  });
                 };
                 void Promise.resolve(onPublish(topicArn, body)).then(
                   (ok) => {
