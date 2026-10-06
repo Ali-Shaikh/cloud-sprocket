@@ -232,6 +232,8 @@ func buildGcpActionCapabilities(
 		"storage": {
 			gcpActionCapability(session, profile, "uploadObject", "Upload object"),
 			gcpActionCapability(session, profile, "deleteObject", "Delete object"),
+			gcpActionCapability(session, profile, "createBucket", "Create bucket"),
+			gcpActionCapability(session, profile, "copyObject", "Copy object"),
 		},
 		"compute": {
 			gcpActionCapability(session, profile, "startInstance", "Start instance"),

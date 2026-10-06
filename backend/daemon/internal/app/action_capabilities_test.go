@@ -192,6 +192,8 @@ func TestBuildGcpActionCapabilitiesWriteModeOn(t *testing.T) {
 	}{
 		{"storage", "uploadObject"},
 		{"storage", "deleteObject"},
+		{"storage", "createBucket"},
+		{"storage", "copyObject"},
 		{"compute", "startInstance"},
 		{"compute", "stopInstance"},
 		{"functions", "invoke"},

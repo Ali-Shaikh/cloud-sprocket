@@ -1559,6 +1559,8 @@ function buildMockActionCapabilities(
       storage: [
         mockWriteModeCapability("uploadObject", "Upload object", writesEnabled),
         mockWriteModeCapability("deleteObject", "Delete object", writesEnabled),
+        mockWriteModeCapability("createBucket", "Create bucket", writesEnabled),
+        mockWriteModeCapability("copyObject", "Copy object", writesEnabled),
       ],
       compute: [
         mockWriteModeCapability("startInstance", "Start instance", writesEnabled),
@@ -4701,6 +4703,61 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
     return Promise.resolve(buildMockWorkspace());
   };
   register("gcp.storage.loadMoreObjects", handle_gcp_storage_loadMoreObjects);
+
+  const handle_gcp_storage_createBucket : MockRpcHandler = async (params, method) => {
+    if (!mockState.session.gcpWriteModeEnabled) {
+      return Promise.reject(
+        new Error("Turn on write mode from the top bar to run mutating actions."),
+      );
+    }
+    const bucketName = String(params.bucketName ?? "").trim();
+    const location = String(params.location ?? "").trim();
+    if (!bucketName || !location) {
+      return Promise.reject(new Error("bucket name and location are required"));
+    }
+    if (!mockGcpStorageBuckets.some((bucket) => bucket.name === bucketName)) {
+      mockGcpStorageBuckets.push({
+        name: bucketName,
+        location,
+        storageClass: "STANDARD",
+        createdAt: new Date().toISOString(),
+        summary: "Created in this session.",
+      });
+    }
+    mockState.session.selectedGcpStorageBucket = bucketName;
+    mockState.session.gcpStoragePrefixFilter = "";
+    mockGcpStorageObjects = [];
+    appendLog("success", `Created Cloud Storage bucket gs://${bucketName} in ${location}.`);
+    return Promise.resolve(buildMockWorkspace());
+  };
+  register("gcp.storage.createBucket", handle_gcp_storage_createBucket);
+
+  const handle_gcp_storage_copyObject : MockRpcHandler = async (params, method) => {
+    if (!mockState.session.gcpWriteModeEnabled) {
+      return Promise.reject(
+        new Error("Turn on write mode from the top bar to run mutating actions."),
+      );
+    }
+    const sourceObjectKey = String(params.sourceObjectKey ?? "").trim();
+    const destinationObjectKey = String(params.destinationObjectKey ?? "").trim();
+    if (!sourceObjectKey || !destinationObjectKey || sourceObjectKey === destinationObjectKey) {
+      return Promise.reject(new Error("destination object key must differ from the source"));
+    }
+    if (!mockGcpStorageObjects.some((entry) => entry.key === destinationObjectKey)) {
+      mockGcpStorageObjects = [
+        ...mockGcpStorageObjects,
+        {
+          key: destinationObjectKey,
+          size: "12 B",
+          updated: new Date().toISOString(),
+          contentType: "application/octet-stream",
+        },
+      ];
+    }
+    appendLog("success", `Copied Cloud Storage object ${sourceObjectKey} to ${destinationObjectKey}.`);
+    return Promise.resolve(buildMockWorkspace());
+  };
+  register("gcp.storage.copyObject", handle_gcp_storage_copyObject);
 
   const handle_gcp_storage_uploadObject : MockRpcHandler = async (params, method) => {
     if (!mockState.session.gcpWriteModeEnabled) {

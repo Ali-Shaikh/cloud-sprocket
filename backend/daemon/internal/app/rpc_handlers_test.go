@@ -177,6 +177,8 @@ var expectedRPCMethods = []string{
 	"gcp.functions.selectFunction",
 	"gcp.gke.selectCluster",
 	"gcp.inventory.get",
+	"gcp.storage.copyObject",
+	"gcp.storage.createBucket",
 	"gcp.storage.deleteObject",
 	"gcp.storage.loadMoreObjects",
 	"gcp.storage.selectBucket",

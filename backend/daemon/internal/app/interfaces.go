@@ -234,6 +234,8 @@ type GcpStorageInventory interface {
 	ListObjects(ctx context.Context, profile models.ProfileSummary, bucketName string, prefix string, pageToken string) (models.GcpStorageObjectListPage, error)
 	UploadObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, sourcePath string) (models.GcpStorageUploadResult, error)
 	DeleteObject(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string) error
+	CreateBucket(ctx context.Context, profile models.ProfileSummary, bucketName string, location string) (models.GcpStorageCreateBucketResult, error)
+	CopyObject(ctx context.Context, profile models.ProfileSummary, bucketName string, sourceObjectKey string, destinationObjectKey string) (models.GcpStorageCopyObjectResult, error)
 	// SignURL issues a short-lived read URL via gcloud storage sign-url (no write mode).
 	SignURL(ctx context.Context, profile models.ProfileSummary, bucketName string, objectKey string, durationSeconds int) (models.GcpStorageSignURLResult, error)
 }

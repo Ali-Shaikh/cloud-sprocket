@@ -251,6 +251,26 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
             },
           );
         }}
+        onCreateBucket={(bucketName, location) => {
+          void mutateWorkspaceSelection(
+            "gcp.storage.createBucket",
+            { bucketName, location },
+            {
+              immediate: true,
+              errorTitle: "Failed to create Cloud Storage bucket",
+            },
+          );
+        }}
+        onCopyObject={(sourceObjectKey, destinationObjectKey) => {
+          void mutateWorkspaceSelection(
+            "gcp.storage.copyObject",
+            { sourceObjectKey, destinationObjectKey },
+            {
+              immediate: true,
+              errorTitle: "Failed to copy Cloud Storage object",
+            },
+          );
+        }}
         onUploadObject={(sourcePath, objectKey) => {
           void backendRequest<{ workspace: WorkspaceSnapshot }>("gcp.storage.uploadObject", {
             sourcePath,

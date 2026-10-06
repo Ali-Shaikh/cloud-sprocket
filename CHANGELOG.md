@@ -9,6 +9,13 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Added
+
+- Cloud Storage can create a bucket and copy an object inside the selected
+  bucket. Both actions stay behind GCP write mode. An empty folder marker is
+  not included: current `gcloud storage` cannot create the zero-byte object
+  that other tools use for an empty prefix.
+
 ## [0.9.19] - 2026-10-06
 
 ### Changed
