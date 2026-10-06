@@ -213,6 +213,7 @@ func (s *Service) enrichGcpGkeInventory(
 		workspace.SelectedGcpGkeCluster = selectedCluster
 		workspace.GcpGkeNodePools = pools
 		workspace.GcpGkeStatusMessage = status
+		markGcpInventory(workspace, "gke", len(clusters), gcpInventoryListEmptyReason(len(clusters), listErr))
 	})
 }
 

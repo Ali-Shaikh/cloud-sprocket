@@ -68,6 +68,13 @@ import {
   markAzureInventoryFetchError,
   shouldFetchAzureInventory,
 } from "./lib/azure-inventory";
+import {
+  gcpInventoryLoadedScopesKey,
+  gcpInventoryScopeForTab,
+  gcpInventoryViewLoading,
+  markGcpInventoryFetchError,
+  shouldFetchGcpInventory,
+} from "./lib/gcp-inventory";
 import { deployRailBadge } from "./lib/deploy-activity";
 import { isDiscoveryRefreshJob, isEC2ActionJob, isS3PresignJob } from "./lib/job-kind";
 import { cycleTabId, isTypingTarget } from "./lib/keyboard-shortcuts";
@@ -212,6 +219,7 @@ import {
   mergeAzureQueuesSelection,
   mergeAwsS3Selection,
   mergeAzureInventoryScope,
+  mergeGcpInventoryScope,
   mergeAwsInventoryScope,
   formatBackendError,
   frontDoorTopologyLoaded,
@@ -246,6 +254,9 @@ export default function App() {
     endAzureInventoryFetch,
     beginAwsInventoryFetch,
     endAwsInventoryFetch,
+    beginGcpInventoryFetch,
+    endGcpInventoryFetch,
+    gcpInventoryLoading,
   } = useWorkspaceLoading();
   const {
     workspace,
@@ -439,8 +450,11 @@ export default function App() {
   const azureInventoryFetchedScopesRef = useRef(new Set<string>());
   const azureInventoryTabRef = useRef(activeWorkspaceTabId);
   const awsInventoryFetchedScopesRef = useRef(new Set<string>());
+  const gcpInventoryFetchedScopesRef = useRef(new Set<string>());
+  const gcpInventoryTabRef = useRef(activeWorkspaceTabId);
   const [azureInventoryRefreshToken, setAzureInventoryRefreshToken] = useState(0);
   const [awsInventoryRefreshToken, setAwsInventoryRefreshToken] = useState(0);
+  const [gcpInventoryRefreshToken, setGcpInventoryRefreshToken] = useState(0);
   const discoveryRefreshJobIdRef = useRef<string | undefined>(undefined);
   const loadWorkspaceRef = useRef<(snapshot: SessionSnapshot) => Promise<void>>(async () => undefined);
   const [loading, setLoading] = useState(true);
@@ -572,8 +586,10 @@ export default function App() {
               discoveryRefreshJobIdRef.current = undefined;
               azureInventoryFetchedScopesRef.current.clear();
               awsInventoryFetchedScopesRef.current.clear();
+              gcpInventoryFetchedScopesRef.current.clear();
               setAzureInventoryRefreshToken((token) => token + 1);
               setAwsInventoryRefreshToken((token) => token + 1);
+              setGcpInventoryRefreshToken((token) => token + 1);
             }
           } else if (
             isDiscoveryRefresh &&
@@ -586,8 +602,10 @@ export default function App() {
               resetWorkspaceFetch();
               azureInventoryFetchedScopesRef.current.clear();
               awsInventoryFetchedScopesRef.current.clear();
+              gcpInventoryFetchedScopesRef.current.clear();
               setAzureInventoryRefreshToken((token) => token + 1);
               setAwsInventoryRefreshToken((token) => token + 1);
+              setGcpInventoryRefreshToken((token) => token + 1);
               void loadWorkspaceRef.current(sessionSnapshotRef.current);
             } else {
               resetWorkspaceFetch();
@@ -697,6 +715,7 @@ export default function App() {
         if (method === "session.unlock") {
           azureInventoryFetchedScopesRef.current.clear();
           awsInventoryFetchedScopesRef.current.clear();
+          gcpInventoryFetchedScopesRef.current.clear();
           setActiveWorkspaceTabId("overview");
           setLambdaInvokeResult(null);
           setLambdaInvokeInFlight(false);
@@ -864,10 +883,12 @@ export default function App() {
   });
   const { refreshAzureFrontDoorTopology, refreshAzureWafPolicyConfig } = azureActions;
   const azureLoadedScopesKey = azureInventoryLoadedScopesKey(workspace);
+  const gcpLoadedScopesKey = gcpInventoryLoadedScopesKey(workspace);
 
   useEffect(() => {
     azureInventoryFetchedScopesRef.current.clear();
     awsInventoryFetchedScopesRef.current.clear();
+    gcpInventoryFetchedScopesRef.current.clear();
   }, [session.lockedProfileId, session.selectedProfileId, session.isLocked]);
 
   useEffect(() => {
@@ -921,6 +942,59 @@ export default function App() {
     workspaceLoaded,
     azureInventoryRefreshToken,
     azureLoadedScopesKey,
+  ]);
+
+  useEffect(() => {
+    if (
+      !session.isLocked ||
+      session.lockedProviderId !== "gcp" ||
+      !workspaceLoaded
+    ) {
+      return;
+    }
+    const scope = gcpInventoryScopeForTab(activeWorkspaceTabId);
+    const tabBecameActive = gcpInventoryTabRef.current !== activeWorkspaceTabId;
+    gcpInventoryTabRef.current = activeWorkspaceTabId;
+    if (!scope) {
+      return;
+    }
+    const inFlight = gcpInventoryFetchedScopesRef.current.has(scope);
+    if (!shouldFetchGcpInventory(workspace, scope, inFlight, tabBecameActive)) {
+      return;
+    }
+    gcpInventoryFetchedScopesRef.current.add(scope);
+    beginGcpInventoryFetch();
+    void requestWorkspaceSnapshot("gcp.inventory.get", { scope })
+      .then((workspaceResult) => {
+        startTransition(() => {
+          setWorkspace((current) =>
+            mergeGcpInventoryScope(current, workspaceResult, scope),
+          );
+        });
+      })
+      .catch((error: unknown) => {
+        const message = formatBackendError(error);
+        startTransition(() => {
+          setWorkspace((current) => markGcpInventoryFetchError(current, scope, message));
+        });
+        pushNotification(
+          "error",
+          "Could not load GCP service inventory",
+          message,
+        );
+      })
+      .finally(() => {
+        gcpInventoryFetchedScopesRef.current.delete(scope);
+        endGcpInventoryFetch();
+      });
+  }, [
+    activeWorkspaceTabId,
+    session.isLocked,
+    session.lockedProviderId,
+    session.selectedProfileId,
+    workspaceLoaded,
+    gcpInventoryRefreshToken,
+    gcpLoadedScopesKey,
   ]);
 
   useEffect(() => {
@@ -1036,6 +1110,14 @@ export default function App() {
   const awsServiceInventoryLoading =
     session.lockedProviderId === "aws" &&
     (awsInventoryLoading || workspaceFetching || !workspaceLoaded);
+  const gcpActiveInventoryScope = gcpInventoryScopeForTab(activeWorkspaceTabId);
+  const gcpServiceInventoryLoading =
+    session.lockedProviderId === "gcp" &&
+    (workspaceFetching ||
+      !workspaceLoaded ||
+      (gcpActiveInventoryScope
+        ? gcpInventoryViewLoading(workspace, gcpActiveInventoryScope, gcpInventoryLoading)
+        : gcpInventoryLoading));
 
   async function loadState(
     options: { refreshWorkspace?: boolean } = {},
@@ -1084,6 +1166,7 @@ export default function App() {
     }
     azureInventoryFetchedScopesRef.current.clear();
     awsInventoryFetchedScopesRef.current.clear();
+    gcpInventoryFetchedScopesRef.current.clear();
     beginWorkspaceFetch();
     try {
       const workspaceResult = await requestWorkspaceSnapshot("workspace.get");
@@ -1252,6 +1335,7 @@ export default function App() {
     workspaceLoaded,
     azureServiceInventoryLoading,
     awsServiceInventoryLoading,
+    gcpServiceInventoryLoading,
     logs,
     requestProviderSwitch,
     refreshDiscovery,
@@ -1421,6 +1505,7 @@ export default function App() {
     hiddenResourceHits,
     hiddenResourceEnablingServiceId,
     onEnableHiddenService: enableHiddenService,
+    gcpInventoryLoading: gcpServiceInventoryLoading,
   };
 
   const awsActionStatus = useMemo<AwsActionStatusContextValue>(

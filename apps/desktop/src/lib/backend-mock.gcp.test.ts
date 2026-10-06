@@ -58,6 +58,7 @@ describe("backend mock GCP multi-cloud smoke", () => {
     expect(workspace.gcpComputeInstances?.length).toBeGreaterThan(0);
     expect(workspace.gcpFunctions?.length).toBeGreaterThan(0);
     expect(workspace.gcpGkeClusters?.length).toBeGreaterThan(0);
+    expect(workspace.gcpInventory).toBeUndefined();
     expect(workspace.gcpWriteCapable).toBe(true);
     expect(workspace.gcpWritesEnabled).toBe(false);
     expect(workspace.actionCapabilities?.storage?.some((c) => c.actionId === "uploadObject")).toBe(
@@ -69,6 +70,13 @@ describe("backend mock GCP multi-cloud smoke", () => {
     expect(workspace.actionCapabilities?.functions?.some((c) => c.actionId === "invoke")).toBe(
       true,
     );
+
+    const scoped = await backendRequest<WorkspaceSnapshot>("gcp.inventory.get", { scope: "gcs" });
+    expect(scoped.gcpInventory?.gcs?.loaded).toBe(true);
+    expect(scoped.gcpStorageBuckets?.length).toBeGreaterThan(0);
+    expect(scoped.gcpComputeInstances ?? []).toEqual([]);
+    expect(scoped.gcpFunctions ?? []).toEqual([]);
+    expect(scoped.gcpGkeClusters ?? []).toEqual([]);
   });
 
   it("signs a GCS URL without write mode and invokes functions when write mode is on", async () => {

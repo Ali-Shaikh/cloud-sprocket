@@ -210,6 +210,11 @@ func (s *Service) handleWorkspaceGet(ctx context.Context, notifier Notifier) (an
 		opts.awsDeferredInventory = true
 		opts.skipAzureInventory = true
 	}
+	if session.CurrentProviderID == "gcp" {
+		opts.gcpDeferredInventory = true
+		opts.skipAwsInventory = true
+		opts.skipAzureInventory = true
+	}
 	return s.buildWorkspaceSnapshotOpts(ctx, snapshot, session, opts), nil
 }
 

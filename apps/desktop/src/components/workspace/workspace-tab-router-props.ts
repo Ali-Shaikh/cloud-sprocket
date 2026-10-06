@@ -48,6 +48,8 @@ export type WorkspaceTabRouterProps = {
   hiddenResourceHits: HiddenResourceHit[];
   hiddenResourceEnablingServiceId: string | null;
   onEnableHiddenService: (hit: HiddenResourceHit) => Promise<void>;
+  /** True while the active GCP tab is waiting for gcp.inventory.get. */
+  gcpInventoryLoading?: boolean;
 };
 
 export type AwsWorkspaceTabsProps = WorkspaceTabRouterProps & {

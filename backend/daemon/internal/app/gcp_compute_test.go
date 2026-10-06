@@ -17,6 +17,7 @@ type stubGcpComputeInventory struct {
 	err        error
 	startErr   error
 	stopErr    error
+	listCalls  int
 	startCalls int
 	stopCalls  int
 	lastName   string
@@ -24,6 +25,7 @@ type stubGcpComputeInventory struct {
 }
 
 func (s *stubGcpComputeInventory) ListInstances(context.Context, models.ProfileSummary) ([]models.GcpComputeInstance, error) {
+	s.listCalls++
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -67,6 +69,10 @@ func TestEnrichGcpComputeInventorySuccess(t *testing.T) {
 	if !strings.Contains(workspace.GcpComputeStatusMessage, "Loaded 2") {
 		t.Fatalf("status = %q", workspace.GcpComputeStatusMessage)
 	}
+	state := workspace.GcpInventory["gce"]
+	if !state.Loaded || state.EmptyReason != "" {
+		t.Fatalf("inventory = %+v, want loaded with rows", state)
+	}
 }
 
 func TestEnrichGcpComputeInventorySurfacesListError(t *testing.T) {
@@ -91,6 +97,10 @@ func TestEnrichGcpComputeInventorySurfacesListError(t *testing.T) {
 	if !strings.Contains(workspace.GcpComputeStatusMessage, "gcloud not authenticated") {
 		t.Fatalf("status missing detail: %q", workspace.GcpComputeStatusMessage)
 	}
+	state := workspace.GcpInventory["gce"]
+	if !state.Loaded || state.EmptyReason != models.InventoryEmptyError {
+		t.Fatalf("inventory = %+v, want loaded error", state)
+	}
 }
 
 func TestEnrichGcpComputeInventorySkipsWhenDisabled(t *testing.T) {
@@ -112,6 +122,9 @@ func TestEnrichGcpComputeInventorySkipsWhenDisabled(t *testing.T) {
 	service.enrichGcpComputeInventory(&workspace, models.SessionSnapshot{}, nil)
 	if len(workspace.GcpComputeInstances) != 0 {
 		t.Fatalf("instances = %+v, want empty when disabled", workspace.GcpComputeInstances)
+	}
+	if workspace.GcpInventory["gce"].Loaded {
+		t.Fatal("disabled service must not mark inventory loaded")
 	}
 }
 

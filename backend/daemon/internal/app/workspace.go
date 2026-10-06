@@ -41,6 +41,12 @@ type workspaceSnapshotOptions struct {
 	// awsDeferredInventory loads only S3 buckets and EC2 regions on workspace.get.
 	// Other AWS services load on demand via aws.inventory.get per tab scope.
 	awsDeferredInventory bool
+	// gcpDeferredInventory skips the four gcloud lists on workspace.get.
+	// Tabs load one scope via gcp.inventory.get. Selection and write handlers
+	// keep the full enrichGcpWorkspace path.
+	gcpDeferredInventory bool
+	// gcpScope limits GCP enrichment to one inventory scope (gcs, gce, gcf, gke).
+	gcpScope string
 }
 
 // buildWorkspaceSnapshot rebuilds a full inventory for the current provider.
@@ -165,7 +171,13 @@ func (s *Service) buildWorkspaceSnapshotOpts(
 	if workspace.Provider != nil &&
 		workspace.Provider.ProviderID == "gcp" &&
 		s.isProviderEnabled("gcp") {
-		s.enrichGcpWorkspace(&workspace, session)
+		if opts.gcpDeferredInventory {
+			// Lists load per tab via gcp.inventory.get.
+		} else if scope := strings.TrimSpace(opts.gcpScope); scope != "" {
+			s.enrichGcpInventoryScope(&workspace, session, scope)
+		} else {
+			s.enrichGcpWorkspace(&workspace, session)
+		}
 	}
 
 	return workspace

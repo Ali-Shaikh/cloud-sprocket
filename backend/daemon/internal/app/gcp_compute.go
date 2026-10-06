@@ -125,6 +125,7 @@ func (s *Service) enrichGcpComputeInventory(
 		workspace.GcpComputeInstances = instances
 		workspace.SelectedGcpComputeInstance = selected
 		workspace.GcpComputeStatusMessage = status
+		markGcpInventory(workspace, "gce", len(instances), gcpInventoryListEmptyReason(len(instances), listErr))
 	})
 }
 

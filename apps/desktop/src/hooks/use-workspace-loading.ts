@@ -12,6 +12,7 @@ export function useWorkspaceLoading() {
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
   const azureInventory = useFetchDepth();
   const awsInventory = useFetchDepth();
+  const gcpInventory = useFetchDepth();
 
   const beginWorkspaceFetch = useCallback(() => {
     workspaceDepthRef.current += 1;
@@ -42,6 +43,7 @@ export function useWorkspaceLoading() {
     setWorkspaceLoaded,
     azureInventoryLoading: azureInventory.loading,
     awsInventoryLoading: awsInventory.loading,
+    gcpInventoryLoading: gcpInventory.loading,
     beginWorkspaceFetch,
     endWorkspaceFetch,
     resetWorkspaceFetch,
@@ -49,5 +51,7 @@ export function useWorkspaceLoading() {
     endAzureInventoryFetch: azureInventory.end,
     beginAwsInventoryFetch: awsInventory.begin,
     endAwsInventoryFetch: awsInventory.end,
+    beginGcpInventoryFetch: gcpInventory.begin,
+    endGcpInventoryFetch: gcpInventory.end,
   };
 }

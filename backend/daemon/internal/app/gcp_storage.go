@@ -172,6 +172,7 @@ func (s *Service) enrichGcpStorageInventory(
 		workspace.GcpStorageObjectsNextToken = nextTok
 		workspace.GcpStorageObjectsHasMore = hasMore
 		workspace.GcpStorageStatusMessage = status
+		markGcpInventory(workspace, "gcs", len(buckets), gcpInventoryListEmptyReason(len(buckets), listErr))
 	})
 }
 

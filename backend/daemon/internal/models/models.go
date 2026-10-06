@@ -81,6 +81,10 @@ type InventoryScopeState struct {
 // AzureInventoryStates is per-scope loaded state for deferred Azure inventory.
 type AzureInventoryStates map[string]InventoryScopeState
 
+// GcpInventoryStates is per-scope loaded state for deferred GCP inventory.
+// Scopes are gcs, gce, gcf, and gke.
+type GcpInventoryStates map[string]InventoryScopeState
+
 // ActionCapability describes whether a single mutating UI action is available
 // and why it may be disabled (write mode, profile, runtime reachability).
 type ActionCapability struct {
@@ -1644,6 +1648,9 @@ type WorkspaceSnapshot struct {
 	GcpWriteCapable     bool `json:"gcpWriteCapable"`
 	GcpWriteModeEnabled bool `json:"gcpWriteModeEnabled"`
 	GcpWritesEnabled    bool `json:"gcpWritesEnabled"`
+	// GcpInventory reports which deferred GCP scopes have been fetched.
+	// Loaded is set by the daemon. The desktop must not infer it from status copy.
+	GcpInventory GcpInventoryStates `json:"gcpInventory,omitempty"`
 	// GCP Compute Engine inventory (foundation slice).
 	SelectedGcpComputeInstance string               `json:"selectedGcpComputeInstance,omitempty"`
 	GcpComputeStatusMessage    string               `json:"gcpComputeStatusMessage,omitempty"`

@@ -109,6 +109,7 @@ func (s *Service) enrichGcpFunctionsInventory(
 		workspace.GcpFunctions = functions
 		workspace.SelectedGcpFunction = selected
 		workspace.GcpFunctionsStatusMessage = status
+		markGcpInventory(workspace, "gcf", len(functions), gcpInventoryListEmptyReason(len(functions), listErr))
 	})
 }
 

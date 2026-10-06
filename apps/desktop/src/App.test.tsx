@@ -262,6 +262,29 @@ vi.mock("./lib/backend", () => ({
           ],
           azureStorageStatusMessage: "Loaded 1 storage account after refresh.",
         };
+      case "gcp.inventory.get": {
+        const scope = String(params?.scope ?? "");
+        if (scope === "gce") {
+          return {
+            ...workspaceFixture,
+            gcpComputeInstances: [{ name: "web-1", zone: "us-central1-a", status: "RUNNING" }],
+            gcpComputeStatusMessage: "Loaded 1 Compute Engine instance(s) via gcloud.",
+            gcpInventory: { gce: { loaded: true } },
+            gcpStorageBuckets: [],
+            gcpFunctions: [],
+            gcpGkeClusters: [],
+          };
+        }
+        return {
+          ...workspaceFixture,
+          gcpStorageBuckets: [{ name: "platform-artifacts", location: "US" }],
+          gcpStorageStatusMessage: "Loaded 1 Cloud Storage bucket(s). Select one to browse objects.",
+          gcpInventory: { gcs: { loaded: true } },
+          gcpComputeInstances: [],
+          gcpFunctions: [],
+          gcpGkeClusters: [],
+        };
+      }
       case "runtime.get":
         return {
           dockerRuntime: workspaceFixture.dockerRuntime,
@@ -2723,5 +2746,224 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByLabelText("Select storage account")).not.toBeDisabled();
     });
+  }, 15000);
+
+  it("loads GCP storage when deferred workspace.get only has status copy and keeps the other tab", async () => {
+    const gcpProvider: ProviderSummary = {
+      providerId: "gcp",
+      label: "GCP",
+      state: "configured",
+      summary: "gcloud config detected.",
+      profileCount: 1,
+      commandPath: "gcloud",
+      locations: ["~/.config/gcloud"],
+    };
+    const gcpProfile: ProfileSummary = {
+      providerId: "gcp",
+      profileId: "default",
+      displayName: "default",
+      summary: "ali@example.com",
+      sourcePaths: ["~/.config/gcloud/configurations/config_default"],
+      attributes: [{ label: "Project", value: "platform-prod" }],
+      authMethods: [
+        { method: "cli", label: "CLI", summary: "gcloud detected.", available: true },
+      ],
+    };
+    sessionFixture = {
+      ...sessionFixture,
+      currentProviderId: "gcp",
+      selectedProfileId: "default",
+      selectedAuthMethod: "cli",
+      isLocked: true,
+      lockedProviderId: "gcp",
+      lockedProfileId: "default",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+        {
+          tabId: "gcp-storage",
+          label: "Cloud Storage",
+          summary: "Buckets",
+          detail: "Cloud Storage panel",
+        },
+        {
+          tabId: "gcp-compute",
+          label: "Compute Engine",
+          summary: "VMs",
+          detail: "Compute panel",
+        },
+      ],
+    };
+    workspaceFixture = {
+      ...workspaceFixture,
+      provider: gcpProvider,
+      profile: gcpProfile,
+      authMethod: "cli",
+      gcpStorageBuckets: [],
+      gcpComputeInstances: [],
+      gcpFunctions: [],
+      gcpGkeClusters: [],
+      gcpStorageStatusMessage: "No Cloud Storage buckets are currently available for this GCP project.",
+      gcpInventory: undefined,
+    };
+
+    render(
+      <AppProviders>
+        <App />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /GCP/ })).toBeInTheDocument();
+    const gcpNav = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
+    await act(async () => {
+      fireEvent.click(gcpNav.getByRole("button", { name: /Cloud Storage/ }));
+    });
+    expect(await screen.findByRole("heading", { name: "Cloud Storage" })).toBeInTheDocument();
+
+    await waitFor(() => {
+      const inventoryCalls = vi
+        .mocked(backendRequest)
+        .mock.calls.filter(([method]) => method === "gcp.inventory.get");
+      expect(inventoryCalls).toHaveLength(1);
+      expect(inventoryCalls[0]?.[1]).toEqual({ scope: "gcs" });
+    });
+    expect(await screen.findByText("platform-artifacts")).toBeInTheDocument();
+    expect(screen.getByLabelText("Select Cloud Storage bucket")).not.toBeDisabled();
+
+    await act(async () => {
+      fireEvent.click(gcpNav.getByRole("button", { name: /Compute Engine/ }));
+    });
+    expect(await screen.findByRole("heading", { name: "Compute Engine" })).toBeInTheDocument();
+    expect(await screen.findByText("web-1")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(gcpNav.getByRole("button", { name: /Cloud Storage/ }));
+    });
+    expect(await screen.findByText("platform-artifacts")).toBeInTheDocument();
+    await waitFor(() => {
+      const inventoryCalls = vi
+        .mocked(backendRequest)
+        .mock.calls.filter(([method]) => method === "gcp.inventory.get");
+      expect(inventoryCalls.filter((call) => call[1]?.scope === "gcs")).toHaveLength(1);
+      expect(inventoryCalls.filter((call) => call[1]?.scope === "gce")).toHaveLength(1);
+    });
+  }, 15000);
+
+  it("refetches an open GCP tab after Refresh Discovery clears loaded rows", async () => {
+    const gcpProvider: ProviderSummary = {
+      providerId: "gcp",
+      label: "GCP",
+      state: "configured",
+      summary: "gcloud config detected.",
+      profileCount: 1,
+      commandPath: "gcloud",
+      locations: ["~/.config/gcloud"],
+    };
+    const gcpProfile: ProfileSummary = {
+      providerId: "gcp",
+      profileId: "default",
+      displayName: "default",
+      summary: "ali@example.com",
+      sourcePaths: ["~/.config/gcloud/configurations/config_default"],
+      attributes: [{ label: "Project", value: "platform-prod" }],
+      authMethods: [
+        { method: "cli", label: "CLI", summary: "gcloud detected.", available: true },
+      ],
+    };
+    sessionFixture = {
+      ...sessionFixture,
+      currentProviderId: "gcp",
+      selectedProfileId: "default",
+      selectedAuthMethod: "cli",
+      isLocked: true,
+      lockedProviderId: "gcp",
+      lockedProfileId: "default",
+      lockedAuthMethod: "cli",
+      workspaceTabs: [
+        {
+          tabId: "overview",
+          label: "Overview",
+          summary: "Summary",
+          detail: "Overview panel",
+        },
+        {
+          tabId: "gcp-storage",
+          label: "Cloud Storage",
+          summary: "Buckets",
+          detail: "Cloud Storage panel",
+        },
+        {
+          tabId: "actions",
+          label: "Activity",
+          summary: "Activity summary",
+          detail: "Activity panel",
+        },
+      ],
+    };
+    workspaceFixture = {
+      ...workspaceFixture,
+      provider: gcpProvider,
+      profile: gcpProfile,
+      authMethod: "cli",
+      gcpStorageBuckets: [{ name: "already-loaded", location: "US" }],
+      gcpStorageStatusMessage: "Loaded 1 Cloud Storage bucket(s).",
+      gcpInventory: undefined,
+    };
+
+    render(
+      <AppProviders>
+        <App />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /GCP/ })).toBeInTheDocument();
+    const inventoryCallsBefore = vi
+      .mocked(backendRequest)
+      .mock.calls.filter(([method]) => method === "gcp.inventory.get").length;
+    const gcpNav = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
+    await act(async () => {
+      fireEvent.click(gcpNav.getByRole("button", { name: /Cloud Storage/ }));
+    });
+    expect(await screen.findByText("already-loaded")).toBeInTheDocument();
+    expect(
+      vi.mocked(backendRequest).mock.calls.filter(([method]) => method === "gcp.inventory.get").length,
+    ).toBe(inventoryCallsBefore);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Activity" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Refresh Discovery" }));
+
+    await act(async () => {
+      backendEventHandlers["job.updated"]?.({
+        jobId: "job-gcp-1",
+        kind: "discovery.refresh",
+        label: "Discovery refresh",
+        status: "completed",
+        message: "Refresh completed.",
+        result: {
+          ...workspaceFixture,
+          gcpStorageBuckets: [],
+          gcpStorageStatusMessage: undefined,
+          gcpInventory: undefined,
+        },
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(gcpNav.getByRole("button", { name: /Cloud Storage/ }));
+    });
+
+    await waitFor(() => {
+      const inventoryCalls = vi
+        .mocked(backendRequest)
+        .mock.calls.filter(([method]) => method === "gcp.inventory.get");
+      expect(inventoryCalls.length).toBeGreaterThan(inventoryCallsBefore);
+      expect(inventoryCalls.at(-1)?.[1]).toEqual({ scope: "gcs" });
+    });
+    expect(await screen.findByText("platform-artifacts")).toBeInTheDocument();
   }, 15000);
 });

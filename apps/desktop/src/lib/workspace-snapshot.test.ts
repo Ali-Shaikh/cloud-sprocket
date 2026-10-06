@@ -14,6 +14,7 @@ import {
   mergeAwsS3ObjectSelection,
   mergeAzureFrontDoorSelection,
   mergeAzureInventoryScope,
+  mergeGcpInventoryScope,
   normaliseWorkspaceSnapshot,
 } from "./workspace-snapshot";
 
@@ -414,5 +415,30 @@ describe("formatBackendError", () => {
     );
 
     expect(message).toBe("Write mode is off");
+  });
+});
+
+describe("mergeGcpInventoryScope", () => {
+  it("keeps previously loaded scopes and records the incoming scope flag", () => {
+    const current = normaliseWorkspaceSnapshot({
+      gcpInventory: { gcs: { loaded: true } },
+      gcpStorageBuckets: [{ name: "alpha" }],
+      gcpComputeInstances: [{ name: "web-1" }],
+    });
+    const incoming = normaliseWorkspaceSnapshot({
+      gcpComputeInstances: [],
+      gcpComputeStatusMessage: "No Compute Engine instances are currently available for this GCP project.",
+      gcpInventory: { gce: { loaded: true, emptyReason: "none_found" } },
+      gcpStorageBuckets: [],
+    });
+
+    const merged = mergeGcpInventoryScope(current, incoming, "gce");
+
+    expect(merged.gcpInventory).toEqual({
+      gcs: { loaded: true },
+      gce: { loaded: true, emptyReason: "none_found" },
+    });
+    expect(merged.gcpStorageBuckets).toEqual([{ name: "alpha" }]);
+    expect(merged.gcpComputeInstances).toEqual([]);
   });
 });

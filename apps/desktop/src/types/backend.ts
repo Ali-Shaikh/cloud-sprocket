@@ -1200,6 +1200,8 @@ export interface WorkspaceSnapshot {
   gcpWriteCapable?: boolean;
   gcpWriteModeEnabled?: boolean;
   gcpWritesEnabled?: boolean;
+  /** Loaded is set by the daemon. Do not infer it from status copy. */
+  gcpInventory?: Record<string, InventoryScopeState>;
   selectedAzureResourceGroup?: string;
   selectedAzureVmId?: string;
   selectedAzureStorageAccount?: string;

@@ -121,6 +121,8 @@ func snapshotOptionsFromPort(opts sessionport.SnapshotOptions) workspaceSnapshot
 		awsScope:                    opts.AWSScope,
 		azureDeferredInventory:      opts.AzureDeferredInventory,
 		awsDeferredInventory:        opts.AWSDeferredInventory,
+		gcpDeferredInventory:        opts.GcpDeferredInventory,
+		gcpScope:                    opts.GcpScope,
 	}
 }
 
@@ -137,5 +139,7 @@ func snapshotOptionsToPort(opts workspaceSnapshotOptions) sessionport.SnapshotOp
 		AWSScope:                    opts.awsScope,
 		AzureDeferredInventory:      opts.azureDeferredInventory,
 		AWSDeferredInventory:        opts.awsDeferredInventory,
+		GcpDeferredInventory:        opts.gcpDeferredInventory,
+		GcpScope:                    opts.gcpScope,
 	}
 }
