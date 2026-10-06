@@ -12,30 +12,142 @@ import (
 
 func TestLambdaSourceGrantsCloudWatchLogs(t *testing.T) {
 	t.Parallel()
+	const functionWithRole = `
+resource "aws_lambda_function" "api" {
+  role = aws_iam_role.api.arn
+}
+`
 	tests := []struct {
 		name string
 		tf   string
 		want bool
 	}{
 		{
-			name: "inline log actions",
-			tf:   `Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]`,
+			name: "inline log actions on the function role",
+			tf: functionWithRole + `
+resource "aws_iam_role_policy" "api_logs" {
+  role = aws_iam_role.api.id
+  policy = jsonencode({
+    Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+  })
+}
+`,
 			want: true,
 		},
 		{
-			name: "managed basic execution role",
-			tf:   `policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"`,
+			name: "managed basic execution role on the function role",
+			tf: functionWithRole + `
+resource "aws_iam_role_policy_attachment" "api_logs" {
+  role       = aws_iam_role.api.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+`,
 			want: true,
 		},
 		{
 			name: "managed VPC execution role includes logs",
-			tf:   `policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"`,
+			tf: functionWithRole + `
+resource "aws_iam_role_policy_attachment" "api_vpc" {
+  role       = aws_iam_role.api.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+`,
 			want: true,
 		},
 		{
-			name: "SQS-only policy is not enough",
-			tf:   `Action = ["sqs:ReceiveMessage", "sqs:DeleteMessage"]`,
+			name: "logs star grants the function role",
+			tf: functionWithRole + `
+resource "aws_iam_role_policy" "api_logs" {
+  role = aws_iam_role.api.id
+  policy = jsonencode({ Action = ["logs:*"] })
+}
+`,
+			want: true,
+		},
+		{
+			name: "PutLogEvents with create log stream grants the function role",
+			tf: functionWithRole + `
+resource "aws_iam_role_policy" "api_logs" {
+  role = aws_iam_role.api.id
+  policy = jsonencode({ Action = ["logs:CreateLogStream", "logs:PutLogEvents"] })
+}
+`,
+			want: true,
+		},
+		{
+			name: "PutLogEvents alone is not enough",
+			tf: functionWithRole + `
+resource "aws_iam_role_policy" "api_logs" {
+  role = aws_iam_role.api.id
+  policy = jsonencode({ Action = ["logs:PutLogEvents"] })
+}
+`,
 			want: false,
+		},
+		{
+			name: "SQS-only policy is not enough",
+			tf: functionWithRole + `
+resource "aws_iam_role_policy" "api_sqs" {
+  role = aws_iam_role.api.id
+  policy = jsonencode({ Action = ["sqs:ReceiveMessage", "sqs:DeleteMessage"] })
+}
+`,
+			want: false,
+		},
+		{
+			name: "logs on a different role do not grant this function",
+			tf: functionWithRole + `
+resource "aws_iam_role_policy_attachment" "other_logs" {
+  role       = aws_iam_role.other.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+`,
+			want: false,
+		},
+		{
+			name: "two functions fail when only one role has logs",
+			tf: `
+resource "aws_lambda_function" "api" {
+  role = aws_iam_role.api.arn
+}
+resource "aws_iam_role_policy_attachment" "api_logs" {
+  role       = aws_iam_role.api.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+resource "aws_lambda_function" "worker" {
+  role = aws_iam_role.worker.arn
+}
+resource "aws_iam_role_policy" "worker_sqs" {
+  role = aws_iam_role.worker.id
+  policy = jsonencode({ Action = ["sqs:ReceiveMessage"] })
+}
+`,
+			want: false,
+		},
+		{
+			name: "two functions pass when each role has logs",
+			tf: `
+resource "aws_lambda_function" "api" {
+  role = aws_iam_role.api.arn
+}
+resource "aws_iam_role_policy_attachment" "api_logs" {
+  role       = aws_iam_role.api.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+resource "aws_lambda_function" "worker" {
+  role = aws_iam_role.worker.arn
+}
+resource "aws_iam_role_policy_attachment" "worker_logs" {
+  role       = aws_iam_role.worker.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+`,
+			want: true,
+		},
+		{
+			name: "no lambda function has nothing to grant",
+			tf:   `policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"`,
+			want: true,
 		},
 	}
 	for _, test := range tests {

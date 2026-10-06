@@ -9,6 +9,7 @@ import {
   sqsQueueNameFromUrl,
   sqsQueueUrlIsIncomplete,
   sqsQueueUrlsMatch,
+  sqsRegionFromUrl,
 } from "./sqs-queue-url";
 
 describe("sqs queue URL helpers", () => {
@@ -52,8 +53,46 @@ describe("sqs queue URL helpers", () => {
     );
   });
 
-  it("recognises SQS queue URLs so they are not treated as browser endpoints", () => {
-    expect(isSqsQueueUrl("https://sqs.us-east-1.amazonaws.com/123456789012/lab-events")).toBe(true);
-    expect(isSqsQueueUrl("https://abc123.execute-api.us-east-1.amazonaws.com")).toBe(false);
+  it.each([
+    ["https://sqs.amazonaws.com/123456789012/orders", true],
+    ["https://sqs.us-east-1.amazonaws.com/123456789012/lab-events", true],
+    ["https://SQS.EU-WEST-1.amazonaws.com/123456789012/lab-events", true],
+    ["https://sqs.us-gov-west-1.amazonaws.com/123456789012/lab-events", true],
+    ["sqs.eu-west-2.amazonaws.com/123456789012/lab-events", true],
+    ["http://localhost:4566/000000000000/lab-events", true],
+    ["http://localhost/000000000000/lab-events", true],
+    ["https://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/lab-events", true],
+    ["https://localhost.localstack.cloud/000000000000/lab-events", true],
+    ["http://lab.localstack.cloud/000000000000/lab-events", true],
+    ["http://queues.localhost/000000000000/lab-events", true],
+    ["https://evilamazonaws.com/sqs.us-east-1.amazonaws.com/123/lab-events", false],
+    ["https://amazonaws.com.evil.com/sqs.us-east-1.amazonaws.com/123/lab-events", false],
+    ["https://sqs.amazonaws.com.evil.com/123456789012/lab-events", false],
+    ["https://sqs.us-east-1.amazonaws.com.evil.com/123456789012/lab-events", false],
+    ["https://not-sqs.us-east-1.amazonaws.com/123456789012/lab-events", false],
+    ["https://abc123.execute-api.us-east-1.amazonaws.com", false],
+    ["https://s3.us-east-1.amazonaws.com/demo-bucket", false],
+    ["http://localhost:4566/", false],
+    ["http://localhost:4566", false],
+    ["https://evil.localstack.cloud.evil.com/000000000000/lab-events", false],
+    ["not a url", false],
+    ["", false],
+  ])("classifies %s as an SQS URL: %s", (value, expected) => {
+    expect(isSqsQueueUrl(value)).toBe(expected);
+  });
+
+  it.each([
+    ["https://sqs.us-east-1.amazonaws.com/123456789012/name", "us-east-1"],
+    ["https://sqs.eu-west-2.amazonaws.com/123456789012/name", "eu-west-2"],
+    ["https://SQS.US-WEST-2.amazonaws.com/123456789012/name", "us-west-2"],
+    ["https://sqs.amazonaws.com/123456789012/name", ""],
+    ["http://localhost:4566/000000000000/lab-events", ""],
+    ["https://localhost.localstack.cloud/000000000000/lab-events", ""],
+    ["https://sqs.us-east-1.localhost.localstack.cloud/000000000000/lab-events", ""],
+    ["https://not-sqs.us-east-1.amazonaws.com/123456789012/name", ""],
+    ["https://sqs.us-east-1.amazonaws.com.evil.com/123456789012/name", ""],
+    ["", ""],
+  ])("reads the region from %s", (value, region) => {
+    expect(sqsRegionFromUrl(value)).toBe(region);
   });
 });

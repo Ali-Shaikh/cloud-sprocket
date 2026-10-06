@@ -1,16 +1,43 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-function pathSegments(queueUrl: string): string[] {
+/** Regional host `sqs.<region>.amazonaws.com`. Region is letters, digits, and hyphens. */
+const SQS_REGIONAL_HOST = /^sqs\.([a-z0-9-]+)\.amazonaws\.com$/;
+
+function parsedQueueUrl(queueUrl: string): URL | null {
   const trimmed = queueUrl.trim();
-  if (!trimmed) return [];
+  if (!trimmed) return null;
   try {
     const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-    const parsed = new URL(withProtocol);
-    return parsed.pathname.split("/").filter(Boolean);
+    return new URL(withProtocol);
   } catch {
-    return trimmed.split("/").filter(Boolean);
+    return null;
   }
+}
+
+function pathSegments(queueUrl: string): string[] {
+  const parsed = parsedQueueUrl(queueUrl);
+  if (parsed) {
+    return parsed.pathname.split("/").filter(Boolean);
+  }
+  const trimmed = queueUrl.trim();
+  if (!trimmed) return [];
+  return trimmed.split("/").filter(Boolean);
+}
+
+function isSqsAwsHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === "sqs.amazonaws.com" || SQS_REGIONAL_HOST.test(host);
+}
+
+function isLocalStackHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host === "localhost.localstack.cloud" ||
+    host.endsWith(".localstack.cloud")
+  );
 }
 
 /** Final path segment of an SQS queue URL (AWS or LocalStack). */
@@ -57,11 +84,20 @@ export function findSqsQueueByUrl<T extends { queueUrl: string; queueName?: stri
 }
 
 export function isSqsQueueUrl(value: string): boolean {
-  const trimmed = value.trim().toLowerCase();
-  if (!trimmed) return false;
-  if (trimmed.includes("sqs.") && trimmed.includes("amazonaws.com")) return true;
-  if (trimmed.includes("localhost:4566/") || trimmed.includes("localhost.localstack.cloud")) {
-    return pathSegments(value).length >= 1;
-  }
-  return false;
+  const parsed = parsedQueueUrl(value);
+  if (!parsed) return false;
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+  if (isSqsAwsHostname(parsed.hostname)) return true;
+  if (!isLocalStackHostname(parsed.hostname)) return false;
+  return parsed.pathname.split("/").filter(Boolean).length >= 1;
+}
+
+/**
+ * Region embedded in an AWS SQS queue URL.
+ * LocalStack hosts and URLs with no region return an empty string. The region is never guessed.
+ */
+export function sqsRegionFromUrl(queueUrl: string): string {
+  const parsed = parsedQueueUrl(queueUrl);
+  if (!parsed || !isSqsAwsHostname(parsed.hostname)) return "";
+  return SQS_REGIONAL_HOST.exec(parsed.hostname.toLowerCase())?.[1] ?? "";
 }

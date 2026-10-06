@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import type { NavigateToResourceParams } from "@/lib/navigate-to-resource";
+import { sqsRegionFromUrl } from "@/lib/sqs-queue-url";
 import type { Deployment, DeploymentOutput } from "@/types/backend";
 
 /**
@@ -21,7 +22,16 @@ export function deploymentOutputNavigateParams(
   const name = output.name.toLowerCase();
 
   if (provider === "aws" && (name.includes("queue_url") || name.endsWith("queueurl"))) {
-    return { provider: "aws", tab: "sqs", resourceKey: value };
+    const region = sqsRegionFromUrl(value);
+    if (!region) {
+      return { provider: "aws", tab: "sqs", resourceKey: value };
+    }
+    return {
+      provider: "aws",
+      tab: "sqs",
+      resourceKey: value,
+      context: { sqsRegion: region },
+    };
   }
 
   // Prefer external URL open for URL-shaped values.

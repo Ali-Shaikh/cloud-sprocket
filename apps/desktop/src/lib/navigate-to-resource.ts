@@ -97,6 +97,8 @@ const AWS_CONTEXT_KEYS: Record<string, ContextKeyMapping> = {
   logGroupName: { tabId: "logs", method: "aws.logs.selectLogGroup", paramKey: "logGroupName" },
   /** Select Logs region before selecting a log group (cross-service deep links). */
   logsRegion: { tabId: "logs", method: "aws.logs.selectRegion", paramKey: "region" },
+  /** Select SQS region before selecting a queue (queue URL deep links). */
+  sqsRegion: { tabId: "sqs", method: "aws.sqs.selectRegion", paramKey: "region" },
   iamRoleName: { tabId: "iam", method: "aws.iam.selectRole", paramKey: "roleName" },
   ec2InstanceId: { tabId: "ec2", method: "aws.ec2.selectInstance", paramKey: "instanceId" },
   s3BucketName: { tabId: "s3", method: "aws.s3.selectBucket", paramKey: "bucketName" },

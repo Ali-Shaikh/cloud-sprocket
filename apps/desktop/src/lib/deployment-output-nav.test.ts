@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import { deploymentOutputNavigateParams } from "./deployment-output-nav";
+import { planNavigateToResource } from "./navigate-to-resource";
 
 describe("deploymentOutputNavigateParams", () => {
   it("maps bucket outputs to S3", () => {
@@ -37,6 +38,45 @@ describe("deploymentOutputNavigateParams", () => {
       provider: "aws",
       tab: "sqs",
       resourceKey: "https://sqs.us-east-1.amazonaws.com/123456789012/lab-events",
+      context: { sqsRegion: "us-east-1" },
+    });
+  });
+
+  it("selects the queue region before the queue when the URL is in another region", () => {
+    const queueUrl = "https://sqs.eu-west-1.amazonaws.com/123456789012/lab-events";
+    const params = deploymentOutputNavigateParams(
+      { providerId: "aws" },
+      { name: "events_queue_url", value: queueUrl },
+    );
+
+    expect(params).toEqual({
+      provider: "aws",
+      tab: "sqs",
+      resourceKey: queueUrl,
+      context: { sqsRegion: "eu-west-1" },
+    });
+    expect(planNavigateToResource(params!)).toMatchObject({
+      tabId: "sqs",
+      selections: [
+        { method: "aws.sqs.selectRegion", params: { region: "eu-west-1" } },
+        { method: "aws.sqs.selectQueue", params: { queueUrl } },
+      ],
+    });
+  });
+
+  it("does not invent a region for LocalStack queue URLs", () => {
+    expect(
+      deploymentOutputNavigateParams(
+        { providerId: "aws" },
+        {
+          name: "queue_url",
+          value: "http://localhost:4566/000000000000/lab-events",
+        },
+      ),
+    ).toEqual({
+      provider: "aws",
+      tab: "sqs",
+      resourceKey: "http://localhost:4566/000000000000/lab-events",
     });
   });
 
