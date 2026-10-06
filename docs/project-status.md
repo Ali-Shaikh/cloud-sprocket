@@ -2,10 +2,10 @@
 
 **Last updated:** 6 October 2026
 
-**Latest release:** [v0.9.18](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.9.18)
-**Recent releases:** v0.9.18 (lab SQS URLs, Lambda logs, SNS draft), v0.9.17 (Storage Queue send, SQS draft, region names), v0.9.16 (Azure inventory and WAF/Front Door dropdowns)
+**Latest release:** [v0.9.19](https://github.com/Ali-Shaikh/cloud-sprocket/releases/tag/v0.9.19)
+**Recent releases:** v0.9.19 (GCP tab inventory), v0.9.18 (lab SQS URLs, Lambda logs, SNS draft), v0.9.17 (Storage Queue send, SQS draft, region names)
 
-**Post-v0.9.18 on `dev` (not yet released):** GCP lazy inventory (`gcp.inventory.get`) is next and is not started.
+**Post-v0.9.19 on `dev` (not yet released):** None.
 
 CloudSprocket is a local-first desktop cloud workbench: React + TypeScript + Tauri v2 + Go sidecar. The PySide6 legacy app was removed in PR #67. The Tauri rewrite is the active product. The app is labelled **Developer Preview** (not production-ready).
 

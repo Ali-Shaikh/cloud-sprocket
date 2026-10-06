@@ -9,6 +9,8 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.19] - 2026-10-06
+
 ### Changed
 
 - GCP Cloud Storage, Compute Engine, Cloud Functions, and GKE inventories load
@@ -1491,7 +1493,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.18...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.19...HEAD
+[0.9.19]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.18...v0.9.19
 [0.9.18]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.17...v0.9.18
 [0.9.17]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.16...v0.9.17
 [0.9.16]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.15...v0.9.16
