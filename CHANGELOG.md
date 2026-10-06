@@ -16,6 +16,8 @@ Installers for every release are published on the
   removes a leftover LocalStack override.
 - Lambda recipes attach CloudWatch Logs permissions
   (`AWSLambdaBasicExecutionRole`) so functions can write logs on real AWS.
+- SNS publish keeps the dialog and draft when the request fails, matching SQS
+  send.
 
 ## [0.9.17] - 2026-09-20
 

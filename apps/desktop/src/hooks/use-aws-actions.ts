@@ -495,16 +495,23 @@ export function useAwsActions(params: UseAwsActionsParams) {
       });
   }, [setSnsActionStatus, setWorkspace]);
 
-  const publishSNSTopic = useCallback((topicArn: string, message: string): void => {
-    setSnsActionStatus("Publishing message to the topic.");
-    void backendRequest<{ summary: string }>("aws.sns.publish", { topicArn, message })
-      .then((result) => {
+  const publishSNSTopic = useCallback(
+    async (topicArn: string, message: string): Promise<boolean> => {
+      setSnsActionStatus("Publishing message to the topic.");
+      try {
+        const result = await backendRequest<{ summary: string }>("aws.sns.publish", {
+          topicArn,
+          message,
+        });
         setSnsActionStatus(result.summary || "Message published.");
-      })
-      .catch((error: unknown) => {
+        return true;
+      } catch (error: unknown) {
         setSnsActionStatus(error instanceof Error ? error.message : String(error));
-      });
-  }, [setSnsActionStatus]);
+        return false;
+      }
+    },
+    [setSnsActionStatus],
+  );
 
   const createSNSTopic = useCallback((topicName: string): void => {
     setSnsActionStatus(`Creating SNS topic ${topicName}.`);

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
@@ -270,7 +270,7 @@ describe("SNSView", () => {
     return { onPublish, onCreateTopic, onCreateSubscription };
   }
 
-  it("publishes a message to the selected topic through the publish dialog", () => {
+  it("publishes a message to the selected topic through the publish dialog", async () => {
     mockMatchMedia(true);
     const { onPublish } = renderWritableSNSView();
 
@@ -282,6 +282,78 @@ describe("SNSView", () => {
       "arn:aws:sns:us-east-1:000000000000:order-events",
       expect.stringContaining("event"),
     );
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("keeps the draft when publish fails", async () => {
+    mockMatchMedia(true);
+    const onPublish = vi.fn(async () => false);
+    render(
+      <ThemeProvider>
+        <SNSView
+          workspace={{ ...workspaceFixture, awsWritesEnabled: true }}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectEntity={vi.fn()}
+          onPublish={onPublish}
+          onCreateTopic={vi.fn()}
+          onCreateSubscription={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish message" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText("Topic message text"), {
+      target: { value: "retry me" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Publish" }));
+    await waitFor(() => {
+      expect(onPublish).toHaveBeenCalledWith(
+        "arn:aws:sns:us-east-1:000000000000:order-events",
+        "retry me",
+      );
+    });
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Topic message text")).toHaveValue("retry me");
+  });
+
+  it("disables the message field while publish is in flight", async () => {
+    mockMatchMedia(true);
+    let finishPublish: (ok: boolean) => void = () => undefined;
+    const onPublish = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishPublish = resolve;
+        }),
+    );
+    render(
+      <ThemeProvider>
+        <SNSView
+          workspace={{ ...workspaceFixture, awsWritesEnabled: true }}
+          actionStatus=""
+          onRefresh={vi.fn()}
+          onSelectRegion={vi.fn()}
+          onSelectEntity={vi.fn()}
+          onPublish={onPublish}
+          onCreateTopic={vi.fn()}
+          onCreateSubscription={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish message" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Publish" }));
+    expect(within(dialog).getByLabelText("Topic message text")).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Publish" })).toBeDisabled();
+    finishPublish(true);
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
   });
 
   it("creates a topic through the create dialog", () => {
