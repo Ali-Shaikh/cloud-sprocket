@@ -39,3 +39,18 @@ export function applySnsPublishStatus(
     shownFailures.length > 0 ? `${event.text} ${shownFailures.join(" ")}` : event.text;
   return { status, failures: new Map() };
 }
+
+// A topic or region change drops failures whose publish has already finished.
+// A serial still in flight stays, so that request can still report its own error.
+export function dropFinishedSnsPublishFailures(
+  failures: ReadonlyMap<number, string>,
+  inFlightSerials: ReadonlySet<number>,
+): Map<number, string> {
+  const kept = new Map<number, string>();
+  for (const [serial, message] of failures) {
+    if (inFlightSerials.has(serial)) {
+      kept.set(serial, message);
+    }
+  }
+  return kept;
+}
