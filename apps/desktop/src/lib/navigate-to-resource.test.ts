@@ -108,6 +108,28 @@ describe("planNavigateToResource", () => {
     expect(plan.subPage).toEqual({ tab: "s3", pageId: "objects" });
   });
 
+  it("selects SQS region before the queue when sqsRegion context is set", () => {
+    const queueUrl = "https://sqs.eu-west-1.amazonaws.com/123456789012/lab-events";
+    const plan = planNavigateToResource({
+      provider: "aws",
+      tab: "sqs",
+      resourceKey: queueUrl,
+      context: { sqsRegion: "eu-west-1" },
+    });
+
+    expect(plan.tabId).toBe("sqs");
+    expect(plan.selections).toEqual([
+      {
+        method: "aws.sqs.selectRegion",
+        params: { region: "eu-west-1" },
+      },
+      {
+        method: "aws.sqs.selectQueue",
+        params: { queueUrl },
+      },
+    ]);
+  });
+
   it("selects Logs region before log group when logsRegion context is set", () => {
     const plan = planNavigateToResource({
       provider: "aws",

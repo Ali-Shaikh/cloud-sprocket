@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
+import { isSqsQueueUrl } from "@/lib/sqs-queue-url";
 import type { Deployment, DeploymentOutput } from "@/types/backend";
 
 export type LogCommand = {
@@ -274,10 +275,19 @@ function databaseEndpointLink(
   };
 }
 
+function isQueueOutput(output: Pick<DeploymentOutput, "name" | "value">): boolean {
+  const name = output.name.toLowerCase();
+  if (name.includes("queue_url") || name.endsWith("queueurl")) return true;
+  return isSqsQueueUrl(String(output.value ?? ""));
+}
+
 function localStackDeploymentOutputLink(
   deployment: Pick<Deployment, "local" | "runtimeId" | "recipeId" | "variables">,
   output: Pick<DeploymentOutput, "name" | "value">,
 ): DeploymentOutputLink | null {
+  if (isQueueOutput(output)) {
+    return null;
+  }
   if (output.name === "database_endpoint") {
     return databaseEndpointLink(deployment, output);
   }
@@ -316,6 +326,10 @@ function cloudDeploymentOutputLink(
       title: "Use this host and port from your application or SQL client inside the same VPC.",
       note: `Endpoint: ${value}`,
     };
+  }
+
+  if (isQueueOutput(output)) {
+    return null;
   }
 
   const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value}`;

@@ -115,6 +115,35 @@ describe("toLocalStackUrl", () => {
     ).toBeNull();
   });
 
+  it("does not treat SQS queue URLs as browser endpoints", () => {
+    expect(
+      deploymentOutputLink(
+        {
+          local: false,
+          recipeId: "lab-eventbridge-aws",
+          variables: { app_name: "lab", environment: "dev" },
+        },
+        {
+          name: "queue_url",
+          value: "https://sqs.us-east-1.amazonaws.com/123456789012/lab-events",
+        },
+      ),
+    ).toBeNull();
+    expect(
+      deploymentOutputLink(
+        {
+          local: true,
+          recipeId: "lab-s3-events-aws",
+          variables: { app_name: "lab", environment: "dev" },
+        },
+        {
+          name: "queue_url",
+          value: "https://sqs.us-east-1.amazonaws.com/lab-events",
+        },
+      ),
+    ).toBeNull();
+  });
+
   it("opens real cloud HTTP endpoints directly", () => {
     expect(
       deploymentOutputLink(
