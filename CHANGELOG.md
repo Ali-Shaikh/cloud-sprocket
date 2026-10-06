@@ -9,6 +9,8 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.18] - 2026-10-06
+
 ### Fixed
 
 - SQS and EventBridge lab `queue_url` outputs include the account id, open the
@@ -1481,7 +1483,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.17...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.18...HEAD
+[0.9.18]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.17...v0.9.18
 [0.9.17]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.16...v0.9.17
 [0.9.16]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.15...v0.9.16
 [0.9.15]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.14...v0.9.15
