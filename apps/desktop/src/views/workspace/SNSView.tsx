@@ -125,6 +125,8 @@ export default function SNSView({
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [publishBody, setPublishBody] = useState(defaultSnsPublishBody);
   const [publishInFlight, setPublishInFlight] = useState(false);
+  // Bumped when the dialog closes so a late response cannot close or reset a later draft.
+  const publishAttemptRef = useRef(0);
   const [newTopicName, setNewTopicName] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [subscribeDialogOpen, setSubscribeDialogOpen] = useState(false);
@@ -560,7 +562,16 @@ export default function SNSView({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
+      <AlertDialog
+        open={publishDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            publishAttemptRef.current += 1;
+            setPublishInFlight(false);
+          }
+          setPublishDialogOpen(open);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Publish message?</AlertDialogTitle>
@@ -589,9 +600,13 @@ export default function SNSView({
                   return;
                 }
                 const body = publishBody;
+                const attempt = publishAttemptRef.current;
                 setPublishInFlight(true);
                 void Promise.resolve(onPublish(selectedTopic.topicArn, body)).then(
                   (ok) => {
+                    if (publishAttemptRef.current !== attempt) {
+                      return;
+                    }
                     setPublishInFlight(false);
                     if (ok === false) {
                       return;
@@ -602,6 +617,9 @@ export default function SNSView({
                     );
                   },
                   () => {
+                    if (publishAttemptRef.current !== attempt) {
+                      return;
+                    }
                     setPublishInFlight(false);
                   },
                 );
