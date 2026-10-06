@@ -124,9 +124,9 @@ export default function SNSView({
   const [filterText, setFilterText] = useState("");
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [publishBody, setPublishBody] = useState(defaultSnsPublishBody);
-  const [publishInFlight, setPublishInFlight] = useState(false);
+  const [publishInFlightArn, setPublishInFlightArn] = useState("");
   // Bumped when the dialog closes so a late response cannot close or reset a later draft.
-  // publishInFlight stays true until that request finishes, so Publish cannot send it twice.
+  // The in-flight lock is the topic that was sent, so another topic can still be published.
   const publishAttemptRef = useRef(0);
   const [newTopicName, setNewTopicName] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -148,6 +148,8 @@ export default function SNSView({
   const selectedTopic = workspace.snsTopics.find(
     (topic) => topic.topicArn === workspace.selectedSnsTopicArn,
   );
+  const selectedPublishInFlight =
+    publishInFlightArn !== "" && publishInFlightArn === selectedTopic?.topicArn;
 
   const filteredTopics = useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -585,7 +587,7 @@ export default function SNSView({
             value={publishBody}
             rows={5}
             className="font-mono text-xs"
-            disabled={publishInFlight}
+            disabled={selectedPublishInFlight}
             onChange={(event) => {
               setPublishBody(event.target.value);
             }}
@@ -593,22 +595,25 @@ export default function SNSView({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={!canPublish || !publishBody.trim() || publishInFlight}
+              disabled={!canPublish || !publishBody.trim() || selectedPublishInFlight}
               onClick={(event) => {
                 event.preventDefault();
-                if (!selectedTopic?.topicArn || !publishBody.trim() || publishInFlight) {
+                if (!selectedTopic?.topicArn || !publishBody.trim() || selectedPublishInFlight) {
                   return;
                 }
                 const body = publishBody;
+                const topicArn = selectedTopic.topicArn;
                 const attempt = publishAttemptRef.current;
-                setPublishInFlight(true);
-                void Promise.resolve(onPublish(selectedTopic.topicArn, body)).then(
+                setPublishInFlightArn(topicArn);
+                const releaseTopic = () => {
+                  setPublishInFlightArn((current) => (current === topicArn ? "" : current));
+                };
+                void Promise.resolve(onPublish(topicArn, body)).then(
                   (ok) => {
+                    releaseTopic();
                     if (publishAttemptRef.current !== attempt) {
-                      setPublishInFlight(false);
                       return;
                     }
-                    setPublishInFlight(false);
                     if (ok === false) {
                       return;
                     }
@@ -618,7 +623,7 @@ export default function SNSView({
                     );
                   },
                   () => {
-                    setPublishInFlight(false);
+                    releaseTopic();
                   },
                 );
               }}
