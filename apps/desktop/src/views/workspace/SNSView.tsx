@@ -126,6 +126,7 @@ export default function SNSView({
   const [publishBody, setPublishBody] = useState(defaultSnsPublishBody);
   const [publishInFlight, setPublishInFlight] = useState(false);
   // Bumped when the dialog closes so a late response cannot close or reset a later draft.
+  // publishInFlight stays true until that request finishes, so Publish cannot send it twice.
   const publishAttemptRef = useRef(0);
   const [newTopicName, setNewTopicName] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -567,7 +568,6 @@ export default function SNSView({
         onOpenChange={(open) => {
           if (!open) {
             publishAttemptRef.current += 1;
-            setPublishInFlight(false);
           }
           setPublishDialogOpen(open);
         }}
@@ -605,6 +605,7 @@ export default function SNSView({
                 void Promise.resolve(onPublish(selectedTopic.topicArn, body)).then(
                   (ok) => {
                     if (publishAttemptRef.current !== attempt) {
+                      setPublishInFlight(false);
                       return;
                     }
                     setPublishInFlight(false);
@@ -617,9 +618,6 @@ export default function SNSView({
                     );
                   },
                   () => {
-                    if (publishAttemptRef.current !== attempt) {
-                      return;
-                    }
                     setPublishInFlight(false);
                   },
                 );

@@ -364,16 +364,19 @@ describe("SNSView", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Publish message" }));
-    fireEvent.change(screen.getByLabelText("Topic message text"), {
-      target: { value: "second draft" },
-    });
+    expect(screen.getByLabelText("Topic message text")).toBeDisabled();
+    expect(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Publish" })).toBeDisabled();
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Publish" }));
+    expect(onPublish).toHaveBeenCalledTimes(1);
+
     await act(async () => {
       finishPublish(true);
     });
 
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
-    expect(screen.getByLabelText("Topic message text")).toHaveValue("second draft");
+    expect(screen.getByLabelText("Topic message text")).toHaveValue("first draft");
     expect(screen.getByLabelText("Topic message text")).toBeEnabled();
+    expect(onPublish).toHaveBeenCalledTimes(1);
   });
 
   it("disables the message field while publish is in flight", async () => {
