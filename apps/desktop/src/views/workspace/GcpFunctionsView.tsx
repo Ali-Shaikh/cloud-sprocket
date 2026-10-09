@@ -12,11 +12,7 @@ import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
-import {
-  GCP_CREATE_HINTS,
-  gcpFilterEmpty,
-  gcpProjectEmpty,
-} from "@/lib/gcp-empty-copy";
+import { GCP_CREATE_HINTS, gcpTableEmptyCopy } from "@/lib/gcp-empty-copy";
 import { gcpInventoryLoadingLabel } from "@/lib/gcp-inventory";
 import { cn } from "@/lib/utils";
 import type {
@@ -234,9 +230,12 @@ export default function GcpFunctionsView({
             ) : (
               <EmptyState
                 icon={<Zap />}
-                {...(functions.length === 0
-                  ? gcpProjectEmpty("functions", GCP_CREATE_HINTS.functions)
-                  : gcpFilterEmpty("functions"))}
+                {...gcpTableEmptyCopy({
+                  resourceLabel: "functions",
+                  createHint: GCP_CREATE_HINTS.functions,
+                  rowCount: functions.length,
+                  listFailed: workspace.gcpInventory?.gcf?.emptyReason === "error",
+                })}
               />
             )
           }

@@ -319,7 +319,8 @@ const mockGcpWorkspaceTabs: WorkspaceTab[] = [
     tabId: "gcp-overview",
     label: "GCP",
     summary: "Project context and readiness.",
-    detail: "Surfaces the open GCP configuration details while provider-specific inventory is ported.",
+    detail:
+      "Shows the open gcloud project. Open Cloud Storage, Compute Engine, Cloud Functions, or GKE to load that inventory.",
     category: "workspace",
   },
   {
@@ -327,7 +328,7 @@ const mockGcpWorkspaceTabs: WorkspaceTab[] = [
     label: "Cloud Storage",
     summary: "GCS buckets and object browser via gcloud.",
     detail:
-      "Lists Cloud Storage buckets for the open gcloud configuration and project, and browses objects under a selected prefix.",
+      "Lists Cloud Storage buckets and objects for the open gcloud project. Creating a bucket, uploading, copying, and deleting need write mode.",
     category: "service",
     domain: "storage",
   },
@@ -336,7 +337,7 @@ const mockGcpWorkspaceTabs: WorkspaceTab[] = [
     label: "Compute Engine",
     summary: "VM instance inventory via gcloud.",
     detail:
-      "Lists Compute Engine instances for the open gcloud configuration and project. Start and stop when write mode is on.",
+      "Lists Compute Engine instances for the open gcloud project. Start and stop need write mode. Reset is not available yet.",
     category: "service",
     domain: "compute",
   },
@@ -345,7 +346,7 @@ const mockGcpWorkspaceTabs: WorkspaceTab[] = [
     label: "Cloud Functions",
     summary: "Function inventory via gcloud (1st and 2nd gen).",
     detail:
-      "Lists Cloud Functions for the open gcloud configuration and project. Invoke when write mode is on.",
+      "Lists Cloud Functions for the open gcloud project. Invoke needs write mode. Delete is not available yet.",
     category: "service",
     domain: "compute",
   },
@@ -354,7 +355,7 @@ const mockGcpWorkspaceTabs: WorkspaceTab[] = [
     label: "GKE",
     summary: "Kubernetes cluster inventory via gcloud.",
     detail:
-      "Lists Google Kubernetes Engine clusters for the open gcloud configuration and project.",
+      "Lists GKE clusters and node pools for the open gcloud project. Fetching cluster credentials is not available yet.",
     category: "service",
     domain: "compute",
   },

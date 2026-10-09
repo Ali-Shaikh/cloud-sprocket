@@ -21,11 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
-import {
-  GCP_CREATE_HINTS,
-  gcpFilterEmpty,
-  gcpProjectEmpty,
-} from "@/lib/gcp-empty-copy";
+import { GCP_CREATE_HINTS, gcpTableEmptyCopy } from "@/lib/gcp-empty-copy";
 import { gcpInventoryLoadingLabel } from "@/lib/gcp-inventory";
 import type { GcpComputeInstance, WorkspaceSnapshot } from "@/types/backend";
 
@@ -258,9 +254,12 @@ export default function GcpComputeView({
             ) : (
               <EmptyState
                 icon={<Cpu />}
-                {...(instances.length === 0
-                  ? gcpProjectEmpty("instances", GCP_CREATE_HINTS.instances)
-                  : gcpFilterEmpty("instances"))}
+                {...gcpTableEmptyCopy({
+                  resourceLabel: "instances",
+                  createHint: GCP_CREATE_HINTS.instances,
+                  rowCount: instances.length,
+                  listFailed: workspace.gcpInventory?.gce?.emptyReason === "error",
+                })}
               />
             )
           }

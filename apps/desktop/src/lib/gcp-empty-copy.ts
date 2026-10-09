@@ -27,6 +27,25 @@ export function gcpFilterEmpty(resourceLabel: string): GcpEmptyCopy {
   };
 }
 
+/** Empty table copy. A failed list must not look like an empty project. */
+export function gcpTableEmptyCopy(input: {
+  resourceLabel: string;
+  createHint: string;
+  rowCount: number;
+  listFailed: boolean;
+}): GcpEmptyCopy {
+  if (input.rowCount > 0) {
+    return gcpFilterEmpty(input.resourceLabel);
+  }
+  if (input.listFailed) {
+    return {
+      title: `Could not list ${input.resourceLabel}`,
+      description: "Refresh to try the list again.",
+    };
+  }
+  return gcpProjectEmpty(input.resourceLabel, input.createHint);
+}
+
 export const GCP_CREATE_HINTS = {
   buckets: "Create a bucket in the Google Cloud console or with gcloud, then refresh.",
   instances: "Create a VM in the Google Cloud console or with gcloud, then refresh.",

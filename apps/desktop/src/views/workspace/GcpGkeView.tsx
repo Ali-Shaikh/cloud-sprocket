@@ -10,11 +10,7 @@ import { InlineBanner } from "@/components/inline-banner";
 import { ResourceTable } from "@/components/inventory/resource-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  GCP_CREATE_HINTS,
-  gcpFilterEmpty,
-  gcpProjectEmpty,
-} from "@/lib/gcp-empty-copy";
+import { GCP_CREATE_HINTS, gcpTableEmptyCopy } from "@/lib/gcp-empty-copy";
 import { gcpInventoryLoadingLabel } from "@/lib/gcp-inventory";
 import type { GcpGkeCluster, GcpGkeNodePool, WorkspaceSnapshot } from "@/types/backend";
 
@@ -164,9 +160,12 @@ export default function GcpGkeView({
             ) : (
               <EmptyState
                 icon={<Boxes />}
-                {...(clusters.length === 0
-                  ? gcpProjectEmpty("clusters", GCP_CREATE_HINTS.clusters)
-                  : gcpFilterEmpty("clusters"))}
+                {...gcpTableEmptyCopy({
+                  resourceLabel: "clusters",
+                  createHint: GCP_CREATE_HINTS.clusters,
+                  rowCount: clusters.length,
+                  listFailed: workspace.gcpInventory?.gke?.emptyReason === "error",
+                })}
               />
             )
           }
