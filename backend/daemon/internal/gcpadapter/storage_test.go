@@ -377,3 +377,135 @@ func TestDeleteObjectRequiresFields(t *testing.T) {
 		t.Fatal("expected error for empty key")
 	}
 }
+
+func TestCreateBucketBuildsGcloudCommand(t *testing.T) {
+	fake := &fakeCLI{out: []byte("")}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	if _, err := inv.CreateBucket(context.Background(), gcpProfile(), "gs://New-Artifacts/", " europe-west2 "); err == nil {
+		t.Fatal("expected lowercase rejection before gcloud")
+	}
+	if len(fake.args) != 0 {
+		t.Fatalf("gcloud args = %v, want none", fake.args)
+	}
+
+	result, err := inv.CreateBucket(context.Background(), gcpProfile(), "gs://new-artifacts/", " europe-west2 ")
+	if err != nil {
+		t.Fatalf("CreateBucket: %v", err)
+	}
+	if result.BucketName != "new-artifacts" || result.Location != "europe-west2" || result.URI != "gs://new-artifacts" {
+		t.Fatalf("result = %+v", result)
+	}
+	joined := strings.Join(fake.args, " ")
+	for _, want := range []string{
+		"--configuration=default",
+		"storage buckets create",
+		"gs://new-artifacts",
+		"--location=europe-west2",
+		"--project platform-prod",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("args %v missing %q", fake.args, want)
+		}
+	}
+}
+
+func TestCreateBucketRejectsUnsafeNames(t *testing.T) {
+	inv := NewInventory(config.Settings{})
+	inv.runner = &fakeCLI{}
+	cases := []struct {
+		name     string
+		location string
+	}{
+		{name: "ab", location: "US"},
+		{name: "goog-private", location: "US"},
+		{name: "bad..name", location: "US"},
+		{name: "192.168.0.1", location: "US"},
+		{name: "-leading", location: "US"},
+		{name: "new-artifacts", location: ""},
+		{name: "new-artifacts", location: "europe west2"},
+		{name: "new-artifacts", location: "-us"},
+	}
+	for _, tc := range cases {
+		if _, err := inv.CreateBucket(context.Background(), gcpProfile(), tc.name, tc.location); err == nil {
+			t.Fatalf("expected rejection for name %q location %q", tc.name, tc.location)
+		}
+	}
+}
+
+func TestCopyObjectBuildsSameBucketGcloudCp(t *testing.T) {
+	fake := &fakeCLI{out: []byte("")}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	result, err := inv.CopyObject(context.Background(), gcpProfile(), "demo-bucket", "docs/readme.txt", "archive/readme.txt")
+	if err != nil {
+		t.Fatalf("CopyObject: %v", err)
+	}
+	if result.DestinationURI != "gs://demo-bucket/archive/readme.txt" {
+		t.Fatalf("uri = %q", result.DestinationURI)
+	}
+	joined := strings.Join(fake.args, " ")
+	for _, want := range []string{
+		"storage cp",
+		"gs://demo-bucket/docs/readme.txt",
+		"gs://demo-bucket/archive/readme.txt",
+		"--project platform-prod",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("args %v missing %q", fake.args, want)
+		}
+	}
+}
+
+func TestCopyObjectRejectsFoldersAndIdenticalKeys(t *testing.T) {
+	inv := NewInventory(config.Settings{})
+	inv.runner = &fakeCLI{}
+	cases := []struct {
+		source string
+		dest   string
+	}{
+		{source: "docs/", dest: "other/docs.txt"},
+		{source: "docs/readme.txt", dest: "docs/readme.txt"},
+		{source: "docs/../../secret.txt", dest: "ok.txt"},
+		{source: "gs://other/readme.txt", dest: "ok.txt"},
+	}
+	for _, tc := range cases {
+		if _, err := inv.CopyObject(context.Background(), gcpProfile(), "demo-bucket", tc.source, tc.dest); err == nil {
+			t.Fatalf("expected rejection for %q -> %q", tc.source, tc.dest)
+		}
+	}
+}
+
+func TestCopyObjectKeepsALeadingSlashInTheSourceName(t *testing.T) {
+	fake := &fakeCLI{out: []byte("")}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	if _, err := inv.CopyObject(context.Background(), gcpProfile(), "demo-bucket", "/report.txt", "copy.txt"); err != nil {
+		t.Fatalf("CopyObject: %v", err)
+	}
+	joined := strings.Join(fake.args, " ")
+	if !strings.Contains(joined, "gs://demo-bucket//report.txt") {
+		t.Fatalf("args %v did not keep the leading slash on the source name", fake.args)
+	}
+	if strings.Contains(joined, "gs://demo-bucket/report.txt ") || strings.HasSuffix(joined, "gs://demo-bucket/report.txt") {
+		t.Fatalf("args %v copied report.txt instead of /report.txt", fake.args)
+	}
+}
+
+func TestCopyObjectRejectsWildcardNames(t *testing.T) {
+	fake := &fakeCLI{out: []byte("")}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+	cases := []string{"docs/*.txt", "docs/file?.txt", "docs/file[1].txt"}
+	for _, source := range cases {
+		if _, err := inv.CopyObject(context.Background(), gcpProfile(), "demo-bucket", source, "copy.txt"); err == nil {
+			t.Fatalf("expected wildcard rejection for %q", source)
+		}
+	}
+	if fake.args != nil {
+		t.Fatalf("gcloud was called for a wildcard name: %v", fake.args)
+	}
+}

@@ -1700,6 +1700,21 @@ type GcpStorageUploadResult struct {
 	DestinationURI string `json:"destinationUri"`
 }
 
+// GcpStorageCreateBucketResult is returned after gcloud storage buckets create.
+type GcpStorageCreateBucketResult struct {
+	BucketName string `json:"bucketName"`
+	Location   string `json:"location"`
+	URI        string `json:"uri"`
+}
+
+// GcpStorageCopyObjectResult is a same-bucket object copy.
+type GcpStorageCopyObjectResult struct {
+	BucketName           string `json:"bucketName"`
+	SourceObjectKey      string `json:"sourceObjectKey"`
+	DestinationObjectKey string `json:"destinationObjectKey"`
+	DestinationURI       string `json:"destinationUri"`
+}
+
 // GcpStorageSignURLResult is a short-lived read signed URL for a GCS object.
 type GcpStorageSignURLResult struct {
 	BucketName      string `json:"bucketName"`

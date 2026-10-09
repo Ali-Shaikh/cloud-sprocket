@@ -7,10 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/dustin/go-humanize"
 
@@ -216,6 +218,178 @@ func (i *Inventory) DeleteObject(
 	}
 	_, err := i.run(ctx, profile, args...)
 	return err
+}
+
+// CreateBucket creates one bucket with `gcloud storage buckets create`.
+// Location is required even though gcloud would otherwise default to us,
+// because a bucket location cannot be changed after creation.
+func (i *Inventory) CreateBucket(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+	location string,
+) (models.GcpStorageCreateBucketResult, error) {
+	name, err := validateGcpBucketName(bucketName)
+	if err != nil {
+		return models.GcpStorageCreateBucketResult{}, err
+	}
+	place, err := validateGcpBucketLocation(location)
+	if err != nil {
+		return models.GcpStorageCreateBucketResult{}, err
+	}
+	uri := "gs://" + name
+	args := []string{
+		"storage", "buckets", "create",
+		uri,
+		"--location=" + place,
+	}
+	if project := projectFromProfile(profile); project != "" {
+		args = append(args, "--project", project)
+	}
+	if _, err := i.run(ctx, profile, args...); err != nil {
+		return models.GcpStorageCreateBucketResult{}, err
+	}
+	return models.GcpStorageCreateBucketResult{
+		BucketName: name,
+		Location:   place,
+		URI:        uri,
+	}, nil
+}
+
+// CopyObject copies one object to another key in the same bucket via
+// `gcloud storage cp`. Folder prefixes are rejected: gcloud treats a trailing
+// slash as a directory, not as an object name. Names are copied literally.
+// gcloud would otherwise expand *, ?, and [] as wildcards.
+func (i *Inventory) CopyObject(
+	ctx context.Context,
+	profile models.ProfileSummary,
+	bucketName string,
+	sourceObjectKey string,
+	destinationObjectKey string,
+) (models.GcpStorageCopyObjectResult, error) {
+	bucket := normaliseBucketName(bucketName)
+	if bucket == "" {
+		return models.GcpStorageCopyObjectResult{}, fmt.Errorf("bucket name is required")
+	}
+	source, err := normaliseGcpObjectKey(sourceObjectKey)
+	if err != nil {
+		return models.GcpStorageCopyObjectResult{}, err
+	}
+	destination, err := normaliseGcpObjectKey(destinationObjectKey)
+	if err != nil {
+		return models.GcpStorageCopyObjectResult{}, err
+	}
+	if strings.HasSuffix(source, "/") || strings.HasSuffix(destination, "/") {
+		return models.GcpStorageCopyObjectResult{}, fmt.Errorf("folder prefixes cannot be copied")
+	}
+	if source == destination {
+		return models.GcpStorageCopyObjectResult{}, fmt.Errorf("destination object key must differ from the source")
+	}
+	sourceURI := "gs://" + bucket + "/" + source
+	destinationURI := "gs://" + bucket + "/" + destination
+	args := []string{
+		"storage", "cp",
+		sourceURI,
+		destinationURI,
+	}
+	if project := projectFromProfile(profile); project != "" {
+		args = append(args, "--project", project)
+	}
+	if _, err := i.run(ctx, profile, args...); err != nil {
+		return models.GcpStorageCopyObjectResult{}, err
+	}
+	return models.GcpStorageCopyObjectResult{
+		BucketName:           bucket,
+		SourceObjectKey:      source,
+		DestinationObjectKey: destination,
+		DestinationURI:       destinationURI,
+	}, nil
+}
+
+func validateGcpBucketName(raw string) (string, error) {
+	name := normaliseBucketName(raw)
+	if name == "" {
+		return "", fmt.Errorf("bucket name is required")
+	}
+	if name != strings.ToLower(name) {
+		return "", fmt.Errorf("bucket name must be lowercase")
+	}
+	if len(name) < 3 || len(name) > 63 {
+		return "", fmt.Errorf("bucket name must be 3 to 63 characters")
+	}
+	if strings.HasPrefix(name, "goog") {
+		return "", fmt.Errorf("bucket name must not begin with goog")
+	}
+	if strings.Contains(name, "..") {
+		return "", fmt.Errorf("bucket name must not contain consecutive dots")
+	}
+	if net.ParseIP(name) != nil {
+		return "", fmt.Errorf("bucket name must not be an IP address")
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '_', r == '.':
+		default:
+			return "", fmt.Errorf("bucket name may contain only lowercase letters, numbers, dots, hyphens, and underscores")
+		}
+	}
+	if !gcpBucketEdgeOK(rune(name[0])) || !gcpBucketEdgeOK(rune(name[len(name)-1])) {
+		return "", fmt.Errorf("bucket name must start and end with a letter or number")
+	}
+	return name, nil
+}
+
+func gcpBucketEdgeOK(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+}
+
+func validateGcpBucketLocation(raw string) (string, error) {
+	location := strings.TrimSpace(raw)
+	if location == "" {
+		return "", fmt.Errorf("bucket location is required")
+	}
+	if len(location) > 63 {
+		return "", fmt.Errorf("bucket location is too long")
+	}
+	for index, r := range location {
+		letter := (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')
+		digit := r >= '0' && r <= '9'
+		hyphen := r == '-' && index > 0
+		if !letter && !digit && !hyphen {
+			return "", fmt.Errorf("bucket location may contain only letters, numbers, and hyphens")
+		}
+	}
+	if strings.HasSuffix(location, "-") {
+		return "", fmt.Errorf("bucket location must not end with a hyphen")
+	}
+	return location, nil
+}
+
+func normaliseGcpObjectKey(raw string) (string, error) {
+	key := strings.TrimSpace(raw)
+	if key == "" {
+		return "", fmt.Errorf("object key is required")
+	}
+	if strings.HasPrefix(strings.ToLower(key), "gs://") {
+		return "", fmt.Errorf("object key must be a path inside the bucket")
+	}
+	if len(key) > 1024 || !utf8.ValidString(key) {
+		return "", fmt.Errorf("object key must be valid text of at most 1024 bytes")
+	}
+	if strings.ContainsAny(key, "\\\x00\r\n") {
+		return "", fmt.Errorf("object key contains an unsupported character")
+	}
+	// gcloud storage cp expands these. An object can be named this way, but
+	// this command cannot copy that name without also matching others.
+	if strings.ContainsAny(key, "*?[]") {
+		return "", fmt.Errorf("object key must not contain wildcard characters")
+	}
+	for _, part := range strings.Split(key, "/") {
+		if part == "." || part == ".." {
+			return "", fmt.Errorf("object key must not contain . or .. segments")
+		}
+	}
+	return key, nil
 }
 
 func decodeStorageBuckets(payload []byte) ([]models.GcpStorageBucket, error) {

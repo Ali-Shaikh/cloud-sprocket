@@ -36,6 +36,18 @@ const baseWorkspace = {
         enabled: false,
         reason: WRITE_MODE_REQUIRED_REASON,
       },
+      {
+        actionId: "createBucket",
+        label: "Create bucket",
+        enabled: false,
+        reason: WRITE_MODE_REQUIRED_REASON,
+      },
+      {
+        actionId: "copyObject",
+        label: "Copy object",
+        enabled: false,
+        reason: WRITE_MODE_REQUIRED_REASON,
+      },
     ],
   },
 } as unknown as WorkspaceSnapshot;
@@ -44,6 +56,8 @@ function renderStorage(overrides: {
   workspace?: WorkspaceSnapshot;
   onUploadObject?: (sourcePath: string, objectKey: string) => void;
   onDeleteObject?: (objectKey: string) => void;
+  onCreateBucket?: (bucketName: string, location: string) => void;
+  onCopyObject?: (sourceObjectKey: string, destinationObjectKey: string) => void;
   onSignUrl?: (objectKey: string, durationSeconds: number) => void;
   onSelectBucket?: (bucketName: string) => void;
   onSetPrefixFilter?: (prefix: string) => void;
@@ -68,6 +82,8 @@ function renderStorage(overrides: {
         onSetPrefixFilter={onSetPrefixFilter}
         onUploadObject={overrides.onUploadObject}
         onDeleteObject={overrides.onDeleteObject}
+        onCreateBucket={overrides.onCreateBucket}
+        onCopyObject={overrides.onCopyObject}
         onSignUrl={overrides.onSignUrl}
         signedUrlResult={overrides.signedUrlResult}
         signedUrlStatus={overrides.signedUrlStatus}
@@ -123,6 +139,8 @@ describe("GcpStorageView", () => {
         storage: [
           { actionId: "uploadObject", label: "Upload object", enabled: true },
           { actionId: "deleteObject", label: "Delete object", enabled: true },
+          { actionId: "createBucket", label: "Create bucket", enabled: true },
+          { actionId: "copyObject", label: "Copy object", enabled: true },
         ],
       },
     } as unknown as WorkspaceSnapshot;
@@ -146,6 +164,51 @@ describe("GcpStorageView", () => {
     const confirm = screen.getByRole("alertdialog");
     fireEvent.click(within(confirm).getByRole("button", { name: /^delete$/i }));
     expect(onDeleteObject).toHaveBeenCalledWith("docs/readme.txt");
+  });
+
+  it("creates a bucket and copies an object when write mode is enabled", () => {
+    const onCreateBucket = vi.fn();
+    const onCopyObject = vi.fn();
+    const writable = {
+      ...baseWorkspace,
+      gcpWritesEnabled: true,
+      actionCapabilities: {
+        storage: [
+          { actionId: "uploadObject", label: "Upload object", enabled: true },
+          { actionId: "deleteObject", label: "Delete object", enabled: true },
+          { actionId: "createBucket", label: "Create bucket", enabled: true },
+          { actionId: "copyObject", label: "Copy object", enabled: true },
+        ],
+      },
+    } as unknown as WorkspaceSnapshot;
+    renderStorage({
+      workspace: writable,
+      onCreateBucket,
+      onCopyObject,
+      onSignUrl: vi.fn(),
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /new bucket/i }));
+    const createDialog = screen.getByRole("alertdialog");
+    fireEvent.change(within(createDialog).getByLabelText("New Cloud Storage bucket name"), {
+      target: { value: "new-artifacts" },
+    });
+    fireEvent.change(within(createDialog).getByLabelText("Cloud Storage bucket location"), {
+      target: { value: "europe-west2" },
+    });
+    fireEvent.click(within(createDialog).getByRole("button", { name: /^create bucket$/i }));
+    expect(onCreateBucket).toHaveBeenCalledWith("new-artifacts", "europe-west2");
+
+    fireEvent.click(screen.getByText("docs/readme.txt"));
+    fireEvent.click(screen.getByRole("button", { name: /^copy object$/i }));
+    const copyDialog = screen.getByRole("alertdialog");
+    const confirm = within(copyDialog).getByRole("button", { name: /^copy object$/i });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(within(copyDialog).getByLabelText("Destination Cloud Storage object key"), {
+      target: { value: "docs/copy.txt" },
+    });
+    fireEvent.click(within(copyDialog).getByRole("button", { name: /^copy object$/i }));
+    expect(onCopyObject).toHaveBeenCalledWith("docs/readme.txt", "docs/copy.txt");
   });
 
   it("navigates into a folder prefix from the objects table", () => {

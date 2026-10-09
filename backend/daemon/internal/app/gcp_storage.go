@@ -503,6 +503,150 @@ func (s *Service) handleGcpStorageDeleteObject(ctx context.Context, params json.
 	)
 }
 
+type gcpStorageMutation struct {
+	snapshot discovery.Snapshot
+	profile  models.ProfileSummary
+	bucket   string
+	prefix   string
+}
+
+func gcpWorkspaceStillOpen(profile models.ProfileSummary, session models.SessionSnapshot) bool {
+	return session.IsLocked &&
+		session.CurrentProviderID == "gcp" &&
+		session.SelectedProfileID == profile.ProfileID
+}
+
+func (s *Service) prepareGcpStorageMutation(
+	ctx context.Context,
+	action string,
+	requireBucket bool,
+) (gcpStorageMutation, error) {
+	if s.gcpStorage == nil {
+		return gcpStorageMutation{}, errors.New("GCP Cloud Storage inventory is not available")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return gcpStorageMutation{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, err := s.currentState(ctx, snapshot)
+	if err != nil {
+		return gcpStorageMutation{}, err
+	}
+	if !session.IsLocked || session.CurrentProviderID != "gcp" {
+		return gcpStorageMutation{}, fmt.Errorf("open a locked GCP workspace before %s", action)
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, session.CurrentProviderID), session.SelectedProfileID)
+	if !ok {
+		return gcpStorageMutation{}, errors.New("the workspace's GCP profile is not available")
+	}
+	if !effectiveGcpWritesEnabled(session, profile) {
+		return gcpStorageMutation{}, fmt.Errorf("Cloud Storage %s requires write mode to be enabled for this GCP workspace", action)
+	}
+	bucket := strings.TrimSpace(session.SelectedGcpStorageBucket)
+	if requireBucket && bucket == "" {
+		return gcpStorageMutation{}, fmt.Errorf("select a Cloud Storage bucket before %s", action)
+	}
+	return gcpStorageMutation{
+		snapshot: snapshot,
+		profile:  profile,
+		bucket:   bucket,
+		prefix:   session.GcpStoragePrefixFilter,
+	}, nil
+}
+
+func (s *Service) handleGcpStorageCreateBucket(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		BucketName string `json:"bucketName"`
+		Location   string `json:"location"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	target, err := s.prepareGcpStorageMutation(ctx, "creating a bucket", false)
+	if err != nil {
+		return nil, err
+	}
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	result, err := s.gcpStorage.CreateBucket(timeoutCtx, target.profile, request.BucketName, request.Location)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	s.invalidateResourceCacheScope(ctx, "gcp.storage.buckets")
+	s.invalidateResourceCacheScope(ctx, "gcp.storage.objects.page")
+	s.mu.Lock()
+	session, err := s.currentState(ctx, target.snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	// The create can outlive the workspace that started it. Selecting the new
+	// bucket on a different profile would overwrite that workspace.
+	if gcpWorkspaceStillOpen(target.profile, session) {
+		session.SelectedGcpStorageBucket = result.BucketName
+		session.GcpStoragePrefixFilter = ""
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
+	}
+	s.mu.Unlock()
+	return s.finishGcpWorkspace(
+		ctx,
+		target.snapshot,
+		session,
+		notifier,
+		"success",
+		fmt.Sprintf("Created Cloud Storage bucket %s in %s.", result.URI, result.Location),
+	)
+}
+
+func (s *Service) handleGcpStorageCopyObject(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	var request struct {
+		SourceObjectKey      string `json:"sourceObjectKey"`
+		DestinationObjectKey string `json:"destinationObjectKey"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	target, err := s.prepareGcpStorageMutation(ctx, "copying an object", true)
+	if err != nil {
+		return nil, err
+	}
+	timeoutCtx, cancel := s.withAzureTimeout(ctx)
+	result, err := s.gcpStorage.CopyObject(
+		timeoutCtx,
+		target.profile,
+		target.bucket,
+		request.SourceObjectKey,
+		request.DestinationObjectKey,
+	)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	s.invalidateResourceCacheScope(ctx, "gcp.storage.objects.page")
+	s.mu.Lock()
+	session, err := s.currentState(ctx, target.snapshot)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.mu.Unlock()
+	// Leave the bucket and prefix the user has now. Writing the values captured
+	// before gcloud returns would undo a selection they made while the copy ran.
+	return s.finishGcpWorkspace(
+		ctx,
+		target.snapshot,
+		session,
+		notifier,
+		"success",
+		fmt.Sprintf("Copied gs://%s/%s to gs://%s/%s.", result.BucketName, result.SourceObjectKey, result.BucketName, result.DestinationObjectKey),
+	)
+}
+
 func (s *Service) handleGcpStorageLoadMoreObjects(ctx context.Context, params json.RawMessage, _ Notifier) (any, error) {
 	if s.gcpStorage == nil {
 		return nil, errors.New("GCP Cloud Storage inventory is not available")

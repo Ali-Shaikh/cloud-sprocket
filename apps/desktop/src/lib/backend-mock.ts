@@ -541,21 +541,41 @@ const mockGcpStorageBuckets: GcpStorageBucket[] = [
   },
 ];
 
-let mockGcpStorageObjects: GcpStorageObject[] = [
-  { key: "docs/", isFolder: true, size: "Folder" },
-  {
-    key: "docs/readme.txt",
-    size: "12 B",
-    updated: "2026-08-01T10:00:00Z",
-    contentType: "text/plain",
-  },
-  {
-    key: "uploads/package.zip",
-    size: "4.2 MB",
-    updated: "2026-08-02T08:15:00Z",
-    contentType: "application/zip",
-  },
-];
+const mockGcpObjectsByBucket = new Map<string, GcpStorageObject[]>([
+  [
+    "platform-artifacts",
+    [
+      { key: "docs/", isFolder: true, size: "Folder" },
+      {
+        key: "docs/readme.txt",
+        size: "12 B",
+        updated: "2026-08-01T10:00:00Z",
+        contentType: "text/plain",
+      },
+      {
+        key: "uploads/package.zip",
+        size: "4.2 MB",
+        updated: "2026-08-02T08:15:00Z",
+        contentType: "application/zip",
+      },
+    ],
+  ],
+]);
+
+function selectedMockGcpBucketName(): string {
+  return mockState.session.selectedGcpStorageBucket ?? mockGcpStorageBuckets[0]?.name ?? "";
+}
+
+function mockGcpStorageObjects(): GcpStorageObject[] {
+  return mockGcpObjectsByBucket.get(selectedMockGcpBucketName()) ?? [];
+}
+
+function setMockGcpStorageObjects(objects: GcpStorageObject[]): void {
+  const bucket = selectedMockGcpBucketName();
+  if (bucket) {
+    mockGcpObjectsByBucket.set(bucket, objects);
+  }
+}
 
 let mockGcpStorageObjectsHasMore = true;
 let mockGcpStorageObjectsNextToken: string | undefined = "mock-gcs-page-2";
@@ -1559,6 +1579,8 @@ function buildMockActionCapabilities(
       storage: [
         mockWriteModeCapability("uploadObject", "Upload object", writesEnabled),
         mockWriteModeCapability("deleteObject", "Delete object", writesEnabled),
+        mockWriteModeCapability("createBucket", "Create bucket", writesEnabled),
+        mockWriteModeCapability("copyObject", "Copy object", writesEnabled),
       ],
       compute: [
         mockWriteModeCapability("startInstance", "Start instance", writesEnabled),
@@ -2076,13 +2098,13 @@ function buildMockWorkspace(): WorkspaceSnapshot {
     gcpStoragePrefixFilter: isGcpWorkspace ? mockState.session.gcpStoragePrefixFilter ?? "" : undefined,
     gcpStorageStatusMessage: isGcpWorkspace
       ? mockState.session.selectedGcpStorageBucket || mockGcpStorageBuckets[0]
-        ? `Loaded ${mockGcpStorageObjects.length} object(s) from ${
+        ? `Loaded ${mockGcpStorageObjects().length} object(s) from ${
             mockState.session.selectedGcpStorageBucket ?? mockGcpStorageBuckets[0]?.name
           }.`
         : `Loaded ${mockGcpStorageBuckets.length} Cloud Storage bucket(s) via gcloud.`
       : undefined,
     gcpStorageBuckets: isGcpWorkspace ? mockGcpStorageBuckets : [],
-    gcpStorageObjects: isGcpWorkspace ? mockGcpStorageObjects : [],
+    gcpStorageObjects: isGcpWorkspace ? mockGcpStorageObjects() : [],
     gcpStorageObjectsNextToken: isGcpWorkspace ? mockGcpStorageObjectsNextToken : undefined,
     gcpStorageObjectsHasMore: isGcpWorkspace ? mockGcpStorageObjectsHasMore : undefined,
     selectedGcpComputeInstance: isGcpWorkspace
@@ -4686,21 +4708,81 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
     if (!mockGcpStorageObjectsHasMore) {
       return Promise.resolve(buildMockWorkspace());
     }
-    mockGcpStorageObjects = [
-      ...mockGcpStorageObjects,
+    setMockGcpStorageObjects([
+      ...mockGcpStorageObjects(),
       {
         key: "archive/old.log",
         size: "2 KB",
         updated: "2026-07-01T00:00:00Z",
         contentType: "text/plain",
       },
-    ];
+    ]);
     mockGcpStorageObjectsHasMore = false;
     mockGcpStorageObjectsNextToken = undefined;
     appendLog("info", "Loaded more Cloud Storage objects.");
     return Promise.resolve(buildMockWorkspace());
   };
   register("gcp.storage.loadMoreObjects", handle_gcp_storage_loadMoreObjects);
+
+  const handle_gcp_storage_createBucket : MockRpcHandler = async (params, method) => {
+    if (!mockState.session.gcpWriteModeEnabled) {
+      return Promise.reject(
+        new Error("Turn on write mode from the top bar to run mutating actions."),
+      );
+    }
+    const bucketName = String(params.bucketName ?? "").trim();
+    const location = String(params.location ?? "").trim();
+    if (!bucketName || !location) {
+      return Promise.reject(new Error("bucket name and location are required"));
+    }
+    if (!mockGcpStorageBuckets.some((bucket) => bucket.name === bucketName)) {
+      mockGcpStorageBuckets.push({
+        name: bucketName,
+        location,
+        storageClass: "STANDARD",
+        createdAt: new Date().toISOString(),
+        summary: "Created in this session.",
+      });
+    }
+    if (!mockGcpObjectsByBucket.has(bucketName)) {
+      mockGcpObjectsByBucket.set(bucketName, []);
+    }
+    mockState.session.selectedGcpStorageBucket = bucketName;
+    mockState.session.gcpStoragePrefixFilter = "";
+    appendLog("success", `Created Cloud Storage bucket gs://${bucketName} in ${location}.`);
+    return Promise.resolve(buildMockWorkspace());
+  };
+  register("gcp.storage.createBucket", handle_gcp_storage_createBucket);
+
+  const handle_gcp_storage_copyObject : MockRpcHandler = async (params, method) => {
+    if (!mockState.session.gcpWriteModeEnabled) {
+      return Promise.reject(
+        new Error("Turn on write mode from the top bar to run mutating actions."),
+      );
+    }
+    const sourceObjectKey = String(params.sourceObjectKey ?? "").trim();
+    const destinationObjectKey = String(params.destinationObjectKey ?? "").trim();
+    if (!sourceObjectKey || !destinationObjectKey || sourceObjectKey === destinationObjectKey) {
+      return Promise.reject(new Error("destination object key must differ from the source"));
+    }
+    const source = mockGcpStorageObjects().find((entry) => entry.key === sourceObjectKey);
+    if (!source || source.isFolder) {
+      return Promise.reject(new Error("source object was not found"));
+    }
+    const objects = mockGcpStorageObjects().filter((entry) => entry.key !== destinationObjectKey);
+    setMockGcpStorageObjects([
+      ...objects,
+      {
+        key: destinationObjectKey,
+        size: source.size,
+        updated: new Date().toISOString(),
+        contentType: source.contentType,
+      },
+    ]);
+    appendLog("success", `Copied Cloud Storage object ${sourceObjectKey} to ${destinationObjectKey}.`);
+    return Promise.resolve(buildMockWorkspace());
+  };
+  register("gcp.storage.copyObject", handle_gcp_storage_copyObject);
 
   const handle_gcp_storage_uploadObject : MockRpcHandler = async (params, method) => {
     if (!mockState.session.gcpWriteModeEnabled) {
@@ -4709,15 +4791,15 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
       );
     }
     const objectKey = String(params.objectKey ?? "upload.bin");
-    mockGcpStorageObjects = [
-      ...mockGcpStorageObjects.filter((entry) => entry.key !== objectKey),
+    setMockGcpStorageObjects([
+      ...mockGcpStorageObjects().filter((entry) => entry.key !== objectKey),
       {
         key: objectKey,
         size: "1 KB",
         updated: new Date().toISOString(),
         contentType: "application/octet-stream",
       },
-    ];
+    ]);
     appendLog("success", `Uploaded Cloud Storage object ${objectKey}.`);
     return Promise.resolve(buildMockWorkspace());
   };
@@ -4730,7 +4812,7 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
       );
     }
     const objectKey = String(params.objectKey ?? "");
-    mockGcpStorageObjects = mockGcpStorageObjects.filter((entry) => entry.key !== objectKey);
+    setMockGcpStorageObjects(mockGcpStorageObjects().filter((entry) => entry.key !== objectKey));
     appendLog("success", `Deleted Cloud Storage object ${objectKey}.`);
     return Promise.resolve(buildMockWorkspace());
   };

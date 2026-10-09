@@ -28,6 +28,12 @@ func (s *Service) registerGcpHandlers(m *handlerRegistry) {
 	m.register("gcp.inventory.get", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleGcpInventoryGet(ctx, params, notifier)
 	})
+	m.register("gcp.storage.copyObject", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleGcpStorageCopyObject(ctx, params, notifier)
+	})
+	m.register("gcp.storage.createBucket", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+		return s.handleGcpStorageCreateBucket(ctx, params, notifier)
+	})
 	m.register("gcp.storage.deleteObject", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleGcpStorageDeleteObject(ctx, params, notifier)
 	})

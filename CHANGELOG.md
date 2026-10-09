@@ -9,6 +9,19 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Security
+
+- Go 1.26.6 to 1.26.9 and `golang.org/x/net` v0.60.0. This covers the October
+  2026 standard library fixes for HTTP/2 and `crypto/tls` (GO-2026-6603
+  through GO-2026-6617).
+
+### Added
+
+- Cloud Storage can create a bucket and copy an object inside the selected
+  bucket. Both actions stay behind GCP write mode. An empty folder marker is
+  not included: current `gcloud storage` cannot create the zero-byte object
+  that other tools use for an empty prefix.
+
 ## [0.9.19] - 2026-10-06
 
 ### Changed

@@ -69,6 +69,8 @@ export type GcpStorageViewProps = {
   onLoadMoreObjects?: () => void;
   onUploadObject?: (sourcePath: string, objectKey: string) => void;
   onDeleteObject?: (objectKey: string) => void;
+  onCreateBucket?: (bucketName: string, location: string) => void;
+  onCopyObject?: (sourceObjectKey: string, destinationObjectKey: string) => void;
   onSignUrl?: (objectKey: string, durationSeconds: number) => void;
   signedUrlResult?: GcpStorageSignUrlResult;
   signedUrlStatus?: string;
@@ -106,8 +108,8 @@ function defaultUploadKey(sourcePath: string, prefix?: string): string {
 
 /**
  * Cloud Storage browser: bucket list + prefix navigation + objects table.
- * Upload/delete are gated by GCP write mode (top bar). Signed read URLs do not
- * require write mode.
+ * Upload, delete, create bucket, and copy are gated by GCP write mode (top bar).
+ * Signed read URLs do not require write mode. Copy stays inside the selected bucket.
  */
 export default function GcpStorageView({
   workspace,
@@ -117,6 +119,8 @@ export default function GcpStorageView({
   onLoadMoreObjects,
   onUploadObject,
   onDeleteObject,
+  onCreateBucket,
+  onCopyObject,
   onSignUrl,
   signedUrlResult,
   signedUrlStatus,
@@ -132,6 +136,12 @@ export default function GcpStorageView({
   const [uploadObjectKey, setUploadObjectKey] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [selectedObjectKey, setSelectedObjectKey] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [bucketDraft, setBucketDraft] = useState("");
+  const [locationDraft, setLocationDraft] = useState("US");
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [copySourceKey, setCopySourceKey] = useState("");
+  const [copyDestinationKey, setCopyDestinationKey] = useState("");
 
   const buckets = workspace.gcpStorageBuckets ?? [];
   const objects = workspace.gcpStorageObjects ?? [];
@@ -146,6 +156,8 @@ export default function GcpStorageView({
 
   const uploadCapability = actionCapabilityState(workspace, "storage", "uploadObject", "gcp");
   const deleteCapability = actionCapabilityState(workspace, "storage", "deleteObject", "gcp");
+  const createCapability = actionCapabilityState(workspace, "storage", "createBucket", "gcp");
+  const copyCapability = actionCapabilityState(workspace, "storage", "copyObject", "gcp");
   const canUpload =
     uploadCapability.enabled &&
     Boolean(bucketName) &&
@@ -251,6 +263,22 @@ export default function GcpStorageView({
           {bucketName ? breadcrumb : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {onCreateBucket ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!createCapability.enabled}
+              title={createCapability.enabled ? "Create a Cloud Storage bucket" : createCapability.reason}
+              onClick={() => {
+                setBucketDraft("");
+                setLocationDraft("US");
+                setCreateOpen(true);
+              }}
+            >
+              <HardDrive className="size-3.5" />
+              New bucket
+            </Button>
+          ) : null}
           {onUploadObject ? (
             <Button
               variant="outline"
@@ -541,14 +569,36 @@ export default function GcpStorageView({
                     {selectedObject.key}
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onSignUrl(selectedObject.key, 3600)}
-                >
-                  <Link2 className="size-3.5" />
-                  Signed link (1h)
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {onCopyObject ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!copyCapability.enabled}
+                      title={
+                        copyCapability.enabled
+                          ? "Copy this object inside the bucket"
+                          : copyCapability.reason
+                      }
+                      onClick={() => {
+                        setCopySourceKey(selectedObject.key);
+                        setCopyDestinationKey(selectedObject.key);
+                        setCopyOpen(true);
+                      }}
+                    >
+                      <Copy className="size-3.5" />
+                      Copy object
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onSignUrl(selectedObject.key, 3600)}
+                  >
+                    <Link2 className="size-3.5" />
+                    Signed link (1h)
+                  </Button>
+                </div>
               </div>
               {signedUrlStatus ? (
                 <p className="text-xs text-muted-foreground">{signedUrlStatus}</p>
@@ -577,6 +627,99 @@ export default function GcpStorageView({
           ) : null}
         </section>
       ) : null}
+
+      <AlertDialog open={createOpen} onOpenChange={setCreateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create bucket</AlertDialogTitle>
+            <AlertDialogDescription>
+              The location is sent as gcloud --location and cannot be changed after the bucket
+              exists. US is the gcloud default when a location is omitted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <div>
+              <div className={cn(fieldLabel, "mb-1")}>Bucket name</div>
+              <Input
+                value={bucketDraft}
+                onChange={(event) => setBucketDraft(event.target.value)}
+                placeholder="my-bucket"
+                aria-label="New Cloud Storage bucket name"
+              />
+            </div>
+            <div>
+              <div className={cn(fieldLabel, "mb-1")}>Location</div>
+              <Input
+                value={locationDraft}
+                onChange={(event) => setLocationDraft(event.target.value)}
+                placeholder="US"
+                aria-label="Cloud Storage bucket location"
+              />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={
+                !onCreateBucket ||
+                !createCapability.enabled ||
+                !bucketDraft.trim() ||
+                !locationDraft.trim()
+              }
+              onClick={() => {
+                if (!onCreateBucket || !bucketDraft.trim() || !locationDraft.trim()) {
+                  return;
+                }
+                onCreateBucket(bucketDraft.trim(), locationDraft.trim());
+                setCreateOpen(false);
+              }}
+            >
+              Create bucket
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={copyOpen} onOpenChange={setCopyOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Copy object</AlertDialogTitle>
+            <AlertDialogDescription>
+              Copy gs://{bucketName}/{copySourceKey} to another key in the same bucket.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div>
+            <div className={cn(fieldLabel, "mb-1")}>Destination object key</div>
+            <Input
+              value={copyDestinationKey}
+              onChange={(event) => setCopyDestinationKey(event.target.value)}
+              placeholder="folder/copy.txt"
+              aria-label="Destination Cloud Storage object key"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={
+                !onCopyObject ||
+                !copyCapability.enabled ||
+                !copyDestinationKey.trim() ||
+                copyDestinationKey.trim() === copySourceKey
+              }
+              onClick={() => {
+                const destination = copyDestinationKey.trim();
+                if (!onCopyObject || !destination || destination === copySourceKey) {
+                  return;
+                }
+                onCopyObject(copySourceKey, destination);
+                setCopyOpen(false);
+              }}
+            >
+              Copy object
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={uploadOpen} onOpenChange={setUploadOpen}>
         <AlertDialogContent>
