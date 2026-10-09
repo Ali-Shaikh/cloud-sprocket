@@ -98,14 +98,12 @@ function isRdsAvailable(status?: string): boolean {
   return (status ?? "").toLowerCase() === "available";
 }
 
-function gcpScopeStat(
-  workspace: WorkspaceSnapshot,
+function inventoryScopeStat(
   label: string,
-  scope: "gcs" | "gce" | "gcf" | "gke",
+  state: { loaded: boolean; emptyReason?: string } | undefined,
   count: number,
   tabId: string,
 ): StatItem {
-  const state = workspace.gcpInventory?.[scope];
   if (!state?.loaded) {
     return { label, value: "–", footer: "Open to load", tabId };
   }
@@ -118,6 +116,27 @@ function gcpScopeStat(
     footer: count === 0 ? "None yet" : undefined,
     tabId,
   };
+}
+
+function statsForEnabledTabs(
+  cards: StatItem[],
+  tabs: { tabId: string }[] | undefined,
+): StatItem[] {
+  const enabledTabs = new Set((tabs ?? []).map((tab) => tab.tabId));
+  if (enabledTabs.size === 0) {
+    return cards;
+  }
+  return cards.filter((card) => card.tabId !== undefined && enabledTabs.has(card.tabId));
+}
+
+function gcpScopeStat(
+  workspace: WorkspaceSnapshot,
+  label: string,
+  scope: "gcs" | "gce" | "gcf" | "gke",
+  count: number,
+  tabId: string,
+): StatItem {
+  return inventoryScopeStat(label, workspace.gcpInventory?.[scope], count, tabId);
 }
 
 export default function OverviewView({
@@ -240,25 +259,72 @@ export default function OverviewView({
         "gcp-gke",
       ),
     ];
-    const enabledTabs = new Set((session.workspaceTabs ?? []).map((tab) => tab.tabId));
-    stats.push(
-      ...(enabledTabs.size === 0
-        ? gcpCards
-        : gcpCards.filter((card) => card.tabId !== undefined && enabledTabs.has(card.tabId))),
-    );
+    stats.push(...statsForEnabledTabs(gcpCards, session.workspaceTabs));
   }
   if (isAzure) {
-    stats.push({
-      label: "Resource groups",
-      value: workspace.azureResourceGroups.length,
-      tabId: "azure-overview",
-    });
-    stats.push({
-      label: "Virtual machines",
-      value: workspace.azureVirtualMachines.length,
-      footer: runningFooter(vmsRunning, workspace.azureVirtualMachines.length),
-      tabId: "azure-vms",
-    });
+    const azureCards: StatItem[] = [
+      {
+        label: "Resource groups",
+        value: workspace.azureResourceGroups?.length ?? 0,
+        footer: (workspace.azureResourceGroups?.length ?? 0) === 0 ? "None yet" : undefined,
+        tabId: "azure-overview",
+      },
+      {
+        label: "Virtual machines",
+        value: workspace.azureVirtualMachines?.length ?? 0,
+        footer: runningFooter(vmsRunning, workspace.azureVirtualMachines?.length ?? 0),
+        tabId: "azure-vms",
+      },
+      inventoryScopeStat(
+        "Storage",
+        workspace.azureInventory?.storage,
+        workspace.azureStorageAccounts?.length ?? 0,
+        "azure-storage",
+      ),
+      inventoryScopeStat(
+        "App Service",
+        workspace.azureInventory?.webapps,
+        workspace.azureWebApps?.length ?? 0,
+        "azure-app-service",
+      ),
+      inventoryScopeStat(
+        "Functions",
+        workspace.azureInventory?.functions,
+        workspace.azureFunctionApps?.length ?? 0,
+        "azure-functions",
+      ),
+      inventoryScopeStat(
+        "Key Vault",
+        workspace.azureInventory?.keyvault,
+        workspace.azureKeyVaults?.length ?? 0,
+        "azure-key-vault",
+      ),
+      inventoryScopeStat(
+        "Cosmos DB",
+        workspace.azureInventory?.cosmos,
+        workspace.azureCosmosAccounts?.length ?? 0,
+        "azure-cosmos",
+      ),
+      inventoryScopeStat(
+        "PostgreSQL",
+        workspace.azureInventory?.postgres,
+        workspace.azurePostgresServers?.length ?? 0,
+        "azure-postgres",
+      ),
+      inventoryScopeStat(
+        "Queues",
+        workspace.azureInventory?.queues,
+        workspace.azureStorageQueues?.length ?? 0,
+        "azure-queues",
+      ),
+      inventoryScopeStat(
+        "Entra ID",
+        workspace.azureInventory?.entra,
+        workspace.azureEntraUsers?.length ?? 0,
+        "azure-entra",
+      ),
+    ];
+    stats.push(...statsForEnabledTabs(azureCards, session.workspaceTabs));
   }
   // Real cloud overviews should not advertise local emulators. Management stays
   // under the Local Runtime nav when the user wants it.

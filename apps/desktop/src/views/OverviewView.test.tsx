@@ -236,6 +236,111 @@ describe("OverviewView", () => {
     expect(screen.getByText("GKE clusters")).toBeInTheDocument();
   });
 
+  it("shows deferred Azure services as not loaded", () => {
+    render(
+      <OverviewView
+        workspace={{
+          ...workspace,
+          provider: { providerId: "azure", label: "Azure" },
+          profile: { profileId: "sandbox", displayName: "sandbox", attributes: [] },
+          azureResourceGroups: [{ name: "rg-platform" }],
+          azureStorageAccounts: [],
+        } as unknown as WorkspaceSnapshot}
+        session={{ ...session, lockedProviderId: "azure" }}
+        providerLabel="Azure"
+        onRefresh={vi.fn()}
+        onNavigate={vi.fn()}
+        onOpenRuntime={vi.fn()}
+      />,
+    );
+
+    const storage = screen.getByText("Storage").closest("button");
+    expect(storage).toHaveTextContent("Open to load");
+    expect(storage).not.toHaveTextContent("0");
+    expect(screen.getAllByText("Open to load")).toHaveLength(8);
+    expect(screen.getByText("Resource groups").closest("button")).toHaveTextContent("1");
+  });
+
+  it("shows a failed Azure list on the overview card", () => {
+    render(
+      <OverviewView
+        workspace={{
+          ...workspace,
+          provider: { providerId: "azure", label: "Azure" },
+          profile: { profileId: "sandbox", displayName: "sandbox", attributes: [] },
+          azureInventory: { storage: { loaded: true, emptyReason: "error" } },
+          azureStorageAccounts: [{ name: "logs" }, { name: "data" }],
+        } as unknown as WorkspaceSnapshot}
+        session={{ ...session, lockedProviderId: "azure" }}
+        providerLabel="Azure"
+        onRefresh={vi.fn()}
+        onNavigate={vi.fn()}
+        onOpenRuntime={vi.fn()}
+      />,
+    );
+
+    const storage = screen.getByText("Storage").closest("button");
+    expect(storage).toHaveTextContent("List failed");
+    expect(storage).toHaveTextContent("2");
+    expect(screen.getAllByText("Open to load")).toHaveLength(7);
+  });
+
+  it("shows a loaded empty Azure list as none yet", () => {
+    render(
+      <OverviewView
+        workspace={{
+          ...workspace,
+          provider: { providerId: "azure", label: "Azure" },
+          profile: { profileId: "sandbox", displayName: "sandbox", attributes: [] },
+          azureInventory: { storage: { loaded: true, emptyReason: "none_found" } },
+          azureStorageAccounts: [],
+        } as unknown as WorkspaceSnapshot}
+        session={{ ...session, lockedProviderId: "azure" }}
+        providerLabel="Azure"
+        onRefresh={vi.fn()}
+        onNavigate={vi.fn()}
+        onOpenRuntime={vi.fn()}
+      />,
+    );
+
+    const storage = screen.getByText("Storage").closest("button");
+    expect(storage).toHaveTextContent("None yet");
+    expect(storage).not.toHaveTextContent("Open to load");
+  });
+
+  it("hides an Azure card when that service is turned off", () => {
+    const tab = (tabId: string, label: string) => ({ tabId, label, summary: label, detail: label });
+    render(
+      <OverviewView
+        workspace={{
+          ...workspace,
+          provider: { providerId: "azure", label: "Azure" },
+          profile: { profileId: "sandbox", displayName: "sandbox", attributes: [] },
+        } as unknown as WorkspaceSnapshot}
+        session={{
+          ...session,
+          lockedProviderId: "azure",
+          workspaceTabs: [
+            tab("overview", "Overview"),
+            tab("azure-overview", "Azure"),
+            tab("azure-vms", "Virtual machines"),
+            tab("azure-functions", "Functions"),
+          ],
+        }}
+        providerLabel="Azure"
+        onRefresh={vi.fn()}
+        onNavigate={vi.fn()}
+        onOpenRuntime={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("Storage")).not.toBeInTheDocument();
+    expect(screen.queryByText("App Service")).not.toBeInTheDocument();
+    expect(screen.getByText("Resource groups")).toBeInTheDocument();
+    expect(screen.getByText("Virtual machines")).toBeInTheDocument();
+    expect(screen.getByText("Functions").closest("button")).toHaveTextContent("Open to load");
+  });
+
   it("hides local runtime health on real cloud workspaces", () => {
     const cloudWorkspace = {
       ...workspace,
