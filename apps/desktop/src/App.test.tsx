@@ -2729,7 +2729,8 @@ describe("App", () => {
       </AppProviders>,
     );
 
-    expect(await screen.findByText("Resource groups")).toBeInTheDocument();
+    expect(await screen.findByText("Open to load")).toBeInTheDocument();
+    expect(screen.queryByText("Resource groups")).not.toBeInTheDocument();
     const azureNav = within(document.querySelector('[data-slot="context-nav"]') as HTMLElement);
     await act(async () => {
       fireEvent.click(azureNav.getByRole("button", { name: /Storage/ }));

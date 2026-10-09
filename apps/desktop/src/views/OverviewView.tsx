@@ -25,6 +25,7 @@ import {
   workspaceUsesLocalEmulator,
   type RuntimeHealthTargetId,
 } from "@/lib/runtime-health";
+import { azureInventoryLoaded, type AzureInventoryScope } from "@/lib/azure-inventory";
 import { HiddenResourcesHint } from "@/components/overview/hidden-resources-hint";
 import type { HiddenResourceHit, SessionSnapshot, WorkspaceSnapshot } from "@/types/backend";
 
@@ -98,18 +99,17 @@ function isRdsAvailable(status?: string): boolean {
   return (status ?? "").toLowerCase() === "available";
 }
 
-function gcpScopeStat(
-  workspace: WorkspaceSnapshot,
+function inventoryScopeStat(
   label: string,
-  scope: "gcs" | "gce" | "gcf" | "gke",
+  loaded: boolean,
+  emptyReason: string | undefined,
   count: number,
   tabId: string,
 ): StatItem {
-  const state = workspace.gcpInventory?.[scope];
-  if (!state?.loaded) {
+  if (!loaded) {
     return { label, value: "–", footer: "Open to load", tabId };
   }
-  if (state.emptyReason === "error") {
+  if (emptyReason === "error") {
     return { label, value: count, footer: "List failed", tabId };
   }
   return {
@@ -118,6 +118,45 @@ function gcpScopeStat(
     footer: count === 0 ? "None yet" : undefined,
     tabId,
   };
+}
+
+function statsForEnabledTabs(
+  cards: StatItem[],
+  tabs: { tabId: string }[] | undefined,
+): StatItem[] {
+  const enabledTabs = new Set((tabs ?? []).map((tab) => tab.tabId));
+  if (enabledTabs.size === 0) {
+    return cards;
+  }
+  return cards.filter((card) => card.tabId !== undefined && enabledTabs.has(card.tabId));
+}
+
+function gcpScopeStat(
+  workspace: WorkspaceSnapshot,
+  label: string,
+  scope: "gcs" | "gce" | "gcf" | "gke",
+  count: number,
+  tabId: string,
+): StatItem {
+  const state = workspace.gcpInventory?.[scope];
+  return inventoryScopeStat(label, Boolean(state?.loaded), state?.emptyReason, count, tabId);
+}
+
+function azureScopeStat(
+  workspace: WorkspaceSnapshot,
+  label: string,
+  scope: AzureInventoryScope,
+  count: number,
+  tabId: string,
+): StatItem {
+  const state = workspace.azureInventory?.[scope];
+  return inventoryScopeStat(
+    label,
+    azureInventoryLoaded(workspace, scope),
+    state?.emptyReason,
+    count,
+    tabId,
+  );
 }
 
 export default function OverviewView({
@@ -240,25 +279,82 @@ export default function OverviewView({
         "gcp-gke",
       ),
     ];
-    const enabledTabs = new Set((session.workspaceTabs ?? []).map((tab) => tab.tabId));
-    stats.push(
-      ...(enabledTabs.size === 0
-        ? gcpCards
-        : gcpCards.filter((card) => card.tabId !== undefined && enabledTabs.has(card.tabId))),
-    );
+    stats.push(...statsForEnabledTabs(gcpCards, session.workspaceTabs));
   }
   if (isAzure) {
-    stats.push({
-      label: "Resource groups",
-      value: workspace.azureResourceGroups.length,
-      tabId: "azure-overview",
-    });
-    stats.push({
-      label: "Virtual machines",
-      value: workspace.azureVirtualMachines.length,
-      footer: runningFooter(vmsRunning, workspace.azureVirtualMachines.length),
-      tabId: "azure-vms",
-    });
+    const azureCards: StatItem[] = [
+      {
+        label: "Resource groups",
+        value: workspace.azureResourceGroups?.length ?? 0,
+        footer: (workspace.azureResourceGroups?.length ?? 0) === 0 ? "None yet" : undefined,
+        tabId: "azure-resource-groups",
+      },
+      {
+        label: "Virtual machines",
+        value: workspace.azureVirtualMachines?.length ?? 0,
+        footer: runningFooter(vmsRunning, workspace.azureVirtualMachines?.length ?? 0),
+        tabId: "azure-vms",
+      },
+      azureScopeStat(
+        workspace,
+        "Storage",
+        "storage",
+        workspace.azureStorageAccounts?.length ?? 0,
+        "azure-storage",
+      ),
+      azureScopeStat(
+        workspace,
+        "App Service",
+        "webapps",
+        workspace.azureWebApps?.length ?? 0,
+        "azure-app-service",
+      ),
+      azureScopeStat(
+        workspace,
+        "Functions",
+        "functions",
+        workspace.azureFunctionApps?.length ?? 0,
+        "azure-functions",
+      ),
+      azureScopeStat(
+        workspace,
+        "Key Vault",
+        "keyvault",
+        workspace.azureKeyVaults?.length ?? 0,
+        "azure-key-vault",
+      ),
+      azureScopeStat(
+        workspace,
+        "Cosmos DB",
+        "cosmos",
+        workspace.azureCosmosAccounts?.length ?? 0,
+        "azure-cosmos",
+      ),
+      azureScopeStat(
+        workspace,
+        "PostgreSQL",
+        "postgres",
+        workspace.azurePostgresServers?.length ?? 0,
+        "azure-postgres",
+      ),
+      azureScopeStat(
+        workspace,
+        "Queues",
+        "queues",
+        workspace.azureStorageQueues?.length ?? 0,
+        "azure-queues",
+      ),
+      azureScopeStat(
+        workspace,
+        "Entra ID",
+        "entra",
+        (workspace.azureEntraUsers?.length ?? 0) +
+          (workspace.azureEntraGroups?.length ?? 0) +
+          (workspace.azureEntraApps?.length ?? 0),
+        "azure-entra",
+      ),
+    ];
+    stats.push(...statsForEnabledTabs(azureCards, session.workspaceTabs));
   }
   // Real cloud overviews should not advertise local emulators. Management stays
   // under the Local Runtime nav when the user wants it.

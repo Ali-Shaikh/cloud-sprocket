@@ -14,6 +14,10 @@ Installers for every release are published on the
 - A failed S3 bucket or object list stays a failure. It no longer looks like
   the account or folder is empty. A stale cached list still shows, with the
   refresh failure beside it.
+- The Azure overview no longer shows 0 for Storage, App Service, Functions,
+  Key Vault, Cosmos DB, PostgreSQL, Queues, or Entra ID before that list has
+  loaded. Those cards stay unloaded until the tab opens. A failed list stays a
+  failure. A service that is turned off does not get a card.
 
 ## [0.9.21] - 2026-10-09
 
