@@ -3,7 +3,13 @@
 
 import { describe, expect, it } from "vitest";
 
-import { GCP_CREATE_HINTS, gcpFilterEmpty, gcpProjectEmpty, gcpTableEmptyCopy } from "./gcp-empty-copy";
+import {
+  GCP_CREATE_HINTS,
+  gcpFilterEmpty,
+  gcpObjectEmptyCopy,
+  gcpProjectEmpty,
+  gcpTableEmptyCopy,
+} from "./gcp-empty-copy";
 
 describe("gcp empty-state copy", () => {
   it("builds project-empty and filter-empty messages", () => {
@@ -53,5 +59,26 @@ describe("gcpTableEmptyCopy", () => {
         listFailed: true,
       }).title,
     ).toBe("No instances match the filter");
+  });
+});
+
+describe("gcpObjectEmptyCopy", () => {
+  it("says the object list failed even when the bucket warning comes first", () => {
+    expect(
+      gcpObjectEmptyCopy(
+        0,
+        "Could not refresh the live list. Showing 1 cached Cloud Storage bucket(s).\nCould not list objects in alpha.",
+      ).title,
+    ).toBe("Could not list objects");
+  });
+
+  it("says the folder is empty when the object list succeeded", () => {
+    expect(gcpObjectEmptyCopy(0, "This folder is empty in alpha.").title).toBe("This folder is empty");
+  });
+
+  it("says nothing matched when objects are loaded", () => {
+    expect(gcpObjectEmptyCopy(2, "Could not list objects in alpha.").title).toBe(
+      "No objects match the filter",
+    );
   });
 });

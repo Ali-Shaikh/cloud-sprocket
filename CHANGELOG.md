@@ -12,9 +12,11 @@ Installers for every release are published on the
 ### Changed
 
 - The Google Cloud overview shows Cloud Storage, Compute Engine, Cloud Functions,
-  and GKE as not loaded until that tab opens. A failed list stays a failure
-  instead of looking like an empty project. Catalogue text matches the actions
-  that exist today. Cloud Storage shows the write-mode reason on the page.
+  and GKE as not loaded until that tab opens. A service that is turned off does
+  not get a card. A failed list stays a failure instead of looking like an empty
+  project, including an object list that fails while cached buckets are still
+  shown. Catalogue text matches the actions that exist today. Cloud Storage
+  shows the write-mode reason on the page.
 
 ## [0.9.20] - 2026-10-09
 

@@ -263,6 +263,42 @@ func TestEnrichGcpStorageInventoryListsObjectsWhenBucketSelected(t *testing.T) {
 	}
 }
 
+func TestGcpStorageStatusMessageKeepsObjectFailureWhenBucketsAreCached(t *testing.T) {
+	message := gcpStorageStatusMessage(
+		[]models.GcpStorageBucket{{Name: "alpha"}},
+		"alpha",
+		"",
+		nil,
+		false,
+		errors.New("bucket refresh failed"),
+		errors.New("object list failed"),
+	)
+	if !strings.Contains(message, "Could not refresh the live list") {
+		t.Fatalf("status = %q", message)
+	}
+	if !strings.Contains(message, "Could not list objects in alpha") {
+		t.Fatalf("status = %q", message)
+	}
+	if !strings.Contains(message, "object list failed") {
+		t.Fatalf("status missing object detail: %q", message)
+	}
+}
+
+func TestGcpStorageStatusMessageDoesNotBlameObjectsWhenTheyListed(t *testing.T) {
+	message := gcpStorageStatusMessage(
+		[]models.GcpStorageBucket{{Name: "alpha"}},
+		"alpha",
+		"",
+		nil,
+		false,
+		errors.New("bucket refresh failed"),
+		nil,
+	)
+	if strings.Contains(message, "Could not list objects") {
+		t.Fatalf("status = %q", message)
+	}
+}
+
 func TestEnrichGcpStorageInventorySurfacesListError(t *testing.T) {
 	inv := &stubGcpStorageInventory{err: errors.New("gcloud not authenticated")}
 	service := &Service{

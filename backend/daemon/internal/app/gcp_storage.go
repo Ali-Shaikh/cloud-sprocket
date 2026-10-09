@@ -176,6 +176,14 @@ func (s *Service) enrichGcpStorageInventory(
 	})
 }
 
+func gcpObjectListFailure(selected string, objErr error) string {
+	return fmt.Sprintf(
+		"Could not list objects in %s.\nCheck that the bucket exists and the active gcloud identity has storage.objects.list.\nDetail: %v",
+		selected,
+		objErr,
+	)
+}
+
 func gcpStorageStatusMessage(
 	buckets []models.GcpStorageBucket,
 	selected string,
@@ -192,17 +200,17 @@ func gcpStorageStatusMessage(
 			listErr,
 		)
 	case listErr != nil:
-		return gcpCachedInventoryStatus("Cloud Storage bucket(s)", len(buckets), listErr)
+		message := gcpCachedInventoryStatus("Cloud Storage bucket(s)", len(buckets), listErr)
+		if objErr != nil && selected != "" && len(objects) == 0 {
+			return message + "\n" + gcpObjectListFailure(selected, objErr)
+		}
+		return message
 	case len(buckets) == 0:
 		return "No Cloud Storage buckets are currently available for this GCP project."
 	case selected == "":
 		return fmt.Sprintf("Loaded %d Cloud Storage bucket(s). Select one to browse objects.", len(buckets))
 	case objErr != nil && len(objects) == 0:
-		return fmt.Sprintf(
-			"Could not list objects in %s.\nCheck that the bucket exists and the active gcloud identity has storage.objects.list.\nDetail: %v",
-			selected,
-			objErr,
-		)
+		return gcpObjectListFailure(selected, objErr)
 	}
 
 	folderCount := 0

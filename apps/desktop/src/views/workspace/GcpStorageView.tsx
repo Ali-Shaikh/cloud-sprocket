@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/select";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { formatTimestamp } from "@/lib/format";
-import { GCP_CREATE_HINTS, gcpTableEmptyCopy } from "@/lib/gcp-empty-copy";
+import { GCP_CREATE_HINTS, gcpObjectEmptyCopy, gcpTableEmptyCopy } from "@/lib/gcp-empty-copy";
 import { gcpInventoryLoadingLabel } from "@/lib/gcp-inventory";
 import { notify } from "@/lib/notify";
 import {
@@ -142,6 +142,7 @@ export default function GcpStorageView({
   const buckets = workspace.gcpStorageBuckets ?? [];
   const objects = workspace.gcpStorageObjects ?? [];
   const status = workspace.gcpStorageStatusMessage?.trim() ?? "";
+  const objectEmpty = gcpObjectEmptyCopy(objects.length, status);
   const bucketName = workspace.selectedGcpStorageBucket ?? "";
   const prefix = workspace.gcpStoragePrefixFilter ?? "";
   const hasMore = Boolean(workspace.gcpStorageObjectsHasMore);
@@ -552,20 +553,8 @@ export default function GcpStorageView({
             emptyState={
               <EmptyState
                 icon={<FolderOpen />}
-                title={
-                  objects.length === 0 && status.startsWith("Could not list objects")
-                    ? "Could not list objects"
-                    : objects.length === 0
-                      ? "This folder is empty"
-                      : "No objects match the filter"
-                }
-                description={
-                  objects.length === 0 && status.startsWith("Could not list objects")
-                    ? "Refresh to try the list again."
-                    : objects.length === 0
-                      ? GCP_CREATE_HINTS.objects
-                      : GCP_CREATE_HINTS.objectFilter
-                }
+                title={objectEmpty.title}
+                description={objectEmpty.description}
               />
             }
           />

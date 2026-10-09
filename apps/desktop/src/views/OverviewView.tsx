@@ -210,7 +210,7 @@ export default function OverviewView({
     });
   }
   if (providerId === "gcp") {
-    stats.push(
+    const gcpCards = [
       gcpScopeStat(
         workspace,
         "Cloud Storage",
@@ -239,6 +239,12 @@ export default function OverviewView({
         workspace.gcpGkeClusters?.length ?? 0,
         "gcp-gke",
       ),
+    ];
+    const enabledTabs = new Set((session.workspaceTabs ?? []).map((tab) => tab.tabId));
+    stats.push(
+      ...(enabledTabs.size === 0
+        ? gcpCards
+        : gcpCards.filter((card) => card.tabId !== undefined && enabledTabs.has(card.tabId))),
     );
   }
   if (isAzure) {

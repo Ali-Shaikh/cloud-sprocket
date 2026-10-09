@@ -46,6 +46,26 @@ export function gcpTableEmptyCopy(input: {
   return gcpProjectEmpty(input.resourceLabel, input.createHint);
 }
 
+/** Object table copy. A failed object list must not look like an empty folder. */
+export function gcpObjectEmptyCopy(objectCount: number, status: string): GcpEmptyCopy {
+  if (objectCount === 0 && status.includes("Could not list objects")) {
+    return {
+      title: "Could not list objects",
+      description: "Refresh to try the list again.",
+    };
+  }
+  if (objectCount === 0) {
+    return {
+      title: "This folder is empty",
+      description: GCP_CREATE_HINTS.objects,
+    };
+  }
+  return {
+    title: "No objects match the filter",
+    description: GCP_CREATE_HINTS.objectFilter,
+  };
+}
+
 export const GCP_CREATE_HINTS = {
   buckets: "Create a bucket in the Google Cloud console or with gcloud, then refresh.",
   instances: "Create a VM in the Google Cloud console or with gcloud, then refresh.",
