@@ -9,6 +9,12 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Fixed
+
+- A failed S3 bucket or object list stays a failure. It no longer looks like
+  the account or folder is empty. A stale cached list still shows, with the
+  refresh failure beside it.
+
 ## [0.9.21] - 2026-10-09
 
 ### Changed

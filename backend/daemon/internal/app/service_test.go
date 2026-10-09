@@ -21,11 +21,13 @@ import (
 )
 
 type stubS3Inventory struct {
-	buckets       []models.AwsS3Bucket
-	objects       map[string][]models.AwsS3Object
-	metadata      map[string][]models.DetailField
-	uploaded      []models.AwsS3UploadResult
-	presignedURLs map[string]string
+	buckets        []models.AwsS3Bucket
+	objects        map[string][]models.AwsS3Object
+	metadata       map[string][]models.DetailField
+	uploaded       []models.AwsS3UploadResult
+	presignedURLs  map[string]string
+	listBucketsErr error
+	listObjectsErr error
 }
 
 type stubEC2Inventory struct {
@@ -369,10 +371,16 @@ func (s *stubIAMInventory) CreateRole(_ context.Context, _ models.ProfileSummary
 }
 
 func (s *stubS3Inventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.AwsS3Bucket, error) {
+	if s.listBucketsErr != nil {
+		return nil, s.listBucketsErr
+	}
 	return append([]models.AwsS3Bucket(nil), s.buckets...), nil
 }
 
 func (s *stubS3Inventory) ListObjects(_ context.Context, _ models.ProfileSummary, bucketName string, prefix string, continuationToken string) (models.AwsS3ObjectListPage, error) {
+	if s.listObjectsErr != nil {
+		return models.AwsS3ObjectListPage{}, s.listObjectsErr
+	}
 	objects := append([]models.AwsS3Object(nil), s.objects[bucketName]...)
 	if prefix == "" {
 		return models.AwsS3ObjectListPage{Entries: objects}, nil
