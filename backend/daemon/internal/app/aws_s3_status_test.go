@@ -89,6 +89,45 @@ func TestEnrichS3InventoryKeepsCachedBucketsWhenTheRefreshFails(t *testing.T) {
 	}
 }
 
+func TestEnrichS3InventoryKeepsCachedObjectsWhenTheRefreshFails(t *testing.T) {
+	service := s3StatusTestService(t, &stubS3Inventory{
+		buckets:        []models.AwsS3Bucket{{Name: "alpha"}},
+		listObjectsErr: errors.New("slow down"),
+	})
+	profile := awsS3Workspace().Profile
+	err := service.store.SaveResourceCache(
+		context.Background(),
+		"aws.s3.objects.page",
+		profile.ProfileID+"|alpha|",
+		models.AwsS3ObjectListPage{
+			Entries: []models.AwsS3Object{{Key: "docs/readme.txt", Size: "12 B"}},
+		},
+		time.Now().UTC().Add(-2*time.Hour).Format(time.RFC3339),
+	)
+	if err != nil {
+		t.Fatalf("SaveResourceCache: %v", err)
+	}
+	workspace := awsS3Workspace()
+
+	service.enrichS3Inventory(&workspace, models.SessionSnapshot{}, awsEnrichmentOptions{}, nil)
+
+	if len(workspace.S3Objects) != 1 || workspace.S3Objects[0].Key != "docs/readme.txt" {
+		t.Fatalf("objects = %+v", workspace.S3Objects)
+	}
+	if !strings.Contains(workspace.S3StatusMessage, "Could not refresh the live list") {
+		t.Fatalf("status = %q", workspace.S3StatusMessage)
+	}
+	if !strings.Contains(workspace.S3StatusMessage, "1 cached object(s) in alpha") {
+		t.Fatalf("status = %q", workspace.S3StatusMessage)
+	}
+	if !strings.Contains(workspace.S3StatusMessage, "slow down") {
+		t.Fatalf("status missing detail: %q", workspace.S3StatusMessage)
+	}
+	if strings.Contains(workspace.S3StatusMessage, "This folder is empty") {
+		t.Fatalf("status = %q", workspace.S3StatusMessage)
+	}
+}
+
 func TestS3ListFailureStatusKeepsObjectFailureBesideCachedBuckets(t *testing.T) {
 	message, failed := s3ListFailureStatus(
 		[]models.AwsS3Bucket{{Name: "alpha"}},
