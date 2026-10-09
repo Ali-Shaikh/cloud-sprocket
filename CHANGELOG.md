@@ -9,6 +9,12 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Security
+
+- Go 1.26.6 to 1.26.9 and `golang.org/x/net` v0.60.0. This covers the October
+  2026 standard library fixes for HTTP/2 and `crypto/tls` (GO-2026-6603
+  through GO-2026-6617).
+
 ### Added
 
 - Cloud Storage can create a bucket and copy an object inside the selected
