@@ -40,11 +40,7 @@ import {
 } from "@/components/ui/select";
 import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
 import { formatTimestamp } from "@/lib/format";
-import {
-  GCP_CREATE_HINTS,
-  gcpFilterEmpty,
-  gcpProjectEmpty,
-} from "@/lib/gcp-empty-copy";
+import { GCP_CREATE_HINTS, gcpObjectEmptyCopy, gcpTableEmptyCopy } from "@/lib/gcp-empty-copy";
 import { gcpInventoryLoadingLabel } from "@/lib/gcp-inventory";
 import { notify } from "@/lib/notify";
 import {
@@ -146,6 +142,7 @@ export default function GcpStorageView({
   const buckets = workspace.gcpStorageBuckets ?? [];
   const objects = workspace.gcpStorageObjects ?? [];
   const status = workspace.gcpStorageStatusMessage?.trim() ?? "";
+  const objectEmpty = gcpObjectEmptyCopy(objects.length, status);
   const bucketName = workspace.selectedGcpStorageBucket ?? "";
   const prefix = workspace.gcpStoragePrefixFilter ?? "";
   const hasMore = Boolean(workspace.gcpStorageObjectsHasMore);
@@ -260,6 +257,9 @@ export default function GcpStorageView({
             Bucket inventory and object browser for the open gcloud configuration
             {projectLabel ? ` · project ${projectLabel}` : ""}.
           </p>
+          {onCreateBucket && !createCapability.enabled && createCapability.reason ? (
+            <p className="text-xs text-muted-foreground">{createCapability.reason}</p>
+          ) : null}
           {bucketName ? breadcrumb : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -416,9 +416,14 @@ export default function GcpStorageView({
             ) : (
               <EmptyState
                 icon={<HardDrive />}
-                {...(buckets.length === 0
-                  ? gcpProjectEmpty("buckets", GCP_CREATE_HINTS.buckets)
-                  : gcpFilterEmpty("buckets"))}
+                {...gcpTableEmptyCopy({
+                  resourceLabel: "buckets",
+                  createHint: createCapability.enabled
+                    ? "Use New bucket, or refresh after you create one elsewhere."
+                    : GCP_CREATE_HINTS.buckets,
+                  rowCount: buckets.length,
+                  listFailed: workspace.gcpInventory?.gcs?.emptyReason === "error",
+                })}
               />
             )
           }
@@ -548,14 +553,8 @@ export default function GcpStorageView({
             emptyState={
               <EmptyState
                 icon={<FolderOpen />}
-                title={
-                  objects.length === 0 ? "This folder is empty" : "No objects match the filter"
-                }
-                description={
-                  objects.length === 0
-                    ? GCP_CREATE_HINTS.objects
-                    : GCP_CREATE_HINTS.objectFilter
-                }
+                title={objectEmpty.title}
+                description={objectEmpty.description}
               />
             }
           />

@@ -233,6 +233,40 @@ describe("GcpStorageView", () => {
     expect(screen.getByText(/Google Cloud console or with gcloud/i)).toBeTruthy();
   });
 
+  it("says the object list failed when the bucket warning is listed first", () => {
+    const failed = {
+      ...baseWorkspace,
+      gcpStorageObjects: [],
+      gcpStorageStatusMessage:
+        "Could not refresh the live list. Showing 1 cached Cloud Storage bucket(s).\nCould not list objects in alpha.",
+    } as unknown as WorkspaceSnapshot;
+
+    renderStorage({ workspace: failed });
+
+    expect(screen.getByText("Could not list objects")).toBeTruthy();
+    expect(screen.queryByText("This folder is empty")).toBeNull();
+  });
+
+  it("says the bucket list failed instead of saying the project is empty", () => {
+    const failed = {
+      profile: baseWorkspace.profile,
+      gcpStorageBuckets: [],
+      gcpStorageObjects: [],
+      gcpStorageStatusMessage: "Could not list Cloud Storage buckets.",
+      gcpInventory: { gcs: { loaded: true, emptyReason: "error" } },
+    } as unknown as WorkspaceSnapshot;
+
+    renderStorage({ workspace: failed });
+
+    expect(screen.getByText("Could not list buckets")).toBeTruthy();
+    expect(screen.queryByText("No buckets in this project")).toBeNull();
+  });
+
+  it("shows the write mode reason in the page", () => {
+    renderStorage({ onCreateBucket: vi.fn() });
+    expect(screen.getByText(WRITE_MODE_REQUIRED_REASON)).toBeTruthy();
+  });
+
   it("loads more objects when a continuation token is present", () => {
     const onLoadMoreObjects = vi.fn();
     const paged = {

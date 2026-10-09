@@ -66,7 +66,7 @@ export type OverviewViewProps = {
 
 type StatItem = {
   label: string;
-  value: number;
+  value: number | string;
   footer?: React.ReactNode;
   tabId?: string;
 };
@@ -96,6 +96,28 @@ function isDynamoDBActive(status?: string): boolean {
 
 function isRdsAvailable(status?: string): boolean {
   return (status ?? "").toLowerCase() === "available";
+}
+
+function gcpScopeStat(
+  workspace: WorkspaceSnapshot,
+  label: string,
+  scope: "gcs" | "gce" | "gcf" | "gke",
+  count: number,
+  tabId: string,
+): StatItem {
+  const state = workspace.gcpInventory?.[scope];
+  if (!state?.loaded) {
+    return { label, value: "–", footer: "Open to load", tabId };
+  }
+  if (state.emptyReason === "error") {
+    return { label, value: count, footer: "List failed", tabId };
+  }
+  return {
+    label,
+    value: count,
+    footer: count === 0 ? "None yet" : undefined,
+    tabId,
+  };
 }
 
 export default function OverviewView({
@@ -186,6 +208,44 @@ export default function OverviewView({
       value: workspace.iamRoles.length,
       tabId: "iam",
     });
+  }
+  if (providerId === "gcp") {
+    const gcpCards = [
+      gcpScopeStat(
+        workspace,
+        "Cloud Storage",
+        "gcs",
+        workspace.gcpStorageBuckets?.length ?? 0,
+        "gcp-storage",
+      ),
+      gcpScopeStat(
+        workspace,
+        "Compute Engine",
+        "gce",
+        workspace.gcpComputeInstances?.length ?? 0,
+        "gcp-compute",
+      ),
+      gcpScopeStat(
+        workspace,
+        "Cloud Functions",
+        "gcf",
+        workspace.gcpFunctions?.length ?? 0,
+        "gcp-functions",
+      ),
+      gcpScopeStat(
+        workspace,
+        "GKE clusters",
+        "gke",
+        workspace.gcpGkeClusters?.length ?? 0,
+        "gcp-gke",
+      ),
+    ];
+    const enabledTabs = new Set((session.workspaceTabs ?? []).map((tab) => tab.tabId));
+    stats.push(
+      ...(enabledTabs.size === 0
+        ? gcpCards
+        : gcpCards.filter((card) => card.tabId !== undefined && enabledTabs.has(card.tabId))),
+    );
   }
   if (isAzure) {
     stats.push({

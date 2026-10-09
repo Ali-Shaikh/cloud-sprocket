@@ -170,6 +170,72 @@ describe("OverviewView", () => {
     expect(onEmulatorQuickStart).toHaveBeenCalledWith("localstack");
   });
 
+  it("shows Google Cloud services as not loaded until a tab opens", () => {
+    render(
+      <OverviewView
+        workspace={workspace}
+        session={{ ...session, lockedProviderId: "gcp" }}
+        providerLabel="Google Cloud"
+        profileLabel="platform"
+        onRefresh={vi.fn()}
+        onNavigate={vi.fn()}
+        onOpenRuntime={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Cloud Storage")).toBeInTheDocument();
+    expect(screen.getAllByText("Open to load").length).toBe(4);
+  });
+
+  it("shows a Google Cloud list failure on the overview card", () => {
+    const gcpWorkspace = {
+      ...workspace,
+      gcpInventory: { gcs: { loaded: true, emptyReason: "error" } },
+      gcpStorageBuckets: [],
+    } as unknown as WorkspaceSnapshot;
+    render(
+      <OverviewView
+        workspace={gcpWorkspace}
+        session={{ ...session, lockedProviderId: "gcp" }}
+        providerLabel="Google Cloud"
+        onRefresh={vi.fn()}
+        onNavigate={vi.fn()}
+        onOpenRuntime={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("List failed")).toBeInTheDocument();
+    expect(screen.getAllByText("Open to load").length).toBe(3);
+  });
+
+  it("hides a Google Cloud card when that service is turned off", () => {
+    const tab = (tabId: string, label: string) => ({ tabId, label, summary: label, detail: label });
+    render(
+      <OverviewView
+        workspace={workspace}
+        session={{
+          ...session,
+          lockedProviderId: "gcp",
+          workspaceTabs: [
+            tab("overview", "Overview"),
+            tab("gcp-compute", "Compute Engine"),
+            tab("gcp-functions", "Cloud Functions"),
+            tab("gcp-gke", "GKE"),
+          ],
+        }}
+        providerLabel="Google Cloud"
+        onRefresh={vi.fn()}
+        onNavigate={vi.fn()}
+        onOpenRuntime={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("Cloud Storage")).not.toBeInTheDocument();
+    expect(screen.getByText("Compute Engine")).toBeInTheDocument();
+    expect(screen.getByText("Cloud Functions")).toBeInTheDocument();
+    expect(screen.getByText("GKE clusters")).toBeInTheDocument();
+  });
+
   it("hides local runtime health on real cloud workspaces", () => {
     const cloudWorkspace = {
       ...workspace,
