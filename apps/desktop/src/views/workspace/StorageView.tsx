@@ -28,6 +28,7 @@ import {
   s3EntryDisplayName,
   s3ObjectListSummary,
 } from "@/lib/s3-object-filter";
+import { s3BucketEmptyCopy, s3ObjectEmptyCopy } from "@/lib/s3-empty-copy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -264,6 +265,16 @@ export default function StorageView({
     [workspace.s3Objects, debouncedKeySearch],
   );
   const searchActive = debouncedKeySearch.trim().length > 0;
+  const bucketEmpty = s3BucketEmptyCopy(
+    workspace.s3Buckets.length,
+    workspace.s3StatusMessage ?? "",
+  );
+  const objectEmpty = s3ObjectEmptyCopy({
+    loadedCount: workspace.s3Objects.length,
+    searchActive,
+    status: workspace.s3StatusMessage ?? "",
+    searchDescription: `No loaded names contain “${debouncedKeySearch.trim()}”. Clear search or open another folder.`,
+  });
   const listSummary = s3ObjectListSummary(
     workspace.s3Objects.length,
     visibleObjects.length,
@@ -780,13 +791,8 @@ export default function StorageView({
       {!bucketName || workspace.s3Buckets.length === 0 ? (
         <EmptyState
           icon={<Database />}
-          title={workspace.s3Buckets.length === 0 ? "No buckets discovered" : "Select a bucket"}
-          description={
-            workspace.s3Buckets.length === 0
-              ? workspace.s3StatusMessage ||
-                "S3 inventory is waiting for an open AWS workspace."
-              : "Choose a bucket above. Objects stay on this page."
-          }
+          title={bucketEmpty.title}
+          description={bucketEmpty.description}
         />
       ) : listingLoading ? (
         <InventoryLoadingState variant="panel" label={listingLoadingLabel} />
@@ -853,12 +859,8 @@ export default function StorageView({
                 emptyState={
                   <EmptyState
                     icon={<Database />}
-                    title={searchActive ? "No matching names" : "Empty folder"}
-                    description={
-                      searchActive
-                        ? `No loaded names contain “${debouncedKeySearch.trim()}”. Clear search or open another folder.`
-                        : "This folder has no subfolders or objects. Use the breadcrumb to go up."
-                    }
+                    title={objectEmpty.title}
+                    description={objectEmpty.description}
                     className="border-0"
                   />
                 }

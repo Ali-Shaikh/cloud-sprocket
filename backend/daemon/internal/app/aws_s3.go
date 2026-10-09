@@ -30,7 +30,8 @@ func (s *Service) activeS3Selection(
 	}
 	bucketName := session.SelectedS3BucketName
 	if bucketName == "" && requireBucket {
-		bucketName = s.selectedS3BucketName(session, s.s3Buckets(context.Background(), profile))
+		buckets, _ := s.s3Buckets(context.Background(), profile)
+		bucketName = s.selectedS3BucketName(session, buckets)
 	}
 	if requireBucket && bucketName == "" {
 		return models.ProfileSummary{}, "", errors.New("select an S3 bucket before using this action")
@@ -84,45 +85,50 @@ func (s *Service) selectedS3ObjectKey(
 func (s *Service) s3Buckets(
 	ctx context.Context,
 	profile models.ProfileSummary,
-) []models.AwsS3Bucket {
+) ([]models.AwsS3Bucket, error) {
 	const scope = "aws.s3.buckets"
 
 	queryHash := profile.ProfileID
 
 	var cached []models.AwsS3Bucket
-	if fetchedAt, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
-		for index := range cached {
-			if cached[index].Summary == "" {
-				cached[index].Summary = "Cached " + fetchedAt
-			}
+	if s.store != nil {
+		if fetchedAt, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+			return labelCachedS3Buckets(cached, fetchedAt), nil
 		}
-		return cached
 	}
 
 	buckets, err := s.s3.ListBuckets(ctx, profile)
 	if err == nil {
-		fetchedAt := s.timestamp()
-		if saveErr := s.saveResourceCacheWithTTL(ctx, scope, queryHash, buckets); saveErr == nil {
-			for index := range buckets {
-				if buckets[index].Summary == "" {
-					buckets[index].Summary = "Fetched " + fetchedAt
+		if s.store != nil {
+			fetchedAt := s.timestamp()
+			if saveErr := s.saveResourceCacheWithTTL(ctx, scope, queryHash, buckets); saveErr == nil {
+				for index := range buckets {
+					if buckets[index].Summary == "" {
+						buckets[index].Summary = "Fetched " + fetchedAt
+					}
 				}
 			}
 		}
-		return buckets
+		return buckets, nil
 	}
 
-	fetchedAt, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
-	if cacheErr == nil && ok {
-		for index := range cached {
-			if cached[index].Summary == "" {
-				cached[index].Summary = "Cached " + fetchedAt
-			}
+	if s.store != nil {
+		fetchedAt, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached)
+		if cacheErr == nil && ok {
+			return labelCachedS3Buckets(cached, fetchedAt), err
 		}
-		return cached
 	}
 
-	return []models.AwsS3Bucket{}
+	return []models.AwsS3Bucket{}, err
+}
+
+func labelCachedS3Buckets(buckets []models.AwsS3Bucket, fetchedAt string) []models.AwsS3Bucket {
+	for index := range buckets {
+		if buckets[index].Summary == "" {
+			buckets[index].Summary = "Cached " + fetchedAt
+		}
+	}
+	return buckets
 }
 
 func (s *Service) s3ObjectPage(
@@ -131,33 +137,39 @@ func (s *Service) s3ObjectPage(
 	bucketName string,
 	prefix string,
 	continuationToken string,
-) models.AwsS3ObjectListPage {
+) (models.AwsS3ObjectListPage, error) {
 	if bucketName == "" {
-		return models.AwsS3ObjectListPage{}
+		return models.AwsS3ObjectListPage{}, nil
 	}
 	// First page may use a short TTL cache; paginated tokens are never cached.
 	if continuationToken == "" {
 		const scope = "aws.s3.objects.page"
 		queryHash := profile.ProfileID + "|" + bucketName + "|" + prefix
 		var cached models.AwsS3ObjectListPage
-		if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
-			return cached
+		if s.store != nil {
+			if _, ok, _ := s.loadCachedResource(ctx, scope, queryHash, &cached); ok {
+				return cached, nil
+			}
 		}
 		page, err := s.s3.ListObjects(ctx, profile, bucketName, prefix, "")
 		if err == nil {
-			_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, page)
-			return page
+			if s.store != nil {
+				_ = s.saveResourceCacheWithTTL(ctx, scope, queryHash, page)
+			}
+			return page, nil
 		}
-		if _, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached); cacheErr == nil && ok {
-			return cached
+		if s.store != nil {
+			if _, ok, cacheErr := s.store.LoadResourceCache(ctx, scope, queryHash, &cached); cacheErr == nil && ok {
+				return cached, err
+			}
 		}
-		return models.AwsS3ObjectListPage{}
+		return models.AwsS3ObjectListPage{}, err
 	}
 	page, err := s.s3.ListObjects(ctx, profile, bucketName, prefix, continuationToken)
 	if err != nil {
-		return models.AwsS3ObjectListPage{}
+		return models.AwsS3ObjectListPage{}, err
 	}
-	return page
+	return page, nil
 }
 
 // s3Objects is used by write paths that only need keys under a prefix (no pagination).
@@ -167,7 +179,55 @@ func (s *Service) s3Objects(
 	bucketName string,
 	prefix string,
 ) []models.AwsS3Object {
-	return s.s3ObjectPage(ctx, profile, bucketName, prefix, "").Entries
+	page, _ := s.s3ObjectPage(ctx, profile, bucketName, prefix, "")
+	return page.Entries
+}
+
+// s3ListFailureStatus reports a failed bucket or object list. A successful
+// empty account or empty folder returns false so the caller keeps its own copy.
+func s3ListFailureStatus(
+	buckets []models.AwsS3Bucket,
+	selected string,
+	prefix string,
+	objects []models.AwsS3Object,
+	bucketErr error,
+	objectErr error,
+) (string, bool) {
+	location := selected
+	if prefix != "" {
+		location = selected + "/" + strings.TrimSuffix(prefix, "/")
+	}
+	objectNote := ""
+	if objectErr != nil && selected != "" {
+		if len(objects) == 0 {
+			objectNote = fmt.Sprintf("Could not list objects in %s.\nDetail: %v", location, objectErr)
+		} else {
+			objectNote = fmt.Sprintf(
+				"Could not refresh the live list. Showing %d cached object(s) in %s.\nDetail: %v",
+				len(objects),
+				location,
+				objectErr,
+			)
+		}
+	}
+	switch {
+	case bucketErr != nil && len(buckets) == 0:
+		return fmt.Sprintf("Could not list S3 buckets.\nDetail: %v", bucketErr), true
+	case bucketErr != nil:
+		message := fmt.Sprintf(
+			"Could not refresh the live list. Showing %d cached bucket(s).\nDetail: %v",
+			len(buckets),
+			bucketErr,
+		)
+		if objectNote != "" {
+			return message + "\n" + objectNote, true
+		}
+		return message, true
+	case objectNote != "":
+		return objectNote, true
+	default:
+		return "", false
+	}
 }
 
 func (s *Service) s3ObjectMetadata(
@@ -236,7 +296,7 @@ func (s *Service) enrichS3Inventory(
 		return
 	}
 	timeoutCtx, cancel := s.withAWSTimeout(context.Background())
-	buckets := s.s3Buckets(timeoutCtx, *workspace.Profile)
+	buckets, bucketErr := s.s3Buckets(timeoutCtx, *workspace.Profile)
 	cancel()
 	selectedBucket := s.selectedS3BucketName(session, buckets)
 
@@ -248,6 +308,9 @@ func (s *Service) enrichS3Inventory(
 			} else {
 				status = fmt.Sprintf("Loaded %d bucket(s). Select %s to browse objects.", len(buckets), selectedBucket)
 			}
+		}
+		if failure, failed := s3ListFailureStatus(buckets, selectedBucket, "", nil, bucketErr, nil); failed {
+			status = failure
 		}
 		lockWorkspace(mu, func() {
 			workspace.S3Buckets = buckets
@@ -263,7 +326,7 @@ func (s *Service) enrichS3Inventory(
 	}
 
 	timeoutCtx, cancel = s.withAWSTimeout(context.Background())
-	page := s.s3ObjectPage(
+	page, objectErr := s.s3ObjectPage(
 		timeoutCtx,
 		*workspace.Profile,
 		selectedBucket,
@@ -316,6 +379,16 @@ func (s *Service) enrichS3Inventory(
 				location,
 			)
 		}
+	}
+	if failure, failed := s3ListFailureStatus(
+		buckets,
+		selectedBucket,
+		session.S3PrefixFilter,
+		objects,
+		bucketErr,
+		objectErr,
+	); failed {
+		status = failure
 	}
 
 	lockWorkspace(mu, func() {
