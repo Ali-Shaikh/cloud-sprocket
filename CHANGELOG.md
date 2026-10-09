@@ -9,6 +9,8 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+## [0.9.20] - 2026-10-09
+
 ### Security
 
 - Go 1.26.6 to 1.26.9 and `golang.org/x/net` v0.60.0. This covers the October
@@ -1506,7 +1508,8 @@ Initial public release.
 - Lockable workspace flow and session landing page
 - Automated Windows and macOS CI builds
 
-[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.19...HEAD
+[Unreleased]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.20...HEAD
+[0.9.20]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.19...v0.9.20
 [0.9.19]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.18...v0.9.19
 [0.9.18]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.17...v0.9.18
 [0.9.17]: https://github.com/Ali-Shaikh/cloud-sprocket/compare/v0.9.16...v0.9.17
