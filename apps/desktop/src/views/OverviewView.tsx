@@ -25,6 +25,7 @@ import {
   workspaceUsesLocalEmulator,
   type RuntimeHealthTargetId,
 } from "@/lib/runtime-health";
+import { azureInventoryLoaded, type AzureInventoryScope } from "@/lib/azure-inventory";
 import { HiddenResourcesHint } from "@/components/overview/hidden-resources-hint";
 import type { HiddenResourceHit, SessionSnapshot, WorkspaceSnapshot } from "@/types/backend";
 
@@ -100,14 +101,15 @@ function isRdsAvailable(status?: string): boolean {
 
 function inventoryScopeStat(
   label: string,
-  state: { loaded: boolean; emptyReason?: string } | undefined,
+  loaded: boolean,
+  emptyReason: string | undefined,
   count: number,
   tabId: string,
 ): StatItem {
-  if (!state?.loaded) {
+  if (!loaded) {
     return { label, value: "–", footer: "Open to load", tabId };
   }
-  if (state.emptyReason === "error") {
+  if (emptyReason === "error") {
     return { label, value: count, footer: "List failed", tabId };
   }
   return {
@@ -136,7 +138,25 @@ function gcpScopeStat(
   count: number,
   tabId: string,
 ): StatItem {
-  return inventoryScopeStat(label, workspace.gcpInventory?.[scope], count, tabId);
+  const state = workspace.gcpInventory?.[scope];
+  return inventoryScopeStat(label, Boolean(state?.loaded), state?.emptyReason, count, tabId);
+}
+
+function azureScopeStat(
+  workspace: WorkspaceSnapshot,
+  label: string,
+  scope: AzureInventoryScope,
+  count: number,
+  tabId: string,
+): StatItem {
+  const state = workspace.azureInventory?.[scope];
+  return inventoryScopeStat(
+    label,
+    azureInventoryLoaded(workspace, scope),
+    state?.emptyReason,
+    count,
+    tabId,
+  );
 }
 
 export default function OverviewView({
@@ -267,7 +287,7 @@ export default function OverviewView({
         label: "Resource groups",
         value: workspace.azureResourceGroups?.length ?? 0,
         footer: (workspace.azureResourceGroups?.length ?? 0) === 0 ? "None yet" : undefined,
-        tabId: "azure-overview",
+        tabId: "azure-resource-groups",
       },
       {
         label: "Virtual machines",
@@ -275,52 +295,62 @@ export default function OverviewView({
         footer: runningFooter(vmsRunning, workspace.azureVirtualMachines?.length ?? 0),
         tabId: "azure-vms",
       },
-      inventoryScopeStat(
+      azureScopeStat(
+        workspace,
         "Storage",
-        workspace.azureInventory?.storage,
+        "storage",
         workspace.azureStorageAccounts?.length ?? 0,
         "azure-storage",
       ),
-      inventoryScopeStat(
+      azureScopeStat(
+        workspace,
         "App Service",
-        workspace.azureInventory?.webapps,
+        "webapps",
         workspace.azureWebApps?.length ?? 0,
         "azure-app-service",
       ),
-      inventoryScopeStat(
+      azureScopeStat(
+        workspace,
         "Functions",
-        workspace.azureInventory?.functions,
+        "functions",
         workspace.azureFunctionApps?.length ?? 0,
         "azure-functions",
       ),
-      inventoryScopeStat(
+      azureScopeStat(
+        workspace,
         "Key Vault",
-        workspace.azureInventory?.keyvault,
+        "keyvault",
         workspace.azureKeyVaults?.length ?? 0,
         "azure-key-vault",
       ),
-      inventoryScopeStat(
+      azureScopeStat(
+        workspace,
         "Cosmos DB",
-        workspace.azureInventory?.cosmos,
+        "cosmos",
         workspace.azureCosmosAccounts?.length ?? 0,
         "azure-cosmos",
       ),
-      inventoryScopeStat(
+      azureScopeStat(
+        workspace,
         "PostgreSQL",
-        workspace.azureInventory?.postgres,
+        "postgres",
         workspace.azurePostgresServers?.length ?? 0,
         "azure-postgres",
       ),
-      inventoryScopeStat(
+      azureScopeStat(
+        workspace,
         "Queues",
-        workspace.azureInventory?.queues,
+        "queues",
         workspace.azureStorageQueues?.length ?? 0,
         "azure-queues",
       ),
-      inventoryScopeStat(
+      azureScopeStat(
+        workspace,
         "Entra ID",
-        workspace.azureInventory?.entra,
-        workspace.azureEntraUsers?.length ?? 0,
+        "entra",
+        (workspace.azureEntraUsers?.length ?? 0) +
+          (workspace.azureEntraGroups?.length ?? 0) +
+          (workspace.azureEntraApps?.length ?? 0),
         "azure-entra",
       ),
     ];
