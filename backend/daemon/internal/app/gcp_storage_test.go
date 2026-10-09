@@ -18,34 +18,36 @@ import (
 )
 
 type stubGcpStorageInventory struct {
-	buckets     []models.GcpStorageBucket
-	objects     models.GcpStorageObjectListPage
-	err         error
-	objectsErr  error
-	uploadErr   error
-	deleteErr   error
-	createErr   error
-	copyErr     error
-	signErr     error
-	signResult  models.GcpStorageSignURLResult
-	calls       int
-	objectCalls int
-	uploadCalls int
-	deleteCalls int
-	createCalls int
-	copyCalls   int
-	signCalls   int
-	lastBucket  string
-	lastPrefix  string
-	lastToken   string
-	lastKey     string
-	lastSource  string
-	lastSignKey string
-	lastSignDur int
-	lastCreate  string
-	lastPlace   string
-	lastCopySrc string
-	lastCopyDst string
+	buckets      []models.GcpStorageBucket
+	objects      models.GcpStorageObjectListPage
+	err          error
+	objectsErr   error
+	uploadErr    error
+	deleteErr    error
+	createErr    error
+	copyErr      error
+	duringCreate func()
+	duringCopy   func()
+	signErr      error
+	signResult   models.GcpStorageSignURLResult
+	calls        int
+	objectCalls  int
+	uploadCalls  int
+	deleteCalls  int
+	createCalls  int
+	copyCalls    int
+	signCalls    int
+	lastBucket   string
+	lastPrefix   string
+	lastToken    string
+	lastKey      string
+	lastSource   string
+	lastSignKey  string
+	lastSignDur  int
+	lastCreate   string
+	lastPlace    string
+	lastCopySrc  string
+	lastCopyDst  string
 }
 
 func (s *stubGcpStorageInventory) ListBuckets(context.Context, models.ProfileSummary) ([]models.GcpStorageBucket, error) {
@@ -119,6 +121,9 @@ func (s *stubGcpStorageInventory) CreateBucket(
 	s.createCalls++
 	s.lastCreate = bucketName
 	s.lastPlace = location
+	if s.duringCreate != nil {
+		s.duringCreate()
+	}
 	if s.createErr != nil {
 		return models.GcpStorageCreateBucketResult{}, s.createErr
 	}
@@ -141,6 +146,9 @@ func (s *stubGcpStorageInventory) CopyObject(
 	s.lastBucket = bucketName
 	s.lastCopySrc = sourceObjectKey
 	s.lastCopyDst = destinationObjectKey
+	if s.duringCopy != nil {
+		s.duringCopy()
+	}
 	if s.copyErr != nil {
 		return models.GcpStorageCopyObjectResult{}, s.copyErr
 	}
@@ -678,5 +686,61 @@ func TestHandleGcpStorageCopyObjectRequiresWriteModeAndBucket(t *testing.T) {
 	}
 	if inv.copyCalls != 1 || inv.lastBucket != "alpha" || inv.lastCopySrc != "docs/readme.txt" || inv.lastCopyDst != "docs/copy.txt" {
 		t.Fatalf("copy bucket=%q src=%q dst=%q calls=%d", inv.lastBucket, inv.lastCopySrc, inv.lastCopyDst, inv.copyCalls)
+	}
+}
+
+func TestHandleGcpStorageCopyKeepsANewerBucketSelection(t *testing.T) {
+	inv := &stubGcpStorageInventory{
+		buckets: []models.GcpStorageBucket{{Name: "alpha"}, {Name: "beta"}},
+	}
+	service := gcpStorageTestService(t, inv)
+	lockGcpWorkspace(t, service)
+	if _, err := service.Handle(context.Background(), "session.setWriteMode", []byte(`{"enabled":true}`), nil); err != nil {
+		t.Fatalf("setWriteMode: %v", err)
+	}
+	if _, err := service.Handle(context.Background(), "gcp.storage.selectBucket", []byte(`{"bucketName":"alpha"}`), nil); err != nil {
+		t.Fatalf("selectBucket: %v", err)
+	}
+	inv.duringCopy = func() {
+		if _, err := service.Handle(context.Background(), "gcp.storage.selectBucket", []byte(`{"bucketName":"beta"}`), nil); err != nil {
+			t.Fatalf("select beta during copy: %v", err)
+		}
+	}
+	payload := []byte(`{"sourceObjectKey":"docs/readme.txt","destinationObjectKey":"docs/copy.txt"}`)
+	result, err := service.Handle(context.Background(), "gcp.storage.copyObject", payload, nil)
+	if err != nil {
+		t.Fatalf("copyObject: %v", err)
+	}
+	workspace, ok := result.(models.WorkspaceSnapshot)
+	if !ok {
+		t.Fatalf("result type %T", result)
+	}
+	if workspace.SelectedGcpStorageBucket != "beta" {
+		t.Fatalf("selected bucket = %q, want beta", workspace.SelectedGcpStorageBucket)
+	}
+}
+
+func TestHandleGcpStorageCreateBucketDoesNotSelectAfterTheWorkspaceCloses(t *testing.T) {
+	inv := &stubGcpStorageInventory{}
+	service := gcpStorageTestService(t, inv)
+	lockGcpWorkspace(t, service)
+	if _, err := service.Handle(context.Background(), "session.setWriteMode", []byte(`{"enabled":true}`), nil); err != nil {
+		t.Fatalf("setWriteMode: %v", err)
+	}
+	inv.duringCreate = func() {
+		if _, err := service.Handle(context.Background(), "session.unlock", nil, nil); err != nil {
+			t.Fatalf("unlock during create: %v", err)
+		}
+	}
+	result, err := service.Handle(context.Background(), "gcp.storage.createBucket", []byte(`{"bucketName":"new-bucket","location":"europe-west2"}`), nil)
+	if err != nil {
+		t.Fatalf("createBucket: %v", err)
+	}
+	workspace, ok := result.(models.WorkspaceSnapshot)
+	if !ok {
+		t.Fatalf("result type %T", result)
+	}
+	if workspace.SelectedGcpStorageBucket != "" {
+		t.Fatalf("selected bucket = %q, want none after the workspace closed", workspace.SelectedGcpStorageBucket)
 	}
 }

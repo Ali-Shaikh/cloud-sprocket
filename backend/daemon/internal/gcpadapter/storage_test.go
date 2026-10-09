@@ -439,7 +439,7 @@ func TestCopyObjectBuildsSameBucketGcloudCp(t *testing.T) {
 	inv := NewInventory(config.Settings{})
 	inv.runner = fake
 
-	result, err := inv.CopyObject(context.Background(), gcpProfile(), "demo-bucket", "/docs/readme.txt", "archive/readme.txt")
+	result, err := inv.CopyObject(context.Background(), gcpProfile(), "demo-bucket", "docs/readme.txt", "archive/readme.txt")
 	if err != nil {
 		t.Fatalf("CopyObject: %v", err)
 	}
@@ -475,5 +475,37 @@ func TestCopyObjectRejectsFoldersAndIdenticalKeys(t *testing.T) {
 		if _, err := inv.CopyObject(context.Background(), gcpProfile(), "demo-bucket", tc.source, tc.dest); err == nil {
 			t.Fatalf("expected rejection for %q -> %q", tc.source, tc.dest)
 		}
+	}
+}
+
+func TestCopyObjectKeepsALeadingSlashInTheSourceName(t *testing.T) {
+	fake := &fakeCLI{out: []byte("")}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	if _, err := inv.CopyObject(context.Background(), gcpProfile(), "demo-bucket", "/report.txt", "copy.txt"); err != nil {
+		t.Fatalf("CopyObject: %v", err)
+	}
+	joined := strings.Join(fake.args, " ")
+	if !strings.Contains(joined, "gs://demo-bucket//report.txt") {
+		t.Fatalf("args %v did not keep the leading slash on the source name", fake.args)
+	}
+	if strings.Contains(joined, "gs://demo-bucket/report.txt ") || strings.HasSuffix(joined, "gs://demo-bucket/report.txt") {
+		t.Fatalf("args %v copied report.txt instead of /report.txt", fake.args)
+	}
+}
+
+func TestCopyObjectRejectsWildcardNames(t *testing.T) {
+	fake := &fakeCLI{out: []byte("")}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+	cases := []string{"docs/*.txt", "docs/file?.txt", "docs/file[1].txt"}
+	for _, source := range cases {
+		if _, err := inv.CopyObject(context.Background(), gcpProfile(), "demo-bucket", source, "copy.txt"); err == nil {
+			t.Fatalf("expected wildcard rejection for %q", source)
+		}
+	}
+	if fake.args != nil {
+		t.Fatalf("gcloud was called for a wildcard name: %v", fake.args)
 	}
 }

@@ -258,7 +258,8 @@ func (i *Inventory) CreateBucket(
 
 // CopyObject copies one object to another key in the same bucket via
 // `gcloud storage cp`. Folder prefixes are rejected: gcloud treats a trailing
-// slash as a directory, not as an object name.
+// slash as a directory, not as an object name. Names are copied literally.
+// gcloud would otherwise expand *, ?, and [] as wildcards.
 func (i *Inventory) CopyObject(
 	ctx context.Context,
 	profile models.ProfileSummary,
@@ -366,7 +367,6 @@ func validateGcpBucketLocation(raw string) (string, error) {
 
 func normaliseGcpObjectKey(raw string) (string, error) {
 	key := strings.TrimSpace(raw)
-	key = strings.TrimPrefix(key, "/")
 	if key == "" {
 		return "", fmt.Errorf("object key is required")
 	}
@@ -378,6 +378,11 @@ func normaliseGcpObjectKey(raw string) (string, error) {
 	}
 	if strings.ContainsAny(key, "\\\x00\r\n") {
 		return "", fmt.Errorf("object key contains an unsupported character")
+	}
+	// gcloud storage cp expands these. An object can be named this way, but
+	// this command cannot copy that name without also matching others.
+	if strings.ContainsAny(key, "*?[]") {
+		return "", fmt.Errorf("object key must not contain wildcard characters")
 	}
 	for _, part := range strings.Split(key, "/") {
 		if part == "." || part == ".." {

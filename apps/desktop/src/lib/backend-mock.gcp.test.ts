@@ -118,6 +118,13 @@ describe("backend mock GCP multi-cloud smoke", () => {
     expect(invoked.result.name).toBe("hello-http");
     expect(invoked.result.body).toMatch(/"ok":true/);
 
+    const copied = await backendRequest<WorkspaceSnapshot>("gcp.storage.copyObject", {
+      sourceObjectKey: "docs/readme.txt",
+      destinationObjectKey: "docs/copy.txt",
+    });
+    expect(copied.gcpStorageObjects?.some((entry) => entry.key === "docs/readme.txt")).toBe(true);
+    expect(copied.gcpStorageObjects?.some((entry) => entry.key === "docs/copy.txt")).toBe(true);
+
     await expect(
       backendRequest("gcp.storage.createBucket", {
         bucketName: "new-artifacts",
@@ -125,12 +132,22 @@ describe("backend mock GCP multi-cloud smoke", () => {
       }),
     ).resolves.toMatchObject({
       selectedGcpStorageBucket: "new-artifacts",
+      gcpStorageObjects: [],
     });
-    const copied = await backendRequest<WorkspaceSnapshot>("gcp.storage.copyObject", {
-      sourceObjectKey: "docs/readme.txt",
-      destinationObjectKey: "docs/copy.txt",
+    await expect(
+      backendRequest("gcp.storage.copyObject", {
+        sourceObjectKey: "docs/readme.txt",
+        destinationObjectKey: "docs/copy.txt",
+      }),
+    ).rejects.toThrow(/source object was not found/i);
+
+    const restored = await backendRequest<WorkspaceSnapshot>("gcp.storage.selectBucket", {
+      bucketName: "platform-artifacts",
     });
-    expect(copied.gcpStorageObjects?.some((entry) => entry.key === "docs/copy.txt")).toBe(true);
+    expect(restored.gcpStorageObjects?.some((entry) => entry.key === "docs/readme.txt")).toBe(
+      true,
+    );
+    expect(restored.gcpStorageObjects?.some((entry) => entry.key === "docs/copy.txt")).toBe(true);
   });
 
   it("starts and stops compute instances when write mode is on", async () => {

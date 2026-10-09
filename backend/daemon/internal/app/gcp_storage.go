@@ -510,6 +510,12 @@ type gcpStorageMutation struct {
 	prefix   string
 }
 
+func gcpWorkspaceStillOpen(profile models.ProfileSummary, session models.SessionSnapshot) bool {
+	return session.IsLocked &&
+		session.CurrentProviderID == "gcp" &&
+		session.SelectedProfileID == profile.ProfileID
+}
+
 func (s *Service) prepareGcpStorageMutation(
 	ctx context.Context,
 	action string,
@@ -576,11 +582,15 @@ func (s *Service) handleGcpStorageCreateBucket(ctx context.Context, params json.
 		s.mu.Unlock()
 		return nil, err
 	}
-	session.SelectedGcpStorageBucket = result.BucketName
-	session.GcpStoragePrefixFilter = ""
-	if err := s.store.SaveSession(ctx, session); err != nil {
-		s.mu.Unlock()
-		return nil, err
+	// The create can outlive the workspace that started it. Selecting the new
+	// bucket on a different profile would overwrite that workspace.
+	if gcpWorkspaceStillOpen(target.profile, session) {
+		session.SelectedGcpStorageBucket = result.BucketName
+		session.GcpStoragePrefixFilter = ""
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
 	}
 	s.mu.Unlock()
 	return s.finishGcpWorkspace(
@@ -624,13 +634,9 @@ func (s *Service) handleGcpStorageCopyObject(ctx context.Context, params json.Ra
 		s.mu.Unlock()
 		return nil, err
 	}
-	session.SelectedGcpStorageBucket = target.bucket
-	session.GcpStoragePrefixFilter = target.prefix
-	if err := s.store.SaveSession(ctx, session); err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
 	s.mu.Unlock()
+	// Leave the bucket and prefix the user has now. Writing the values captured
+	// before gcloud returns would undo a selection they made while the copy ran.
 	return s.finishGcpWorkspace(
 		ctx,
 		target.snapshot,
