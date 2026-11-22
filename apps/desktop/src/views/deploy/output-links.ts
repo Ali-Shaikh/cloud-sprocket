@@ -34,8 +34,14 @@ function stringVariable(value: unknown, fallback: string): string {
   return text === "" ? fallback : text;
 }
 
-function quoteArg(value: string): string {
-  return `"${value.replace(/"/g, '\\"')}"`;
+type LogCommandShell = "posix" | "powershell";
+
+function quoteArg(value: string, shell: LogCommandShell): string {
+  const literal =
+    shell === "powershell"
+      ? value.replace(/['\u2018\u2019\u201a\u201b]/g, "$&$&")
+      : value.split("'").join("'\"'\"'");
+  return "'" + literal + "'";
 }
 
 function recipeDefaultAppName(recipeId: string): string {
@@ -61,23 +67,40 @@ function localStackLogEndpoint(deployment: Deployment): string | null {
   return "http://localhost:4566";
 }
 
-export function logCommandsForDeployment(deployment: Deployment): LogCommand[] {
+export function logCommandsForDeployment(
+  deployment: Deployment,
+  shell: LogCommandShell = "posix",
+): LogCommand[] {
   const appName = stringVariable(deployment.variables.app_name, recipeDefaultAppName(deployment.recipeId));
   const environment = stringVariable(deployment.variables.environment, "dev");
   const region = stringVariable(deployment.variables.aws_region, "us-east-1");
   const stackName = `${appName}-${environment}`;
 
+  const localEndpoint = localStackLogEndpoint(deployment);
+  const args = ["aws"];
+  if (localEndpoint) {
+    args.push("--endpoint-url", quoteArg(localEndpoint, shell), "--no-sign-request");
+  }
+  args.push("logs", "tail");
+  const options = ["--follow", "--region", quoteArg(region, shell)];
+  if (!localEndpoint && deployment.profileId) {
+    options.push("--profile", quoteArg(deployment.profileId, shell));
+  }
+  const tail = (logGroup: string, label: string, detail: string): LogCommand => ({
+    label,
+    detail,
+    command: [...args, quoteArg(logGroup, shell), ...options].join(" "),
+  });
+
   switch (deployment.recipeId) {
     case "serverless-fullstack-aws":
     case "api-dynamodb-serverless-aws":
       return [
-        cloudWatchTailCommand(deployment, region, `/aws/lambda/${stackName}-api`, "API Lambda", "Lambda invocation logs for the HTTP API."),
+        tail(`/aws/lambda/${stackName}-api`, "API Lambda", "Lambda invocation logs for the HTTP API."),
       ];
     case "scheduled-job-aws":
       return [
-        cloudWatchTailCommand(
-          deployment,
-          region,
+        tail(
           `/aws/lambda/${stackName}-job`,
           "Scheduled job Lambda",
           "Lambda invocation logs for each scheduled run.",
@@ -87,9 +110,7 @@ export function logCommandsForDeployment(deployment: Deployment): LogCommand[] {
     case "api-postgres-containers-aws":
     case "magento-commerce-aws":
       return [
-        cloudWatchTailCommand(
-          deployment,
-          region,
+        tail(
           `/ecs/${stackName}`,
           deployment.recipeId === "magento-commerce-aws" ? "Magento ECS service" : "ECS container service",
           deployment.recipeId === "magento-commerce-aws"
@@ -102,15 +123,13 @@ export function logCommandsForDeployment(deployment: Deployment): LogCommand[] {
     case "fullstack-postgres-serverless-aws":
     case "lab-rest-api-aws":
       return [
-        cloudWatchTailCommand(deployment, region, `/aws/lambda/${stackName}-api`, "API Lambda", "Lambda invocation logs for the HTTP API."),
+        tail(`/aws/lambda/${stackName}-api`, "API Lambda", "Lambda invocation logs for the HTTP API."),
       ];
     case "lab-queue-worker-aws":
     case "async-app-aws":
       return [
-        cloudWatchTailCommand(deployment, region, `/aws/lambda/${stackName}-api`, "API Lambda", "HTTP API invocation logs."),
-        cloudWatchTailCommand(
-          deployment,
-          region,
+        tail(`/aws/lambda/${stackName}-api`, "API Lambda", "HTTP API invocation logs."),
+        tail(
           `/aws/lambda/${stackName}-worker`,
           "Worker Lambda",
           "Lambda invocation logs for SQS-triggered runs.",
@@ -118,9 +137,7 @@ export function logCommandsForDeployment(deployment: Deployment): LogCommand[] {
       ];
     case "lab-event-fanout-aws":
       return [
-        cloudWatchTailCommand(
-          deployment,
-          region,
+        tail(
           `/aws/lambda/${stackName}-worker`,
           "Fan-out worker Lambda",
           "Lambda invocation logs for SNS → SQS → Lambda deliveries.",
@@ -128,10 +145,8 @@ export function logCommandsForDeployment(deployment: Deployment): LogCommand[] {
       ];
     case "webhook-platform-aws":
       return [
-        cloudWatchTailCommand(deployment, region, `/aws/lambda/${stackName}-ingest`, "Webhook ingest Lambda", "Inbound webhook request logs."),
-        cloudWatchTailCommand(
-          deployment,
-          region,
+        tail(`/aws/lambda/${stackName}-ingest`, "Webhook ingest Lambda", "Inbound webhook request logs."),
+        tail(
           `/aws/lambda/${stackName}-processor`,
           "Webhook processor Lambda",
           "Lambda invocation logs for queued webhook payloads.",
@@ -155,41 +170,6 @@ export function getNoRuntimeLogsMessage(recipeId: string): string {
 
   // Service labs and many infrastructure recipes intentionally do not emit app-level runtime logs.
   return "This recipe does not produce application runtime logs by default.";
-}
-
-function cloudWatchTailCommand(
-  deployment: Deployment,
-  region: string,
-  logGroup: string,
-  label: string,
-  detail: string,
-): LogCommand {
-  const localEndpoint = localStackLogEndpoint(deployment);
-  const command = localEndpoint
-    ? [
-        "aws",
-        "--endpoint-url",
-        quoteArg(localEndpoint),
-        "--no-sign-request",
-        "logs",
-        "tail",
-        quoteArg(logGroup),
-        "--follow",
-        "--region",
-        quoteArg(region),
-      ].join(" ")
-    : [
-        "aws",
-        "logs",
-        "tail",
-        quoteArg(logGroup),
-        "--follow",
-        "--region",
-        quoteArg(region),
-        ...(deployment.profileId ? ["--profile", quoteArg(deployment.profileId)] : []),
-      ].join(" ");
-
-  return { label, command, detail };
 }
 
 function isLocalStackHostname(hostname: string): boolean {
