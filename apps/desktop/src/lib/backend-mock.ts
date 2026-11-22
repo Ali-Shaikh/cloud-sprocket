@@ -355,7 +355,7 @@ const mockGcpWorkspaceTabs: WorkspaceTab[] = [
     label: "GKE",
     summary: "Kubernetes cluster inventory via gcloud.",
     detail:
-      "Lists GKE clusters and node pools for the open gcloud project. Fetching cluster credentials is not available yet.",
+      "Lists GKE clusters and node pools for the open gcloud project. Getting credentials updates kubeconfig and needs write mode.",
     category: "service",
     domain: "compute",
   },
@@ -1592,6 +1592,7 @@ function buildMockActionCapabilities(
         mockWriteModeCapability("invoke", "Invoke function", writesEnabled),
         mockWriteModeCapability("delete", "Delete function", writesEnabled),
       ],
+      gke: [mockWriteModeCapability("getCredentials", "Get credentials", writesEnabled)],
     };
   }
   if (providerId === "aws") {
@@ -2128,6 +2129,10 @@ function buildMockWorkspace(): WorkspaceSnapshot {
       ? `Loaded ${mockGcpGkeClusters.length} GKE cluster(s) via gcloud.`
       : undefined,
     gcpGkeClusters: isGcpWorkspace ? mockGcpGkeClusters : [],
+    selectedGcpGkeCluster: isGcpWorkspace ? mockState.session.selectedGcpGkeCluster : undefined,
+    selectedGcpGkeClusterLocation: isGcpWorkspace
+      ? mockState.session.selectedGcpGkeClusterLocation
+      : undefined,
     selectedAzureResourceGroup,
     selectedAzureVmId,
     azureStatusMessage: isAzureWorkspace
@@ -5544,10 +5549,30 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
 
   const handle_gcp_gke_selectCluster : MockRpcHandler = async (params, method) => {
     mockState.session.selectedGcpGkeCluster = String(params.clusterName ?? "");
+    mockState.session.selectedGcpGkeClusterLocation = String(params.location ?? "");
     appendLog("info", `Selected GKE cluster ${params.clusterName ?? "none"}.`);
     return Promise.resolve(buildMockWorkspace());
   };
   register("gcp.gke.selectCluster", handle_gcp_gke_selectCluster);
+  register("gcp.gke.getCredentials", async (params) => {
+    if (!mockState.session.isLocked || mockState.session.currentProviderId !== "gcp") {
+      throw new Error("Open a locked GCP workspace before getting GKE credentials.");
+    }
+    if (!mockState.session.gcpWriteModeEnabled) {
+      throw new Error("Turn on write mode from the top bar to run mutating actions.");
+    }
+    const name = String(params.clusterName ?? "").trim();
+    const location = String(params.location ?? "").trim();
+    const cluster = mockGcpGkeClusters.find((entry) => entry.name === name && entry.location === location);
+    if (!cluster || mockState.session.selectedGcpGkeCluster !== name ||
+        (mockState.session.selectedGcpGkeClusterLocation &&
+          mockState.session.selectedGcpGkeClusterLocation !== location)) {
+      throw new Error("Select the GKE cluster and location before getting credentials.");
+    }
+    const message = `Browser preview simulated credentials for ${name} in ${location}.`;
+    appendLog("success", message);
+    return { message };
+  });
 
   const handle_gcp_inventory_get : MockRpcHandler = async (params, method) => {
     rebuildSessionDerivedState();
@@ -5576,6 +5601,7 @@ function buildMockGcpInventory(scope: string): WorkspaceSnapshot {
     gcpFunctionsStatusMessage: undefined,
     gcpFunctions: [],
     selectedGcpGkeCluster: undefined,
+    selectedGcpGkeClusterLocation: undefined,
     gcpGkeStatusMessage: undefined,
     gcpGkeClusters: [],
     gcpGkeNodePools: [],
@@ -5615,6 +5641,7 @@ function buildMockGcpInventory(scope: string): WorkspaceSnapshot {
         ...workspace,
         ...cleared,
         selectedGcpGkeCluster: workspace.selectedGcpGkeCluster,
+        selectedGcpGkeClusterLocation: workspace.selectedGcpGkeClusterLocation,
         gcpGkeStatusMessage: workspace.gcpGkeStatusMessage,
         gcpGkeClusters: workspace.gcpGkeClusters,
         gcpGkeNodePools: workspace.gcpGkeNodePools,

@@ -926,6 +926,7 @@ export function mergeGcpInventoryScope(
       merged = normaliseWorkspaceSnapshot({
         ...current,
         selectedGcpGkeCluster: normalised.selectedGcpGkeCluster,
+        selectedGcpGkeClusterLocation: normalised.selectedGcpGkeClusterLocation,
         gcpGkeStatusMessage: normalised.gcpGkeStatusMessage,
         gcpGkeClusters: normalised.gcpGkeClusters,
         gcpGkeNodePools: normalised.gcpGkeNodePools,
@@ -1431,6 +1432,7 @@ export function normaliseWorkspaceSnapshot(snapshot: Partial<WorkspaceSnapshot> 
     gcpFunctionsStatusMessage: source.gcpFunctionsStatusMessage,
     gcpFunctions: normaliseArray(source.gcpFunctions).map(normaliseGcpCloudFunction),
     selectedGcpGkeCluster: source.selectedGcpGkeCluster,
+    selectedGcpGkeClusterLocation: source.selectedGcpGkeClusterLocation,
     gcpGkeStatusMessage: source.gcpGkeStatusMessage,
     gcpGkeClusters: normaliseArray(source.gcpGkeClusters).map(normaliseGcpGkeCluster),
     gcpGkeNodePools: normaliseArray(source.gcpGkeNodePools).map(normaliseGcpGkeNodePool),

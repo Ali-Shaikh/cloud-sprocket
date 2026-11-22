@@ -325,6 +325,7 @@ type SessionSnapshot struct {
 	SelectedGcpComputeInstance        string             `json:"selectedGcpComputeInstance,omitempty"`
 	SelectedGcpFunction               string             `json:"selectedGcpFunction,omitempty"`
 	SelectedGcpGkeCluster             string             `json:"selectedGcpGkeCluster,omitempty"`
+	SelectedGcpGkeClusterLocation     string             `json:"selectedGcpGkeClusterLocation,omitempty"`
 	GcpWriteModeEnabled               bool               `json:"gcpWriteModeEnabled,omitempty"`
 	SelectedEC2Region                 string             `json:"selectedEc2Region,omitempty"`
 	SelectedEC2InstanceID             string             `json:"selectedEc2InstanceId,omitempty"`
@@ -1660,10 +1661,11 @@ type WorkspaceSnapshot struct {
 	GcpFunctionsStatusMessage string             `json:"gcpFunctionsStatusMessage,omitempty"`
 	GcpFunctions              []GcpCloudFunction `json:"gcpFunctions"`
 	// GCP GKE inventory (foundation slice).
-	SelectedGcpGkeCluster string           `json:"selectedGcpGkeCluster,omitempty"`
-	GcpGkeStatusMessage   string           `json:"gcpGkeStatusMessage,omitempty"`
-	GcpGkeClusters        []GcpGkeCluster  `json:"gcpGkeClusters"`
-	GcpGkeNodePools       []GcpGkeNodePool `json:"gcpGkeNodePools"`
+	SelectedGcpGkeCluster         string           `json:"selectedGcpGkeCluster,omitempty"`
+	SelectedGcpGkeClusterLocation string           `json:"selectedGcpGkeClusterLocation,omitempty"`
+	GcpGkeStatusMessage           string           `json:"gcpGkeStatusMessage,omitempty"`
+	GcpGkeClusters                []GcpGkeCluster  `json:"gcpGkeClusters"`
+	GcpGkeNodePools               []GcpGkeNodePool `json:"gcpGkeNodePools"`
 }
 
 // GcpStorageBucket is a Cloud Storage bucket from gcloud inventory.

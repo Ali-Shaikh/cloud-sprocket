@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"cloudsprocket/backend/daemon/internal/config"
 	"cloudsprocket/backend/daemon/internal/models"
@@ -44,8 +45,9 @@ func (execRunner) CommandContext(ctx context.Context, name string, args ...strin
 
 // Inventory lists GCP resources via the gcloud CLI (no GCP SDK).
 type Inventory struct {
-	settings config.Settings
-	runner   CLIExecutor
+	settings     config.Settings
+	runner       CLIExecutor
+	kubeconfigMu sync.Mutex
 }
 
 // NewInventory constructs a production Inventory that shells out to gcloud.

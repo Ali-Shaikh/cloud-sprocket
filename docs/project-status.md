@@ -72,7 +72,7 @@ Four live service tabs (no longer Soon-only):
 | Cloud Storage | List buckets/objects, prefix nav, upload/delete, **signed read URL** |
 | Compute Engine | List VMs, start, stop and hard reset |
 | Cloud Functions | List (1st and 2nd gen), select, invoke and delete |
-| GKE | List clusters, **select cluster + list node pools** |
+| GKE | List clusters and node pools, get credentials and update kubeconfig |
 
 Write mutations gated by per-session `gcpWriteModeEnabled`. Profile discovery and overview remain available.
 

@@ -6,6 +6,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -121,33 +122,19 @@ func (s *Service) gcpGkeNodePoolsResult(
 	return []models.GcpGkeNodePool{}, err
 }
 
-func selectedGcpGkeClusterName(
-	session models.SessionSnapshot,
-	clusters []models.GcpGkeCluster,
-) string {
-	selected := strings.TrimSpace(session.SelectedGcpGkeCluster)
-	if selected == "" {
-		return ""
-	}
+func findGcpGkeCluster(clusters []models.GcpGkeCluster, name, location string) (models.GcpGkeCluster, bool) {
+	var selected models.GcpGkeCluster
+	var found bool
 	for _, cluster := range clusters {
-		if cluster.Name == selected {
-			return selected
+		if cluster.Name != name || (location != "" && cluster.Location != location) {
+			continue
 		}
-	}
-	return ""
-}
-
-func findGcpGkeCluster(clusters []models.GcpGkeCluster, name string) (models.GcpGkeCluster, bool) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return models.GcpGkeCluster{}, false
-	}
-	for _, cluster := range clusters {
-		if cluster.Name == name {
-			return cluster, true
+		if found {
+			return models.GcpGkeCluster{}, false
 		}
+		selected, found = cluster, true
 	}
-	return models.GcpGkeCluster{}, false
+	return selected, found
 }
 
 func (s *Service) enrichGcpGkeInventory(
@@ -170,14 +157,12 @@ func (s *Service) enrichGcpGkeInventory(
 	profile := *workspace.Profile
 
 	clusters, listErr := s.gcpGkeClustersResult(ctx, profile)
-	selectedCluster := selectedGcpGkeClusterName(session, clusters)
+	selectedCluster, found := findGcpGkeCluster(clusters, session.SelectedGcpGkeCluster, session.SelectedGcpGkeClusterLocation)
 
 	var pools []models.GcpGkeNodePool
 	var poolsErr error
-	if selectedCluster != "" {
-		if cluster, ok := findGcpGkeCluster(clusters, selectedCluster); ok {
-			pools, poolsErr = s.gcpGkeNodePoolsResult(ctx, profile, cluster.Name, cluster.Location)
-		}
+	if found {
+		pools, poolsErr = s.gcpGkeNodePoolsResult(ctx, profile, selectedCluster.Name, selectedCluster.Location)
 	}
 
 	var status string
@@ -191,7 +176,7 @@ func (s *Service) enrichGcpGkeInventory(
 		status = gcpCachedInventoryStatus("GKE cluster(s)", len(clusters), listErr)
 	case len(clusters) == 0:
 		status = "No GKE clusters are currently available for this GCP project."
-	case selectedCluster == "":
+	case !found:
 		status = fmt.Sprintf(
 			"Loaded %d GKE cluster(s) via gcloud. Select a cluster to list node pools.",
 			len(clusters),
@@ -199,20 +184,21 @@ func (s *Service) enrichGcpGkeInventory(
 	case poolsErr != nil && len(pools) == 0:
 		status = fmt.Sprintf(
 			"Loaded cluster %s but could not list node pools.\nDetail: %v",
-			selectedCluster,
+			selectedCluster.Name,
 			poolsErr,
 		)
 	default:
 		status = fmt.Sprintf(
 			"Loaded %d node pool(s) for cluster %s.",
 			len(pools),
-			selectedCluster,
+			selectedCluster.Name,
 		)
 	}
 
 	lockWorkspace(mu, func() {
 		workspace.GcpGkeClusters = clusters
-		workspace.SelectedGcpGkeCluster = selectedCluster
+		workspace.SelectedGcpGkeCluster = selectedCluster.Name
+		workspace.SelectedGcpGkeClusterLocation = selectedCluster.Location
 		workspace.GcpGkeNodePools = pools
 		workspace.GcpGkeStatusMessage = status
 		markGcpInventory(workspace, "gke", len(clusters), gcpInventoryListEmptyReason(len(clusters), listErr))
@@ -223,6 +209,7 @@ func (s *Service) enrichGcpGkeInventory(
 func (s *Service) handleGcpGkeSelectCluster(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	var request struct {
 		ClusterName string `json:"clusterName"`
+		Location    string `json:"location"`
 	}
 	if err := json.Unmarshal(params, &request); err != nil {
 		return nil, err
@@ -230,6 +217,7 @@ func (s *Service) handleGcpGkeSelectCluster(ctx context.Context, params json.Raw
 	clusterName := strings.TrimSpace(request.ClusterName)
 	snapshot, session, err := s.withLockedGcpWorkspace(ctx, "open a GCP workspace before selecting a GKE cluster", func(session *models.SessionSnapshot) error {
 		session.SelectedGcpGkeCluster = clusterName
+		session.SelectedGcpGkeClusterLocation = strings.TrimSpace(request.Location)
 		return nil
 	})
 	if err != nil {
@@ -242,4 +230,55 @@ func (s *Service) handleGcpGkeSelectCluster(ctx context.Context, params json.Raw
 		label = "none"
 	}
 	return s.finishGcpWorkspace(ctx, snapshot, session, notifier, "info", fmt.Sprintf("Selected GKE cluster %s.", label))
+}
+
+func (s *Service) handleGcpGkeGetCredentials(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if s.gcpGke == nil {
+		return nil, errors.New("GKE inventory is not available")
+	}
+	var request struct {
+		ClusterName string `json:"clusterName"`
+		Location    string `json:"location"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	name := strings.TrimSpace(request.ClusterName)
+	location := strings.TrimSpace(request.Location)
+	if name == "" || location == "" {
+		return nil, errors.New("a GKE cluster name and location are required")
+	}
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	session, err := s.Load(ctx, snapshot)
+	if err != nil {
+		return nil, err
+	}
+	if !session.IsLocked || session.CurrentProviderID != "gcp" {
+		return nil, errors.New("open a locked GCP workspace before getting GKE credentials")
+	}
+	if !session.GcpWriteModeEnabled {
+		return nil, errors.New(gcpWriteModeRequiredMessage)
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, "gcp"), session.SelectedProfileID)
+	if !ok {
+		return nil, errors.New("the workspace's GCP profile is not available")
+	}
+	actionCtx, cancel := s.withAzureTimeout(ctx)
+	defer cancel()
+	clusters, err := s.gcpGkeClustersResult(actionCtx, profile)
+	if err != nil {
+		return nil, err
+	}
+	selected, ok := findGcpGkeCluster(clusters, session.SelectedGcpGkeCluster, session.SelectedGcpGkeClusterLocation)
+	if !ok || selected.Name != name || selected.Location != location {
+		return nil, errors.New("select the GKE cluster and location before getting credentials")
+	}
+	if err := s.gcpGke.GetClusterCredentials(actionCtx, profile, name, location); err != nil {
+		return nil, err
+	}
+	message := fmt.Sprintf("Updated kubeconfig for GKE cluster %s in %s.", name, location)
+	return map[string]string{"message": message}, s.AppendActivity(ctx, notifier, "success", message)
 }

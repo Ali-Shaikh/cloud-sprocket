@@ -2,38 +2,66 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { useMemo, useState } from "react";
-import { Boxes, RefreshCw } from "lucide-react";
+import { Boxes, KeyRound, RefreshCw } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
 import { InventoryLoadingState } from "@/components/inventory-loading-state";
 import { InlineBanner } from "@/components/inline-banner";
 import { ResourceTable } from "@/components/inventory/resource-table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { actionCapabilityState } from "@/lib/action-capabilities";
 import { GCP_CREATE_HINTS, gcpTableEmptyCopy } from "@/lib/gcp-empty-copy";
 import { gcpInventoryLoadingLabel } from "@/lib/gcp-inventory";
-import type { GcpGkeCluster, GcpGkeNodePool, WorkspaceSnapshot } from "@/types/backend";
+import type {
+  GcpGkeCluster,
+  GcpGkeNodePool,
+  WorkspaceSnapshot,
+} from "@/types/backend";
 
 export type GcpGkeViewProps = {
   workspace: WorkspaceSnapshot;
   onRefresh: () => void;
-  onSelectCluster?: (clusterName: string) => void;
+  onSelectCluster?: (
+    clusterName: string,
+    location: string,
+  ) => void | Promise<boolean>;
+  onGetCredentials?: (clusterName: string, location: string) => Promise<void>;
   inventoryLoading?: boolean;
 };
 
-/**
- * GKE panel: cluster inventory with node pools for the selected cluster.
- */
+function clusterKey(cluster: GcpGkeCluster): string {
+  return `${cluster.location ?? ""}/${cluster.name}`;
+}
+
 export default function GcpGkeView({
   workspace,
   onRefresh,
   onSelectCluster,
+  onGetCredentials,
   inventoryLoading = false,
 }: GcpGkeViewProps) {
   const [filterText, setFilterText] = useState("");
+  const [selectingCluster, setSelectingCluster] = useState(false);
+  const [credentialTarget, setCredentialTarget] = useState<{
+    name: string;
+    location: string;
+  } | null>(null);
+  const [gettingCredentials, setGettingCredentials] = useState(false);
   const clusters = workspace.gcpGkeClusters ?? [];
   const nodePools = workspace.gcpGkeNodePools ?? [];
   const selectedCluster = workspace.selectedGcpGkeCluster ?? "";
+  const selectedLocation = workspace.selectedGcpGkeClusterLocation;
   const status = workspace.gcpGkeStatusMessage?.trim() ?? "";
 
   const filtered = useMemo(() => {
@@ -60,26 +88,124 @@ export default function GcpGkeView({
   }, [clusters, filterText]);
 
   const projectLabel =
-    workspace.profile?.attributes.find((field) => field.label.toLowerCase() === "project")
-      ?.value ?? workspace.profile?.displayName;
+    workspace.profile?.attributes.find(
+      (field) => field.label.toLowerCase() === "project",
+    )?.value ?? workspace.profile?.displayName;
 
-  const selectedClusterMeta = clusters.find((cluster) => cluster.name === selectedCluster);
+  const matchingClusters = clusters.filter(
+    (cluster) =>
+      cluster.name === selectedCluster &&
+      (!selectedLocation || cluster.location === selectedLocation),
+  );
+  const selectedClusterMeta =
+    matchingClusters.length === 1 ? matchingClusters[0] : undefined;
+  const capability = actionCapabilityState(
+    workspace,
+    "gke",
+    "getCredentials",
+    "gcp",
+  );
+  const canGetCredentials =
+    capability.enabled &&
+    Boolean(selectedClusterMeta?.location) &&
+    !selectingCluster &&
+    !gettingCredentials;
+  const credentialsDisabledReason =
+    capability.reason ??
+    (!selectedClusterMeta
+      ? "Select a cluster first."
+      : !selectedClusterMeta.location
+        ? "Selected cluster is missing a location."
+        : undefined);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">GKE</h1>
+          <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">
+            GKE
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Kubernetes cluster inventory for the open gcloud configuration
             {projectLabel ? ` · project ${projectLabel}` : ""}.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={onRefresh}>
-          <RefreshCw className="size-3.5" />
-          Refresh
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {onGetCredentials ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!canGetCredentials}
+              title={credentialsDisabledReason}
+              onClick={() => {
+                if (selectedClusterMeta?.location) {
+                  setCredentialTarget({
+                    name: selectedClusterMeta.name,
+                    location: selectedClusterMeta.location,
+                  });
+                }
+              }}
+            >
+              <KeyRound className="size-3.5" />
+              {gettingCredentials ? "Getting credentials…" : "Get credentials"}
+            </Button>
+          ) : null}
+          <Button variant="outline" size="sm" onClick={onRefresh}>
+            <RefreshCw className="size-3.5" />
+            Refresh
+          </Button>
+        </div>
       </header>
+
+      <AlertDialog
+        open={credentialTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setCredentialTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Get GKE credentials?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Update kubeconfig and switch the current kubectl context to{" "}
+              <strong>{credentialTarget?.name}</strong> in{" "}
+              <strong>{credentialTarget?.location}</strong>
+              {projectLabel ? (
+                <>
+                  {" "}
+                  in project <strong>{projectLabel}</strong>
+                </>
+              ) : null}
+              .
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={
+                !canGetCredentials ||
+                selectedClusterMeta?.name !== credentialTarget?.name ||
+                selectedClusterMeta?.location !== credentialTarget?.location
+              }
+              onClick={async () => {
+                if (!onGetCredentials || !credentialTarget) return;
+                setCredentialTarget(null);
+                setGettingCredentials(true);
+                try {
+                  await onGetCredentials(
+                    credentialTarget.name,
+                    credentialTarget.location,
+                  );
+                } finally {
+                  setGettingCredentials(false);
+                }
+              }}
+            >
+              Update kubeconfig
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {inventoryLoading && clusters.length === 0 ? (
         <InventoryLoadingState
@@ -105,8 +231,10 @@ export default function GcpGkeView({
           <div>
             <h2 className="text-base font-bold">Clusters</h2>
             <p className="text-xs text-muted-foreground">
-              {clusters.length === 1 ? "1 cluster" : `${clusters.length} clusters`} loaded via
-              gcloud.
+              {clusters.length === 1
+                ? "1 cluster"
+                : `${clusters.length} clusters`}{" "}
+              loaded via gcloud.
             </p>
           </div>
           <Input
@@ -128,10 +256,19 @@ export default function GcpGkeView({
             { id: "nodeCount", label: "Nodes" },
           ]}
           rows={filtered}
-          getRowKey={(row) => row.name}
-          selectedKey={selectedCluster}
-          onRowClick={(row) => {
-            onSelectCluster?.(row.name);
+          getRowKey={clusterKey}
+          selectedKey={
+            selectedClusterMeta ? clusterKey(selectedClusterMeta) : undefined
+          }
+          onRowClick={async (row) => {
+            if (!onSelectCluster || selectingCluster || gettingCredentials)
+              return;
+            setSelectingCluster(true);
+            try {
+              await onSelectCluster(row.name, row.location ?? "");
+            } finally {
+              setSelectingCluster(false);
+            }
           }}
           renderCell={(row, columnId) => {
             switch (columnId) {
@@ -164,7 +301,8 @@ export default function GcpGkeView({
                   resourceLabel: "clusters",
                   createHint: GCP_CREATE_HINTS.clusters,
                   rowCount: clusters.length,
-                  listFailed: workspace.gcpInventory?.gke?.emptyReason === "error",
+                  listFailed:
+                    workspace.gcpInventory?.gke?.emptyReason === "error",
                 })}
               />
             )
@@ -210,7 +348,9 @@ export default function GcpGkeView({
                 if (row.autoscalingEnabled) {
                   return `${row.minNodeCount ?? 0}-${row.maxNodeCount ?? 0} (autoscale)`;
                 }
-                return row.initialNodeCount != null ? String(row.initialNodeCount) : "-";
+                return row.initialNodeCount != null
+                  ? String(row.initialNodeCount)
+                  : "-";
               case "locations":
                 return row.locations || "-";
               default:

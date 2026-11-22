@@ -244,6 +244,9 @@ func buildGcpActionCapabilities(
 			gcpActionCapability(session, profile, "invoke", "Invoke function"),
 			gcpActionCapability(session, profile, "delete", "Delete function"),
 		},
+		"gke": {
+			gcpActionCapability(session, profile, "getCredentials", "Get credentials"),
+		},
 	}
 }
 

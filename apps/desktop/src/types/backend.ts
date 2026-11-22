@@ -225,6 +225,7 @@ export interface SessionSnapshot {
   gcpWriteModeEnabled?: boolean;
   selectedGcpFunction?: string;
   selectedGcpGkeCluster?: string;
+  selectedGcpGkeClusterLocation?: string;
   selectedGcpComputeInstance?: string;
   selectedAzureStorageAccount?: string;
   selectedAzureBlobContainer?: string;
@@ -1288,6 +1289,7 @@ export interface WorkspaceSnapshot {
   /** Present after GCP Functions enrichment; omit in fixtures/mocks. */
   gcpFunctions?: GcpCloudFunction[];
   selectedGcpGkeCluster?: string;
+  selectedGcpGkeClusterLocation?: string;
   gcpGkeStatusMessage?: string;
   /** Present after GCP GKE enrichment; omit in fixtures/mocks. */
   gcpGkeClusters?: GcpGkeCluster[];

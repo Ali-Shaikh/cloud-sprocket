@@ -172,6 +172,7 @@ export const EXPECTED_RPC_METHODS = [
   "gcp.functions.call",
   "gcp.functions.delete",
   "gcp.functions.selectFunction",
+  "gcp.gke.getCredentials",
   "gcp.gke.selectCluster",
   "gcp.inventory.get",
   "gcp.storage.copyObject",
