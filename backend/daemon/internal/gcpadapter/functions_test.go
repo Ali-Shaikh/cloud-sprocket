@@ -6,6 +6,7 @@ package gcpadapter
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -184,5 +185,37 @@ func TestFunctionRegionAndShortName(t *testing.T) {
 	item := functionJSON{Name: raw}
 	if got := functionShortName(item); got != "hello" {
 		t.Fatalf("functionShortName = %q, want hello", got)
+	}
+}
+
+func TestDeleteFunctionUsesExplicitRegionAndProject(t *testing.T) {
+	inv := NewInventory(config.Settings{})
+	fake := &fakeCLI{}
+	inv.runner = fake
+
+	if err := inv.DeleteFunction(context.Background(), gcpProfile(), "process-upload", "europe-west1"); err != nil {
+		t.Fatalf("DeleteFunction: %v", err)
+	}
+	want := []string{"--configuration=default", "functions", "delete", "process-upload",
+		"--region=europe-west1", "--project", "platform-prod", "--quiet"}
+	if !slices.Equal(fake.args, want) {
+		t.Fatalf("args = %v, want %v", fake.args, want)
+	}
+}
+
+func TestDeleteFunctionRejectsMissingOrUnscopedTarget(t *testing.T) {
+	inv := NewInventory(config.Settings{})
+	fake := &fakeCLI{}
+	inv.runner = fake
+	profile := gcpProfile()
+
+	if err := inv.DeleteFunction(context.Background(), profile, "hello-http", ""); err == nil {
+		t.Fatal("expected error for missing region")
+	}
+	if err := inv.DeleteFunction(context.Background(), profile, "projects/other/locations/region/functions/hello-http", "europe-west1"); err == nil {
+		t.Fatal("expected error for a fully qualified name")
+	}
+	if len(fake.args) > 0 {
+		t.Fatalf("gcloud invoked with %v", fake.args)
 	}
 }

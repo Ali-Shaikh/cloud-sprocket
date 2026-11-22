@@ -346,7 +346,7 @@ const mockGcpWorkspaceTabs: WorkspaceTab[] = [
     label: "Cloud Functions",
     summary: "Function inventory via gcloud (1st and 2nd gen).",
     detail:
-      "Lists Cloud Functions for the open gcloud project. Invoke needs write mode. Delete is not available yet.",
+      "Lists Cloud Functions for the open gcloud project. Invoke and delete need write mode.",
     category: "service",
     domain: "compute",
   },
@@ -1588,7 +1588,10 @@ function buildMockActionCapabilities(
         mockWriteModeCapability("stopInstance", "Stop instance", writesEnabled),
         mockWriteModeCapability("resetInstance", "Reset instance", writesEnabled),
       ],
-      functions: [mockWriteModeCapability("invoke", "Invoke function", writesEnabled)],
+      functions: [
+        mockWriteModeCapability("invoke", "Invoke function", writesEnabled),
+        mockWriteModeCapability("delete", "Delete function", writesEnabled),
+      ],
     };
   }
   if (providerId === "aws") {
@@ -4901,6 +4904,26 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
     });
   };
   register("gcp.functions.call", handle_gcp_functions_call);
+  register("gcp.functions.delete", async (params) => {
+    if (!mockState.session.isLocked || mockState.session.currentProviderId !== "gcp") {
+      throw new Error("Open a locked GCP workspace before deleting a Cloud Function.");
+    }
+    if (!mockState.session.gcpWriteModeEnabled) {
+      throw new Error("Turn on write mode from the top bar to run mutating actions.");
+    }
+    const name = String(params.name ?? "").trim();
+    const region = String(params.region ?? "").trim();
+    const key = `${region}/${name}`;
+    if (!name || !region || mockState.session.selectedGcpFunction !== key) {
+      throw new Error("Select the Cloud Function and region before deleting.");
+    }
+    const index = mockGcpFunctions.findIndex((fn) => fn.name === name && fn.region === region);
+    if (index === -1) throw new Error("The Cloud Function was not found.");
+    mockGcpFunctions.splice(index, 1);
+    mockState.session.selectedGcpFunction = "";
+    appendLog("success", `Deleted Cloud Function ${name} in ${region}.`);
+    return buildMockWorkspace();
+  });
 
   const handle_azure_webApps_create : MockRpcHandler = async (params, method) => {
     if (!mockState.session.azureWriteModeEnabled) {

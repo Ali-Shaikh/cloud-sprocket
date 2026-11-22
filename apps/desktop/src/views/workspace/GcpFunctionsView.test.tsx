@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
@@ -81,7 +87,9 @@ describe("GcpFunctionsView", () => {
       selectedGcpFunction: "us-central1/hello-http",
       gcpWritesEnabled: true,
       actionCapabilities: {
-        functions: [{ actionId: "invoke", label: "Invoke function", enabled: true }],
+        functions: [
+          { actionId: "invoke", label: "Invoke function", enabled: true },
+        ],
       },
     } as unknown as WorkspaceSnapshot;
 
@@ -103,7 +111,9 @@ describe("GcpFunctionsView", () => {
       "us-central1",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /^invoke$/i }));
+    const invoke = screen.getByRole("button", { name: /^invoke$/i });
+    await waitFor(() => expect(invoke).toBeEnabled());
+    fireEvent.click(invoke);
     await waitFor(() => {
       expect(onInvoke).toHaveBeenCalled();
     });
@@ -128,6 +138,7 @@ describe("GcpFunctionsView", () => {
           workspace={selected}
           onRefresh={() => {}}
           onInvoke={onInvoke}
+          onDelete={vi.fn()}
         />
       </ThemeProvider>,
     );
@@ -137,6 +148,48 @@ describe("GcpFunctionsView", () => {
     expect(invoke).toBeDisabled();
     expect(invoke.getAttribute("title") ?? "").toMatch(/write mode/i);
     expect(screen.getByText(/turn on write mode/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+  });
+
+  it("confirms the selected function and keeps the dialog available after a failed delete", async () => {
+    const onDelete = vi
+      .fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const writable = {
+      ...baseWorkspace,
+      selectedGcpFunction: "us-central1/hello-http",
+      gcpWritesEnabled: true,
+    } as WorkspaceSnapshot;
+    render(
+      <ThemeProvider>
+        <GcpFunctionsView
+          workspace={writable}
+          onRefresh={vi.fn()}
+          onDelete={onDelete}
+        />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = within(screen.getByRole("alertdialog"));
+    expect(dialog.getByText("hello-http")).toBeVisible();
+    expect(dialog.getByText("us-central1")).toBeVisible();
+    expect(dialog.getByText("platform-prod")).toBeVisible();
+    expect(onDelete).not.toHaveBeenCalled();
+
+    const confirm = dialog.getByRole("button", { name: "Delete function" });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(confirm).toBeEnabled());
+    expect(onDelete).toHaveBeenCalledExactlyOnceWith(
+      "hello-http",
+      "us-central1",
+    );
+    fireEvent.click(confirm);
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
+    expect(onDelete).toHaveBeenCalledTimes(2);
   });
 
   it("shows an empty-state when no functions are loaded", () => {

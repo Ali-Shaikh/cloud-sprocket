@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -17,16 +18,29 @@ import (
 )
 
 type stubGcpFunctionsInventory struct {
-	functions  []models.GcpCloudFunction
-	err        error
-	callErr    error
-	callResult models.GcpCloudFunctionInvokeResult
-	listCalls  int
-	callCalls  int
-	lastName   string
-	lastRegion string
-	lastGen    string
-	lastData   string
+	functions   []models.GcpCloudFunction
+	err         error
+	callErr     error
+	callResult  models.GcpCloudFunctionInvokeResult
+	listCalls   int
+	callCalls   int
+	deleteCalls int
+	deleteErr   error
+	lastName    string
+	lastRegion  string
+	lastGen     string
+	lastData    string
+}
+
+func (s *stubGcpFunctionsInventory) DeleteFunction(_ context.Context, _ models.ProfileSummary, name, region string) error {
+	s.deleteCalls++
+	if s.deleteErr != nil {
+		return s.deleteErr
+	}
+	s.functions = slices.DeleteFunc(s.functions, func(fn models.GcpCloudFunction) bool {
+		return fn.Name == name && fn.Region == region
+	})
+	return nil
 }
 
 func (s *stubGcpFunctionsInventory) ListFunctions(context.Context, models.ProfileSummary) ([]models.GcpCloudFunction, error) {
@@ -274,5 +288,47 @@ func TestHandleGcpFunctionsSelectFunctionPersistsSession(t *testing.T) {
 	}
 	if loaded.SelectedGcpFunction != "us-central1/hello-http" {
 		t.Fatalf("session selected = %q", loaded.SelectedGcpFunction)
+	}
+}
+
+func TestHandleGcpFunctionsDeleteUsesLockedSelection(t *testing.T) {
+	ctx := context.Background()
+	inv := &stubGcpFunctionsInventory{
+		functions: []models.GcpCloudFunction{
+			{Name: "hello-http", Region: "us-central1"},
+			{Name: "hello-http", Region: "europe-west1"},
+		},
+	}
+	service := gcpFunctionsTestService(t, inv)
+	lockGcpWorkspace(t, service)
+
+	params := []byte(`{"name":"hello-http","region":"us-central1"}`)
+	if _, err := service.Handle(ctx, "gcp.functions.selectFunction", params, nil); err != nil {
+		t.Fatalf("selectFunction: %v", err)
+	}
+	if _, err := service.Handle(ctx, "gcp.functions.delete", params, nil); err == nil || !strings.Contains(err.Error(), "write mode") {
+		t.Fatalf("read-only delete: %v", err)
+	}
+	if _, err := service.Handle(ctx, "session.setWriteMode", []byte(`{"enabled":true}`), nil); err != nil {
+		t.Fatalf("setWriteMode: %v", err)
+	}
+	otherRegion := []byte(`{"name":"hello-http","region":"europe-west1"}`)
+	if _, err := service.Handle(ctx, "gcp.functions.delete", otherRegion, nil); err == nil || inv.deleteCalls != 0 {
+		t.Fatalf("delete of unselected region: error=%v calls=%d", err, inv.deleteCalls)
+	}
+
+	inv.deleteErr = errors.New("delete denied")
+	if _, err := service.Handle(ctx, "gcp.functions.delete", params, nil); !errors.Is(err, inv.deleteErr) {
+		t.Fatalf("delete error = %v, want %v", err, inv.deleteErr)
+	}
+	inv.deleteErr = nil
+	result, err := service.Handle(ctx, "gcp.functions.delete", params, nil)
+	if err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	workspace := result.(models.WorkspaceSnapshot)
+	if workspace.SelectedGcpFunction != "" || len(workspace.GcpFunctions) != 1 ||
+		workspace.GcpFunctions[0].Region != "europe-west1" {
+		t.Fatalf("selection = %q, functions = %+v", workspace.SelectedGcpFunction, workspace.GcpFunctions)
 	}
 }

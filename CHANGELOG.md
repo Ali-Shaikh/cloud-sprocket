@@ -12,6 +12,7 @@ Installers for every release are published on the
 ### Added
 
 - Compute Engine can hard-reset a running VM after confirmation in write mode.
+- Cloud Functions can delete the selected function after confirmation in write mode.
 
 ### Security
 

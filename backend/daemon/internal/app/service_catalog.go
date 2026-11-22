@@ -336,7 +336,7 @@ func gcpServiceCatalog() []serviceCatalogEntry {
 		{
 			ProviderID: "gcp", ServiceID: "gcp-functions", Label: "Cloud Functions",
 			Summary:  "Function inventory via gcloud (1st and 2nd gen).",
-			Detail:   "Lists Cloud Functions for the open gcloud project. Invoke needs write mode. Delete is not available yet.",
+			Detail:   "Lists Cloud Functions for the open gcloud project. Invoke and delete need write mode.",
 			Category: workspaceTabCategoryService, Domain: serviceDomainCompute,
 			InventoryScope: "gcf",
 		},
