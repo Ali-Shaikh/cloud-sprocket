@@ -16,13 +16,13 @@ This file is generated. Regenerate after dependency changes with:
 pnpm --dir apps/desktop run generate:notices
 ```
 
-Generated: 2026-07-05
+Generated: 2026-11-22
 
-## Desktop frontend (85 npm packages)
+## Desktop frontend (86 npm packages)
 
 Packages whose code is compiled into the application's JavaScript bundle.
 
-### MIT (81)
+### MIT (82)
 
 - **@codemirror/autocomplete** 6.20.3  
   Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
@@ -36,9 +36,9 @@ Packages whose code is compiled into the application's JavaScript bundle.
   Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
 - **@codemirror/merge** 6.12.2  
   Copyright (C) 2018-2022 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
-- **@codemirror/state** 6.7.0  
+- **@codemirror/state** 6.7.1  
   Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
-- **@codemirror/view** 6.43.4  
+- **@codemirror/view** 6.43.8  
   Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
 - **@floating-ui/core** 1.7.5  
   Copyright (c) 2021-present Floating UI contributors
@@ -60,91 +60,93 @@ Packages whose code is compiled into the application's JavaScript bundle.
   Copyright (C) 2024 by Marijn Haverbeke <marijnh@gmail.com> and others
 - **@marijn/find-cluster-break** 1.0.3  
   Copyright (C) 2024 by Marijn Haverbeke <marijn@haverbeke.berlin>
-- **@radix-ui/number** 1.1.2  
+- **@radix-ui/number** 1.1.3  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/primitive** 1.1.4  
+- **@radix-ui/primitive** 1.1.7  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-alert-dialog** 1.1.16  
+- **@radix-ui/react-alert-dialog** 1.1.23  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-arrow** 1.1.9  
+- **@radix-ui/react-arrow** 1.1.15  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-avatar** 1.1.12  
+- **@radix-ui/react-avatar** 1.2.6  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-collection** 1.1.9  
+- **@radix-ui/react-collection** 1.1.15  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-compose-refs** 1.1.3  
+- **@radix-ui/react-compose-refs** 1.1.5  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-context** 1.1.4  
+- **@radix-ui/react-context** 1.2.2  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-dialog** 1.1.16  
+- **@radix-ui/react-dialog** 1.1.23  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-direction** 1.1.2  
+- **@radix-ui/react-direction** 1.1.4  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-dismissable-layer** 1.1.12  
+- **@radix-ui/react-dismissable-layer** 1.1.19  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-dropdown-menu** 2.1.17  
+- **@radix-ui/react-dropdown-menu** 2.1.24  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-focus-guards** 1.1.4  
+- **@radix-ui/react-focus-guards** 1.1.6  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-focus-scope** 1.1.9  
+- **@radix-ui/react-focus-scope** 1.1.16  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-id** 1.1.2  
+- **@radix-ui/react-id** 1.1.4  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-menu** 2.1.17  
+- **@radix-ui/react-menu** 2.1.24  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-popper** 1.3.0  
+- **@radix-ui/react-popper** 1.3.7  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-portal** 1.1.11  
+- **@radix-ui/react-portal** 1.1.17  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-presence** 1.1.6  
+- **@radix-ui/react-presence** 1.1.10  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-primitive** 2.1.5  
+- **@radix-ui/react-primitive** 2.1.10  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-roving-focus** 1.1.12  
+- **@radix-ui/react-roving-focus** 1.1.19  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-scroll-area** 1.2.11  
+- **@radix-ui/react-scroll-area** 1.2.18  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-select** 2.3.0  
+- **@radix-ui/react-select** 2.3.7  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-separator** 1.1.9  
+- **@radix-ui/react-separator** 1.1.15  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-slot** 1.2.5  
+- **@radix-ui/react-slot** 1.3.3  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-switch** 1.3.0  
+- **@radix-ui/react-switch** 1.3.7  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-tabs** 1.1.14  
+- **@radix-ui/react-tabs** 1.1.21  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-tooltip** 1.2.9  
+- **@radix-ui/react-tooltip** 1.2.16  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-use-callback-ref** 1.1.2  
+- **@radix-ui/react-use-callback-ref** 1.1.4  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-use-controllable-state** 1.2.3  
+- **@radix-ui/react-use-controllable-state** 1.2.6  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-use-effect-event** 0.0.3  
+- **@radix-ui/react-use-effect-event** 0.0.5  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-use-escape-keydown** 1.1.2  
+- **@radix-ui/react-use-is-hydrated** 0.1.3  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-use-is-hydrated** 0.1.1  
+- **@radix-ui/react-use-layout-effect** 1.1.4  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-use-layout-effect** 1.1.2  
+- **@radix-ui/react-use-previous** 1.1.4  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-use-previous** 1.1.2  
+- **@radix-ui/react-use-rect** 1.1.4  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-use-rect** 1.1.2  
+- **@radix-ui/react-use-size** 1.1.4  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-use-size** 1.1.2  
+- **@radix-ui/react-visually-hidden** 1.2.11  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/react-visually-hidden** 1.2.5  
+- **@radix-ui/rect** 1.1.3  
   Copyright (c) 2022 WorkOS
-- **@radix-ui/rect** 1.1.2  
-  Copyright (c) 2022 WorkOS
-- **@tanstack/react-virtual** 3.14.3  
+- **@tanstack/query-core** 5.101.4  
   Copyright (c) 2021-present Tanner Linsley
-- **@tanstack/virtual-core** 3.17.1  
+- **@tanstack/react-query** 5.101.4  
   Copyright (c) 2021-present Tanner Linsley
-- **@tauri-apps/api** 2.11.1  
+- **@tanstack/react-virtual** 3.14.9  
+  Copyright (c) 2021-present Tanner Linsley
+- **@tanstack/virtual-core** 3.17.7  
+  Copyright (c) 2021-present Tanner Linsley
+- **@tauri-apps/api** 2.12.5  
   Copyright (c) 2017 - Present Tauri Apps Contributors
-- **@tauri-apps/plugin-dialog** 2.7.1
+- **@tauri-apps/plugin-dialog** 2.7.2
 - **@tauri-apps/plugin-opener** 2.5.4
 - **aria-hidden** 1.2.6  
   Copyright (c) 2017 Anton Korzunov
@@ -156,13 +158,13 @@ Packages whose code is compiled into the application's JavaScript bundle.
   Copyright (c) 2017 Ilya Kantor
 - **get-nonce** 1.0.1  
   Copyright (c) 2020 Anton Korzunov
-- **js-yaml** 5.2.1  
+- **js-yaml** 5.5.0  
   Copyright (C) 2011-2015 by Vitaly Puzrin
-- **prettier** 3.9.4  
+- **prettier** 3.9.6  
   Copyright © James Long and contributors
-- **react** 19.2.7  
+- **react** 19.2.8  
   Copyright (c) Meta Platforms, Inc. and affiliates.
-- **react-dom** 19.2.7  
+- **react-dom** 19.2.8  
   Copyright (c) Meta Platforms, Inc. and affiliates.
 - **react-remove-scroll** 2.7.2  
   Copyright (c) 2017 Anton Korzunov
@@ -172,7 +174,7 @@ Packages whose code is compiled into the application's JavaScript bundle.
   Copyright (c) 2017 Anton Korzunov
 - **scheduler** 0.27.0  
   Copyright (c) Meta Platforms, Inc. and affiliates.
-- **sonner** 2.0.7  
+- **sonner** 2.0.8  
   Copyright (c) 2023 Emil Kowalski
 - **style-mod** 4.1.3  
   Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
@@ -192,7 +194,7 @@ Packages whose code is compiled into the application's JavaScript bundle.
 
 ### ISC (1)
 
-- **lucide-react** 1.17.0  
+- **lucide-react** 1.28.0  
   Copyright (c) 2026 Lucide Icons and Contributors  
   Copyright (c) 2013-present Cole Bemis
 
@@ -201,12 +203,11 @@ Packages whose code is compiled into the application's JavaScript bundle.
 - **tslib** 2.8.1  
   Copyright (c) Microsoft Corporation.
 
-### Python-2.0 (1)
+### PSF-2.0 (1)
 
-- **argparse** 2.0.1  
-  Copyright (c) 1991 - 1995, Stichting Mathematisch Centrum Amsterdam,
+- **argparse** 3.0.4
 
-## Go sidecar `cloudsprocketd` (80 modules)
+## Go sidecar `cloudsprocketd` (87 modules)
 
 Modules compiled into the sidecar binary.
 
@@ -216,21 +217,21 @@ Modules compiled into the sidecar binary.
   Copyright (c) Microsoft Corporation.
 - **github.com/Azure/azure-sdk-for-go/sdk/internal** v1.12.0  
   Copyright (c) Microsoft Corporation.
-- **github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6** v6.4.0  
+- **github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v8** v8.2.0  
   Copyright (c) Microsoft Corporation. All rights reserved.
-- **github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources/v3** v3.0.1  
+- **github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources/v4** v4.0.0  
   Copyright (c) Microsoft Corporation. All rights reserved.
-- **github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage** v1.8.1  
+- **github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage/v4** v4.1.0  
   Copyright (c) Microsoft Corporation. All rights reserved.
 - **github.com/Azure/azure-sdk-for-go/sdk/storage/azblob** v1.8.0  
   Copyright (c) Microsoft Corporation. All rights reserved.
-- **github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue** v1.0.1  
+- **github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue/v2** v2.1.0  
   Copyright (c) Microsoft Corporation. All rights reserved.
 - **github.com/dustin/go-humanize** v1.0.1  
   Copyright (c) 2005-2008  Dustin Sallings <dustin@spy.net>
 - **github.com/felixge/httpsnoop** v1.0.4  
   Copyright (c) 2016 Felix Geisendörfer (felix@debuggable.com)
-- **github.com/mattn/go-isatty** v0.0.20  
+- **github.com/mattn/go-isatty** v0.0.24  
   Copyright (c) Yasuhiro MATSUMOTO <mattn.jp@gmail.com>
 - **github.com/Microsoft/go-winio** v0.6.2  
   Copyright (c) 2015 Microsoft
@@ -241,47 +242,53 @@ Modules compiled into the sidecar binary.
 - **github.com/zclconf/go-cty** v1.14.4  
   Copyright (c) 2017-2018 Martin Atkins
 
-### Apache-2.0 (54)
+### Apache-2.0 (60)
 
 - **github.com/agext/levenshtein** v1.2.2
 - **github.com/apparentlymart/go-textseg/v15** v15.0.0  
   Copyright (c) 2017 Martin Atkins  
   Copyright (c) 2014 Couchbase, Inc.  
   COPYRIGHT AND PERMISSION NOTICE
-- **github.com/aws/aws-sdk-go-v2** v1.42.1
-- **github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream** v1.7.13
-- **github.com/aws/aws-sdk-go-v2/config** v1.32.26
-- **github.com/aws/aws-sdk-go-v2/credentials** v1.19.25
-- **github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue** v1.20.49
-- **github.com/aws/aws-sdk-go-v2/feature/ec2/imds** v1.18.29
-- **github.com/aws/aws-sdk-go-v2/feature/s3/manager** v1.22.29
-- **github.com/aws/aws-sdk-go-v2/internal/configsources** v1.4.30
-- **github.com/aws/aws-sdk-go-v2/internal/endpoints/v2** v2.7.30
-- **github.com/aws/aws-sdk-go-v2/internal/v4a** v1.4.30
-- **github.com/aws/aws-sdk-go-v2/service/apigateway** v1.40.8
-- **github.com/aws/aws-sdk-go-v2/service/apigatewayv2** v1.35.8
-- **github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs** v1.78.1
-- **github.com/aws/aws-sdk-go-v2/service/dynamodb** v1.59.1
-- **github.com/aws/aws-sdk-go-v2/service/dynamodbstreams** v1.34.1
-- **github.com/aws/aws-sdk-go-v2/service/ec2** v1.309.0
-- **github.com/aws/aws-sdk-go-v2/service/ecs** v1.86.2
-- **github.com/aws/aws-sdk-go-v2/service/iam** v1.54.6
-- **github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding** v1.13.12
-- **github.com/aws/aws-sdk-go-v2/service/internal/checksum** v1.9.22
-- **github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery** v1.12.6
-- **github.com/aws/aws-sdk-go-v2/service/internal/presigned-url** v1.13.29
-- **github.com/aws/aws-sdk-go-v2/service/internal/s3shared** v1.19.30
-- **github.com/aws/aws-sdk-go-v2/service/lambda** v1.94.0
-- **github.com/aws/aws-sdk-go-v2/service/rds** v1.119.4
-- **github.com/aws/aws-sdk-go-v2/service/s3** v1.104.1
-- **github.com/aws/aws-sdk-go-v2/service/secretsmanager** v1.42.5
-- **github.com/aws/aws-sdk-go-v2/service/signin** v1.2.1
-- **github.com/aws/aws-sdk-go-v2/service/sns** v1.40.2
-- **github.com/aws/aws-sdk-go-v2/service/sqs** v1.44.1
-- **github.com/aws/aws-sdk-go-v2/service/sso** v1.31.4
-- **github.com/aws/aws-sdk-go-v2/service/ssooidc** v1.36.7
-- **github.com/aws/aws-sdk-go-v2/service/sts** v1.43.4
-- **github.com/aws/smithy-go** v1.27.3
+- **github.com/aws/aws-sdk-go-v2** v1.43.5
+- **github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream** v1.7.17
+- **github.com/aws/aws-sdk-go-v2/config** v1.32.36
+- **github.com/aws/aws-sdk-go-v2/credentials** v1.19.35
+- **github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue** v1.20.60
+- **github.com/aws/aws-sdk-go-v2/feature/ec2/imds** v1.18.36
+- **github.com/aws/aws-sdk-go-v2/feature/s3/manager** v1.22.42
+- **github.com/aws/aws-sdk-go-v2/internal/configsources** v1.4.36
+- **github.com/aws/aws-sdk-go-v2/internal/endpoints/v2** v2.7.36
+- **github.com/aws/aws-sdk-go-v2/internal/v4a** v1.4.37
+- **github.com/aws/aws-sdk-go-v2/service/apigateway** v1.42.5
+- **github.com/aws/aws-sdk-go-v2/service/apigatewayv2** v1.37.5
+- **github.com/aws/aws-sdk-go-v2/service/cloudformation** v1.76.2
+- **github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs** v1.82.1
+- **github.com/aws/aws-sdk-go-v2/service/dynamodb** v1.63.2
+- **github.com/aws/aws-sdk-go-v2/service/dynamodbstreams** v1.36.5
+- **github.com/aws/aws-sdk-go-v2/service/ec2** v1.321.1
+- **github.com/aws/aws-sdk-go-v2/service/ecs** v1.90.1
+- **github.com/aws/aws-sdk-go-v2/service/eks** v1.90.5
+- **github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2** v1.58.6
+- **github.com/aws/aws-sdk-go-v2/service/eventbridge** v1.48.5
+- **github.com/aws/aws-sdk-go-v2/service/iam** v1.58.2
+- **github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding** v1.13.16
+- **github.com/aws/aws-sdk-go-v2/service/internal/checksum** v1.9.29
+- **github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery** v1.12.13
+- **github.com/aws/aws-sdk-go-v2/service/internal/presigned-url** v1.13.36
+- **github.com/aws/aws-sdk-go-v2/service/internal/s3shared** v1.19.37
+- **github.com/aws/aws-sdk-go-v2/service/kms** v1.55.5
+- **github.com/aws/aws-sdk-go-v2/service/lambda** v1.101.3
+- **github.com/aws/aws-sdk-go-v2/service/rds** v1.124.2
+- **github.com/aws/aws-sdk-go-v2/service/route53** v1.65.7
+- **github.com/aws/aws-sdk-go-v2/service/s3** v1.107.1
+- **github.com/aws/aws-sdk-go-v2/service/secretsmanager** v1.44.5
+- **github.com/aws/aws-sdk-go-v2/service/signin** v1.5.5
+- **github.com/aws/aws-sdk-go-v2/service/sns** v1.42.5
+- **github.com/aws/aws-sdk-go-v2/service/sqs** v1.46.5
+- **github.com/aws/aws-sdk-go-v2/service/sso** v1.33.5
+- **github.com/aws/aws-sdk-go-v2/service/ssooidc** v1.38.5
+- **github.com/aws/aws-sdk-go-v2/service/sts** v1.45.5
+- **github.com/aws/smithy-go** v1.27.7
 - **github.com/containerd/errdefs** v1.0.0  
   Copyright The containerd Authors
 - **github.com/containerd/errdefs/pkg** v0.3.0  
@@ -294,8 +301,8 @@ Modules compiled into the sidecar binary.
 - **github.com/go-logr/logr** v1.4.2
 - **github.com/go-logr/stdr** v1.2.2
 - **github.com/moby/docker-image-spec** v1.3.1
-- **github.com/moby/moby/api** v1.54.2
-- **github.com/moby/moby/client** v0.4.1
+- **github.com/moby/moby/api** v1.55.0
+- **github.com/moby/moby/client** v0.5.1
 - **github.com/opencontainers/go-digest** v1.0.0  
   Copyright 2019, 2020 OCI Contributors  
   Copyright 2016 Docker, Inc.  
@@ -744,17 +751,19 @@ Creative Commons may be contacted at creativecommons.org.
   Copyright (c) 2006-2010 Kirill Simonov  
   Copyright (c) 2006-2011 Kirill Simonov
 
-### BSD-3-Clause (8)
+### BSD-3-Clause (9)
 
 - **github.com/google/go-cmp** v0.7.0  
   Copyright (c) 2017 The Go Authors. All rights reserved.
 - **github.com/remyoudompheng/bigfft** v0.0.0-20230129092748-24d4a6f8daec  
   Copyright (c) 2012 The Go Authors. All rights reserved.
-- **golang.org/x/net** v0.56.0  
+- **golang.org/x/mod** v0.42.0  
   Copyright 2009 The Go Authors.
-- **golang.org/x/sys** v0.46.0  
+- **golang.org/x/net** v0.63.0  
   Copyright 2009 The Go Authors.
-- **golang.org/x/text** v0.38.0  
+- **golang.org/x/sys** v0.50.0  
+  Copyright 2009 The Go Authors.
+- **golang.org/x/text** v0.44.0  
   Copyright 2009 The Go Authors.
 - **modernc.org/mathutil** v1.7.1  
   Copyright (c) 2014 The mathutil Authors. All rights reserved.
@@ -770,7 +779,7 @@ https://commons.wikimedia.org/wiki/File:Memory_infra_logo.png
 ```
 
   </details>
-- **modernc.org/sqlite** v1.50.1  
+- **modernc.org/sqlite** v1.56.0  
   Copyright (c) 2017 The Sqlite Authors. All rights reserved.
 
 ### MPL-2.0 (3)
@@ -778,30 +787,30 @@ https://commons.wikimedia.org/wiki/File:Memory_infra_logo.png
 - **github.com/hashicorp/hcl** v0.0.0-20170504190234-a4b07c25de5f
 - **github.com/hashicorp/hcl/v2** v2.20.1  
   Copyright (c) 2014 HashiCorp, Inc.
-- **github.com/hashicorp/terraform-config-inspect** v0.0.0-20260224005459-813a97530220  
+- **github.com/hashicorp/terraform-config-inspect** v0.0.0-20260709150029-2fb54c236733  
   Copyright IBM Corp. 2018, 2025
 
 ### BSD-3-Clause AND MIT (1)
 
-- **modernc.org/libc** v1.72.3  
+- **modernc.org/libc** v1.74.4  
   Copyright (c) 2017 The Libc Authors. All rights reserved.  
   Copyright (c) 2009 The Go Authors. All rights reserved.  
   Copyright © 2005-2020 Rich Felker, et al.
 
-## Desktop shell (375 Rust crates)
+## Desktop shell (379 Rust crates)
 
 Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-msvc, x86_64-unknown-linux-gnu, x86_64-apple-darwin, aarch64-apple-darwin.
 
-### MIT (341)
+### MIT (344)
 
 - **adler2** 2.0.1
 - **aho-corasick** 1.1.4  
   Copyright (c) 2015 Andrew Gallant
-- **anyhow** 1.0.102
+- **anyhow** 1.0.103
 - **async-broadcast** 0.7.2  
   Copyright (c) 2020 Yoshua Wuyts
 - **async-channel** 2.5.0
-- **async-executor** 1.14.0
+- **async-executor** 1.14.1
 - **async-io** 2.6.0
 - **async-lock** 3.4.2
 - **async-process** 2.5.0
@@ -814,6 +823,8 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
 - **atomic-waker** 1.1.2
 - **base64** 0.22.1  
   Copyright (c) 2015 Alice Maz
+- **base64** 0.23.1  
+  Copyright (c) 2025 Alice Maz, Marshall Pierce
 - **bit-set** 0.8.0  
   Copyright (c) 2023 The Rust Project Developers
 - **bit-vec** 0.8.0  
@@ -822,11 +833,11 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
   Copyright (c) 2014 The Rust Project Developers
 - **bitflags** 1.3.2  
   Copyright (c) 2014 The Rust Project Developers
-- **block-buffer** 0.10.4  
-  Copyright (c) 2018-2019 The RustCrypto Project Developers
+- **block-buffer** 0.12.1  
+  Copyright (c) 2018-2025 The RustCrypto Project Developers
 - **block2** 0.6.2
 - **blocking** 1.6.2
-- **brotli-decompressor** 5.0.0  
+- **brotli-decompressor** 6.3.2  
   Copyright (c) 2016 Dropbox, Inc.
 - **byteorder** 1.5.0  
   Copyright (c) 2015 Andrew Gallant
@@ -837,11 +848,13 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
 - **camino** 1.2.2
 - **cargo_metadata** 0.19.2
 - **cargo-platform** 0.1.9
-- **cfb** 0.7.3  
+- **cfb** 0.14.0  
   Copyright (c) 2017 Matthew D. Steele
 - **cfg-if** 1.0.4  
   Copyright (c) 2014 Alex Crichton
 - **concurrent-queue** 2.5.0
+- **const-oid** 0.10.3  
+  Copyright (c) 2020-2026 The RustCrypto Project Developers
 - **convert_case** 0.4.0
 - **cookie** 0.18.1  
   Copyright (c) 2017 Sergio Benitez  
@@ -854,18 +867,17 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
   Copyright (c) 2012-2013 Mozilla Foundation
 - **core-graphics-types** 0.2.0  
   Copyright (c) 2012-2013 Mozilla Foundation
-- **cpufeatures** 0.2.17  
-  Copyright (c) 2020-2025 The RustCrypto Project Developers
+- **cpufeatures** 0.3.1  
+  Copyright (c) 2020-2026 The RustCrypto Project Developers
 - **crc32fast** 1.5.0  
   Copyright (c) 2018 Sam Rijs, Alex Crichton and contributors
 - **crossbeam-channel** 0.5.15  
   Copyright (c) 2019 The Crossbeam Project Developers
 - **crossbeam-utils** 0.8.21  
   Copyright (c) 2019 The Crossbeam Project Developers
-- **crypto-common** 0.1.7  
-  Copyright (c) 2021 RustCrypto Developers
-- **ctor** 0.8.0
-- **ctor-proc-macro** 0.0.7
+- **crypto-common** 0.2.2  
+  Copyright (c) 2021-2026 RustCrypto Developers
+- **ctor** 1.0.14
 - **darling** 0.23.0  
   Copyright (c) 2017 Ted Driggs
 - **darling_core** 0.23.0  
@@ -882,9 +894,10 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
   Copyright (c) 2016 Jelte Fennema
 - **derive_more-impl** 2.1.1  
   Copyright (c) 2016 Jelte Fennema
-- **digest** 0.10.7  
+- **digest** 0.11.3  
+  Copyright (c) 2017-2025 RustCrypto Developers  
   Copyright (c) 2017 Artyom Pavlov
-- **dirs** 6.0.0  
+- **dirs** 7.0.0  
   Copyright (c) 2018-2019 dirs-rs contributors
 - **dirs-sys** 0.5.0  
   Copyright (c) 2018-2019 dirs-rs contributors
@@ -892,7 +905,7 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
 - **displaydoc** 0.2.5
 - **dlopen2** 0.8.2
 - **dlopen2_derive** 0.4.3
-- **dom_query** 0.27.0  
+- **dom_query** 0.28.0  
   Copyright (c) 2023 Mykola Humanov
 - **dtoa** 1.0.11
 - **dyn-clone** 1.0.20
@@ -908,7 +921,7 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
 - **erased-serde** 0.4.10
 - **errno** 0.3.14  
   Copyright (c) 2014 Chris Wong
-- **event-listener** 5.4.1
+- **event-listener** 5.4.2
 - **event-listener-strategy** 0.5.4
 - **fastrand** 2.4.1
 - **fdeflate** 0.3.7
@@ -924,7 +937,7 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
   Copyright (c) 2017 The foreign-types Developers
 - **foreign-types-shared** 0.3.1  
   Copyright (c) 2017 The foreign-types Developers
-- **form_urlencoded** 1.2.2  
+- **form_urlencoded** 1.2.3  
   Copyright (c) 2013-2016 The rust-url developers
 - **futf** 0.1.5  
   Copyright (c) 2015 Keegan McAllister
@@ -958,8 +971,6 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
 - **gdkwayland-sys** 0.18.2
 - **gdkx11** 0.18.2
 - **gdkx11-sys** 0.18.2
-- **generic-array** 0.14.7  
-  Copyright (c) 2015 Bartłomiej Kamiński
 - **getrandom** 0.3.4  
   Copyright (c) 2018-2025 The rust-random Project Developers  
   Copyright (c) 2014 The Rust Project Developers
@@ -991,13 +1002,15 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
 - **hex** 0.4.3  
   Copyright (c) 2013-2014 The Rust Project Developers.  
   Copyright (c) 2015-2020 The rust-hex Developers
-- **html5ever** 0.38.0  
+- **html5ever** 0.39.0  
   Copyright (c) 2014 The html5ever Project Developers
 - **html5ever** 0.29.1  
   Copyright (c) 2014 The html5ever Project Developers
 - **http** 1.4.0  
   Copyright (c) 2017 http-rs authors
-- **ico** 0.5.0  
+- **hybrid-array** 0.4.15  
+  Copyright (c) 2022-2026 The RustCrypto Project Developers
+- **ico** 0.6.0  
   Copyright (c) 2018 Matthew D. Steele
 - **ident_case** 1.0.1
 - **idna** 1.1.0  
@@ -1008,7 +1021,7 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
   Copyright (c) 2016--2017
 - **indexmap** 1.9.3  
   Copyright (c) 2016--2017
-- **infer** 0.19.0  
+- **infer** 0.22.0  
   Copyright (c) 2019 Bojan
 - **is-docker** 0.2.0  
   Copyright (c) 2023 Sean Larkin
@@ -1020,11 +1033,11 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
   Copyright (c) 2021, Tauri Programme within The Commons Conservancy.
 - **javascriptcore-rs-sys** 1.1.1  
   Copyright (c) 2013-2017, The Gtk-rs Project Developers.
-- **json-patch** 3.0.1  
+- **json-patch** 4.2.0  
   Copyright (c) 2017 Ivan Dubrov
-- **jsonptr** 0.6.3  
+- **jsonptr** 0.7.1  
   Copyright (c) 2022 Chance Dinkins
-- **keyboard-types** 0.7.0  
+- **keyboard-types** 0.8.3  
   Copyright (c) 2017 Pyfisch
 - **kuchikiki** 0.8.8-speedreader
 - **libc** 0.2.185  
@@ -1037,7 +1050,7 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
 - **log** 0.4.29  
   Copyright (c) 2014 The Rust Project Developers
 - **mac** 0.1.1
-- **markup5ever** 0.38.0  
+- **markup5ever** 0.39.0  
   Copyright (c) 2014 The html5ever Project Developers
 - **markup5ever** 0.14.1  
   Copyright (c) 2014 The html5ever Project Developers
@@ -1054,13 +1067,13 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
   Copyright 2013-2014 RAD Game Tools and Valve Software  
   Copyright 2010-2014 Rich Geldreich and Tenacious Software LLC  
   Copyright (c) 2017 Frommi
-- **muda** 0.19.1  
+- **muda** 0.20.0  
   Copyright (c) 2022-2022 Tauri Programme within The Commons Conservancy
 - **new_debug_unreachable** 1.0.6  
   Copyright (c) 2015 Jonathan Reem
 - **nodrop** 0.1.14  
   Copyright (c) Ulrik Sverdrup "bluss" 2015-2017
-- **num-conv** 0.2.1  
+- **num-conv** 0.2.2  
   Copyright (c) Jacob Pratt
 - **objc2** 0.6.4
 - **objc2-app-kit** 0.3.2
@@ -1068,6 +1081,7 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
 - **objc2-encode** 4.1.0
 - **objc2-exception-helper** 0.1.1
 - **objc2-foundation** 0.3.2
+- **objc2-quartz-core** 0.3.2
 - **objc2-web-kit** 0.3.2
 - **once_cell** 1.21.4
 - **open** 5.3.3  
@@ -1104,11 +1118,9 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
 - **phf_shared** 0.8.0
 - **pin-project-lite** 0.2.17
 - **piper** 0.2.5
-- **plist** 1.8.0  
+- **plist** 1.10.0  
   Copyright (c) 2015 Edward Barnard
 - **png** 0.18.1  
-  Copyright (c) 2015 nwin
-- **png** 0.17.16  
   Copyright (c) 2015 nwin
 - **polling** 3.11.0
 - **powerfmt** 0.2.0  
@@ -1127,10 +1139,10 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
 - **proc-macro-hack** 0.5.20+deprecated  
   Copyright (c) 2018 David Tolnay
 - **proc-macro2** 1.0.106
-- **quick-xml** 0.38.4  
+- **quick-xml** 0.41.0  
   Copyright (c) 2016 Johann Tuffe
 - **quote** 1.0.45
-- **rand** 0.8.5  
+- **rand** 0.8.6  
   Copyright 2018 Developers of the Rand project  
   Copyright (c) 2014 The Rust Project Developers
 - **rand_chacha** 0.3.1  
@@ -1150,7 +1162,7 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
 - **rfd** 0.16.0  
   Copyright (c) 2022 Bartłomiej Maryńczak
 - **rustc-hash** 2.1.2
-- **rustix** 1.1.4
+- **rustix** 1.1.6
 - **same-file** 1.0.6  
   Copyright (c) 2017 Andrew Gallant
 - **schemars** 0.8.22  
@@ -1160,11 +1172,11 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
 - **scopeguard** 1.2.0  
   Copyright (c) 2016-2019 Ulrik Sverdrup "bluss" and scopeguard developers
 - **semver** 1.0.28
-- **serde** 1.0.228
-- **serde_core** 1.0.228
-- **serde_derive** 1.0.228
+- **serde** 1.0.229
+- **serde_core** 1.0.229
+- **serde_derive** 1.0.229
 - **serde_derive_internals** 0.29.1
-- **serde_json** 1.0.150
+- **serde_json** 1.0.151
 - **serde_repr** 0.1.20
 - **serde_spanned** 1.1.1  
   Copyright (c) Individual contributors
@@ -1181,10 +1193,10 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
   Copyright (c) 2021 Chip Reed
 - **servo_arc** 0.4.3
 - **servo_arc** 0.2.0
-- **sha2** 0.10.9  
-  Copyright (c) 2006-2009 Graydon Hoare  
-  Copyright (c) 2009-2013 Mozilla Foundation  
-  Copyright (c) 2016 Artyom Pavlov
+- **sha2** 0.11.1  
+  Copyright (c) 2016-2026 The RustCrypto Project Developers  
+  Copyright (c) 2016 Artyom Pavlov  
+  Copyright (c) 2009-2013 Mozilla Foundation
 - **shared_child** 1.1.1
 - **sigchld** 0.2.4
 - **signal-hook** 0.3.18  
@@ -1219,17 +1231,18 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
   Copyright (c) 2015 Danny Guo  
   Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>  
   Copyright (c) 2018 Akash Kurdekar
+- **syn** 3.0.0
 - **syn** 2.0.117
 - **syn** 1.0.109
 - **synstructure** 0.13.2  
   Copyright 2016 Nika Layzell
-- **tauri** 2.11.4  
+- **tauri** 2.12.7  
   Copyright (c) 2017 - Present Tauri Apps Contributors
-- **tauri-codegen** 2.6.3  
+- **tauri-codegen** 2.7.6  
   Copyright (c) 2017 - Present Tauri Apps Contributors
-- **tauri-macros** 2.6.3  
+- **tauri-macros** 2.7.6  
   Copyright (c) 2017 - Present Tauri Apps Contributors
-- **tauri-plugin-dialog** 2.7.1  
+- **tauri-plugin-dialog** 2.7.2  
   Copyright (c) 2017 - Present Tauri Apps Contributors
 - **tauri-plugin-fs** 2.5.1  
   Copyright (c) 2017 - Present Tauri Apps Contributors
@@ -1237,27 +1250,27 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
   Copyright (c) 2017 - Present Tauri Apps Contributors
 - **tauri-plugin-shell** 2.3.5  
   Copyright (c) 2017 - Present Tauri Apps Contributors
-- **tauri-runtime** 2.11.3  
+- **tauri-runtime** 2.12.4  
   Copyright (c) 2017 - Present Tauri Apps Contributors
-- **tauri-runtime-wry** 2.11.4  
+- **tauri-runtime-wry** 2.12.5  
   Copyright (c) 2017 - Present Tauri Apps Contributors
-- **tauri-utils** 2.9.3  
+- **tauri-utils** 2.10.4  
   Copyright (c) 2017 - Present Tauri Apps Contributors
 - **tendril** 0.5.0  
   Copyright (c) 2015 Keegan McAllister
 - **tendril** 0.4.3  
   Copyright (c) 2015 Keegan McAllister
-- **thiserror** 2.0.18
+- **thiserror** 2.0.20
 - **thiserror** 1.0.69
-- **thiserror-impl** 2.0.18
+- **thiserror-impl** 2.0.20
 - **thiserror-impl** 1.0.69
-- **time** 0.3.47  
+- **time** 0.3.55  
   Copyright (c) Jacob Pratt et al.
-- **time-core** 0.1.8  
+- **time-core** 0.1.9  
   Copyright (c) Jacob Pratt et al.
-- **time-macros** 0.2.27  
+- **time-macros** 0.2.32  
   Copyright (c) Jacob Pratt et al.
-- **tokio** 1.52.3  
+- **tokio** 1.54.1  
   Copyright (c) Tokio Contributors
 - **toml** 1.1.2+spec-1.1.0  
   Copyright (c) Individual contributors
@@ -1282,18 +1295,13 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
 - **tracing-core** 0.1.36  
   Copyright (c) 2019 Tokio Contributors
 - **typeid** 1.0.3
-- **typenum** 1.19.0  
+- **typenum** 1.20.1  
   Copyright (c) 2014 Paho Lurie-Gregg
-- **unic-char-property** 0.9.0
-- **unic-char-range** 0.9.0
-- **unic-common** 0.9.0
-- **unic-ucd-ident** 0.9.0
-- **unic-ucd-version** 0.9.0
 - **unicode-segmentation** 1.13.2  
   Copyright (c) 2015 The Rust Project Developers
-- **url** 2.5.8  
+- **url** 2.5.9  
   Copyright (c) 2013-2025 The rust-url developers
-- **urlpattern** 0.3.0  
+- **urlpattern** 0.6.0  
   Copyright (c) 2021 the Deno authors
 - **utf-8** 0.7.6
 - **utf8_iter** 1.0.4  
@@ -1305,28 +1313,36 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
   Copyright (c) 2015 Andrew Gallant
 - **web_atoms** 0.2.3  
   Copyright (c) 2014 The html5ever Project Developers
+- **web-time** 1.1.0  
+  Copyright (c) 2023 dAxpeDDa
 - **webkit2gtk** 2.0.2  
   Copyright (c) 2016 Boucher, Antoni <bouanto@zoho.com>  
   Copyright (c) 2017-2021, The Gtk-rs Project Developers.  
   Copyright (c) 2021, Tauri Programme within The Commons Conservancy
 - **webkit2gtk-sys** 2.0.2  
   Copyright (c) 2016 Boucher, Antoni <bouanto@zoho.com>
-- **webview2-com** 0.38.2
+- **webview2-com** 0.39.1
 - **webview2-com-macros** 0.8.1
-- **webview2-com-sys** 0.38.2
+- **webview2-com-sys** 0.39.1
 - **winapi-util** 0.1.11  
   Copyright (c) 2017 Andrew Gallant
-- **window-vibrancy** 0.6.0  
+- **window-vibrancy** 0.8.1  
   Copyright (c) 2020-2022 Tauri Programme within The Commons Conservancy
+- **windows** 0.62.2  
+  Copyright (c) Microsoft Corporation.
 - **windows** 0.61.3  
   Copyright (c) Microsoft Corporation.
 - **windows_x86_64_msvc** 0.53.1  
   Copyright (c) Microsoft Corporation.
-- **windows_x86_64_msvc** 0.52.6  
+- **windows-collections** 0.3.2  
   Copyright (c) Microsoft Corporation.
 - **windows-collections** 0.2.0  
   Copyright (c) Microsoft Corporation.
+- **windows-core** 0.62.2  
+  Copyright (c) Microsoft Corporation.
 - **windows-core** 0.61.2  
+  Copyright (c) Microsoft Corporation.
+- **windows-future** 0.3.2  
   Copyright (c) Microsoft Corporation.
 - **windows-future** 0.2.1  
   Copyright (c) Microsoft Corporation.
@@ -1338,21 +1354,25 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
   Copyright (c) Microsoft Corporation.
 - **windows-link** 0.1.3  
   Copyright (c) Microsoft Corporation.
+- **windows-numerics** 0.3.1  
+  Copyright (c) Microsoft Corporation.
 - **windows-numerics** 0.2.0  
+  Copyright (c) Microsoft Corporation.
+- **windows-result** 0.4.1  
   Copyright (c) Microsoft Corporation.
 - **windows-result** 0.3.4  
   Copyright (c) Microsoft Corporation.
-- **windows-strings** 0.4.2  
+- **windows-strings** 0.5.1  
   Copyright (c) Microsoft Corporation.
-- **windows-sys** 0.60.2  
+- **windows-strings** 0.4.2  
   Copyright (c) Microsoft Corporation.
 - **windows-sys** 0.61.2  
   Copyright (c) Microsoft Corporation.
-- **windows-sys** 0.59.0  
+- **windows-sys** 0.60.2  
   Copyright (c) Microsoft Corporation.
 - **windows-targets** 0.53.5  
   Copyright (c) Microsoft Corporation.
-- **windows-targets** 0.52.6  
+- **windows-threading** 0.2.1  
   Copyright (c) Microsoft Corporation.
 - **windows-threading** 0.1.0  
   Copyright (c) Microsoft Corporation.
@@ -1360,7 +1380,7 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
   Copyright (c) Microsoft Corporation.
 - **winnow** 1.0.1
 - **winnow** 0.5.40
-- **wry** 0.55.1  
+- **wry** 0.57.3  
   Copyright (c) 2020-2023 Ngo Iok Ui & Tauri Programme within The Commons Conservancy
 - **x11** 2.21.0
 - **x11-dl** 2.21.0
@@ -1382,13 +1402,13 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
 ### Apache-2.0 (2)
 
 - **dunce** 1.0.5
-- **tao** 0.35.2
+- **tao** 0.37.3
 
 ### BSD-3-Clause (2)
 
-- **alloc-no-stdlib** 2.0.4  
+- **alloc-no-stdlib** 3.0.0  
   Copyright (c) 2016 Dropbox, Inc.
-- **alloc-stdlib** 0.2.2
+- **alloc-stdlib** 0.3.0
 
 ### Zlib (1)
 
@@ -1452,14 +1472,15 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
   COPYRIGHT AND PERMISSION NOTICE  
   Copyright © 2020-2024 Unicode, Inc.
 
-### MPL-2.0 (7)
+### MPL-2.0 (8)
 
-- **cssparser** 0.36.0
+- **cssparser** 0.37.0
 - **cssparser** 0.29.6
+- **cssparser-macros** 0.7.1
 - **cssparser-macros** 0.6.1
 - **dtoa-short** 0.3.5
 - **option-ext** 0.2.0
-- **selectors** 0.36.1
+- **selectors** 0.38.0
 - **selectors** 0.24.0
 
 ### Apache-2.0 AND MIT (1)
@@ -1471,7 +1492,8 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
 
 ### BSD-3-Clause AND MIT (1)
 
-- **brotli** 8.0.2  
+- **brotli** 9.1.3  
+  Copyright (c) 2016 Dropbox, Inc.  
   Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors.
 
 ### MIT AND BSD-3-Clause (1)
@@ -1898,265 +1920,6 @@ dealings in these Data Files or Software without prior written
 authorization of the copyright holder.
 ```
 
-### Python-2.0
-
-```
-A. HISTORY OF THE SOFTWARE
-==========================
-
-Python was created in the early 1990s by Guido van Rossum at Stichting
-Mathematisch Centrum (CWI, see http://www.cwi.nl) in the Netherlands
-as a successor of a language called ABC.  Guido remains Python's
-principal author, although it includes many contributions from others.
-
-In 1995, Guido continued his work on Python at the Corporation for
-National Research Initiatives (CNRI, see http://www.cnri.reston.va.us)
-in Reston, Virginia where he released several versions of the
-software.
-
-In May 2000, Guido and the Python core development team moved to
-BeOpen.com to form the BeOpen PythonLabs team.  In October of the same
-year, the PythonLabs team moved to Digital Creations, which became
-Zope Corporation.  In 2001, the Python Software Foundation (PSF, see
-https://www.python.org/psf/) was formed, a non-profit organization
-created specifically to own Python-related Intellectual Property.
-Zope Corporation was a sponsoring member of the PSF.
-
-All Python releases are Open Source (see http://www.opensource.org for
-the Open Source Definition).  Historically, most, but not all, Python
-releases have also been GPL-compatible; the table below summarizes
-the various releases.
-
-    Release         Derived     Year        Owner       GPL-
-                    from                                compatible? (1)
-
-    0.9.0 thru 1.2              1991-1995   CWI         yes
-    1.3 thru 1.5.2  1.2         1995-1999   CNRI        yes
-    1.6             1.5.2       2000        CNRI        no
-    2.0             1.6         2000        BeOpen.com  no
-    1.6.1           1.6         2001        CNRI        yes (2)
-    2.1             2.0+1.6.1   2001        PSF         no
-    2.0.1           2.0+1.6.1   2001        PSF         yes
-    2.1.1           2.1+2.0.1   2001        PSF         yes
-    2.1.2           2.1.1       2002        PSF         yes
-    2.1.3           2.1.2       2002        PSF         yes
-    2.2 and above   2.1.1       2001-now    PSF         yes
-
-Footnotes:
-
-(1) GPL-compatible doesn't mean that we're distributing Python under
-    the GPL.  All Python licenses, unlike the GPL, let you distribute
-    a modified version without making your changes open source.  The
-    GPL-compatible licenses make it possible to combine Python with
-    other software that is released under the GPL; the others don't.
-
-(2) According to Richard Stallman, 1.6.1 is not GPL-compatible,
-    because its license has a choice of law clause.  According to
-    CNRI, however, Stallman's lawyer has told CNRI's lawyer that 1.6.1
-    is "not incompatible" with the GPL.
-
-Thanks to the many outside volunteers who have worked under Guido's
-direction to make these releases possible.
-
-
-B. TERMS AND CONDITIONS FOR ACCESSING OR OTHERWISE USING PYTHON
-===============================================================
-
-PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2
---------------------------------------------
-
-1. This LICENSE AGREEMENT is between the Python Software Foundation
-("PSF"), and the Individual or Organization ("Licensee") accessing and
-otherwise using this software ("Python") in source or binary form and
-its associated documentation.
-
-2. Subject to the terms and conditions of this License Agreement, PSF hereby
-grants Licensee a nonexclusive, royalty-free, world-wide license to reproduce,
-analyze, test, perform and/or display publicly, prepare derivative works,
-distribute, and otherwise use Python alone or in any derivative version,
-provided, however, that PSF's License Agreement and PSF's notice of copyright,
-i.e., "Copyright (c) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
-2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020 Python Software Foundation;
-All Rights Reserved" are retained in Python alone or in any derivative version
-prepared by Licensee.
-
-3. In the event Licensee prepares a derivative work that is based on
-or incorporates Python or any part thereof, and wants to make
-the derivative work available to others as provided herein, then
-Licensee hereby agrees to include in any such work a brief summary of
-the changes made to Python.
-
-4. PSF is making Python available to Licensee on an "AS IS"
-basis.  PSF MAKES NO REPRESENTATIONS OR WARRANTIES, EXPRESS OR
-IMPLIED.  BY WAY OF EXAMPLE, BUT NOT LIMITATION, PSF MAKES NO AND
-DISCLAIMS ANY REPRESENTATION OR WARRANTY OF MERCHANTABILITY OR FITNESS
-FOR ANY PARTICULAR PURPOSE OR THAT THE USE OF PYTHON WILL NOT
-INFRINGE ANY THIRD PARTY RIGHTS.
-
-5. PSF SHALL NOT BE LIABLE TO LICENSEE OR ANY OTHER USERS OF PYTHON
-FOR ANY INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES OR LOSS AS
-A RESULT OF MODIFYING, DISTRIBUTING, OR OTHERWISE USING PYTHON,
-OR ANY DERIVATIVE THEREOF, EVEN IF ADVISED OF THE POSSIBILITY THEREOF.
-
-6. This License Agreement will automatically terminate upon a material
-breach of its terms and conditions.
-
-7. Nothing in this License Agreement shall be deemed to create any
-relationship of agency, partnership, or joint venture between PSF and
-Licensee.  This License Agreement does not grant permission to use PSF
-trademarks or trade name in a trademark sense to endorse or promote
-products or services of Licensee, or any third party.
-
-8. By copying, installing or otherwise using Python, Licensee
-agrees to be bound by the terms and conditions of this License
-Agreement.
-
-
-BEOPEN.COM LICENSE AGREEMENT FOR PYTHON 2.0
--------------------------------------------
-
-BEOPEN PYTHON OPEN SOURCE LICENSE AGREEMENT VERSION 1
-
-1. This LICENSE AGREEMENT is between BeOpen.com ("BeOpen"), having an
-office at 160 Saratoga Avenue, Santa Clara, CA 95051, and the
-Individual or Organization ("Licensee") accessing and otherwise using
-this software in source or binary form and its associated
-documentation ("the Software").
-
-2. Subject to the terms and conditions of this BeOpen Python License
-Agreement, BeOpen hereby grants Licensee a non-exclusive,
-royalty-free, world-wide license to reproduce, analyze, test, perform
-and/or display publicly, prepare derivative works, distribute, and
-otherwise use the Software alone or in any derivative version,
-provided, however, that the BeOpen Python License is retained in the
-Software, alone or in any derivative version prepared by Licensee.
-
-3. BeOpen is making the Software available to Licensee on an "AS IS"
-basis.  BEOPEN MAKES NO REPRESENTATIONS OR WARRANTIES, EXPRESS OR
-IMPLIED.  BY WAY OF EXAMPLE, BUT NOT LIMITATION, BEOPEN MAKES NO AND
-DISCLAIMS ANY REPRESENTATION OR WARRANTY OF MERCHANTABILITY OR FITNESS
-FOR ANY PARTICULAR PURPOSE OR THAT THE USE OF THE SOFTWARE WILL NOT
-INFRINGE ANY THIRD PARTY RIGHTS.
-
-4. BEOPEN SHALL NOT BE LIABLE TO LICENSEE OR ANY OTHER USERS OF THE
-SOFTWARE FOR ANY INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES OR LOSS
-AS A RESULT OF USING, MODIFYING OR DISTRIBUTING THE SOFTWARE, OR ANY
-DERIVATIVE THEREOF, EVEN IF ADVISED OF THE POSSIBILITY THEREOF.
-
-5. This License Agreement will automatically terminate upon a material
-breach of its terms and conditions.
-
-6. This License Agreement shall be governed by and interpreted in all
-respects by the law of the State of California, excluding conflict of
-law provisions.  Nothing in this License Agreement shall be deemed to
-create any relationship of agency, partnership, or joint venture
-between BeOpen and Licensee.  This License Agreement does not grant
-permission to use BeOpen trademarks or trade names in a trademark
-sense to endorse or promote products or services of Licensee, or any
-third party.  As an exception, the "BeOpen Python" logos available at
-http://www.pythonlabs.com/logos.html may be used according to the
-permissions granted on that web page.
-
-7. By copying, installing or otherwise using the software, Licensee
-agrees to be bound by the terms and conditions of this License
-Agreement.
-
-
-CNRI LICENSE AGREEMENT FOR PYTHON 1.6.1
----------------------------------------
-
-1. This LICENSE AGREEMENT is between the Corporation for National
-Research Initiatives, having an office at 1895 Preston White Drive,
-Reston, VA 20191 ("CNRI"), and the Individual or Organization
-("Licensee") accessing and otherwise using Python 1.6.1 software in
-source or binary form and its associated documentation.
-
-2. Subject to the terms and conditions of this License Agreement, CNRI
-hereby grants Licensee a nonexclusive, royalty-free, world-wide
-license to reproduce, analyze, test, perform and/or display publicly,
-prepare derivative works, distribute, and otherwise use Python 1.6.1
-alone or in any derivative version, provided, however, that CNRI's
-License Agreement and CNRI's notice of copyright, i.e., "Copyright (c)
-1995-2001 Corporation for National Research Initiatives; All Rights
-Reserved" are retained in Python 1.6.1 alone or in any derivative
-version prepared by Licensee.  Alternately, in lieu of CNRI's License
-Agreement, Licensee may substitute the following text (omitting the
-quotes): "Python 1.6.1 is made available subject to the terms and
-conditions in CNRI's License Agreement.  This Agreement together with
-Python 1.6.1 may be located on the Internet using the following
-unique, persistent identifier (known as a handle): 1895.22/1013.  This
-Agreement may also be obtained from a proxy server on the Internet
-using the following URL: http://hdl.handle.net/1895.22/1013".
-
-3. In the event Licensee prepares a derivative work that is based on
-or incorporates Python 1.6.1 or any part thereof, and wants to make
-the derivative work available to others as provided herein, then
-Licensee hereby agrees to include in any such work a brief summary of
-the changes made to Python 1.6.1.
-
-4. CNRI is making Python 1.6.1 available to Licensee on an "AS IS"
-basis.  CNRI MAKES NO REPRESENTATIONS OR WARRANTIES, EXPRESS OR
-IMPLIED.  BY WAY OF EXAMPLE, BUT NOT LIMITATION, CNRI MAKES NO AND
-DISCLAIMS ANY REPRESENTATION OR WARRANTY OF MERCHANTABILITY OR FITNESS
-FOR ANY PARTICULAR PURPOSE OR THAT THE USE OF PYTHON 1.6.1 WILL NOT
-INFRINGE ANY THIRD PARTY RIGHTS.
-
-5. CNRI SHALL NOT BE LIABLE TO LICENSEE OR ANY OTHER USERS OF PYTHON
-1.6.1 FOR ANY INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES OR LOSS AS
-A RESULT OF MODIFYING, DISTRIBUTING, OR OTHERWISE USING PYTHON 1.6.1,
-OR ANY DERIVATIVE THEREOF, EVEN IF ADVISED OF THE POSSIBILITY THEREOF.
-
-6. This License Agreement will automatically terminate upon a material
-breach of its terms and conditions.
-
-7. This License Agreement shall be governed by the federal
-intellectual property law of the United States, including without
-limitation the federal copyright law, and, to the extent such
-U.S. federal law does not apply, by the law of the Commonwealth of
-Virginia, excluding Virginia's conflict of law provisions.
-Notwithstanding the foregoing, with regard to derivative works based
-on Python 1.6.1 that incorporate non-separable material that was
-previously distributed under the GNU General Public License (GPL), the
-law of the Commonwealth of Virginia shall govern this License
-Agreement only as to issues arising under or with respect to
-Paragraphs 4, 5, and 7 of this License Agreement.  Nothing in this
-License Agreement shall be deemed to create any relationship of
-agency, partnership, or joint venture between CNRI and Licensee.  This
-License Agreement does not grant permission to use CNRI trademarks or
-trade name in a trademark sense to endorse or promote products or
-services of Licensee, or any third party.
-
-8. By clicking on the "ACCEPT" button where indicated, or by copying,
-installing or otherwise using Python 1.6.1, Licensee agrees to be
-bound by the terms and conditions of this License Agreement.
-
-        ACCEPT
-
-
-CWI LICENSE AGREEMENT FOR PYTHON 0.9.0 THROUGH 1.2
---------------------------------------------------
-
-Copyright (c) 1991 - 1995, Stichting Mathematisch Centrum Amsterdam,
-The Netherlands.  All rights reserved.
-
-Permission to use, copy, modify, and distribute this software and its
-documentation for any purpose and without fee is hereby granted,
-provided that the above copyright notice appear in all copies and that
-both that copyright notice and this permission notice appear in
-supporting documentation, and that the name of Stichting Mathematisch
-Centrum or CWI not be used in advertising or publicity pertaining to
-distribution of the software without specific, written prior
-permission.
-
-STICHTING MATHEMATISCH CENTRUM DISCLAIMS ALL WARRANTIES WITH REGARD TO
-THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
-FITNESS, IN NO EVENT SHALL STICHTING MATHEMATISCH CENTRUM BE LIABLE
-FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
-OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-```
-
 ### MPL-2.0
 
 ```
@@ -2533,6 +2296,58 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
 
 This Source Code Form is "Incompatible With Secondary Licenses", as
 defined by the Mozilla Public License, v. 2.0.
+```
+
+### PSF-2.0
+
+```
+PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2
+
+1. This LICENSE AGREEMENT is between the Python Software Foundation
+("PSF"), and the Individual or Organization ("Licensee") accessing and
+otherwise using this software ("Python") in source or binary form and
+its associated documentation.
+
+2. Subject to the terms and conditions of this License Agreement, PSF hereby
+grants Licensee a nonexclusive, royalty-free, world-wide license to reproduce,
+analyze, test, perform and/or display publicly, prepare derivative works,
+distribute, and otherwise use Python alone or in any derivative version,
+provided, however, that PSF's License Agreement and PSF's notice of copyright,
+i.e., "Copyright (c) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
+2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019 Python Software Foundation;
+All Rights Reserved" are retained in Python alone or in any derivative version
+prepared by Licensee.
+
+3. In the event Licensee prepares a derivative work that is based on
+or incorporates Python or any part thereof, and wants to make
+the derivative work available to others as provided herein, then
+Licensee hereby agrees to include in any such work a brief summary of
+the changes made to Python.
+
+4. PSF is making Python available to Licensee on an "AS IS"
+basis.  PSF MAKES NO REPRESENTATIONS OR WARRANTIES, EXPRESS OR
+IMPLIED.  BY WAY OF EXAMPLE, BUT NOT LIMITATION, PSF MAKES NO AND
+DISCLAIMS ANY REPRESENTATION OR WARRANTY OF MERCHANTABILITY OR FITNESS
+FOR ANY PARTICULAR PURPOSE OR THAT THE USE OF PYTHON WILL NOT
+INFRINGE ANY THIRD PARTY RIGHTS.
+
+5. PSF SHALL NOT BE LIABLE TO LICENSEE OR ANY OTHER USERS OF PYTHON
+FOR ANY INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES OR LOSS AS
+A RESULT OF MODIFYING, DISTRIBUTING, OR OTHERWISE USING PYTHON,
+OR ANY DERIVATIVE THEREOF, EVEN IF ADVISED OF THE POSSIBILITY THEREOF.
+
+6. This License Agreement will automatically terminate upon a material
+breach of its terms and conditions.
+
+7. Nothing in this License Agreement shall be deemed to create any
+relationship of agency, partnership, or joint venture between PSF and
+Licensee.  This License Agreement does not grant permission to use PSF
+trademarks or trade name in a trademark sense to endorse or promote
+products or services of Licensee, or any third party.
+
+8. By copying, installing or otherwise using Python, Licensee
+agrees to be bound by the terms and conditions of this License
+Agreement.
 ```
 
 ## Additional notes
