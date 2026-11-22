@@ -9,6 +9,11 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Security
+
+- Updated Go to 1.26.11 and `golang.org/x/net` to 0.63.0 to address the standard library and module advisories reported by `govulncheck`.
+- Updated `js-yaml`, Rust `url`, Tokio, rustix and rand 0.8 to patched versions. Updated Tauri to 2.12.7, which removes the unmaintained `unic-*` dependency chain.
+
 ## [0.9.22] - 2026-10-10
 
 ### Fixed
