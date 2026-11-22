@@ -118,7 +118,7 @@ func (s *Service) enrichGcpComputeInventory(
 		status = "No Compute Engine instances are currently available for this GCP project."
 	default:
 		status = fmt.Sprintf(
-			"Loaded %d Compute Engine instance(s) via gcloud. Enable write mode to start or stop instances.",
+			"Loaded %d Compute Engine instance(s) via gcloud. Enable write mode to start, stop or reset instances.",
 			len(instances),
 		)
 	}
@@ -137,6 +137,10 @@ func (s *Service) handleGcpComputeStartInstance(ctx context.Context, params json
 
 func (s *Service) handleGcpComputeStopInstance(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 	return s.handleGcpComputeLifecycle(ctx, params, notifier, "stop")
+}
+
+func (s *Service) handleGcpComputeResetInstance(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	return s.handleGcpComputeLifecycle(ctx, params, notifier, "reset")
 }
 
 func (s *Service) handleGcpComputeLifecycle(
@@ -190,11 +194,17 @@ func (s *Service) handleGcpComputeLifecycle(
 
 	timeoutCtx, cancel := s.withAzureTimeout(ctx)
 	var lifecycleErr error
+	var verb string
 	switch action {
 	case "start":
+		verb = "Started"
 		lifecycleErr = s.gcpCompute.StartInstance(timeoutCtx, profile, name, zone)
 	case "stop":
+		verb = "Stopped"
 		lifecycleErr = s.gcpCompute.StopInstance(timeoutCtx, profile, name, zone)
+	case "reset":
+		verb = "Reset"
+		lifecycleErr = s.gcpCompute.ResetInstance(timeoutCtx, profile, name, zone)
 	default:
 		cancel()
 		return nil, fmt.Errorf("unsupported Compute Engine action %q", action)
@@ -210,16 +220,14 @@ func (s *Service) handleGcpComputeLifecycle(
 		s.mu.Unlock()
 		return nil, err
 	}
-	session.SelectedGcpComputeInstance = name
-	if err := s.store.SaveSession(ctx, session); err != nil {
-		s.mu.Unlock()
-		return nil, err
+	if session.IsLocked && session.CurrentProviderID == "gcp" && session.SelectedProfileID == profile.ProfileID {
+		session.SelectedGcpComputeInstance = name
+		if err := s.store.SaveSession(ctx, session); err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
 	}
 	s.mu.Unlock()
-	verb := "Started"
-	if action == "stop" {
-		verb = "Stopped"
-	}
 	return s.finishGcpWorkspace(
 		ctx,
 		snapshot,

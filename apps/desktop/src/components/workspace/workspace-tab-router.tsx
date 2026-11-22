@@ -319,31 +319,48 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
   if (session.isLocked && activeWorkspaceTabId === "gcp-compute") {
     return (
       <GcpComputeView
+        key={activeWorkspace.profile?.profileId}
         workspace={activeWorkspace}
         inventoryLoading={props.gcpInventoryLoading}
         onRefresh={() => {
           void refreshDiscovery();
         }}
-        onStartInstance={(instanceName, zone) => {
-          void mutateWorkspaceSelection(
+        onStartInstance={(instanceName, zone) =>
+          mutateWorkspaceSelection(
             "gcp.compute.startInstance",
             { instanceName, zone },
             {
               immediate: true,
               errorTitle: "Failed to start Compute Engine instance",
             },
-          );
-        }}
-        onStopInstance={(instanceName, zone) => {
-          void mutateWorkspaceSelection(
+          )
+        }
+        onStopInstance={(instanceName, zone) =>
+          mutateWorkspaceSelection(
             "gcp.compute.stopInstance",
             { instanceName, zone },
             {
               immediate: true,
               errorTitle: "Failed to stop Compute Engine instance",
             },
-          );
-        }}
+          )
+        }
+        onResetInstance={(instanceName, zone) =>
+          mutateWorkspaceSelection(
+            "gcp.compute.resetInstance",
+            { instanceName, zone },
+            {
+              immediate: true,
+              errorTitle: "Failed to reset Compute Engine instance",
+              merge: (current, result) =>
+                current?.provider?.providerId === "gcp" &&
+                current.profile?.profileId === activeWorkspace.profile?.profileId &&
+                result.profile?.profileId === activeWorkspace.profile?.profileId
+                  ? result
+                  : current,
+            },
+          )
+        }
       />
     );
   }

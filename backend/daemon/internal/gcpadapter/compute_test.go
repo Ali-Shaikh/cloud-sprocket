@@ -6,6 +6,7 @@ package gcpadapter
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -170,5 +171,40 @@ func TestStartInstanceRequiresNameAndZone(t *testing.T) {
 	inv.runner = &fakeCLI{}
 	if err := inv.StartInstance(context.Background(), gcpProfile(), "web-1", ""); err == nil {
 		t.Fatal("expected error for empty zone")
+	}
+}
+
+func TestResetInstanceUsesSelectedProject(t *testing.T) {
+	fake := &fakeCLI{}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+
+	if err := inv.ResetInstance(context.Background(), gcpProfile(), "web-1", "us-central1-a"); err != nil {
+		t.Fatalf("ResetInstance: %v", err)
+	}
+	want := []string{"--configuration=default", "compute", "instances", "reset", "web-1",
+		"--zone=us-central1-a", "--project", "platform-prod", "--quiet"}
+	if !slices.Equal(fake.args, want) {
+		t.Fatalf("args = %v, want %v", fake.args, want)
+	}
+}
+
+func TestResetInstanceRejectsInvalidTarget(t *testing.T) {
+	fake := &fakeCLI{}
+	inv := NewInventory(config.Settings{})
+	inv.runner = fake
+	profile := gcpProfile()
+
+	for _, name := range []string{"--project=other", "projects/other/zones/us-central1-a/instances/web-1"} {
+		if err := inv.ResetInstance(context.Background(), profile, name, "us-central1-a"); err == nil {
+			t.Fatalf("expected invalid instance error for %q", name)
+		}
+	}
+	profile.Attributes = nil
+	if err := inv.ResetInstance(context.Background(), profile, "web-1", "us-central1-a"); err == nil {
+		t.Fatal("expected error for missing project")
+	}
+	if len(fake.args) > 0 {
+		t.Fatalf("gcloud invoked with %v", fake.args)
 	}
 }

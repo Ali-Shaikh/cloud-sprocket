@@ -245,6 +245,7 @@ type GcpComputeInventory interface {
 	ListInstances(ctx context.Context, profile models.ProfileSummary) ([]models.GcpComputeInstance, error)
 	StartInstance(ctx context.Context, profile models.ProfileSummary, instanceName string, zone string) error
 	StopInstance(ctx context.Context, profile models.ProfileSummary, instanceName string, zone string) error
+	ResetInstance(ctx context.Context, profile models.ProfileSummary, instanceName string, zone string) error
 }
 
 // GcpFunctionsInventory lists and invokes Cloud Functions via the gcloud CLI adapter.

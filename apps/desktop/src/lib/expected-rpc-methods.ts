@@ -166,6 +166,7 @@ export const EXPECTED_RPC_METHODS = [
   "emulators.prepareProfile",
   "emulators.start",
   "emulators.stop",
+  "gcp.compute.resetInstance",
   "gcp.compute.startInstance",
   "gcp.compute.stopInstance",
   "gcp.functions.call",

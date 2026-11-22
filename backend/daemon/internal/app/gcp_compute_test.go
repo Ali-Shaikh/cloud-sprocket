@@ -17,9 +17,11 @@ type stubGcpComputeInventory struct {
 	err        error
 	startErr   error
 	stopErr    error
+	resetErr   error
 	listCalls  int
 	startCalls int
 	stopCalls  int
+	resetCalls int
 	lastName   string
 	lastZone   string
 }
@@ -44,6 +46,13 @@ func (s *stubGcpComputeInventory) StopInstance(_ context.Context, _ models.Profi
 	s.lastName = instanceName
 	s.lastZone = zone
 	return s.stopErr
+}
+
+func (s *stubGcpComputeInventory) ResetInstance(_ context.Context, _ models.ProfileSummary, instanceName string, zone string) error {
+	s.resetCalls++
+	s.lastName = instanceName
+	s.lastZone = zone
+	return s.resetErr
 }
 
 func TestEnrichGcpComputeInventorySuccess(t *testing.T) {
@@ -177,5 +186,39 @@ func TestHandleGcpComputeLifecycleRequiresWriteMode(t *testing.T) {
 	}
 	if compute.stopCalls != 1 {
 		t.Fatalf("stopCalls = %d, want 1", compute.stopCalls)
+	}
+}
+
+func TestHandleGcpComputeReset(t *testing.T) {
+	ctx := context.Background()
+	compute := &stubGcpComputeInventory{
+		instances: []models.GcpComputeInstance{{Name: "web-1", Zone: "us-central1-a", Status: "RUNNING"}},
+	}
+	service := gcpStorageTestService(t, &stubGcpStorageInventory{})
+	service.gcpCompute = compute
+	lockGcpWorkspace(t, service)
+
+	params := []byte(`{"instanceName":"web-1","zone":"us-central1-a"}`)
+	if _, err := service.Handle(ctx, "gcp.compute.resetInstance", params, nil); err == nil ||
+		!strings.Contains(err.Error(), "write mode") || compute.resetCalls != 0 {
+		t.Fatalf("read-only reset: error=%v, calls=%d", err, compute.resetCalls)
+	}
+	if _, err := service.Handle(ctx, "session.setWriteMode", []byte(`{"enabled":true}`), nil); err != nil {
+		t.Fatalf("setWriteMode: %v", err)
+	}
+	compute.resetErr = errors.New("gcloud reset denied")
+	if _, err := service.Handle(ctx, "gcp.compute.resetInstance", params, nil); !errors.Is(err, compute.resetErr) {
+		t.Fatalf("reset error = %v, want %v", err, compute.resetErr)
+	}
+	compute.resetErr = nil
+	result, err := service.Handle(ctx, "gcp.compute.resetInstance", params, nil)
+	if err != nil {
+		t.Fatalf("resetInstance: %v", err)
+	}
+	if compute.resetCalls != 2 || compute.lastName != "web-1" || compute.lastZone != "us-central1-a" {
+		t.Fatalf("reset calls=%d name=%q zone=%q", compute.resetCalls, compute.lastName, compute.lastZone)
+	}
+	if workspace := result.(models.WorkspaceSnapshot); workspace.SelectedGcpComputeInstance != "web-1" {
+		t.Fatalf("selected instance = %q, want web-1", workspace.SelectedGcpComputeInstance)
 	}
 }

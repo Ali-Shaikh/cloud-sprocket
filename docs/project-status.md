@@ -70,7 +70,7 @@ Four live service tabs (no longer Soon-only):
 | Service | Operations |
 |---------|------------|
 | Cloud Storage | List buckets/objects, prefix nav, upload/delete, **signed read URL** |
-| Compute Engine | List VMs, **start/stop** |
+| Compute Engine | List VMs, start, stop and hard reset |
 | Cloud Functions | List (1st + 2nd gen), select, **invoke** |
 | GKE | List clusters, **select cluster + list node pools** |
 

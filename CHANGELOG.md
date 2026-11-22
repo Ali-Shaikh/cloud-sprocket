@@ -9,6 +9,10 @@ Installers for every release are published on the
 
 ## [Unreleased]
 
+### Added
+
+- Compute Engine can hard-reset a running VM after confirmation in write mode.
+
 ## [0.9.23] - 2026-11-22
 
 ### Security

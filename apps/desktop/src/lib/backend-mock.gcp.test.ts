@@ -150,8 +150,10 @@ describe("backend mock GCP multi-cloud smoke", () => {
     expect(restored.gcpStorageObjects?.some((entry) => entry.key === "docs/copy.txt")).toBe(true);
   });
 
-  it("starts and stops compute instances when write mode is on", async () => {
+  it("starts, stops and resets compute instances when write mode is on", async () => {
     await lockGcpWorkspace();
+    const resetTarget = { instanceName: "batch-1", zone: "europe-west1-b" };
+    await expect(backendRequest("gcp.compute.resetInstance", resetTarget)).rejects.toThrow(/write mode/i);
     await backendRequest("session.setWriteMode", { enabled: true });
 
     const started = await backendRequest<WorkspaceSnapshot>("gcp.compute.startInstance", {
@@ -161,6 +163,14 @@ describe("backend mock GCP multi-cloud smoke", () => {
     expect(
       started.gcpComputeInstances?.find((instance) => instance.name === "batch-1")?.status,
     ).toBe("RUNNING");
+    const reset = await backendRequest<WorkspaceSnapshot>("gcp.compute.resetInstance", resetTarget);
+    expect(reset.selectedGcpComputeInstance).toBe("batch-1");
+    expect(
+      reset.gcpComputeInstances?.find((instance) => instance.name === "batch-1")?.status,
+    ).toBe("RUNNING");
+    await expect(
+      backendRequest("gcp.compute.resetInstance", { ...resetTarget, zone: "us-central1-a" }),
+    ).rejects.toThrow(/selected zone/i);
 
     const stopped = await backendRequest<WorkspaceSnapshot>("gcp.compute.stopInstance", {
       name: "web-1",
