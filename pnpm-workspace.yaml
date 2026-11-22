@@ -2,6 +2,7 @@ packages:
   - "apps/*"
 overrides:
   "@codemirror/view": "6.43.8"
+  "@typescript-eslint/typescript-estree@8.72.0>minimatch": "11.0.9"
 allowBuilds:
   esbuild: true
 minimumReleaseAgeExclude:

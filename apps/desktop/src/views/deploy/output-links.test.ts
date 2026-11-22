@@ -179,10 +179,30 @@ describe("toLocalStackUrl", () => {
 
     expect(commands).toHaveLength(1);
     expect(commands[0].command).toBe(
-      'aws --endpoint-url "http://localhost:4566" --no-sign-request logs tail "/ecs/myappaaa-dev" --follow --region "us-east-1"',
+      "aws --endpoint-url 'http://localhost:4566' --no-sign-request logs tail '/ecs/myappaaa-dev' --follow --region 'us-east-1'",
     );
     expect(commands[0].command).not.toContain("AWS_ACCESS_KEY_ID");
     expect(commands[0].command).not.toContain("AWS_SECRET_ACCESS_KEY");
+  });
+
+  it("copies literal profile arguments for POSIX shells and PowerShell", () => {
+    const deployment = {
+      id: "dep-2",
+      recipeId: "scheduled-job-aws",
+      name: "Scheduled job",
+      providerId: "aws",
+      profileId: "team\\ops's profile \u2019$",
+      local: false,
+      variables: {},
+      status: "applied",
+      createdAt: "2026-06-15T00:00:00Z",
+      updatedAt: "2026-06-15T00:00:00Z",
+    } as const;
+
+    const [posix] = logCommandsForDeployment(deployment, "posix");
+    const [powershell] = logCommandsForDeployment(deployment, "powershell");
+    expect(posix.command).toContain("--profile 'team\\ops'\"'\"'s profile \u2019$'");
+    expect(powershell.command).toContain("--profile 'team\\ops''s profile \u2019\u2019$'");
   });
 });
 

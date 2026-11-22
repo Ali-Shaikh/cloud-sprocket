@@ -130,13 +130,18 @@ export function SuperpowersCard({
 }
 
 export function LogCommandsCard({ deployment }: { deployment: Deployment }) {
-  const commands = logCommandsForDeployment(deployment);
+  const shell = /\bWindows\b/i.test(globalThis.navigator?.userAgent ?? "")
+    ? "powershell"
+    : "posix";
+  const commands = logCommandsForDeployment(deployment, shell);
 
   return (
     <Card className="p-4">
       <div className="mb-3 flex items-center gap-2">
         <Terminal className="size-4 text-muted-foreground" />
-        <p className="text-sm font-medium text-foreground">Runtime log commands</p>
+        <p className="text-sm font-medium text-foreground">
+          Runtime log commands{shell === "powershell" ? " (PowerShell)" : ""}
+        </p>
       </div>
       {commands.length === 0 ? (
         <p className="text-sm text-muted-foreground">
