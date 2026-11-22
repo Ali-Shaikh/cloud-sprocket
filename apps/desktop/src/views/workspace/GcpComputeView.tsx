@@ -36,6 +36,7 @@ export type GcpComputeViewProps = {
   onStartInstance?: InstanceAction;
   onStopInstance?: InstanceAction;
   onResetInstance?: InstanceAction;
+  lifecyclePending?: boolean;
   inventoryLoading?: boolean;
 };
 
@@ -58,6 +59,7 @@ export default function GcpComputeView({
   onStartInstance,
   onStopInstance,
   onResetInstance,
+  lifecyclePending = false,
   inventoryLoading = false,
 }: GcpComputeViewProps) {
   const [filterText, setFilterText] = useState("");
@@ -109,7 +111,7 @@ export default function GcpComputeView({
     if (!state.enabled) {
       return state.reason ?? "Action unavailable.";
     }
-    if (actionInFlight) return "A Compute Engine action is in progress.";
+    if (actionInFlight || lifecyclePending) return "A Compute Engine action is in progress.";
     if (!instance) return "Select an instance first.";
     if (!instance.zone) return "Selected instance is missing a zone.";
     if (!action.accepts(instance.status)) {

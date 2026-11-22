@@ -9,6 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { useGcpComputeLifecycle } from "@/hooks/use-gcp-compute-lifecycle";
 
 import { WRITE_MODE_REQUIRED_REASON } from "@/lib/action-capabilities";
 import { ThemeProvider } from "@/lib/theme";
@@ -186,27 +187,34 @@ describe("GcpComputeView", () => {
     expect(reset.getAttribute("title") ?? "").toMatch(/write mode/i);
   });
 
-  it("keeps reset disabled until a pending stop finishes", async () => {
+  it("keeps reset disabled after leaving and reopening the tab during a stop", async () => {
     let finishStop!: (value: boolean) => void;
     const onStop = vi.fn().mockReturnValue(
       new Promise<boolean>((resolve) => {
         finishStop = resolve;
       }),
     );
-    render(
-      <ThemeProvider>
-        <GcpComputeView
-          workspace={workspace}
-          onRefresh={vi.fn()}
-          onStopInstance={onStop}
-          onResetInstance={vi.fn()}
-        />
-      </ThemeProvider>,
-    );
-
-    fireEvent.click(screen.getByText("web-1"));
+    const profileId = "platform";
+    function Workspace({ showCompute }: { showCompute: boolean }) {
+      const { pendingProfiles, runLifecycle } = useGcpComputeLifecycle();
+      return showCompute ? (
+        <ThemeProvider>
+          <GcpComputeView
+            workspace={{ ...workspace, selectedGcpComputeInstance: "web-1" }}
+            onRefresh={vi.fn()}
+            onStopInstance={() => runLifecycle(profileId, onStop)}
+            onResetInstance={vi.fn()}
+            lifecyclePending={pendingProfiles.has(profileId)}
+          />
+        </ThemeProvider>
+      ) : null;
+    }
+    const { rerender } = render(<Workspace showCompute />);
     fireEvent.click(screen.getByRole("button", { name: "Stop" }));
     fireEvent.click(screen.getByRole("button", { name: "Stop instance" }));
+    expect(onStop).toHaveBeenCalledOnce();
+    rerender(<Workspace showCompute={false} />);
+    rerender(<Workspace showCompute />);
     expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
     finishStop(true);
     await waitFor(() =>
