@@ -144,7 +144,7 @@ Packages whose code is compiled into the application's JavaScript bundle.
   Copyright (c) 2021-present Tanner Linsley
 - **@tanstack/virtual-core** 3.17.7  
   Copyright (c) 2021-present Tanner Linsley
-- **@tauri-apps/api** 2.11.1  
+- **@tauri-apps/api** 2.12.5  
   Copyright (c) 2017 - Present Tauri Apps Contributors
 - **@tauri-apps/plugin-dialog** 2.7.2
 - **@tauri-apps/plugin-opener** 2.5.4
