@@ -16,6 +16,7 @@ Installers for every release are published on the
 ### Security
 
 - Updated Rust `cookie` to 0.18.3 for RUSTSEC-2026-0594.
+- Updated OpenTelemetry to 1.47.0 for GO-2026-6974.
 
 ## [0.9.23] - 2026-11-22
 

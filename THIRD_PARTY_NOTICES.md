@@ -207,11 +207,11 @@ Packages whose code is compiled into the application's JavaScript bundle.
 
 - **argparse** 3.0.4
 
-## Go sidecar `cloudsprocketd` (87 modules)
+## Go sidecar `cloudsprocketd` (89 modules)
 
 Modules compiled into the sidecar binary.
 
-### MIT (14)
+### MIT (15)
 
 - **github.com/Azure/azure-sdk-for-go/sdk/azcore** v1.22.0  
   Copyright (c) Microsoft Corporation.
@@ -227,6 +227,8 @@ Modules compiled into the sidecar binary.
   Copyright (c) Microsoft Corporation. All rights reserved.
 - **github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue/v2** v2.1.0  
   Copyright (c) Microsoft Corporation. All rights reserved.
+- **github.com/cespare/xxhash/v2** v2.3.0  
+  Copyright (c) 2016 Caleb Spare
 - **github.com/dustin/go-humanize** v1.0.1  
   Copyright (c) 2005-2008  Dustin Sallings <dustin@spy.net>
 - **github.com/felixge/httpsnoop** v1.0.4  
@@ -242,7 +244,7 @@ Modules compiled into the sidecar binary.
 - **github.com/zclconf/go-cty** v1.14.4  
   Copyright (c) 2017-2018 Martin Atkins
 
-### Apache-2.0 (60)
+### Apache-2.0 (61)
 
 - **github.com/agext/levenshtein** v1.2.2
 - **github.com/apparentlymart/go-textseg/v15** v15.0.0  
@@ -298,7 +300,7 @@ Modules compiled into the sidecar binary.
   Copyright 2015 Docker, Inc.
 - **github.com/docker/go-units** v0.5.0  
   Copyright 2015 Docker, Inc.
-- **github.com/go-logr/logr** v1.4.2
+- **github.com/go-logr/logr** v1.4.4
 - **github.com/go-logr/stdr** v1.2.2
 - **github.com/moby/docker-image-spec** v1.3.1
 - **github.com/moby/moby/api** v1.55.0
@@ -741,11 +743,16 @@ Creative Commons may be contacted at creativecommons.org.
   </details>
 - **github.com/opencontainers/image-spec** v1.1.1  
   Copyright 2016 The Linux Foundation.
-- **go.opentelemetry.io/auto/sdk** v1.1.0
+- **go.opentelemetry.io/auto/sdk** v1.2.1
 - **go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp** v0.60.0
-- **go.opentelemetry.io/otel** v1.35.0
-- **go.opentelemetry.io/otel/metric** v1.35.0
-- **go.opentelemetry.io/otel/trace** v1.35.0
+- **go.opentelemetry.io/otel** v1.47.0  
+  Copyright 2009 The Go Authors.
+- **go.opentelemetry.io/otel/log** v1.47.0  
+  Copyright 2009 The Go Authors.
+- **go.opentelemetry.io/otel/metric** v1.47.0  
+  Copyright 2009 The Go Authors.
+- **go.opentelemetry.io/otel/trace** v1.47.0  
+  Copyright 2009 The Go Authors.
 - **gopkg.in/yaml.v3** v3.0.1  
   copyright staring in 2011 when the project was ported over:  
   Copyright (c) 2006-2010 Kirill Simonov  
