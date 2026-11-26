@@ -10,9 +10,12 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
+
+const gcpFunctionsInventoryScope = "gcp.functions.list"
 
 func (s *Service) gcpFunctionsResult(
 	ctx context.Context,
@@ -21,7 +24,7 @@ func (s *Service) gcpFunctionsResult(
 	if s.gcpFunctions == nil {
 		return []models.GcpCloudFunction{}, nil
 	}
-	const scope = "gcp.functions.list"
+	const scope = gcpFunctionsInventoryScope
 	queryHash := profile.ProfileID
 
 	if s.store != nil {
@@ -102,7 +105,7 @@ func (s *Service) enrichGcpFunctionsInventory(
 		status = "No Cloud Functions are currently available for this GCP project."
 	default:
 		status = fmt.Sprintf(
-			"Loaded %d Cloud Function(s) via gcloud. Select one to invoke with write mode enabled.",
+			"Loaded %d Cloud Function(s) via gcloud. Enable write mode to invoke or delete functions.",
 			len(functions),
 		)
 	}
@@ -250,4 +253,63 @@ func (s *Service) handleGcpFunctionsCall(ctx context.Context, params json.RawMes
 	return map[string]any{
 		"result": result,
 	}, nil
+}
+
+func (s *Service) handleGcpFunctionsDelete(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
+	if s.gcpFunctions == nil {
+		return nil, errors.New("GCP Cloud Functions inventory is not available")
+	}
+	var request struct {
+		Name   string `json:"name"`
+		Region string `json:"region"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	name := strings.TrimSpace(request.Name)
+	region := strings.TrimSpace(request.Region)
+	if name == "" || region == "" {
+		return nil, errors.New("a Cloud Function name and region are required")
+	}
+	key := region + "/" + name
+	snapshot, err := s.discovery.Discover()
+	if err != nil {
+		return nil, err
+	}
+	session, err := s.Load(ctx, snapshot)
+	if err != nil {
+		return nil, err
+	}
+	if !session.IsLocked || session.CurrentProviderID != "gcp" {
+		return nil, errors.New("open a locked GCP workspace before deleting a Cloud Function")
+	}
+	if !session.GcpWriteModeEnabled {
+		return nil, errors.New(gcpWriteModeRequiredMessage)
+	}
+	profile, ok := findProfile(filterProfiles(snapshot.Profiles, "gcp"), session.SelectedProfileID)
+	if !ok {
+		return nil, errors.New("the workspace's GCP profile is not available")
+	}
+	if session.SelectedGcpFunction != key {
+		return nil, errors.New("select the Cloud Function and region before deleting")
+	}
+
+	actionCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	err = s.gcpFunctions.DeleteFunction(actionCtx, profile, name, region)
+	cancel()
+	s.invalidateResourceCacheScope(ctx, gcpFunctionsInventoryScope)
+	if err != nil {
+		return nil, err
+	}
+	session, err = s.Update(ctx, snapshot, func(current *models.SessionSnapshot) error {
+		if current.IsLocked && current.CurrentProviderID == "gcp" &&
+			current.SelectedProfileID == profile.ProfileID && current.SelectedGcpFunction == key {
+			current.SelectedGcpFunction = ""
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.finishGcpWorkspace(ctx, snapshot, session, notifier, "success", fmt.Sprintf("Deleted Cloud Function %s in %s.", name, region))
 }

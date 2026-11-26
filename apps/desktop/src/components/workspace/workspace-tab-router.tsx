@@ -358,21 +358,22 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
   if (session.isLocked && activeWorkspaceTabId === "gcp-functions") {
     return (
       <GcpFunctionsView
+        key={activeWorkspace.profile?.profileId}
         workspace={activeWorkspace}
         inventoryLoading={props.gcpInventoryLoading}
         onRefresh={() => {
           void refreshDiscovery();
         }}
-        onSelectFunction={(functionKey, name, region) => {
-          void mutateWorkspaceSelection(
+        onSelectFunction={(functionKey, name, region) =>
+          mutateWorkspaceSelection(
             "gcp.functions.selectFunction",
             { functionKey, name, region },
             {
               immediate: true,
               errorTitle: "Failed to select Cloud Function",
             },
-          );
-        }}
+          )
+        }
         onInvoke={async (name, region, generation, data) => {
           try {
             const response = await backendRequest<{ result: GcpCloudFunctionInvokeResult }>(
@@ -387,6 +388,22 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
             throw error instanceof Error ? error : new Error(message);
           }
         }}
+        onDelete={(name, region) =>
+          mutateWorkspaceSelection(
+            "gcp.functions.delete",
+            { name, region },
+            {
+              immediate: true,
+              errorTitle: "Failed to delete Cloud Function",
+              merge: (current, result) =>
+                current?.provider?.providerId === "gcp" &&
+                current.profile?.profileId === activeWorkspace.profile?.profileId &&
+                result.profile?.profileId === activeWorkspace.profile?.profileId
+                  ? result
+                  : current,
+            },
+          )
+        }
       />
     );
   }

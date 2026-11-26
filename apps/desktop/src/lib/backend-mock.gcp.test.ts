@@ -181,6 +181,22 @@ describe("backend mock GCP multi-cloud smoke", () => {
     ).toBe("TERMINATED");
   });
 
+  it("deletes only the selected Cloud Function", async () => {
+    await lockGcpWorkspace();
+    const target = { name: "process-upload", region: "europe-west1" };
+    await backendRequest("gcp.functions.selectFunction", {
+      functionKey: "europe-west1/process-upload",
+    });
+    await expect(backendRequest("gcp.functions.delete", target)).rejects.toThrow(/write mode/i);
+    await backendRequest("session.setWriteMode", { enabled: true });
+    await expect(
+      backendRequest("gcp.functions.delete", { ...target, region: "us-central1" }),
+    ).rejects.toThrow(/select the cloud function and region/i);
+    const updated = await backendRequest<WorkspaceSnapshot>("gcp.functions.delete", target);
+    expect(updated.selectedGcpFunction).toBe("");
+    expect(updated.gcpFunctions?.map((fn) => fn.name)).toEqual(["hello-http"]);
+  });
+
   it("loads more DynamoDB sample items and reboots RDS when write mode is on", async () => {
     await backendRequest("session.selectProvider", { providerId: "aws" });
     await backendRequest("session.selectProfile", {

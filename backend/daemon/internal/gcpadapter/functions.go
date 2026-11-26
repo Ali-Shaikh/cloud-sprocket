@@ -7,11 +7,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
+
+var cloudFunctionName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,62}$`)
+var cloudFunctionRegion = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$`)
 
 // ListFunctions returns Cloud Functions (1st and 2nd gen) for the profile project
 // via `gcloud functions list --format=json` and `gcloud functions list --gen2 --format=json`.
@@ -251,6 +255,19 @@ func (i *Inventory) CallFunction(
 		Generation: strings.TrimSpace(generation),
 		Body:       strings.TrimSpace(string(out)),
 	}, nil
+}
+
+// DeleteFunction deletes a function by name and region in the selected project.
+// The gcloud delete command resolves the function generation.
+func (i *Inventory) DeleteFunction(ctx context.Context, profile models.ProfileSummary, name, region string) error {
+	name = strings.TrimSpace(name)
+	region = strings.TrimSpace(region)
+	project := projectFromProfile(profile)
+	if !cloudFunctionName.MatchString(name) || !cloudFunctionRegion.MatchString(region) || project == "" {
+		return fmt.Errorf("deletion requires a valid Cloud Function name, region and project")
+	}
+	_, err := i.run(ctx, profile, "functions", "delete", name, "--region="+region, "--project", project, "--quiet")
+	return err
 }
 
 func isGen2Generation(generation string) bool {

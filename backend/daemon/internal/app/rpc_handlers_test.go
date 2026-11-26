@@ -175,6 +175,7 @@ var expectedRPCMethods = []string{
 	"gcp.compute.startInstance",
 	"gcp.compute.stopInstance",
 	"gcp.functions.call",
+	"gcp.functions.delete",
 	"gcp.functions.selectFunction",
 	"gcp.gke.selectCluster",
 	"gcp.inventory.get",

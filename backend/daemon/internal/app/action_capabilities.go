@@ -242,6 +242,7 @@ func buildGcpActionCapabilities(
 		},
 		"functions": {
 			gcpActionCapability(session, profile, "invoke", "Invoke function"),
+			gcpActionCapability(session, profile, "delete", "Delete function"),
 		},
 	}
 }

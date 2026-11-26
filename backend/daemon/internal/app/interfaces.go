@@ -251,6 +251,7 @@ type GcpComputeInventory interface {
 // GcpFunctionsInventory lists and invokes Cloud Functions via the gcloud CLI adapter.
 type GcpFunctionsInventory interface {
 	ListFunctions(ctx context.Context, profile models.ProfileSummary) ([]models.GcpCloudFunction, error)
+	DeleteFunction(ctx context.Context, profile models.ProfileSummary, name string, region string) error
 	// CallFunction triggers execution via gcloud functions call (write-gated at the handler).
 	CallFunction(ctx context.Context, profile models.ProfileSummary, name string, region string, generation string, data string) (models.GcpCloudFunctionInvokeResult, error)
 }

@@ -170,6 +170,7 @@ export const EXPECTED_RPC_METHODS = [
   "gcp.compute.startInstance",
   "gcp.compute.stopInstance",
   "gcp.functions.call",
+  "gcp.functions.delete",
   "gcp.functions.selectFunction",
   "gcp.gke.selectCluster",
   "gcp.inventory.get",

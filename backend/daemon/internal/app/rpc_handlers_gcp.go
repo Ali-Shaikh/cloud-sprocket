@@ -20,6 +20,7 @@ func (s *Service) registerGcpHandlers(m *handlerRegistry) {
 	m.register("gcp.functions.call", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleGcpFunctionsCall(ctx, params, notifier)
 	})
+	m.register("gcp.functions.delete", s.handleGcpFunctionsDelete)
 	m.register("gcp.functions.selectFunction", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleGcpFunctionsSelectFunction(ctx, params, notifier)
 	})
