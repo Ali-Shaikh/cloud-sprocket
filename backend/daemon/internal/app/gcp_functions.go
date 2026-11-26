@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
@@ -293,13 +294,13 @@ func (s *Service) handleGcpFunctionsDelete(ctx context.Context, params json.RawM
 		return nil, errors.New("select the Cloud Function and region before deleting")
 	}
 
-	actionCtx, cancel := s.withAzureTimeout(ctx)
+	actionCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	err = s.gcpFunctions.DeleteFunction(actionCtx, profile, name, region)
 	cancel()
+	s.invalidateResourceCacheScope(ctx, gcpFunctionsInventoryScope)
 	if err != nil {
 		return nil, err
 	}
-	s.invalidateResourceCacheScope(ctx, gcpFunctionsInventoryScope)
 	session, err = s.Update(ctx, snapshot, func(current *models.SessionSnapshot) error {
 		if current.IsLocked && current.CurrentProviderID == "gcp" &&
 			current.SelectedProfileID == profile.ProfileID && current.SelectedGcpFunction == key {
