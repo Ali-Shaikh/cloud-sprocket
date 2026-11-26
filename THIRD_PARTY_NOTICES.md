@@ -16,7 +16,7 @@ This file is generated. Regenerate after dependency changes with:
 pnpm --dir apps/desktop run generate:notices
 ```
 
-Generated: 2026-11-22
+Generated: 2026-11-26
 
 ## Desktop frontend (86 npm packages)
 
@@ -856,7 +856,7 @@ Crates compiled into the Tauri shell for the release targets: x86_64-pc-windows-
 - **const-oid** 0.10.3  
   Copyright (c) 2020-2026 The RustCrypto Project Developers
 - **convert_case** 0.4.0
-- **cookie** 0.18.1  
+- **cookie** 0.18.3  
   Copyright (c) 2017 Sergio Benitez  
   Copyright (c) 2014 Alex Crichton
 - **core-foundation** 0.10.1  
