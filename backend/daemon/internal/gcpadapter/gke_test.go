@@ -6,6 +6,7 @@ package gcpadapter
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -109,6 +110,21 @@ func TestListNodePoolsRequiresClusterAndLocation(t *testing.T) {
 	}
 	if _, err := inv.ListNodePools(context.Background(), gcpProfile(), "alpha", ""); err == nil {
 		t.Fatal("expected error for empty location")
+	}
+}
+
+func TestGetClusterCredentialsUsesExplicitProjectAndLocation(t *testing.T) {
+	inv := NewInventory(config.Settings{})
+	fake := &fakeCLI{}
+	inv.runner = fake
+
+	if err := inv.GetClusterCredentials(context.Background(), gcpProfile(), "prod-gke", "us-central1"); err != nil {
+		t.Fatalf("GetClusterCredentials: %v", err)
+	}
+	want := []string{"--configuration=default", "container", "clusters", "get-credentials",
+		"prod-gke", "--location=us-central1", "--project", "platform-prod", "--quiet"}
+	if !slices.Equal(fake.args, want) {
+		t.Fatalf("args = %v, want %v", fake.args, want)
 	}
 }
 

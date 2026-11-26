@@ -13,12 +13,20 @@ import (
 )
 
 type stubGcpGkeInventory struct {
-	clusters  []models.GcpGkeCluster
-	nodePools []models.GcpGkeNodePool
-	err       error
-	poolsErr  error
-	listCalls int
-	listPools int
+	clusters           []models.GcpGkeCluster
+	nodePools          []models.GcpGkeNodePool
+	err                error
+	poolsErr           error
+	listCalls          int
+	listPools          int
+	credentialCalls    int
+	credentialLocation string
+}
+
+func (s *stubGcpGkeInventory) GetClusterCredentials(_ context.Context, _ models.ProfileSummary, _, location string) error {
+	s.credentialCalls++
+	s.credentialLocation = location
+	return nil
 }
 
 func (s *stubGcpGkeInventory) ListClusters(context.Context, models.ProfileSummary) ([]models.GcpGkeCluster, error) {
@@ -72,6 +80,50 @@ func TestEnrichGcpGkeInventorySuccess(t *testing.T) {
 	state := workspace.GcpInventory["gke"]
 	if !state.Loaded || state.EmptyReason != "" {
 		t.Fatalf("inventory = %+v, want loaded with rows", state)
+	}
+}
+
+func TestHandleGcpGkeGetCredentialsUsesSelectedLocation(t *testing.T) {
+	ctx := context.Background()
+	inv := &stubGcpGkeInventory{clusters: []models.GcpGkeCluster{
+		{Name: "prod-gke", Location: "us-central1"},
+		{Name: "prod-gke", Location: "europe-west1-b"},
+	}}
+	service := gcpStorageTestService(t, &stubGcpStorageInventory{})
+	service.gcpGke = inv
+	lockGcpWorkspace(t, service)
+
+	request := []byte(`{"clusterName":"prod-gke","location":"europe-west1-b"}`)
+	if _, err := service.Handle(ctx, "gcp.gke.getCredentials", request, nil); err == nil ||
+		!strings.Contains(err.Error(), "write mode") || inv.credentialCalls != 0 {
+		t.Fatalf("read-only credentials: error=%v calls=%d", err, inv.credentialCalls)
+	}
+	if _, err := service.Handle(ctx, "session.setWriteMode", []byte(`{"enabled":true}`), nil); err != nil {
+		t.Fatalf("setWriteMode: %v", err)
+	}
+	legacy := []byte(`{"clusterName":"prod-gke"}`)
+	if _, err := service.Handle(ctx, "gcp.gke.selectCluster", legacy, nil); err != nil {
+		t.Fatalf("selectCluster without location: %v", err)
+	}
+	if _, err := service.Handle(ctx, "gcp.gke.getCredentials", request, nil); err == nil || inv.credentialCalls != 0 {
+		t.Fatalf("ambiguous cluster: error=%v calls=%d", err, inv.credentialCalls)
+	}
+	result, err := service.Handle(ctx, "gcp.gke.selectCluster", request, nil)
+	if err != nil {
+		t.Fatalf("selectCluster: %v", err)
+	}
+	if workspace := result.(models.WorkspaceSnapshot); workspace.SelectedGcpGkeClusterLocation != "europe-west1-b" {
+		t.Fatalf("workspace location = %q", workspace.SelectedGcpGkeClusterLocation)
+	}
+	other := []byte(`{"clusterName":"prod-gke","location":"us-central1"}`)
+	if _, err := service.Handle(ctx, "gcp.gke.getCredentials", other, nil); err == nil || inv.credentialCalls != 0 {
+		t.Fatalf("unselected cluster: error=%v calls=%d", err, inv.credentialCalls)
+	}
+	if _, err := service.Handle(ctx, "gcp.gke.getCredentials", request, nil); err != nil {
+		t.Fatalf("getCredentials: %v", err)
+	}
+	if inv.credentialCalls != 1 || inv.credentialLocation != "europe-west1-b" {
+		t.Fatalf("credential calls=%d location=%q", inv.credentialCalls, inv.credentialLocation)
 	}
 }
 

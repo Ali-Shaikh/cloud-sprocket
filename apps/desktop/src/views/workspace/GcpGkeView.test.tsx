@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/lib/theme";
@@ -83,7 +89,43 @@ describe("GcpGkeView", () => {
     expect(screen.getByText("e2-medium")).toBeTruthy();
 
     fireEvent.click(screen.getByText("prod-gke"));
-    expect(onSelectCluster).toHaveBeenCalledWith("prod-gke");
+    expect(onSelectCluster).toHaveBeenCalledWith("prod-gke", "us-central1");
+  });
+
+  it("requires write mode and confirms the kubeconfig context switch", async () => {
+    const onGetCredentials = vi.fn().mockResolvedValue(undefined);
+    const view = (snapshot: WorkspaceSnapshot) => (
+      <ThemeProvider>
+        <GcpGkeView
+          workspace={snapshot}
+          onRefresh={vi.fn()}
+          onGetCredentials={onGetCredentials}
+        />
+      </ThemeProvider>
+    );
+    const { rerender } = render(view(workspace));
+    expect(
+      screen.getByRole("button", { name: "Get credentials" }),
+    ).toBeDisabled();
+    rerender(view({ ...workspace, gcpWritesEnabled: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Get credentials" }));
+
+    const dialog = within(screen.getByRole("alertdialog"));
+    expect(
+      dialog.getByText(/switch the current kubectl context/i),
+    ).toBeVisible();
+    expect(dialog.getByText("europe-west1-b")).toBeVisible();
+    expect(onGetCredentials).not.toHaveBeenCalled();
+    fireEvent.click(dialog.getByRole("button", { name: "Update kubeconfig" }));
+    expect(onGetCredentials).toHaveBeenCalledExactlyOnceWith(
+      "dev-gke",
+      "europe-west1-b",
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Get credentials" }),
+      ).toBeEnabled(),
+    );
   });
 
   it("shows an empty-state when no clusters are loaded", () => {

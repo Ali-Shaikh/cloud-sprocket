@@ -343,7 +343,7 @@ func gcpServiceCatalog() []serviceCatalogEntry {
 		{
 			ProviderID: "gcp", ServiceID: "gcp-gke", Label: "GKE",
 			Summary:  "Kubernetes cluster inventory via gcloud.",
-			Detail:   "Lists GKE clusters and node pools for the open gcloud project. Fetching cluster credentials is not available yet.",
+			Detail:   "Lists GKE clusters and node pools for the open gcloud project. Getting credentials updates kubeconfig and needs write mode.",
 			Category: workspaceTabCategoryService, Domain: serviceDomainCompute,
 			InventoryScope: "gke",
 		},

@@ -24,6 +24,7 @@ func (s *Service) registerGcpHandlers(m *handlerRegistry) {
 	m.register("gcp.functions.selectFunction", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleGcpFunctionsSelectFunction(ctx, params, notifier)
 	})
+	m.register("gcp.gke.getCredentials", s.handleGcpGkeGetCredentials)
 	m.register("gcp.gke.selectCluster", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleGcpGkeSelectCluster(ctx, params, notifier)
 	})

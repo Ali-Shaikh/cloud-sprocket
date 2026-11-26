@@ -411,20 +411,36 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
   if (session.isLocked && activeWorkspaceTabId === "gcp-gke") {
     return (
       <GcpGkeView
+        key={activeWorkspace.profile?.profileId}
         workspace={activeWorkspace}
         inventoryLoading={props.gcpInventoryLoading}
         onRefresh={() => {
           void refreshDiscovery();
         }}
-        onSelectCluster={(clusterName) => {
-          void mutateWorkspaceSelection(
+        onSelectCluster={(clusterName, location) =>
+          mutateWorkspaceSelection(
             "gcp.gke.selectCluster",
-            { clusterName },
+            { clusterName, location },
             {
               immediate: true,
               errorTitle: "Failed to select GKE cluster",
             },
-          );
+          )
+        }
+        onGetCredentials={async (clusterName, location) => {
+          try {
+            const result = await backendRequest<{ message: string }>(
+              "gcp.gke.getCredentials",
+              { clusterName, location },
+            );
+            notify("success", result.message);
+          } catch (error: unknown) {
+            notify(
+              "error",
+              "Failed to get GKE credentials",
+              error instanceof Error ? error.message : String(error),
+            );
+          }
         }}
       />
     );

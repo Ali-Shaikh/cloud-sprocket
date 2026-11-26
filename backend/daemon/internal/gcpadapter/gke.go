@@ -7,11 +7,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
+
+var gkeNameOrLocation = regexp.MustCompile(`^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$`)
 
 // ListClusters returns GKE clusters for the profile project via
 // `gcloud container clusters list --format=json`.
@@ -31,6 +34,24 @@ func (i *Inventory) ListClusters(
 		return nil, err
 	}
 	return decodeGkeClusters(payload)
+}
+
+// GetClusterCredentials updates the kubeconfig used by gcloud, including its current context.
+func (i *Inventory) GetClusterCredentials(ctx context.Context, profile models.ProfileSummary, name, location string) error {
+	name = strings.TrimSpace(name)
+	location = strings.TrimSpace(location)
+	project := projectFromProfile(profile)
+	if !gkeNameOrLocation.MatchString(name) || !gkeNameOrLocation.MatchString(location) || project == "" {
+		return fmt.Errorf("a valid GKE cluster name, location and project are required")
+	}
+	i.kubeconfigMu.Lock()
+	defer i.kubeconfigMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	_, err := i.run(ctx, profile, "container", "clusters", "get-credentials", name,
+		"--location="+location, "--project", project, "--quiet")
+	return err
 }
 
 func decodeGkeClusters(payload []byte) ([]models.GcpGkeCluster, error) {

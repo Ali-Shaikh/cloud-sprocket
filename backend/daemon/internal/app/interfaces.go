@@ -260,6 +260,7 @@ type GcpFunctionsInventory interface {
 type GcpGkeInventory interface {
 	ListClusters(ctx context.Context, profile models.ProfileSummary) ([]models.GcpGkeCluster, error)
 	ListNodePools(ctx context.Context, profile models.ProfileSummary, clusterName string, location string) ([]models.GcpGkeNodePool, error)
+	GetClusterCredentials(ctx context.Context, profile models.ProfileSummary, clusterName string, location string) error
 }
 
 // DockerRuntime, LocalStackManager, and AzureRuntimeManager are aliases of the
