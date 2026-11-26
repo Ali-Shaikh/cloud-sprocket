@@ -192,7 +192,7 @@ impl SidecarManager {
             &self.pending,
             &request_id,
             receiver,
-            BACKEND_REQUEST_TIMEOUT,
+            backend_request_timeout(&method),
         )
         .await
     }
@@ -281,6 +281,14 @@ impl SidecarManager {
     }
 }
 
+fn backend_request_timeout(method: &str) -> Duration {
+    if method == "gcp.functions.delete" {
+        Duration::from_secs(660)
+    } else {
+        BACKEND_REQUEST_TIMEOUT
+    }
+}
+
 fn tauri_event_name(method: &str) -> String {
     method.replace('.', ":")
 }
@@ -360,6 +368,12 @@ async fn backend_request(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn function_deletion_allows_the_daemon_action_deadline() {
+        assert!(backend_request_timeout("gcp.functions.delete") > Duration::from_secs(600));
+        assert_eq!(backend_request_timeout("workspace.get"), BACKEND_REQUEST_TIMEOUT);
+    }
 
     #[test]
     fn response_ids_accept_strings_and_numbers() {
