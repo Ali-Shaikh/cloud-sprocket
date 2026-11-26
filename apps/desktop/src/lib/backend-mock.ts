@@ -337,7 +337,7 @@ const mockGcpWorkspaceTabs: WorkspaceTab[] = [
     label: "Compute Engine",
     summary: "VM instance inventory via gcloud.",
     detail:
-      "Lists Compute Engine instances for the open gcloud project. Start and stop need write mode. Reset is not available yet.",
+      "Lists Compute Engine instances for the open gcloud project. Start, stop and reset need write mode.",
     category: "service",
     domain: "compute",
   },
@@ -1586,6 +1586,7 @@ function buildMockActionCapabilities(
       compute: [
         mockWriteModeCapability("startInstance", "Start instance", writesEnabled),
         mockWriteModeCapability("stopInstance", "Stop instance", writesEnabled),
+        mockWriteModeCapability("resetInstance", "Reset instance", writesEnabled),
       ],
       functions: [mockWriteModeCapability("invoke", "Invoke function", writesEnabled)],
     };
@@ -4841,29 +4842,37 @@ function registerMockHandlers(): Map<string, MockRpcHandler> {
   };
   register("gcp.storage.signUrl", handle_gcp_storage_signUrl);
 
-  const handle_gcp_compute_startInstance : MockRpcHandler = async (params, method) => {
+  const handleGcpComputeLifecycle: MockRpcHandler = async (params, method) => {
     if (!mockState.session.gcpWriteModeEnabled) {
       return Promise.reject(
         new Error("Turn on write mode from the top bar to run mutating actions."),
       );
     }
-    const name = String(params.name ?? "");
-    const zone = String(params.zone ?? "");
-    const instance = mockGcpComputeInstances.find((entry) => entry.name === name);
-    if (instance) {
-      instance.status = method.endsWith("startInstance") ? "RUNNING" : "TERMINATED";
+    const name = String(params.instanceName ?? params.name ?? "").trim();
+    const zone = String(params.zone ?? "").trim();
+    const instance = mockGcpComputeInstances.find(
+      (entry) => entry.name === name && entry.zone === zone,
+    );
+    if (!instance) {
+      throw new Error("Compute Engine instance not found in the selected zone.");
+    }
+    let verb = "Reset";
+    if (method.endsWith("startInstance")) {
+      verb = "Started";
+      instance.status = "RUNNING";
+    } else if (method.endsWith("stopInstance")) {
+      verb = "Stopped";
+      instance.status = "TERMINATED";
+    } else if (instance.status !== "RUNNING") {
+      throw new Error("Only a running Compute Engine instance can be reset.");
     }
     mockState.session.selectedGcpComputeInstance = name;
-    appendLog(
-      "success",
-      method.endsWith("startInstance")
-        ? `Started Compute Engine instance ${name} in ${zone}.`
-        : `Stopped Compute Engine instance ${name} in ${zone}.`,
-    );
+    appendLog("success", `${verb} Compute Engine instance ${name} in zone ${zone}.`);
     return Promise.resolve(buildMockWorkspace());
   };
-  register("gcp.compute.startInstance", handle_gcp_compute_startInstance);
-  register("gcp.compute.stopInstance", handle_gcp_compute_startInstance);
+  register("gcp.compute.resetInstance", handleGcpComputeLifecycle);
+  register("gcp.compute.startInstance", handleGcpComputeLifecycle);
+  register("gcp.compute.stopInstance", handleGcpComputeLifecycle);
 
   const handle_gcp_functions_selectFunction : MockRpcHandler = async (params, method) => {
     mockState.session.selectedGcpFunction = String(params.functionKey ?? "");

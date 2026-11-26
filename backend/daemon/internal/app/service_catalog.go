@@ -329,7 +329,7 @@ func gcpServiceCatalog() []serviceCatalogEntry {
 		{
 			ProviderID: "gcp", ServiceID: "gcp-compute", Label: "Compute Engine",
 			Summary:  "VM instance inventory via gcloud.",
-			Detail:   "Lists Compute Engine instances for the open gcloud project. Start and stop need write mode. Reset is not available yet.",
+			Detail:   "Lists Compute Engine instances for the open gcloud project. Start, stop and reset need write mode.",
 			Category: workspaceTabCategoryService, Domain: serviceDomainCompute,
 			InventoryScope: "gce",
 		},

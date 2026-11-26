@@ -7,6 +7,7 @@ import { notify } from "@/lib/notify";
 import { overviewNavigateToParams, resolveOverviewProvider } from "@/lib/navigate-to-resource";
 import { formatBackendError, normaliseWorkspaceSnapshot } from "@/lib/workspace-snapshot";
 import { toActivityEntries } from "@/lib/workspace-shell";
+import { useGcpComputeLifecycle } from "@/hooks/use-gcp-compute-lifecycle";
 import { useNavigateToResource } from "@/hooks/use-navigate-to-resource";
 import type {
   GcpCloudFunctionInvokeResult,
@@ -48,6 +49,7 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
   const [deployRecipeId, setDeployRecipeId] = useState<string>();
   const [gcpSignedUrlResult, setGcpSignedUrlResult] = useState<GcpStorageSignUrlResult | undefined>();
   const [gcpSignedUrlStatus, setGcpSignedUrlStatus] = useState("");
+  const { pendingProfiles, runLifecycle } = useGcpComputeLifecycle();
   const {
     activeWorkspaceTabId,
     setActiveWorkspaceTabId,
@@ -317,33 +319,38 @@ export function WorkspaceTabRouter(props: WorkspaceTabRouterProps): ReactNode {
   }
 
   if (session.isLocked && activeWorkspaceTabId === "gcp-compute") {
+    const profileId = activeWorkspace.profile?.profileId ?? session.lockedProfileId ?? "";
+    function runComputeAction(action: "start" | "stop" | "reset", instanceName: string, zone: string) {
+      if (!profileId) return Promise.resolve(false);
+      return runLifecycle(profileId, () =>
+        mutateWorkspaceSelection(
+          `gcp.compute.${action}Instance`,
+          { instanceName, zone },
+          {
+            immediate: true,
+            errorTitle: `Failed to ${action} Compute Engine instance`,
+            merge: (current, result) =>
+              current?.provider?.providerId === "gcp" &&
+              current.profile?.profileId === profileId &&
+              result.profile?.profileId === profileId
+                ? result
+                : current,
+          },
+        ),
+      );
+    }
     return (
       <GcpComputeView
+        key={profileId}
         workspace={activeWorkspace}
         inventoryLoading={props.gcpInventoryLoading}
+        lifecyclePending={pendingProfiles.has(profileId)}
         onRefresh={() => {
           void refreshDiscovery();
         }}
-        onStartInstance={(instanceName, zone) => {
-          void mutateWorkspaceSelection(
-            "gcp.compute.startInstance",
-            { instanceName, zone },
-            {
-              immediate: true,
-              errorTitle: "Failed to start Compute Engine instance",
-            },
-          );
-        }}
-        onStopInstance={(instanceName, zone) => {
-          void mutateWorkspaceSelection(
-            "gcp.compute.stopInstance",
-            { instanceName, zone },
-            {
-              immediate: true,
-              errorTitle: "Failed to stop Compute Engine instance",
-            },
-          );
-        }}
+        onStartInstance={(name, zone) => runComputeAction("start", name, zone)}
+        onStopInstance={(name, zone) => runComputeAction("stop", name, zone)}
+        onResetInstance={(name, zone) => runComputeAction("reset", name, zone)}
       />
     );
   }

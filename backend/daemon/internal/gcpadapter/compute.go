@@ -8,11 +8,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"regexp"
 	"sort"
 	"strings"
 
 	"cloudsprocket/backend/daemon/internal/models"
 )
+
+var computeInstanceName = regexp.MustCompile(`^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$`)
 
 // ListInstances returns Compute Engine VMs for the profile project via
 // `gcloud compute instances list --format=json`.
@@ -56,6 +59,11 @@ func (i *Inventory) StopInstance(
 	return i.invokeInstanceLifecycle(ctx, profile, "stop", instanceName, zone)
 }
 
+// ResetInstance hard-resets a running VM in the selected gcloud project.
+func (i *Inventory) ResetInstance(ctx context.Context, profile models.ProfileSummary, instanceName string, zone string) error {
+	return i.invokeInstanceLifecycle(ctx, profile, "reset", instanceName, zone)
+}
+
 func (i *Inventory) invokeInstanceLifecycle(
 	ctx context.Context,
 	profile models.ProfileSummary,
@@ -68,13 +76,20 @@ func (i *Inventory) invokeInstanceLifecycle(
 	if name == "" || zoneName == "" {
 		return fmt.Errorf("instance name and zone are required")
 	}
+	project := projectFromProfile(profile)
+	if action == "reset" && (!computeInstanceName.MatchString(name) || !computeInstanceName.MatchString(zoneName) || project == "") {
+		return fmt.Errorf("reset requires a valid Compute Engine instance name, zone and project")
+	}
 	args := []string{
 		"compute", "instances", action,
 		name,
 		"--zone=" + zoneName,
 	}
-	if project := projectFromProfile(profile); project != "" {
+	if project != "" {
 		args = append(args, "--project", project)
+	}
+	if action == "reset" {
+		args = append(args, "--quiet")
 	}
 	_, err := i.run(ctx, profile, args...)
 	return err

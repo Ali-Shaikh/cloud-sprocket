@@ -171,6 +171,7 @@ var expectedRPCMethods = []string{
 	"emulators.prepareProfile",
 	"emulators.start",
 	"emulators.stop",
+	"gcp.compute.resetInstance",
 	"gcp.compute.startInstance",
 	"gcp.compute.stopInstance",
 	"gcp.functions.call",

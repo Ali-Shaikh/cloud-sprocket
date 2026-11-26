@@ -10,6 +10,7 @@ import (
 
 // registerGcpHandlers registers GCP Cloud Storage, Compute Engine, and Cloud Functions methods.
 func (s *Service) registerGcpHandlers(m *handlerRegistry) {
+	m.register("gcp.compute.resetInstance", s.handleGcpComputeResetInstance)
 	m.register("gcp.compute.startInstance", func(ctx context.Context, params json.RawMessage, notifier Notifier) (any, error) {
 		return s.handleGcpComputeStartInstance(ctx, params, notifier)
 	})

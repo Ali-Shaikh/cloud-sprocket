@@ -238,6 +238,7 @@ func buildGcpActionCapabilities(
 		"compute": {
 			gcpActionCapability(session, profile, "startInstance", "Start instance"),
 			gcpActionCapability(session, profile, "stopInstance", "Stop instance"),
+			gcpActionCapability(session, profile, "resetInstance", "Reset instance"),
 		},
 		"functions": {
 			gcpActionCapability(session, profile, "invoke", "Invoke function"),

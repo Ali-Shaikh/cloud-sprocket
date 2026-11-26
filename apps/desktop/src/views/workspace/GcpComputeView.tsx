@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Ali Shaikh
 
 import { useMemo, useState } from "react";
-import { Cpu, Play, RefreshCw, Square } from "lucide-react";
+import { Cpu, Play, RefreshCw, RotateCcw, Square } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
 import { InventoryLoadingState } from "@/components/inventory-loading-state";
@@ -20,18 +20,29 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { actionCapabilityState, actionDisabledReason } from "@/lib/action-capabilities";
+import { actionCapabilityState } from "@/lib/action-capabilities";
 import { GCP_CREATE_HINTS, gcpTableEmptyCopy } from "@/lib/gcp-empty-copy";
 import { gcpInventoryLoadingLabel } from "@/lib/gcp-inventory";
 import type { GcpComputeInstance, WorkspaceSnapshot } from "@/types/backend";
 
+type InstanceAction = (
+  instanceName: string,
+  zone: string,
+) => void | Promise<boolean>;
+
 export type GcpComputeViewProps = {
   workspace: WorkspaceSnapshot;
   onRefresh: () => void;
-  onStartInstance?: (instanceName: string, zone: string) => void;
-  onStopInstance?: (instanceName: string, zone: string) => void;
+  onStartInstance?: InstanceAction;
+  onStopInstance?: InstanceAction;
+  onResetInstance?: InstanceAction;
+  lifecyclePending?: boolean;
   inventoryLoading?: boolean;
 };
+
+function instanceKey(instance: GcpComputeInstance): string {
+  return `${instance.zone}/${instance.name}`;
+}
 
 function isRunning(status: string | undefined): boolean {
   return (status ?? "").toUpperCase() === "RUNNING";
@@ -42,72 +53,84 @@ function isStopped(status: string | undefined): boolean {
   return normalised === "TERMINATED" || normalised === "STOPPED";
 }
 
-/**
- * Compute Engine panel: lists VMs and offers start/stop when write mode is on.
- */
 export default function GcpComputeView({
   workspace,
   onRefresh,
   onStartInstance,
   onStopInstance,
+  onResetInstance,
+  lifecyclePending = false,
   inventoryLoading = false,
 }: GcpComputeViewProps) {
   const [filterText, setFilterText] = useState("");
-  const [selectedName, setSelectedName] = useState(workspace.selectedGcpComputeInstance ?? "");
-  const [pendingAction, setPendingAction] = useState<"start" | "stop" | null>(null);
+  const [selectedKey, setSelectedKey] = useState("");
+  const [confirmation, setConfirmation] = useState<{
+    action: "startInstance" | "stopInstance" | "resetInstance";
+    instance: GcpComputeInstance;
+  } | null>(null);
+  const [actionInFlight, setActionInFlight] = useState(false);
   const instances = workspace.gcpComputeInstances ?? [];
   const status = workspace.gcpComputeStatusMessage?.trim() ?? "";
 
-  const startCapability = actionCapabilityState(workspace, "compute", "startInstance", "gcp");
-  const stopCapability = actionCapabilityState(workspace, "compute", "stopInstance", "gcp");
-
+  const savedSelection = instances.filter(
+    (instance) => instance.name === workspace.selectedGcpComputeInstance,
+  );
   const selected =
-    instances.find((instance) => instance.name === selectedName) ??
-    instances.find((instance) => instance.name === workspace.selectedGcpComputeInstance);
+    instances.find((instance) => instanceKey(instance) === selectedKey) ??
+    (savedSelection.length === 1 ? savedSelection[0] : undefined);
+  const actions = [
+    {
+      id: "startInstance",
+      label: "Start",
+      icon: Play,
+      accepts: isStopped,
+      onAction: onStartInstance,
+    },
+    {
+      id: "stopInstance",
+      label: "Stop",
+      icon: Square,
+      accepts: isRunning,
+      onAction: onStopInstance,
+    },
+    {
+      id: "resetInstance",
+      label: "Reset",
+      icon: RotateCcw,
+      accepts: isRunning,
+      onAction: onResetInstance,
+    },
+  ] as const;
+  type Action = (typeof actions)[number];
 
-  const canStart =
-    Boolean(onStartInstance) &&
-    startCapability.enabled &&
-    Boolean(selected?.name) &&
-    Boolean(selected?.zone) &&
-    isStopped(selected?.status);
-  const canStop =
-    Boolean(onStopInstance) &&
-    stopCapability.enabled &&
-    Boolean(selected?.name) &&
-    Boolean(selected?.zone) &&
-    isRunning(selected?.status);
+  function disabledReason(
+    action: Action,
+    instance: GcpComputeInstance | undefined,
+  ) {
+    const state = actionCapabilityState(workspace, "compute", action.id, "gcp");
+    if (!state.enabled) {
+      return state.reason ?? "Action unavailable.";
+    }
+    if (actionInFlight || lifecyclePending) return "A Compute Engine action is in progress.";
+    if (!instance) return "Select an instance first.";
+    if (!instance.zone) return "Selected instance is missing a zone.";
+    if (!action.accepts(instance.status)) {
+      const requiredState =
+        action.id === "startInstance" ? "stopped or terminated" : "running";
+      return `${action.label} is only available when the instance is ${requiredState}.`;
+    }
+    return undefined;
+  }
 
-  const startDisabledReason = canStart
-    ? undefined
-    : actionDisabledReason(
-        workspace,
-        "compute",
-        "startInstance",
-        !selected
-          ? "Select an instance first."
-          : !selected.zone
-            ? "Selected instance is missing a zone."
-            : !isStopped(selected.status)
-              ? "Start is only available when the instance is stopped or terminated."
-              : undefined,
-        "gcp",
-      );
-  const stopDisabledReason = canStop
-    ? undefined
-    : actionDisabledReason(
-        workspace,
-        "compute",
-        "stopInstance",
-        !selected
-          ? "Select an instance first."
-          : !selected.zone
-            ? "Selected instance is missing a zone."
-            : !isRunning(selected.status)
-              ? "Stop is only available when the instance is running."
-              : undefined,
-        "gcp",
-      );
+  const confirmedAction = actions.find(
+    (action) => action.id === confirmation?.action,
+  );
+  const confirmedInstance = confirmation?.instance;
+  const currentConfirmedInstance = confirmedInstance
+    ? instances.find(
+        (instance) => instanceKey(instance) === instanceKey(confirmedInstance),
+      )
+    : undefined;
 
   const filtered = useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -132,44 +155,43 @@ export default function GcpComputeView({
   }, [instances, filterText]);
 
   const projectLabel =
-    workspace.profile?.attributes.find((field) => field.label.toLowerCase() === "project")
-      ?.value ?? workspace.profile?.displayName;
+    workspace.profile?.attributes.find(
+      (field) => field.label.toLowerCase() === "project",
+    )?.value ?? workspace.profile?.displayName;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">Compute Engine</h1>
+          <h1 className="text-[1.375rem] font-[750] tracking-[-0.015em]">
+            Compute Engine
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             VM inventory for the open gcloud configuration
             {projectLabel ? ` · project ${projectLabel}` : ""}.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {onStartInstance ? (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!canStart}
-              title={startDisabledReason}
-              onClick={() => setPendingAction("start")}
-            >
-              <Play className="size-3.5" />
-              Start
-            </Button>
-          ) : null}
-          {onStopInstance ? (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!canStop}
-              title={stopDisabledReason}
-              onClick={() => setPendingAction("stop")}
-            >
-              <Square className="size-3.5" />
-              Stop
-            </Button>
-          ) : null}
+          {actions.map((action) => {
+            if (!action.onAction) return null;
+            const reason = disabledReason(action, selected);
+            return (
+              <Button
+                key={action.id}
+                variant="outline"
+                size="sm"
+                disabled={Boolean(reason)}
+                title={reason}
+                onClick={() => {
+                  if (selected)
+                    setConfirmation({ action: action.id, instance: selected });
+                }}
+              >
+                <action.icon className="size-3.5" />
+                {action.label}
+              </Button>
+            );
+          })}
           <Button variant="outline" size="sm" onClick={onRefresh}>
             <RefreshCw className="size-3.5" />
             Refresh
@@ -189,7 +211,7 @@ export default function GcpComputeView({
           description={
             status.includes("\n")
               ? status.split("\n").slice(1).join(" ").trim()
-              : "Select an instance, enable write mode, then use Start or Stop."
+              : "Select an instance and enable write mode to use lifecycle actions."
           }
         />
       ) : null}
@@ -199,8 +221,10 @@ export default function GcpComputeView({
           <div>
             <h2 className="text-base font-bold">Instances</h2>
             <p className="text-xs text-muted-foreground">
-              {instances.length === 1 ? "1 instance" : `${instances.length} instances`} loaded via
-              gcloud.
+              {instances.length === 1
+                ? "1 instance"
+                : `${instances.length} instances`}{" "}
+              loaded via gcloud.
             </p>
           </div>
           <Input
@@ -222,11 +246,9 @@ export default function GcpComputeView({
             { id: "externalIp", label: "External IP" },
           ]}
           rows={filtered}
-          getRowKey={(row) => row.name}
-          selectedKey={selected?.name ?? workspace.selectedGcpComputeInstance}
-          onRowClick={(row) => {
-            setSelectedName(row.name);
-          }}
+          getRowKey={instanceKey}
+          selectedKey={selected ? instanceKey(selected) : undefined}
+          onRowClick={(row) => setSelectedKey(instanceKey(row))}
           renderCell={(row, columnId) => {
             switch (columnId) {
               case "name":
@@ -258,7 +280,8 @@ export default function GcpComputeView({
                   resourceLabel: "instances",
                   createHint: GCP_CREATE_HINTS.instances,
                   rowCount: instances.length,
-                  listFailed: workspace.gcpInventory?.gce?.emptyReason === "error",
+                  listFailed:
+                    workspace.gcpInventory?.gce?.emptyReason === "error",
                 })}
               />
             )
@@ -267,47 +290,59 @@ export default function GcpComputeView({
       </section>
 
       <AlertDialog
-        open={pendingAction !== null}
+        open={confirmation !== null}
         onOpenChange={(open) => {
           if (!open) {
-            setPendingAction(null);
+            setConfirmation(null);
           }
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {pendingAction === "stop" ? "Stop Compute Engine VM?" : "Start Compute Engine VM?"}
+              {confirmedAction?.label} Compute Engine VM?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {pendingAction === "stop" ? "Stop" : "Start"}{" "}
-              <span className="font-mono font-medium text-foreground">{selected?.name}</span>
-              {selected?.zone ? (
-                <>
-                  {" "}
-                  in zone <span className="font-mono">{selected.zone}</span>
-                </>
-              ) : null}
-              . This runs against the active gcloud configuration.
+              {confirmedAction?.label}{" "}
+              <span className="font-mono font-medium text-foreground">
+                {confirmedInstance?.name}
+              </span>{" "}
+              in zone{" "}
+              <span className="font-mono">{confirmedInstance?.zone}</span>
+              {projectLabel ? <> in project {projectLabel}</> : null}.
+              {confirmedAction?.id === "resetInstance"
+                ? " This immediately restarts the VM without a graceful shutdown. Unsaved data may be lost."
+                : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
-                if (!selected?.name || !selected.zone || !pendingAction) {
-                  setPendingAction(null);
+              disabled={
+                !confirmedAction ||
+                Boolean(
+                  disabledReason(confirmedAction, currentConfirmedInstance),
+                )
+              }
+              onClick={async () => {
+                if (
+                  !confirmedAction?.onAction ||
+                  !currentConfirmedInstance?.zone
+                )
                   return;
+                setConfirmation(null);
+                setActionInFlight(true);
+                try {
+                  await confirmedAction.onAction(
+                    currentConfirmedInstance.name,
+                    currentConfirmedInstance.zone,
+                  );
+                } finally {
+                  setActionInFlight(false);
                 }
-                if (pendingAction === "start") {
-                  onStartInstance?.(selected.name, selected.zone);
-                } else {
-                  onStopInstance?.(selected.name, selected.zone);
-                }
-                setPendingAction(null);
               }}
             >
-              {pendingAction === "stop" ? "Stop instance" : "Start instance"}
+              {confirmedAction?.label} instance
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

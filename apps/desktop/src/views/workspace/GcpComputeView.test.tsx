@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Ali Shaikh
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { useGcpComputeLifecycle } from "@/hooks/use-gcp-compute-lifecycle";
 
 import { WRITE_MODE_REQUIRED_REASON } from "@/lib/action-capabilities";
 import { ThemeProvider } from "@/lib/theme";
@@ -21,6 +28,7 @@ const workspace = {
     compute: [
       { actionId: "startInstance", label: "Start instance", enabled: true },
       { actionId: "stopInstance", label: "Stop instance", enabled: true },
+      { actionId: "resetInstance", label: "Reset instance", enabled: true },
     ],
   },
   gcpComputeInstances: [
@@ -66,7 +74,7 @@ describe("GcpComputeView", () => {
     expect(onRefresh).toHaveBeenCalled();
   });
 
-  it("starts a stopped instance and stops a running instance when write mode is on", () => {
+  it("starts a stopped instance and stops a running instance when write mode is on", async () => {
     const onStart = vi.fn();
     const onStop = vi.fn();
     render(
@@ -86,12 +94,51 @@ describe("GcpComputeView", () => {
     expect(onStart).toHaveBeenCalledWith("batch-1", "europe-west1-b");
 
     fireEvent.click(screen.getByText("web-1"));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /^stop$/i })).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
     fireEvent.click(screen.getByRole("button", { name: "Stop instance" }));
     expect(onStop).toHaveBeenCalledWith("web-1", "us-central1-a");
   });
 
-  it("disables start and stop when write mode is off", () => {
+  it("confirms a hard reset of the selected zone when a name occurs twice", async () => {
+    const onReset = vi.fn();
+    const duplicate = {
+      ...workspace,
+      selectedGcpComputeInstance: "web-1",
+      gcpComputeInstances: [
+        { name: "web-1", zone: "us-central1-a", status: "RUNNING" },
+        { name: "web-1", zone: "europe-west1-b", status: "RUNNING" },
+        { name: "batch-1", zone: "us-central1-a", status: "TERMINATED" },
+      ],
+    };
+    render(
+      <ThemeProvider>
+        <GcpComputeView
+          workspace={duplicate}
+          onRefresh={vi.fn()}
+          onResetInstance={onReset}
+        />
+      </ThemeProvider>,
+    );
+
+    const reset = screen.getByRole("button", { name: "Reset" });
+    expect(reset).toBeDisabled();
+    fireEvent.click(screen.getByText("batch-1"));
+    expect(reset).toBeDisabled();
+    fireEvent.click(screen.getByText("europe-west1-b"));
+    fireEvent.click(reset);
+    const dialog = within(screen.getByRole("alertdialog"));
+    expect(dialog.getByText(/unsaved data may be lost/i)).toBeVisible();
+    expect(dialog.getByText("europe-west1-b")).toBeVisible();
+    expect(onReset).not.toHaveBeenCalled();
+    fireEvent.click(dialog.getByRole("button", { name: "Reset instance" }));
+    expect(onReset).toHaveBeenCalledExactlyOnceWith("web-1", "europe-west1-b");
+    await waitFor(() => expect(reset).toBeEnabled());
+  });
+
+  it("disables lifecycle actions when write mode is off", () => {
     const readOnly = {
       ...workspace,
       gcpWriteModeEnabled: false,
@@ -121,6 +168,7 @@ describe("GcpComputeView", () => {
           onRefresh={vi.fn()}
           onStartInstance={vi.fn()}
           onStopInstance={vi.fn()}
+          onResetInstance={vi.fn()}
         />
       </ThemeProvider>,
     );
@@ -134,6 +182,44 @@ describe("GcpComputeView", () => {
     const stop = screen.getByRole("button", { name: /^stop$/i });
     expect(stop).toBeDisabled();
     expect(stop.getAttribute("title") ?? "").toMatch(/write mode/i);
+    const reset = screen.getByRole("button", { name: "Reset" });
+    expect(reset).toBeDisabled();
+    expect(reset.getAttribute("title") ?? "").toMatch(/write mode/i);
+  });
+
+  it("keeps reset disabled after leaving and reopening the tab during a stop", async () => {
+    let finishStop!: (value: boolean) => void;
+    const onStop = vi.fn().mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        finishStop = resolve;
+      }),
+    );
+    const profileId = "platform";
+    function Workspace({ showCompute }: { showCompute: boolean }) {
+      const { pendingProfiles, runLifecycle } = useGcpComputeLifecycle();
+      return showCompute ? (
+        <ThemeProvider>
+          <GcpComputeView
+            workspace={{ ...workspace, selectedGcpComputeInstance: "web-1" }}
+            onRefresh={vi.fn()}
+            onStopInstance={() => runLifecycle(profileId, onStop)}
+            onResetInstance={vi.fn()}
+            lifecyclePending={pendingProfiles.has(profileId)}
+          />
+        </ThemeProvider>
+      ) : null;
+    }
+    const { rerender } = render(<Workspace showCompute />);
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop instance" }));
+    expect(onStop).toHaveBeenCalledOnce();
+    rerender(<Workspace showCompute={false} />);
+    rerender(<Workspace showCompute />);
+    expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
+    finishStop(true);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Reset" })).toBeEnabled(),
+    );
   });
 
   it("shows an empty-state when no instances are loaded", () => {
@@ -150,6 +236,8 @@ describe("GcpComputeView", () => {
     );
 
     expect(screen.getByText("No instances in this project")).toBeTruthy();
-    expect(screen.getByText(/Google Cloud console or with gcloud/i)).toBeTruthy();
+    expect(
+      screen.getByText(/Google Cloud console or with gcloud/i),
+    ).toBeTruthy();
   });
 });
